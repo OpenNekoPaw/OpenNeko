@@ -19,32 +19,30 @@ import {
 const NOW = '2026-08-10T01:00:00.000Z';
 
 describe('CharacterPresentationService', () => {
-  it('isolates participant configuration and freezes next-turn-only receipts', async () => {
+  it('isolates participant presentation configuration and freezes next-turn-only receipts', async () => {
     const repository = fixtureRepository();
     const service = new CharacterPresentationService(repository, { now: () => NOW });
     await service.initializeConfiguration({
       characterRunId: 'run-a',
       participantId: 'participant-a',
-      chat: { providerRef: 'provider:chat-a', modelRef: 'model:chat-a' },
     });
     await service.initializeConfiguration({
       characterRunId: 'run-b',
       participantId: 'participant-b',
-      chat: { providerRef: 'provider:chat-b', modelRef: 'model:chat-b' },
     });
 
     const receipt = await service.startTurn({ turnId: 'turn-a', characterRunId: 'run-a' });
     await service.updateConfigurations([
       {
         ...repository.configurations.get('run-a')!,
-        chat: { providerRef: 'provider:chat-next', modelRef: 'model:chat-next' },
+        tts: { ...repository.configurations.get('run-a')!.tts, speed: 1.25 },
       },
     ]);
 
-    expect(receipt.chat.modelRef).toBe('model:chat-a');
-    expect(repository.receipts.get('turn-a')?.chat.modelRef).toBe('model:chat-a');
-    expect(repository.configurations.get('run-a')?.chat.modelRef).toBe('model:chat-next');
-    expect(repository.configurations.get('run-b')?.chat.modelRef).toBe('model:chat-b');
+    expect(receipt.tts.speed).toBe(1);
+    expect(repository.receipts.get('turn-a')?.tts.speed).toBe(1);
+    expect(repository.configurations.get('run-a')?.tts.speed).toBe(1.25);
+    expect(repository.configurations.get('run-b')?.tts.speed).toBe(1);
     expect(Object.isFrozen(receipt)).toBe(true);
   });
 
@@ -54,7 +52,6 @@ describe('CharacterPresentationService', () => {
     const configuration = {
       characterRunId: 'run-a',
       participantId: 'participant-a',
-      chat: { providerRef: 'provider:chat-a', modelRef: 'model:chat-a' },
       tts: {
         providerRef: 'provider:tts-a',
         voiceRepresentationId: 'voice-a',
@@ -73,7 +70,6 @@ describe('CharacterPresentationService', () => {
       service.initializeConfiguration({
         characterRunId: 'run-a',
         participantId: 'participant-other',
-        chat: configuration.chat,
       }),
     ).rejects.toMatchObject({ code: 'character-presentation-participant-mismatch' });
     await expect(
@@ -101,7 +97,6 @@ describe('CharacterPresentationService', () => {
       await service.initializeConfiguration({
         characterRunId: `run-${suffix}`,
         participantId: `participant-${suffix}`,
-        chat: { providerRef: 'provider:chat-a', modelRef: `model:chat-${suffix}` },
       });
       await service.startTurn({ turnId: `turn-${suffix}`, characterRunId: `run-${suffix}` });
     }
@@ -190,7 +185,11 @@ describe('CharacterAvatarAuthorityService', () => {
               characterVersionId: avatarPublication.characterVersionId,
               participantId: 'participant-a',
               controller: { kind: 'agent' as const, primaryAgentSessionId: 'agent-session-a' },
-              runtimeBinding: { kind: 'companion' as const, relationshipId: 'relationship-a' },
+              runtimeBinding: {
+                kind: 'companion' as const,
+                companionContinuityId: 'continuity-a',
+                relationshipId: 'relationship-a',
+              },
               createdAt: NOW,
             }
           : undefined;
@@ -221,7 +220,7 @@ describe('CharacterAvatarAuthorityService', () => {
               ],
               schedulingPolicy: { kind: 'mentioned' as const },
               events: [],
-              runtimeKind: 'companion' as const,
+              mode: 'companion' as const,
               relationshipIds: ['relationship-a'],
               createdAt: NOW,
             }
@@ -259,7 +258,11 @@ function fixtureRepository() {
       characterVersionId: `version-${suffix}`,
       participantId: `participant-${suffix}`,
       controller: { kind: 'agent', primaryAgentSessionId: `agent-session-${suffix}` },
-      runtimeBinding: { kind: 'companion', relationshipId: `relationship-${suffix}` },
+      runtimeBinding: {
+        kind: 'companion',
+        companionContinuityId: `continuity-${suffix}`,
+        relationshipId: `relationship-${suffix}`,
+      },
       createdAt: NOW,
     });
     versions.set(`version-${suffix}`, publicationFixture(suffix));
@@ -293,7 +296,6 @@ function fixtureRepository() {
         turnId: input.turnId,
         characterRunId: configuration.characterRunId,
         participantId: configuration.participantId,
-        chat: configuration.chat,
         tts: configuration.tts,
         startedAt: input.startedAt,
       });

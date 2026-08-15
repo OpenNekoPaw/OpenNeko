@@ -96,6 +96,33 @@ Host 已从 canonical `config.toml` 解析的 image/audio/video understanding mo
 同一个 launch catalog，再由 Draft adapter 发送给 composer。Renderer 不重读配置文件、不推断 provider，且不以
 首个可用模型替代显式 `default_models` 或 `default_model_purposes`。
 
+### 8. 已选 binding 收敛到 composer context bar
+
+Entry Draft 已选 Project、授权目录、Character 与未来的 World target 统一投影到 composer 底部的单行
+binding-context bar。该横条只消费当前 Draft 已有的 package-owned presentation state；清除操作仍调用
+`configureEntryTarget` 或对应 owner 的精确配置操作，不保存 identity、不推断 recent/active target，也不新增
+binding authority。
+
+Authoring/Character chooser 只负责浏览、选择和选中态，不再在 composer 下方渲染独立“当前目标”卡片或摘要，
+避免同一 selection 出现两个视觉 owner。目录选择入口也归入横条；无 binding 时只显示该入口，不渲染空的
+binding item，使发送工具栏保持只承载附件、模型、执行模式与发送动作。横条作为稍窄的 sibling rail 承接在
+composer shell 下方，不在 shell 内形成第二个输入框；它使用共享 composer 的中性文字和 glass token，
+不引入领域颜色或完整面板边框。
+
+Entry target chooser 统一使用紧凑横向资源卡：固定尺寸的中性图标容器承载类型，名称与 owner label 组成
+单一信息列，已选项使用尾部 check、共享边框和内描边形成明确反馈。项目、角色、聊天室和 World target
+复用同一基础组件与 hover/focus/disabled 状态，不再由 Authoring selector 维护第二套覆盖样式。宽屏三列，
+窄屏收敛为两列或单列；不引入项目、角色或世界的领域背景色。
+
+同一个 context bar 按当前 Entry mode 投影唯一入口：Authoring 显示目录/项目入口，Character Dialogue 显示
+角色选择入口和已选参与者，World Experience 显示 World 入口。World owner 尚未组合时入口保持 disabled 并
+携带 owner-qualified diagnostic，不创建 Renderer 本地 World selection，也不伪装为可成功操作。
+
+Character Dialogue chooser 同时呈现“日常 / 叙事”运行模式。日常映射现有 companion runtime；叙事映射
+Chara contract 已定义的 narrative runtime，而不是 Character 自有 StorylineVersion。由于 external
+Composition owner 尚未完成生产组合，单角色与聊天室的叙事入口均保持 disabled 并显示明确原因；不得让
+Renderer 保存一个无法执行的 narrative 选择，不得在启动失败后回退日常，也不得用剧情下拉冒充叙事绑定。
+
 ## Replaced Paths
 
 - 删除 Desktop `Scene → selected mode` 与 `mode → management Scene intent` presenter。

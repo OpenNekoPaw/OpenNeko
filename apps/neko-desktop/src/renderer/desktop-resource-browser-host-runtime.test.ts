@@ -17,7 +17,7 @@ const identity: ResourceBrowserIdentity = {
 };
 const projection: ResourceBrowserProjection = {
   identity,
-  facet: 'media',
+  source: 'media',
   query: '',
   items: [],
 };
@@ -95,7 +95,7 @@ describe('Electron Resource Browser Host runtime', () => {
       requestId: 'children-1',
       identity,
       route: 'children',
-      facet: 'media',
+      source: 'media',
       parentResourceId: 'content:library',
       limit: 100,
     });

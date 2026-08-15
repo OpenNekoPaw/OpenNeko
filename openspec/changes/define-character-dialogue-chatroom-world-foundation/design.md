@@ -1,5 +1,7 @@
 ## Context
 
+> Successor note: `separate-companion-and-narrative-character-conversations` 已接管 Conversation mode、Storyline authoring/context、Companion continuity 和 Character Interaction Workbench。本文中的 `CharacterStorylineRun`、运行时 Storyline transition/revision、run-scoped `CharacterMemoryScope`、Narrative external Composition 和固定 Avatar/Runtime Manager 设计仅记录已实现的 foundation 原型，不再约束后续实现或验收；successor 必须原子删除这些成功路径并保留旧用户记录的局部诊断。
+
 `@neko/chara` 已有 CharacterProject/Version、UserCharacterRelationship、CharacterRun、Dialogue/Room、AgentSession adapter 和 Desktop Character surfaces，但角色定义仍缺少清晰的背景故事、原生背景设定、个人故事线和 narrative character memory。历史 Character Foundation 为了尽快形成端到端 fixture，把 WorldProject/Version/Run/Save 的 command、catalog 和 snapshot 一并暴露在 Chara Host contract 中，形成了产品与公共契约越界。
 
 本设计只收敛 Chara。`packages/world`、World OpenSpec、WorldStory、WorldRun/Save 和 Character + World Composition 由 `define-ai-native-interactive-world` 处理。Chara 只提供精确角色、角色故事线、角色记忆和运行引用，并在外部 Composition producer 存在后消费其只读关联投影；缺失时保持 unavailable，不建立本地替代 shape。

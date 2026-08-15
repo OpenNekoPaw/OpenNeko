@@ -33,6 +33,7 @@ describe('Agent interaction binding contract', () => {
       worldRunId: 'world-run-9',
       participantId: 'participant-user',
       roleScopeId: 'world-role-participant',
+      characters: [{ characterId: 'character-rin', characterVersionId: 'character-version-rin-7' }],
     });
     if (character.kind !== 'character' || world.kind !== 'world') {
       throw new Error('Fixture bindings did not retain their exact domain kinds.');
@@ -44,6 +45,46 @@ describe('Agent interaction binding contract', () => {
     expect(
       createAgentSessionInteraction({ conversationId: 'conversation-2', binding: world }),
     ).toMatchObject({ binding: { worldExperienceVersionId: 'world-experience-version-4' } });
+  });
+
+  it('keeps Room interaction and participant Conversation owners distinct', () => {
+    expect(
+      parseAgentDomainBinding({
+        kind: 'room',
+        scope: 'interaction',
+        roomId: 'room:one',
+        roomRunId: 'room-run:one',
+      }),
+    ).toEqual({
+      kind: 'room',
+      scope: 'interaction',
+      roomId: 'room:one',
+      roomRunId: 'room-run:one',
+    });
+    expect(
+      parseAgentDomainBinding({
+        kind: 'room',
+        scope: 'participant',
+        roomId: 'room:one',
+        roomRunId: 'room-run:one',
+        participantId: 'participant:rin',
+        characterRunId: 'character-run:rin',
+      }),
+    ).toEqual({
+      kind: 'room',
+      scope: 'participant',
+      roomId: 'room:one',
+      roomRunId: 'room-run:one',
+      participantId: 'participant:rin',
+      characterRunId: 'character-run:rin',
+    });
+    expect(() =>
+      parseAgentDomainBinding({
+        kind: 'room',
+        roomId: 'room:one',
+        roomRunId: 'room-run:one',
+      }),
+    ).toThrow('Unknown Room Agent binding scope');
   });
 
   it('rejects a stale or cross-Draft binding receipt locally', () => {
@@ -91,6 +132,7 @@ describe('Agent interaction binding contract', () => {
           worldExperienceVersionId: 'world-experience-version-4',
           participantId: 'participant-user',
           roleScopeId: 'world-role-participant',
+          characters: [],
         },
       }),
     ).toThrow('World Run');

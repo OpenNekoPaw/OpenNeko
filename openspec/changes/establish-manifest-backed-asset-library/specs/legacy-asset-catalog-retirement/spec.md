@@ -5,7 +5,7 @@
 Product startup, ordinary readers, package public entries and Asset Library discovery MUST NOT inspect,
 classify, migrate or repair `library.json`, flat path-derived Asset records or other retired catalog data.
 Existing bytes remain untouched. A manifest-backed Asset Library receives an item only through a new,
-explicit user import/install/publish intent that validates a reusable package with stable identity,
+explicit user import/install intent that validates a reusable local package with stable identity,
 owned or declared members, and user-confirmed package facts. Ordinary workspace and linked media remain
 locator-addressed without replacement Asset IDs.
 

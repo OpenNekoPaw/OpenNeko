@@ -31,8 +31,9 @@ describe('message resource projector', () => {
     expect(isLocalMediaFilePath('https://example.test/image.png')).toBe(false);
   });
 
-  it('preserves ContentLocator, removes absolute display paths and adds only renderUri', async () => {
-    const resolveDisplayLocator = vi.fn(async () => 'http://127.0.0.1:43125/resources/image-token');
+  it('preserves ContentLocator, removes absolute display paths and adds one Preview descriptor', async () => {
+    const descriptor = previewDescriptor(contentLocator);
+    const resolveDisplayLocator = vi.fn(async () => ({ status: 'ready' as const, descriptor }));
 
     await expect(
       projectResourceValue(
@@ -49,7 +50,7 @@ describe('message resource projector', () => {
       path: 'images/page-1.jpg',
       mimeType: 'image/jpeg',
       contentLocator,
-      renderUri: 'http://127.0.0.1:43125/resources/image-token',
+      previewDescriptor: descriptor,
     });
     expect(resolveDisplayLocator).toHaveBeenCalledWith(contentLocator, {
       mediaType: 'image/jpeg',
@@ -113,8 +114,9 @@ describe('message resource projector', () => {
       },
     ];
 
+    const descriptor = previewDescriptor(contentLocator);
     const [projected] = await projectMessagesForResourceDisplay(messages, {
-      resolveDisplayLocator: async () => 'http://127.0.0.1:43125/resources/image-token',
+      resolveDisplayLocator: async () => ({ status: 'ready', descriptor }),
     });
     expect(messages[0]?.contentBlocks?.[0]).toEqual({
       id: 'block-1',
@@ -141,7 +143,7 @@ describe('message resource projector', () => {
       contentLocator,
       path: 'images/page-1.jpg',
       mimeType: 'image/jpeg',
-      renderUri: 'http://127.0.0.1:43125/resources/image-token',
+      previewDescriptor: descriptor,
     });
     expect(JSON.stringify(projected)).not.toContain('/tmp/page-1.jpg');
   });
@@ -156,7 +158,13 @@ describe('message resource projector', () => {
         },
         {
           resolveDisplayLocator: async () => {
-            throw new Error('denied');
+            return {
+              status: 'unavailable',
+              diagnostic: {
+                code: 'agent-preview-content-unavailable',
+                message: 'The requested image is unavailable.',
+              },
+            };
           },
         },
       ),
@@ -166,18 +174,19 @@ describe('message resource projector', () => {
       mimeType: 'image/jpeg',
       resourceProjectionDiagnostics: [
         {
-          code: 'resource-projection-denied',
+          code: 'agent-preview-content-unavailable',
           severity: 'error',
           field: 'contentLocator',
           sourceKind: 'authorization-denied',
-          message: 'Content could not be authorized for Webview display.',
+          message: 'The requested image is unavailable.',
         },
       ],
     });
   });
 
   it('projects the exact representation locator instead of substituting its source', async () => {
-    const resolveDisplayLocator = vi.fn(async () => 'openneko://resource/page/content');
+    const descriptor = previewDescriptor(representationLocator.source);
+    const resolveDisplayLocator = vi.fn(async () => ({ status: 'ready' as const, descriptor }));
 
     await expect(
       projectResourceValue(
@@ -192,10 +201,23 @@ describe('message resource projector', () => {
       label: 'Page 1',
       mimeType: 'image/png',
       representationLocator,
-      renderUri: 'openneko://resource/page/content',
+      previewDescriptor: descriptor,
     });
     expect(resolveDisplayLocator).toHaveBeenCalledWith(representationLocator, {
       mediaType: 'image/png',
     });
   });
 });
+
+function previewDescriptor(locator: typeof contentLocator) {
+  return {
+    descriptorId: 'agent-display:attachment-1:image-1',
+    sourceFingerprint: 'sha256:image-1',
+    contentLocator: locator,
+    url: `openneko://resource/${'a'.repeat(32)}`,
+    contentKind: 'image' as const,
+    mediaType: 'image/jpeg',
+    displayName: 'page-1.jpg',
+    byteLength: 42,
+  };
+}

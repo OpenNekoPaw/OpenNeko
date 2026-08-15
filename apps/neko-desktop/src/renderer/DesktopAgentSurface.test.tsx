@@ -9,6 +9,7 @@ import type {
   AgentInteractionProjection,
   ToolCall,
 } from '@neko/agent-contracts';
+import type { CharacterProductHandoff } from '@neko/chara/contracts';
 import type {
   AgentComposerWorkspacePresentation,
   AgentToolCallAccessoryRenderer,
@@ -16,6 +17,8 @@ import type {
 import { projectAgentConfigurationPolicy } from '@neko/agent-runtime/application';
 import { DesktopAgentSurface, prepareDesktopAgentSurfaceResources } from './DesktopAgentSurface';
 import { createDesktopI18n } from './i18n';
+
+let projectedToolCall: ToolCall | undefined;
 
 vi.mock('@neko/agent-webview/root', async () => {
   const { useEffect } = await import('react');
@@ -74,7 +77,7 @@ vi.mock('@neko/agent-webview/root', async () => {
           <div data-agent-tool-call-id="tool-call-1" data-testid="tool-call-timeline-item">
             {toolCallAccessoryRenderer?.({
               conversationId: initialConversation?.id ?? null,
-              toolCall: automationToolCall(),
+              toolCall: projectedToolCall ?? automationToolCall(),
             })}
           </div>
         </div>
@@ -87,6 +90,7 @@ describe('DesktopAgentSurface', () => {
   afterEach(() => {
     document.body.replaceChildren();
     sessionStorage.clear();
+    projectedToolCall = undefined;
     vi.restoreAllMocks();
   });
 
@@ -299,6 +303,113 @@ describe('DesktopAgentSurface', () => {
     );
     expect(container.querySelector('[data-automation-session-control="true"]')).toBeNull();
     expect(container.querySelector('[data-testid="tool-call-timeline-item"]')).toBeTruthy();
+    await act(async () => root.unmount());
+  });
+
+  it('projects exact Character result handoffs without automatic Studio navigation', async () => {
+    projectedToolCall = {
+      id: 'tool-call-character-1',
+      name: 'chara.character.fillDraft',
+      arguments: {},
+      result: {
+        success: true,
+        data: {
+          characterProjectId: 'character-project-lin',
+          handoffs: [
+            { kind: 'open-character', characterProjectId: 'character-project-lin' },
+            {
+              kind: 'open-character-studio',
+              characterProjectId: 'character-project-lin',
+              authority: { kind: 'project', projectId: 'project-1' },
+            },
+          ],
+        },
+      },
+    };
+    installBridge(vi.fn(async () => readyBootstrap()));
+    const onCharacterProductHandoff = vi.fn();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<TestAgentSurface onCharacterProductHandoff={onCharacterProductHandoff} />);
+    });
+    await act(async () => undefined);
+
+    const viewCharacter = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'View character',
+    );
+    const openStudio = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Open Studio',
+    );
+    expect(viewCharacter).toBeTruthy();
+    expect(openStudio?.disabled).toBe(false);
+    await act(async () => viewCharacter?.click());
+    expect(onCharacterProductHandoff).toHaveBeenCalledWith({
+      kind: 'open-character',
+      characterProjectId: 'character-project-lin',
+    });
+    await act(async () => openStudio?.click());
+    expect(onCharacterProductHandoff).toHaveBeenLastCalledWith({
+      kind: 'open-character-studio',
+      characterProjectId: 'character-project-lin',
+      authority: { kind: 'project', projectId: 'project-1' },
+    });
+    expect(onCharacterProductHandoff).toHaveBeenCalledTimes(2);
+    await act(async () => root.unmount());
+  });
+
+  it('shows a local diagnostic when a successful Character result omits handoffs', async () => {
+    projectedToolCall = {
+      id: 'tool-call-character-invalid',
+      name: 'chara.character.fillDraft',
+      arguments: {},
+      result: {
+        success: true,
+        data: { characterProjectId: 'character-project-lin' },
+      },
+    };
+    installBridge(vi.fn(async () => readyBootstrap()));
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<TestAgentSurface />);
+    });
+    await act(async () => undefined);
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'The Character draft result is missing valid actions.',
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('does not project result actions or navigate when Character draft filling fails', async () => {
+    projectedToolCall = {
+      id: 'tool-call-character-failed',
+      name: 'chara.character.fillDraft',
+      arguments: {},
+      result: {
+        success: false,
+        data: null,
+        error: 'chara.character.fillDraft failed: Character draft write interrupted.',
+      },
+    };
+    installBridge(vi.fn(async () => readyBootstrap()));
+    const onCharacterProductHandoff = vi.fn();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<TestAgentSurface onCharacterProductHandoff={onCharacterProductHandoff} />);
+    });
+    await act(async () => undefined);
+
+    expect(container.querySelector('[data-character-product-handoff="true"]')).toBeNull();
+    expect(onCharacterProductHandoff).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 
@@ -688,10 +799,12 @@ function TestAgentSurface({
   agentPresentation,
   composerWorkspace,
   initialConversation,
+  onCharacterProductHandoff,
 }: {
   readonly agentPresentation?: AgentInteractionProjection;
   readonly composerWorkspace?: AgentComposerWorkspacePresentation;
   readonly initialConversation?: { readonly id: string; readonly title: string };
+  readonly onCharacterProductHandoff?: (handoff: CharacterProductHandoff) => void;
 }): JSX.Element {
   const i18n = createDesktopI18n('en');
   return (
@@ -703,6 +816,7 @@ function TestAgentSurface({
         agentSurfaceId="agent-surface-1"
         composerWorkspace={composerWorkspace}
         initialConversation={initialConversation}
+        onCharacterProductHandoff={onCharacterProductHandoff}
         tab={{
           tabId: 'tab-1',
           projectId: 'project-1',
@@ -766,7 +880,7 @@ function installBridge(
       assetCenter: { execute: vi.fn() },
       assistantResources: { execute: vi.fn() },
       extensionManagement: { execute: vi.fn() },
-      automationEndpoints: { execute: vi.fn() },
+      automationLocalRuntimes: { execute: vi.fn() },
       automationPermissions: { execute: vi.fn() },
       automationTargetSelection: {
         execute: vi.fn(async (request) => ({
@@ -798,7 +912,6 @@ function installBridge(
         chooseDirectory: vi.fn(),
         createContentProject: vi.fn(),
         selectProject: vi.fn(),
-        selectAuthoringLibrary: vi.fn(),
       },
       agent: {
         getBootstrap,
@@ -836,36 +949,37 @@ function installBridge(
       applicationSidebar: { update: vi.fn() },
       scenes: { transition: vi.fn() },
       characterFoundation: {
+        getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),
         getSnapshot: vi.fn(async () => ({
           character: {
-            projects: [],
+            globalCharacters: [],
             versions: [],
             relationships: [],
             characterRuns: [],
             dialogueRuns: [],
             rooms: [],
             roomRuns: [],
+            storylines: [],
+            storylineDrafts: [],
             storylineVersions: [],
-            storylineRuns: [],
-            storylineObservationCandidates: [],
-            memoryScopes: [],
+            companionContinuities: [],
             presentationConfigurations: [],
           },
           diagnostics: [],
         })),
         execute: vi.fn(async () => ({
           character: {
-            projects: [],
+            globalCharacters: [],
             versions: [],
             relationships: [],
             characterRuns: [],
             dialogueRuns: [],
             rooms: [],
             roomRuns: [],
+            storylines: [],
+            storylineDrafts: [],
             storylineVersions: [],
-            storylineRuns: [],
-            storylineObservationCandidates: [],
-            memoryScopes: [],
+            companionContinuities: [],
             presentationConfigurations: [],
           },
           diagnostics: [],
@@ -879,15 +993,25 @@ function installBridge(
           throw new Error('Character authoring is not expected by this test.');
         }),
       },
-      worldFoundation: {
-        getSnapshot: vi.fn(async () => ({
-          world: { projects: [], versions: [], runtimes: [] },
+      characterPortable: {
+        getExportScope: vi.fn(),
+        exportPackage: vi.fn(),
+        importPackage: vi.fn(),
+      },
+      worldPortable: {
+        exportPackage: vi.fn(),
+        importPackage: vi.fn(),
+      },
+      worldManagement: {
+        getCatalog: vi.fn(async (query) => ({
+          scope: { kind: 'global-catalog' as const },
+          query,
+          items: [],
           diagnostics: [],
         })),
-        execute: vi.fn(async () => ({
-          world: { projects: [], versions: [], runtimes: [] },
-          diagnostics: [],
-        })),
+        getDetail: vi.fn(async () => {
+          throw new Error('World management detail is not expected by this test.');
+        }),
       },
       worldAuthoring: {
         getSnapshot: vi.fn(async () => {
@@ -896,6 +1020,11 @@ function installBridge(
         execute: vi.fn(async () => {
           throw new Error('World authoring is not expected by this test.');
         }),
+      },
+      worldRuntime: {
+        launch: vi.fn(),
+        getSnapshot: vi.fn(),
+        submitAction: vi.fn(),
       },
       characterAvatar: {
         openSurface: vi.fn(),
@@ -907,7 +1036,16 @@ function installBridge(
       },
       resources: createResourceBridgeMock(),
       projectAuthoring: {
+        getCatalog: vi.fn(async () => ({
+          requestId: 'project-authoring-catalog',
+          projects: [],
+          diagnostics: [],
+        })),
         getNavigation: vi.fn(),
+        getContent: vi.fn(),
+        getCreativeWorkspace: vi.fn(),
+        mutateCreativeWorkspaceReference: vi.fn(),
+        mutateCreativeWorkspaceObject: vi.fn(),
       },
       projectLocalAuthoring: {
         createTarget: vi.fn(),
@@ -928,7 +1066,8 @@ function installBridge(
         readTextFilePreview: vi.fn(),
         executeIntent: vi.fn(),
         resolvePreviewVariant: vi.fn(),
-        executeMediaRequest: vi.fn(),
+        resolvePreviewResource: vi.fn(),
+        releasePreviewResource: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
       },
       cut: {
@@ -964,11 +1103,10 @@ function targetSelectionProjection() {
     authorizationId: 'authorization-1',
     profileId: 'computer.observe',
     provider: {
-      extensionId: 'computer-use@openneko',
+      extensionId: 'computer-use',
       providerId: 'cua-driver',
       kind: 'computer' as const,
-      upstreamRelease: '0.19.2',
-      deliverySource: { kind: 'github-release' as const },
+      deliverySource: { kind: 'bundled-adapter' as const },
     },
     mode: 'observe' as const,
     timeoutMs: 30_000,
@@ -1003,10 +1141,9 @@ function sessionControlProjection() {
     sessionId: 'session-1',
     profileId: 'computer.observe',
     provider: {
-      extensionId: 'computer-use@openneko',
+      extensionId: 'computer-use',
       providerId: 'cua-driver',
       kind: 'computer' as const,
-      upstreamRelease: '0.19.2',
     },
     target: {
       kind: 'computer' as const,

@@ -3,7 +3,6 @@ import type {
   CreativeEntityOccurrenceProjection,
   CreativeEntityRef,
   CreativeEntityRelationshipProjection,
-  CreativeEntityRepresentationHint,
 } from '@neko/entity-domain';
 import type {
   NpcProfileFact,
@@ -31,7 +30,6 @@ export interface EmbodyCharacterSessionConfig {
 export interface EmbodyCharacterEvidenceSnapshot {
   readonly relationships: readonly CreativeEntityRelationshipProjection[];
   readonly occurrences: readonly CreativeEntityOccurrenceProjection[];
-  readonly representationHints: readonly CreativeEntityRepresentationHint[];
   readonly scriptContextFacts: readonly NpcProfileFact[];
 }
 

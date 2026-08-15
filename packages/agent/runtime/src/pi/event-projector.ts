@@ -13,6 +13,12 @@ export interface PiProductEventBase {
 export type PiProductEventPayload =
   | { readonly type: 'turn.started' }
   | {
+      readonly type: 'skill.activated';
+      readonly skillName: string;
+      readonly source: 'project' | 'personal' | 'builtin' | 'plugin';
+      readonly fingerprint: string;
+    }
+  | {
       readonly type: 'assistant.text.delta';
       readonly delta: string;
       readonly sourceIndex: number;
@@ -171,6 +177,14 @@ export class PiEventProjector {
       case 'message_start':
         return;
     }
+  }
+
+  skillActivated(input: {
+    readonly skillName: string;
+    readonly source: 'project' | 'personal' | 'builtin' | 'plugin';
+    readonly fingerprint: string;
+  }): Promise<void> {
+    return this.emit({ type: 'skill.activated', ...input });
   }
 
   async confirmationRequired(input: {

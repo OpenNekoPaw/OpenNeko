@@ -3,6 +3,7 @@ import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
   parseCharacterVersion,
+  parseGlobalCharacterVersion,
 } from '@neko/chara/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -21,10 +22,104 @@ const connection: AgentLaunchConnectionIdentity = {
 };
 
 describe('Desktop Agent runtime Entry service', () => {
+  it('rejects Narrative references before creating any Chara runtime records', async () => {
+    const launch = vi.fn();
+    const service = createDesktopAgentRuntimeEntryService({
+      characterConversations: { validateSelection: vi.fn(), launch },
+      ...runtimeOwners(),
+      userId: 'user:local',
+      userDisplayName: 'You',
+    });
+    const receipt = {
+      targetReceiptId: 'target-character',
+      draftId: 'draft-1',
+      connectionId: 'connection-1',
+      mode: 'character-dialogue' as const,
+      binding: {
+        kind: 'character-dialogue' as const,
+        mode: 'narrative' as const,
+        participants: [
+          {
+            globalCharacterId: 'global-character-1',
+            characterVersionId: 'character-version-1',
+            storyline: {
+              characterStorylineId: 'storyline-1',
+              characterStorylineVersionId: 'storyline-version-1',
+              storylineNodeId: 'node-1',
+            },
+          },
+        ],
+      },
+    };
+
+    await expect(
+      service.validate({
+        receipt,
+        input: { kind: 'message', text: 'Hello' },
+        references: [
+          {
+            catalogEntryId: 'reference:1',
+            referenceId: 'reference:1',
+            ownerKind: 'character',
+            ownerId: 'character-project-1',
+          },
+        ],
+        resourceGrantIds: [],
+      }),
+    ).rejects.toThrow('forbids external references');
+    expect(launch).not.toHaveBeenCalled();
+  });
+
+  it('rejects unqualified Room references instead of silently dropping participant context', async () => {
+    const launch = vi.fn();
+    const service = createDesktopAgentRuntimeEntryService({
+      characterConversations: { validateSelection: vi.fn(), launch },
+      ...runtimeOwners(),
+      userId: 'user:local',
+      userDisplayName: 'You',
+    });
+
+    await expect(
+      service.validate({
+        receipt: {
+          targetReceiptId: 'target-room',
+          draftId: 'draft-1',
+          connectionId: 'connection-1',
+          mode: 'character-dialogue',
+          binding: {
+            kind: 'character-dialogue',
+            mode: 'companion',
+            participants: [
+              {
+                globalCharacterId: 'global-character-1',
+                characterVersionId: 'character-version-1',
+              },
+              {
+                globalCharacterId: 'global-character-2',
+                characterVersionId: 'character-version-2',
+              },
+            ],
+          },
+        },
+        input: { kind: 'message', text: 'Read this together.' },
+        references: [
+          {
+            catalogEntryId: 'reference:1',
+            referenceId: 'reference:1',
+            ownerKind: 'character',
+            ownerId: 'character-project-1',
+          },
+        ],
+        resourceGrantIds: [],
+      }),
+    ).rejects.toThrow('require an exact participant turn');
+    expect(launch).not.toHaveBeenCalled();
+  });
+
   it('materializes one exact Chara Dialogue and preserves its role profile', async () => {
     const launch = vi.fn(async () => ({
       topology: 'dialogue' as const,
-      runtimeKind: 'companion' as const,
+      mode: 'companion' as const,
       characterProjectId: 'character-project-1',
       characterVersionId: 'character-version-1',
       characterRunId: 'character-run:launch:request-1:1',
@@ -45,7 +140,7 @@ describe('Desktop Agent runtime Entry service', () => {
         input: { kind: 'message', text: 'Hello' },
         receipt: characterReceipt([
           {
-            characterProjectId: 'character-project-1',
+            globalCharacterId: 'global-character-1',
             characterVersionId: 'character-version-1',
             roleProfileId: 'role-profile-1',
           },
@@ -55,7 +150,7 @@ describe('Desktop Agent runtime Entry service', () => {
       conversationId: 'conversation:character:character-run:launch:request-1:1',
       context: {
         kind: 'character',
-        characterId: 'character-project-1',
+        characterId: 'global-character-1',
         characterVersionId: 'character-version-1',
         characterRunId: 'character-run:launch:request-1:1',
         dialogueRunId: 'dialogue-run:launch:request-1',
@@ -67,7 +162,7 @@ describe('Desktop Agent runtime Entry service', () => {
       userId: 'user:local',
       userDisplayName: 'You',
       selection: {
-        runtimeKind: 'companion',
+        mode: 'companion',
         characters: [
           { characterVersionId: 'character-version-1', roleProfileId: 'role-profile-1' },
         ],
@@ -78,7 +173,7 @@ describe('Desktop Agent runtime Entry service', () => {
   it('materializes multiple exact Characters as one Room owner', async () => {
     const launch = vi.fn(async () => ({
       topology: 'chatroom' as const,
-      runtimeKind: 'companion' as const,
+      mode: 'companion' as const,
       characterRoomId: 'character-room:launch:request-room',
       roomRunId: 'room-run:launch:request-room',
       interactionAgentSessionId: 'conversation:character:run-1',
@@ -110,25 +205,27 @@ describe('Desktop Agent runtime Entry service', () => {
         connection,
         input: { kind: 'message', text: 'Hello room' },
         receipt: characterReceipt([
-          { characterProjectId: 'project-1', characterVersionId: 'character-version-1' },
-          { characterProjectId: 'project-2', characterVersionId: 'character-version-2' },
+          { globalCharacterId: 'global-1', characterVersionId: 'character-version-1' },
+          { globalCharacterId: 'global-2', characterVersionId: 'character-version-2' },
         ]),
       }),
     ).resolves.toEqual({
       conversationId: 'conversation:room:room-run:launch:request-room',
       context: {
         kind: 'room',
+        scope: 'interaction',
         roomId: 'character-room:launch:request-room',
         roomRunId: 'room-run:launch:request-room',
       },
     });
   });
 
-  it('keeps complete World Experience launch unavailable without calling Chara', async () => {
+  it('materializes one exact global World with the selected Character participants', async () => {
     const launch = vi.fn();
+    const owners = runtimeOwners();
     const service = createDesktopAgentRuntimeEntryService({
       characterConversations: { validateSelection: vi.fn(), launch },
-      ...runtimeOwners(),
+      ...owners,
       userId: 'user:local',
       userDisplayName: 'You',
     });
@@ -145,26 +242,114 @@ describe('Desktop Agent runtime Entry service', () => {
           mode: 'world-experience',
           binding: {
             kind: 'world-experience',
-            worldExperienceId: 'experience-1',
-            worldExperienceVersionId: 'experience-version-1',
-            launch: { kind: 'new', participantId: 'participant-1', roleScopeId: 'role-1' },
+            globalWorldId: 'global-world-1',
+            worldVersionId: 'world-version-1',
+            participants: [
+              {
+                globalCharacterId: 'global-character-1',
+                characterVersionId: 'character-version-1',
+              },
+            ],
+            launch: { kind: 'new' },
           },
         },
       }),
-    ).rejects.toThrow('[world/agent-world-experience-provider-unavailable]');
+    ).resolves.toEqual({
+      conversationId:
+        'conversation:world:world-run:request-world:world-participant:request-world',
+      context: {
+        kind: 'world',
+        worldExperienceId: 'global-world-1',
+        worldExperienceVersionId: 'world-version-1',
+        worldRunId: 'world-run:request-world',
+        participantId: 'world-participant:request-world',
+        roleScopeId: 'world-role:request-world',
+        characters: [
+          {
+        characterId: 'global-character-1',
+            characterVersionId: 'character-version-1',
+          },
+        ],
+      },
+    });
+    expect(owners.validateWorldExperience).toHaveBeenCalledOnce();
+    expect(owners.worldRuntime.createRun).toHaveBeenCalledWith({
+      worldVersionId: 'world-version-1',
+      worldRunId: 'world-run:request-world',
+      worldSaveId: 'world-save:request-world',
+      branchId: 'world-branch:request-world',
+      saveLabel: 'Agent World Experience',
+    });
     expect(launch).not.toHaveBeenCalled();
   });
 
-  it('validates exact CharacterProject ownership before issuing an Entry receipt', async () => {
+  it('continues only the exact World Run, Save, and branch without creating another Run', async () => {
+    const owners = runtimeOwners();
+    const service = createDesktopAgentRuntimeEntryService({
+      characterConversations: { validateSelection: vi.fn(), launch: vi.fn() },
+      ...owners,
+      userId: 'user:local',
+      userDisplayName: 'You',
+    });
+
+    await expect(
+      service.materialize({
+        requestId: 'request-world-continue',
+        connection,
+        input: { kind: 'message', text: 'Continue world' },
+        receipt: {
+          targetReceiptId: 'target-world-continue',
+          draftId: 'draft-1',
+          connectionId: 'connection-1',
+          mode: 'world-experience',
+          binding: {
+            kind: 'world-experience',
+            globalWorldId: 'global-world-1',
+            worldVersionId: 'world-version-1',
+            participants: [],
+            launch: {
+              kind: 'continue',
+              worldRunId: 'world-run-existing',
+              worldSaveId: 'world-save-existing',
+              branchId: 'world-branch-existing',
+            },
+          },
+        },
+      }),
+    ).resolves.toMatchObject({
+      context: {
+        kind: 'world',
+        worldExperienceId: 'global-world-1',
+        worldExperienceVersionId: 'world-version-1',
+        worldRunId: 'world-run-existing',
+        characters: [],
+      },
+    });
+    expect(owners.worldRuntime.validateBinding).toHaveBeenCalledWith({
+      worldVersionId: 'world-version-1',
+      worldRunId: 'world-run-existing',
+      worldSaveId: 'world-save-existing',
+      branchId: 'world-branch-existing',
+    });
+    expect(owners.worldRuntime.createRun).not.toHaveBeenCalled();
+  });
+
+  it('validates exact GlobalCharacter ownership before issuing an Entry receipt', async () => {
     const validateSelection = vi.fn(async () => undefined);
     const validate = createDesktopAgentCharacterDialogueTargetValidator({
       conversations: { validateSelection },
       publications: {
         readPublication: async () => publication('character-project-1', 'character-version-1'),
+        readCatalog: async () =>
+          globalCatalog(
+            'global-character-1',
+            'character-project-1',
+            'character-version-1',
+          ),
       },
     });
     const binding = characterReceipt([
-      { characterProjectId: 'character-project-1', characterVersionId: 'character-version-1' },
+      { globalCharacterId: 'global-character-1', characterVersionId: 'character-version-1' },
     ]).binding;
 
     await expect(validate(binding)).resolves.toBeUndefined();
@@ -173,101 +358,101 @@ describe('Desktop Agent runtime Entry service', () => {
         ...binding,
         participants: [
           {
-            characterProjectId: 'character-project-other',
+            globalCharacterId: 'global-character-other',
             characterVersionId: 'character-version-1',
           },
         ],
       }),
-    ).rejects.toThrow("does not belong to exact CharacterProject 'character-project-other'");
+    ).rejects.toThrow("does not belong to exact GlobalCharacter 'global-character-other'");
   });
 
-  it('routes the first Dialogue message to Chara after exact runtime validation', async () => {
-    const owners = runtimeOwners();
-    const service = createDesktopAgentRuntimeEntryService({
-      characterConversations: { validateSelection: vi.fn(), launch: vi.fn() },
-      ...owners,
-      userId: 'user:local',
-      userDisplayName: 'You',
+  it('delegates the exact Narrative mode and participant node selection to Chara', async () => {
+    const validateSelection = vi.fn(async () => undefined);
+    const validate = createDesktopAgentCharacterDialogueTargetValidator({
+      conversations: { validateSelection },
+      publications: {
+        readPublication: async () => publication('character-project-1', 'character-version-1'),
+        readCatalog: async () =>
+          globalCatalog(
+            'global-character-1',
+            'character-project-1',
+            'character-version-1',
+          ),
+      },
     });
-    const context = {
-      kind: 'character' as const,
-      characterId: 'character-project-1',
-      characterVersionId: 'character-version-1',
-      characterRunId: 'character-run-1',
-      dialogueRunId: 'dialogue-run-1',
+    const binding = {
+      kind: 'character-dialogue' as const,
+      mode: 'narrative' as const,
+      participants: [
+        {
+          globalCharacterId: 'global-character-1',
+          characterVersionId: 'character-version-1',
+          storyline: {
+            characterStorylineId: 'storyline-1',
+            characterStorylineVersionId: 'storyline-version-1',
+            storylineNodeId: 'storyline-node-1',
+          },
+        },
+      ],
     };
 
-    await service.executeInitialInput({
-      requestId: 'request-dialogue',
-      context,
-      intent: { kind: 'message', text: 'Hello' },
-    });
-
-    expect(owners.characterInteractions.validateDialogueBinding).toHaveBeenCalledWith({
-      characterProjectId: 'character-project-1',
-      characterVersionId: 'character-version-1',
-      characterRunId: 'character-run-1',
-      dialogueRunId: 'dialogue-run-1',
-    });
-    expect(owners.characterInteractions.submitTurn).toHaveBeenCalledWith({
-      topology: 'dialogue',
-      dialogueRunId: 'dialogue-run-1',
-      characterRunId: 'character-run-1',
-      message: 'Hello',
+    await expect(validate(binding)).resolves.toBeUndefined();
+    expect(validateSelection).toHaveBeenCalledWith({
+      mode: 'narrative',
+      characters: [
+        {
+          characterVersionId: 'character-version-1',
+          storyline: {
+            characterStorylineId: 'storyline-1',
+            characterStorylineVersionId: 'storyline-version-1',
+            storylineNodeId: 'storyline-node-1',
+          },
+        },
+      ],
     });
   });
 
-  it('routes the first Room message once and rejects an all-participant failure', async () => {
-    const owners = runtimeOwners();
-    owners.characterRoomConversations.submitUserMessage.mockResolvedValueOnce({
-      outcomes: [{ status: 'rejected' }, { status: 'rejected' }],
-    });
-    const service = createDesktopAgentRuntimeEntryService({
-      characterConversations: { validateSelection: vi.fn(), launch: vi.fn() },
-      ...owners,
-      userId: 'user:local',
-      userDisplayName: 'You',
-    });
-
-    await expect(
-      service.executeInitialInput({
-        requestId: 'request-room',
-        context: { kind: 'room', roomId: 'character-room-1', roomRunId: 'room-run-1' },
-        intent: { kind: 'message', text: 'Hello room' },
-      }),
-    ).rejects.toThrow('Every scheduled Room participant response was rejected');
-    expect(owners.characterRoomConversations.submitUserMessage).toHaveBeenCalledOnce();
-  });
 });
 
 function runtimeOwners() {
   return {
     characterInteractions: {
       validateDialogueBinding: vi.fn(async () => undefined),
-      submitTurn: vi.fn(async () => undefined),
     },
     characterRooms: {
       readRun: vi.fn(async () => ({ characterRoomId: 'character-room-1' })),
     },
-    characterRoomConversations: {
-      submitUserMessage: vi.fn(
-        async (): Promise<{ readonly outcomes: readonly { readonly status: string }[] }> => ({
-          outcomes: [],
-        }),
+    characterPublications: {
+      readPublication: vi.fn(async (characterVersionId: string) =>
+        publication('character-project-1', characterVersionId),
+      ),
+      readCatalog: vi.fn(async () =>
+        globalCatalog(
+          'global-character-1',
+          'character-project-1',
+          'character-version-1',
+        ),
       ),
     },
+    validateCharacterDialogue: vi.fn(async () => undefined),
+    worldRuntime: {
+      createRun: vi.fn(async () => undefined),
+      validateBinding: vi.fn(async () => undefined),
+      readRuntime: vi.fn(async () => undefined),
+    },
+    validateWorldExperience: vi.fn(async () => undefined),
   };
 }
 
 function characterReceipt(
-  participants: import('@neko/agent-contracts').AgentCharacterDialogueLaunchBinding['participants'],
+  participants: readonly import('@neko/agent-contracts').AgentCompanionCharacterDialogueParticipant[],
 ) {
   return {
     targetReceiptId: 'target-character',
     draftId: 'draft-1',
     connectionId: 'connection-1',
     mode: 'character-dialogue' as const,
-    binding: { kind: 'character-dialogue' as const, participants },
+    binding: { kind: 'character-dialogue' as const, mode: 'companion' as const, participants },
   };
 }
 
@@ -289,4 +474,35 @@ function publication(characterProjectId: string, characterVersionId: string) {
     acceptedEvidenceIds: [],
     publishedAt: '2026-08-11T00:00:00.000Z',
   });
+}
+
+function globalCatalog(
+  globalCharacterId: string,
+  _characterProjectId: string,
+  characterVersionId: string,
+) {
+  return {
+    characters: [
+      {
+        globalCharacterId,
+        displayName: 'Character',
+        currentCharacterVersionId: characterVersionId,
+        characterVersionIds: [characterVersionId],
+        createdAt: '2026-08-11T00:00:00.000Z',
+        updatedAt: '2026-08-11T00:00:00.000Z',
+      },
+    ],
+    versions: [
+      parseGlobalCharacterVersion({
+        characterVersionId,
+        globalCharacterId,
+        label: 'Character',
+        definition: publication(globalCharacterId, characterVersionId).definition,
+        acceptedEvidenceIds: [],
+        publishedAt: '2026-08-11T00:00:00.000Z',
+      }),
+    ],
+    links: [],
+    diagnostics: [],
+  };
 }

@@ -4,16 +4,15 @@ import type { AutomationMcpArgumentProjector, AutomationMcpResultProjector } fro
 export const CUA_DRIVER_OBSERVE_PROFILE: AutomationProfile = Object.freeze({
   id: 'computer-use.observe.macos',
   provider: Object.freeze({
-    extensionId: 'computer-use@openneko',
+    extensionId: 'computer-use',
     providerId: 'cua-driver',
     kind: 'computer',
-    upstreamRelease: '0.19.2',
-    deliverySource: Object.freeze({ kind: 'github-release' as const }),
+    deliverySource: Object.freeze({ kind: 'bundled-adapter' as const }),
   }),
   operations: Object.freeze([
     Object.freeze({
       name: 'verify_state',
-      inputSchemaDigest: 'sha256:8bb240b986195599be93f88443dbe3c97203489be33f82b8d7b26b5b15f328e4',
+      requiredInputProperties: Object.freeze(['pid', 'window_id', 'session']),
       modes: Object.freeze(['observe'] as const),
       trait: Object.freeze({
         effect: 'observe' as const,
@@ -41,7 +40,7 @@ const ALLOWED_VERIFY_STATE_ARGUMENTS = new Set([
 const mutableCuaDriverArgumentProjector: AutomationMcpArgumentProjector = {
   project({ providerSessionId, target, mode, operation, arguments: args }) {
     if (target.kind !== 'computer' || mode !== 'observe' || operation !== 'verify_state') {
-      throw new Error('Cua Driver operation does not match the qualified Computer profile.');
+      throw new Error('Cua Driver operation does not match the available Computer profile.');
     }
     const unknownKeys = Object.keys(args).filter((key) => !ALLOWED_VERIFY_STATE_ARGUMENTS.has(key));
     if (unknownKeys.length > 0) {

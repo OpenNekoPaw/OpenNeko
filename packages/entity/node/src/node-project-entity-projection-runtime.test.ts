@@ -36,7 +36,6 @@ describe('NodeProjectEntityProjectionRuntime', () => {
             entityId: 'character-rin',
             kind: 'character',
             names: { canonical: 'Rin', aliases: [] },
-            facts: {},
             representations: [
               {
                 bindingId: 'binding-rin',
@@ -62,18 +61,18 @@ describe('NodeProjectEntityProjectionRuntime', () => {
     const runtime = new NodeProjectEntityProjectionRuntime({
       homedir,
       metadataStore,
-      projections: metadataStore.repositories.entityAssetProjections,
+      projections: metadataStore.repositories.projectEntityProjections,
       now: () => NOW,
     });
 
     await runtime.refresh({ workspaceId: WORKSPACE_ID, workspacePath });
 
     await expect(
-      metadataStore.repositories.entityAssetProjections.list({
+      metadataStore.repositories.projectEntityProjections.list({
         partition: {
           scope: 'workspace',
           workspaceId: WORKSPACE_ID,
-          domain: 'entity-asset-projection',
+          domain: 'project-entity-projection',
         },
         kinds: ['entity-candidate', 'binding-availability'],
       }),
@@ -127,7 +126,7 @@ describe('NodeProjectEntityProjectionRuntime', () => {
     const runtime = new NodeProjectEntityProjectionRuntime({
       homedir,
       metadataStore,
-      projections: metadataStore.repositories.entityAssetProjections,
+      projections: metadataStore.repositories.projectEntityProjections,
       createMetadataBinding: async (options) => {
         const binding = await createNodeWorkspaceSemanticEntityMetadataBinding(options);
         signalBindingReady();

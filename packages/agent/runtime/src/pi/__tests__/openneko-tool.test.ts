@@ -373,6 +373,52 @@ describe('OpenNeko tool projection to Pi', () => {
     expect(load).toHaveBeenCalledWith(assetRef);
   });
 
+  it('projects a transient observation through its exact one-shot Host receipt', async () => {
+    const loadTransientImage = vi.fn(async () => ({
+      kind: 'image' as const,
+      url: 'data:image/png;base64,aW1hZ2UtYnl0ZXM=',
+      mimeType: 'image/png',
+    }));
+    const projected = projectOpenNekoTool(
+      tool({
+        execute: async () => ({
+          success: true,
+          data: { receiptId: 'receipt-1' },
+          attachments: [
+            {
+              type: 'image',
+              mimeType: 'image/png',
+              transientImage: {
+                receiptId: 'receipt-1',
+                sessionId: 'session-1',
+                actionId: 'action-1',
+              },
+            },
+          ],
+        }),
+      }),
+      {
+        assetLoader: {
+          load: vi.fn(),
+          loadTransientImage,
+        },
+      },
+    );
+
+    await expect(projected.execute({ args: {}, context })).resolves.toEqual({
+      content: [
+        { type: 'text', text: '{"receiptId":"receipt-1"}' },
+        { type: 'image', data: 'aW1hZ2UtYnl0ZXM=', mimeType: 'image/png' },
+      ],
+      details: expect.objectContaining({ success: true, data: { receiptId: 'receipt-1' } }),
+    });
+    expect(loadTransientImage).toHaveBeenCalledWith({
+      receiptId: 'receipt-1',
+      sessionId: 'session-1',
+      actionId: 'action-1',
+    });
+  });
+
   it('projects generated-output image attachments through their canonical content locator', async () => {
     const contentLocator = {
       kind: 'generated-output' as const,

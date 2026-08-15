@@ -1,5 +1,12 @@
 ## 1. Boundary design
 
+> Task 1.2 is gated: only Foundation and exact cross-domain refs may enter the current production contract.
+> Story/Experience identities and codecs remain design-only until the optional-capability audit in
+> `simplify-resource-entity-character-world-boundaries` finds a complete real path.
+> Foundation identities and product consumers are owned by
+> `refine-world-management-authoring-and-runtime`; none of the tasks below may add a second
+> WorldProject/WorldVersion/WorldRun/WorldSave contract, repository or registration.
+
 - [ ] 1.1 完成五层 ownership/topology 审计并更新 package role metadata。
 - [ ] 1.2 定义 World Definition、World Story、World Experience canonical identities、refs、contracts 和 strict codecs。
 - [ ] 1.3 定义用户数据清单、workspace-relative owner paths 和 record-local diagnostics。

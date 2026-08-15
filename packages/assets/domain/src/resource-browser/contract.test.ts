@@ -65,14 +65,14 @@ describe('Resource Browser contract', () => {
       createResourceBrowserSearchRequest({
         requestId: 'request-1',
         identity,
-        facet: 'media',
+        source: 'media',
         query: 'cat',
       }),
     ).toEqual({
       requestId: 'request-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.search,
-      facet: 'media',
+      source: 'media',
       query: 'cat',
       limit: 100,
     });
@@ -90,25 +90,25 @@ describe('Resource Browser contract', () => {
       createResourceBrowserChildrenRequest({
         requestId: 'children-1',
         identity,
-        facet: 'files',
+        source: 'files',
         parentResourceId: 'directory-1',
       }),
     ).toEqual({
       requestId: 'children-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.children,
-      facet: 'files',
+      source: 'files',
       parentResourceId: 'directory-1',
       limit: 100,
     });
   });
 
-  it('parses portable ContentLocator, Asset and Entity projections', () => {
+  it('parses portable ContentLocator and Asset projections', () => {
     const media = parseResourceBrowserProjection(
       projection('media', [
         {
           resourceId: 'media-1',
-          facet: 'media',
+          source: 'media',
           role: 'content',
           depth: 0,
           kind: 'image',
@@ -127,7 +127,7 @@ describe('Resource Browser contract', () => {
       projection('assets', [
         {
           resourceId: 'asset-1',
-          facet: 'assets',
+          source: 'assets',
           role: 'asset',
           depth: 0,
           kind: 'asset',
@@ -138,33 +138,23 @@ describe('Resource Browser contract', () => {
         },
       ]),
     );
-    const entities = parseResourceBrowserProjection(
-      projection('entities', [
-        {
-          resourceId: 'entity-1',
-          facet: 'entities',
-          role: 'entity',
-          depth: 0,
-          kind: 'character',
-          label: 'Neko',
-          entityRef: { entityId: 'character-1', entityKind: 'character' },
-          entityStatus: 'confirmed',
-          sourceOwners: ['project-entity'],
-          attentionBindingIds: [],
-          inspector: inspector({ status: 'confirmed', entityId: 'character-1' }),
-          representationAvailability: 'active',
-          representationLocator: { kind: 'workspace-file', path: 'characters/neko.png' },
-          representationBindingId: 'binding-neko-portrait',
-          representationRole: 'portrait',
-          capabilities: ['preview', 'add-to-canvas'],
-        },
-      ]),
-    );
-
     expect(media.items[0]?.capabilities).toContain('add-to-cut');
-    expect(media.items[0]?.facet).toBe('media');
-    expect(assets.items[0]?.facet).toBe('assets');
-    expect(entities.items[0]?.facet).toBe('entities');
+    expect(media.items[0]?.source).toBe('media');
+    expect(assets.items[0]?.source).toBe('assets');
+  });
+
+  it('rejects retired Entity source and intent contracts', () => {
+    expect(() => parseResourceBrowserProjection(projection('entities', []))).toThrow(
+      'source is invalid',
+    );
+    expect(() =>
+      parseResourceBrowserIntentRequest({
+        requestId: 'retired-entity-route',
+        identity,
+        route: 'entity.manage',
+        resourceId: 'entity-nova',
+      }),
+    ).toThrow('route is invalid');
   });
 
   it('parses hierarchical File projections and library management', () => {
@@ -172,7 +162,7 @@ describe('Resource Browser contract', () => {
       projection('files', [
         {
           resourceId: 'directory-1',
-          facet: 'files',
+          source: 'files',
           role: 'directory',
           depth: 0,
           kind: 'directory',
@@ -183,7 +173,7 @@ describe('Resource Browser contract', () => {
         {
           resourceId: 'file-1',
           parentResourceId: 'directory-1',
-          facet: 'files',
+          source: 'files',
           role: 'content',
           depth: 1,
           kind: 'image',
@@ -212,6 +202,18 @@ describe('Resource Browser contract', () => {
   it('rejects unknown fields, absolute paths and stale owner identity', () => {
     expect(() =>
       parseResourceBrowserProjection({
+        identity,
+        facet: 'files',
+        query: '',
+        items: [],
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<ResourceBrowserContractError>>({
+        code: 'invalid-resource-browser-payload',
+      }),
+    );
+    expect(() =>
+      parseResourceBrowserProjection({
         ...projection('files', []),
         obsoleteField: 3,
       }),
@@ -225,29 +227,11 @@ describe('Resource Browser contract', () => {
         projection('files', [
           {
             resourceId: 'file-1',
-            facet: 'files',
+            source: 'files',
             kind: 'file',
             label: 'secret',
             locator: { kind: 'workspace-file', path: '/Users/private/secret.txt' },
             capabilities: ['reveal'],
-          },
-        ]),
-      ),
-    ).toThrowError(ResourceBrowserContractError);
-    expect(() =>
-      parseResourceBrowserProjection(
-        projection('entities', [
-          {
-            resourceId: 'entity-1',
-            facet: 'entities',
-            kind: 'character',
-            label: 'Neko',
-            entityRef: {
-              entityId: 'character-1',
-              entityKind: 'character',
-              projectRoot: '/Users/private/project',
-            },
-            capabilities: [],
           },
         ]),
       ),
@@ -324,7 +308,7 @@ describe('Resource Browser contract', () => {
         projection('media', [
           {
             resourceId: 'library-1',
-            facet: 'media',
+            source: 'media',
             role: 'library-root',
             depth: 0,
             kind: 'directory',
@@ -355,7 +339,6 @@ describe('Resource Browser contract', () => {
         'creative-document.create',
         'creative-document.open',
         'cut.add',
-        'entity.manage',
         'preview',
         'projection.reconcile',
         'quick-preview.release',
@@ -374,6 +357,7 @@ describe('Resource Browser contract', () => {
         'thumbnail.resolve',
         'workspace-entry.create-directory',
         'workspace-entry.create-file',
+        'workspace-entry.import-files',
       ].sort(),
     );
     expect(
@@ -384,13 +368,13 @@ describe('Resource Browser contract', () => {
     ).toBe(1);
     expect(
       parseResourceBrowserIntentRequest({
-        requestId: 'source-1',
+        requestId: 'import-1',
         identity,
-        route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
+        route: RESOURCE_BROWSER_ROUTES.importFiles,
       }),
     ).toMatchObject({
-      requestId: 'source-1',
-      route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
+      requestId: 'import-1',
+      route: RESOURCE_BROWSER_ROUTES.importFiles,
     });
   });
 
@@ -448,59 +432,6 @@ describe('Resource Browser contract', () => {
     });
   });
 
-  it('parses candidates without promoting them to stable Entity identity', () => {
-    const result = parseResourceBrowserProjection(
-      projection('entities', [
-        {
-          resourceId: 'candidate-1',
-          facet: 'entities',
-          role: 'entity',
-          depth: 0,
-          kind: 'character',
-          label: 'Nova',
-          candidateRef: { candidateId: 'candidate-nova', entityKind: 'character' },
-          entityStatus: 'candidate',
-          sourceOwners: ['document'],
-          evidenceCount: 1,
-          inspector: inspector({ status: 'candidate', candidateId: 'candidate-nova' }),
-          capabilities: [],
-        },
-      ]),
-    );
-    expect(result.items[0]).toMatchObject({
-      entityStatus: 'candidate',
-      candidateRef: { candidateId: 'candidate-nova' },
-    });
-    expect(result.items[0]).not.toHaveProperty('entityRef');
-  });
-
-  it('parses Entity management only through the canonical Resource Browser route', () => {
-    expect(
-      parseResourceBrowserIntentRequest({
-        requestId: 'entity-edit',
-        identity,
-        route: RESOURCE_BROWSER_ROUTES.manageEntity,
-        resourceId: 'entity-nova',
-        entityIntent: {
-          type: 'edit',
-          entityId: 'entity-nova',
-          changes: { facts: { role: 'lead' } },
-        },
-      }),
-    ).toMatchObject({
-      route: 'entity.manage',
-      entityIntent: { type: 'edit', entityId: 'entity-nova' },
-    });
-    expect(() =>
-      parseResourceBrowserIntentRequest({
-        requestId: 'entity-missing-intent',
-        identity,
-        route: RESOURCE_BROWSER_ROUTES.manageEntity,
-        resourceId: 'entity-nova',
-      }),
-    ).toThrowError(ResourceBrowserContractError);
-  });
-
   it('requires explicit Preview and Cut handoff targets', () => {
     expect(
       parseResourceBrowserIntentRequest({
@@ -548,30 +479,11 @@ describe('Resource Browser contract', () => {
   });
 });
 
-function projection(facet: 'files' | 'media' | 'assets' | 'entities', items: readonly unknown[]) {
+function projection(source: string, items: readonly unknown[]) {
   return {
     identity,
-    facet,
+    source,
     query: '',
     items,
-  };
-}
-
-function inspector(
-  identity:
-    | { readonly status: 'confirmed'; readonly entityId: string }
-    | { readonly status: 'candidate'; readonly candidateId: string },
-) {
-  return {
-    status: identity.status,
-    kind: 'character',
-    names: { canonical: 'Nova', aliases: [] },
-    facts: {},
-    ...('entityId' in identity
-      ? { entityId: identity.entityId }
-      : { candidateId: identity.candidateId, evidence: [] }),
-    bindings: [],
-    operations: identity.status === 'candidate' ? ['confirm'] : ['edit'],
-    blockers: [],
   };
 }

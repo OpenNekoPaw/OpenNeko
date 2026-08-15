@@ -10,12 +10,14 @@ import {
   parseAgentInputReferenceReceipt,
   parseMessageContextReference,
   parseAgentScratchArtifactRef,
+  parseAgentTurnCapabilityConstraint,
   type AgentBoundDomainBinding,
   type AgentConfigurationPolicyProjection,
   type AgentConfigurationRequest,
   type AgentConversationConfiguration,
   type AgentConversationTurnConfigurationSnapshot,
   type AgentScratchArtifactRef,
+  type AgentTurnCapabilityConstraint,
   type AgentContextPayload,
   type AgentDraftInputIntent,
   type AgentEntryTargetReceipt,
@@ -62,6 +64,7 @@ export interface AgentConversationLifecycleRecord {
     readonly turnId: string;
     readonly status: AgentPendingTurnStatus;
     readonly configuration: AgentConversationTurnConfigurationSnapshot;
+    readonly capabilityConstraint: AgentTurnCapabilityConstraint;
     readonly diagnostic?: string;
   };
   readonly scratchArtifacts: readonly AgentScratchArtifactRef[];
@@ -152,8 +155,15 @@ export interface AgentResourceGrantValidationPort {
 }
 
 export interface AgentDomainContextResolutionPort {
+  resolveCapabilityConstraint(input: {
+    readonly conversationId: string;
+    readonly context: AgentBoundDomainBinding;
+    readonly input: AgentDraftInputIntent;
+    readonly references: readonly AgentInputReferenceReceipt[];
+  }): Promise<AgentTurnCapabilityConstraint>;
   resolveForTurn(input: {
     readonly conversationId: string;
+    readonly turnId: string;
     readonly context: AgentBoundDomainBinding;
     readonly references: readonly AgentInputReferenceReceipt[];
   }): Promise<readonly AgentContextPayload[]>;
@@ -177,18 +187,26 @@ export interface AgentScratchPublicationPort {
 }
 
 export interface AgentProviderExecutionPort {
-  start(input: {
-    readonly requestId: string;
-    readonly turnId: string;
-    readonly conversationId: string;
-    readonly context: AgentBoundDomainBinding;
-    readonly input: AgentDraftInputIntent;
-    readonly entryTargetReceipt: AgentEntryTargetReceipt | null;
-    readonly resourceGrantIds: readonly string[];
-    readonly contextPayloads: readonly AgentContextPayload[];
-    readonly configuration: AgentConversationTurnConfigurationSnapshot;
-    readonly purposeModels?: AgentFlatPurposeModelRefs;
-  }): Promise<void>;
+  start(input: AgentProviderExecutionInput): Promise<AgentProviderExecutionResult | void>;
+}
+
+export interface AgentProviderExecutionInput {
+  readonly requestId: string;
+  readonly turnId: string;
+  readonly conversationId: string;
+  readonly context: AgentBoundDomainBinding;
+  readonly input: AgentDraftInputIntent;
+  readonly entryTargetReceipt: AgentEntryTargetReceipt | null;
+  readonly resourceGrantIds: readonly string[];
+  readonly contextPayloads: readonly AgentContextPayload[];
+  readonly configuration: AgentConversationTurnConfigurationSnapshot;
+  readonly capabilityConstraint: AgentTurnCapabilityConstraint;
+  readonly purposeModels?: AgentFlatPurposeModelRefs;
+}
+
+export interface AgentProviderExecutionResult {
+  readonly turnId: string;
+  readonly content: string;
 }
 
 export interface AgentConversationSessionMaterializationPort {
@@ -202,6 +220,7 @@ export interface AgentConversationSessionMaterializationPort {
 export interface AgentConversationLifecycleService {
   firstSubmit(input: AgentFirstSubmitInput): Promise<AgentConversationLifecycleRecord>;
   startProviderExecution(conversationId: string): Promise<AgentConversationLifecycleRecord>;
+  executeProviderTurn(conversationId: string): Promise<AgentProviderExecutionResult>;
   waitForProviderIdle(): Promise<void>;
   readFirstSubmitRecord(
     conversationId: string,
@@ -215,6 +234,9 @@ export interface AgentConversationLifecycleService {
     conversationId: string,
   ): Promise<AgentEntryTargetReceipt | null>;
   readConversationConfiguration(conversationId: string): Promise<AgentConversationConfiguration>;
+  readConversationCapabilityConstraint(
+    conversationId: string,
+  ): Promise<AgentTurnCapabilityConstraint>;
   updateConfiguration(input: {
     readonly conversationId: string;
     readonly request: AgentConfigurationRequest;
@@ -265,15 +287,15 @@ export function createAgentConversationLifecycleService(options: {
   readonly now: () => string;
 }): AgentConversationLifecycleService {
   const providerExecutions = new Set<Promise<void>>();
-  const trackProviderExecution = (operation: Promise<void>): void => {
-    providerExecutions.add(operation);
-    void operation.then(
-      () => providerExecutions.delete(operation),
+  const trackProviderExecution = (operation: Promise<unknown>): void => {
+    const tracked = operation.then(
+      () => undefined,
       (error: unknown) => {
-        providerExecutions.delete(operation);
         options.reportError(toError(error));
       },
     );
+    providerExecutions.add(tracked);
+    void tracked.finally(() => providerExecutions.delete(tracked));
   };
   const firstSubmit = async (
     input: AgentFirstSubmitInput,
@@ -339,6 +361,19 @@ export function createAgentConversationLifecycleService(options: {
       return existing;
     }
     const conversationId = requestedConversationId ?? `conversation:${options.createIdentity()}`;
+    const capabilityConstraint = parseAgentTurnCapabilityConstraint(
+      await options.domainContext.resolveCapabilityConstraint({
+        conversationId,
+        context,
+        input: inputIntent,
+        references,
+      }),
+    );
+    if (capabilityConstraint.skills === 'none' && inputIntent.kind !== 'message') {
+      throw new Error(
+        `Agent turn capability constraint '${capabilityConstraint.owner.kind}/${capabilityConstraint.owner.id}' forbids Skill or command activation.`,
+      );
+    }
     const turnId = `turn:${options.createIdentity()}`;
     const configuration = parseAgentConversationConfiguration({
       conversationId,
@@ -365,7 +400,13 @@ export function createAgentConversationLifecycleService(options: {
         ...(purposeModels === undefined ? {} : { purposeModels }),
       },
       configuration,
-      pendingTurn: { requestId, turnId, status: 'pending', configuration: turnConfiguration },
+      pendingTurn: {
+        requestId,
+        turnId,
+        status: 'pending',
+        configuration: turnConfiguration,
+        capabilityConstraint,
+      },
       scratchArtifacts: [],
     };
     const committed = await options.repository.commitFirstSubmit(record);
@@ -393,17 +434,20 @@ export function createAgentConversationLifecycleService(options: {
     return exact;
   };
 
-  const startProviderExecution = async (
+  const beginProviderExecution = async (
     conversationIdValue: string,
-  ): Promise<AgentConversationLifecycleRecord> => {
+  ): Promise<{
+    readonly record: AgentConversationLifecycleRecord;
+    readonly execution?: Promise<AgentProviderExecutionResult | void>;
+  }> => {
     const conversationId = requireIdentity(conversationIdValue, 'Agent Conversation');
     const exact = await options.repository.readConversation(conversationId);
     if (!exact) throw new Error(`Agent Conversation '${conversationId}' is not present.`);
-    if (exact.pendingTurn.status !== 'pending') return exact;
+    if (exact.pendingTurn.status !== 'pending') return { record: exact };
     if (!(await options.repository.claimProviderExecution(exact.pendingTurn.turnId))) {
       const claimed = await options.repository.readConversation(conversationId);
       if (!claimed) throw new Error(`Agent Conversation '${conversationId}' is not present.`);
-      return claimed;
+      return { record: claimed };
     }
     const running = await options.repository.updatePendingTurn(conversationId, {
       ...exact.pendingTurn,
@@ -413,6 +457,7 @@ export function createAgentConversationLifecycleService(options: {
       const [domainContextPayloads, resourceContextPayloads] = await Promise.all([
         options.domainContext.resolveForTurn({
           conversationId: exact.conversationId,
+          turnId: exact.pendingTurn.turnId,
           context: exact.context,
           references: exact.initialInput.references,
         }),
@@ -421,7 +466,7 @@ export function createAgentConversationLifecycleService(options: {
           resourceGrantIds: exact.initialInput.resourceGrantIds,
         }),
       ]);
-      await options.provider.start({
+      const result = await options.provider.start({
         requestId: exact.pendingTurn.requestId,
         turnId: exact.pendingTurn.turnId,
         conversationId: exact.conversationId,
@@ -434,21 +479,34 @@ export function createAgentConversationLifecycleService(options: {
           : { purposeModels: exact.initialInput.purposeModels }),
         contextPayloads: [...domainContextPayloads, ...resourceContextPayloads],
         configuration: exact.pendingTurn.configuration,
+        capabilityConstraint: exact.pendingTurn.capabilityConstraint,
       });
+      if (result && result.turnId !== exact.pendingTurn.turnId) {
+        throw new Error(
+          `Agent provider returned Turn '${result.turnId}' for pending Turn '${exact.pendingTurn.turnId}'.`,
+        );
+      }
       await options.repository.updatePendingTurn(exact.conversationId, {
         ...exact.pendingTurn,
         status: 'completed',
       });
+      return result;
     })().catch(async (error: unknown) => {
       await options.repository.updatePendingTurn(conversationId, {
         ...exact.pendingTurn,
         status: 'failed',
         diagnostic: describeError(error),
       });
+      throw error;
     });
     trackProviderExecution(execution);
-    return running;
+    return { record: running, execution };
   };
+
+  const startProviderExecution = async (
+    conversationId: string,
+  ): Promise<AgentConversationLifecycleRecord> =>
+    (await beginProviderExecution(conversationId)).record;
 
   const readFirstSubmitRecord = async (
     conversationIdValue: string,
@@ -529,6 +587,21 @@ export function createAgentConversationLifecycleService(options: {
   return {
     firstSubmit,
     startProviderExecution,
+    async executeProviderTurn(conversationId) {
+      const started = await beginProviderExecution(conversationId);
+      if (!started.execution) {
+        throw new Error(
+          `Agent Conversation '${conversationId}' has no locally claimable pending provider Turn.`,
+        );
+      }
+      const result = await started.execution;
+      if (!result) {
+        throw new Error(
+          `Agent Conversation '${conversationId}' provider completed without a Turn result.`,
+        );
+      }
+      return result;
+    },
     async waitForProviderIdle() {
       while (providerExecutions.size > 0) {
         await Promise.all([...providerExecutions]);
@@ -545,6 +618,11 @@ export function createAgentConversationLifecycleService(options: {
       return (await readConversation(conversationId)).initialInput.entryTargetReceipt;
     },
     readConversationConfiguration,
+    async readConversationCapabilityConstraint(conversationId) {
+      return parseAgentTurnCapabilityConstraint(
+        (await readConversation(conversationId)).pendingTurn.capabilityConstraint,
+      );
+    },
     async updateConfiguration(input) {
       const conversationId = requireIdentity(input.conversationId, 'Agent Conversation');
       const configuration = parseAgentConversationConfiguration({

@@ -23,6 +23,9 @@ import type {
 } from '@ai-sdk/provider';
 import type { ProviderConfig } from '../../types';
 import { copyBytesToArrayBuffer } from './newapi-binary';
+import { Agent } from 'undici';
+
+const NEWAPI_IMAGE_HTTP_TIMEOUT_MS = 10 * 60 * 1000;
 
 export class NewAPIImageModel implements ImageModelV3 {
   readonly specificationVersion = 'v3' as const;
@@ -137,7 +140,7 @@ export class NewAPIImageModel implements ImageModelV3 {
     const quality = normalizeNewAPIImageQuality(nekoExtras['quality'], this.modelId);
     if (quality !== undefined) body.quality = quality;
 
-    const response = await fetchNewAPIImageResponse(
+    const data = await consumeNewAPIImageResponse(
       url,
       {
         method: 'POST',
@@ -149,18 +152,18 @@ export class NewAPIImageModel implements ImageModelV3 {
         body: JSON.stringify(body),
         signal: options.abortSignal,
       },
+      async (response) => {
+        if (!response.ok) {
+          const errorBody = await response.text();
+          throw new Error(`NewAPI image generation failed (${response.status}): ${errorBody}`);
+        }
+        return (await response.json()) as {
+          created: number;
+          data: Array<{ url?: string; b64_json?: string; revised_prompt?: string }>;
+        };
+      },
       options.abortSignal,
     );
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`NewAPI image generation failed (${response.status}): ${errorBody}`);
-    }
-
-    const data = (await response.json()) as {
-      created: number;
-      data: Array<{ url?: string; b64_json?: string; revised_prompt?: string }>;
-    };
 
     const images = await materializeNewAPIImageResults(
       data.data,
@@ -308,7 +311,7 @@ export class NewAPIImageModel implements ImageModelV3 {
       form.append('ip_adapter_refs', JSON.stringify(serialized));
     }
 
-    const response = await fetchNewAPIImageResponse(
+    const data = await consumeNewAPIImageResponse(
       url,
       {
         method: 'POST',
@@ -320,18 +323,18 @@ export class NewAPIImageModel implements ImageModelV3 {
         body: form,
         signal: options.abortSignal,
       },
+      async (response) => {
+        if (!response.ok) {
+          const errorBody = await response.text();
+          throw new Error(`NewAPI image edit failed (${response.status}): ${errorBody}`);
+        }
+        return (await response.json()) as {
+          created: number;
+          data: Array<{ url?: string; b64_json?: string; revised_prompt?: string }>;
+        };
+      },
       options.abortSignal,
     );
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`NewAPI image edit failed (${response.status}): ${errorBody}`);
-    }
-
-    const data = (await response.json()) as {
-      created: number;
-      data: Array<{ url?: string; b64_json?: string; revised_prompt?: string }>;
-    };
 
     const images = await materializeNewAPIImageResults(
       data.data,
@@ -391,13 +394,26 @@ const AMBIGUOUS_IMAGE_SUBMISSION_CODES = new Set([
   'UND_ERR_SOCKET',
 ]);
 
-async function fetchNewAPIImageResponse(
+async function consumeNewAPIImageResponse<T>(
   url: string,
   init: RequestInit,
+  consume: (response: Response) => Promise<T>,
   signal?: AbortSignal,
-): Promise<Response> {
+): Promise<T> {
+  const dispatcher = new Agent({
+    headersTimeout: NEWAPI_IMAGE_HTTP_TIMEOUT_MS,
+    bodyTimeout: NEWAPI_IMAGE_HTTP_TIMEOUT_MS,
+  });
   try {
-    return await fetch(url, init);
+    // Node fetch accepts Undici's dispatcher extension even though the DOM
+    // RequestInit declaration does not expose a compatible dispatcher type.
+    const requestInit: RequestInit = { ...init };
+    Object.defineProperty(requestInit, 'dispatcher', {
+      value: dispatcher,
+      enumerable: true,
+    });
+    const response = await fetch(url, requestInit);
+    return await consume(response);
   } catch (error) {
     if (signal?.aborted || readErrorName(error) === 'AbortError') throw error;
     const transportCode = readNestedErrorCode(error);
@@ -411,8 +427,11 @@ async function fetchNewAPIImageResponse(
         cause: error,
         code: 'NEWAPI_IMAGE_OUTCOME_UNKNOWN',
         isRetryable: false,
+        outcomeUnknown: true,
       },
     );
+  } finally {
+    await releaseDispatcher(dispatcher);
   }
 }
 

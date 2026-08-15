@@ -112,6 +112,7 @@ import {
 import {
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
+  parseCanvasHostRuntimeIdentity,
   parseCanvasMaterialActionResolution,
   parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostProjectionEvent,
@@ -124,11 +125,11 @@ import {
 import {
   DESKTOP_CANVAS_CHANNELS,
   isSameCanvasHostIdentity,
-  parseDesktopCanvasHostIdentity,
-  parseDesktopCanvasMediaRequest,
-  parseDesktopCanvasMediaResponse,
   parseDesktopCanvasPreviewVariantRequest,
   parseDesktopCanvasPreviewVariantResult,
+  parseDesktopCanvasPreviewResourceReleaseRequest,
+  parseDesktopCanvasPreviewResourceRequest,
+  parseDesktopCanvasPreviewResourceResult,
   type OpenNekoDesktopCanvasBridge,
 } from '../shared/canvas-bridge-contract';
 import {
@@ -198,7 +199,6 @@ import {
   DESKTOP_WORKSPACE_GRANT_CHANNEL,
   createDesktopWorkspaceDirectoryTargetRequest,
   createDesktopContentProjectTargetRequest,
-  createDesktopWorkspaceAuthoringLibraryTargetRequest,
   createDesktopWorkspaceProjectTargetRequest,
   parseDesktopWorkspaceGrantTargetResult,
   type OpenNekoDesktopWorkspaceGrantBridge,
@@ -206,8 +206,16 @@ import {
 import {
   PROJECT_AUTHORING_HOST_CHANNEL,
   PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
+  createProjectAuthoringCatalogHostRequest,
+  createProjectCreativeWorkspaceHostRequest,
+  createProjectCreativeWorkspaceMutationHostRequest,
+  createProjectCreativeWorkspaceObjectMutationHostRequest,
+  createProjectContentHostRequest,
   createProjectLocalAuthoringHostRequest,
   createProjectAuthoringNavigationHostRequest,
+  parseProjectAuthoringCatalogHostResult,
+  parseProjectCreativeWorkspaceHostResult,
+  parseProjectContentHostResult,
   parseProjectLocalAuthoringHostResult,
   parseProjectAuthoringNavigationHostResult,
   type OpenNekoDesktopProjectAuthoringBridge,
@@ -220,11 +228,11 @@ import {
   type OpenNekoAgentExtensionManagementBridge,
 } from '@neko/agent-contracts/extension-management-host';
 import {
-  AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
-  parseAutomationEndpointManagementHostRequest,
-  parseAutomationEndpointManagementHostResult,
-  type OpenNekoAutomationEndpointManagementBridge,
-} from '@neko/automation-contracts/endpoint-management';
+  AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
+  parseAutomationLocalRuntimeManagementHostRequest,
+  parseAutomationLocalRuntimeManagementHostResult,
+  type OpenNekoAutomationLocalRuntimeManagementBridge,
+} from '@neko/automation-contracts/local-runtime-management';
 import {
   AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
   parseAutomationPermissionManagementHostRequest,
@@ -249,36 +257,51 @@ import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
   CHARACTER_AUTHORING_HOST_CHANNEL,
   CHARACTER_AVATAR_HOST_CHANNEL,
+  CHARACTER_PORTABLE_HOST_CHANNELS,
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
   createCharacterFoundationCommandHostRequest,
   createCharacterFoundationHostRequest,
   createCharacterAuthoringCommandRequest,
   createCharacterAuthoringSnapshotRequest,
+  createCharacterPortableHostRequest,
   createCharacterAvatarOpenRequest,
   createCharacterAvatarReleaseRequest,
   createCharacterRoomWorkbenchSnapshotRequest,
   parseCharacterFoundationHostResult,
+  parseCharacterConversationLaunchCatalogHostResult,
   parseCharacterAuthoringHostResult,
+  parseCharacterPortableHostResult,
   parseCharacterAvatarHostResult,
   parseCharacterRoomWorkbenchProjectionEvent,
   parseCharacterRoomWorkbenchSnapshotResult,
   type CharacterRoomWorkbenchProjectionEvent,
   type OpenNekoDesktopCharacterBridge,
   type OpenNekoDesktopCharacterAuthoringBridge,
+  type OpenNekoDesktopCharacterPortableBridge,
   type OpenNekoDesktopCharacterAvatarBridge,
   type OpenNekoDesktopCharacterRoomWorkbenchBridge,
 } from '@neko/chara/contracts';
 import {
-  WORLD_FOUNDATION_HOST_CHANNEL,
   WORLD_AUTHORING_HOST_CHANNEL,
-  createWorldFoundationCommandHostRequest,
-  createWorldFoundationHostRequest,
+  WORLD_MANAGEMENT_HOST_CHANNEL,
+  WORLD_PORTABLE_HOST_CHANNELS,
+  WORLD_RUNTIME_HOST_CHANNEL,
+  createWorldRuntimeActionRequest,
+  createWorldRuntimeLaunchRequest,
+  createWorldRuntimeSnapshotRequest,
   createWorldAuthoringCommandRequest,
   createWorldAuthoringSnapshotRequest,
-  parseWorldFoundationHostResult,
+  createWorldManagementCatalogRequest,
+  createWorldManagementDetailRequest,
+  createWorldPortableHostRequest,
   parseWorldAuthoringHostResult,
+  parseWorldManagementHostResult,
+  parseWorldPortableHostResult,
+  parseWorldRuntimeHostResult,
+  type OpenNekoDesktopWorldManagementBridge,
+  type OpenNekoDesktopWorldPortableBridge,
   type OpenNekoDesktopWorldAuthoringBridge,
-  type OpenNekoDesktopWorldBridge,
+  type OpenNekoDesktopWorldRuntimeBridge,
 } from '@neko/world/contracts';
 
 let requestSequence = 0;
@@ -347,7 +370,7 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoAssistantResourceBridge &
   OpenNekoDesktopWorkspaceGrantBridge &
   OpenNekoAgentExtensionManagementBridge &
-  OpenNekoAutomationEndpointManagementBridge &
+  OpenNekoAutomationLocalRuntimeManagementBridge &
   OpenNekoAutomationPermissionManagementBridge &
   OpenNekoDesktopAutomationTargetSelectionBridge &
   OpenNekoDesktopAutomationSessionControlBridge &
@@ -357,10 +380,13 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopProjectLocalAuthoringBridge &
   OpenNekoDesktopCharacterBridge &
   OpenNekoDesktopCharacterAuthoringBridge &
+  OpenNekoDesktopCharacterPortableBridge &
   OpenNekoDesktopCharacterAvatarBridge &
   OpenNekoDesktopCharacterRoomWorkbenchBridge &
-  OpenNekoDesktopWorldBridge &
-  OpenNekoDesktopWorldAuthoringBridge = {
+  OpenNekoDesktopWorldManagementBridge &
+  OpenNekoDesktopWorldAuthoringBridge &
+  OpenNekoDesktopWorldPortableBridge &
+  OpenNekoDesktopWorldRuntimeBridge = {
   worldAuthoring: {
     async getSnapshot(windowId, binding) {
       const context = requireShellMutationContext();
@@ -386,19 +412,97 @@ const bridge: OpenNekoDesktopBridge &
       return parseWorldAuthoringHostResult(response, request.requestId, binding).snapshot;
     },
   },
-  worldFoundation: {
-    async getSnapshot() {
-      const request = createWorldFoundationHostRequest(nextRequestId('world-foundation'));
-      const response: unknown = await ipcRenderer.invoke(WORLD_FOUNDATION_HOST_CHANNEL, request);
-      return parseWorldFoundationHostResult(response, request.requestId).snapshot;
+  worldRuntime: {
+    async launch(windowId, launch) {
+      const context = requireShellMutationContext();
+      const request = createWorldRuntimeLaunchRequest({
+        requestId: nextRequestId('world-runtime-launch'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        launch,
+      });
+      const response: unknown = await ipcRenderer.invoke(WORLD_RUNTIME_HOST_CHANNEL, request);
+      return parseWorldRuntimeHostResult(response, request.requestId).projection;
     },
-    async execute(command) {
-      const request = createWorldFoundationCommandHostRequest(
-        nextRequestId('world-foundation-command'),
-        command,
+    async getSnapshot(windowId, binding) {
+      const context = requireShellMutationContext();
+      const request = createWorldRuntimeSnapshotRequest({
+        requestId: nextRequestId('world-runtime-snapshot'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        binding,
+      });
+      const response: unknown = await ipcRenderer.invoke(WORLD_RUNTIME_HOST_CHANNEL, request);
+      return parseWorldRuntimeHostResult(response, request.requestId).projection;
+    },
+    async submitAction(windowId, binding, intent) {
+      const context = requireShellMutationContext();
+      const request = createWorldRuntimeActionRequest({
+        requestId: nextRequestId('world-runtime-action'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        binding,
+        intent,
+      });
+      const response: unknown = await ipcRenderer.invoke(WORLD_RUNTIME_HOST_CHANNEL, request);
+      return parseWorldRuntimeHostResult(response, request.requestId).projection;
+    },
+  },
+  worldPortable: {
+    async exportPackage(windowId, binding, selection) {
+      const context = requireShellMutationContext();
+      const request = createWorldPortableHostRequest({
+        requestId: nextRequestId('world-portable-export'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        operation: 'export',
+        binding,
+        selection,
+      });
+      return parseWorldPortableHostResult(
+        await ipcRenderer.invoke(WORLD_PORTABLE_HOST_CHANNELS.exportPackage, request),
+        request.requestId,
       );
-      const response: unknown = await ipcRenderer.invoke(WORLD_FOUNDATION_HOST_CHANNEL, request);
-      return parseWorldFoundationHostResult(response, request.requestId).snapshot;
+    },
+    async importPackage(windowId, target) {
+      const context = requireShellMutationContext();
+      const request = createWorldPortableHostRequest({
+        requestId: nextRequestId('world-portable-import'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        operation: 'import',
+        ...(target === undefined ? {} : { target }),
+      });
+      return parseWorldPortableHostResult(
+        await ipcRenderer.invoke(WORLD_PORTABLE_HOST_CHANNELS.importPackage, request),
+        request.requestId,
+      );
+    },
+  },
+  worldManagement: {
+    async getCatalog(query) {
+      const request = createWorldManagementCatalogRequest(
+        nextRequestId('world-management-catalog'),
+        query,
+      );
+      const response: unknown = await ipcRenderer.invoke(WORLD_MANAGEMENT_HOST_CHANNEL, request);
+      const result = parseWorldManagementHostResult(response, request);
+      if (result.operation !== 'catalog-get') {
+        throw new Error('World management catalog response operation mismatch.');
+      }
+      return result.catalog;
+    },
+    async getDetail(worldProjectId) {
+      const request = createWorldManagementDetailRequest(
+        nextRequestId('world-management-detail'),
+        worldProjectId,
+      );
+      const response: unknown = await ipcRenderer.invoke(WORLD_MANAGEMENT_HOST_CHANNEL, request);
+      const result = parseWorldManagementHostResult(response, request);
+      if (result.operation !== 'detail-get') {
+        throw new Error('World management detail response operation mismatch.');
+      }
+      return result.detail;
     },
   },
   characterFoundation: {
@@ -409,6 +513,17 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       return parseCharacterFoundationHostResult(response, request.requestId).snapshot;
+    },
+    async getConversationLaunchCatalog() {
+      const request = createCharacterFoundationHostRequest(
+        nextRequestId('character-conversation-launch-catalog'),
+        'conversation-launch-catalog-get',
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_FOUNDATION_HOST_CHANNEL,
+        request,
+      );
+      return parseCharacterConversationLaunchCatalogHostResult(response, request.requestId).catalog;
     },
     async execute(command) {
       const request = createCharacterFoundationCommandHostRequest(
@@ -445,6 +560,58 @@ const bridge: OpenNekoDesktopBridge &
       });
       const response: unknown = await ipcRenderer.invoke(CHARACTER_AUTHORING_HOST_CHANNEL, request);
       return parseCharacterAuthoringHostResult(response, request.requestId, binding).snapshot;
+    },
+  },
+  characterPortable: {
+    async getExportScope(windowId, binding, characterProjectId) {
+      const context = requireShellMutationContext();
+      const request = createCharacterPortableHostRequest(
+        {
+          requestId: nextRequestId('character-portable-export-scope'),
+          rendererSessionId: context.rendererSessionId,
+          windowId,
+        },
+        binding,
+        { kind: 'export-scope', characterProjectId },
+      );
+      return parseCharacterPortableHostResult(
+        await ipcRenderer.invoke(CHARACTER_PORTABLE_HOST_CHANNELS.exportScope, request),
+        request.requestId,
+      );
+    },
+    async exportPackage(windowId, binding, characterProjectId, selection) {
+      const context = requireShellMutationContext();
+      const request = createCharacterPortableHostRequest(
+        {
+          requestId: nextRequestId('character-portable-export'),
+          rendererSessionId: context.rendererSessionId,
+          windowId,
+        },
+        binding,
+        { kind: 'export', characterProjectId, selection },
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_PORTABLE_HOST_CHANNELS.exportPackage,
+        request,
+      );
+      return parseCharacterPortableHostResult(response, request.requestId);
+    },
+    async importPackage(windowId, target) {
+      const context = requireShellMutationContext();
+      const request = createCharacterPortableHostRequest(
+        {
+          requestId: nextRequestId('character-portable-import'),
+          rendererSessionId: context.rendererSessionId,
+          windowId,
+        },
+        undefined,
+        { kind: 'import', ...(target === undefined ? {} : { target }) },
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        CHARACTER_PORTABLE_HOST_CHANNELS.importPackage,
+        request,
+      );
+      return parseCharacterPortableHostResult(response, request.requestId);
     },
   },
   characterAvatar: {
@@ -676,19 +843,18 @@ const bridge: OpenNekoDesktopBridge &
       const response: unknown = await ipcRenderer.invoke(DESKTOP_WORKSPACE_GRANT_CHANNEL, request);
       return parseDesktopWorkspaceGrantTargetResult(response, request.requestId);
     },
-    async selectAuthoringLibrary(windowId, library) {
-      const context = requireShellMutationContext();
-      const request = createDesktopWorkspaceAuthoringLibraryTargetRequest({
-        requestId: nextRequestId('desktop-workspace-grant-select-authoring-library'),
-        rendererSessionId: context.rendererSessionId,
-        windowId,
-        library,
-      });
-      const response: unknown = await ipcRenderer.invoke(DESKTOP_WORKSPACE_GRANT_CHANNEL, request);
-      return parseDesktopWorkspaceGrantTargetResult(response, request.requestId);
-    },
   },
   projectAuthoring: {
+    async getCatalog(windowId) {
+      const context = requireShellMutationContext();
+      const request = createProjectAuthoringCatalogHostRequest({
+        requestId: nextRequestId('project-authoring-catalog'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+      });
+      const response: unknown = await ipcRenderer.invoke(PROJECT_AUTHORING_HOST_CHANNEL, request);
+      return parseProjectAuthoringCatalogHostResult(response, request.requestId);
+    },
     async getNavigation(windowId, binding) {
       const context = requireShellMutationContext();
       const request = createProjectAuthoringNavigationHostRequest({
@@ -699,6 +865,56 @@ const bridge: OpenNekoDesktopBridge &
       });
       const response: unknown = await ipcRenderer.invoke(PROJECT_AUTHORING_HOST_CHANNEL, request);
       return parseProjectAuthoringNavigationHostResult(response, request.requestId);
+    },
+    async getContent(windowId, binding) {
+      const context = requireShellMutationContext();
+      const request = createProjectContentHostRequest({
+        requestId: nextRequestId('project-content'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        binding,
+      });
+      const response: unknown = await ipcRenderer.invoke(PROJECT_AUTHORING_HOST_CHANNEL, request);
+      const result = parseProjectContentHostResult(response, request.requestId);
+      if (result.workspaceId !== binding.workspaceId || result.projectId !== binding.projectId) {
+        throw new Error('Desktop Project Content result identity does not match.');
+      }
+      return result;
+    },
+    async getCreativeWorkspace(windowId, binding) {
+      const context = requireShellMutationContext();
+      const request = createProjectCreativeWorkspaceHostRequest({
+        requestId: nextRequestId('project-creative-workspace'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        binding,
+      });
+      const response: unknown = await ipcRenderer.invoke(PROJECT_AUTHORING_HOST_CHANNEL, request);
+      return parseProjectCreativeWorkspaceHostResult(response, request.requestId, binding);
+    },
+    async mutateCreativeWorkspaceReference(windowId, binding, mutation) {
+      const context = requireShellMutationContext();
+      const request = createProjectCreativeWorkspaceMutationHostRequest({
+        requestId: nextRequestId('project-creative-workspace-reference-mutate'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        binding,
+        mutation,
+      });
+      const response: unknown = await ipcRenderer.invoke(PROJECT_AUTHORING_HOST_CHANNEL, request);
+      return parseProjectCreativeWorkspaceHostResult(response, request.requestId, binding);
+    },
+    async mutateCreativeWorkspaceObject(windowId, binding, mutation) {
+      const context = requireShellMutationContext();
+      const request = createProjectCreativeWorkspaceObjectMutationHostRequest({
+        requestId: nextRequestId('project-creative-workspace-object-mutate'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        binding,
+        mutation,
+      });
+      const response: unknown = await ipcRenderer.invoke(PROJECT_AUTHORING_HOST_CHANNEL, request);
+      return parseProjectCreativeWorkspaceHostResult(response, request.requestId, binding);
     },
   },
   projectLocalAuthoring: {
@@ -715,7 +931,19 @@ const bridge: OpenNekoDesktopBridge &
         PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
         request,
       );
-      return parseProjectLocalAuthoringHostResult(response, request.requestId, binding);
+      const expectedTarget =
+        input.kind === 'character-project'
+          ? {
+              kind: 'character-project' as const,
+              characterProjectId: input.characterProjectId,
+            }
+          : { kind: 'world-project' as const, worldProjectId: input.worldProjectId };
+      return parseProjectLocalAuthoringHostResult(
+        response,
+        request.requestId,
+        binding,
+        expectedTarget,
+      );
     },
   },
   agent: {
@@ -912,14 +1140,14 @@ const bridge: OpenNekoDesktopBridge &
       return parseAgentExtensionManagementHostResult(response, request);
     },
   },
-  automationEndpoints: {
+  automationLocalRuntimes: {
     async execute(input) {
-      const request = parseAutomationEndpointManagementHostRequest(input);
+      const request = parseAutomationLocalRuntimeManagementHostRequest(input);
       const response: unknown = await ipcRenderer.invoke(
-        AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
+        AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
         request,
       );
-      return parseAutomationEndpointManagementHostResult(response, request);
+      return parseAutomationLocalRuntimeManagementHostResult(response, request);
     },
   },
   automationPermissions: {
@@ -1319,7 +1547,7 @@ const bridge: OpenNekoDesktopBridge &
   },
   canvas: {
     async getSnapshot(value) {
-      const identity = parseDesktopCanvasHostIdentity(value);
+      const identity = parseCanvasHostRuntimeIdentity(value);
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_CANVAS_CHANNELS.snapshotGet,
         identity,
@@ -1386,20 +1614,30 @@ const bridge: OpenNekoDesktopBridge &
       );
       return parseDesktopCanvasPreviewVariantResult(response, request.requestId);
     },
-    async executeMediaRequest(value) {
-      const request = parseDesktopCanvasMediaRequest(value);
+    async resolvePreviewResource(value) {
+      const request = parseDesktopCanvasPreviewResourceRequest(value);
       const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
       if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
-        throw new Error('Desktop Canvas media request requires a current owner-bound snapshot.');
+        throw new Error('Desktop Canvas preview resource requires a current owner-bound snapshot.');
       }
       const response: unknown = await ipcRenderer.invoke(
-        DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
+        DESKTOP_CANVAS_CHANNELS.previewResourceResolve,
         request,
       );
-      return parseDesktopCanvasMediaResponse(response, request.nodeId);
+      return parseDesktopCanvasPreviewResourceResult(response, request.requestId);
+    },
+    async releasePreviewResource(value) {
+      const request = parseDesktopCanvasPreviewResourceReleaseRequest(value);
+      const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
+      if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
+        throw new Error(
+          'Desktop Canvas preview resource release requires a current owner-bound snapshot.',
+        );
+      }
+      await ipcRenderer.invoke(DESKTOP_CANVAS_CHANNELS.previewResourceRelease, request);
     },
     subscribe(identity, listener) {
-      const entry = { identity: parseDesktopCanvasHostIdentity(identity), listener };
+      const entry = { identity: parseCanvasHostRuntimeIdentity(identity), listener };
       canvasListeners.add(entry);
       return () => canvasListeners.delete(entry);
     },

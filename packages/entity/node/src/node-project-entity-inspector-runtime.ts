@@ -8,8 +8,8 @@ import {
   assertProjectEntityDocument,
   createEmptyProjectEntityDocument,
   projectEntityManagement,
-  type EntityAssetProjectionRecord,
-  type EntityAssetProjectionRepository,
+  type ProjectEntityProjectionRecord,
+  type ProjectEntityProjectionRepository,
   type ProjectEntityCandidateDecision,
   type ProjectEntityCandidateProjection,
   type ProjectEntityCandidateWorkflowPort,
@@ -27,7 +27,7 @@ export interface NodeProjectEntityInspectorRuntimeOptions {
     readonly workspaceId: string;
     readonly workspacePath: string;
   };
-  readonly projections?: Pick<EntityAssetProjectionRepository, 'list' | 'replaceSource'>;
+  readonly projections?: Pick<ProjectEntityProjectionRepository, 'list' | 'replaceSource'>;
   readonly now?: () => string;
   readonly createEntityId?: (candidateId: string) => string;
   readonly createBindingId?: (entityId: string) => string;
@@ -50,7 +50,7 @@ export class NodeProjectEntityInspectorRuntime {
     this.partition = {
       scope: 'workspace' as const,
       workspaceId: options.workspace.workspaceId,
-      domain: 'entity-asset-projection',
+      domain: 'project-entity-projection',
     };
     this.journalPath = resolveJournalPath(options.workspace.workspacePath);
     this.now = options.now ?? (() => new Date().toISOString());
@@ -95,7 +95,7 @@ interface CandidateWorkflowOptions {
     readonly workspaceId: string;
     readonly domain: string;
   };
-  readonly projections?: Pick<EntityAssetProjectionRepository, 'list' | 'replaceSource'>;
+  readonly projections?: Pick<ProjectEntityProjectionRepository, 'list' | 'replaceSource'>;
   readonly now: () => string;
 }
 
@@ -153,7 +153,7 @@ class NodeProjectEntityCandidateWorkflow implements ProjectEntityCandidateWorkfl
     }
   }
 
-  private requireProjections(): Pick<EntityAssetProjectionRepository, 'list' | 'replaceSource'> {
+  private requireProjections(): Pick<ProjectEntityProjectionRepository, 'list' | 'replaceSource'> {
     if (this.options.projections) return this.options.projections;
     throw nodeIntentError(
       'project-entity-candidate-not-found',
@@ -237,7 +237,7 @@ interface NodeProjectEntityOperationJournal {
   };
 }
 
-function isCandidateRecord(record: EntityAssetProjectionRecord, candidateId: string): boolean {
+function isCandidateRecord(record: ProjectEntityProjectionRecord, candidateId: string): boolean {
   return record.kind === 'entity-candidate' && record.value.candidateId === candidateId;
 }
 

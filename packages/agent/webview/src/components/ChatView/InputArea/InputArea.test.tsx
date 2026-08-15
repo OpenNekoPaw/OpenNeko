@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { cloneElement, isValidElement, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -37,6 +37,16 @@ const translations: Record<string, string> = {
   'chat.input.workspace.openProject': '打开项目',
   'chat.input.workspace.chooseDirectory': '从系统目录选择',
   'chat.input.workspace.clear': '清除项目选择',
+  'chat.entryAction.openDirectory': '打开目录',
+  'chat.entryContext.chooseCharacters': '选择角色',
+  'chat.entryExperience.characterDialogue.modeLabel': '对话模式',
+  'chat.entryExperience.characterDialogue.modeDaily': '日常',
+  'chat.entryExperience.characterDialogue.modeDailyDescription': '使用日常关系与长期记忆。',
+  'chat.entryExperience.characterDialogue.modeNarrative': '叙事',
+  'chat.entryExperience.characterDialogue.modeNarrativeDescription': '使用角色与剧情上下文。',
+  'chat.entryAction.chooseWorld': '选择世界',
+  'chat.entryContext.bindingBar': '当前上下文',
+  'chat.entryContext.clearTarget': '清除',
   'chat.input.send': '发送',
   'chat.input.queue': '加入队列',
   'chat.input.skills': '技能',
@@ -440,6 +450,28 @@ describe('InputArea composer controls', () => {
     vi.clearAllMocks();
   });
 
+  it('places the approval surface inside the composer rail immediately above the input shell', () => {
+    const { container } = render(
+      <Harness>
+        <InputArea
+          approvalSurface={<div data-testid="approval-surface" />}
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
+      </Harness>,
+    );
+
+    const rail = container.querySelector('.agent-composer-rail');
+    const approvalSurface = screen.getByTestId('approval-surface');
+    const composerShell = container.querySelector('.agent-composer-shell');
+
+    expect(rail?.contains(approvalSurface)).toBe(true);
+    expect(rail?.contains(composerShell)).toBe(true);
+    expect(approvalSurface.nextElementSibling).toBe(composerShell);
+  });
+
   it('does not feed unchanged mention menu state back into a controlled render store', () => {
     const onComposerStateCommit = vi.fn();
 
@@ -759,6 +791,38 @@ describe('InputArea composer controls', () => {
     expect(document.querySelector('.agent-composer-textarea')).toBeTruthy();
   });
 
+  it('places Character conversation mode beside the Entry model selector', () => {
+    const onModeChange = vi.fn();
+    render(
+      <Harness>
+        <InputArea
+          presentation="entry"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          entryCharacterConversationMode="companion"
+          onEntryCharacterConversationModeChange={onModeChange}
+        />
+      </Harness>,
+    );
+
+    const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
+    const modelTrigger = within(modeGroup).getByRole('button', { name: '配置模型' });
+    const conversationModeTrigger = within(modeGroup).getByRole('button', {
+      name: '对话模式: 日常',
+    });
+    expect(
+      modelTrigger.compareDocumentPosition(conversationModeTrigger) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    fireEvent.click(conversationModeTrigger);
+    const menu = screen.getByRole('menu', { name: '对话模式' });
+    fireEvent.click(within(menu).getByRole('menuitemradio', { name: /叙事/u }));
+    expect(onModeChange).toHaveBeenCalledWith('narrative');
+  });
+
   it('omits the locked Workspace label from the conversation composer', () => {
     render(
       <Harness composerWorkspace={{ kind: 'workspace', label: 'OpenNeko' }}>
@@ -776,119 +840,191 @@ describe('InputArea composer controls', () => {
     expect(screen.queryByText(/branch|分支|local|本地/iu)).toBeNull();
   });
 
-  it('selects an exact Workspace target from the Entry composer', async () => {
-    const target = {
-      label: 'OpenNeko',
-      context: {
-        kind: 'workspace' as const,
-        workspaceId: 'workspace-1',
-        workspaceGrantId: 'grant-1',
-      },
-      target: { kind: 'content-project' as const, contentProjectId: 'project-1' },
-    };
-    const onSelectProject = vi.fn(async () => target);
-    const onDraftWorkspaceTargetChange = vi.fn(async () => undefined);
+  it('renders Project selection inside the Creation context bar', () => {
+    const onChooseProject = vi.fn(async () => undefined);
     render(
-      <Harness
-        composerWorkspace={{
-          kind: 'entry',
-          projects: [{ projectId: 'project-1', label: 'OpenNeko' }],
-          onChooseDirectory: vi.fn(async () => undefined),
-          onSelectProject,
-        }}
-      >
+      <Harness>
         <InputArea
           presentation="entry"
-          inputValue="preserved"
+          inputValue=""
           isThinking={false}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
-          showDraftWorkspaceControl
-          onDraftWorkspaceTargetChange={onDraftWorkspaceTargetChange}
+          entryContextActions={[
+            {
+              kind: 'project',
+              label: '选择项目',
+              onInvoke: onChooseProject,
+            },
+          ]}
         />
       </Harness>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'OpenNeko' }));
-
-    await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith('project-1'));
-    expect(onDraftWorkspaceTargetChange).toHaveBeenCalledWith(target);
-    expect(screen.getByRole('textbox')).toHaveProperty('value', 'preserved');
+    const button = screen.getByRole('button', { name: '选择项目' });
+    const bar = screen.getByLabelText('当前上下文');
+    expect(button.closest('.agent-entry-binding-bar')).toBe(bar);
+    expect(button.closest('.agent-composer-toolbar')).toBeNull();
+    fireEvent.click(button);
+    expect(onChooseProject).toHaveBeenCalledOnce();
   });
 
-  it('loads, selects, and creates owner-qualified authoring targets in the Entry menu', async () => {
-    const selected = {
-      label: 'Characters / Aster',
-      context: {
-        kind: 'workspace' as const,
-        workspaceId: 'character-library',
-        workspaceGrantId: 'grant-character',
-      },
-      target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
-    };
-    const option = {
-      optionId: 'standalone-character:character-1',
-      label: 'Aster',
-      workspaceLabel: 'Characters',
-      target: selected.target,
-      placement: { kind: 'standalone-library' as const, library: 'character' as const },
-    };
-    const creation = {
-      creationId: 'project-1:world',
-      label: 'Novel / Worlds',
-      targetKind: 'world-project' as const,
-      placement: { kind: 'project-local' as const, contentProjectId: 'project-1' },
-    };
-    const onSelectAuthoringTarget = vi.fn(async () => selected);
-    const onCreateAuthoringTarget = vi.fn(async () => ({
-      ...selected,
-      target: { kind: 'world-project' as const, worldProjectId: 'world-1' },
-    }));
-    const onDraftWorkspaceTargetChange = vi.fn(async () => undefined);
+  it('renders Character and unavailable World actions together in the shared context bar', () => {
+    const onChooseCharacters = vi.fn();
     render(
-      <Harness
-        composerWorkspace={{
-          kind: 'entry',
-          projects: [],
-          onChooseDirectory: vi.fn(async () => undefined),
-          onSelectProject: vi.fn(async () => undefined),
-          loadAuthoringCatalog: vi.fn(async () => ({
-            targets: [option],
-            creationContexts: [creation],
-            diagnostics: [],
-          })),
-          onSelectAuthoringTarget,
-          onCreateAuthoringTarget,
-        }}
-      >
+      <Harness>
         <InputArea
           presentation="entry"
-          inputValue="preserved"
+          inputValue=""
           isThinking={false}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
-          showDraftWorkspaceControl
-          onDraftWorkspaceTargetChange={onDraftWorkspaceTargetChange}
+          entryContextActions={[
+            {
+              kind: 'character',
+              label: '选择角色',
+              onInvoke: onChooseCharacters,
+            },
+            {
+              kind: 'world',
+              label: '选择世界',
+              disabled: true,
+              disabledReason: '世界模式尚不可用',
+            },
+          ]}
         />
       </Harness>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Aster/u }));
-    await waitFor(() => expect(onSelectAuthoringTarget).toHaveBeenCalledWith(option));
-    expect(onDraftWorkspaceTargetChange).toHaveBeenCalledWith(selected);
+    const characterAction = screen.getByRole('button', { name: '选择角色' });
+    expect(characterAction.getAttribute('data-entry-context-action')).toBe('character');
+    fireEvent.click(characterAction);
+    expect(onChooseCharacters).toHaveBeenCalledOnce();
 
-    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
-    fireEvent.change(await screen.findByLabelText('chat.input.workspace.createScope'), {
-      target: { value: creation.creationId },
-    });
-    fireEvent.change(screen.getByLabelText('chat.input.workspace.targetName'), {
-      target: { value: 'Arcadia' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'chat.input.workspace.createTarget' }));
-    await waitFor(() => expect(onCreateAuthoringTarget).toHaveBeenCalledWith(creation, 'Arcadia'));
-    expect(screen.getByRole('textbox')).toHaveProperty('value', 'preserved');
+    const worldAction = screen.getByRole('button', { name: '选择世界' });
+    expect(worldAction.getAttribute('data-entry-context-action')).toBe('world');
+    expect(worldAction).toHaveProperty('disabled', true);
+    expect(worldAction.getAttribute('title')).toBe('世界模式尚不可用');
+  });
+
+  it('consolidates the Entry authoring target and Character selections in one context bar', () => {
+    const onClearEntryWorkspaceTarget = vi.fn(async () => undefined);
+    const onRemoveCharacterLaunch = vi.fn();
+    render(
+      <Harness>
+        <InputArea
+          presentation="entry"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          entryContextActions={[
+            {
+              kind: 'project',
+              label: '选择项目',
+              onInvoke: vi.fn(async () => undefined),
+            },
+          ]}
+          entryWorkspaceTarget={{
+            label: 'Blame',
+            context: {
+              kind: 'workspace',
+              workspaceId: 'workspace-1',
+              workspaceGrantId: 'grant-1',
+            },
+            target: { kind: 'content-document', documentId: 'documents/story.md' },
+            authority: { kind: 'project', projectId: 'project-1' },
+          }}
+          onClearEntryWorkspaceTarget={onClearEntryWorkspaceTarget}
+          selectedCharacterLaunches={[
+            {
+              globalCharacterId: 'character-project-1',
+              characterVersionId: 'character-version-1',
+              label: 'Aster',
+            },
+          ]}
+          onRemoveCharacterLaunch={onRemoveCharacterLaunch}
+        />
+      </Harness>,
+    );
+
+    const bar = screen.getByLabelText('当前上下文');
+    expect(bar.getAttribute('data-entry-binding-bar')).toBe('true');
+    expect(within(bar).getByText('Blame')).toBeTruthy();
+    expect(within(bar).getByText('Aster')).toBeTruthy();
+    expect(within(bar).getByRole('button', { name: '选择项目' })).toBeTruthy();
+    expect(bar.querySelector('[data-entry-binding-kind="content-document"]')).not.toBeNull();
+    expect(bar.querySelector('[data-entry-binding-kind="character-dialogue"]')).not.toBeNull();
+    expect(document.querySelector('[data-character-launch-selections]')).toBeNull();
+
+    fireEvent.click(within(bar).getByRole('button', { name: '清除: Blame' }));
+    fireEvent.click(within(bar).getByRole('button', { name: '清除: Aster' }));
+    expect(onClearEntryWorkspaceTarget).toHaveBeenCalledOnce();
+    expect(onRemoveCharacterLaunch).toHaveBeenCalledWith('character-version-1');
+  });
+
+  it('shows multiple Characters and one World together in the Conversation context bar', () => {
+    const onRemoveCharacterLaunch = vi.fn();
+    const onRemoveWorldLaunch = vi.fn();
+    render(
+      <Harness>
+        <InputArea
+          presentation="entry"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          selectedCharacterLaunches={[
+            {
+              globalCharacterId: 'character-project-1',
+              characterVersionId: 'character-version-1',
+              label: 'Aster',
+            },
+            {
+              globalCharacterId: 'character-project-2',
+              characterVersionId: 'character-version-2',
+              label: 'Beryl',
+            },
+          ]}
+          selectedWorldLaunch={{
+            globalWorldId: 'global-world-1',
+            worldVersionId: 'world-version-1',
+            label: 'Rain Station',
+            versionLabel: 'Published v1',
+          }}
+          onRemoveCharacterLaunch={onRemoveCharacterLaunch}
+          onRemoveWorldLaunch={onRemoveWorldLaunch}
+        />
+      </Harness>,
+    );
+
+    const bar = screen.getByLabelText('当前上下文');
+    expect(within(bar).getByText('Aster')).toBeTruthy();
+    expect(within(bar).getByText('Beryl')).toBeTruthy();
+    expect(within(bar).getByText('Rain Station')).toBeTruthy();
+    expect(bar.querySelectorAll('[data-entry-binding-kind="character-dialogue"]')).toHaveLength(2);
+    expect(bar.querySelectorAll('[data-entry-binding-kind="world-experience"]')).toHaveLength(1);
+
+    fireEvent.click(within(bar).getByRole('button', { name: '清除: Beryl' }));
+    fireEvent.click(within(bar).getByRole('button', { name: '清除: Rain Station' }));
+    expect(onRemoveCharacterLaunch).toHaveBeenCalledWith('character-version-2');
+    expect(onRemoveWorldLaunch).toHaveBeenCalledOnce();
+  });
+
+  it('does not reserve a context-bar row when the Entry draft has no binding', () => {
+    render(
+      <Harness>
+        <InputArea
+          presentation="entry"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
+      </Harness>,
+    );
+
+    expect(screen.queryByLabelText('当前上下文')).toBeNull();
   });
 
   it('keeps command and Skill discovery available in the Entry composer', () => {
@@ -919,7 +1055,7 @@ describe('InputArea composer controls', () => {
     expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe('描述你想要完成的内容...');
   });
 
-  it('keeps the Entry textarea editable while a prerequisite blocks only send', () => {
+  it('keeps the Entry textarea editable and minimal while a prerequisite blocks only send', () => {
     render(
       <Harness>
         <InputArea
@@ -928,17 +1064,14 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
-          submissionBlockedReason="请选择项目或已授权目录。"
+          submissionBlocked
         />
       </Harness>,
     );
 
     expect(screen.getByRole('textbox')).toHaveProperty('disabled', false);
-    expect(screen.getByRole('button', { name: '请选择项目或已授权目录。' })).toHaveProperty(
-      'disabled',
-      true,
-    );
-    expect(screen.getByRole('status').textContent).toBe('请选择项目或已授权目录。');
+    expect(screen.getByRole('button', { name: '发送' })).toHaveProperty('disabled', true);
+    expect(document.querySelector('.agent-composer-validation')).toBeNull();
   });
 
   it('keeps unbound Entry @ discovery local and closes its empty menu with Escape', () => {
@@ -1339,6 +1472,92 @@ describe('InputArea composer controls', () => {
     expect(textarea.value).toBe('$quality-review ');
   });
 
+  it('submits direct skill arguments instead of replacing them with the selected menu item', () => {
+    const onSend = vi.fn();
+    render(
+      <Harness
+        inputCatalog={[
+          {
+            id: 'skill:project:character-creator',
+            name: 'character-creator',
+            description: 'Create a character draft',
+            trigger: 'skill',
+            prefix: '$',
+            phaseRequirement: 'any',
+            bindingRequirement: 'workspace',
+            source: { kind: 'project', workspaceId: 'workspace-1', sourceId: 'skill-source-2' },
+            availability: { status: 'available' },
+            executable: {
+              kind: 'skill',
+              skillName: 'character-creator',
+              activationId: 'skill:project:skill:skill-source-2',
+            },
+          },
+        ]}
+        inputCatalogPhase="session"
+        inputCatalogBindingKind="workspace"
+      >
+        <InputAreaStatefulHarness initialInputValue="" onSend={onSend} />
+      </Harness>,
+    );
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, {
+      target: { value: '$character-creator 保留这段完整角色提示词' },
+    });
+    expect(screen.queryByRole('menuitem', { name: /\$character-creator/ })).toBeNull();
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageText: '$character-creator 保留这段完整角色提示词',
+        displayMessageText: '$character-creator 保留这段完整角色提示词',
+      }),
+    );
+  });
+
+  it('submits direct slash-command arguments without reopening completion', () => {
+    const onSend = vi.fn();
+    render(
+      <Harness
+        inputCatalog={[
+          {
+            id: 'command:builtin:review',
+            name: 'review',
+            description: 'Review files',
+            trigger: 'command',
+            prefix: '/',
+            phaseRequirement: 'any',
+            bindingRequirement: 'any',
+            source: { kind: 'builtin', sourceId: 'review' },
+            availability: { status: 'available' },
+            executable: {
+              kind: 'command',
+              commandId: 'review',
+              handlerId: 'builtin:review',
+            },
+          },
+        ]}
+        inputCatalogPhase="session"
+        inputCatalogBindingKind="workspace"
+      >
+        <InputAreaStatefulHarness initialInputValue="" onSend={onSend} />
+      </Harness>,
+    );
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: '/review changed files' } });
+    expect(screen.queryByRole('menuitem', { name: /\/review/ })).toBeNull();
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({ messageText: '/review changed files' }),
+    );
+  });
+
   it('suppresses slash and skill command affordances in roleplay while keeping mentions', () => {
     render(
       <Harness
@@ -1469,7 +1688,7 @@ describe('InputArea composer controls', () => {
               roleProfileId: 'role-profile-xiaoju',
             },
             characterLaunchSelection: {
-              characterProjectId: 'char-xiaoju',
+              globalCharacterId: 'char-xiaoju',
               characterVersionId: 'character-version-xiaoju',
             },
           },
@@ -1493,7 +1712,7 @@ describe('InputArea composer controls', () => {
               roleProfileId: 'role-profile-cn',
             },
             characterLaunchSelection: {
-              characterProjectId: 'char-cn',
+              globalCharacterId: 'char-cn',
               characterVersionId: 'character-version-cn',
             },
           },
@@ -1527,7 +1746,7 @@ describe('InputArea composer controls', () => {
 
     expect(onSend).not.toHaveBeenCalled();
     expect(onAddCharacterLaunch).toHaveBeenCalledWith({
-      characterProjectId: 'char-xiaoju',
+      globalCharacterId: 'char-xiaoju',
       characterVersionId: 'character-version-xiaoju',
       label: '小橘',
     });
@@ -1551,7 +1770,7 @@ describe('InputArea composer controls', () => {
               roleProfileId: 'role-profile-xiaoju',
             },
             characterLaunchSelection: {
-              characterProjectId: 'char-xiaoju',
+              globalCharacterId: 'char-xiaoju',
               characterVersionId: 'character-version-xiaoju',
             },
           },
@@ -1786,7 +2005,10 @@ describe('InputArea composer controls', () => {
             id: 'media-hero',
             kind: 'media',
             label: 'Hero portrait',
-            filePath: 'neko/assets/Characters/hero.png',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/hero.png',
+            },
             source: 'media-library',
             mediaType: 'image',
           },
@@ -1839,7 +2061,10 @@ describe('InputArea composer controls', () => {
             id: 'media-lamp-spirit',
             kind: 'media',
             label: '灯神立绘',
-            filePath: 'neko/assets/Characters/lamp-spirit.png',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/lamp-spirit.png',
+            },
             source: 'media-library',
             mediaType: 'image',
             searchText: '灯神 神灯 aladdin genie',
@@ -2337,6 +2562,27 @@ describe('InputArea composer controls', () => {
       '请分析 @cases/1080',
     );
     expect(document.querySelector('[data-agent-reference-token="true"]')).toBeNull();
+  });
+
+  it('preserves the controlled draft when a pre-submit action does not consume it', () => {
+    const onSend = vi.fn(() => false as const);
+    render(
+      <Harness>
+        <InputAreaStatefulHarness
+          initialInputValue="$skill-creator keep this complete request"
+          onSend={onSend}
+          presentation="entry"
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(screen.getByRole('textbox')).toHaveProperty(
+      'value',
+      '$skill-creator keep this complete request',
+    );
   });
 });
 

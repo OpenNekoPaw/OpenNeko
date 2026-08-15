@@ -18,6 +18,8 @@ export interface CanvasGenerationRuntimeProjection {
   readonly recipeInputFingerprint: string;
   readonly jobRef?: GenerationJobRef;
   readonly phase: GenerationJobSnapshot['phase'] | 'binding';
+  readonly createdAt?: number;
+  readonly updatedAt?: number;
   readonly progress?: GenerationJobSnapshot['progress'];
   readonly resultLocators?: readonly GeneratedOutputContentLocator[];
   readonly text?: string;

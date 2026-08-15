@@ -10,9 +10,7 @@ import {
   type AutomationProviderPort,
 } from './index';
 
-const SCREENSHOT_DIGEST = `sha256:${'a'.repeat(64)}`;
-const CLICK_DIGEST = `sha256:${'b'.repeat(64)}`;
-const CHANGED_DIGEST = `sha256:${'c'.repeat(64)}`;
+const EMPTY_INPUT_SCHEMA = Object.freeze({ type: 'object', properties: Object.freeze({}) });
 const target: AutomationTarget = {
   kind: 'browser',
   targetKey: 'target-1',
@@ -43,7 +41,7 @@ describe('AutomationApplicationService', () => {
     expect(
       fixture.service.listAvailableOperations('browser.default').map((item) => item.name),
     ).toEqual(['browser_screenshot', 'browser_click']);
-    expect(fixture.service.listQualificationDiagnostics()).toEqual([
+    expect(fixture.service.listSupportDiagnostics()).toEqual([
       {
         profileId: 'browser.default',
         operation: 'browser_get_html',
@@ -68,26 +66,47 @@ describe('AutomationApplicationService', () => {
     expect(
       contradicted.service.listAvailableOperations('browser.default').map((item) => item.name),
     ).not.toContain('browser_screenshot');
-    expect(contradicted.service.listQualificationDiagnostics()).toContainEqual({
+    expect(contradicted.service.listSupportDiagnostics()).toContainEqual({
       profileId: 'browser.default',
       operation: 'browser_screenshot',
       code: 'operation-annotations-contradictory',
     });
   });
 
-  it('does not try a user-managed endpoint for a GitHub-delivered profile', async () => {
-    const fixture = await createFixture({
-      providerDeliverySource: { kind: 'user-managed-endpoint', endpointId: 'endpoint-1' },
+  it('does not try a different user-managed local runtime authorization', async () => {
+    const localProfile = {
+      ...profile,
+      provider: {
+        ...profile.provider,
+        deliverySource: {
+          kind: 'user-managed-local-runtime' as const,
+          runtimeId: 'local-runtime:expected',
+        },
+      },
+    };
+    const provider = await createFixture({
+      providerDeliverySource: {
+        kind: 'user-managed-local-runtime',
+        runtimeId: 'local-runtime:other',
+      },
+    });
+    const service = await createAutomationApplicationService({
+      profiles: [localProfile],
+      providers: [provider.provider],
+      extensionRuntime: { isEnabled: async () => true },
+      sessionGrants: { consume: async () => true },
+      hostPermissions: { query: async () => 'granted' },
+      transientObservations: provider.transientObservations,
     });
 
-    expect(fixture.service.listQualificationDiagnostics()).toEqual(
-      profile.operations.map((operation) => ({
-        profileId: profile.id,
+    expect(service.listSupportDiagnostics()).toEqual(
+      localProfile.operations.map((operation) => ({
+        profileId: localProfile.id,
         operation: operation.name,
         code: 'provider-unavailable',
       })),
     );
-    expect(fixture.provider.inspect).not.toHaveBeenCalled();
+    expect(provider.provider.inspect).not.toHaveBeenCalled();
   });
 
   it('keeps install enablement, OS permission and session grant as independent gates', async () => {
@@ -272,16 +291,16 @@ describe('AutomationApplicationService', () => {
     const fixture = await createFixture();
     await fixture.service.openSession(sessionRequest('session-owned'));
 
-    expect(fixture.service.listOwnedSessions('browser-use@openneko')).toEqual([
+    expect(fixture.service.listOwnedSessions('browser-use')).toEqual([
       expect.objectContaining({
         sessionId: 'session-owned',
         profileId: 'browser.default',
         status: 'active',
       }),
     ]);
-    expect(fixture.service.listOwnedSessions('computer-use@openneko')).toEqual([]);
+    expect(fixture.service.listOwnedSessions('computer-use')).toEqual([]);
     await fixture.service.stopSession('session-owned');
-    expect(fixture.service.listOwnedSessions('browser-use@openneko')).toEqual([]);
+    expect(fixture.service.listOwnedSessions('browser-use')).toEqual([]);
     expect(() => fixture.service.listOwnedSessions('../browser-use')).toThrow(
       'extension identity is invalid',
     );
@@ -301,10 +320,9 @@ describe('AutomationApplicationService', () => {
         sessionId: 'session-control',
         profileId: 'browser.default',
         provider: {
-          extensionId: 'browser-use@openneko',
+          extensionId: 'browser-use',
           providerId: 'browser-use',
           kind: 'browser',
-          upstreamRelease: '0.13.7',
         },
         target: { kind: 'browser', targetKey: 'target-1', label: 'Example' },
         mode: 'observe',
@@ -452,7 +470,7 @@ async function createFixture(
       operations: [
         {
           name: 'browser_screenshot',
-          inputSchemaDigest: SCREENSHOT_DIGEST,
+          inputSchema: EMPTY_INPUT_SCHEMA,
           ...(options.omitScreenshotAnnotations
             ? { annotations: {} }
             : {
@@ -464,17 +482,17 @@ async function createFixture(
         },
         {
           name: 'browser_click',
-          inputSchemaDigest: CLICK_DIGEST,
+          inputSchema: EMPTY_INPUT_SCHEMA,
           annotations: { readOnlyHint: false, destructiveHint: false },
         },
         {
           name: 'browser_get_html',
-          inputSchemaDigest: SCREENSHOT_DIGEST,
+          inputSchema: EMPTY_INPUT_SCHEMA,
           annotations: { readOnlyHint: true },
         },
         {
           name: 'browser_exec',
-          inputSchemaDigest: SCREENSHOT_DIGEST,
+          inputSchema: EMPTY_INPUT_SCHEMA,
           annotations: { readOnlyHint: false },
         },
       ],
@@ -520,16 +538,15 @@ async function createFixture(
 const profile: AutomationProfile = {
   id: 'browser.default',
   provider: {
-    extensionId: 'browser-use@openneko',
+    extensionId: 'browser-use',
     providerId: 'browser-use',
     kind: 'browser',
-    upstreamRelease: '0.13.7',
-    deliverySource: { kind: 'github-release' },
+    deliverySource: { kind: 'bundled-adapter' },
   },
   operations: [
     {
       name: 'browser_screenshot',
-      inputSchemaDigest: SCREENSHOT_DIGEST,
+      requiredInputProperties: [],
       modes: ['observe', 'browse-read', 'interact'],
       trait: {
         effect: 'observe',
@@ -541,7 +558,7 @@ const profile: AutomationProfile = {
     },
     {
       name: 'browser_click',
-      inputSchemaDigest: CLICK_DIGEST,
+      requiredInputProperties: [],
       modes: ['interact'],
       trait: {
         effect: 'input',
@@ -553,7 +570,7 @@ const profile: AutomationProfile = {
     },
     {
       name: 'browser_get_html',
-      inputSchemaDigest: CHANGED_DIGEST,
+      requiredInputProperties: ['required_missing'],
       modes: ['observe'],
       trait: {
         effect: 'observe',

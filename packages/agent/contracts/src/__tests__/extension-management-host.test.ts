@@ -20,19 +20,6 @@ function createRequest() {
 function createProjection() {
   return {
     identity,
-    operations: [
-      {
-        operationId: 'artifact-operation-1',
-        pluginId: 'computer-use@openneko',
-        kind: 'update',
-        phase: 'downloading',
-        status: 'active',
-        transferredBytes: 1024,
-        totalBytes: 2048,
-        canCancel: true,
-        diagnosticCode: '',
-      },
-    ],
     skills: [
       {
         id: 'personal:personal:story-planner',
@@ -41,6 +28,8 @@ function createProjection() {
         source: 'personal',
         sourceId: 'personal',
         managementId: `skill:${'b'.repeat(64)}`,
+        canOpenInEditor: true,
+        canShowInFolder: true,
         canRemove: true,
       },
     ],
@@ -50,7 +39,7 @@ function createProjection() {
     },
     extensions: [
       {
-        id: 'computer-use@openneko',
+        id: 'computer-use',
         name: 'computer-use',
         displayName: 'Computer Use',
         description: 'Control Mac apps.',
@@ -59,28 +48,18 @@ function createProjection() {
         },
         version: '1.0.2',
         developer: 'OpenAI',
-        marketplace: 'openneko',
-        category: 'Productivity',
-        installed: true,
         enabled: true,
-        canInstall: false,
-        canUpdate: false,
         canEnable: false,
         canDisable: true,
         canRemove: false,
-        updatePackageRelease: '',
-        deliverySource: 'official-download',
-        artifactPlatform: 'darwin-arm64',
-        downloadSizeBytes: 64_208_172,
-        artifactStatus: 'installed',
-        dependencyStatus: 'ready',
-        enableGrantStatus: 'accepted',
-        hostPermissionStatus: 'granted',
-        qualificationStatus: 'qualified',
-        declaredPermissions: ['accessibility', 'screen-recording'],
-        acceptedPermissions: ['accessibility', 'screen-recording'],
+        deliverySource: 'bundled',
         agentStatus: 'ready',
         runtimeDiagnosticCode: '',
+        componentReadiness: {
+          skills: { status: 'ready', diagnosticCode: '' },
+          mcp: { status: 'ready', diagnosticCode: '' },
+          apps: { status: 'absent', diagnosticCode: '' },
+        },
         iconDataUrl: '',
         mcpServerIds: ['computer-use'],
         hasSkills: true,
@@ -97,23 +76,45 @@ describe('Agent Extension Management Host contract', () => {
     expect(parseAgentExtensionManagementHostRequest(request)).toEqual(request);
     expect(
       createAgentExtensionManagementHostRequest({
-        route: 'plugin.update',
-        requestId: 'extensions-update-1',
+        route: 'sources.rescan',
+        requestId: 'extensions-rescan-1',
         identity,
-        pluginId: 'computer-use@openneko',
       }),
-    ).toMatchObject({ route: 'plugin.update', pluginId: 'computer-use@openneko' });
+    ).toMatchObject({ route: 'sources.rescan' });
     expect(
       createAgentExtensionManagementHostRequest({
-        route: 'plugin.operation.cancel',
-        requestId: 'extensions-cancel-1',
+        route: 'plugin.install',
+        requestId: 'extensions-install-1',
         identity,
-        operationId: 'artifact-operation-1',
+      }),
+    ).toMatchObject({ route: 'plugin.install' });
+    expect(
+      createAgentExtensionManagementHostRequest({
+        route: 'plugin.remove',
+        requestId: 'extensions-remove-1',
+        identity,
+        pluginId: 'computer-use',
       }),
     ).toMatchObject({
-      route: 'plugin.operation.cancel',
-      operationId: 'artifact-operation-1',
+      route: 'plugin.remove',
+      pluginId: 'computer-use',
     });
+    expect(
+      createAgentExtensionManagementHostRequest({
+        route: 'skill.open',
+        requestId: 'skill-open-1',
+        identity,
+        managementId: `skill:${'b'.repeat(64)}`,
+      }),
+    ).toMatchObject({ route: 'skill.open' });
+    expect(
+      createAgentExtensionManagementHostRequest({
+        route: 'skill.reveal',
+        requestId: 'skill-reveal-1',
+        identity,
+        managementId: `skill:${'b'.repeat(64)}`,
+      }),
+    ).toMatchObject({ route: 'skill.reveal' });
     expect(
       parseAgentExtensionManagementHostResult(
         {
@@ -137,7 +138,7 @@ describe('Agent Extension Management Host contract', () => {
                 enabled: false,
                 canEnable: true,
                 canDisable: false,
-                canRemove: true,
+                canRemove: false,
                 agentStatus: 'disabled',
               },
             ],
@@ -150,8 +151,73 @@ describe('Agent Extension Management Host contract', () => {
         extensions: [
           expect.objectContaining({
             enabled: false,
-            enableGrantStatus: 'accepted',
-            acceptedPermissions: ['accessibility', 'screen-recording'],
+            agentStatus: 'disabled',
+          }),
+        ],
+      },
+    });
+    expect(
+      parseAgentExtensionManagementHostResult(
+        {
+          requestId: request.requestId,
+          route: request.route,
+          projection: {
+            ...createProjection(),
+            extensions: [
+              {
+                ...createProjection().extensions[0],
+                enabled: false,
+                canEnable: true,
+                canDisable: false,
+                deliverySource: 'local',
+                canRemove: true,
+                agentStatus: 'disabled',
+              },
+            ],
+          },
+        },
+        request,
+      ),
+    ).toMatchObject({
+      projection: {
+        extensions: [
+          expect.objectContaining({
+            deliverySource: 'local',
+            canRemove: true,
+          }),
+        ],
+      },
+    });
+    expect(
+      parseAgentExtensionManagementHostResult(
+        {
+          requestId: request.requestId,
+          route: request.route,
+          projection: {
+            ...createProjection(),
+            extensions: [
+              {
+                ...createProjection().extensions[0],
+                enabled: false,
+                canEnable: false,
+                canDisable: false,
+                deliverySource: 'local',
+                canRemove: true,
+                agentStatus: 'error',
+                runtimeDiagnosticCode: 'state-invalid',
+              },
+            ],
+          },
+        },
+        request,
+      ),
+    ).toMatchObject({
+      projection: {
+        extensions: [
+          expect.objectContaining({
+            agentStatus: 'error',
+            canEnable: false,
+            canRemove: true,
           }),
         ],
       },
@@ -199,6 +265,20 @@ describe('Agent Extension Management Host contract', () => {
           projection: {
             ...result.projection,
             extensions: [
+              { ...result.projection.extensions[0], marketplace: 'foreign-marketplace' },
+            ],
+          },
+        },
+        request,
+      ),
+    ).toThrow('extension item is invalid');
+    expect(() =>
+      parseAgentExtensionManagementHostResult(
+        {
+          ...result,
+          projection: {
+            ...result.projection,
+            extensions: [
               {
                 ...result.projection.extensions[0],
                 localization: { zh_CN: { description: '无效语言标识' } },
@@ -229,7 +309,7 @@ describe('Agent Extension Management Host contract', () => {
         },
         request,
       ),
-    ).toThrow('removal capability is inconsistent');
+    ).toThrow('capabilities are inconsistent');
     expect(() =>
       parseAgentExtensionManagementHostResult(
         {
@@ -253,24 +333,26 @@ describe('Agent Extension Management Host contract', () => {
         },
         request,
       ),
-    ).toThrow('extension flags are inconsistent');
+    ).toThrow('extension item is invalid');
     expect(() =>
       parseAgentExtensionManagementHostResult(
         {
           ...result,
           projection: {
             ...result.projection,
-            operations: [
+            extensions: [
               {
-                ...result.projection.operations[0],
-                status: 'completed',
-                canCancel: false,
+                ...result.projection.extensions[0],
+                enabled: false,
+                canEnable: true,
+                canDisable: false,
+                canRemove: true,
               },
             ],
           },
         },
         request,
       ),
-    ).toThrow('artifact operation state is inconsistent');
+    ).toThrow('extension flags are inconsistent');
   });
 });

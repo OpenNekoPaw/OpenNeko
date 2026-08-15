@@ -1,9 +1,10 @@
 import type { ResourceBrowserContentEntry } from '@neko/assets-domain/resource-browser/ports';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
+  searchProjectMediaLibraryContentEntries,
   searchWorkspaceContentEntries,
-  searchWorkspaceLinkedMediaLibraryContentEntries,
 } from '@neko/assets-node';
+import { serializeContentReferenceTarget } from '@neko/content';
 import { readProjectEntityResources } from '@neko/entity-node';
 import type { NekoHostPorts } from '@neko/host/ports';
 import {
@@ -16,6 +17,7 @@ import {
 
 export interface NodeTextEditorMarkdownReferenceCatalogOptions {
   readonly files: NekoHostPorts['files'];
+  readonly globalMediaLibraryRoot: string;
   readonly resolveWorkspace: (workspaceId: string) => Promise<AssetWorkspaceResolution>;
 }
 
@@ -54,8 +56,10 @@ export function createNodeTextEditorMarkdownReferenceCatalog(
       },
     },
     contentContributor('asset', async (request) =>
-      searchWorkspaceLinkedMediaLibraryContentEntries({
+      searchProjectMediaLibraryContentEntries({
+        projectId: request.identity.owner.projectId,
         workspace: await options.resolveWorkspace(request.identity.workspaceId),
+        globalMediaLibraryRoot: options.globalMediaLibraryRoot,
         files: options.files,
         query: request.query,
         limit: request.limit,
@@ -87,18 +91,24 @@ function projectContentEntry(
   entry: ResourceBrowserContentEntry,
   kind: TextEditorMarkdownReferenceSearchRequest['kind'],
 ): readonly TextEditorMarkdownReferenceCandidate[] {
-  if (
-    entry.role !== 'content' ||
-    entry.availability !== 'available' ||
-    entry.locator.kind !== 'workspace-file'
-  ) {
+  if (entry.role !== 'content' || entry.availability !== 'available') {
     return [];
   }
-  const ref = {
-    kind: source === 'asset' ? 'workspace-media-library' : 'workspace-file',
-    id: entry.locator.path,
-  };
-  const detail = entry.locator.path;
+  if (source === 'workspace-file' && entry.locator.kind !== 'workspace-file') return [];
+  if (source === 'asset' && entry.locator.kind !== 'media-library') return [];
+  if (entry.locator.kind !== 'workspace-file' && entry.locator.kind !== 'media-library') return [];
+  const ref =
+    entry.locator.kind === 'media-library'
+      ? {
+          kind: 'media-library',
+          namespace: entry.locator.libraryName,
+          id: entry.locator.relativePath,
+        }
+      : { kind: 'workspace-file', id: entry.locator.path };
+  const detail =
+    entry.locator.kind === 'media-library'
+      ? `${entry.locator.libraryName}/${entry.locator.relativePath}`
+      : entry.locator.path;
   if (kind === 'mention') return [];
   const mediaType = entry.metadata?.mediaType;
   const embeddable = mediaType === 'image' || mediaType === 'audio' || mediaType === 'video';
@@ -110,7 +120,7 @@ function projectContentEntry(
       ref,
       label: entry.label,
       detail,
-      target: entry.locator.path,
+      target: serializeContentReferenceTarget(entry.locator),
       embeddable,
     },
   ];

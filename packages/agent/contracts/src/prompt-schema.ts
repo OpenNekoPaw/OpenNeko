@@ -1,5 +1,4 @@
 import type { ProviderExpressionProfileDescriptor } from './provider-card';
-import type { SkillProfileReference } from './skill';
 import type { ToolDefinition } from './platform';
 import type { ArtifactProfileDescriptor } from './composite-artifact';
 import type { AgentCapabilityDiagnostic, AgentInjectedCapabilitySet } from './capability';
@@ -17,7 +16,6 @@ export interface PromptGenerationProviderCapabilities {
 }
 
 export interface PromptGenerationProfileContext {
-  readonly skillProfileReferences?: readonly SkillProfileReference[];
   readonly artifactProfiles?: readonly ArtifactProfileDescriptor[];
   readonly providerExpressionProfiles?: readonly ProviderExpressionProfileDescriptor[];
 }

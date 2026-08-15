@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat, realpath, stat } from 'node:fs/promises';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type { LocalMetadataRepositories } from '@neko/local-metadata';
 import {
@@ -57,7 +58,7 @@ import type {
   GlobalMediaLibraryLocationKind,
   GlobalMediaLibraryProjection,
 } from '@neko/assets-domain/global-library/contract';
-import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import { type AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
   createGlobalMediaLibraryConnection,
   listGlobalMediaLibraryConnections,
@@ -65,7 +66,6 @@ import {
   replaceGlobalMediaLibraryConnection,
   resolveGlobalMediaLibraryTarget,
 } from './global-media-library-files';
-import { WorkspaceMediaLibrarySyncService } from './workspace-media-library-sync';
 import { WorkspaceDirectoryObserver } from './workspace-directory-observer';
 import {
   createResourceBrowserNodeProjectionSource,
@@ -82,6 +82,11 @@ import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/globa
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createResourceBrowserViewId } from '@neko/assets-domain/resource-browser/contract';
 import type { ContentLocator } from '@neko/content';
+import {
+  createWorkspaceLinkedMediaLibrary,
+  replaceWorkspaceLinkedMediaLibrary,
+} from './workspace-linked-media-libraries';
+import { readProjectContentReferences } from './project-content-reference-readers';
 import {
   resolveDesktopWindowWorkspaceWorkbench,
   type DesktopShellProjection,
@@ -116,13 +121,13 @@ export interface ResourceBrowserNodeRuntimeOptions {
   readonly globalMediaLibraryRoot: string;
   readonly assetLibraryMemberships?: AssetLibraryMembershipRepository;
   readonly localMetadataRepositories?: LocalMetadataRepositories;
-  readonly refreshEntityProjections?: ResourceBrowserNodeSourceOptions['refreshEntityProjections'];
   readonly shell: ResourceBrowserShellPort;
   readonly host: Pick<NekoHostPorts, 'files' | 'external' | 'diagnostics'>;
   readonly openPreview: ResourceBrowserNodeSourceOptions['openPreview'];
   readonly openCreativeDocument: ResourceBrowserNodeSourceOptions['openCreativeDocument'];
   readonly openTextEditor: ResourceBrowserNodeSourceOptions['openTextEditor'];
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
+  readonly selectWorkspaceFiles: (windowId: string) => Promise<readonly string[] | undefined>;
   readonly trashWorkspaceItem: ResourceBrowserNodeSourceOptions['trashWorkspaceItem'];
   readonly selectConfiguredGlobalMediaLibrary: ResourceBrowserNodeSourceOptions['selectGlobalLibrary'];
   readonly selectGlobalMediaLibrarySource: (windowId: string) => Promise<string | undefined>;
@@ -163,13 +168,6 @@ export interface ResourceBrowserNodeRuntimeOptions {
       };
     }): Promise<void>;
   };
-  readonly entity: {
-    executeIntent(
-      input: Parameters<ResourceBrowserNodeSourceOptions['manageEntity']>[0] & {
-        readonly workspace: AssetWorkspaceResolution;
-      },
-    ): Promise<void>;
-  };
 }
 
 export class ResourceBrowserNodeRuntime {
@@ -181,14 +179,22 @@ export class ResourceBrowserNodeRuntime {
   private globalAssetMutationTail: Promise<void> = Promise.resolve();
   private globalMediaLibraryMutationTail: Promise<void> = Promise.resolve();
   private disposed = false;
-  private readonly workspaceMediaLibrarySync: WorkspaceMediaLibrarySyncService;
+  private readonly mediaRecoveryPlans = new Map<
+    string,
+    {
+      readonly identity: ResourceBrowserIdentity;
+      readonly resourceId: string;
+      readonly operationFingerprint: string;
+      readonly plan: {
+        readonly libraryName: string;
+        readonly requirementFingerprint: string;
+        readonly validatedRelativePaths: readonly string[];
+        readonly targetDirectory: string;
+      };
+    }
+  >();
 
-  constructor(private readonly options: ResourceBrowserNodeRuntimeOptions) {
-    this.workspaceMediaLibrarySync = new WorkspaceMediaLibrarySyncService(
-      options.globalMediaLibraryRoot,
-      options.localMetadataRepositories,
-    );
-  }
+  constructor(private readonly options: ResourceBrowserNodeRuntimeOptions) {}
 
   async getSnapshot(
     windowId: string,
@@ -239,7 +245,9 @@ export class ResourceBrowserNodeRuntime {
     }
     const absolutePath = await resolveResourceBrowserItemPath({
       workspace,
+      projectId: request.identity.projectId,
       globalAssetRoot: this.options.globalAssetRoot,
+      globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
       memberships: this.requireAssetLibraryMemberships(),
       item,
     });
@@ -278,9 +286,12 @@ export class ResourceBrowserNodeRuntime {
   ): Promise<ResourceBrowserRecoveryPlanResult> {
     const request = parseResourceBrowserRecoveryPlanRequest(value);
     const context = await this.resolveRecoveryContext(windowId, request);
+    let targetDirectory: string;
+    let locationKind: GlobalMediaLibraryLocationKind;
+    let connectionName: string;
     if (request.candidate === 'select-directory') {
-      const sourceDirectory = await this.options.selectSource(windowId);
-      if (!sourceDirectory) {
+      const selectedDirectory = await this.options.selectSource(windowId);
+      if (!selectedDirectory) {
         return {
           requestId: request.requestId,
           identity: request.identity,
@@ -288,30 +299,80 @@ export class ResourceBrowserNodeRuntime {
           status: 'cancelled',
         };
       }
-      const plan = await this.workspaceMediaLibrarySync.planSelectedDirectory({
-        workspace: context.workspace,
-        libraryName: context.libraryName,
-        locationKind: 'local',
-        sourceDirectory,
+      connectionName = path.basename(selectedDirectory);
+      if (connectionName !== context.libraryName) {
+        throw new Error('Selected Media Library directory must exactly match the logical name.');
+      }
+      locationKind = 'local';
+      targetDirectory = selectedDirectory;
+    } else {
+      const candidates = (
+        await listGlobalMediaLibraryConnections(this.options.globalMediaLibraryRoot)
+      ).filter(
+        (connection) =>
+          connection.name === context.libraryName && connection.availability === 'available',
+      );
+      if (candidates.length === 0) {
+        return {
+          requestId: request.requestId,
+          identity: request.identity,
+          resourceId: request.resourceId,
+          status: 'cancelled',
+        };
+      }
+      if (candidates.length !== 1) {
+        throw new Error('Reconnect found multiple exact-name available external sources.');
+      }
+      const candidate = candidates[0];
+      if (!candidate) throw new Error('Recovery candidate is unavailable.');
+      connectionName = candidate.name;
+      locationKind = candidate.locationKind;
+      targetDirectory = await resolveGlobalMediaLibraryTarget({
+        mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+        libraryId: candidate.libraryId,
       });
-      return {
-        requestId: request.requestId,
-        identity: request.identity,
-        resourceId: request.resourceId,
-        status: 'planned',
-        plan,
-      };
     }
-    const plan = await this.workspaceMediaLibrarySync.planRecovery({
-      workspace: context.workspace,
+    const references = await readProjectContentReferences({
+      workspacePath: context.workspace.workspacePath,
+      projectId: request.identity.projectId,
+    });
+    const requirement = references.requirements.requirements.find(
+      (candidate) => candidate.libraryName === context.libraryName,
+    );
+    const relativePaths = requirement?.descendants ?? [];
+    await validateRecoveryTarget(targetDirectory, relativePaths);
+    const plan = {
       libraryName: context.libraryName,
+      requirementFingerprint: references.requirements.fingerprint,
+      validatedRelativePaths: relativePaths,
+      targetDirectory,
+    };
+    const planId = `media-library-recovery:${randomUUID()}`;
+    this.mediaRecoveryPlans.set(planId, {
+      identity: request.identity,
+      resourceId: request.resourceId,
+      operationFingerprint: request.expectedOperationFingerprint,
+      plan,
     });
     return {
       requestId: request.requestId,
       identity: request.identity,
       resourceId: request.resourceId,
       status: 'planned',
-      plan,
+      plan: {
+        planId,
+        workspaceId: request.identity.workspaceId,
+        libraryName: context.libraryName,
+        requirementFingerprint: plan.requirementFingerprint,
+        operationFingerprint: request.expectedOperationFingerprint,
+        candidate: {
+          kind: 'global-alias',
+          name: connectionName,
+          locationKind,
+        },
+        referencedCount: plan.validatedRelativePaths.length,
+        validatedCount: plan.validatedRelativePaths.length,
+      },
     };
   }
 
@@ -325,13 +386,25 @@ export class ResourceBrowserNodeRuntime {
     if (workspace.workspaceId !== request.identity.workspaceId) {
       throw new Error('Desktop Resource Browser recovery Workspace is stale.');
     }
-    await this.withGlobalMediaLibraryMutation(() =>
-      this.workspaceMediaLibrarySync.applyRecovery({
-        workspace,
-        planId: request.planId,
-        expectedOperationFingerprint: request.expectedOperationFingerprint,
-      }),
-    );
+    const pending = this.mediaRecoveryPlans.get(request.planId);
+    if (
+      !pending ||
+      resourceBrowserIdentityKey(pending.identity) !==
+        resourceBrowserIdentityKey(request.identity) ||
+      pending.operationFingerprint !== request.expectedOperationFingerprint
+    ) {
+      throw new Error('Desktop Resource Browser recovery plan is stale.');
+    }
+    await this.assertRecoveryProjectionCurrent(controller, pending);
+    try {
+      await applyWorkspaceMediaLibraryLink({
+        workspaceRoot: workspace.workspacePath,
+        libraryName: pending.plan.libraryName,
+        targetDirectory: pending.plan.targetDirectory,
+      });
+    } finally {
+      this.mediaRecoveryPlans.delete(request.planId);
+    }
     return controller.reconcile();
   }
 
@@ -345,10 +418,14 @@ export class ResourceBrowserNodeRuntime {
     if (workspace.workspaceId !== request.identity.workspaceId) {
       throw new Error('Desktop Resource Browser recovery Workspace is stale.');
     }
-    this.workspaceMediaLibrarySync.cancelRecovery({
-      workspace,
-      planId: request.planId,
-    });
+    const pending = this.mediaRecoveryPlans.get(request.planId);
+    if (
+      !pending ||
+      resourceBrowserIdentityKey(pending.identity) !== resourceBrowserIdentityKey(request.identity)
+    ) {
+      throw new Error('Desktop Resource Browser recovery plan is stale.');
+    }
+    this.mediaRecoveryPlans.delete(request.planId);
     return {
       requestId: request.requestId,
       identity: request.identity,
@@ -683,6 +760,9 @@ export class ResourceBrowserNodeRuntime {
       this.controllers.delete(key);
     }
     this.homeItemsByWindow.delete(windowId);
+    for (const [planId, plan] of this.mediaRecoveryPlans) {
+      if (plan.identity.windowId === windowId) this.mediaRecoveryPlans.delete(planId);
+    }
     const controllers = this.homeThumbnailControllers.get(windowId);
     if (controllers) {
       for (const controller of controllers) {
@@ -783,6 +863,7 @@ export class ResourceBrowserNodeRuntime {
     }
     this.homeThumbnailControllers.clear();
     this.homeItemsByWindow.clear();
+    this.mediaRecoveryPlans.clear();
   }
 
   private recordHomeItems(
@@ -1047,33 +1128,31 @@ export class ResourceBrowserNodeRuntime {
       await this.options.cut.addResource({ resourceIdentity, item, target });
     };
     const composition = createResourceBrowserNodeProjectionSource({
+      projectId: project.projectId,
       globalAssetRoot: this.options.globalAssetRoot,
       ...((this.options.assetLibraryMemberships ?? this.options.localMetadataRepositories)
         ? { assetLibraryMemberships: this.requireAssetLibraryMemberships() }
         : {}),
       globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
-      workspaceMediaLibrarySync: this.workspaceMediaLibrarySync,
-      entityProjections: this.options.localMetadataRepositories?.entityAssetProjections,
-      refreshEntityProjections: this.options.refreshEntityProjections,
       workspace,
       host: this.options.host,
       openPreview: this.options.openPreview,
       openCreativeDocument: this.options.openCreativeDocument,
       openTextEditor: this.options.openTextEditor,
       selectSource: this.options.selectSource,
+      selectWorkspaceFiles: this.options.selectWorkspaceFiles,
       trashWorkspaceItem: this.options.trashWorkspaceItem,
       selectGlobalLibrary: this.options.selectConfiguredGlobalMediaLibrary,
       mutateGlobalMediaLibraries: (operation) => this.withGlobalMediaLibraryMutation(operation),
       createThumbnail: this.options.createThumbnail,
       addToCanvas,
       addToCut,
-      manageEntity: (input) => this.options.entity.executeIntent({ ...input, workspace }),
     });
     const controller = new ResourceBrowserController({
       identity: expected,
       source: composition.source,
       interactions: composition.interactions,
-      initialFacet: 'files',
+      initialSource: 'files',
       canvasAvailable: true,
     });
     this.controllers.set(key, controller);
@@ -1104,6 +1183,21 @@ export class ResourceBrowserNodeRuntime {
       throw new Error('Desktop Resource Browser recovery Workspace is stale.');
     }
     return { workspace, libraryName: item.libraryName };
+  }
+
+  private async assertRecoveryProjectionCurrent(
+    controller: ResourceBrowserController,
+    pending: {
+      readonly resourceId: string;
+      readonly operationFingerprint: string;
+    },
+  ): Promise<void> {
+    const item = (await controller.getSnapshot()).items.find(
+      (candidate) => candidate.resourceId === pending.resourceId,
+    );
+    if (item?.libraryStatus?.operationFingerprint !== pending.operationFingerprint) {
+      throw new Error('Desktop Resource Browser recovery projection changed after planning.');
+    }
   }
 
   private requireAssetLibraryMemberships(): AssetLibraryMembershipRepository {
@@ -1159,13 +1253,7 @@ export function createResourceToCanvasInteraction(options: {
       rendererSessionId: resourceIdentity.rendererSessionId,
     };
     const locator =
-      item.facet === 'entities'
-        ? item.entityStatus === 'candidate'
-          ? undefined
-          : item.representationLocator
-        : item.facet === 'assets'
-          ? undefined
-          : item.locator;
+      item.source === 'assets' || item.role === 'library-root' ? undefined : item.locator;
     if (!locator) {
       throw new Error('Resource Browser item has no Canvas representation.');
     }
@@ -1200,15 +1288,6 @@ export function createResourceToCanvasInteraction(options: {
             locator,
             mediaKind: resourceItemMediaKind(item),
             title: item.label,
-            ...(item.facet === 'entities' && item.entityStatus !== 'candidate'
-              ? {
-                  entity: {
-                    entityId: item.entityRef.entityId,
-                    bindingId: requireEntityRepresentationBindingId(item),
-                    role: requireEntityRepresentationRole(item),
-                  },
-                }
-              : {}),
           },
         },
       }),
@@ -1217,30 +1296,6 @@ export function createResourceToCanvasInteraction(options: {
       throw new Error(result.diagnostic.message);
     }
   };
-}
-
-function requireEntityRepresentationBindingId(
-  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
-): string {
-  if (item.entityStatus === 'candidate') {
-    throw new Error('Resource Browser candidate has no representation binding identity.');
-  }
-  if (!item.representationBindingId) {
-    throw new Error('Resource Browser Entity has no active representation binding identity.');
-  }
-  return item.representationBindingId;
-}
-
-function requireEntityRepresentationRole(
-  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
-) {
-  if (item.entityStatus === 'candidate') {
-    throw new Error('Resource Browser candidate has no representation role.');
-  }
-  if (!item.representationRole) {
-    throw new Error('Resource Browser Entity has no active representation role.');
-  }
-  return item.representationRole;
 }
 
 function resourceItemMediaKind(item: ResourceBrowserItem): CanvasMaterialMediaKind {
@@ -1259,11 +1314,6 @@ function resourceItemMediaKind(item: ResourceBrowserItem): CanvasMaterialMediaKi
     }
     case 'directory':
     case 'asset':
-    case 'character':
-    case 'scene':
-    case 'object':
-    case 'location':
-    case 'style':
       return 'other';
   }
 }
@@ -1276,4 +1326,60 @@ function resourceBrowserControllerKey(identity: ResourceBrowserIdentity): string
     String(identity.viewInstanceId),
     identity.rendererSessionId,
   ].join(':');
+}
+
+function resourceBrowserIdentityKey(identity: ResourceBrowserIdentity): string {
+  return [
+    identity.projectId,
+    identity.workspaceId,
+    identity.windowId,
+    identity.viewId,
+    String(identity.viewInstanceId),
+    identity.rendererSessionId,
+  ].join(':');
+}
+
+async function validateRecoveryTarget(
+  targetDirectory: string,
+  relativePaths: readonly string[],
+): Promise<void> {
+  const root = await realpath(targetDirectory);
+  if (!(await stat(root)).isDirectory()) {
+    throw new Error('Selected Media Library target is not a directory.');
+  }
+  for (const relativePath of relativePaths) {
+    const candidate = await realpath(path.join(root, ...relativePath.split('/')));
+    if (!isPathInside(candidate, root) || !(await stat(candidate)).isFile()) {
+      throw new Error('Selected Media Library is missing required project content.');
+    }
+  }
+}
+
+async function applyWorkspaceMediaLibraryLink(input: {
+  readonly workspaceRoot: string;
+  readonly libraryName: string;
+  readonly targetDirectory: string;
+}): Promise<void> {
+  const linkPath = path.join(input.workspaceRoot, 'neko', 'assets', input.libraryName);
+  let exists = false;
+  try {
+    await lstat(linkPath);
+    exists = true;
+  } catch (error) {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
+  }
+  const operation = exists ? replaceWorkspaceLinkedMediaLibrary : createWorkspaceLinkedMediaLibrary;
+  await operation({
+    workspaceRoot: input.workspaceRoot,
+    name: input.libraryName,
+    targetDirectory: input.targetDirectory,
+  });
+}
+
+function isPathInside(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  return (
+    relative === '' ||
+    (relative !== '..' && !path.isAbsolute(relative) && !relative.startsWith(`..${path.sep}`))
+  );
 }

@@ -41,6 +41,7 @@ export {
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
   parseCanvasHostPresentationState,
+  parseCanvasHostRuntimeIdentity,
   parseCanvasMaterialActionResolution,
   parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostProjectionEvent,

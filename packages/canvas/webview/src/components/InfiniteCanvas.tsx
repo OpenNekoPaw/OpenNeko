@@ -30,6 +30,11 @@ import {
 } from '../utils/renderRefreshTiering';
 import { SelectionContextToolbar } from './selection/SelectionContextToolbar';
 import {
+  CanvasFullscreenPreviewOverlay,
+  resolveCanvasFullscreenPreviewRequest,
+  type CanvasFullscreenPreviewRequest,
+} from './selection/CanvasImagePreviewOverlay';
+import {
   resolveGenerationSelectionSafePan,
   SelectionGenerationInputPanel,
 } from './selection/SelectionGenerationInputPanel';
@@ -89,6 +94,8 @@ export interface InfiniteCanvasProps {
   onDocumentOpen?: (locator: ContentLocator) => void;
   /** Called when user opens an embedded canvas. */
   onCanvasEmbedOpen?: (canvasPath: string) => void;
+  /** Reports whether the Canvas-owned modal preview currently owns input. */
+  onFullscreenPreviewOpenChange?: (open: boolean) => void;
 }
 
 // =============================================================================
@@ -119,12 +126,15 @@ export function InfiniteCanvas({
   isSpacePanActive = false,
   onDocumentOpen,
   onCanvasEmbedOpen,
+  onFullscreenPreviewOpenChange,
   isGridVisible = true,
 }: InfiniteCanvasProps) {
   const [generationInputLayout, setGenerationInputLayout] = useState<{
     readonly nodeId: string;
     readonly height: number;
   }>();
+  const [fullscreenPreviewRequest, setFullscreenPreviewRequest] =
+    useState<CanvasFullscreenPreviewRequest>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [transformingNodeIds, setTransformingNodeIds] = useState<readonly string[]>([]);
@@ -135,6 +145,12 @@ export function InfiniteCanvas({
   const frozenVisibleNodeIdsRef = useRef<readonly string[] | null>(null);
   const renderPlan = useMemo(() => projectCanvasNodeRenderPlan(nodes), [nodes]);
 
+  useEffect(() => {
+    onFullscreenPreviewOpenChange?.(fullscreenPreviewRequest !== undefined);
+  }, [fullscreenPreviewRequest, onFullscreenPreviewOpenChange]);
+
+  useEffect(() => () => onFullscreenPreviewOpenChange?.(false), [onFullscreenPreviewOpenChange]);
+
   // Viewport transform hook
   const { state: viewportState, handlers: viewportHandlers } = useViewportTransform({
     viewport,
@@ -142,6 +158,7 @@ export function InfiniteCanvas({
     containerRef,
     isPanMode,
     isSpacePanActive,
+    disabled: fullscreenPreviewRequest !== undefined,
   });
 
   // Connection drag hook - enables drag-to-connect with mouse-follow preview
@@ -159,6 +176,7 @@ export function InfiniteCanvas({
       validateCanvasConnectionDraft(nodes, connections, connection),
     onConnectionCancel,
     onConnectionStateChange,
+    enabled: fullscreenPreviewRequest === undefined,
   });
 
   // Marquee selection hook
@@ -171,7 +189,11 @@ export function InfiniteCanvas({
     containerRef: containerRef as React.RefObject<HTMLElement | null>,
     nodes: [...renderPlan.nodes],
     onSelect: onMarqueeSelect,
-    enabled: !viewportState.isPanning && !isDraggingConnection && !isPanMode,
+    enabled:
+      fullscreenPreviewRequest === undefined &&
+      !viewportState.isPanning &&
+      !isDraggingConnection &&
+      !isPanMode,
   });
 
   useEffect(() => {
@@ -278,6 +300,18 @@ export function InfiniteCanvas({
           )
         : nodes,
     [dragPreview, nodes],
+  );
+  const openFullscreenPreview = useCallback(
+    (nodeId: string, outputId?: string) => {
+      const node = interactionNodes.find((candidate) => candidate.id === nodeId);
+      if (!node) throw new Error(`Canvas preview resource node "${nodeId}" is not rendered.`);
+      const request = resolveCanvasFullscreenPreviewRequest(node, outputId);
+      if (!request) {
+        throw new Error(`Canvas node "${nodeId}" does not expose an preview resource.`);
+      }
+      setFullscreenPreviewRequest(request);
+    },
+    [interactionNodes],
   );
 
   const dropTargetPreview = useMemo(() => {
@@ -386,6 +420,8 @@ export function InfiniteCanvas({
     <div
       ref={containerRef}
       data-canvas-viewport-root="true"
+      data-canvas-zoom-detail={viewport.zoom < 0.55 ? 'distant' : 'readable'}
+      data-canvas-interaction-suspended={fullscreenPreviewRequest ? 'true' : undefined}
       className="relative w-full h-full overflow-hidden select-none"
       style={{ cursor: getCursor() }}
       {...getKeyboardBoundaryMetadata({
@@ -395,6 +431,7 @@ export function InfiniteCanvas({
       })}
       tabIndex={-1}
       onMouseDown={(e) => {
+        if (fullscreenPreviewRequest) return;
         if (
           e.target === e.currentTarget ||
           (e.target as HTMLElement).hasAttribute('data-canvas-viewport-layer') ||
@@ -407,15 +444,21 @@ export function InfiniteCanvas({
         handleCanvasClick(e);
       }}
       onMouseMove={(e) => {
+        if (fullscreenPreviewRequest) return;
         viewportHandlers.onMouseMove(e);
         marqueeHandlers.onMouseMove(e);
       }}
       onMouseUp={(e) => {
+        if (fullscreenPreviewRequest) return;
         viewportHandlers.onMouseUp();
         marqueeHandlers.onMouseUp(e);
       }}
-      onMouseLeave={viewportHandlers.onMouseLeave}
-      onContextMenu={viewportHandlers.onContextMenu}
+      onMouseLeave={() => {
+        if (!fullscreenPreviewRequest) viewportHandlers.onMouseLeave();
+      }}
+      onContextMenu={(event) => {
+        if (!fullscreenPreviewRequest) viewportHandlers.onContextMenu(event);
+      }}
     >
       {isGridVisible && (
         <CanvasGrid viewport={viewport} width={containerSize.width} height={containerSize.height} />
@@ -481,6 +524,7 @@ export function InfiniteCanvas({
             onResizeEnd: handleNodeResizeEnd,
             onRotateEnd: handleNodeRotateEnd,
             onUpdateData: onNodeUpdateData,
+            onFullscreenPreview: openFullscreenPreview,
             onConnectionStart: startDragConnection,
             isConnecting: isDraggingConnection,
             connectionTargetState,
@@ -500,7 +544,11 @@ export function InfiniteCanvas({
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
         viewportSize={containerSize}
-        hidden={(transformingNodeIds.length > 0 && !dragPreview) || isMarqueeSelecting}
+        hidden={
+          fullscreenPreviewRequest !== undefined ||
+          (transformingNodeIds.length > 0 && !dragPreview) ||
+          isMarqueeSelecting
+        }
       />
       <SelectionGenerationInputPanel
         nodes={interactionNodes}
@@ -508,7 +556,11 @@ export function InfiniteCanvas({
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
         viewportSize={containerSize}
-        hidden={(transformingNodeIds.length > 0 && !dragPreview) || isMarqueeSelecting}
+        hidden={
+          fullscreenPreviewRequest !== undefined ||
+          (transformingNodeIds.length > 0 && !dragPreview) ||
+          isMarqueeSelecting
+        }
         onLayoutMeasure={setGenerationInputLayout}
       />
       <SelectionMaterialGenerationBar
@@ -516,7 +568,11 @@ export function InfiniteCanvas({
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
         viewportSize={containerSize}
-        hidden={transformingNodeIds.length > 0 || isMarqueeSelecting}
+        hidden={
+          fullscreenPreviewRequest !== undefined ||
+          transformingNodeIds.length > 0 ||
+          isMarqueeSelecting
+        }
       />
       {/* Marquee selection rectangle */}
       {marqueeRect && (
@@ -548,6 +604,12 @@ export function InfiniteCanvas({
           </span>
         )}
       </div>
+      {fullscreenPreviewRequest ? (
+        <CanvasFullscreenPreviewOverlay
+          request={fullscreenPreviewRequest}
+          onClose={() => setFullscreenPreviewRequest(undefined)}
+        />
+      ) : null}
     </div>
   );
 }

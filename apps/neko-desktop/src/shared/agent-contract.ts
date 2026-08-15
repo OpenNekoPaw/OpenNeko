@@ -101,7 +101,8 @@ export interface DesktopAgentAcceptedMessageResult {
 export interface DesktopAgentUnavailableMessageResult {
   readonly requestId: string;
   readonly status: 'unavailable';
-  readonly diagnostic: AgentHostRouteUnavailableDiagnostic;
+  readonly diagnostic:
+    AgentHostRouteUnavailableDiagnostic | DesktopAgentConversationUnavailableDiagnostic;
 }
 
 export type DesktopAgentMessageResult =
@@ -403,6 +404,17 @@ export function parseDesktopAgentMessageResult(
       record['diagnostic'],
       'Desktop Agent route diagnostic is required.',
     );
+    if (diagnostic['code'] === 'desktop-agent-conversation-unavailable') {
+      const conversationDiagnostic = parseUnavailableDiagnostic(diagnostic);
+      if (conversationDiagnostic.code !== 'desktop-agent-conversation-unavailable') {
+        throw invalidPayload('Desktop Agent Conversation diagnostic code is invalid.');
+      }
+      return {
+        requestId,
+        status: 'unavailable',
+        diagnostic: conversationDiagnostic,
+      };
+    }
     const messageType = requireAgentMessageType(diagnostic['messageType']);
     const support = diagnostic['support'];
     const code = diagnostic['code'];

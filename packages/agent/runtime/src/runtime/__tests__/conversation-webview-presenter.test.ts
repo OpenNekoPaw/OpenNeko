@@ -60,7 +60,10 @@ describe('conversation-host-message', () => {
           updatedAt: 100,
         },
         {
-          resolveDisplayLocator: async () => 'http://127.0.0.1:43125/resources/image-token',
+          resolveDisplayLocator: async () => ({
+            status: 'ready',
+            descriptor: previewDescriptor(contentLocator),
+          }),
         },
       ),
     ).resolves.toEqual({
@@ -85,7 +88,7 @@ describe('conversation-host-message', () => {
                     contentLocator,
                     url: 'images/out.png',
                     mimeType: 'image/png',
-                    renderUri: 'http://127.0.0.1:43125/resources/image-token',
+                    previewDescriptor: previewDescriptor(contentLocator),
                   },
                 },
               },
@@ -96,3 +99,19 @@ describe('conversation-host-message', () => {
     });
   });
 });
+
+function previewDescriptor(contentLocator: {
+  readonly kind: 'workspace-file';
+  readonly path: string;
+}) {
+  return {
+    descriptorId: 'agent-display:attachment-1:image-1',
+    sourceFingerprint: 'sha256:image-1',
+    contentLocator,
+    url: `openneko://resource/${'a'.repeat(32)}`,
+    contentKind: 'image' as const,
+    mediaType: 'image/png',
+    displayName: 'out.png',
+    byteLength: 42,
+  };
+}

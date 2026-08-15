@@ -13,8 +13,29 @@ const connection: AgentLaunchConnectionIdentity = {
 };
 
 describe('AgentEntryTargetApplicationService', () => {
+  it('binds an exact Project authoring context without fabricating a domain target', async () => {
+    const fixture = createFixture();
+    const binding = authoringBinding(null);
+
+    const result = await fixture.service.configure({
+      connection,
+      draftId: 'draft-1',
+      mode: 'authoring',
+      binding,
+    });
+
+    expect(result).toMatchObject({
+      mode: 'authoring',
+      targetReceipt: { binding },
+    });
+    expect(fixture.projectAuthoring.validate).toHaveBeenCalledWith(connection, binding);
+    expect(fixture.providers.contentAuthoring.validate).not.toHaveBeenCalled();
+    expect(fixture.providers.characterAuthoring.validate).not.toHaveBeenCalled();
+    expect(fixture.providers.worldAuthoring.validate).not.toHaveBeenCalled();
+  });
+
   it.each([
-    ['contentAuthoring', { kind: 'content-project', contentProjectId: 'content-1' }],
+    ['contentAuthoring', { kind: 'content-document', documentId: 'documents/story.md' }],
     ['characterAuthoring', { kind: 'character-project', characterProjectId: 'character-1' }],
     ['worldAuthoring', { kind: 'world-project', worldProjectId: 'world-1' }],
   ] as const)(
@@ -42,6 +63,27 @@ describe('AgentEntryTargetApplicationService', () => {
       });
     },
   );
+
+  it('validates an explicit Character draft target without changing Assistant Entry mode', async () => {
+    const fixture = createFixture();
+    const binding = authoringBinding({
+      kind: 'character-project',
+      characterProjectId: 'character-1',
+    });
+
+    const result = await fixture.service.configure({
+      connection,
+      draftId: 'draft-1',
+      mode: 'assistant',
+      binding,
+    });
+
+    expect(fixture.providers.characterAuthoring.validate).toHaveBeenCalledWith(connection, binding);
+    expect(result).toMatchObject({
+      mode: 'assistant',
+      targetReceipt: { mode: 'assistant', binding },
+    });
+  });
 
   it('keeps selection without authority as a visible incomplete mode', async () => {
     const { service } = createFixture();
@@ -72,6 +114,18 @@ describe('AgentEntryTargetApplicationService', () => {
         binding,
       }),
     ).rejects.toThrow('does not match');
+    await expect(
+      fixture.service.configure({
+        connection,
+        draftId: 'draft-1',
+        mode: 'assistant',
+        binding: {
+          kind: 'character-dialogue',
+          mode: 'companion',
+          participants: [{ globalCharacterId: 'character-1', characterVersionId: 'version-1' }],
+        },
+      }),
+    ).rejects.toThrow('does not match');
 
     fixture.providers.characterAuthoring.validate.mockResolvedValueOnce({
       status: 'unavailable',
@@ -95,20 +149,29 @@ describe('AgentEntryTargetApplicationService', () => {
     const fixture = createFixture();
     fixture.providers.contentAuthoring.validate.mockResolvedValueOnce({
       status: 'ready',
-      binding: authoringBinding({ kind: 'content-project', contentProjectId: 'content-other' }),
+      binding: {
+        ...authoringBinding({ kind: 'content-document', documentId: 'documents/story.md' }),
+        authority: { kind: 'project', projectId: 'project-other' },
+      },
     });
     await expect(
       fixture.service.configure({
         connection,
         draftId: 'draft-1',
         mode: 'authoring',
-        binding: authoringBinding({ kind: 'content-project', contentProjectId: 'content-1' }),
+        binding: authoringBinding({
+          kind: 'content-document',
+          documentId: 'documents/story.md',
+        }),
       }),
     ).rejects.toThrow('different authority');
   });
 });
 
 function createFixture() {
+  const projectAuthoring = {
+    validate: vi.fn(async (_connection, binding) => ({ status: 'ready' as const, binding })),
+  } satisfies Parameters<typeof createAgentEntryTargetApplicationService>[0]['projectAuthoring'];
   const contentAuthoring = {
     validate: vi.fn(async (_connection, binding) => ({ status: 'ready' as const, binding })),
   } satisfies Parameters<typeof createAgentEntryTargetApplicationService>[0]['contentAuthoring'];
@@ -132,8 +195,10 @@ function createFixture() {
     worldExperience,
   };
   return {
+    projectAuthoring,
     providers,
     service: createAgentEntryTargetApplicationService({
+      projectAuthoring,
       ...providers,
       createIdentity: () => 'receipt-1',
     }),
@@ -145,6 +210,7 @@ function authoringBinding(target: AgentAuthoringBinding['target']): AgentAuthori
     kind: 'authoring',
     workspaceId: 'workspace-1',
     workspaceGrantId: 'grant-1',
+    authority: { kind: 'project', projectId: 'project-1' },
     target,
   };
 }

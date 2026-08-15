@@ -79,6 +79,7 @@ export function MessageList({
       [flattenedItems],
     ),
     overscan: 5,
+    useFlushSync: false,
   });
   const virtualizerRef = useRef(virtualizer);
   const flattenedItemsRef = useRef(flattenedItems);

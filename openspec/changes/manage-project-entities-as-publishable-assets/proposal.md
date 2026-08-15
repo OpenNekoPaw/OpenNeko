@@ -1,3 +1,10 @@
+> Supersession notice (2026-08-12):
+> [`simplify-resource-entity-character-world-boundaries`](../simplify-resource-entity-character-world-boundaries/)
+> retains the canonical Project Entity repository, candidates, bindings and reference diagnostics, but
+> supersedes Entity Asset lifecycle, mandatory four peer resource facets and Entity-owned Character
+> dialogue/Room/embody. Those clauses are no longer implementation requirements. See its
+> [`reconciliation.md`](../simplify-resource-entity-character-world-boundaries/reconciliation.md).
+
 ## Why
 
 Project Entity facts are currently fragmented across character, per-kind, candidate, binding,

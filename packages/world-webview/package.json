@@ -1,10 +1,11 @@
 {
   "name": "@neko/world-webview",
-  "description": "Browser-only World Foundation library, studio and deterministic preview for OpenNeko",
+  "description": "Browser-only World management, authoring and deterministic runtime surfaces for OpenNeko",
   "private": true,
   "type": "module",
   "exports": {
     "./root": "./src/root.tsx",
+    "./runtime": "./src/runtime.tsx",
     "./style.css": "./src/style.css"
   },
   "scripts": {

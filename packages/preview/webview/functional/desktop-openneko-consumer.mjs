@@ -14,6 +14,7 @@ const VIEWERS = Object.freeze([
   { key: 'image', kind: 'image', pathKey: 'image' },
   { key: 'audio', kind: 'audio', pathKey: 'audio' },
   { key: 'video', kind: 'video', pathKey: 'video' },
+  { key: 'webm', kind: 'video', pathKey: 'webm' },
   { key: 'pdf', kind: 'document', pathKey: 'pdf' },
   { key: 'epub', kind: 'document', pathKey: 'epub' },
   { key: 'glb', kind: 'model', pathKey: 'glb' },
@@ -37,7 +38,7 @@ export const previewOpenNekoConsumerScenario = Object.freeze({
       const before = readOpenNekoResourceRequests();
       await openPreviewResource(evaluate, path);
       let detail = await waitForViewer(click, evaluate, definition);
-      if (definition.key === 'video') {
+      if (definition.kind === 'video') {
         detail = { ...detail, ...(await positionPreviewVideoAtMidpoint(click, evaluate)) };
       }
       screenshots.push(
@@ -104,6 +105,7 @@ async function waitForViewer(click, evaluate, definition) {
   const deadline = Date.now() + 45_000;
   let playbackStarted = false;
   let lastDetail;
+  const playbackKind = definition.kind === 'video' ? 'video' : definition.kind;
   while (Date.now() < deadline) {
     const detail = await evaluate(`(() => {
       const root = document.querySelector('.neko-preview-root[data-preview-kind=${JSON.stringify(definition.kind)}]');
@@ -115,7 +117,7 @@ async function waitForViewer(click, evaluate, definition) {
       const epub = root.querySelector('[data-testid="epub-preview-ready"]');
       const model = root.querySelector('[data-testid="model-preview-ready"]');
       const playbackButton = root.querySelector(
-        '[data-testid="preview-${definition.key}-toggle-playback"]',
+        '[data-testid="preview-${playbackKind}-toggle-playback"]',
       );
       const playbackButtonRect = playbackButton?.getBoundingClientRect();
       return {
@@ -132,7 +134,7 @@ async function waitForViewer(click, evaluate, definition) {
         modelReady: model instanceof HTMLElement && model.dataset.viewerStatus === 'ready',
         meshCount: model instanceof HTMLElement ? Number(model.dataset.meshCount ?? '0') : 0,
         playbackButtonCount: root.querySelectorAll(
-          '[data-testid="preview-${definition.key}-toggle-playback"]',
+          '[data-testid="preview-${playbackKind}-toggle-playback"]',
         ).length,
         playbackButtonWidth: playbackButtonRect?.width ?? 0,
         playbackButtonHeight: playbackButtonRect?.height ?? 0,
@@ -149,23 +151,23 @@ async function waitForViewer(click, evaluate, definition) {
     if (detail) {
       const ready =
         (definition.key === 'image' && detail.imageReady) ||
-        (definition.key === 'audio' && detail.audioTime > 0.1) ||
-        (definition.key === 'video' && detail.videoTime > 0.1) ||
+        (definition.kind === 'audio' && detail.audioTime > 0.1) ||
+        (definition.kind === 'video' && detail.videoTime > 0.1) ||
         (definition.key === 'pdf' && detail.pdfReady) ||
         (definition.key === 'epub' && detail.epubReady) ||
         ((definition.key === 'glb' || definition.key === 'gltf') &&
           detail.modelReady &&
           detail.meshCount > 0);
       if (ready) return { ...detail, ready: true };
-      if ((definition.key === 'audio' || definition.key === 'video') && !playbackStarted) {
-        const ready = definition.key === 'audio' ? detail.audioReady : detail.videoReady;
+      if ((definition.kind === 'audio' || definition.kind === 'video') && !playbackStarted) {
+        const ready = definition.kind === 'audio' ? detail.audioReady : detail.videoReady;
         if (
           ready &&
           detail.playbackButtonCount > 0 &&
           detail.playbackButtonWidth > 0 &&
           detail.playbackButtonHeight > 0
         ) {
-          await click(`[data-testid="preview-${definition.key}-toggle-playback"]`);
+          await click(`[data-testid="preview-${playbackKind}-toggle-playback"]`);
           playbackStarted = true;
         }
       }

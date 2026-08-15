@@ -1,5 +1,9 @@
 export { ProjectCacheSearchService } from './ProjectCacheSearchService';
-export { ProjectIndexCoordinator } from './ProjectIndexCoordinator';
+export {
+  ProjectIndexCoordinator,
+  ProjectSearchCoordinationError,
+  type ProjectSearchCoordinationFailure,
+} from './ProjectIndexCoordinator';
 export {
   buildProjectSearchText,
   matchesProjectSearchItem,
@@ -34,6 +38,7 @@ export {
 } from './projections';
 export { SimpleEventEmitter } from './simpleEventEmitter';
 export * from './SemanticSourceCoordinator';
+export * from './ResourceUsageProjectionReconciliationService';
 export type {
   ProjectSearchContextResolver,
   ProjectSearchDisposable,

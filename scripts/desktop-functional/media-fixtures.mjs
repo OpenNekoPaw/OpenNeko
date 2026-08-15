@@ -17,6 +17,7 @@ export async function createDesktopMediaFixtureSet(workspacePath) {
   ]);
 
   const videoPath = join(mediaRoot, 'motion-with-audio.mp4');
+  const webmPath = join(mediaRoot, 'motion-with-audio.webm');
   const audioPath = join(mediaRoot, 'tone.wav');
   const imagePath = join(mediaRoot, 'frame.png');
   await Promise.all([
@@ -39,6 +40,28 @@ export async function createDesktopMediaFixtureSet(workspacePath) {
       'aac',
       '-shortest',
       videoPath,
+    ]),
+    runFfmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc2=size=320x180:rate=30',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:sample_rate=48000',
+      '-t',
+      '4',
+      '-c:v',
+      'libvpx-vp9',
+      '-deadline',
+      'realtime',
+      '-cpu-used',
+      '8',
+      '-c:a',
+      'libopus',
+      '-shortest',
+      webmPath,
     ]),
     runFfmpeg([
       '-f',
@@ -69,6 +92,7 @@ export async function createDesktopMediaFixtureSet(workspacePath) {
 
   return Object.freeze({
     video: 'media/motion-with-audio.mp4',
+    webm: 'media/motion-with-audio.webm',
     audio: 'media/tone.wav',
     image: 'media/frame.png',
     pdf: 'documents/qualification.pdf',

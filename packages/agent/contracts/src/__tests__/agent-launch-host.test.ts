@@ -117,6 +117,7 @@ describe('Agent launch Host contract', () => {
         kind: 'authoring',
         workspaceId: 'workspace-1',
         workspaceGrantId: 'grant-1',
+        authority: { kind: 'project', projectId: 'project-1' },
         target: { kind: 'world-project', worldProjectId: 'world-1' },
       },
     });

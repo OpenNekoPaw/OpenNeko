@@ -1,19 +1,26 @@
 import {
-  createCharacterFoundationCommandHostRequest,
+  parseCharacterCreationSourceSelection,
+  parseCharacterDefinition,
+  type CharacterCreationSourceSelection,
   type CharacterDefinition,
 } from '@neko/chara/contracts';
+import { parseWorldAuthoringCommand, type WorldDefinition } from '@neko/world/contracts';
 import {
-  createWorldFoundationCommandHostRequest,
-  type WorldDefinition,
-} from '@neko/world/contracts';
-import { parseProjectLocalTargetRef, type ProjectLocalTargetRef } from './project-composition';
+  parseProjectLocalTargetRef,
+  projectLocalTargetKey,
+  type ProjectLocalTargetRef,
+} from './project-target';
+import type {
+  ProjectLocalAuthoringOutcome,
+  ProjectLocalCharacterEntitySelection,
+} from './project-local-authoring';
 
 export const PROJECT_LOCAL_AUTHORING_HOST_CHANNEL = 'openneko:project:local-authoring' as const;
 
 export interface ProjectLocalAuthoringHostBinding {
   readonly workspaceId: string;
   readonly workspaceGrantId: string;
-  readonly contentProjectId: string;
+  readonly projectId: string;
 }
 
 export type ProjectLocalAuthoringCreateInput =
@@ -22,6 +29,8 @@ export type ProjectLocalAuthoringCreateInput =
       readonly characterProjectId: string;
       readonly displayName: string;
       readonly draft: CharacterDefinition;
+      readonly sources: CharacterCreationSourceSelection;
+      readonly entity: ProjectLocalCharacterEntitySelection;
     }
   | {
       readonly kind: 'world-project';
@@ -30,7 +39,7 @@ export type ProjectLocalAuthoringCreateInput =
       readonly draft: WorldDefinition;
     };
 
-export interface ProjectLocalAuthoringHostRequest extends ProjectLocalAuthoringHostBinding {
+export interface ProjectLocalAuthoringCreateHostRequest extends ProjectLocalAuthoringHostBinding {
   readonly requestId: string;
   readonly rendererSessionId: string;
   readonly windowId: string;
@@ -38,10 +47,11 @@ export interface ProjectLocalAuthoringHostRequest extends ProjectLocalAuthoringH
   readonly input: ProjectLocalAuthoringCreateInput;
 }
 
-export interface ProjectLocalAuthoringHostResult extends ProjectLocalAuthoringHostBinding {
-  readonly requestId: string;
-  readonly target: ProjectLocalTargetRef;
-}
+export type ProjectLocalAuthoringHostRequest = ProjectLocalAuthoringCreateHostRequest;
+
+export type ProjectLocalAuthoringHostResult = ProjectLocalAuthoringHostBinding &
+  Readonly<{ requestId: string }> &
+  ProjectLocalAuthoringOutcome;
 
 export interface OpenNekoDesktopProjectLocalAuthoringBridge {
   readonly projectLocalAuthoring: {
@@ -80,75 +90,90 @@ export function parseProjectLocalAuthoringHostRequest(
     'operation',
     'workspaceId',
     'workspaceGrantId',
-    'contentProjectId',
+    'projectId',
     'input',
   ]);
-  if (record['operation'] !== 'create-local-target') {
-    throw new Error(`Unknown Project local authoring operation '${String(record['operation'])}'.`);
-  }
   const requestId = identity(record['requestId'], 'request');
-  return {
+  const common = {
     requestId,
     rendererSessionId: identity(record['rendererSessionId'], 'Renderer session'),
     windowId: identity(record['windowId'], 'Window'),
-    operation: 'create-local-target',
     workspaceId: identity(record['workspaceId'], 'Workspace'),
     workspaceGrantId: identity(record['workspaceGrantId'], 'Workspace grant'),
-    contentProjectId: identity(record['contentProjectId'], 'Content Project'),
-    input: parseCreateInput(record['input'], requestId),
+    projectId: identity(record['projectId'], 'Project'),
   };
+  if (record['operation'] === 'create-local-target') {
+    return {
+      ...common,
+      operation: 'create-local-target',
+      input: parseCreateInput(record['input']),
+    };
+  }
+  throw new Error(`Unknown Project local authoring operation '${String(record['operation'])}'.`);
 }
 
 export function parseProjectLocalAuthoringHostResult(
   value: unknown,
   expectedRequestId: string,
   expectedBinding: ProjectLocalAuthoringHostBinding,
+  expectedTarget: ProjectLocalTargetRef,
 ): ProjectLocalAuthoringHostResult {
   const record = exactRecord(value, [
     'requestId',
     'workspaceId',
     'workspaceGrantId',
-    'contentProjectId',
+    'projectId',
+    'status',
     'target',
   ]);
-  const result = {
+  const status = record['status'];
+  if (status !== 'created') {
+    throw new Error(`Unknown Project local authoring result status '${String(status)}'.`);
+  }
+  const common = {
     requestId: identity(record['requestId'], 'request'),
     workspaceId: identity(record['workspaceId'], 'Workspace'),
     workspaceGrantId: identity(record['workspaceGrantId'], 'Workspace grant'),
-    contentProjectId: identity(record['contentProjectId'], 'Content Project'),
-    target: parseProjectLocalTargetRef(record['target']),
+    projectId: identity(record['projectId'], 'Project'),
   };
-  if (result.requestId !== expectedRequestId) {
+  if (common.requestId !== expectedRequestId) {
     throw new Error('Project local authoring response request identity mismatch.');
   }
-  for (const key of ['workspaceId', 'workspaceGrantId', 'contentProjectId'] as const) {
-    if (result[key] !== expectedBinding[key]) {
+  for (const key of ['workspaceId', 'workspaceGrantId', 'projectId'] as const) {
+    if (common[key] !== expectedBinding[key]) {
       throw new Error(`Project local authoring response ${key} mismatch.`);
     }
   }
-  return result;
+  const target = parseProjectLocalTargetRef(record['target']);
+  if (projectLocalTargetKey(target) !== projectLocalTargetKey(expectedTarget)) {
+    throw new Error('Project local authoring response target identity mismatch.');
+  }
+  return { ...common, status, target };
 }
 
-function parseCreateInput(value: unknown, requestId: string): ProjectLocalAuthoringCreateInput {
+function parseCreateInput(value: unknown): ProjectLocalAuthoringCreateInput {
   const record = objectValue(value);
   if (record['kind'] === 'character-project') {
-    const input = exactRecord(value, ['kind', 'characterProjectId', 'displayName', 'draft']);
-    const command = createCharacterFoundationCommandHostRequest(requestId, {
-      operation: 'character-project-create',
-      input: {
-        characterProjectId: input['characterProjectId'] as string,
-        displayName: input['displayName'] as string,
-        draft: input['draft'] as CharacterDefinition,
-      },
-    });
-    if (command.operation !== 'character-project-create') {
-      throw new Error('Character owner returned another create operation.');
-    }
-    return { kind: 'character-project', ...command.input };
+    const input = exactRecord(value, [
+      'kind',
+      'characterProjectId',
+      'displayName',
+      'draft',
+      'sources',
+      'entity',
+    ]);
+    return {
+      kind: 'character-project',
+      characterProjectId: requireIdentity(input['characterProjectId'], 'CharacterProject'),
+      displayName: requireIdentity(input['displayName'], 'Character display name'),
+      draft: parseCharacterDefinition(input['draft']),
+      sources: parseCharacterCreationSourceSelection(input['sources']),
+      entity: parseCharacterEntitySelection(input['entity']),
+    };
   }
   if (record['kind'] === 'world-project') {
     const input = exactRecord(value, ['kind', 'worldProjectId', 'title', 'draft']);
-    const command = createWorldFoundationCommandHostRequest(requestId, {
+    const command = parseWorldAuthoringCommand({
       operation: 'world-project-create',
       input: {
         worldProjectId: input['worldProjectId'] as string,
@@ -162,6 +187,26 @@ function parseCreateInput(value: unknown, requestId: string): ProjectLocalAuthor
     return { kind: 'world-project', ...command.input };
   }
   throw new Error(`Unknown Project local authoring target '${String(record['kind'])}'.`);
+}
+
+function parseCharacterEntitySelection(value: unknown): ProjectLocalCharacterEntitySelection {
+  const record = objectValue(value);
+  if (record['kind'] === 'create') {
+    const selection = exactRecord(value, ['kind', 'entityId', 'name']);
+    return {
+      kind: 'create',
+      entityId: identity(selection['entityId'], 'Project Entity'),
+      name: identity(selection['name'], 'Project Entity name'),
+    };
+  }
+  if (record['kind'] === 'existing') {
+    const selection = exactRecord(value, ['kind', 'entityId']);
+    return {
+      kind: 'existing',
+      entityId: identity(selection['entityId'], 'Project Entity'),
+    };
+  }
+  throw new Error(`Unknown Project Entity selection '${String(record['kind'])}'.`);
 }
 
 function exactRecord(value: unknown, keys: readonly string[]): Readonly<Record<string, unknown>> {
@@ -179,6 +224,13 @@ function objectValue(value: unknown): Readonly<Record<string, unknown>> {
     throw new Error('Project local authoring payload must be an object.');
   }
   return value as Readonly<Record<string, unknown>>;
+}
+
+function requireIdentity(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`${label} is required.`);
+  }
+  return value;
 }
 
 function identity(value: unknown, label: string): string {

@@ -9,6 +9,7 @@ import type {
   AgentTurnTimelineToolCallItem,
   ConversationProjectionSnapshot,
 } from '@neko/agent-contracts';
+import { CONFIGURED_AGENT_TURN_CAPABILITIES } from '@neko/agent-contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentWorkspaceRuntime } from '@neko/agent-runtime/application';
 import { auditDesktopAgentStartup } from './desktop-agent-bridge-runtime';
@@ -28,6 +29,7 @@ import {
 } from '@neko/host/settings';
 
 const temporaryRoots: string[] = [];
+const readConfiguredCapabilityConstraint = async () => CONFIGURED_AGENT_TURN_CAPABILITIES;
 
 afterEach(async () => {
   await Promise.all(
@@ -36,6 +38,190 @@ afterEach(async () => {
 });
 
 describe('Agent controller composition', () => {
+  it('projects no Skill activation entries for a persisted Narrative capability constraint', async () => {
+    const workspace = createWorkspace();
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+    });
+    const effects = composition.createEffects({
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-1',
+      },
+      readConversationContext: async () => ({
+        kind: 'character',
+        characterId: 'character-1',
+        characterVersionId: 'character-version-1',
+        characterRunId: 'character-run-1',
+        dialogueRunId: 'dialogue-run-1',
+      }),
+      readConversationCapabilityConstraint: async () => ({
+        owner: { kind: 'character', id: 'character-run-1' },
+        skills: 'none',
+        tools: 'none',
+        references: 'none',
+      }),
+      personalSkillOwnerId: 'assistant-space-1',
+      readGlobalSkillCatalog: async () => ({
+        records: [],
+        diagnostics: [],
+        warnings: [],
+        commands: { records: [], diagnostics: [] },
+      }),
+    });
+    const posted: AgentHostToWebviewMessage[] = [];
+
+    await effects.skill.readInputCatalog('conversation-narrative', {
+      identity: {
+        hostKind: 'electron',
+        applicationId: 'neko-desktop',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        workspaceId: workspace.workspaceId,
+        connectionId: 'connection-1',
+      },
+      post: (message) => {
+        posted.push(message);
+      },
+    });
+
+    expect(workspace.readSkillCatalog).not.toHaveBeenCalled();
+    expect(posted).toEqual([
+      expect.objectContaining({
+        type: 'agentInputCatalog',
+        entries: expect.not.arrayContaining([expect.objectContaining({ trigger: 'skill' })]),
+      }),
+    ]);
+  });
+
+  it('rejects Narrative references before domain or reference materialization on later turns', async () => {
+    const workspace = createWorkspace();
+    await workspace.createConversation('conversation-narrative');
+    const resolveReferences = vi.fn(async () => []);
+    const resolveDomain = vi.fn(async () => ({ contextPayloads: [] }));
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
+      conversationReferences: { resolve: resolveReferences },
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+    });
+    const configuration = missingTurnConfiguration('conversation-narrative', 'turn-narrative');
+    const effects = composition.createEffects({
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-1',
+      },
+      readConversationConfiguration: async () => configuration,
+      readConversationContext: async () => ({
+        kind: 'character',
+        characterId: 'character-1',
+        characterVersionId: 'character-version-1',
+        characterRunId: 'character-run-1',
+        dialogueRunId: 'dialogue-run-1',
+      }),
+      readConversationEntryTargetReceipt: async () => null,
+      readConversationCapabilityConstraint: async () => ({
+        owner: { kind: 'character', id: 'character-run-1' },
+        skills: 'none',
+        tools: 'none',
+        references: 'none',
+      }),
+      resolveConversationDomainTurnContext: { resolve: resolveDomain },
+    });
+    const posted: AgentHostToWebviewMessage[] = [];
+
+    effects.conversation.submitTurn(
+      {
+        source: 'user-message',
+        conversationId: 'conversation-narrative',
+        messageText: 'Use this forbidden source.',
+        sessionMode: 'agent',
+        locale: 'en',
+        fileReferences: [
+          {
+            id: 'file:forbidden',
+            label: 'forbidden.md',
+            contentLocator: { kind: 'workspace-file', path: 'forbidden.md' },
+            mediaType: 'text',
+          },
+        ],
+      },
+      {
+        identity: {
+          hostKind: 'electron',
+          applicationId: 'neko-desktop',
+          windowId: 'window-1',
+          viewId: 'view-1',
+          workspaceId: workspace.workspaceId,
+          connectionId: 'connection-1',
+        },
+        post: (message) => {
+          posted.push(message);
+        },
+      },
+    );
+
+    await vi.waitFor(() =>
+      expect(posted).toContainEqual(
+        expect.objectContaining({
+          type: 'error',
+          conversationId: 'conversation-narrative',
+          message: expect.stringContaining('forbids external references'),
+        }),
+      ),
+    );
+    expect(resolveDomain).not.toHaveBeenCalled();
+    expect(resolveReferences).not.toHaveBeenCalled();
+    expect(workspace.startTurn).not.toHaveBeenCalled();
+
+    effects.dispose();
+    await composition.dispose?.();
+  });
+
   it('resolves Session file locators through the exact Conversation binding', async () => {
     const resolve = vi.fn(async () => [
       {
@@ -125,6 +311,7 @@ describe('Agent controller composition', () => {
           workspaceGrantId: 'workspace-grant-1',
         },
         locale: 'en',
+        capabilityConstraint: CONFIGURED_AGENT_TURN_CAPABILITIES,
       }),
     ).rejects.toThrow("model 'provider-missing:model-missing' is stale or unavailable");
     expect(workspace.checkpointFailedInitialTurn).toHaveBeenCalledWith({
@@ -175,6 +362,7 @@ describe('Agent controller composition', () => {
           workspaceGrantId: 'workspace-grant-1',
         },
         locale: 'en',
+        capabilityConstraint: CONFIGURED_AGENT_TURN_CAPABILITIES,
       }),
     ).rejects.toThrow("model 'provider-missing:model-missing' is stale or unavailable");
     expect(workspace.checkpointFailedInitialTurn).toHaveBeenCalledWith({
@@ -280,28 +468,57 @@ describe('Agent controller composition', () => {
         },
       }),
     };
-    const turnIdentity = {
-      workspaceId: workspace.workspaceId,
-      conversationId: 'conversation-image',
-      branchId: 'main',
-      turnId: 'turn-image',
-      runId: 'run-image',
-    };
-    workspace.startTurn.mockImplementation((input) => ({
-      identity: turnIdentity,
-      completion: Promise.resolve({
+    workspace.startTurn.mockImplementation((input) => {
+      const turnId = input.turnId;
+      if (!turnId) throw new Error('Fixture Turn requires an exact identity.');
+      const turnIdentity = {
+        workspaceId: workspace.workspaceId,
+        conversationId: 'conversation-image',
+        branchId: 'main',
+        turnId,
+        runId: `run-${turnId}`,
+      };
+      return {
         identity: turnIdentity,
-        durability: 'durable',
-        projection: { conversationId: 'conversation-image', turns: [] },
-        configuration: input.configuration,
-        path: {
-          runtime: 'pi-conversation-runtime',
-          transcript: 'pi-session',
-          metadata: 'sqlite',
-          projection: 'conversation-projection-store',
-        },
-      }),
-    }));
+        completion: Promise.resolve({
+          identity: turnIdentity,
+          durability: 'durable',
+          projection: {
+            conversationId: 'conversation-image',
+            turns: [
+              {
+                turnId: turnIdentity.turnId,
+                runId: turnIdentity.runId,
+                messageId: 'message-image',
+                items: [
+                  {
+                    conversationId: 'conversation-image',
+                    turnId: turnIdentity.turnId,
+                    runId: turnIdentity.runId,
+                    messageId: 'message-image',
+                    itemId: 'assistant-image',
+                    sequence: 1,
+                    kind: 'assistant_text',
+                    status: 'complete',
+                    createdAt: 1,
+                    updatedAt: 1,
+                    payload: { content: 'Image request completed.' },
+                  },
+                ],
+                completion: { status: 'completed', completedAt: 1 },
+              },
+            ],
+          },
+          configuration: input.configuration,
+          path: {
+            runtime: 'pi-conversation-runtime',
+            transcript: 'pi-session',
+            metadata: 'sqlite',
+            projection: 'conversation-projection-store',
+          },
+        }),
+      };
+    });
     workspace.readConversationEvidence.mockReturnValue({
       workspaceId: workspace.workspaceId,
       conversationId: 'conversation-image',
@@ -361,6 +578,7 @@ describe('Agent controller composition', () => {
       },
       entryTargetReceipt: authoringReceipt(),
       locale: 'en',
+      capabilityConstraint: CONFIGURED_AGENT_TURN_CAPABILITIES,
       purposeModels: {
         'image.generate': {
           providerId: 'image-provider',
@@ -404,6 +622,7 @@ describe('Agent controller composition', () => {
         workspaceGrantId: 'workspace-grant-1',
       },
       locale: 'en',
+      capabilityConstraint: CONFIGURED_AGENT_TURN_CAPABILITIES,
       purposeModels: {
         'image.generate': {
           providerId: 'login-image-provider',
@@ -435,6 +654,7 @@ describe('Agent controller composition', () => {
         workspaceGrantId: 'workspace-grant-1',
       },
       locale: 'en',
+      capabilityConstraint: CONFIGURED_AGENT_TURN_CAPABILITIES,
       purposeModels: {
         'image.generate': {
           providerId: 'login-image-provider',
@@ -462,6 +682,7 @@ describe('Agent controller composition', () => {
         workspaceGrantId: 'workspace-grant-1',
       },
       locale: 'en',
+      capabilityConstraint: CONFIGURED_AGENT_TURN_CAPABILITIES,
       purposeModels: {
         'image.generate': {
           providerId: 'login-image-provider',
@@ -505,6 +726,7 @@ describe('Agent controller composition', () => {
       reportError: vi.fn(),
     });
     const effects = composition.createEffects({
+      readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
       workspace,
       identity: {
         applicationInstanceId: 'app-1',
@@ -572,6 +794,213 @@ describe('Agent controller composition', () => {
         },
       },
     ]);
+
+    effects.dispose();
+    await composition.dispose?.();
+  });
+
+  it('projects completed initial Turn facts into the later exact Session connection', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'desktop-agent-initial-facts-'));
+    temporaryRoots.push(root);
+    const configPath = join(root, 'config.toml');
+    await writeFile(
+      configPath,
+      [
+        '[[providers]]',
+        'id = "provider-1"',
+        'name = "Provider"',
+        'type = "openai"',
+        'api_url = "https://provider.example.test/v1"',
+        'protocol_profile = "openai-chat"',
+        'enabled = true',
+        'requires_api_key = false',
+        '',
+        '[[models]]',
+        'id = "model-1"',
+        'name = "Model"',
+        'provider_id = "provider-1"',
+        'type = "llm"',
+        'capabilities = ["chat", "tools"]',
+        'context_window = 8192',
+        'max_output_tokens = 4096',
+        'enabled = true',
+      ].join('\n'),
+      'utf8',
+    );
+    const config = new ConfigManager({
+      userConfigManager: new FileUserConfigManager({ filePath: configPath }),
+      assistantRuntimeSettings: createRuntimeSettings({
+        selectedProviderId: 'provider-1',
+        selectedModelId: 'model-1',
+      }),
+    });
+    const workspace = createWorkspace(root);
+    await workspace.createConversation('conversation-initial-facts');
+    await workspace.createConversation('conversation-sibling');
+    const request = {
+      modelCatalogEntryId: 'provider-1:model-1',
+      providerId: 'provider-1',
+      modelId: 'model-1',
+      executionMode: 'ask' as const,
+      temperature: 0.7,
+      maximumOutputTokens: 4096,
+      thinkingBudget: 0,
+    };
+    const configuration = {
+      conversationId: 'conversation-initial-facts',
+      turnId: 'turn-initial-facts',
+      request,
+      projection: projectAgentConfigurationPolicy({
+        models: projectAgentModelCatalog(config.getAssistantConfigState()),
+        request,
+        source: 'draft-request' as const,
+        defaults: {
+          executionMode: 'ask' as const,
+          temperature: 0.7,
+          maximumOutputTokens: 4096,
+          thinkingBudget: 0,
+        },
+      }),
+    };
+    const turnIdentity = {
+      workspaceId: workspace.workspaceId,
+      conversationId: 'conversation-initial-facts',
+      branchId: 'main',
+      turnId: 'turn-initial-facts',
+      runId: 'run-initial-facts',
+    };
+    workspace.startTurn.mockImplementation((input) => {
+      input.events?.emit({
+        identity: turnIdentity,
+        timestamp: 1,
+        type: 'skill.activated',
+        skillName: 'character-creator',
+        source: 'builtin',
+        fingerprint: 'sha256:character-creator-fixture',
+      });
+      input.events?.emit({
+        identity: turnIdentity,
+        timestamp: 2,
+        type: 'usage',
+        provider: 'provider-1',
+        model: 'model-1',
+        usage: {
+          input: 12,
+          output: 8,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 20,
+          cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 },
+        },
+      });
+      return {
+        identity: turnIdentity,
+        completion: Promise.resolve({
+          identity: turnIdentity,
+          durability: 'durable',
+          projection: {
+            conversationId: turnIdentity.conversationId,
+            turns: [
+              {
+                turnId: turnIdentity.turnId,
+                runId: turnIdentity.runId,
+                messageId: 'message-initial-facts',
+                items: [],
+                completion: { status: 'completed', completedAt: 3 },
+              },
+            ],
+          },
+          configuration: input.configuration,
+          path: {
+            runtime: 'pi-conversation-runtime',
+            transcript: 'pi-session',
+            metadata: 'sqlite',
+            projection: 'conversation-projection-store',
+          },
+        }),
+      };
+    });
+    workspace.readConversationEvidence.mockReturnValue({
+      workspaceId: workspace.workspaceId,
+      conversationId: turnIdentity.conversationId,
+      branchId: turnIdentity.branchId,
+      piSessionId: 'pi-session-initial-facts',
+      writerLeaseId: 'writer-lease-initial-facts',
+    });
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: () => config,
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+    });
+
+    await composition.startInitialTurn?.({
+      workspace,
+      conversationId: turnIdentity.conversationId,
+      turnId: turnIdentity.turnId,
+      messageText: 'Create a reviewable character.',
+      configuration,
+      context: {
+        kind: 'workspace',
+        workspaceId: workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant-1',
+      },
+      skillName: 'character-creator',
+      skillActivationId: 'skill:builtin:character-creator-fixture',
+      locale: 'en',
+      capabilityConstraint: CONFIGURED_AGENT_TURN_CAPABILITIES,
+    });
+    const effects = composition.createEffects({
+      readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'session-connection-initial-facts',
+      },
+      initialConversationId: turnIdentity.conversationId,
+    });
+
+    expect(effects.automation?.readLatestTurnIdentity(turnIdentity.conversationId)).toEqual(
+      turnIdentity,
+    );
+    expect(effects.automation?.readLatestTurnIdentity('conversation-sibling')).toBeUndefined();
+    expect(effects.automation?.readFacts(turnIdentity)).toMatchObject({
+      identity: {
+        connection: { connectionId: 'session-connection-initial-facts' },
+      },
+      receipts: {
+        skills: {
+          items: [
+            {
+              name: 'character-creator',
+              source: 'builtin',
+              fingerprint: 'sha256:character-creator-fixture',
+              status: 'injected',
+            },
+          ],
+        },
+      },
+      usage: { inputTokens: 12, outputTokens: 8, costUsd: 0.3 },
+    });
 
     effects.dispose();
     await composition.dispose?.();
@@ -687,11 +1116,21 @@ describe('Agent controller composition', () => {
         },
       }),
     };
+    const resolveConversationReferences = vi.fn(async () => [
+      {
+        type: 'file' as const,
+        id: 'file:companion-source',
+        label: 'source.md',
+        summary: 'Authorized source for this turn.',
+        data: { text: 'authorized-source' },
+      },
+    ]);
     const composition = createAgentControllerComposition({
       host: createHost(),
       userHome: root,
       credentialRuntime: createCredentialRuntime(),
       resolveWorkspaceConfig: () => config,
+      conversationReferences: { resolve: resolveConversationReferences },
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -706,7 +1145,21 @@ describe('Agent controller composition', () => {
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
     });
+    const freezeDomainTurn = vi.fn(async () => undefined);
+    const resolveConversationDomainTurnContext = vi.fn(async () => ({
+      contextPayloads: [
+        {
+          type: 'entity' as const,
+          id: 'domain-turn-context-1',
+          label: 'Domain turn context',
+          summary: 'Fresh context for this exact turn.',
+          data: { text: 'fresh-domain-context' },
+        },
+      ],
+      onTurnStarted: freezeDomainTurn,
+    }));
     const effects = composition.createEffects({
+      readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
       workspace,
       identity: {
         applicationInstanceId: 'app-1',
@@ -725,6 +1178,9 @@ describe('Agent controller composition', () => {
         workspaceGrantId: 'workspace-grant-1',
       }),
       readConversationEntryTargetReceipt: async () => authoringReceipt(),
+      resolveConversationDomainTurnContext: {
+        resolve: resolveConversationDomainTurnContext,
+      },
     });
     const posted: AgentHostToWebviewMessage[] = [];
     effects.conversation.submitTurn(
@@ -734,6 +1190,15 @@ describe('Agent controller composition', () => {
         messageText: 'Create a durable artifact.',
         sessionMode: 'agent',
         locale: 'en',
+        turnId: turnIdentity.turnId,
+        fileReferences: [
+          {
+            id: 'file:companion-source',
+            label: 'source.md',
+            contentLocator: { kind: 'workspace-file', path: 'source.md' },
+            mediaType: 'text',
+          },
+        ],
       },
       {
         identity: {
@@ -762,8 +1227,24 @@ describe('Agent controller composition', () => {
       }),
     );
     expect(workspace.startTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ entryTargetReceipt: authoringReceipt() }),
+      expect.objectContaining({
+        turnId: turnIdentity.turnId,
+        entryTargetReceipt: authoringReceipt(),
+        contextPayloads: [
+          expect.objectContaining({ id: 'domain-turn-context-1' }),
+          expect.objectContaining({ id: 'file:companion-source' }),
+        ],
+      }),
     );
+    expect(resolveConversationDomainTurnContext).toHaveBeenCalledWith({
+      conversationId: turnIdentity.conversationId,
+      context: {
+        kind: 'workspace',
+        workspaceId: workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant-1',
+      },
+    });
+    expect(freezeDomainTurn).toHaveBeenCalledWith(turnIdentity.turnId);
     const facts = effects.automation?.readFacts(turnIdentity);
     expect(facts).toMatchObject({
       projection: { terminalState: 'completed' },
@@ -805,6 +1286,7 @@ describe('Agent controller composition', () => {
 
     expect(() =>
       composition.createEffects({
+        readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
         workspace,
         identity: {
           applicationInstanceId: 'app-1',
@@ -848,6 +1330,7 @@ describe('Agent controller composition', () => {
       reportError: vi.fn(),
     });
     const effects = composition.createEffects({
+      readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
       workspace,
       identity: {
         applicationInstanceId: 'app-1',
@@ -977,6 +1460,7 @@ describe('Agent controller composition', () => {
       reportError: vi.fn(),
     });
     const effects = composition.createEffects({
+      readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
       workspace,
       identity: {
         applicationInstanceId: 'app-1',
@@ -1208,7 +1692,11 @@ describe('Agent controller composition', () => {
       viewId: 'view-1',
       connectionId: 'connection-1',
     };
-    const effects = composition.createEffects({ workspace, identity });
+    const effects = composition.createEffects({
+      workspace,
+      identity,
+      readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
+    });
     const posted: AgentHostToWebviewMessage[] = [];
     const context = {
       identity: {
@@ -1260,7 +1748,8 @@ function authoringReceipt(): AgentEntryTargetReceipt {
       kind: 'authoring',
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant-1',
-      target: { kind: 'content-project', contentProjectId: 'content-1' },
+      authority: { kind: 'project', projectId: 'project-1' },
+      target: { kind: 'content-document', documentId: 'document-1' },
     },
   };
 }
@@ -1386,7 +1875,9 @@ function createWorkspace(
       records: [],
       diagnostics: [],
       warnings: [],
+      commands: { records: [], diagnostics: [] },
     })),
+    invokeCommand: vi.fn(),
     readCapabilityPromptFragments: () => [],
     listConversations: () => records,
     readConversationEvidence,

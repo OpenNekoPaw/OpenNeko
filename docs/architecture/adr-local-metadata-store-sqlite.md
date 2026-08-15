@@ -2,9 +2,14 @@
 
 状态：Accepted
 
-更新日期：2026-08-05
+更新日期：2026-08-13
 
 范围：Electron Desktop、本地 SQLite、项目文件、Agent、Assets、Entity、Search、任务投影和缓存索引。
+
+实现入口：
+[`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)。
+当前实现允许 package-owned 项目 `.neko` 本机状态，同时由产品 sync/package/enumerator 在遍历前
+强制排除该根目录；用户级 SQLite 仍保持单一 `~/.neko/neko.db` authority。
 
 ## 决策
 
@@ -31,15 +36,16 @@ retention、backup 与离线恢复语义。未知分类、非 canonical SQLite p
 migration reader、legacy reader 或自动修复路径；需要保护有价值数据时只能使用显式授权、精确目标且
 产品不可达的离线工具。
 
-| 数据                                        | Canonical owner                          | SQLite 角色                                         |
-| ------------------------------------------- | ---------------------------------------- | --------------------------------------------------- |
-| `.nk*`、Markdown、OTIO 等项目内容           | owning package 的项目文件                | 可选索引，不得反向覆盖项目事实                      |
-| Agent transcript                            | Pi Session JSONL + conversation manifest | catalog、查询和恢复所需的结构化投影                 |
-| Media Library link、Entity/Asset projection | owning domain                            | 可查询 projection 与 freshness metadata             |
-| 后台领域 Job                                | owning domain repository                 | checkpoint、状态和恢复索引                          |
-| 派生缓存                                    | cache owner                              | locator、fingerprint、quota、GC eligibility         |
-| 凭据与 secret                               | Desktop credential store                 | 不保存 secret；仅允许无敏感信息的 provider metadata |
-| 窗口、选择、滚动和布局                      | Desktop view-state owner                 | 仅保存明确允许恢复的稳定展示状态                    |
+| 数据                              | Canonical owner                          | SQLite 角色                                         |
+| --------------------------------- | ---------------------------------------- | --------------------------------------------------- |
+| `.nk*`、Markdown、OTIO 等项目内容 | owning package 的项目文件                | 可选索引，不得反向覆盖项目事实                      |
+| Agent transcript                  | Pi Session JSONL + conversation manifest | catalog、查询和恢复所需的结构化投影                 |
+| Media Library 本机 binding        | Assets-owned 项目 `.neko` record         | 不进入 SQLite；缺失时初始化为空并从项目引用推导需求 |
+| Media/Entity/Asset projection     | owning domain                            | 可查询 projection 与 freshness metadata             |
+| 后台领域 Job                      | owning domain repository                 | checkpoint、状态和恢复索引                          |
+| 派生缓存                          | cache owner                              | locator、fingerprint、quota、GC eligibility         |
+| 凭据与 secret                     | Desktop credential store                 | 不保存 secret；仅允许无敏感信息的 provider metadata |
+| 窗口、选择、滚动和布局            | Desktop view-state owner                 | 仅保存明确允许恢复的稳定展示状态                    |
 
 Agent Pi Session 的 transcript 仍保存在 JSONL；conversation lease/checkpoint 等 operational state 与
 catalog projection 使用同一 `~/.neko/neko.db`。旧 `agent/pi/metadata.sqlite`、旧 Desktop JSON state
@@ -50,21 +56,30 @@ catalog projection 使用同一 `~/.neko/neko.db`。旧 `agent/pi/metadata.sqlit
 
 ## 工作区与用户区
 
-正常工作区只保存用户文档和 `neko/` 下可审阅、可同步、版本化的项目事实：
+工作区明确分为同步项目事实和可丢弃本机状态：
 
 - `neko/project.json` 保存稳定项目/工作区身份和最小项目元数据；不得成为无 owner 的通用设置容器；
 - owning domain 在 `neko/` 下保存自己的项目事实；
 - 只有存在明确 review/edit/delete/sync 产品入口时，才创建可选的 `neko/memory.md`；
-- 正常运行不得创建或依赖工作区 `.neko/` 目录。
+- package 可以在项目 `.neko/` 下保存当前 checkout 的本机 binding、presentation snapshot 与
+  可丢弃 cache，但必须声明精确 owner、严格 codec、canonical 默认值、删除语义和局部 diagnostic；
+- 删除整个项目 `.neko/` 必须只产生当前 canonical 本地初始状态，不得丢失、伪造或覆盖项目 identity、
+  Entity/Character binding、领域版本、文档、Conversation、Task、WorldSave、Asset pin 或其他用户事实；
+- 项目 `.neko/` 不得成为通用 settings bag，不得与 `neko.db` 双写同一 authority，也不得保存 credential、
+  物理媒体 target、绝对路径或不可重建的未提交创作事实；
+- 产品自有 sync、package/export、Project file enumeration 和通用 Resource Browser 必须在遍历前排除
+  根 `.neko/`，且不能只依赖 Git ignore 保证该边界。
 
-机器本地工作区设置、运行恢复和任务状态按 `workspace_id` 进入 `neko.db#state`；Search、Media、
-Entity 等可重建索引进入 `neko.db#cache`。大型派生字节位于
+用户级 catalog、运行恢复和任务状态按稳定项目 identity 进入 `neko.db#state`；Search、Media、Entity
+等跨工作区可查询 projection 进入 `neko.db#cache`。只有生命周期明确跟随 checkout 的 package-owned
+状态才进入项目 `.neko/`，同一 datum 不得同时进入两者。大型用户级派生字节位于
 `~/.neko/cache/workspaces/<workspaceId>/`，Desktop/Workspace/Agent 原始日志位于
 `~/.neko/logs/` 下按 owner identity 分区。物理 cache/log path 不进入项目事实。
 
-旧 `.neko/workspace.json`、`.neko/config.toml`、`.neko/settings.local.json`、
-`.neko/preferences.md`、`.neko/memory.md`、`.neko/logs` 和 `.neko/.cache` 不进入正常产品读取路径。
-未知文件和旧文件必须原样保留；不得因为目录已废弃而递归删除或自动转换。
+`.neko/workspace.json` 不拥有项目 identity；项目 identity 始终来自 `neko/project.json`。未被当前
+package 精确登记的 `.neko/config.toml`、`.neko/settings.local.json`、`.neko/preferences.md`、
+`.neko/memory.md`、`.neko/logs`、`.neko/.cache` 和未知文件不进入正常产品读取路径，必须原样保留；
+不得因为 `.neko` 可重新初始化而递归删除、解释或自动转换未知字节。
 
 ## 一致性与失败语义
 

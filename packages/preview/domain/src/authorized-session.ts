@@ -15,6 +15,15 @@ export interface AuthorizedPreviewSessionIdentity {
         readonly assistantSpaceId: string;
         readonly conversationId: string;
         readonly scratchArtifactId: string;
+      }
+    | {
+        readonly kind: 'canvas';
+        readonly projectId: string;
+        readonly workspaceId: string;
+        readonly documentId: string;
+        readonly canvasSessionId: string;
+        readonly nodeId: string;
+        readonly outputId: string;
       };
 }
 
@@ -141,6 +150,21 @@ export function parseAuthorizedPreviewSessionIdentity(
       assistantSpaceId: requireIdentity(owner['assistantSpaceId'], 'Assistant Space'),
       conversationId: requireIdentity(owner['conversationId'], 'Agent Conversation'),
       scratchArtifactId: requireIdentity(owner['scratchArtifactId'], 'Agent Scratch artifact'),
+    };
+  } else if (owner['kind'] === 'canvas') {
+    requireExactKeys(
+      owner,
+      ['kind', 'projectId', 'workspaceId', 'documentId', 'canvasSessionId', 'nodeId', 'outputId'],
+      'Authorized Preview Canvas owner',
+    );
+    parsedOwner = {
+      kind: 'canvas',
+      projectId: requireIdentity(owner['projectId'], 'Canvas Project'),
+      workspaceId: requireIdentity(owner['workspaceId'], 'Canvas Workspace'),
+      documentId: requireIdentity(owner['documentId'], 'Canvas document'),
+      canvasSessionId: requireIdentity(owner['canvasSessionId'], 'Canvas session'),
+      nodeId: requireIdentity(owner['nodeId'], 'Canvas node'),
+      outputId: requireIdentity(owner['outputId'], 'Canvas output'),
     };
   } else {
     throw new Error(`Unknown Authorized Preview owner '${String(owner['kind'])}'.`);

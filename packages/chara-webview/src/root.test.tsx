@@ -3,7 +3,10 @@ import {
   createEmptyCharacterOriginSetting,
   type CharacterFoundationCommand,
   type CharacterFoundationSnapshot,
+  type CharacterAuthoringCommand,
   type CharacterAuthoringSnapshot,
+  type CharacterProject,
+  type CharacterVersion,
   type OpenNekoDesktopCharacterBridge,
   type OpenNekoDesktopCharacterRoomWorkbenchBridge,
   type RoomView,
@@ -13,29 +16,33 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CharacterCatalogSurface,
-  CharacterAuthoringStudioRoot,
+  CharacterAuthoringSurface,
+  CharacterCompanionContinuitySurface,
   CharacterDetailSurface,
   CharacterRoomInteractionFeed,
   CharacterRoomTimelineSurface,
   type CharacterDetailSelection,
+  type CharacterManagementDetailActions,
   useCharacterManagementRuntime,
   useCharacterRoomWorkbenchRuntime,
 } from './root';
+import { CharacterAuthoringEditor } from './character-panel';
+import { CharacterVersionWorkspace } from './character-version-workspace';
 
 function emptySnapshot(): CharacterFoundationSnapshot {
   return {
     character: {
-      projects: [],
+      globalCharacters: [],
       versions: [],
       relationships: [],
       characterRuns: [],
       dialogueRuns: [],
       rooms: [],
       roomRuns: [],
+      storylines: [],
+      storylineDrafts: [],
       storylineVersions: [],
-      storylineRuns: [],
-      storylineObservationCandidates: [],
-      memoryScopes: [],
+      companionContinuities: [],
       presentationConfigurations: [],
     },
     diagnostics: [],
@@ -55,11 +62,8 @@ describe('Character Management surfaces', () => {
     await waitFor(() => {
       expect(container.querySelector('[data-neko-empty-state="fill"] svg')).not.toBeNull();
     });
-    const viewSwitcher = container.querySelector('.character-management__view-switcher');
-    expect(viewSwitcher?.querySelectorAll('button')).toHaveLength(2);
-    expect(viewSwitcher?.querySelector('button:first-child')?.getAttribute('aria-label')).toBe(
-      'List view',
-    );
+    expect(container.querySelector('.character-management__view-switcher')).toBeNull();
+    expect(screen.getByText('No characters yet. Import the first package.')).toBeTruthy();
     expect(screen.queryByRole('navigation', { name: 'Character workspace views' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Dialogues' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Rooms' })).toBeNull();
@@ -68,20 +72,33 @@ describe('Character Management surfaces', () => {
 
   it('mounts the project-local authoring-only Studio from validated authority', async () => {
     const foundation = projectSnapshot();
-    const project = foundation.character.projects[0]!;
+    const project = foundation.localProject;
     const snapshot: CharacterAuthoringSnapshot = {
       project,
-      versions: foundation.character.versions,
+      versions: foundation.localVersions,
+      authoringTestSnapshots: [],
+      storylines: foundation.character.storylines,
+      storylineDrafts: foundation.character.storylineDrafts,
+      storylineVersions: foundation.character.storylineVersions,
+      lineage: null,
+      referenceInventories: foundation.localVersions.map((version) => ({
+        characterVersionId: version.characterVersionId,
+        coverage: 'complete' as const,
+        references: [],
+        diagnostics: [],
+      })),
       diagnostics: [],
     };
     const getSnapshot = vi.fn(async () => snapshot);
-    const execute = vi.fn(async () => snapshot);
+    const execute = vi.fn(
+      async (_windowId: string, _binding: unknown, _command: CharacterAuthoringCommand) => snapshot,
+    );
     const { container, unmount } = render(
-      <CharacterAuthoringStudioRoot
+      <CharacterAuthoringSurface
         binding={{
           workspaceId: 'workspace-1',
           workspaceGrantId: 'grant-1',
-          contentProjectId: 'content-project-1',
+          authority: { kind: 'project', projectId: 'project-1' },
           characterProjectId: project.characterProjectId,
         }}
         host={{ getSnapshot, execute }}
@@ -98,7 +115,11 @@ describe('Character Management surfaces', () => {
     ).toBeNull();
     expect(
       container.querySelector('[data-character-studio-section="storyline-authoring"]'),
-    ).toBeNull();
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-character-studio-section="authoring-tests"]'),
+    ).toBeTruthy();
+    expect(container.querySelector('[data-character-studio-section="memory-review"]')).toBeNull();
     fireEvent.change(screen.getByLabelText('Summary'), { target: { value: 'Updated summary' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await waitFor(() => expect(execute).toHaveBeenCalledOnce());
@@ -108,10 +129,155 @@ describe('Character Management surfaces', () => {
       expect.objectContaining({ operation: 'character-project-update-draft' }),
     );
     unmount();
-    expect(container.querySelector('[data-character-authoring-studio="true"]')).toBeNull();
+    expect(container.querySelector('[data-character-authoring-surface="true"]')).toBeNull();
   });
 
-  it('filters the catalog and opens the exact project detail', async () => {
+  it('keeps a finalized usable version when the exact Conversation launch fails', async () => {
+    const foundation = projectSnapshot();
+    const baseProject = foundation.localProject;
+    const project = { ...baseProject, reviewStatus: 'ready' as const };
+    const snapshot: CharacterAuthoringSnapshot = {
+      project,
+      versions: [],
+      authoringTestSnapshots: [],
+      storylines: [],
+      storylineDrafts: [],
+      storylineVersions: [],
+      lineage: null,
+      referenceInventories: [],
+      diagnostics: [],
+    };
+    const execute = vi.fn(
+      async (_windowId: string, _binding: unknown, _command: CharacterAuthoringCommand) => snapshot,
+    );
+    const onFinalizeAndStartConversation = vi.fn(async () => {
+      throw new Error('Agent Entry is unavailable.');
+    });
+    render(
+      <CharacterAuthoringSurface
+        binding={{
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          authority: { kind: 'project', projectId: 'project-1' },
+          characterProjectId: project.characterProjectId,
+        }}
+        host={{ getSnapshot: vi.fn(async () => snapshot), execute }}
+        initialSnapshot={snapshot}
+        locale="en"
+        onFinalizeAndStartConversation={onFinalizeAndStartConversation}
+        windowId="window-1"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Version label'), { target: { value: 'Ready Rin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Finalize and start Conversation' }));
+
+    await waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    const command = execute.mock.calls[0]?.[2];
+    expect(command).toMatchObject({
+      operation: 'character-version-publish',
+      input: {
+        characterProjectId: project.characterProjectId,
+        label: 'Ready Rin',
+      },
+    });
+    const characterVersionId =
+      command?.operation === 'character-version-publish'
+        ? command.input.characterVersionId
+        : undefined;
+    expect(characterVersionId).toMatch(/^character-version:/u);
+    await waitFor(() =>
+      expect(onFinalizeAndStartConversation).toHaveBeenCalledWith({
+        characterProjectId: project.characterProjectId,
+        characterVersionId,
+        label: 'Lin',
+      }),
+    );
+    expect(await screen.findByText('Agent Entry is unavailable.')).toBeTruthy();
+    expect(screen.getByLabelText('Version label')).toHaveProperty('value', '');
+  });
+
+  it('shows the read-only version graph, exact comparison and reference-based delete state', () => {
+    const snapshot = versionWorkspaceSnapshot();
+    const execute = vi.fn(async () => snapshot);
+    const { container } = render(
+      <CharacterVersionWorkspace
+        execute={execute}
+        hasUnsavedDraft={false}
+        locale="en"
+        project={snapshot.project}
+        snapshot={snapshot}
+        versions={snapshot.versions}
+      />,
+    );
+
+    expect(
+      screen.getByText('Inspect branches, compare immutable content, and review exact references.'),
+    ).toBeTruthy();
+    expect(screen.getByText(/Draft basis/u)).toBeTruthy();
+    expect(screen.getByText('Source not declared')).toBeTruthy();
+    expect(screen.getByText('conversation:lin')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Delete version' })).toHaveProperty('disabled', true);
+    expect(screen.getByText('1 exact reference(s) block deletion.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Compare with another version'), {
+      target: { value: 'character-version:branch' },
+    });
+    expect(screen.getAllByText('Changed').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'List' }));
+    expect(screen.getByRole('button', { name: 'List' }).getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('[data-character-version-workspace="true"]')).not.toBeNull();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('requires explicit draft replacement and exact confirmation before continuing or deleting', async () => {
+    const snapshot = versionWorkspaceSnapshot();
+    const execute = vi.fn(async () => snapshot);
+    render(
+      <CharacterVersionWorkspace
+        execute={execute}
+        hasUnsavedDraft
+        locale="en"
+        project={snapshot.project}
+        snapshot={snapshot}
+        versions={snapshot.versions}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue from this version' }));
+    expect(screen.getByText('The current unsaved draft will be replaced.')).toBeTruthy();
+    expect(execute).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard draft and continue' }));
+    await waitFor(() =>
+      expect(execute).toHaveBeenCalledWith({
+        operation: 'character-version-continue',
+        input: {
+          characterProjectId: 'character-project:lin',
+          characterVersionId: 'character-version:root',
+          replaceWorkingDraft: true,
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Branch version/u }));
+    expect(screen.getByRole('button', { name: 'Delete version' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete version' }));
+    expect(screen.getByText('Delete this unreferenced version?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
+    await waitFor(() =>
+      expect(execute).toHaveBeenLastCalledWith({
+        operation: 'character-version-delete',
+        input: {
+          characterProjectId: 'character-project:lin',
+          characterVersionId: 'character-version:branch',
+        },
+      }),
+    );
+  });
+
+  it('filters the catalog and opens the exact global detail', async () => {
     const snapshot = projectSnapshot();
     const { container } = render(<Harness host={createHost(undefined, snapshot)} />);
 
@@ -122,122 +288,94 @@ describe('Character Management surfaces', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
 
     expect(await screen.findByRole('heading', { name: 'Lin' })).toBeTruthy();
-    expect(screen.getByLabelText('Display name')).toHaveProperty('disabled', true);
-    expect(
-      container.querySelector<HTMLDetailsElement>(
-        '[data-character-studio-section="character-definition"]',
-      )?.open,
-    ).toBe(false);
-    expect(
-      container.querySelector<HTMLDetailsElement>('[data-character-studio-section="presentation"]')
-        ?.open,
-    ).toBe(false);
-    expect(
-      container.querySelector<HTMLDetailsElement>(
-        '[data-character-studio-section="storyline-authoring"]',
-      )?.open,
-    ).toBe(false);
-    expect(screen.getByLabelText('Background story')).toBeTruthy();
-    expect(screen.getByLabelText('Origin setting')).toBeTruthy();
-    expect(
-      container.querySelector('[data-character-studio-section="portrait-resource"]'),
-    ).toBeTruthy();
-    expect(
-      container.querySelector('[data-character-studio-section="avatar-resource"]'),
-    ).toBeTruthy();
-    expect(screen.getByText('Character capabilities and history')).toBeTruthy();
-    expect(screen.getAllByText('Character storylines').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Character memory').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Relationship memory').length).toBeGreaterThan(0);
-    expect(screen.getByText('Presentation resources')).toBeTruthy();
-    expect(screen.getAllByText('Voice defaults').length).toBeGreaterThan(0);
-    expect(screen.getByText('Runtime history')).toBeTruthy();
-    expect(screen.getByLabelText(/^Voice provider/u)).toBeTruthy();
-    expect(screen.getByLabelText('Default voice resource')).toBeTruthy();
-    expect(screen.getByText('Publish a character storyline')).toBeTruthy();
-    expect(screen.getByText('Candidates and accepted memories')).toBeTruthy();
-    expect(screen.getByText('Review relationship memory independently')).toBeTruthy();
+    expect(screen.getByText('Global catalog')).toBeTruthy();
+    expect(screen.getByText('Version history')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Available versions' })).toBeTruthy();
+    const detail = container.querySelector('[data-character-management-detail-surface="true"]');
+    expect(detail?.querySelector('form')).toBeNull();
+    expect(detail?.querySelector('input')).toBeNull();
+    expect(detail?.querySelector('textarea')).toBeNull();
+    expect(detail?.querySelector('[data-character-detail-editor="true"]')).toBeNull();
+    expect(detail?.querySelector('[data-character-studio-section]')).toBeNull();
   });
 
-  it('submits Character creation through the injected typed Host port', async () => {
-    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
-      '00000000-0000-4000-8000-000000000001',
+  it('launches the exact selected global version without authoring controls', async () => {
+    const base = projectSnapshot();
+    const version = base.character.versions[0]!;
+    const onStartInteraction = vi.fn();
+    render(<Harness detailActions={{ onStartInteraction }} host={createHost(undefined, base)} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
+
+    expect(screen.getByText('Global catalog')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Edit character/u })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Start conversation' }));
+    expect(onStartInteraction).toHaveBeenCalledWith(
+      version.globalCharacterId,
+      version.characterVersionId,
     );
-    const execute = vi.fn(
-      async (command: CharacterFoundationCommand): Promise<CharacterFoundationSnapshot> => {
-        const snapshot = emptySnapshot();
-        if (command.operation !== 'character-project-create') return snapshot;
-        return {
-          ...snapshot,
-          character: {
-            ...snapshot.character,
-            projects: [
-              {
-                characterProjectId: command.input.characterProjectId,
-                displayName: command.input.displayName,
-                draft: command.input.draft,
-                evidence: [],
-                candidates: [],
-                reviewStatus: 'draft',
-                createdAt: '2026-08-09T00:00:00.000Z',
-                updatedAt: '2026-08-09T00:00:00.000Z',
-              },
-            ],
+  });
+
+  it('offers global package import without standalone draft creation', async () => {
+    const execute = vi.fn();
+    const onImport = vi.fn();
+    render(<Harness host={createHost(execute)} onImport={onImport} />);
+    await screen.findByRole('heading', { name: 'Characters' });
+    expect(screen.queryByRole('button', { name: 'Generate with AI' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Import package' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Create manually' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Import package' }));
+    expect(onImport).toHaveBeenCalledOnce();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('defaults to current and allows an exact historical version for conversation', async () => {
+    const base = projectSnapshot();
+    const globalCharacterId = base.character.globalCharacters[0]!.globalCharacterId;
+    const versions = ['root', 'branch'].map((suffix) => ({
+      characterVersionId: `character-version:lin-${suffix}`,
+      globalCharacterId,
+      label: suffix === 'root' ? 'Root' : 'Branch',
+      definition: base.localProject.draft,
+      acceptedEvidenceIds: [],
+      publishedAt: `2026-08-0${suffix === 'root' ? '9' : '8'}T01:00:00.000Z`,
+    }));
+    const snapshot: CharacterFoundationFixture = {
+      ...base,
+      character: {
+        ...base.character,
+        globalCharacters: [
+          {
+            ...base.character.globalCharacters[0]!,
+            currentCharacterVersionId: versions[0]!.characterVersionId,
+            characterVersionIds: versions.map((version) => version.characterVersionId),
           },
-        };
+        ],
+        versions,
       },
+    };
+    const onStartInteraction = vi.fn();
+    render(
+      <Harness detailActions={{ onStartInteraction }} host={createHost(undefined, snapshot)} />,
     );
-    const { container } = render(<Harness host={createHost(execute)} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'New character' }));
-    await screen.findByRole('heading', { name: 'Define character' });
+    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
 
-    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Lin' } });
-    fireEvent.change(screen.getByLabelText('Summary'), {
-      target: { value: 'An archivist who guards the sealed tower.' },
+    const startButton = screen.getByRole('button', { name: 'Start conversation' });
+    expect(startButton).toHaveProperty('disabled', false);
+    fireEvent.change(screen.getByLabelText('Conversation version'), {
+      target: { value: versions[1]!.characterVersionId },
     });
-    const avatarResource = container.querySelector(
-      '[data-character-studio-section="avatar-resource"]',
+    expect(startButton).toHaveProperty('disabled', false);
+    fireEvent.click(startButton);
+    expect(onStartInteraction).toHaveBeenCalledWith(
+      globalCharacterId,
+      versions[1]!.characterVersionId,
     );
-    if (!(avatarResource instanceof HTMLInputElement))
-      throw new Error('Avatar resource input is unavailable.');
-    fireEvent.change(avatarResource, {
-      target: { value: 'global-asset-library:avatar-lin' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
-
-    await waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
-    expect(execute).toHaveBeenCalledWith({
-      operation: 'character-project-create',
-      input: {
-        characterProjectId: 'character-project:00000000-0000-4000-8000-000000000001',
-        displayName: 'Lin',
-        draft: {
-          summary: 'An archivist who guards the sealed tower.',
-          backgroundStory: createEmptyCharacterBackgroundStory(),
-          originSetting: createEmptyCharacterOriginSetting(),
-          canon: [],
-          knowledgeBoundary: [],
-          behaviorPolicy: [],
-          expressionPolicy: [],
-          representationRefs: [
-            {
-              representationId: 'avatar-main',
-              kind: 'vrm',
-              resourceRef: 'global-asset-library:avatar-lin',
-            },
-          ],
-          representationDefaults: { avatarRepresentationId: 'avatar-main' },
-        },
-      },
-    });
-    expect(await screen.findByRole('heading', { name: 'Lin' })).toBeTruthy();
   });
 
   it('saves editable Voice defaults through the Character draft authority', async () => {
     const snapshot = projectSnapshot();
     const execute = vi.fn(async () => snapshot);
-    render(<Harness host={createHost(execute, snapshot)} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
+    render(<EditorHarness execute={execute} snapshot={snapshot} />);
 
     fireEvent.change(screen.getByLabelText(/^Voice provider/u), {
       target: { value: 'provider:local-tts' },
@@ -278,28 +416,23 @@ describe('Character Management surfaces', () => {
       '00000000-0000-4000-8000-000000000002',
     );
     const base = projectSnapshot();
-    const project = base.character.projects[0];
-    if (!project) throw new Error('Storyline UI fixture requires a CharacterProject.');
-    const snapshot: CharacterFoundationSnapshot = {
+    const project = base.localProject;
+    const snapshot: CharacterFoundationFixture = {
       ...base,
-      character: {
-        ...base.character,
-        versions: [
-          {
-            characterVersionId: 'character-version:lin',
-            characterProjectId: project.characterProjectId,
-            label: 'Published Lin',
-            definition: project.draft,
-            acceptedEvidenceIds: [],
-            publishedAt: '2026-08-09T00:00:00.000Z',
-          },
-        ],
-      },
+      localVersions: [
+        {
+          characterVersionId: 'character-version:lin',
+          characterProjectId: project.characterProjectId,
+          label: 'Published Lin',
+          definition: project.draft,
+          acceptedEvidenceIds: [],
+          publishedAt: '2026-08-09T00:00:00.000Z',
+        },
+      ],
     };
     const execute = vi.fn(async () => snapshot);
-    render(<Harness host={createHost(execute, snapshot)} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
-    fireEvent.click(screen.getByText('Publish a character storyline'));
+    render(<EditorHarness execute={execute} snapshot={snapshot} />);
+    fireEvent.click(screen.getByText('Create a storyline version'));
 
     fireEvent.change(screen.getByLabelText('Character version'), {
       target: { value: 'character-version:lin' },
@@ -310,120 +443,223 @@ describe('Character Management surfaces', () => {
     fireEvent.change(screen.getByLabelText('Premise'), {
       target: { value: 'The sealed archive opens.' },
     });
-    fireEvent.change(screen.getByLabelText('Desire'), {
+    fireEvent.change(screen.getByLabelText('Character state'), {
       target: { value: 'Protect its record.' },
     });
-    fireEvent.change(screen.getByLabelText('Conflict'), {
+    fireEvent.change(screen.getByLabelText('Relationship state'), {
       target: { value: 'The record must be shared.' },
     });
-    fireEvent.change(screen.getByLabelText('Growth arc'), {
+    fireEvent.change(screen.getByLabelText('Narrative memories'), {
       target: { value: 'Learn to trust a witness.' },
     });
-    fireEvent.change(screen.getByLabelText('Initial stage'), {
+    fireEvent.change(screen.getByLabelText('Node title'), {
       target: { value: 'Guarded' },
     });
-    fireEvent.change(screen.getByLabelText('Stage description'), {
+    fireEvent.change(screen.getByLabelText('Current situation'), {
       target: { value: 'Keeps distance.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Publish storyline' }));
 
-    await waitFor(() => expect(execute).toHaveBeenCalledOnce());
-    expect(execute).toHaveBeenCalledWith({
+    await waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    expect(execute).toHaveBeenNthCalledWith(1, {
+      operation: 'character-storyline-create',
+      input: {
+        characterStorylineId: 'character-storyline:00000000-0000-4000-8000-000000000002',
+        characterProjectId: project.characterProjectId,
+        displayName: 'Trust arc',
+        draft: {
+          characterVersionId: 'character-version:lin',
+          premise: 'The sealed archive opens.',
+          constraints: [],
+          nodeOrder: ['storyline-node:00000000-0000-4000-8000-000000000002'],
+          nodes: [
+            {
+              storylineNodeId: 'storyline-node:00000000-0000-4000-8000-000000000002',
+              title: 'Guarded',
+              spoilerVisibility: 'visible',
+              context: {
+                situation: 'Keeps distance.',
+                characterState: 'Protect its record.',
+                relationshipState: 'The record must be shared.',
+                allowedStoryFacts: [],
+                forbiddenStoryFacts: [],
+                narrativeMemories: ['Learn to trust a witness.'],
+                knowledgeBoundary: [],
+                behaviorConstraints: [],
+                expressionConstraints: [],
+                authorOnlyNotes: [],
+              },
+            },
+          ],
+          edges: [],
+        },
+      },
+    });
+    expect(execute).toHaveBeenNthCalledWith(2, {
       operation: 'character-storyline-publish',
       input: {
+        characterStorylineId: 'character-storyline:00000000-0000-4000-8000-000000000002',
         characterStorylineVersionId:
           'character-storyline-version:00000000-0000-4000-8000-000000000002',
-        characterVersionId: 'character-version:lin',
         label: 'Trust arc',
-        premise: 'The sealed archive opens.',
-        desire: 'Protect its record.',
-        conflict: 'The record must be shared.',
-        growthArc: 'Learn to trust a witness.',
-        stages: [
-          {
-            stageId: 'character-storyline-stage:00000000-0000-4000-8000-000000000002',
-            title: 'Guarded',
-            description: 'Keeps distance.',
-          },
-        ],
-        turningPoints: [],
-        constraints: [],
-        acceptedEvidenceIds: [],
       },
     });
   });
 
-  it('accepts a Character memory candidate with the exact CAS revision', async () => {
-    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
-      '00000000-0000-4000-8000-000000000003',
-    );
+  it('edits a stable Storyline draft and compares, restores, and deletes authored publications', async () => {
     const base = projectSnapshot();
-    const project = base.character.projects[0];
-    if (!project) throw new Error('Memory UI fixture requires a CharacterProject.');
-    const snapshot: CharacterFoundationSnapshot = {
+    const project = base.localProject;
+    const firstNode = {
+      storylineNodeId: 'storyline-node:opening',
+      title: 'Opening',
+      spoilerVisibility: 'visible' as const,
+      context: {
+        situation: 'The archive is sealed.',
+        characterState: 'Guarded',
+        relationshipState: 'Distant',
+        allowedStoryFacts: [],
+        forbiddenStoryFacts: [],
+        narrativeMemories: ['The seal has never opened.'],
+        knowledgeBoundary: [],
+        behaviorConstraints: [],
+        expressionConstraints: [],
+        authorOnlyNotes: [],
+      },
+    };
+    const secondNode = {
+      ...firstNode,
+      title: 'Opening revised',
+      context: { ...firstNode.context, situation: 'The archive seal is breaking.' },
+    };
+    const snapshot: CharacterFoundationFixture = {
       ...base,
+      localVersions: [
+        {
+          characterVersionId: 'character-version:lin',
+          characterProjectId: project.characterProjectId,
+          label: 'Published Lin',
+          definition: project.draft,
+          acceptedEvidenceIds: [],
+          publishedAt: '2026-08-09T00:00:00.000Z',
+        },
+      ],
       character: {
         ...base.character,
-        versions: [
+        storylines: [
           {
-            characterVersionId: 'character-version:lin',
+            characterStorylineId: 'character-storyline:trust',
             characterProjectId: project.characterProjectId,
-            label: 'Published Lin',
-            definition: project.draft,
-            acceptedEvidenceIds: [],
+            displayName: 'Trust arc',
+            createdAt: '2026-08-09T00:00:00.000Z',
+            updatedAt: '2026-08-10T00:00:00.000Z',
+          },
+        ],
+        storylineDrafts: [
+          {
+            characterStorylineId: 'character-storyline:trust',
+            characterVersionId: 'character-version:lin',
+            premise: 'A guarded archive.',
+            constraints: [],
+            nodeOrder: ['storyline-node:opening'],
+            nodes: [secondNode],
+            edges: [],
+            updatedAt: '2026-08-10T00:00:00.000Z',
+          },
+        ],
+        storylineVersions: [
+          {
+            characterStorylineVersionId: 'character-storyline-version:first',
+            characterStorylineId: 'character-storyline:trust',
+            characterVersionId: 'character-version:lin',
+            label: 'First publication',
+            premise: 'A sealed archive.',
+            constraints: [],
+            nodeOrder: ['storyline-node:opening'],
+            nodes: [firstNode],
+            edges: [],
             publishedAt: '2026-08-09T00:00:00.000Z',
           },
-        ],
-        characterRuns: [
           {
-            characterRunId: 'character-run:lin',
+            characterStorylineVersionId: 'character-storyline-version:second',
+            characterStorylineId: 'character-storyline:trust',
             characterVersionId: 'character-version:lin',
-            characterMemoryScopeId: 'character-memory-scope:lin',
-            participantId: 'participant:lin',
-            controller: { kind: 'agent', primaryAgentSessionId: 'conversation:character:lin' },
-            runtimeBinding: { kind: 'companion', relationshipId: 'relationship:lin' },
-            createdAt: '2026-08-09T00:00:00.000Z',
-          },
-        ],
-        memoryScopes: [
-          {
-            characterMemoryScopeId: 'character-memory-scope:lin',
-            characterRunId: 'character-run:lin',
-            memoryRevision: 4,
-            candidates: [
-              {
-                characterMemoryCandidateId: 'character-memory-candidate:rain',
-                characterMemoryScopeId: 'character-memory-scope:lin',
-                content: 'The user waited in the rain.',
-                sourceRef: 'room-event:rain',
-                observedAt: '2026-08-09T01:00:00.000Z',
-                sensitivityTraits: [],
-                retentionTraits: ['long-term'],
-                expectedMemoryRevision: 4,
-                status: 'pending',
-              },
-            ],
-            entries: [],
-            createdAt: '2026-08-09T00:00:00.000Z',
-            updatedAt: '2026-08-09T01:00:00.000Z',
+            label: 'Second publication',
+            premise: 'A guarded archive.',
+            constraints: [],
+            nodeOrder: ['storyline-node:opening'],
+            nodes: [secondNode],
+            edges: [],
+            publishedAt: '2026-08-10T00:00:00.000Z',
           },
         ],
       },
     };
     const execute = vi.fn(async () => snapshot);
-    render(<Harness host={createHost(execute, snapshot)} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
-    fireEvent.click(screen.getByText('Candidates and accepted memories'));
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    render(<EditorHarness execute={execute} snapshot={snapshot} />);
+    fireEvent.click(screen.getByText('Create a storyline version'));
+    fireEvent.change(screen.getByLabelText('Character storyline'), {
+      target: { value: 'character-storyline:trust' },
+    });
+
+    expect(screen.getByLabelText('Node title')).toHaveProperty('value', 'Opening revised');
+    expect(screen.queryByText(/progress|transition|complete/i)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Left publication'), {
+      target: { value: 'character-storyline-version:first' },
+    });
+    fireEvent.change(screen.getByLabelText('Right publication'), {
+      target: { value: 'character-storyline-version:second' },
+    });
+    expect(screen.getByText('Opening')).toBeTruthy();
+    expect(screen.getAllByText('Opening revised').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Restore as draft' })[0]!);
+    await waitFor(() =>
+      expect(execute).toHaveBeenCalledWith({
+        operation: 'character-storyline-restore-as-draft',
+        input: {
+          characterStorylineId: 'character-storyline:trust',
+          characterStorylineVersionId: 'character-storyline-version:first',
+        },
+      }),
+    );
+    expect(screen.getByLabelText('Node title')).toHaveProperty('value', 'Opening');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete selected storyline' }));
+    expect(execute).not.toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'character-storyline-delete' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm storyline deletion' }));
+    await waitFor(() =>
+      expect(execute).toHaveBeenCalledWith({
+        operation: 'character-storyline-delete',
+        input: { characterStorylineId: 'character-storyline:trust' },
+      }),
+    );
+  });
+
+  it('captures an authoring-test snapshot without creating a usable version', async () => {
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
+      '00000000-0000-4000-8000-000000000003',
+    );
+    const snapshot = projectAuthoringSnapshot(projectSnapshot());
+    const execute = vi.fn(async () => snapshot);
+    render(
+      <CharacterAuthoringEditor
+        execute={execute}
+        locale="en"
+        selectedProjectId={snapshot.project.characterProjectId}
+        snapshot={snapshot}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Capture test snapshot' }));
 
     await waitFor(() => expect(execute).toHaveBeenCalledOnce());
     expect(execute).toHaveBeenCalledWith({
-      operation: 'character-memory-candidate-accept',
+      operation: 'character-authoring-test-capture',
       input: {
-        characterMemoryScopeId: 'character-memory-scope:lin',
-        characterMemoryCandidateId: 'character-memory-candidate:rain',
-        characterMemoryEntryId: 'character-memory-entry:00000000-0000-4000-8000-000000000003',
-        expectedMemoryRevision: 4,
+        characterProjectId: snapshot.project.characterProjectId,
+        authoringTestSnapshotId: 'character-authoring-test:00000000-0000-4000-8000-000000000003',
       },
     });
   });
@@ -433,7 +669,15 @@ describe('Character Management surfaces', () => {
       .fn<OpenNekoDesktopCharacterBridge['characterFoundation']['getSnapshot']>()
       .mockRejectedValueOnce(new Error('Character catalog unavailable'))
       .mockResolvedValueOnce(emptySnapshot());
-    render(<Harness host={{ getSnapshot, execute: vi.fn() }} />);
+    render(
+      <Harness
+        host={{
+          getSnapshot,
+          getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+          execute: vi.fn(),
+        }}
+      />,
+    );
 
     expect((await screen.findByRole('alert')).textContent).toContain(
       'Character catalog unavailable',
@@ -442,22 +686,100 @@ describe('Character Management surfaces', () => {
     expect(await screen.findByRole('heading', { name: 'Characters' })).toBeTruthy();
     expect(getSnapshot).toHaveBeenCalledTimes(2);
   });
+});
 
-  it('keeps a command failure visible without replacing the create detail', async () => {
-    const execute = vi.fn<OpenNekoDesktopCharacterBridge['characterFoundation']['execute']>();
-    execute.mockRejectedValue(new Error('Character project write rejected'));
-    render(<Harness host={createHost(execute)} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'New character' }));
-    await screen.findByRole('heading', { name: 'Define character' });
-
-    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Lin' } });
-    fireEvent.change(screen.getByLabelText('Summary'), { target: { value: 'Summary' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
-
-    expect((await screen.findByRole('alert')).textContent).toContain(
-      'Character project write rejected',
+describe('Character Companion continuity surface', () => {
+  it('shows Companion memory candidates and keeps Narrative context session-only', async () => {
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
+      '00000000-0000-4000-8000-000000000004',
     );
-    expect(screen.getByRole('heading', { name: 'Define character' })).toBeTruthy();
+    const companionRun = {
+      characterRunId: 'character-run:companion',
+      characterVersionId: 'character-version:companion',
+      participantId: 'participant:companion',
+      controller: { kind: 'agent' as const, primaryAgentSessionId: 'conversation:companion' },
+      runtimeBinding: {
+        kind: 'companion' as const,
+        companionContinuityId: 'continuity:companion',
+        relationshipId: 'relationship:companion',
+      },
+      createdAt: '2026-08-12T00:00:00.000Z',
+    };
+    const narrativeRun = {
+      characterRunId: 'character-run:narrative',
+      characterVersionId: 'character-version:narrative',
+      participantId: 'participant:narrative',
+      controller: { kind: 'agent' as const, primaryAgentSessionId: 'conversation:narrative' },
+      runtimeBinding: { kind: 'narrative' as const },
+      createdAt: '2026-08-12T00:00:00.000Z',
+    };
+    const snapshot: CharacterFoundationSnapshot = {
+      ...emptySnapshot(),
+      character: {
+        ...emptySnapshot().character,
+        characterRuns: [companionRun, narrativeRun],
+        companionContinuities: [
+          {
+            companionContinuityId: 'continuity:companion',
+            userId: 'user:local',
+            characterProjectId: 'character-project:companion',
+            continuityRevision: 2,
+            candidates: [
+              {
+                companionMemoryCandidateId: 'candidate:tea',
+                companionContinuityId: 'continuity:companion',
+                sourceCharacterVersionId: 'character-version:companion',
+                provenance: {
+                  kind: 'conversation-turn',
+                  conversationId: 'conversation:companion',
+                  turnId: 'turn:1',
+                },
+                content: 'The user prefers jasmine tea.',
+                constraints: {
+                  requiredCanonFacts: [],
+                  prohibitedKnowledgeBoundaries: [],
+                  requiredBehaviorPolicies: [],
+                },
+                sensitivityTraits: [],
+                retentionTraits: ['long-term'],
+                expectedContinuityRevision: 2,
+                status: 'pending',
+                createdAt: '2026-08-12T00:01:00.000Z',
+              },
+            ],
+            entries: [],
+            createdAt: '2026-08-12T00:00:00.000Z',
+            updatedAt: '2026-08-12T00:01:00.000Z',
+          },
+        ],
+      },
+    };
+    const execute = vi.fn(async () => snapshot);
+    render(
+      <CharacterCompanionContinuitySurface
+        execute={execute}
+        locale="en"
+        runs={[companionRun, narrativeRun]}
+        snapshot={snapshot}
+      />,
+    );
+
+    expect(screen.getByText('The user prefers jasmine tea.')).not.toBeNull();
+    expect(screen.getByText(/Session-only/u)).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    await waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    expect(execute).toHaveBeenCalledWith({
+      operation: 'companion-memory-candidate-accept',
+      input: {
+        companionContinuityId: 'continuity:companion',
+        companionMemoryCandidateId: 'candidate:tea',
+        companionMemoryEntryId: 'companion-memory-entry:00000000-0000-4000-8000-000000000004',
+        expectedContinuityRevision: 2,
+      },
+    });
+    execute.mockRejectedValueOnce(new Error('Continuity revision changed.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Continuity revision changed.');
   });
 });
 
@@ -522,9 +844,13 @@ describe('Character Room Workbench surfaces', () => {
 });
 
 function Harness({
+  detailActions,
   host,
+  onImport,
 }: {
+  readonly detailActions?: CharacterManagementDetailActions;
   readonly host: OpenNekoDesktopCharacterBridge['characterFoundation'];
+  readonly onImport?: () => void;
 }): JSX.Element {
   const runtime = useCharacterManagementRuntime({ active: true, host });
   const [selection, setSelection] = useState<CharacterDetailSelection>();
@@ -532,19 +858,80 @@ function Harness({
     <>
       <CharacterCatalogSurface
         locale="en"
-        onCreate={() => setSelection({ kind: 'create' })}
-        onSelect={(characterProjectId) => setSelection({ kind: 'project', characterProjectId })}
+        onImport={onImport}
+        onSelect={(globalCharacterId) => setSelection({ kind: 'global', globalCharacterId })}
         runtime={runtime}
-        selectedProjectId={selection?.kind === 'project' ? selection.characterProjectId : undefined}
+        selectedGlobalCharacterId={selection?.globalCharacterId}
       />
       <CharacterDetailSurface
+        actions={{ ...detailActions }}
         locale="en"
-        onCreated={(characterProjectId) => setSelection({ kind: 'project', characterProjectId })}
         runtime={runtime}
         selection={selection}
       />
     </>
   );
+}
+
+function EditorHarness({
+  execute,
+  snapshot,
+}: {
+  readonly execute: (command: CharacterFoundationCommand) => Promise<CharacterFoundationFixture>;
+  readonly snapshot: CharacterFoundationFixture;
+}): JSX.Element {
+  const project = snapshot.localProject;
+  return (
+    <CharacterAuthoringEditor
+      execute={async (command: CharacterAuthoringCommand) => {
+        if (
+          command.operation === 'character-authoring-test-capture' ||
+          command.operation === 'character-version-continue' ||
+          command.operation === 'character-version-delete'
+        ) {
+          throw new Error(
+            'The Foundation editor fixture does not execute authoring-only commands.',
+          );
+        }
+        return projectAuthoringSnapshot(
+          await execute(command as unknown as CharacterFoundationCommand),
+        );
+      }}
+      locale="en"
+      selectedProjectId={project.characterProjectId}
+      snapshot={projectAuthoringSnapshot(snapshot)}
+    />
+  );
+}
+
+function projectAuthoringSnapshot(
+  snapshot: CharacterFoundationFixture,
+): CharacterAuthoringSnapshot {
+  const project = snapshot.localProject;
+  return {
+    project,
+    versions: snapshot.localVersions.filter(
+      (version) => version.characterProjectId === project.characterProjectId,
+    ),
+    authoringTestSnapshots: [],
+    storylines: snapshot.character.storylines.filter(
+      (storyline) => storyline.characterProjectId === project.characterProjectId,
+    ),
+    storylineDrafts: snapshot.character.storylineDrafts,
+    storylineVersions: snapshot.character.storylineVersions,
+    lineage: null,
+    referenceInventories: snapshot.localVersions
+      .filter((version) => version.characterProjectId === project.characterProjectId)
+      .map((version) => ({
+        characterVersionId: version.characterVersionId,
+        coverage: 'complete',
+        references: [],
+        diagnostics: [],
+      })),
+    diagnostics: snapshot.diagnostics.filter(
+      (diagnostic) => diagnostic.owner === 'character',
+    ) as CharacterAuthoringSnapshot['diagnostics'],
+  };
 }
 
 function RoomWorkbenchHarness({
@@ -587,36 +974,140 @@ function createHost(
   ),
   snapshot: CharacterFoundationSnapshot = emptySnapshot(),
 ): OpenNekoDesktopCharacterBridge['characterFoundation'] {
-  return { getSnapshot: vi.fn(async () => snapshot), execute };
+  return {
+    getSnapshot: vi.fn(async () => snapshot),
+    getConversationLaunchCatalog: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+    execute,
+  };
 }
 
-function projectSnapshot(): CharacterFoundationSnapshot {
+type CharacterFoundationFixture = CharacterFoundationSnapshot & {
+  readonly localProject: CharacterProject;
+  readonly localVersions: readonly CharacterVersion[];
+};
+
+function projectSnapshot(): CharacterFoundationFixture {
+  const localProject: CharacterProject = {
+    characterProjectId: 'character-project:lin',
+    displayName: 'Lin',
+    draft: {
+      summary: 'An archivist.',
+      backgroundStory: createEmptyCharacterBackgroundStory(),
+      originSetting: createEmptyCharacterOriginSetting(),
+      canon: [],
+      knowledgeBoundary: [],
+      behaviorPolicy: [],
+      expressionPolicy: [],
+      representationRefs: [],
+    },
+    evidence: [],
+    candidates: [],
+    reviewStatus: 'draft',
+    createdAt: '2026-08-09T00:00:00.000Z',
+    updatedAt: '2026-08-09T00:00:00.000Z',
+  };
+  const localVersion: CharacterVersion = {
+    characterVersionId: 'character-version:lin-root',
+    characterProjectId: localProject.characterProjectId,
+    label: 'Root',
+    definition: localProject.draft,
+    acceptedEvidenceIds: [],
+    publishedAt: '2026-08-09T01:00:00.000Z',
+  };
   return {
     ...emptySnapshot(),
+    localProject,
+    localVersions: [localVersion],
     character: {
       ...emptySnapshot().character,
-      projects: [
+      globalCharacters: [
         {
-          characterProjectId: 'character-project:lin',
+          globalCharacterId: 'global-character:lin',
           displayName: 'Lin',
-          draft: {
-            summary: 'An archivist.',
-            backgroundStory: createEmptyCharacterBackgroundStory(),
-            originSetting: createEmptyCharacterOriginSetting(),
-            canon: [],
-            knowledgeBoundary: [],
-            behaviorPolicy: [],
-            expressionPolicy: [],
-            representationRefs: [],
-          },
-          evidence: [],
-          candidates: [],
-          reviewStatus: 'draft',
+          currentCharacterVersionId: localVersion.characterVersionId,
+          characterVersionIds: [localVersion.characterVersionId],
           createdAt: '2026-08-09T00:00:00.000Z',
           updatedAt: '2026-08-09T00:00:00.000Z',
         },
       ],
+      versions: [
+        {
+          characterVersionId: localVersion.characterVersionId,
+          globalCharacterId: 'global-character:lin',
+          label: localVersion.label,
+          definition: localVersion.definition,
+          acceptedEvidenceIds: localVersion.acceptedEvidenceIds,
+          publishedAt: localVersion.publishedAt,
+        },
+      ],
     },
+  };
+}
+
+function versionWorkspaceSnapshot(): CharacterAuthoringSnapshot {
+  const foundation = projectSnapshot();
+  const baseProject = foundation.localProject;
+  const project = { ...baseProject, draftBasisCharacterVersionId: 'character-version:root' };
+  const versions = [
+    {
+      characterVersionId: 'character-version:root',
+      characterProjectId: project.characterProjectId,
+      label: 'Root version',
+      definition: project.draft,
+      acceptedEvidenceIds: [],
+      publishedAt: '2026-08-09T00:00:00.000Z',
+    },
+    {
+      characterVersionId: 'character-version:branch',
+      characterProjectId: project.characterProjectId,
+      label: 'Branch version',
+      definition: { ...project.draft, canon: ['A newly accepted fact.'] },
+      acceptedEvidenceIds: [],
+      publishedAt: '2026-08-10T00:00:00.000Z',
+    },
+    {
+      characterVersionId: 'character-version:unlinked',
+      characterProjectId: project.characterProjectId,
+      label: 'Imported version',
+      definition: project.draft,
+      acceptedEvidenceIds: [],
+      publishedAt: '2026-08-11T00:00:00.000Z',
+    },
+  ];
+  return {
+    project,
+    versions,
+    authoringTestSnapshots: [],
+    storylines: [],
+    storylineDrafts: [],
+    storylineVersions: [],
+    lineage: {
+      characterProjectId: project.characterProjectId,
+      relations: [
+        { characterVersionId: 'character-version:root', parentCharacterVersionIds: [] },
+        {
+          characterVersionId: 'character-version:branch',
+          parentCharacterVersionIds: ['character-version:root'],
+        },
+      ],
+    },
+    referenceInventories: versions.map((version) => ({
+      characterVersionId: version.characterVersionId,
+      coverage: 'complete' as const,
+      references:
+        version.characterVersionId === 'character-version:root'
+          ? [
+              {
+                ownerKind: 'agent' as const,
+                referenceKind: 'conversation' as const,
+                referenceId: 'conversation:lin',
+                characterVersionId: version.characterVersionId,
+              },
+            ]
+          : [],
+      diagnostics: [],
+    })),
+    diagnostics: [],
   };
 }
 

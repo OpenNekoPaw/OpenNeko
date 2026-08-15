@@ -20,7 +20,8 @@ describe('Canvas Host runtime architecture boundary', () => {
     const root = readFileSync(path.resolve(hostRuntimeRoot, '..', 'root.tsx'), 'utf8');
     const app = readFileSync(path.resolve(hostRuntimeRoot, '..', 'CanvasApp.tsx'), 'utf8');
 
-    expect(root).toContain('runtime: CanvasHostRuntime');
+    expect(root).toContain('host: CanvasWebviewHostPort');
+    expect(root).not.toContain('createCanvasWebviewHost(');
     expect(root).toContain('<CanvasHostProvider host={host}>');
     expect(root).toContain('<CanvasApp host={host}');
     expect(root).not.toContain('getGlobalHostApi');

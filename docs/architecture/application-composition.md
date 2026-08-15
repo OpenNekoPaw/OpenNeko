@@ -84,10 +84,10 @@ Resource Browser 的 `entity.manage` 继续复用同一个 sender-bound Desktop 
 workspace 构造 `@neko/entity-node` runtime，并注入 canonical Entity repository 与 local-metadata public
 repository；`@neko/assets-node` controller 校验选择、capability、Entity/candidate identity 和 expected
 project revision 后委托 exact Entity owner。Entity ID、binding ID、时间、canonical commit、candidate
-decision 和恢复 journal 都由 Entity package 持有，应用根不复制其业务语义或文件 workflow。生产环境
-缺失 manifest-backed Asset lifecycle、完整 reference-rewrite participant、Character、Room 或
-Conversation owner 时，对应 Inspector capability 必须隐藏或返回 owner-qualified blocker，不得在
-Desktop 中以 flat Asset、Agent command、fallback conversation 或 no-op handler 补齐。
+decision 和恢复 journal 都由 Entity package 持有，应用根不复制其业务语义或文件 workflow。完整
+reference reader 或 resource owner 缺失时，对应 Entity operation 必须隐藏或返回 owner-qualified
+blocker。Character/World action 只能由 Project association 与对应 owner 投影；Desktop 不得用 flat
+Asset、Agent command、fallback conversation 或 no-op handler 补齐。
 
 workspace package 的角色、拆分条件、领域家族命名和 inactive capability 语义统一遵循
 [`package-taxonomy.md`](package-taxonomy.md)，应用根不得通过私有 source alias 或 wildcard export
@@ -131,29 +131,34 @@ provider turn、媒体/GPU、subscription、后台 Job 和其他真实昂贵 run
 未完成外部操作保护条件的 runtime 应释放，受保护后台 runtime 可在无 React Root 时继续。
 
 Workbench 是可变形态，不是固定的 Workspace 页面：默认 Agent draft 只有 Interaction；Assistant
-激活后是 Agent + Preview Main；Workspace 是 Agent + creative Main + 右侧 Workspace Resources；
+激活后是 Agent + Preview Main；Project Workspace 是 Agent + creative Main + 右侧 Project Browser；
 资源中心与扩展中心分别把 Asset Management 和 Extension Management 放入 Main，信息充分且由 owner
 提供的 Preview/Detail 只能进入可选 Secondary Main。Settings 和项目管理同样使用该 Shell；低信息量的
 Project selection 保留在 catalog，并以独立行操作显式打开 Workspace，不创建空洞的 Detail shell。
 Character Management 使用 package-owned catalog Main 与 exact detail Secondary Main；Character/Room
-Conversation 使用独立 `character-interaction` composition，组合 Agent Interaction、Avatar/Scene Main、
-Character/World Manager 与 Room 按需 Timeline。Avatar/Scene Main 只解析作者显式选择的 VRM，并通过
-Desktop Main 授权的短生命周期 opaque resource lease 建立唯一动态 runtime；未支持的表现格式、缺失资源、
-完整 World Experience 和未接入的 Room 提交能力必须在 owning Surface 返回 owner-qualified unavailable，Desktop
-不得选择 first-compatible 表现、暴露 raw path、回退静态肖像或伪造业务事实与成功状态。
+Conversation 使用独立 `character-interaction` composition，组合 Agent Interaction、一个 exact owner-qualified
+Character Presentation Main、Companion/Narrative Context 或 Room Participant Manager，以及可选且彼此独立的
+Storyline Timeline/RoomEvent Timeline。Presentation provider 可以提供 VRM、Live2D、Web、动态 Scene 或 Gameplay
+Surface，但 Desktop 只授权和挂载所选 exact surface；未支持格式、缺失资源或 owner mismatch 必须在对应 slot
+返回 owner-qualified unavailable。Desktop 不得选择 first-compatible 表现、暴露 raw path、回退静态肖像、
+把 Timeline 当进度或复制 Character/Agent/外部领域事实。
 
-World Foundation 使用独立 `world-management` 单例 scene，在同一个 package-owned Root 中组合 Library、
-Studio 和确定性 Preview。Main/preload 只转发 strict command/snapshot contract；Project、Version、Run、Save、
-branch 与 event 事务均由 `@neko/world` / `@neko/world-node` 拥有。离开该 scene 后 Root 必须卸载，但 durable
-World 记录和后台无关能力不受影响。该 Preview 只检查已发布定义和 committed replay，不创建 Story、Gameplay
-或 WorldExperience，也不调用 Agent、游戏引擎或世界模型。
+World 按全局管理、Project Workspace 创作和确定性运行三个生命周期分离。`world-management` 是单例导航
+scene，只组合 package-owned 全局目录 Main 与可选版本详情 Secondary Main，不挂载 Studio 或 Runtime。
+本地 World 创作属于精确 Project Workspace；全局 WorldVersion 引用保持只读，用户复制为新的本地对象后才可
+编辑。正式运行使用独立 `world-runtime` scene 和 exact
+`GlobalWorld + WorldVersion -> WorldRun -> WorldSave/branch` identity。Main/preload 只转发各自的 strict
+management、authoring、portable 和 runtime contract；Project、Version、Run、Save、branch 与 event 事务均由
+`@neko/world` / `@neko/world-node` 拥有。离开任一 scene 后对应 Root 必须卸载，但 durable World 记录和受保护后台
+能力不受影响。创作预览只做纯定义检查，不创建 Run、Save、branch、event 或 Agent 记录；确定性 Foundation
+runtime 不得冒充 Story、Gameplay、WorldExperience、Agent Play 或 realtime generation。
 
 Host 把完整 Project catalog、Desktop stored recent Project context 与 owner-qualified Agent conversation
 catalog 组合成一个 canonical grouped navigation projection，PrimarySidebar 只消费该投影，不在 React 中
 重新 join 或推断。Project header 是容器入口，conversation child 携带 exact `conversationId + owner`；当前
 PrimarySidebar 将 `project` 和无法解析 Project 的 `workspace` group 统一放入“项目”，并只将无 Project 的
 Assistant conversation 放入“会话”。失效 Workspace group 保留局部 diagnostic 和清理操作，不得转成独立
-Assistant conversation。Character 与 Room conversation 只保留封闭分类；World Foundation 作为独立 scene 而不是 conversation group。未具备 package-owned projection
+Assistant conversation。Character 与 Room conversation 只保留封闭分类；World 管理与运行作为独立 scene 而不是 conversation group。未具备 package-owned projection
 和 runtime 前不得显示空栏目、占位记录、数量、操作或路由。当前拥有 Conversation 或属于 recent Project
 context 的 Project 保留一个 group；清理最后一条 Conversation 只让 child 变为空，不得让 recent Project
 从侧栏消失或伪造默认 Conversation。完整 catalog 中从未进入 recent context 且没有 Conversation 的 Project
@@ -174,8 +179,10 @@ conversation restore 与 delete 都验证完整 owner identity。Character/Room 
 
 Entry Draft 的 `unbound` scope 不显示强制 owner 卡片。用户未选择 owner 而直接发送时，Host 以 exact
 draft identity 确定性绑定 Assistant 用户区，并在同一事务中创建首次 conversation/session；选择显式
-Project 或 sender/Window-bound directory grant 时绑定 Workspace；一个或多个显式
-`@CharacterVersion` 分别绑定 Character Dialogue 或 Room owner。对话文本、模型输出和
+Project 时只把它保留在 Composer 上下文栏并绑定 Project 创作 authority，不直接导航或挂载 Project
+Workspace。Agent Entry 只显示 Conversation 与 Creation，且不改变既有 PrimarySidebar。Conversation 可同时
+选择零到多个显式全局 `@CharacterVersion` 和最多一个显式全局 `@WorldVersion`：单角色绑定 Dialogue，
+多角色绑定 Room，选择 World 时绑定 World Experience 并携带这些精确角色参与者。对话文本、模型输出和
 active/first/recent Project、Character、Room、World 都不得推断或扩大 owner 权限。失效角色选择、
 不完整叙事 World binding 或 actor mapping 必须 fail-visible，不能降级为普通 prompt、Assistant、
 Workspace 或 companion。Workspace 布局控件
@@ -197,8 +204,12 @@ header，并以透明内容背景继承所在 shell 主题。Management 和合�
 底板中的两个兄弟 panel，通过同一 resize primitive 和单一可见分隔线连接；场景层不得在 sibling panel
 之间增加 margin、空白 gutter、重复边框、圆角或阴影。没有合格 Detail 时不得保留 secondary column 或
 分隔线。各 package-owned Root 继续拥有自身内容区的 padding、toolbar gap、表单间距、裁切和 overflow
-边界，也不制造单项 tab strip。Workspace Resources 复用 package-owned Root，并隐藏与 Host 自动
-projection 重复的顶部全局刷新；relink、recovery 等领域操作仍由该 Root 保留。
+边界，也不制造单项 tab strip。Workspace 右侧 Project Browser 是 Desktop-owned presentation
+composition，只在 Resources 与 Project Content 两个 package-owned Root 之间切换并卸载未选 Root；
+Resources 隐藏与 Host 自动 projection 重复的顶部全局刷新，relink、recovery 等领域操作仍由 Assets
+Root 保留。Project Content 在同一列表中投影 Content、本地可编辑 Character/World 和只读全局精确版本
+引用；新增引用只改变当前 Project membership，不导航到全局管理，也不创建本地副本。同步、复制为本地对象、
+显式更新版本引用和移除仍由对应 owner contract 处理。
 
 ## 数据与资源
 

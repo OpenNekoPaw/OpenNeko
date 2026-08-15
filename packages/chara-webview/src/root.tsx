@@ -1,4 +1,3 @@
-import { isCharacterAuthoringCommand } from '@neko/chara/contracts';
 import type {
   CharacterFoundationCommand,
   CharacterFoundationSnapshot,
@@ -8,19 +7,14 @@ import type {
   OpenNekoDesktopCharacterAuthoringBridge,
   OpenNekoDesktopCharacterBridge,
 } from '@neko/chara/contracts';
-import {
-  EmptyState,
-  GridIcon,
-  LayersIcon,
-  PlusIcon,
-  RefreshIcon,
-  SearchIcon,
-  UserIcon,
-  WarningIcon,
-} from '@neko/ui';
+import { EmptyState, RefreshIcon, SearchIcon, UserIcon, WarningIcon } from '@neko/ui';
 import type { SupportedLocale } from '@neko/ui/i18n';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CharacterPanel } from './character-panel';
+import { CharacterAuthoringEditor } from './character-panel';
+import {
+  CharacterManagementDetailSurface,
+  type CharacterManagementDetailActions,
+} from './character-management-detail';
 import { describeError, FoundationDiagnostic } from './foundation-ui';
 import { foundationLabel } from './labels';
 
@@ -32,6 +26,19 @@ export {
   type CharacterRoomIdentityProjection,
   type CharacterRoomWorkbenchLoadState,
 } from './room-workbench';
+export { CharacterStorylineTimelineSurface } from './storyline-timeline';
+export {
+  CharacterPortableExportScopeSurface,
+  CharacterPortableImportSurface,
+  type CharacterPortableExportRepresentation,
+  type CharacterPortableExportScopePresentation,
+  type CharacterPortableExportSelection,
+} from './character-portable-package-surface';
+export { CharacterCompanionContinuitySurface } from './companion-continuity';
+export {
+  CharacterManagementDetailSurface,
+  type CharacterManagementDetailActions,
+} from './character-management-detail';
 
 type LoadState =
   | { readonly kind: 'idle' | 'loading' }
@@ -46,12 +53,15 @@ export interface CharacterManagementRuntime {
   readonly execute: (command: CharacterFoundationCommand) => Promise<CharacterFoundationSnapshot>;
 }
 
-export type CharacterDetailSelection =
-  { readonly kind: 'create' } | { readonly kind: 'project'; readonly characterProjectId: string };
+export type CharacterDetailSelection = {
+  readonly kind: 'global';
+  readonly globalCharacterId: string;
+};
 
 export function useCharacterManagementRuntime(input: {
   readonly active: boolean;
   readonly host?: OpenNekoDesktopCharacterBridge['characterFoundation'];
+  readonly reloadToken?: number;
 }): CharacterManagementRuntime {
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'idle' });
   const [pendingOperation, setPendingOperation] = useState<string>();
@@ -75,7 +85,7 @@ export function useCharacterManagementRuntime(input: {
       return;
     }
     void reload();
-  }, [input.active, reload]);
+  }, [input.active, input.reloadToken, reload]);
 
   const execute = useCallback(
     async (command: CharacterFoundationCommand): Promise<CharacterFoundationSnapshot> => {
@@ -101,33 +111,32 @@ export function useCharacterManagementRuntime(input: {
 
 export function CharacterCatalogSurface({
   locale,
-  onCreate,
+  onImport,
   onSelect,
   runtime,
-  selectedProjectId,
+  selectedGlobalCharacterId,
 }: {
   readonly locale: SupportedLocale;
-  readonly onCreate: () => void;
-  readonly onSelect: (characterProjectId: string) => void;
+  readonly onImport?: () => void;
+  readonly onSelect: (globalCharacterId: string) => void;
   readonly runtime: CharacterManagementRuntime;
-  readonly selectedProjectId?: string;
+  readonly selectedGlobalCharacterId?: string;
 }): JSX.Element {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<'updated' | 'name'>('updated');
-  const [view, setView] = useState<'list' | 'grid'>('list');
   const snapshot = runtime.loadState.kind === 'ready' ? runtime.loadState.snapshot : undefined;
-  const projects = useMemo(() => {
+  const characters = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
-    return [...(snapshot?.character.projects ?? [])]
-      .filter((project) => project.displayName.toLocaleLowerCase().includes(normalized))
+    return [...(snapshot?.character.globalCharacters ?? [])]
+      .filter((character) => character.displayName.toLocaleLowerCase().includes(normalized))
       .sort((left, right) =>
         sort === 'name'
           ? left.displayName.localeCompare(right.displayName) ||
-            left.characterProjectId.localeCompare(right.characterProjectId)
+            left.globalCharacterId.localeCompare(right.globalCharacterId)
           : right.updatedAt.localeCompare(left.updatedAt) ||
-            left.characterProjectId.localeCompare(right.characterProjectId),
+            left.globalCharacterId.localeCompare(right.globalCharacterId),
       );
-  }, [query, snapshot?.character.projects, sort]);
+  }, [query, snapshot?.character.globalCharacters, sort]);
 
   return (
     <section
@@ -146,12 +155,11 @@ export function CharacterCatalogSurface({
             )}
           </p>
         </div>
-        <div className="character-management__header-actions">
-          <button type="button" onClick={onCreate}>
-            <PlusIcon size={15} />
-            <span>{foundationLabel(locale, '新建角色', 'New character')}</span>
+        {onImport ? (
+          <button type="button" onClick={onImport}>
+            {foundationLabel(locale, '导入角色包', 'Import package')}
           </button>
-        </div>
+        ) : null}
       </header>
       <div className="character-management__toolbar">
         <label className="character-management__search">
@@ -171,26 +179,6 @@ export function CharacterCatalogSurface({
           <option value="updated">{foundationLabel(locale, '最近更新', 'Recently updated')}</option>
           <option value="name">{foundationLabel(locale, '名称', 'Name')}</option>
         </select>
-        <div className="character-management__view-switcher">
-          <button
-            aria-label={foundationLabel(locale, '列表视图', 'List view')}
-            aria-pressed={view === 'list'}
-            title={foundationLabel(locale, '列表视图', 'List view')}
-            type="button"
-            onClick={() => setView('list')}
-          >
-            <LayersIcon size={15} />
-          </button>
-          <button
-            aria-label={foundationLabel(locale, '网格视图', 'Grid view')}
-            aria-pressed={view === 'grid'}
-            title={foundationLabel(locale, '网格视图', 'Grid view')}
-            type="button"
-            onClick={() => setView('grid')}
-          >
-            <GridIcon size={15} />
-          </button>
-        </div>
         <button
           aria-label={foundationLabel(locale, '刷新角色', 'Refresh characters')}
           disabled={runtime.loadState.kind === 'loading'}
@@ -214,14 +202,14 @@ export function CharacterCatalogSurface({
         </div>
       ) : (
         <div
-          className={`character-management__catalog is-${view}${projects.length === 0 ? ' is-empty' : ''}`}
+          className={`character-management__catalog${characters.length === 0 ? ' is-empty' : ''}`}
         >
           {snapshot?.diagnostics.map((item) => (
             <FoundationDiagnostic key={`${item.owner}:${item.recordKind}:${item.recordId}`}>
               {`${item.recordKind} / ${item.recordId}: ${item.message}`}
             </FoundationDiagnostic>
           ))}
-          {projects.length === 0 ? (
+          {characters.length === 0 ? (
             <EmptyState
               fill
               icon={<UserIcon size={24} />}
@@ -230,43 +218,37 @@ export function CharacterCatalogSurface({
                   ? foundationLabel(locale, '没有匹配的角色', 'No matching characters')
                   : foundationLabel(
                       locale,
-                      '尚无角色，创建第一个角色。',
-                      'No characters yet. Create the first one.',
+                      '尚无角色，请导入第一个角色包。',
+                      'No characters yet. Import the first package.',
                     )
               }
             />
           ) : null}
-          {projects.map((project) => {
-            const publicationCount =
-              snapshot?.character.versions.filter(
-                (publication) => publication.characterProjectId === project.characterProjectId,
-              ).length ?? 0;
+          {characters.map((character) => {
+            const publicationCount = character.characterVersionIds.length;
             const diagnostic = snapshot?.diagnostics.find(
-              (item) => item.owner === 'character' && item.recordId === project.characterProjectId,
+              (item) => item.owner === 'character' && item.recordId === character.globalCharacterId,
             );
             return (
               <button
-                aria-pressed={selectedProjectId === project.characterProjectId}
+                aria-pressed={selectedGlobalCharacterId === character.globalCharacterId}
                 className="character-management__catalog-item"
-                key={project.characterProjectId}
+                key={character.globalCharacterId}
                 type="button"
-                onClick={() => onSelect(project.characterProjectId)}
+                onClick={() => onSelect(character.globalCharacterId)}
               >
                 <span className="character-management__avatar-placeholder">
                   <UserIcon size={20} />
                 </span>
                 <span className="character-management__catalog-copy">
-                  <strong>{project.displayName}</strong>
+                  <strong>{character.displayName}</strong>
                   <small>
-                    {project.draft.summary || foundationLabel(locale, '暂无概述', 'No summary')}
+                    {snapshot?.character.versions.find(
+                      (version) =>
+                        version.characterVersionId === character.currentCharacterVersionId,
+                    )?.definition.summary || foundationLabel(locale, '暂无概述', 'No summary')}
                   </small>
                   <span>
-                    {foundationLabel(
-                      locale,
-                      reviewLabelZh(project.reviewStatus),
-                      project.reviewStatus,
-                    )}
-                    {' · '}
                     {foundationLabel(
                       locale,
                       `${publicationCount} 个版本`,
@@ -285,16 +267,17 @@ export function CharacterCatalogSurface({
 }
 
 export function CharacterDetailSurface({
+  actions,
   locale,
-  onCreated,
   runtime,
   selection,
 }: {
+  readonly actions?: CharacterManagementDetailActions;
   readonly locale: SupportedLocale;
-  readonly onCreated: (characterProjectId: string) => void;
   readonly runtime: CharacterManagementRuntime;
   readonly selection?: CharacterDetailSelection;
 }): JSX.Element {
+  const detailActions = actions ?? {};
   return (
     <section
       className="character-management character-management--detail"
@@ -309,18 +292,28 @@ export function CharacterDetailSurface({
             ? runtime.loadState.message
             : foundationLabel(locale, '正在读取角色详情...', 'Loading character details...')}
         </div>
-      ) : selection ? (
-        <CharacterPanel
-          creating={selection.kind === 'create'}
-          execute={runtime.execute}
-          locale={locale}
-          onCreated={onCreated}
-          pendingOperation={runtime.pendingOperation}
-          selectedProjectId={
-            selection.kind === 'project' ? selection.characterProjectId : undefined
-          }
-          snapshot={runtime.loadState.snapshot}
-        />
+      ) : selection?.kind === 'global' ? (
+        (() => {
+          const character = runtime.loadState.snapshot.character.globalCharacters.find(
+            (candidate) => candidate.globalCharacterId === selection.globalCharacterId,
+          );
+          return character ? (
+            <CharacterManagementDetailSurface
+              actions={detailActions}
+              locale={locale}
+              character={character}
+              snapshot={runtime.loadState.snapshot}
+            />
+          ) : (
+            <div className="character-management__detail-empty" role="status">
+              {foundationLabel(
+                locale,
+                '所选角色不可用。',
+                'The selected character is unavailable.',
+              )}
+            </div>
+          );
+        })()
       ) : (
         <div className="character-management__detail-empty">
           <UserIcon size={26} />
@@ -339,17 +332,23 @@ type AuthoringLoadState =
   | { readonly kind: 'failed'; readonly message: string }
   | { readonly kind: 'ready'; readonly snapshot: CharacterAuthoringSnapshot };
 
-export function CharacterAuthoringStudioRoot({
+export function CharacterAuthoringSurface({
   binding,
   host,
   initialSnapshot,
   locale,
+  onFinalizeAndStartConversation,
   windowId,
 }: {
   readonly binding: CharacterAuthoringBinding;
   readonly host?: OpenNekoDesktopCharacterAuthoringBridge['characterAuthoring'];
   readonly initialSnapshot?: CharacterAuthoringSnapshot;
   readonly locale: SupportedLocale;
+  readonly onFinalizeAndStartConversation?: (input: {
+    readonly characterProjectId: string;
+    readonly characterVersionId: string;
+    readonly label: string;
+  }) => Promise<void>;
   readonly windowId: string;
 }): JSX.Element {
   const [loadState, setLoadState] = useState<AuthoringLoadState>(() =>
@@ -379,10 +378,7 @@ export function CharacterAuthoringStudioRoot({
   }, [reload]);
 
   const execute = useCallback(
-    async (command: CharacterFoundationCommand): Promise<CharacterFoundationSnapshot> => {
-      if (!isCharacterAuthoringCommand(command)) {
-        throw new Error(`Character Studio command '${command.operation}' is not authoring-only.`);
-      }
+    async (command: CharacterAuthoringCommand): Promise<CharacterAuthoringSnapshot> => {
       setPendingOperation(command.operation);
       setDiagnostic(undefined);
       try {
@@ -393,7 +389,7 @@ export function CharacterAuthoringStudioRoot({
           command as CharacterAuthoringCommand,
         );
         setLoadState({ kind: 'ready', snapshot });
-        return projectAuthoringFoundationSnapshot(snapshot);
+        return snapshot;
       } catch (error) {
         setDiagnostic(describeError(error));
         throw error;
@@ -402,6 +398,25 @@ export function CharacterAuthoringStudioRoot({
       }
     },
     [binding, host, windowId],
+  );
+  const finalizeAndStartConversation = useCallback(
+    async (input: {
+      readonly characterProjectId: string;
+      readonly characterVersionId: string;
+      readonly label: string;
+    }) => {
+      setDiagnostic(undefined);
+      try {
+        if (!onFinalizeAndStartConversation) {
+          throw new Error('Finalize-and-start Conversation handoff is unavailable.');
+        }
+        await onFinalizeAndStartConversation(input);
+      } catch (error) {
+        setDiagnostic(describeError(error));
+        throw error;
+      }
+    },
+    [onFinalizeAndStartConversation],
   );
 
   if (loadState.kind === 'loading') {
@@ -422,53 +437,18 @@ export function CharacterAuthoringStudioRoot({
     );
   }
   return (
-    <section className="character-authoring-studio" data-character-authoring-studio="true">
+    <section className="character-authoring-surface" data-character-authoring-surface="true">
       {diagnostic ? <FoundationDiagnostic role="alert">{diagnostic}</FoundationDiagnostic> : null}
-      <CharacterPanel
-        authoringOnly
-        creating={false}
+      <CharacterAuthoringEditor
         execute={execute}
         locale={locale}
+        onFinalizeAndStartConversation={
+          onFinalizeAndStartConversation ? finalizeAndStartConversation : undefined
+        }
         pendingOperation={pendingOperation}
         selectedProjectId={binding.characterProjectId}
-        snapshot={projectAuthoringFoundationSnapshot(loadState.snapshot)}
-        onCreated={() => {
-          throw new Error('Project-local Character creation must use the Project workflow.');
-        }}
+        snapshot={loadState.snapshot}
       />
     </section>
   );
-}
-
-function projectAuthoringFoundationSnapshot(
-  snapshot: CharacterAuthoringSnapshot,
-): CharacterFoundationSnapshot {
-  return {
-    character: {
-      projects: [snapshot.project],
-      versions: snapshot.versions,
-      relationships: [],
-      characterRuns: [],
-      dialogueRuns: [],
-      rooms: [],
-      roomRuns: [],
-      storylineVersions: [],
-      storylineRuns: [],
-      storylineObservationCandidates: [],
-      memoryScopes: [],
-      presentationConfigurations: [],
-    },
-    diagnostics: snapshot.diagnostics,
-  };
-}
-
-function reviewLabelZh(status: 'draft' | 'ready' | 'blocked'): string {
-  switch (status) {
-    case 'draft':
-      return '草稿';
-    case 'ready':
-      return '可发布';
-    case 'blocked':
-      return '阻塞';
-  }
 }

@@ -44,7 +44,7 @@ export async function buildCuaDriverArtifactCandidate(options) {
         'apps',
         'neko-desktop',
         'resources',
-        'extension-marketplace',
+        'extensions',
         'plugins',
         CUA_EXTENSION_ID,
       ),
@@ -84,14 +84,14 @@ export async function buildCuaDriverArtifactCandidate(options) {
   const generatedEntries = [
     ...pluginEntries,
     bufferEntry(
-      '.openneko-plugin/artifact-provenance.json',
+      'metadata/io.openneko/artifact-provenance.json',
       stableJsonBuffer({
         ...sourceFacts,
         licenseInventory: licenseFacts,
       }),
     ),
     bufferEntry(
-      '.openneko-plugin/build-inputs.json',
+      'metadata/io.openneko/build-inputs.json',
       stableJsonBuffer({
         extensionId: CUA_EXTENSION_ID,
         target: options.target,
@@ -283,13 +283,13 @@ function requireCuaArtifact(inputs, target) {
 }
 
 function readPluginEntries(pluginRoot, release) {
-  const manifestPath = join(pluginRoot, '.openneko-plugin', 'plugin.json');
-  const mcpPath = join(pluginRoot, '.mcp.json');
+  const manifestPath = join(pluginRoot, 'plugin.json');
+  const mcpPath = join(pluginRoot, 'mcp.json');
   const manifest = parseJson(readFileSync(manifestPath, 'utf8'), 'Computer Use plugin manifest');
   if (
     manifest.name !== CUA_EXTENSION_ID ||
     manifest.version !== release ||
-    manifest.mcpToolExposure !== 'adapter-only'
+    manifest.extensions?.['io.openneko']?.mcpToolExposure !== 'adapter-only'
   ) {
     throw new Error('Computer Use plugin manifest does not match the pinned release boundary.');
   }
@@ -304,8 +304,8 @@ function readPluginEntries(pluginRoot, release) {
     throw new Error('Computer Use MCP descriptor does not use the contained bounded launcher.');
   }
   return [
-    bufferEntry('.mcp.json', stableJsonBuffer(mcp)),
-    bufferEntry('.openneko-plugin/plugin.json', stableJsonBuffer(manifest)),
+    bufferEntry('mcp.json', stableJsonBuffer(mcp)),
+    bufferEntry('plugin.json', stableJsonBuffer(manifest)),
   ];
 }
 

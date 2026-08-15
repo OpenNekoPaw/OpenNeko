@@ -15,7 +15,7 @@ import {
   createDesktopApplicationSettingsUpdateRequest,
 } from '@neko/host/application-settings';
 import { createAgentExtensionManagementHostRequest } from '@neko/agent-contracts/extension-management-host';
-import { parseAutomationEndpointManagementHostRequest } from '@neko/automation-contracts/endpoint-management';
+import { parseAutomationLocalRuntimeManagementHostRequest } from '@neko/automation-contracts/local-runtime-management';
 import { parseAutomationPermissionManagementHostRequest } from '@neko/automation-contracts/permission-management';
 import { createAutomationTargetSelectionCoordinator } from '@neko/automation-node';
 import { type AgentHomeNavigationIdentity } from '@neko/agent-contracts';
@@ -31,7 +31,6 @@ import { DesktopAppHost, type DesktopAppHostOptions } from './app-host';
 import { createDesktopSceneTransitionRequest } from '@neko/host/desktop-scene-contract';
 import {
   createDesktopContentProjectTargetRequest,
-  createDesktopWorkspaceAuthoringLibraryTargetRequest,
   createDesktopWorkspaceDirectoryTargetRequest,
 } from '@neko/host/desktop-workspace-grant-contract';
 import { createAssetCenterHostRequest } from '@neko/assets-domain/asset-center';
@@ -76,25 +75,44 @@ import {
 import { DesktopWorkbenchContractError } from '@neko/host/desktop-workbench-contract';
 import type { ResourceBrowserNodeRuntime } from '@neko/assets-node';
 import { CharacterFoundationService } from '@neko/chara/application';
-import { WorldFoundationService } from '@neko/world/application';
+import { WorldManagementService } from '@neko/world/application';
 import type { RoomRun, RoomView } from '@neko/chara/contracts';
 import {
   createCharacterAuthoringCommandRequest,
   createCharacterAuthoringSnapshotRequest,
+  createCharacterPortableHostRequest,
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
 } from '@neko/chara/contracts';
 import {
   createWorldAuthoringCommandRequest,
   createWorldAuthoringSnapshotRequest,
+  createWorldPortableHostRequest,
+  createWorldRuntimeLaunchRequest,
+  createWorldRuntimeSnapshotRequest,
+  type WorldRuntimeBinding,
+  type WorldRuntimeProjection,
 } from '@neko/world/contracts';
 import {
+  createProjectAuthoringCatalogHostRequest,
   createProjectAuthoringNavigationHostRequest,
+  createProjectCreativeWorkspaceHostRequest,
+  createProjectCreativeWorkspaceMutationHostRequest,
+  createProjectContentHostRequest,
   createProjectLocalAuthoringHostRequest,
 } from '@neko/project/contracts';
 
+const standardCapabilityConstraint = async (input: {
+  readonly context: { readonly kind: 'assistant' | 'workspace' | 'character' | 'room' | 'world' };
+}) => ({
+  owner: { kind: input.context.kind, id: 'test-binding' },
+  skills: 'configured' as const,
+  tools: 'configured' as const,
+  references: 'configured' as const,
+});
+
 describe('DesktopAppHost', () => {
-  it('delegates Character Foundation commands to the package owner and returns its projection', async () => {
+  it('rejects retired Character Project authoring commands at the Foundation boundary', async () => {
     const commands = { execute: vi.fn(async () => undefined) };
     const fixture = await createShellAppHost({ characterFoundationCommands: commands });
     await expect(
@@ -103,39 +121,46 @@ describe('DesktopAppHost', () => {
         operation: 'character-project-set-review',
         input: { characterProjectId: 'character-project:a', reviewStatus: 'ready' },
       }),
-    ).resolves.toMatchObject({
-      requestId: 'character-request-1',
-      snapshot: { character: { projects: [], versions: [] }, diagnostics: [] },
-    });
-    expect(commands.execute).toHaveBeenCalledOnce();
+    ).rejects.toThrow("Unknown Character Foundation operation 'character-project-set-review'.");
+    expect(commands.execute).not.toHaveBeenCalled();
     await fixture.appHost.dispose();
   });
 
-  it('delegates World Foundation commands to the package owner and returns its projection', async () => {
+  it('returns the Chara-owned conversation launch catalog without executing a command', async () => {
     const commands = { execute: vi.fn(async () => undefined) };
-    const fixture = await createShellAppHost({ worldFoundationCommands: commands });
+    const fixture = await createShellAppHost({ characterFoundationCommands: commands });
+
     await expect(
-      fixture.appHost.executeWorldFoundationRequest(fixture.sender, {
-        requestId: 'world-request-1',
-        operation: 'world-project-create',
-        input: {
-          worldProjectId: 'world-project:a',
-          title: 'Archive City',
-          draft: {
-            background: 'A city of archives.',
-            worldBook: [],
-            locations: [],
-            organizations: [],
-            rules: [],
-            initialFacts: [],
-          },
-        },
+      fixture.appHost.executeCharacterFoundationRequest(fixture.sender, {
+        requestId: 'character-launch-catalog-request-1',
+        operation: 'conversation-launch-catalog-get',
       }),
-    ).resolves.toMatchObject({
-      requestId: 'world-request-1',
-      snapshot: { world: { projects: [], versions: [], runtimes: [] }, diagnostics: [] },
+    ).resolves.toEqual({
+      requestId: 'character-launch-catalog-request-1',
+      catalog: { targets: [], diagnostics: [] },
     });
-    expect(commands.execute).toHaveBeenCalledOnce();
+    expect(commands.execute).not.toHaveBeenCalled();
+    await fixture.appHost.dispose();
+  });
+
+  it('delegates World management reads to the narrow owner projection', async () => {
+    const fixture = await createShellAppHost();
+    await expect(
+      fixture.appHost.executeWorldManagementRequest(fixture.sender, {
+        requestId: 'world-management-request-1',
+        operation: 'catalog-get',
+        query: { search: '', sort: 'recently-updated' },
+      }),
+    ).resolves.toEqual({
+      requestId: 'world-management-request-1',
+      operation: 'catalog-get',
+      catalog: {
+        scope: { kind: 'global-catalog' },
+        query: { search: '', sort: 'recently-updated' },
+        items: [],
+        diagnostics: [],
+      },
+    });
     await fixture.appHost.dispose();
   });
 
@@ -150,7 +175,7 @@ describe('DesktopAppHost', () => {
     } as const;
     const resourceProjection: ResourceBrowserProjection = {
       identity,
-      facet: 'files',
+      source: 'files',
       query: '',
       items: [],
     };
@@ -217,18 +242,18 @@ describe('DesktopAppHost', () => {
       agentLaunch: createAgentLaunchRuntime(),
       agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
-      authoringLibraryRoots: createAuthoringLibraryRoots(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
-      automationEndpoints: createAutomationEndpoints(),
+      automationLocalRuntimes: createAutomationLocalRuntimes(),
       automationPermissions: createAutomationPermissions(),
       automationTargetSelections: createAutomationTargetSelectionCoordinator(),
       automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
-      worldFoundation: createWorldFoundationService(),
-      worldFoundationCommands: createWorldFoundationCommands(),
+      worldManagement: createWorldManagementService(),
+      worldRuntime: createWorldRuntimeWorkbench(),
+      worldPortable: createWorldPortableRuntime(),
       characterInteractions: createCharacterInteractions(),
       characterRoomConversations: createCharacterRoomConversations(),
       characterRoomWorkbench: createCharacterRoomWorkbench(),
@@ -309,18 +334,18 @@ describe('DesktopAppHost', () => {
       agentLaunch: createAgentLaunchRuntime(),
       agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
-      authoringLibraryRoots: createAuthoringLibraryRoots(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
-      automationEndpoints: createAutomationEndpoints(),
+      automationLocalRuntimes: createAutomationLocalRuntimes(),
       automationPermissions: createAutomationPermissions(),
       automationTargetSelections: createAutomationTargetSelectionCoordinator(),
       automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
-      worldFoundation: createWorldFoundationService(),
-      worldFoundationCommands: createWorldFoundationCommands(),
+      worldManagement: createWorldManagementService(),
+      worldRuntime: createWorldRuntimeWorkbench(),
+      worldPortable: createWorldPortableRuntime(),
       characterInteractions: createCharacterInteractions(),
       characterRoomConversations: createCharacterRoomConversations(),
       characterRoomWorkbench: createCharacterRoomWorkbench(),
@@ -384,18 +409,18 @@ describe('DesktopAppHost', () => {
       agentLaunch: createAgentLaunchRuntime(),
       agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
-      authoringLibraryRoots: createAuthoringLibraryRoots(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
       personalSkillManager: createPersonalSkillManager(),
-      automationEndpoints: createAutomationEndpoints(),
+      automationLocalRuntimes: createAutomationLocalRuntimes(),
       automationPermissions: createAutomationPermissions(),
       automationTargetSelections: createAutomationTargetSelectionCoordinator(),
       automationSessions: createAutomationSessions(),
       characterFoundation: createCharacterFoundationService(),
       characterFoundationCommands: createCharacterFoundationCommands(),
-      worldFoundation: createWorldFoundationService(),
-      worldFoundationCommands: createWorldFoundationCommands(),
+      worldManagement: createWorldManagementService(),
+      worldRuntime: createWorldRuntimeWorkbench(),
+      worldPortable: createWorldPortableRuntime(),
       characterInteractions: createCharacterInteractions(),
       characterRoomConversations: createCharacterRoomConversations(),
       characterRoomWorkbench: createCharacterRoomWorkbench(),
@@ -613,13 +638,13 @@ describe('DesktopAppHost', () => {
     ).toHaveLength(workspaceConversationCount);
   });
 
-  it('registers Entry Content targets and authorizes configured libraries without navigation', async () => {
+  it('registers Entry Content targets without navigation', async () => {
     const fixture = await createShellAppHost();
     const initialScene = activeScene(fixture.projection);
     fixture.registry.resolve.mockImplementation(async (hostResource) => ({
-      workspaceId: hostResource.includes('characters') ? 'library-characters' : 'workspace-novel',
+      workspaceId: 'workspace-novel',
       workspacePath: hostResource,
-      displayName: hostResource.includes('characters') ? 'Characters' : 'Novel',
+      displayName: 'Novel',
       locator: { kind: 'variable' as const, value: '${HOME}/target' },
     }));
     const created = await fixture.appHost.resolveWorkspaceTarget(
@@ -640,25 +665,7 @@ describe('DesktopAppHost', () => {
     expect(activeScene(afterCreate)).toEqual(initialScene);
     expect(afterCreate.window.tabs).toHaveLength(0);
     expect(afterCreate.catalog.projects).toHaveLength(1);
-    expect(fixture.appHost.projectAuthoring.ensureComposition).toHaveBeenCalledWith({
-      workspace: expect.objectContaining({ workspaceId: 'workspace-novel' }),
-      contentProjectId: 'content:workspace-novel',
-    });
 
-    const library = await fixture.appHost.resolveWorkspaceTarget(
-      fixture.sender,
-      createDesktopWorkspaceAuthoringLibraryTargetRequest({
-        requestId: 'library-select-1',
-        rendererSessionId: afterCreate.rendererSessionId,
-        windowId: fixture.windowId,
-        library: 'character',
-      }),
-      async () => {
-        throw new Error('Configured library selection must not open the native picker.');
-      },
-    );
-    expect(library).toMatchObject({ status: 'authorized', workspaceId: 'library-characters' });
-    expect(JSON.stringify(library)).not.toContain('/Users/fixture');
     expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toEqual(
       initialScene,
     );
@@ -782,7 +789,7 @@ describe('DesktopAppHost', () => {
       }),
     ).resolves.toEqual({
       requestId: 'launch-workspace-after-restart',
-      status: 'ready',
+      status: 'ready' as const,
       catalog,
     });
     expect(restore).toHaveBeenCalledWith(
@@ -822,6 +829,43 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
+  it('enters an authorized Workspace without consulting Project fact projections', async () => {
+    const fixture = await createShellAppHost();
+    const workspace = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(workspace);
+    const selected = await fixture.appHost.resolveWorkspaceTarget(
+      fixture.sender,
+      createDesktopWorkspaceDirectoryTargetRequest({
+        requestId: 'composition-independent-workspace-grant',
+        rendererSessionId: fixture.projection.rendererSessionId,
+        windowId: fixture.windowId,
+      }),
+      async () => ({ label: workspace.displayName, hostResource: workspace.workspacePath }),
+    );
+    if (selected.status !== 'authorized') throw new Error('Expected Workspace authorization.');
+
+    await expect(
+      fixture.appHost.transitionScene(
+        fixture.sender,
+        createDesktopSceneTransitionRequest({
+          requestId: 'composition-independent-workspace-open',
+          rendererSessionId: fixture.projection.rendererSessionId,
+          windowId: fixture.windowId,
+          sceneId: activeScene(fixture.projection).sceneId,
+          intent: { kind: 'open-workspace', workspaceGrantId: selected.grant.workspaceGrantId },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: {
+          kind: 'agent',
+          scope: { kind: 'workspace', workspaceId: workspace.workspaceId },
+        },
+      },
+    });
+  });
+
   it('delegates Entry target configuration only for the sender-bound launch connection', async () => {
     const agentLaunch = createAgentLaunchRuntime();
     const fixture = await createShellAppHost({ agentLaunch });
@@ -841,7 +885,8 @@ describe('DesktopAppHost', () => {
       kind: 'authoring' as const,
       workspaceId: 'workspace-1',
       workspaceGrantId: 'grant-1',
-      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+      authority: { kind: 'project' as const, projectId: 'project-1' },
+      target: { kind: 'content-document' as const, documentId: 'documents/story.md' },
     };
     const intent = {
       mode: 'authoring' as const,
@@ -1029,7 +1074,7 @@ describe('DesktopAppHost', () => {
       conversationId: 'conversation:character:character-run-entry-1',
       context: {
         kind: 'character' as const,
-        characterId: 'character-project-entry-1',
+        characterId: 'global-character-entry-1',
         characterVersionId: 'character-version-entry-1',
         characterRunId: 'character-run-entry-1',
         dialogueRunId: 'dialogue-run-entry-1',
@@ -1037,7 +1082,7 @@ describe('DesktopAppHost', () => {
     }));
     const fixture = await createShellAppHost({
       agentLaunch,
-      runtimeEntry: { materialize },
+      runtimeEntry: { validate: vi.fn(async () => undefined), materialize },
     });
     const scene = activeScene(fixture.projection);
     if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
@@ -1061,9 +1106,10 @@ describe('DesktopAppHost', () => {
       mode: 'character-dialogue' as const,
       binding: {
         kind: 'character-dialogue' as const,
+        mode: 'companion' as const,
         participants: [
           {
-            characterProjectId: 'character-project-entry-1',
+            globalCharacterId: 'global-character-entry-1',
             characterVersionId: 'character-version-entry-1',
           },
         ],
@@ -1130,7 +1176,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1443,7 +1492,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1542,7 +1594,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1666,7 +1721,7 @@ describe('DesktopAppHost', () => {
 
   it('restores a persisted Character conversation without dispatching a new turn', async () => {
     const conversationLifecycle = createConversationLifecycle();
-    const submitTurn = vi.fn(async () => ({ turnId: 'turn-character-restored', content: 'Reply' }));
+    const characterInteractions = createCharacterInteractions();
     const readConversationContext = vi
       .spyOn(conversationLifecycle, 'readConversationContext')
       .mockResolvedValue({
@@ -1678,7 +1733,7 @@ describe('DesktopAppHost', () => {
       });
     const fixture = await createShellAppHost({
       conversationLifecycle,
-      characterInteractions: { submitTurn },
+      characterInteractions,
     });
     const navigation = {
       conversationId: 'conversation-character-1',
@@ -1714,7 +1769,8 @@ describe('DesktopAppHost', () => {
       },
     });
     expect(readConversationContext).toHaveBeenCalledWith('conversation-character-1');
-    expect(submitTurn).not.toHaveBeenCalled();
+    expect(characterInteractions.prepareTurn).not.toHaveBeenCalled();
+    expect(characterInteractions.freezePreparedTurn).not.toHaveBeenCalled();
     expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toMatchObject({
       context: { kind: 'character-interaction', owner: navigation.owner },
     });
@@ -1725,6 +1781,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createConversationLifecycle();
     vi.spyOn(conversationLifecycle, 'readConversationContext').mockResolvedValue({
       kind: 'room',
+      scope: 'interaction',
       roomId: 'character-room-1',
       roomRunId: 'room-run-1',
     });
@@ -1753,7 +1810,16 @@ describe('DesktopAppHost', () => {
       status: 'transitioned',
       scene: {
         context: { kind: 'character-interaction', owner: navigation.owner },
-        slots: { cutPanel: { kind: 'character-room-timeline', owner: navigation.owner } },
+        slots: {
+          cutPanel: {
+            kind: 'character-timeline-stack',
+            owner: navigation.owner,
+            timelines: [
+              { kind: 'character-storyline-timeline' },
+              { kind: 'character-room-event-timeline' },
+            ],
+          },
+        },
       },
     });
     expect(submitUserMessage).not.toHaveBeenCalled();
@@ -1925,7 +1991,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -2096,7 +2165,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -2193,7 +2265,10 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository,
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-      domainContext: { resolveForTurn: async () => [] },
+      domainContext: {
+        resolveCapabilityConstraint: standardCapabilityConstraint,
+        resolveForTurn: async () => [],
+      },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -2314,6 +2389,68 @@ describe('DesktopAppHost', () => {
         viewId: restored.scene.context.agentViewId,
       }),
     );
+
+    const readConversationContext = vi.spyOn(conversationLifecycle, 'readConversationContext');
+    readConversationContext.mockRejectedValueOnce(
+      new AgentConversationLifecycleUnavailableError(
+        conversationId,
+        ['lifecycle'],
+        new Error('Host-only decode detail.'),
+      ),
+    );
+    await expect(
+      fixture.appHost.sendAgentMessage(
+        fixture.sender,
+        createDesktopAgentMessageRequest(
+          'pi-only-assistant-invalid-lifecycle',
+          {
+            applicationInstanceId: 'app-1',
+            windowId: fixture.windowId,
+            workbenchInstanceId: assistantWorkbench.workbenchInstanceId,
+            agentSurfaceId: assistantSurfaceId,
+            assistantSpaceId,
+            workspaceId: assistantSpaceId,
+            viewId: restored.scene.context.agentViewId,
+            connectionId: 'pi-only-assistant-connection',
+          },
+          { type: 'getConversations' },
+        ),
+      ),
+    ).resolves.toEqual({
+      requestId: 'pi-only-assistant-invalid-lifecycle',
+      status: 'unavailable',
+      diagnostic: {
+        code: 'desktop-agent-conversation-unavailable',
+        severity: 'error',
+        conversationId,
+        fieldNames: ['lifecycle'],
+        message: 'The stored Agent Conversation cannot be opened by the current application.',
+      },
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+
+    readConversationContext.mockRejectedValueOnce(new Error('Unexpected connection failure.'));
+    await expect(
+      fixture.appHost.sendAgentMessage(
+        fixture.sender,
+        createDesktopAgentMessageRequest(
+          'pi-only-assistant-unexpected-failure',
+          {
+            applicationInstanceId: 'app-1',
+            windowId: fixture.windowId,
+            workbenchInstanceId: assistantWorkbench.workbenchInstanceId,
+            agentSurfaceId: assistantSurfaceId,
+            assistantSpaceId,
+            workspaceId: assistantSpaceId,
+            viewId: restored.scene.context.agentViewId,
+            connectionId: 'pi-only-assistant-connection',
+          },
+          { type: 'getConversations' },
+        ),
+      ),
+    ).rejects.toThrow('Unexpected connection failure.');
+    expect(send).toHaveBeenCalledTimes(1);
+    readConversationContext.mockRestore();
     await fixture.appHost.dispose();
   });
 
@@ -2399,8 +2536,8 @@ describe('DesktopAppHost', () => {
     vi.mocked(projectAuthoring.getNavigation).mockResolvedValue([
       {
         kind: 'authoring-target',
-        target: { kind: 'content-project', contentProjectId: 'content:placeholder' },
-        identity: 'content-project:content:placeholder',
+        target: { kind: 'content-document', documentId: 'document-placeholder' },
+        identity: 'content-document:document-placeholder',
         label: 'Demo',
       },
     ]);
@@ -2423,8 +2560,8 @@ describe('DesktopAppHost', () => {
     vi.mocked(projectAuthoring.getNavigation).mockResolvedValue([
       {
         kind: 'authoring-target',
-        target: { kind: 'content-project', contentProjectId: project.projectId },
-        identity: `content-project:${project.projectId}`,
+        target: { kind: 'content-document', documentId: 'document-1' },
+        identity: 'content-document:document-1',
         label: project.displayName,
       },
     ]);
@@ -2435,7 +2572,7 @@ describe('DesktopAppHost', () => {
       binding: {
         workspaceId: resolution.workspaceId,
         workspaceGrantId: scene.context.scope.workspaceGrantId,
-        contentProjectId: project.projectId,
+        projectId: project.projectId,
       },
     });
 
@@ -2444,13 +2581,13 @@ describe('DesktopAppHost', () => {
     ).resolves.toMatchObject({
       requestId: request.requestId,
       workspaceId: resolution.workspaceId,
-      contentProjectId: project.projectId,
-      navigation: [{ identity: `content-project:${project.projectId}` }],
+      projectId: project.projectId,
+      navigation: [{ identity: 'content-document:document-1' }],
     });
     expect(projectAuthoring.getNavigation).toHaveBeenCalledWith({
       workspace: resolution,
-      contentProjectId: project.projectId,
-      contentLabel: project.displayName,
+      projectId: project.projectId,
+      projectLabel: project.displayName,
     });
 
     await expect(
@@ -2464,7 +2601,7 @@ describe('DesktopAppHost', () => {
       fixture.appHost.getProjectAuthoringNavigation(fixture.sender, {
         ...request,
         requestId: 'project-authoring-unregistered',
-        contentProjectId: 'content:unregistered',
+        projectId: 'project:unregistered',
       }),
     ).rejects.toThrow('is not registered for this Workspace');
 
@@ -2473,7 +2610,7 @@ describe('DesktopAppHost', () => {
         ...request,
         requestId: 'project-authoring-after-sibling-failure',
       }),
-    ).resolves.toMatchObject({ contentProjectId: project.projectId });
+    ).resolves.toMatchObject({ projectId: project.projectId });
     await fixture.appHost.dispose();
   });
 
@@ -2514,12 +2651,241 @@ describe('DesktopAppHost', () => {
           binding: {
             workspaceId: resolution.workspaceId,
             workspaceGrantId: scene.context.scope.workspaceGrantId,
-            contentProjectId: project.projectId,
+            projectId: project.projectId,
           },
         }),
       ),
     ).rejects.toThrow();
     expect(projectAuthoring.getNavigation).not.toHaveBeenCalled();
+    await fixture.appHost.dispose();
+  });
+
+  it('delegates Project Content only after exact sender and Project authority validation', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'project-content-open',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+    const scene = activeScene(opened.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('Project Content fixture requires an exact Workspace Scene.');
+    }
+    const request = createProjectContentHostRequest({
+      requestId: 'project-content-read',
+      rendererSessionId: opened.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      binding: {
+        workspaceId: resolution.workspaceId,
+        workspaceGrantId: scene.context.scope.workspaceGrantId,
+        projectId: project.projectId,
+      },
+    });
+
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, request),
+    ).resolves.toMatchObject({
+      requestId: request.requestId,
+      projectId: project.projectId,
+      projection: { projectId: project.projectId },
+    });
+    expect(projectAuthoring.getContent).toHaveBeenCalledWith({
+      workspace: resolution,
+      workspaceId: resolution.workspaceId,
+      projectId: project.projectId,
+    });
+
+    vi.mocked(projectAuthoring.getContent).mockClear();
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, {
+        ...request,
+        requestId: 'project-content-wrong-workspace',
+        workspaceId: 'workspace-other',
+      }),
+    ).rejects.toThrow('grant resolves to another Workspace');
+    expect(projectAuthoring.getContent).not.toHaveBeenCalled();
+
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, {
+        ...request,
+        requestId: 'project-content-after-failure',
+      }),
+    ).resolves.toMatchObject({ projectId: project.projectId });
+    await fixture.appHost.dispose();
+  });
+
+  it('delegates Creative Workspace reads and exact reference mutations through the grant', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'creative-workspace-open',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+    const scene = activeScene(opened.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('Creative Workspace fixture requires an exact Workspace Scene.');
+    }
+    const binding = {
+      workspaceId: resolution.workspaceId,
+      workspaceGrantId: scene.context.scope.workspaceGrantId,
+      projectId: project.projectId,
+    };
+    const workspaceRequest = createProjectCreativeWorkspaceHostRequest({
+      requestId: 'creative-workspace-read',
+      rendererSessionId: opened.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      binding,
+    });
+
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, workspaceRequest),
+    ).resolves.toMatchObject({
+      requestId: workspaceRequest.requestId,
+      ...binding,
+      projection: { composition: { projectId: project.projectId } },
+    });
+    expect(projectAuthoring.getCreativeWorkspace).toHaveBeenCalledWith({
+      workspace: resolution,
+      workspaceId: resolution.workspaceId,
+      projectId: project.projectId,
+    });
+    const mutationRequest = createProjectCreativeWorkspaceMutationHostRequest({
+      requestId: 'creative-workspace-mutation',
+      rendererSessionId: opened.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      binding,
+      mutation: {
+        kind: 'remove',
+        reference: {
+          kind: 'world-version',
+          globalWorldId: 'global-world-1',
+          worldVersionId: 'world-version-1',
+        },
+      },
+    });
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, mutationRequest),
+    ).resolves.toMatchObject({ requestId: mutationRequest.requestId, ...binding });
+    expect(projectAuthoring.mutateCreativeWorkspaceReference).toHaveBeenCalledWith({
+      workspace: resolution,
+      workspaceId: resolution.workspaceId,
+      projectId: project.projectId,
+      mutation: mutationRequest.mutation,
+    });
+
+    await fixture.appHost.dispose();
+  });
+
+  it('aggregates every registered Project target and isolates one Project catalog failure', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const firstWorkspace = {
+      ...createWorkspaceResolution(),
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath: '/workspace/first',
+      displayName: 'First',
+      locator: { kind: 'variable' as const, value: '${HOME}/workspace/first' },
+    };
+    const secondWorkspace = {
+      ...createWorkspaceResolution(),
+      workspaceId: '22222222-2222-4222-8222-222222222222',
+      workspacePath: '/workspace/second',
+      displayName: 'Second',
+      locator: { kind: 'variable' as const, value: '${HOME}/workspace/second' },
+    };
+    fixture.registry.resolve.mockImplementation(async (identity: string) => {
+      if (identity === firstWorkspace.workspacePath || identity === firstWorkspace.workspaceId) {
+        return firstWorkspace;
+      }
+      if (identity === secondWorkspace.workspacePath || identity === secondWorkspace.workspaceId) {
+        return secondWorkspace;
+      }
+      throw new Error(`Unknown Workspace '${identity}'.`);
+    });
+    const firstOpened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'aggregate-project-first',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => firstWorkspace.workspacePath,
+    );
+    const secondOpened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'aggregate-project-second',
+        firstOpened.projection.rendererSessionId,
+      ),
+      async () => secondWorkspace.workspacePath,
+    );
+    const [firstProject, secondProject] = secondOpened.projection.catalog.projects;
+    if (!firstProject || !secondProject) throw new Error('Expected two registered Projects.');
+    vi.mocked(projectAuthoring.getNavigation).mockImplementation(async (input) => {
+      if (input.projectId === firstProject.projectId) {
+        throw new Error('First Project catalog is unreadable.');
+      }
+      return [
+        {
+          kind: 'authoring-target',
+          target: { kind: 'content-document', documentId: 'document-2' },
+          identity: 'content-document:document-2',
+          label: secondProject.displayName,
+        },
+        {
+          kind: 'authoring-target',
+          target: { kind: 'character-project', characterProjectId: 'character-1' },
+          identity: 'character-project:character-1',
+          label: 'Aster',
+        },
+        {
+          kind: 'authoring-target',
+          target: { kind: 'world-project', worldProjectId: 'world-1' },
+          identity: 'world-project:world-1',
+          label: 'Cinder Sea',
+        },
+      ];
+    });
+
+    const request = createProjectAuthoringCatalogHostRequest({
+      requestId: 'project-authoring-catalog',
+      rendererSessionId: secondOpened.projection.rendererSessionId,
+      windowId: fixture.windowId,
+    });
+    await expect(
+      fixture.appHost.getProjectAuthoringNavigation(fixture.sender, request),
+    ).resolves.toMatchObject({
+      requestId: request.requestId,
+      projects: [
+        {
+          projectId: secondProject.projectId,
+          navigation: [
+            { identity: 'content-document:document-2' },
+            { identity: 'character-project:character-1' },
+            { identity: 'world-project:world-1' },
+          ],
+        },
+      ],
+      diagnostics: [
+        {
+          projectId: firstProject.projectId,
+          message: 'First Project catalog is unreadable.',
+        },
+      ],
+    });
     await fixture.appHost.dispose();
   });
 
@@ -2550,13 +2916,13 @@ describe('DesktopAppHost', () => {
     const characterBinding = {
       workspaceId: resolution.workspaceId,
       workspaceGrantId: scene.context.scope.workspaceGrantId,
-      contentProjectId: project.projectId,
+      authority: { kind: 'project' as const, projectId: project.projectId },
       characterProjectId: 'character-1',
     };
     const worldBinding = {
       workspaceId: resolution.workspaceId,
       workspaceGrantId: scene.context.scope.workspaceGrantId,
-      contentProjectId: project.projectId,
+      authority: { kind: 'project' as const, projectId: project.projectId },
       worldProjectId: 'world-1',
     };
 
@@ -2589,7 +2955,7 @@ describe('DesktopAppHost', () => {
     );
     expect(projectAuthoring.executeCharacter).toHaveBeenCalledWith({
       workspace: resolution,
-      contentProjectId: project.projectId,
+      authority: { kind: 'project', projectId: project.projectId },
       characterProjectId: 'character-1',
       command: {
         operation: 'character-project-set-review',
@@ -2626,7 +2992,7 @@ describe('DesktopAppHost', () => {
     );
     expect(projectAuthoring.executeWorld).toHaveBeenCalledWith({
       workspace: resolution,
-      contentProjectId: project.projectId,
+      authority: { kind: 'project', projectId: project.projectId },
       worldProjectId: 'world-1',
       command: {
         operation: 'world-project-set-review',
@@ -2634,7 +3000,7 @@ describe('DesktopAppHost', () => {
       },
     });
     await expect(
-      fixture.appHost.createProjectLocalAuthoringTarget(
+      fixture.appHost.executeProjectLocalAuthoringRequest(
         fixture.sender,
         createProjectLocalAuthoringHostRequest({
           requestId: 'project-local-character-create',
@@ -2643,13 +3009,19 @@ describe('DesktopAppHost', () => {
           binding: {
             workspaceId: resolution.workspaceId,
             workspaceGrantId: scene.context.scope.workspaceGrantId,
-            contentProjectId: project.projectId,
+            projectId: project.projectId,
           },
           create: {
             kind: 'character-project',
             characterProjectId: 'character-created',
             displayName: 'Created Character',
             draft: characterAuthoringSnapshot().project.draft,
+            sources: { evidence: [], assetRepresentations: [] },
+            entity: {
+              kind: 'create',
+              entityId: 'entity-created',
+              name: 'Created Character',
+            },
           },
         }),
       ),
@@ -2659,12 +3031,244 @@ describe('DesktopAppHost', () => {
     expect(projectAuthoring.createLocalTarget).toHaveBeenCalledWith({
       workspace: resolution,
       workspaceId: resolution.workspaceId,
-      contentProjectId: project.projectId,
+      projectId: project.projectId,
       create: expect.objectContaining({
         kind: 'character-project',
         characterProjectId: 'character-created',
+        entity: expect.objectContaining({ kind: 'create', entityId: 'entity-created' }),
       }),
     });
+    await fixture.appHost.dispose();
+  });
+
+  it('binds Character package import to one exact sender and destination', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    vi.mocked(projectAuthoring.importCharacterGlobalPackage).mockResolvedValue('character-imported');
+    const fixture = await createShellAppHost({ projectAuthoring });
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'portable-project-open',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const scene = activeScene(opened.projection);
+    const project = opened.projection.catalog.projects[0]!;
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('Portable project fixture requires an exact Workspace Scene.');
+    }
+    const binding = {
+      workspaceId: resolution.workspaceId,
+      workspaceGrantId: scene.context.scope.workspaceGrantId,
+      authority: { kind: 'project' as const, projectId: project.projectId },
+    };
+    const importRequest = createCharacterPortableHostRequest(
+      {
+        requestId: 'portable-import',
+        rendererSessionId: opened.projection.rendererSessionId,
+        windowId: fixture.windowId,
+      },
+      undefined,
+      { kind: 'import', target: { kind: 'new', globalCharacterId: 'character-imported' } },
+    );
+    const archiveBytes = new Uint8Array([1, 2, 3]);
+    await expect(
+      fixture.appHost.importCharacterPortablePackage(fixture.sender, importRequest, archiveBytes),
+    ).resolves.toEqual({
+      requestId: 'portable-import',
+      status: 'imported',
+      globalCharacterId: 'character-imported',
+    });
+    expect(projectAuthoring.importCharacterGlobalPackage).toHaveBeenCalledWith({
+      archiveBytes,
+      target: { kind: 'new', globalCharacterId: 'character-imported' },
+    });
+    vi.mocked(projectAuthoring.getCharacterSnapshot).mockResolvedValue(
+      characterAuthoringSnapshot(),
+    );
+    await expect(
+      fixture.appHost.executeCharacterAuthoringRequest(
+        fixture.sender,
+        createCharacterAuthoringSnapshotRequest({
+          requestId: 'portable-sibling-still-available',
+          rendererSessionId: opened.projection.rendererSessionId,
+          windowId: fixture.windowId,
+          binding: { ...binding, characterProjectId: 'character-1' },
+        }),
+      ),
+    ).resolves.toMatchObject({ snapshot: { project: { characterProjectId: 'character-1' } } });
+    await fixture.appHost.dispose();
+  });
+
+  it('rejects retired standalone Character authoring before the owner port is called', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    const fixture = await createShellAppHost({ projectAuthoring });
+    await expect(
+      fixture.appHost.executeCharacterAuthoringRequest(fixture.sender, {
+        requestId: 'character-standalone-snapshot',
+        rendererSessionId: fixture.projection.rendererSessionId,
+        windowId: fixture.windowId,
+        operation: 'snapshot-get',
+        workspaceId: 'library-characters',
+        workspaceGrantId: 'grant-character-library',
+        authority: { kind: 'standalone-library' },
+        characterProjectId: 'character-1',
+      }),
+    ).rejects.toThrow();
+    expect(projectAuthoring.getCharacterSnapshot).not.toHaveBeenCalled();
+    await fixture.appHost.dispose();
+  });
+
+  it('rejects retired standalone World authoring before the owner port is called', async () => {
+    const projectAuthoring = createProjectAuthoring();
+    const fixture = await createShellAppHost({ projectAuthoring });
+    await expect(
+      fixture.appHost.executeWorldAuthoringRequest(fixture.sender, {
+        requestId: 'world-standalone-snapshot',
+        rendererSessionId: fixture.projection.rendererSessionId,
+        windowId: fixture.windowId,
+        operation: 'snapshot-get',
+        binding: {
+          workspaceId: 'library-worlds',
+          workspaceGrantId: 'grant-world-library',
+          authority: { kind: 'standalone-library' },
+          worldProjectId: 'world-1',
+        },
+      }),
+    ).rejects.toThrow();
+    expect(projectAuthoring.getWorldSnapshot).not.toHaveBeenCalled();
+    await fixture.appHost.dispose();
+  });
+
+  it('binds World package import bytes to one exact sender and destination', async () => {
+    const worldPortable = createWorldPortableRuntime();
+    const importGlobal = vi.mocked(worldPortable.importGlobal);
+    importGlobal.mockResolvedValue({
+      kind: 'import-completed',
+      worldProjectId: 'world-imported',
+      worldVersionId: 'version-imported',
+    });
+    const fixture = await createShellAppHost({ worldPortable });
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest(
+        'world-portable-project-open',
+        fixture.projection.rendererSessionId,
+      ),
+      async () => resolution.workspacePath,
+    );
+    const scene = activeScene(opened.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('World portable fixture requires an exact Workspace Scene.');
+    }
+    const archiveBytes = new Uint8Array([1, 2, 3]);
+    const importRequest = createWorldPortableHostRequest({
+      requestId: 'world-portable-import',
+      rendererSessionId: opened.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      operation: 'import',
+      target: { kind: 'new', globalWorldId: 'world-imported' },
+    });
+    await expect(
+      fixture.appHost.importWorldPortablePackage(fixture.sender, importRequest, archiveBytes),
+    ).resolves.toMatchObject({
+      requestId: 'world-portable-import',
+      status: 'completed',
+      result: { kind: 'import-completed', worldProjectId: 'world-imported' },
+    });
+    expect(importGlobal).toHaveBeenCalledWith({
+      archiveBytes,
+      target: { kind: 'new', globalWorldId: 'world-imported' },
+    });
+    await fixture.appHost.dispose();
+  });
+
+  it('keeps World Runtime IPC sender-bound and requires its exact active Runtime Scene', async () => {
+    const binding: WorldRuntimeBinding = {
+      worldProjectId: 'world-1',
+      worldVersionId: 'world-version-1',
+      worldRunId: 'world-run-1',
+      worldSaveId: 'world-save-1',
+      branchId: 'branch-main',
+      participantId: 'participant-1',
+      actorId: 'actor-user',
+    };
+    const launch = vi.fn();
+    const read = vi.fn();
+    const fixture = await createShellAppHost({
+      worldRuntime: { launch, read, submitAction: vi.fn() },
+    });
+    const runtimeProjection = worldRuntimeProjection(binding);
+    launch.mockResolvedValue(runtimeProjection);
+    read.mockResolvedValue(runtimeProjection);
+    const launchRequest = createWorldRuntimeLaunchRequest({
+      requestId: 'world-runtime-launch',
+      rendererSessionId: fixture.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      launch: { ...binding, saveLabel: 'First run' },
+    });
+
+    await expect(
+      fixture.appHost.executeWorldRuntimeRequest(fixture.sender, launchRequest),
+    ).resolves.toEqual({ requestId: launchRequest.requestId, projection: runtimeProjection });
+    const snapshotRequest = createWorldRuntimeSnapshotRequest({
+      requestId: 'world-runtime-snapshot',
+      rendererSessionId: fixture.projection.rendererSessionId,
+      windowId: fixture.windowId,
+      binding,
+    });
+    await expect(
+      fixture.appHost.executeWorldRuntimeRequest(fixture.sender, snapshotRequest),
+    ).rejects.toThrow('exact active Runtime Scene');
+    expect(read).not.toHaveBeenCalled();
+
+    const current = await fixture.appHost.shell.getProjection(fixture.windowId);
+    await expect(
+      fixture.appHost.transitionScene(
+        fixture.sender,
+        createDesktopSceneTransitionRequest({
+          requestId: 'world-runtime-scene',
+          rendererSessionId: current.rendererSessionId,
+          windowId: fixture.windowId,
+          sceneId: activeScene(current).sceneId,
+          intent: { kind: 'open-world-runtime', binding },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      status: 'transitioned',
+      scene: { context: { kind: 'world-runtime', binding } },
+    });
+    read.mockClear();
+    await expect(
+      fixture.appHost.executeWorldRuntimeRequest(fixture.sender, snapshotRequest),
+    ).resolves.toEqual({ requestId: snapshotRequest.requestId, projection: runtimeProjection });
+    expect(read).toHaveBeenCalledWith(binding);
+
+    const runtimeScene = await fixture.appHost.shell.getProjection(fixture.windowId);
+    await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'leave-world-runtime',
+        rendererSessionId: runtimeScene.rendererSessionId,
+        windowId: fixture.windowId,
+        sceneId: activeScene(runtimeScene).sceneId,
+        intent: { kind: 'open-agent-entry' },
+      }),
+    );
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledTimes(1);
+    await expect(
+      fixture.appHost.executeWorldRuntimeRequest(fixture.sender, {
+        ...snapshotRequest,
+        requestId: 'world-runtime-after-exit',
+      }),
+    ).rejects.toThrow('exact active Runtime Scene');
+    expect(read).toHaveBeenCalledTimes(1);
     await fixture.appHost.dispose();
   });
 
@@ -3011,8 +3615,6 @@ describe('DesktopAppHost', () => {
           name: 'audio-mixing',
           description: 'Mix audio.',
           source: { kind: 'builtin' as const },
-          trusted: true,
-          enabled: true,
           fingerprint: 'builtin-must-stay-in-main',
           locator: {
             kind: 'skill' as const,
@@ -3024,8 +3626,6 @@ describe('DesktopAppHost', () => {
           name: 'story-planner',
           description: 'Plan a story.',
           source: { kind: 'personal' as const },
-          trusted: true,
-          enabled: true,
           fingerprint: 'must-stay-in-main',
           locator: {
             kind: 'skill' as const,
@@ -3036,9 +3636,7 @@ describe('DesktopAppHost', () => {
         {
           name: 'shot-list',
           description: 'Build a shot list.',
-          source: { kind: 'plugin' as const, pluginId: 'story-tools@openneko' },
-          trusted: true,
-          enabled: true,
+          source: { kind: 'plugin' as const, pluginId: 'story-tools' },
           fingerprint: 'plugin-must-stay-in-main',
           locator: {
             kind: 'skill' as const,
@@ -3075,39 +3673,30 @@ describe('DesktopAppHost', () => {
           shadowedSource: 'plugin' as const,
         },
       ],
+      commands: { records: [], diagnostics: [] },
     });
     fixture.extensionManager.readCatalog.mockResolvedValue({
       records: [
         {
-          id: 'computer-use@openneko',
+          id: 'computer-use',
           name: 'computer-use',
           displayName: 'Computer Use',
           description: 'Control Mac apps.',
           localization: {},
           version: '1.0.2',
           developer: 'OpenAI',
-          marketplace: 'openneko',
-          category: 'Productivity',
-          installed: true,
           enabled: true,
-          canInstall: false,
-          canUpdate: false,
           canEnable: false,
           canDisable: true,
           canRemove: false,
-          updatePackageRelease: '',
-          deliverySource: 'official-download',
-          artifactPlatform: 'darwin-arm64',
-          downloadSizeBytes: 64_208_172,
-          artifactStatus: 'installed',
-          dependencyStatus: 'ready',
-          enableGrantStatus: 'accepted',
-          hostPermissionStatus: 'granted',
-          qualificationStatus: 'qualified',
-          declaredPermissions: ['accessibility', 'screen-recording'],
-          acceptedPermissions: ['accessibility', 'screen-recording'],
+          deliverySource: 'bundled',
           agentStatus: 'ready',
           runtimeDiagnosticCode: '',
+          componentReadiness: {
+            skills: { status: 'ready', diagnosticCode: '' },
+            mcp: { status: 'ready', diagnosticCode: '' },
+            apps: { status: 'absent', diagnosticCode: '' },
+          },
           iconDataUrl: '',
           mcpServerIds: ['computer-use'],
           hasSkills: true,
@@ -3134,16 +3723,20 @@ describe('DesktopAppHost', () => {
         description: 'Plan a story.',
         source: 'personal',
         sourceId: 'personal',
-        managementId: '',
-        canRemove: false,
+        managementId: `skill:${'a'.repeat(64)}`,
+        canOpenInEditor: true,
+        canShowInFolder: true,
+        canRemove: true,
       },
       {
-        id: 'plugin:story-tools@openneko:shot-list',
+        id: 'plugin:story-tools:shot-list',
         name: 'shot-list',
         description: 'Build a shot list.',
         source: 'plugin',
-        sourceId: 'story-tools@openneko',
+        sourceId: 'story-tools',
         managementId: '',
+        canOpenInEditor: false,
+        canShowInFolder: false,
         canRemove: false,
       },
     ]);
@@ -3153,7 +3746,7 @@ describe('DesktopAppHost', () => {
     });
     expect(result.projection.extensions).toEqual([
       expect.objectContaining({
-        id: 'computer-use@openneko',
+        id: 'computer-use',
         mcpServerIds: ['computer-use'],
         hasSkills: true,
       }),
@@ -3218,48 +3811,42 @@ describe('DesktopAppHost', () => {
     ).rejects.toThrow('does not match the active Scene');
   });
 
-  it('keeps user-managed endpoint authorization sender-bound and delegates no service lifecycle', async () => {
-    const automationEndpoints: DesktopAppHostOptions['automationEndpoints'] = {
+  it('keeps local runtime authorization sender-bound and passes no Host path contract', async () => {
+    const automationLocalRuntimes: DesktopAppHostOptions['automationLocalRuntimes'] = {
       list: vi.fn(async () => []),
-      configure: vi.fn(async (configuration) => [
-        {
-          connectorId: configuration.connectorId,
-          displayName: 'Browser Use 0.13.7',
-          providerKind: 'browser' as const,
-          upstreamRelease: '0.13.7',
-          configured: true,
-          endpointId: configuration.endpointId,
-          endpointUrl: configuration.url,
-          authorizationState: 'configured' as const,
-          healthStatus: 'reachable' as const,
-          providerStatus: 'matched' as const,
-          qualificationStatus: 'qualified' as const,
-          diagnostics: [],
-        },
-      ]),
-      remove: vi.fn(async () => []),
+      openInstallationGuide: vi.fn(async () => []),
+      copyInstallationCommand: vi.fn(async () => []),
+      authorizeAsset: vi.fn(async () => []),
+      recheck: vi.fn(async () => []),
+      disconnect: vi.fn(async () => []),
     };
-    const fixture = await createShellAppHost({ automationEndpoints });
+    const fixture = await createShellAppHost({ automationLocalRuntimes });
     const extensions = await openExtensionsScene(fixture);
-    const configuration = {
-      connectorId: 'browser-use.observe.endpoint',
-      endpointId: 'endpoint-1',
-      url: 'https://browser.example/mcp',
-      authorization: { kind: 'bearer', secret: 'host-only' } as const,
-    };
-    const request = parseAutomationEndpointManagementHostRequest({
-      requestId: 'endpoint-configure-1',
+    const request = parseAutomationLocalRuntimeManagementHostRequest({
+      requestId: 'local-runtime-authorize-1',
       identity: extensions.identity,
-      route: 'endpoint.configure',
-      configuration,
+      route: 'asset.authorize',
+      sourceId: 'browser-use.observe.local',
+      assetKey: 'provider-runtime',
     });
 
-    await fixture.appHost.executeAutomationEndpointManagement(fixture.sender, request);
-    expect(automationEndpoints.configure).toHaveBeenCalledWith(configuration);
-    expect(automationEndpoints.list).not.toHaveBeenCalled();
-    expect(Object.keys(automationEndpoints).sort()).toEqual(['configure', 'list', 'remove']);
+    await fixture.appHost.executeAutomationLocalRuntimeManagement(fixture.sender, request);
+    expect(automationLocalRuntimes.authorizeAsset).toHaveBeenCalledWith(
+      'browser-use.observe.local',
+      'provider-runtime',
+      fixture.windowId,
+    );
+    expect(JSON.stringify(request)).not.toContain('/Users');
+    expect(Object.keys(automationLocalRuntimes).sort()).toEqual([
+      'authorizeAsset',
+      'copyInstallationCommand',
+      'disconnect',
+      'list',
+      'openInstallationGuide',
+      'recheck',
+    ]);
     await expect(
-      fixture.appHost.executeAutomationEndpointManagement(fixture.sender, {
+      fixture.appHost.executeAutomationLocalRuntimeManagement(fixture.sender, {
         ...request,
         identity: { windowId: 'window-2' },
       }),
@@ -3442,7 +4029,7 @@ describe('DesktopAppHost', () => {
     const fixture = await createShellAppHost();
     const extensions = await openExtensionsScene(fixture);
     vi.mocked(fixture.extensionManager.removePlugin).mockRejectedValue(
-      new Error("OpenNeko extension 'computer-use@openneko' runtime is owned."),
+      new Error("OpenNeko extension 'computer-use' runtime is owned."),
     );
 
     await expect(
@@ -3452,60 +4039,78 @@ describe('DesktopAppHost', () => {
           route: 'plugin.remove',
           requestId: 'plugin-remove-1',
           identity: extensions.identity,
-          pluginId: 'computer-use@openneko',
+          pluginId: 'computer-use',
         }),
       ),
     ).rejects.toThrow('runtime is owned');
-    expect(fixture.extensionManager.removePlugin).toHaveBeenCalledWith('computer-use@openneko');
+    expect(fixture.extensionManager.removePlugin).toHaveBeenCalledWith('computer-use');
     expect(fixture.agent.hasActiveTurns).not.toHaveBeenCalled();
 
-    vi.mocked(fixture.extensionManager.updatePlugin).mockRejectedValue(
-      new Error("OpenNeko extension 'computer-use@openneko' update is owned."),
+    await fixture.appHost.executeExtensionManagement(
+      fixture.sender,
+      createAgentExtensionManagementHostRequest({
+        route: 'sources.rescan',
+        requestId: 'sources-rescan-1',
+        identity: extensions.identity,
+      }),
     );
-    await expect(
-      fixture.appHost.executeExtensionManagement(
-        fixture.sender,
-        createAgentExtensionManagementHostRequest({
-          route: 'plugin.update',
-          requestId: 'plugin-update-1',
-          identity: extensions.identity,
-          pluginId: 'computer-use@openneko',
-        }),
-      ),
-    ).rejects.toThrow('update is owned');
-    expect(fixture.extensionManager.updatePlugin).toHaveBeenCalledWith('computer-use@openneko');
-    expect(fixture.agent.hasActiveTurns).not.toHaveBeenCalled();
+    expect(fixture.extensionManager.rescanSources).toHaveBeenCalledOnce();
+  });
 
-    vi.mocked(fixture.extensionManager.readArtifactOperations).mockReturnValue([
-      {
-        operationId: 'artifact-operation-1',
-        pluginId: 'computer-use@openneko',
-        kind: 'update',
-        phase: 'downloading',
-        status: 'active',
-        transferredBytes: 32,
-        totalBytes: 64,
-        canCancel: true,
-        diagnosticCode: '',
-      },
-    ]);
-    await expect(
-      fixture.appHost.executeExtensionManagement(
-        fixture.sender,
-        createAgentExtensionManagementHostRequest({
-          route: 'plugin.operation.cancel',
-          requestId: 'plugin-operation-cancel-1',
-          identity: extensions.identity,
-          operationId: 'artifact-operation-1',
-        }),
-      ),
-    ).resolves.toMatchObject({
-      projection: {
-        operations: [expect.objectContaining({ operationId: 'artifact-operation-1' })],
-      },
-    });
-    expect(fixture.extensionManager.cancelArtifactOperation).toHaveBeenCalledWith(
-      'artifact-operation-1',
+  it('delegates personal Skill host actions through an opaque current management identity', async () => {
+    const fixture = await createShellAppHost();
+    const extensions = await openExtensionsScene(fixture);
+    const managementId = `skill:${'a'.repeat(64)}`;
+
+    await fixture.appHost.executeExtensionManagement(
+      fixture.sender,
+      createAgentExtensionManagementHostRequest({
+        route: 'skill.open',
+        requestId: 'skill-open-1',
+        identity: extensions.identity,
+        managementId,
+      }),
+    );
+    await fixture.appHost.executeExtensionManagement(
+      fixture.sender,
+      createAgentExtensionManagementHostRequest({
+        route: 'skill.reveal',
+        requestId: 'skill-reveal-1',
+        identity: extensions.identity,
+        managementId,
+      }),
+    );
+
+    expect(fixture.personalSkillManager.openInEditor).toHaveBeenCalledWith(
+      managementId,
+      expect.any(Array),
+    );
+    expect(fixture.personalSkillManager.showInFolder).toHaveBeenCalledWith(
+      managementId,
+      expect.any(Array),
+    );
+    expect(
+      JSON.stringify(vi.mocked(fixture.personalSkillManager.openInEditor).mock.calls),
+    ).not.toContain('/Users');
+  });
+
+  it('keeps the selected local Plugin path in Main and delegates only the authorized path', async () => {
+    const selectLocalPluginDirectory = vi.fn(async () => '/Users/fixture/Downloads/local-plugin');
+    const fixture = await createShellAppHost({ selectLocalPluginDirectory });
+    const extensions = await openExtensionsScene(fixture);
+
+    await fixture.appHost.executeExtensionManagement(
+      fixture.sender,
+      createAgentExtensionManagementHostRequest({
+        route: 'plugin.install',
+        requestId: 'plugin-install-1',
+        identity: extensions.identity,
+      }),
+    );
+
+    expect(selectLocalPluginDirectory).toHaveBeenCalledWith(fixture.windowId);
+    expect(fixture.extensionManager.installLocalPlugin).toHaveBeenCalledWith(
+      '/Users/fixture/Downloads/local-plugin',
     );
   });
 
@@ -3984,7 +4589,10 @@ function createConversationLifecycle() {
   return createAgentConversationLifecycleService({
     repository: createInMemoryAgentConversationLifecycleRepository(),
     grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-    domainContext: { resolveForTurn: async () => [] },
+    domainContext: {
+      resolveCapabilityConstraint: standardCapabilityConstraint,
+      resolveForTurn: async () => [],
+    },
     scratch: {
       create: async () => undefined,
       release: async () => undefined,
@@ -4010,11 +4618,10 @@ function targetSelectionProjection() {
     authorizationId: 'authorization-1',
     profileId: 'computer.observe',
     provider: {
-      extensionId: 'computer-use@openneko',
+      extensionId: 'computer-use',
       providerId: 'cua-driver',
       kind: 'computer' as const,
-      upstreamRelease: '0.19.2',
-      deliverySource: { kind: 'github-release' as const },
+      deliverySource: { kind: 'bundled-adapter' as const },
     },
     mode: 'observe' as const,
     timeoutMs: 30_000,
@@ -4041,10 +4648,9 @@ function sessionControlProjection() {
     sessionId: 'session-1',
     profileId: 'computer.observe',
     provider: {
-      extensionId: 'computer-use@openneko',
+      extensionId: 'computer-use',
       providerId: 'cua-driver',
       kind: 'computer' as const,
-      upstreamRelease: '0.19.2',
     },
     target: { kind: 'computer' as const, targetKey: 'target-1', label: 'Editor' },
     mode: 'observe' as const,
@@ -4071,14 +4677,16 @@ async function createShellAppHost(options?: {
   readonly textEditor?: DesktopAppHostOptions['textEditor'];
   readonly projectAuthoring?: DesktopAppHostOptions['projectAuthoring'];
   readonly characterFoundationCommands?: DesktopAppHostOptions['characterFoundationCommands'];
-  readonly worldFoundationCommands?: DesktopAppHostOptions['worldFoundationCommands'];
+  readonly worldPortable?: DesktopAppHostOptions['worldPortable'];
+  readonly worldRuntime?: DesktopAppHostOptions['worldRuntime'];
   readonly characterInteractions?: DesktopAppHostOptions['characterInteractions'];
   readonly characterRoomConversations?: DesktopAppHostOptions['characterRoomConversations'];
   readonly characterRoomWorkbench?: DesktopAppHostOptions['characterRoomWorkbench'];
-  readonly automationEndpoints?: DesktopAppHostOptions['automationEndpoints'];
+  readonly automationLocalRuntimes?: DesktopAppHostOptions['automationLocalRuntimes'];
   readonly automationPermissions?: DesktopAppHostOptions['automationPermissions'];
   readonly automationTargetSelections?: DesktopAppHostOptions['automationTargetSelections'];
   readonly automationSessions?: DesktopAppHostOptions['automationSessions'];
+  readonly selectLocalPluginDirectory?: DesktopAppHostOptions['selectLocalPluginDirectory'];
   readonly runtimeEntry?: Parameters<
     typeof createAgentLaunchDraftSubmissionApplicationService
   >[0]['runtimeEntry'];
@@ -4087,6 +4695,7 @@ async function createShellAppHost(options?: {
   const fixture = createShellFixture('app-1');
   const agent = createAgentComposition();
   const extensionManager = createExtensionManager();
+  const personalSkillManager = createPersonalSkillManager();
   const agentLaunch = options?.agentLaunch ?? createAgentLaunchRuntime();
   const conversationLifecycle = options?.conversationLifecycle ?? createConversationLifecycle();
   const agentDomainBindings = createAgentDomainBindingApplicationService({
@@ -4113,6 +4722,7 @@ async function createShellAppHost(options?: {
       }),
     },
     runtimeEntry: options?.runtimeEntry ?? {
+      validate: async () => undefined,
       materialize: async () => {
         throw new Error('Formal runtime Entry owner is unavailable in this fixture.');
       },
@@ -4184,15 +4794,15 @@ async function createShellAppHost(options?: {
     agentLaunch,
     agentLaunchSubmission,
     workspaceGrants: fixture.workspaceGrants,
-    authoringLibraryRoots: createAuthoringLibraryRoots(),
     conversationLifecycle,
     assistantResources: options?.assistantResources,
     assetCenter: options?.assetCenter,
     resourceBrowser: options?.resourceBrowser,
     textEditor: options?.textEditor,
     extensionManager,
-    personalSkillManager: createPersonalSkillManager(),
-    automationEndpoints: options?.automationEndpoints ?? createAutomationEndpoints(),
+    selectLocalPluginDirectory: options?.selectLocalPluginDirectory,
+    personalSkillManager,
+    automationLocalRuntimes: options?.automationLocalRuntimes ?? createAutomationLocalRuntimes(),
     automationPermissions: options?.automationPermissions ?? {
       list: async () => [],
       request: async () => [],
@@ -4203,8 +4813,9 @@ async function createShellAppHost(options?: {
     characterFoundation: createCharacterFoundationService(),
     characterFoundationCommands:
       options?.characterFoundationCommands ?? createCharacterFoundationCommands(),
-    worldFoundation: createWorldFoundationService(),
-    worldFoundationCommands: options?.worldFoundationCommands ?? createWorldFoundationCommands(),
+    worldManagement: createWorldManagementService(),
+    worldPortable: options?.worldPortable ?? createWorldPortableRuntime(),
+    worldRuntime: options?.worldRuntime ?? createWorldRuntimeWorkbench(),
     characterInteractions: options?.characterInteractions ?? createCharacterInteractions(),
     characterRoomConversations:
       options?.characterRoomConversations ?? createCharacterRoomConversations(),
@@ -4225,6 +4836,7 @@ async function createShellAppHost(options?: {
     appHost,
     agent,
     extensionManager,
+    personalSkillManager,
     registry: fixture.registry,
     windowId,
     sender: {
@@ -4237,19 +4849,25 @@ async function createShellAppHost(options?: {
 
 function createCharacterFoundationService(): CharacterFoundationService {
   return new CharacterFoundationService({
-    characterCatalog: {
+    globalCatalog: {
       readCatalog: async () => ({
-        projects: [],
+        characters: [],
         versions: [],
+        links: [],
+        diagnostics: [],
+      }),
+    },
+    runtime: {
+      readRuntimeCatalog: async () => ({
         relationships: [],
         characterRuns: [],
         dialogueRuns: [],
         rooms: [],
         roomRuns: [],
+        storylines: [],
+        storylineDrafts: [],
         storylineVersions: [],
-        storylineRuns: [],
-        storylineObservationCandidates: [],
-        memoryScopes: [],
+        companionContinuities: [],
         presentationConfigurations: [],
         diagnostics: [],
       }),
@@ -4259,18 +4877,80 @@ function createCharacterFoundationService(): CharacterFoundationService {
 
 function createProjectAuthoring(): DesktopAppHostOptions['projectAuthoring'] {
   return {
-    ensureComposition: vi.fn(async () => undefined),
     getNavigation: vi.fn(async () => []),
+    getContent: vi.fn(async ({ projectId }) => ({
+      projectId,
+      characters: [],
+      worlds: [],
+      elements: [],
+      candidates: [],
+      diagnostics: [],
+    })),
+    getCreativeWorkspace: vi.fn(async ({ projectId }) => ({
+      composition: {
+        projectId,
+        content: [],
+        characters: [],
+        worlds: [],
+        globalCharacters: [],
+        globalWorlds: [],
+        availableGlobalCharacters: [],
+        availableGlobalWorlds: [],
+        diagnostics: [],
+      },
+    })),
+    mutateCreativeWorkspaceReference: vi.fn(async ({ projectId }) => ({
+      composition: {
+        projectId,
+        content: [],
+        characters: [],
+        worlds: [],
+        globalCharacters: [],
+        globalWorlds: [],
+        availableGlobalCharacters: [],
+        availableGlobalWorlds: [],
+        diagnostics: [],
+      },
+    })),
+    mutateCreativeWorkspaceObject: vi.fn(async ({ projectId }) => ({
+      composition: {
+        projectId,
+        content: [],
+        characters: [],
+        worlds: [],
+        globalCharacters: [],
+        globalWorlds: [],
+        availableGlobalCharacters: [],
+        availableGlobalWorlds: [],
+        diagnostics: [],
+      },
+    })),
     createLocalTarget: vi.fn(async ({ create }) =>
       create.kind === 'character-project'
-        ? { kind: 'character-project' as const, characterProjectId: create.characterProjectId }
-        : { kind: 'world-project' as const, worldProjectId: create.worldProjectId },
+        ? {
+            status: 'created' as const,
+            target: {
+              kind: 'character-project' as const,
+              characterProjectId: create.characterProjectId,
+            },
+          }
+        : {
+            status: 'created' as const,
+            target: { kind: 'world-project' as const, worldProjectId: create.worldProjectId },
+          },
     ),
     getCharacterSnapshot: vi.fn(async () => {
       throw new Error('Character authoring snapshot is not expected by this test.');
     }),
     executeCharacter: vi.fn(async () => {
       throw new Error('Character authoring command is not expected by this test.');
+    }),
+    getCharacterPortableExportScope: vi.fn(async () => {
+      throw new Error('Character package export scope is not expected by this test.');
+    }),
+    exportCharacterPackage: vi.fn(async () => new Uint8Array()),
+    importCharacterGlobalPackage: vi.fn(async () => {
+      throw new Error('Character package import is not expected by this test.');
     }),
     getWorldSnapshot: vi.fn(async () => {
       throw new Error('World authoring snapshot is not expected by this test.');
@@ -4281,33 +4961,73 @@ function createProjectAuthoring(): DesktopAppHostOptions['projectAuthoring'] {
   };
 }
 
-function createAuthoringLibraryRoots(): DesktopAppHostOptions['authoringLibraryRoots'] {
-  return {
-    character: { label: 'Characters', hostResource: '/libraries/characters' },
-    world: { label: 'Worlds', hostResource: '/libraries/worlds' },
-  };
-}
-
 function createCharacterFoundationCommands() {
   return { execute: vi.fn(async () => undefined) };
 }
 
-function createWorldFoundationService(): WorldFoundationService {
-  return new WorldFoundationService({
-    catalog: {
-      readCatalog: async () => ({ projects: [], versions: [], runtimes: [], diagnostics: [] }),
+function createWorldManagementService(): WorldManagementService {
+  return new WorldManagementService({
+    globalCatalog: {
+      readCatalog: async () => ({ worlds: [], versions: [], links: [], diagnostics: [] }),
     },
+    runtime: { readRuntimeCatalog: async () => ({ runtimes: [], diagnostics: [] }) },
   });
 }
 
-function createWorldFoundationCommands() {
-  return { execute: vi.fn(async () => undefined) };
+function createWorldRuntimeWorkbench(): DesktopAppHostOptions['worldRuntime'] {
+  return {
+    launch: vi.fn(async () => {
+      throw new Error('World Runtime launch is not expected by this test.');
+    }),
+    read: vi.fn(async () => {
+      throw new Error('World Runtime read is not expected by this test.');
+    }),
+    submitAction: vi.fn(async () => {
+      throw new Error('World Runtime action is not expected by this test.');
+    }),
+  };
+}
+
+function createWorldPortableRuntime(): DesktopAppHostOptions['worldPortable'] {
+  return {
+    exportPackage: vi.fn(async () => {
+      throw new Error('World portable export is not expected by this test.');
+    }),
+    importGlobal: vi.fn(async () => {
+      throw new Error('World portable import is not expected by this test.');
+    }),
+  };
+}
+
+function worldRuntimeProjection(binding: WorldRuntimeBinding): WorldRuntimeProjection {
+  return {
+    binding,
+    status: 'ready',
+    background: 'Archive City',
+    locations: [],
+    facts: [],
+    availableActions: ['world.foundation.fact.set'],
+    participants: [
+      {
+        participantId: binding.participantId,
+        ...(binding.actorId === undefined ? {} : { actorId: binding.actorId }),
+      },
+    ],
+    worldStateRevision: 0,
+    timepoint: 0,
+    branches: [{ branchId: binding.branchId, active: true, eventCount: 0 }],
+    timeline: [],
+    diagnostics: [],
+  };
 }
 
 function createCharacterInteractions() {
   return {
-    submitTurn: vi.fn(async () => {
-      throw new Error('Character interaction submission is not expected by this test.');
+    prepareTurn: vi.fn(async () => {
+      throw new Error('Character turn preparation is not expected by this test.');
+    }),
+    freezePreparedTurn: vi.fn(async () => {
+      throw new Error('Character turn freezing is not expected by this test.');
     }),
   };
 }
@@ -4485,6 +5205,9 @@ async function openExtensionsScene(fixture: Awaited<ReturnType<typeof createShel
 
 function createExtensionManager(): AgentExtensionManager & {
   readonly readCatalog: ReturnType<typeof vi.fn<() => Promise<AgentExtensionCatalogSnapshot>>>;
+  readonly installLocalPlugin: ReturnType<
+    typeof vi.fn<(sourcePath: string) => Promise<AgentExtensionCatalogSnapshot>>
+  >;
 } {
   return {
     readCatalog: vi.fn<() => Promise<AgentExtensionCatalogSnapshot>>(async () => ({
@@ -4492,14 +5215,15 @@ function createExtensionManager(): AgentExtensionManager & {
       runtimeDescriptors: [],
       diagnostics: [],
     })),
-    readArtifactOperations: vi.fn(() => []),
-    cancelArtifactOperation: vi.fn(),
-    installPlugin: vi.fn(),
-    updatePlugin: vi.fn(),
+    installLocalPlugin: vi.fn(async () => ({
+      records: [],
+      runtimeDescriptors: [],
+      diagnostics: [],
+    })),
     enablePlugin: vi.fn(),
     disablePlugin: vi.fn(),
     removePlugin: vi.fn(),
-    refreshMarketplaces: vi.fn(),
+    rescanSources: vi.fn(),
     setRuntimeReadiness: vi.fn(),
   };
 }
@@ -4507,8 +5231,18 @@ function createExtensionManager(): AgentExtensionManager & {
 function createPersonalSkillManager(): PersonalSkillManager {
   return {
     install: vi.fn(),
+    openInEditor: vi.fn(),
+    showInFolder: vi.fn(),
     remove: vi.fn(),
-    resolveManagementId: vi.fn(async () => undefined),
+    projectManagement: vi.fn<PersonalSkillManager['projectManagement']>(async (records) =>
+      records
+        .filter((record) => record.source.kind === 'personal')
+        .map((record) => ({
+          managementId: `skill:${'a'.repeat(64)}`,
+          name: record.name,
+          fingerprint: record.fingerprint,
+        })),
+    ),
   };
 }
 
@@ -4559,6 +5293,7 @@ function createAgentComposition(): AgentAppHost & {
       records: [],
       diagnostics: [],
       warnings: [],
+      commands: { records: [], diagnostics: [] },
     })),
     hasActiveTurns: vi.fn(() => false),
     listActivePluginTurns: vi.fn(() => []),
@@ -4710,6 +5445,7 @@ function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime
     clearContext: unavailable,
     compactContext: unavailable,
     readSkillCatalog: unavailable,
+    invokeCommand: unavailable,
     readCapabilityPromptFragments: () => [],
     listConversations: () => [],
     readConversationEvidence: () => {
@@ -4746,13 +5482,14 @@ function createTestPiModels() {
   });
 }
 
-function createAutomationEndpoints() {
+function createAutomationLocalRuntimes(): DesktopAppHostOptions['automationLocalRuntimes'] {
   return {
     list: async () => [],
-    configure: async () => {
-      throw new Error('Automation endpoint configuration is not expected by this AppHost test.');
-    },
-    remove: async () => [],
+    openInstallationGuide: async () => [],
+    copyInstallationCommand: async () => [],
+    authorizeAsset: async () => [],
+    recheck: async () => [],
+    disconnect: async () => [],
   };
 }
 
@@ -4802,6 +5539,12 @@ function characterAuthoringSnapshot() {
       updatedAt: '2026-08-11T00:00:00.000Z',
     },
     versions: [],
+    authoringTestSnapshots: [],
+    storylines: [],
+    storylineDrafts: [],
+    storylineVersions: [],
+    lineage: null,
+    referenceInventories: [],
     diagnostics: [],
   };
 }
@@ -4847,7 +5590,8 @@ function activeScene(projection: DesktopShellProjection) {
 }
 
 function currentAgentSurfaceId(projection: DesktopShellProjection): string {
-  const agentSurfaceId = activeWorkbench(projection).scene.slots.interaction?.agentSurfaceId;
+  const interaction = activeWorkbench(projection).scene.slots.interaction;
+  const agentSurfaceId = interaction?.kind === 'agent' ? interaction.agentSurfaceId : undefined;
   if (!agentSurfaceId) throw new Error('Expected an exact active Agent Surface.');
   return agentSurfaceId;
 }

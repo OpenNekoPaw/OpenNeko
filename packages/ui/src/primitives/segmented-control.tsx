@@ -40,7 +40,8 @@ export function SegmentedControl({
     0,
     options.findIndex((option) => option.value === value),
   );
-  const thumbWidth = `${100 / Math.max(options.length, 1)}%`;
+  const segmentCount = Math.max(options.length, 1);
+  const thumbWidth = `calc((100% - ${SEGMENTED_CONTROL_HORIZONTAL_INSET * 2}px) / ${segmentCount})`;
 
   return (
     <div
@@ -156,11 +157,13 @@ const SEGMENTED_CONTROL_STYLE: React.CSSProperties = {
   overflow: 'hidden',
 };
 
+const SEGMENTED_CONTROL_HORIZONTAL_INSET = 2;
+
 const SEGMENTED_CONTROL_THUMB_STYLE: React.CSSProperties = {
   position: 'absolute',
   top: 2,
   bottom: 2,
-  left: 2,
+  left: SEGMENTED_CONTROL_HORIZONTAL_INSET,
   border: '1px solid rgba(255, 255, 255, 0.58)',
   borderRadius: 999,
   background: 'var(--neko-button-background, #0e639c)',

@@ -1,3 +1,10 @@
+> Supersession notice (2026-08-13):
+> [`separate-project-facts-local-state-and-media-bindings`](../separate-project-facts-local-state-and-media-bindings/)
+> replaces this change's `neko/assets` workspace-file locator, project OS-link topology, and blanket
+> workspace `.neko` assumptions. Requirement derivation, explicit confirmed recovery, fail-local status,
+> and reference-scoped atomic portable collection remain valid; follow-on implementation must use the
+> successor's Media Library locator and target-free project-local binding.
+
 ## Why
 
 Workspace Media Library links keep large shared media out of each project, but the machine-local

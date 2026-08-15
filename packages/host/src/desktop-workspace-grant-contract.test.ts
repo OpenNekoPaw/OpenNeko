@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDesktopContentProjectTargetRequest,
-  createDesktopWorkspaceAuthoringLibraryTargetRequest,
   createDesktopWorkspaceDirectoryTargetRequest,
   createDesktopWorkspaceProjectTargetRequest,
+  parseDesktopWorkspaceGrantTargetRequest,
   parseDesktopWorkspaceGrantTargetResult,
 } from './desktop-workspace-grant-contract';
 
@@ -69,7 +69,7 @@ describe('Desktop Workspace grant contract', () => {
     ).toMatchObject({ operation: 'select-project', projectId: 'project-1' });
   });
 
-  it('keeps Content creation and configured authoring libraries as closed Host operations', () => {
+  it('keeps Content creation as a closed Host operation', () => {
     expect(
       createDesktopContentProjectTargetRequest({
         requestId: 'request-content',
@@ -77,14 +77,6 @@ describe('Desktop Workspace grant contract', () => {
         windowId: 'window-1',
       }),
     ).toMatchObject({ operation: 'create-content-project' });
-    expect(
-      createDesktopWorkspaceAuthoringLibraryTargetRequest({
-        requestId: 'request-library',
-        rendererSessionId: 'epoch-1',
-        windowId: 'window-1',
-        library: 'character',
-      }),
-    ).toMatchObject({ operation: 'select-authoring-library', library: 'character' });
     expect(
       parseDesktopWorkspaceGrantTargetResult({
         requestId: 'request-content',
@@ -98,5 +90,17 @@ describe('Desktop Workspace grant contract', () => {
         },
       }),
     ).toMatchObject({ status: 'authorized-project', projectId: 'content:workspace-1' });
+  });
+
+  it('rejects the retired domain-library grant operation', () => {
+    expect(() =>
+      parseDesktopWorkspaceGrantTargetRequest({
+        requestId: 'request-library',
+        rendererSessionId: 'epoch-1',
+        windowId: 'window-1',
+        operation: 'select-domain-library',
+        library: 'character',
+      }),
+    ).toThrow("Unknown Desktop Workspace target operation 'select-domain-library'");
   });
 });

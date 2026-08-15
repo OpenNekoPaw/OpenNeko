@@ -1,5 +1,8 @@
 ## 1. Gameplay owner
 
+> Keep all tasks gated until a real Gameplay consumer and persistence path are qualified; the deterministic
+> Foundation Workbench does not satisfy this gate.
+
 - [ ] 1.1 定义 Gameplay definition/session/seat/action/state/outcome contracts、strict codecs 和 repository ports。
 - [ ] 1.2 实现 rule validation、ordered gameplay commit、result verification 与 record-local diagnostics。
 

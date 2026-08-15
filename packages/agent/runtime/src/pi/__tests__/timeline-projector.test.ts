@@ -51,6 +51,14 @@ describe('Pi Timeline projector', () => {
     });
 
     projector.emit(event({ type: 'turn.started' }));
+    projector.emit(
+      event({
+        type: 'skill.activated',
+        skillName: 'fixture-skill',
+        source: 'project',
+        fingerprint: 'sha256:fixture-skill',
+      }),
+    );
     projector.emit(event({ type: 'assistant.thinking.delta', delta: 'plan', sourceIndex: 0 }));
     projector.emit(event({ type: 'assistant.text.delta', delta: 'answer', sourceIndex: 1 }));
     projector.emit(

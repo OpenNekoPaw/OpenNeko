@@ -1,10 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createNodeHostContentReadService } from '@neko/content/node';
-import {
-  type ContentLocator,
-  type ContentReadService,
-  type GeneratedOutputContentLocator,
-} from '@neko/content';
+import { type ContentReadService, type GeneratedOutputContentLocator } from '@neko/content';
 import {
   beginCanvasGenerationRun,
   bindCanvasGenerationNodeJob,
@@ -15,8 +11,6 @@ import {
   type CanvasGenerationApplicationPort,
   type CanvasGenerationKind,
   type CanvasGenerationModelBinding,
-  type CanvasGenerationRecipe,
-  type CanvasGenerationResolvedInput,
   type CanvasGenerationRunBinding,
   type CanvasGenerationRuntimeProjection,
   type CanvasGenerationStartResult,
@@ -24,6 +18,7 @@ import {
 } from '@neko/canvas-domain';
 import {
   GenerationJobError,
+  projectGenerationRecipeRequest,
   type GenerationJobPort,
   type GenerationJobRequest,
   type GenerationJobSnapshot,
@@ -271,7 +266,7 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
       },
     });
     const fingerprint = fingerprintValue({ recipe: node.data.recipe, inputs });
-    return { request: projectGenerationRequest(node.data.recipe, inputs), fingerprint };
+    return { request: projectGenerationRecipeRequest(node.data.recipe, inputs), fingerprint };
   }
 
   private requireWorkspaceJobs(workspace: CanvasGenerationWorkspace): Promise<GenerationJobPort> {
@@ -323,111 +318,6 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
   }
 }
 
-function projectGenerationRequest(
-  recipe: CanvasGenerationRecipe,
-  inputs: readonly CanvasGenerationResolvedInput[],
-): GenerationJobRequest {
-  if (!recipe.prompt.trim() || !recipe.model) {
-    throw new Error('Canvas Generation Recipe is not executable.');
-  }
-  const textInputs = inputs.filter(
-    (entry): entry is Extract<CanvasGenerationResolvedInput, { kind: 'text' }> =>
-      entry.kind === 'text',
-  );
-  const prompt = [recipe.prompt, ...textInputs.map((entry) => entry.text)]
-    .filter((value) => value.trim().length > 0)
-    .join('\n\n');
-  const binding = { providerId: recipe.model.providerId, modelId: recipe.model.modelId };
-  switch (recipe.kind) {
-    case 'prompt':
-      return {
-        generationType: 'prompt',
-        ...binding,
-        request: {
-          prompt: recipe.prompt,
-          ...(textInputs.length > 0 ? { context: textInputs } : {}),
-          ...(recipe.temperature === undefined ? {} : { temperature: recipe.temperature }),
-          ...(recipe.maxOutputTokens === undefined
-            ? {}
-            : { maxOutputTokens: recipe.maxOutputTokens }),
-        },
-      };
-    case 'image': {
-      const image = uniqueLocator(inputs, 'image');
-      return {
-        generationType: image ? 'image-to-image' : 'text-to-image',
-        ...binding,
-        request: {
-          prompt,
-          ...binding,
-          ...(recipe.negativePrompt === undefined ? {} : { negativePrompt: recipe.negativePrompt }),
-          ...(recipe.width === undefined ? {} : { width: recipe.width }),
-          ...(recipe.height === undefined ? {} : { height: recipe.height }),
-          ...(recipe.aspectRatio === undefined ? {} : { aspectRatio: recipe.aspectRatio }),
-          ...(recipe.count === undefined ? {} : { count: recipe.count }),
-          ...(recipe.quality === undefined ? {} : { quality: recipe.quality }),
-          ...(recipe.style === undefined ? {} : { style: recipe.style }),
-          ...(image ? { referenceImageLocator: image } : {}),
-        },
-      };
-    }
-    case 'video': {
-      const image = uniqueLocator(inputs, 'image');
-      const video = uniqueLocator(inputs, 'video');
-      return {
-        generationType: video ? 'video-to-video' : image ? 'image-to-video' : 'text-to-video',
-        ...binding,
-        request: {
-          prompt,
-          ...binding,
-          ...(recipe.negativePrompt === undefined ? {} : { negativePrompt: recipe.negativePrompt }),
-          ...(recipe.duration === undefined ? {} : { duration: recipe.duration }),
-          ...(recipe.resolution === undefined ? {} : { resolution: recipe.resolution }),
-          ...(recipe.fps === undefined ? {} : { fps: recipe.fps }),
-          ...(recipe.aspectRatio === undefined ? {} : { aspectRatio: recipe.aspectRatio }),
-          ...(recipe.motionStrength === undefined ? {} : { motionStrength: recipe.motionStrength }),
-          ...(recipe.cameraMovement === undefined ? {} : { cameraMovement: recipe.cameraMovement }),
-          ...(video ? { referenceVideoLocator: video } : {}),
-          ...(!video && image ? { startFrameLocator: image } : {}),
-        },
-      };
-    }
-    case 'audio':
-      if (inputs.some((entry) => entry.kind === 'audio')) {
-        throw new Error(
-          'The selected Audio generation contract does not support an audio reference input.',
-        );
-      }
-      return {
-        generationType: recipe.isMusic ? 'text-to-music' : 'text-to-audio',
-        ...binding,
-        request: {
-          prompt,
-          ...binding,
-          ...(recipe.negativePrompt === undefined ? {} : { negativePrompt: recipe.negativePrompt }),
-          ...(recipe.duration === undefined ? {} : { duration: recipe.duration }),
-          ...(recipe.isMusic === undefined ? {} : { isMusic: recipe.isMusic }),
-          ...(recipe.genre === undefined ? {} : { genre: recipe.genre }),
-          ...(recipe.format === undefined ? {} : { format: recipe.format }),
-        },
-      };
-  }
-}
-
-function uniqueLocator(
-  inputs: readonly CanvasGenerationResolvedInput[],
-  kind: 'image' | 'video',
-): ContentLocator | undefined {
-  const matches: ContentLocator[] = [];
-  for (const entry of inputs) {
-    if (entry.kind === kind) matches.push(entry.locator);
-  }
-  if (matches.length > 1) {
-    throw new Error(`Canvas Generation accepts at most one ${kind} reference input.`);
-  }
-  return matches[0];
-}
-
 function projectSnapshot(
   nodeId: string,
   run: CanvasGenerationRunBinding,
@@ -440,6 +330,8 @@ function projectSnapshot(
     recipeInputFingerprint: run.recipeInputFingerprint,
     jobRef: snapshot.ref,
     phase: snapshot.phase,
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.updatedAt,
     progress: snapshot.progress,
     ...(snapshot.resultLocators ? { resultLocators: snapshot.resultLocators } : {}),
     ...(snapshot.failure ? { diagnostic: snapshot.failure } : {}),

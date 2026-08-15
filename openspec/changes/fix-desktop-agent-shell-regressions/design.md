@@ -50,6 +50,32 @@ Agent Webview 同时渲染两份运行提示：MessageList 尾部的 thinking �
 
 ## Decisions
 
+### 0. Composer 只在 canonical input 被受理后消费草稿
+
+`useChatActions.handleSend()` 返回显式 boolean receipt。只有 exact Conversation 的普通消息已经提交给
+Host、运行中消息已经进入同一 Host queue、tabless 首发已经交给 pending-send owner，或 command/Skill
+已经通过 exact input catalog 投递时才返回 `true`。conversation switching、重复点击、空输入、缺失
+conversation creator、command/Skill 解析失败均返回 `false`；`InputArea` 据此保留文本、附件、引用与
+context，既有 diagnostic 继续 fail-visible。
+
+新 conversation 的 pending-send effect 使用同一 receipt，只有 `true` 才标记 request consumed。该
+receipt 是一次同步 Renderer-to-Host intent acceptance，不伪造 provider/turn 成功；后续 IPC/runtime
+拒绝仍按 conversation diagnostic 和 queue projection 处理。不增加 renderer-local retry、第二消息队列
+或失败后的替代发送路径。
+
+### 0a. Pending Tool approval 是 conversation projection，操作面板属于 composer rail
+
+`@neko/agent-webview` 从当前 conversation 的 canonical message/content-block projection 收集全部
+`pendingConfirmation` Tool Call，并保持 transcript 顺序。composer 上方渲染一个有界、可滚动的审批
+面板，每个请求继续通过既有 `confirmTool(conversationId, toolCallId, decision)` Host contract 提交。
+Tool Call 历史位置只展示 Tool identity、摘要和等待状态，不再渲染允许/拒绝按钮，从而保证一个业务
+意图只有一个可操作 UI 路径。
+
+审批面板不复制 approval state、不改变 Tool contract，也不把 conversation/task ownership 提升到
+Desktop Shell。conversation 切换或 projection 更新会自然替换面板；缺失 exact conversation identity
+时面板不得提供可执行按钮。多条并行 pending approval 全部保留，面板通过稳定最大高度滚动，不能只
+显示 latest/active fallback。
+
 ### 1. Pi authority 提供只读 catalog reader，Desktop AppHost 提供 workspace scope
 
 `packages/agent/runtime` 增加只读 catalog reader，只投影 `PiConversationCatalogRecord`，不创建 `PiConversationRuntime`、lease、session reader 或 model registry。Desktop 初始化从 Shell state 读取已登记 workspace identity 集合，并在第一个窗口 claim 前将该 scope 注入 Agent AppHost。
@@ -95,6 +121,15 @@ Workbench pane 的 `overflow: hidden` 是真实布局边界，不能为允许提
 Project attach/restoration 由 `DesktopShellService` 检查当前 project-owned Main Views。若没有可恢复的 Main owner，Host 通过现有 `openOrFocusMainView()` 创建一个指向 `neko/boards/workspace.nkc` 的 Canvas View，并选择 `chat-main`。Canvas runtime 继续负责缺失 Board 的空文档加载和首次保存；renderer 不创建或写入 `.nkc`。已有 Canvas/Preview/Cut/Resource Browser View 按持久 workbench 恢复，不重复创建默认 View。
 
 Project 已 attach 后，用户可以关闭最后一个 Main Tab；该当前会话状态由 renderer 显示为正常的空 Main surface，不附加 Canvas diagnostic，也不立即重建默认 Canvas。下一次 Project attach/restoration 仍按上述 Host 规则恢复 canonical Workspace Canvas。缺失 Canvas capability 或 Canvas 加载失败只针对实际 Canvas View 显示明确 diagnostic，不回退到伪 Canvas。
+
+CharacterProject 与 WorldProject 是 Workspace 内的特殊 authoring target，不是 Workspace 默认 Main，也不改变 Workspace kind。打开这类 target 时，Workbench 保留 primary Main 中的 canonical Board；没有 Content Project 的独立目录 authority 则保留显式空 primary Main，并把精确 Character/World authoring View 放入 Secondary Main。Scene 必须分别按稳定 primary/secondary Group 投影两个 Surface；关闭特殊 target 后折叠 Secondary Main，恢复原 Board 或空状态，不保留隐藏 authoring Root。旧 presentation 若把特殊 target 放入 primary，下一次显式打开该 target 时按同一 canonical 规则局部重排。
+
+应用启动恢复是 presentation reconciliation boundary。若持久 Scene 的 Workspace scope 与按当前
+`activeTarget` 恢复出的 Project-owned Main Views 不一致，说明 Window presentation 曾被非原子写入或
+来自已替换的旧 UI 状态。Host 只重置该 Scene 为 fresh Entry presentation，保留当前 Project 的合法
+Tab presentation、canonical Board 与其他 Project presentation，并投影 owner 为 `workspace` 的
+`desktop-presentation-reset` warning。实时 Workbench update 仍要求 Scene/Layout 精确匹配并 fail-visible；
+不得把启动恢复规则变成通用 fallback 或吞掉合法运行期 contract 错误。
 
 ### 6. Resource Browser 是 Workbench Main View
 

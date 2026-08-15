@@ -41,6 +41,10 @@ export interface AgentCharaBindingContextPort {
   ): Promise<AgentDomainBindingContextResult<'character'>>;
 }
 
+export interface AgentRoomBindingContextPort {
+  resolve(binding: BindingOfKind<'room'>): Promise<AgentDomainBindingContextResult<'room'>>;
+}
+
 export interface AgentWorldBindingContextPort {
   resolve(binding: BindingOfKind<'world'>): Promise<AgentDomainBindingContextResult<'world'>>;
 }
@@ -53,6 +57,7 @@ export function createAgentDomainBindingApplicationService(input: {
   readonly assistant: AgentAssistantBindingContextPort;
   readonly workspace: AgentWorkspaceBindingContextPort;
   readonly chara?: AgentCharaBindingContextPort;
+  readonly room?: AgentRoomBindingContextPort;
   readonly world?: AgentWorldBindingContextPort;
 }): AgentDomainBindingApplicationService {
   return {
@@ -66,7 +71,8 @@ export function createAgentDomainBindingApplicationService(input: {
           if (!input.chara) return unavailable(binding);
           return validateResolution(binding, await input.chara.resolve(binding));
         case 'room':
-          return { status: 'available', binding, contextPayloads: [] };
+          if (!input.room) return unavailable(binding);
+          return validateResolution(binding, await input.room.resolve(binding));
         case 'world':
           if (!input.world) return unavailable(binding);
           return validateResolution(binding, await input.world.resolve(binding));
@@ -131,12 +137,14 @@ function bindingMaterializesRequestedOwner(
 }
 
 function unavailable(
-  binding: BindingOfKind<'character'> | BindingOfKind<'world'>,
-): AgentDomainBindingContextResult<'character' | 'world'> {
+  binding: BindingOfKind<'character'> | BindingOfKind<'room'> | BindingOfKind<'world'>,
+): AgentDomainBindingContextResult<'character' | 'room' | 'world'> {
   const owner =
     binding.kind === 'character'
       ? `character:${binding.characterId}:${binding.characterVersionId}`
-      : `world:${binding.worldExperienceId}:${binding.worldExperienceVersionId}`;
+      : binding.kind === 'room'
+        ? `room:${binding.roomId}:${binding.roomRunId}`
+        : `world:${binding.worldExperienceId}:${binding.worldExperienceVersionId}`;
   return {
     status: 'unavailable',
     diagnostic: {

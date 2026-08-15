@@ -1,10 +1,12 @@
 import { memo, useCallback } from 'react';
+import { LightweightPreview } from '@neko/preview-webview/root';
 import { useAgentHostMessages } from '../../../host-runtime-context';
 import { CopyIcon, FileIcon, MoreHorizontalIcon, UploadIcon } from '@neko/ui/icons';
 import { useMessageActions } from '../MessageActionsContext';
 import { projectCanvasContentTransferTarget } from '../../../presenters/plugin-transfer-presenter';
 import type { DocumentImageThumbnailProjection } from '../../../presenters/tool-call-presenter';
 import { useTranslation } from '../../../i18n/I18nContext';
+import { getLocale } from '../../../i18n';
 
 interface DocumentImageThumbnailsProps {
   thumbnails: readonly DocumentImageThumbnailProjection[];
@@ -79,13 +81,10 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                 }
               >
                 <div className="relative h-28 w-full bg-[var(--agent-bg)]">
-                  {thumbnail.src ? (
-                    <img
-                      src={thumbnail.src}
-                      alt={thumbnail.label}
-                      loading="lazy"
-                      draggable={false}
-                      className="h-full w-full object-contain"
+                  {thumbnail.previewDescriptor ? (
+                    <LightweightPreview
+                      descriptor={thumbnail.previewDescriptor}
+                      locale={getLocale()}
                     />
                   ) : (
                     <div
@@ -106,7 +105,7 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                   {byteSize && <div className="truncate">{byteSize}</div>}
                 </div>
               )}
-              {thumbnail.previewDiagnostic && !thumbnail.src && (
+              {thumbnail.previewDiagnostic && (
                 <div
                   className="border-t border-[var(--agent-input-border)] px-1.5 py-1 text-[9px] leading-tight text-[var(--agent-danger)]"
                   title={thumbnail.previewDiagnostic}

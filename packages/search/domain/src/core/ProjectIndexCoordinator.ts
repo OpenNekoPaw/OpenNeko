@@ -13,7 +13,6 @@ import type {
   ProjectSemanticCoverageResult,
 } from '../contracts';
 import { matchesProjectSearchItem, rankProjectSearchItems } from './normalization';
-import { DEFAULT_PROJECT_SEARCH_PORTS } from './defaults';
 import type {
   ProjectSearchDisposable,
   ProjectSearchRuntimePorts,
@@ -23,6 +22,30 @@ import { aggregateProjectSemanticCoverage } from './semanticCoverage';
 import { SimpleEventEmitter } from './simpleEventEmitter';
 
 const DEFAULT_LIMIT = 50;
+
+export interface ProjectSearchCoordinationFailure {
+  readonly identity: string;
+  readonly operation: 'initialize' | 'refresh';
+  readonly message: string;
+  readonly cause: unknown;
+}
+
+export class ProjectSearchCoordinationError extends Error {
+  constructor(
+    readonly code:
+      | 'invalid-runtime-ports'
+      | 'duplicate-partition'
+      | 'duplicate-provider'
+      | 'missing-workspace-root'
+      | 'missing-partition'
+      | 'partition-operation-failed',
+    message: string,
+    readonly failures: readonly ProjectSearchCoordinationFailure[] = [],
+  ) {
+    super(message);
+    this.name = 'ProjectSearchCoordinationError';
+  }
+}
 
 export class ProjectIndexCoordinator implements ProjectSearchDisposable {
   private readonly adapters = new Map<ProjectSearchPartitionKind, ProjectSearchAdapter>();
@@ -34,14 +57,19 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
   private readonly onDidChangeEmitter = new SimpleEventEmitter<ProjectIndexChangeEvent>();
   readonly onDidChangeProjectIndex = this.onDidChangeEmitter.event;
 
-  constructor(ports: Partial<ProjectSearchRuntimePorts> = {}) {
-    this.ports = { ...DEFAULT_PROJECT_SEARCH_PORTS, ...ports };
+  constructor(ports: ProjectSearchRuntimePorts) {
+    assertProjectSearchRuntimePorts(ports);
+    this.ports = ports;
     this.disposables.push(this.onDidChangeEmitter);
   }
 
   registerAdapter(adapter: ProjectSearchAdapter): ProjectSearchDisposable {
-    const previous = this.adapters.get(adapter.partition);
-    previous?.dispose?.();
+    if (this.adapters.has(adapter.partition)) {
+      throw new ProjectSearchCoordinationError(
+        'duplicate-partition',
+        `Project Search partition '${adapter.partition}' is already registered.`,
+      );
+    }
     this.adapters.set(adapter.partition, adapter);
     return {
       dispose: () => {
@@ -56,8 +84,12 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
   registerSemanticCoverageProvider(
     provider: ProjectSemanticCoverageProvider,
   ): ProjectSearchDisposable {
-    const previous = this.coverageProviders.get(provider.providerId);
-    previous?.dispose?.();
+    if (this.coverageProviders.has(provider.providerId)) {
+      throw new ProjectSearchCoordinationError(
+        'duplicate-provider',
+        `Project Search semantic provider '${provider.providerId}' is already registered.`,
+      );
+    }
     this.coverageProviders.set(provider.providerId, provider);
     return {
       dispose: () => {
@@ -70,12 +102,18 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
   }
 
   async ensureInitialized(projectRoot?: string): Promise<void> {
-    const roots = projectRoot ? [projectRoot] : (this.ports.getWorkspaceRoots?.() ?? []);
+    const roots = projectRoot ? [projectRoot] : this.ports.getWorkspaceRoots();
     for (const root of roots) {
       if (this.initializedProjects.has(root)) continue;
-      await Promise.allSettled(
-        [...this.adapters.values()].map((adapter) => adapter.ensureInitialized(root)),
+      const adapters = [...this.adapters.values()];
+      const settled = await Promise.allSettled(
+        adapters.map((adapter) => adapter.ensureInitialized(root)),
       );
+      const failures = collectPartitionFailures(adapters, settled, 'initialize');
+      if (failures.length > 0) {
+        this.reportFailures(failures);
+        throw partitionOperationError('initialize', failures);
+      }
       this.initializedProjects.add(root);
       this.emitChange(root, 'project-open', undefined, 'fresh');
     }
@@ -108,6 +146,7 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
       adapters.map((adapter) => adapter.query(query, context)),
     );
     const items: ProjectSearchItem[] = [];
+    const failedPartitions = new Map<ProjectSearchPartitionKind, string>();
 
     settled.forEach((result, index) => {
       if (result.status === 'fulfilled') {
@@ -115,19 +154,24 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
         return;
       }
       const adapter = adapters[index];
-      this.ports.logger?.warn(
-        `Project search partition failed: ${adapter?.partition ?? 'unknown'}`,
-        {
-          error: result.reason,
-        },
-      );
+      if (!adapter) throw new Error('Project Search query result has no owning adapter.');
+      const message = describeError(result.reason);
+      failedPartitions.set(adapter.partition, message);
+      this.ports.logger.warn(`Project search partition failed: ${adapter.partition}`, {
+        error: result.reason,
+      });
     });
 
     const filtered = items
       .filter((item) => (query.freshness === 'fresh-only' ? item.freshness === 'fresh' : true))
       .filter((item) => matchesProjectSearchItem(item, query));
     const ranked = rankProjectSearchItems(filtered, query).slice(0, query.limit ?? DEFAULT_LIMIT);
-    const partitions = this.getStatus(projectRoot);
+    const partitions = this.getStatus(projectRoot).map((partition) => {
+      const error = failedPartitions.get(partition.partition);
+      return error === undefined
+        ? partition
+        : { ...partition, status: 'failed' as const, freshness: 'failed' as const, error };
+    });
 
     return {
       context,
@@ -185,24 +229,38 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
       readonly changedRefs?: readonly ProjectIndexChangedRef[];
     } = {},
   ): Promise<void> {
-    const adapters = options.partition
-      ? [this.adapters.get(options.partition)].filter((adapter): adapter is ProjectSearchAdapter =>
-          Boolean(adapter),
-        )
-      : [...this.adapters.values()];
-    await Promise.allSettled(
+    const selected = options.partition ? this.adapters.get(options.partition) : undefined;
+    if (options.partition && !selected) {
+      throw new ProjectSearchCoordinationError(
+        'missing-partition',
+        `Project Search partition '${options.partition}' is not registered.`,
+      );
+    }
+    const adapters = selected ? [selected] : [...this.adapters.values()];
+    const settled = await Promise.allSettled(
       adapters.map(
         (adapter) =>
           adapter.refresh?.({ projectRoot, reason, changedRefs: options.changedRefs }) ??
           Promise.resolve(),
       ),
     );
+    const failures = collectPartitionFailures(adapters, settled, 'refresh');
+    if (failures.length > 0) {
+      this.reportFailures(failures);
+      throw partitionOperationError('refresh', failures);
+    }
     this.initializedProjects.add(projectRoot);
     this.emitChange(projectRoot, reason, options.partition, 'fresh', options.changedRefs ?? []);
   }
 
   getStatus(projectRoot?: string): readonly ProjectSearchPartitionStatusSnapshot[] {
-    const root = projectRoot ?? this.ports.getWorkspaceRoots?.()[0] ?? '';
+    const root = projectRoot ?? this.ports.getWorkspaceRoots()[0];
+    if (!root) {
+      throw new ProjectSearchCoordinationError(
+        'missing-workspace-root',
+        'Project Search status requires an exact Workspace root.',
+      );
+    }
     return [...this.adapters.values()].map((adapter) => adapter.getStatus(root));
   }
 
@@ -253,9 +311,71 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
       reason,
       changedRefs,
       freshness,
-      updatedAt: (this.ports.now?.() ?? new Date()).toISOString(),
+      updatedAt: this.ports.now().toISOString(),
     });
   }
+
+  private reportFailures(failures: readonly ProjectSearchCoordinationFailure[]): void {
+    for (const failure of failures) {
+      this.ports.logger.warn(
+        `Project Search partition '${failure.identity}' failed to ${failure.operation}.`,
+        { error: failure.cause },
+      );
+    }
+  }
+}
+
+function assertProjectSearchRuntimePorts(ports: ProjectSearchRuntimePorts): void {
+  if (
+    typeof ports !== 'object' ||
+    ports === null ||
+    typeof ports.resolveContext !== 'function' ||
+    typeof ports.getWorkspaceRoots !== 'function' ||
+    typeof ports.logger?.warn !== 'function' ||
+    typeof ports.now !== 'function'
+  ) {
+    throw new ProjectSearchCoordinationError(
+      'invalid-runtime-ports',
+      'Project Search requires resolveContext, getWorkspaceRoots, logger, and now runtime ports.',
+    );
+  }
+}
+
+function collectPartitionFailures(
+  adapters: readonly ProjectSearchAdapter[],
+  settled: readonly PromiseSettledResult<void>[],
+  operation: ProjectSearchCoordinationFailure['operation'],
+): readonly ProjectSearchCoordinationFailure[] {
+  return settled.flatMap((result, index) => {
+    if (result.status === 'fulfilled') return [];
+    const adapter = adapters[index];
+    if (!adapter) throw new Error('Project Search partition result has no owning adapter.');
+    return [
+      {
+        identity: adapter.partition,
+        operation,
+        message: describeError(result.reason),
+        cause: result.reason,
+      },
+    ];
+  });
+}
+
+function partitionOperationError(
+  operation: ProjectSearchCoordinationFailure['operation'],
+  failures: readonly ProjectSearchCoordinationFailure[],
+): ProjectSearchCoordinationError {
+  return new ProjectSearchCoordinationError(
+    'partition-operation-failed',
+    `Project Search failed to ${operation} partition(s): ${failures
+      .map((failure) => `${failure.identity}: ${failure.message}`)
+      .join('; ')}.`,
+    failures,
+  );
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function partitionMayReturnKind(
@@ -280,6 +400,9 @@ function aggregateFreshness(
   items: readonly ProjectSearchItem[],
   partitions: readonly ProjectSearchPartitionStatusSnapshot[],
 ): ProjectIndexFreshness {
+  if (partitions.length > 0 && partitions.every((partition) => partition.freshness === 'failed')) {
+    return 'failed';
+  }
   if (partitions.some((partition) => partition.freshness === 'failed')) return 'partial';
   if (items.some((item) => item.freshness === 'stale')) return 'stale';
   if (partitions.some((partition) => partition.freshness === 'building')) return 'building';

@@ -80,16 +80,6 @@ export const TOOL_NAMES_EFFECTS = {
 } as const;
 
 // =============================================================================
-// Creative Entities — Entity Facts and Projections
-// =============================================================================
-
-export const TOOL_NAMES_ENTITY = {
-  LIST_CREATIVE_ENTITIES: 'ListCreativeEntities',
-  GET_CREATIVE_ENTITY: 'GetCreativeEntity',
-  BIND_ENTITY_REPRESENTATION: 'BindEntityRepresentation',
-} as const;
-
-// =============================================================================
 // Project Search — Sanitized Project-Wide Search
 // =============================================================================
 
@@ -155,6 +145,18 @@ export const TOOL_NAMES_CREATION = {
   // creation-flow persona skills are authored.
 } as const;
 
+export const TOOL_NAMES_CHARA = {
+  FILL_CHARACTER_DRAFT: 'chara.character.fillDraft',
+} as const;
+
+export const TOOL_NAMES_WORLD = {
+  FILL_WORLD_DRAFT: 'world.world.fillDraft',
+} as const;
+
+export const TOOL_NAMES_SKILLS = {
+  CREATE_SKILL: 'CreateSkill',
+} as const;
+
 // =============================================================================
 // Dual-Flow — Execution ring tools (P2 W6)
 // =============================================================================
@@ -181,6 +183,9 @@ export const TOOL_NAMES = {
   ...TOOL_NAMES_PERCEPTION,
   ...TOOL_NAMES_SYSTEM,
   ...TOOL_NAMES_CREATION,
+  ...TOOL_NAMES_CHARA,
+  ...TOOL_NAMES_WORLD,
+  ...TOOL_NAMES_SKILLS,
   ...TOOL_NAMES_EXECUTION,
 } as const;
 

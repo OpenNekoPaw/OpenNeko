@@ -15,7 +15,7 @@ import { isHostProjectedRuntimeValue } from '../content-access';
 
 const locator = {
   kind: 'workspace-file' as const,
-  path: 'neko/assets/Books/comic.epub',
+  path: 'documents/Books/comic.epub',
   fingerprint: { strategy: 'sha256' as const, value: 'sha256:comic-content' },
 };
 

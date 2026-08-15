@@ -25,7 +25,7 @@ describe('tool-call-presenter', () => {
             {
               type: 'image',
               contentLocator: generatedOutputLocator('generated-1'),
-              renderUri: 'http://127.0.0.1:43125/resources/generated/image.png',
+              previewDescriptor: previewDescriptor('generated-1'),
             },
           ],
           boardDelivery: {
@@ -39,9 +39,9 @@ describe('tool-call-presenter', () => {
 
     expect(projection).toMatchObject({
       isImageTool: true,
-      imageUrls: ['http://127.0.0.1:43125/resources/generated/image.png'],
-      videoUrls: [],
-      audioUrls: [],
+      imageDescriptors: [previewDescriptor('generated-1')],
+      videoDescriptors: [],
+      audioDescriptors: [],
       isSuccess: true,
       generationJob: {
         jobId: 'generation-1',
@@ -72,7 +72,7 @@ describe('tool-call-presenter', () => {
             {
               type: 'image',
               contentLocator: generatedOutputLocator('generated-1'),
-              renderUri: 'http://127.0.0.1:43125/resources/generated/generated-1.png',
+              previewDescriptor: previewDescriptor('generated-1'),
             },
           ],
         },
@@ -80,9 +80,9 @@ describe('tool-call-presenter', () => {
     });
 
     expect(projection).toMatchObject({
-      imageUrls: ['http://127.0.0.1:43125/resources/generated/generated-1.png'],
-      videoUrls: [],
-      audioUrls: [],
+      imageDescriptors: [previewDescriptor('generated-1')],
+      videoDescriptors: [],
+      audioDescriptors: [],
       generationJob: {
         jobId: 'generation-1',
         phase: 'succeeded',
@@ -92,7 +92,7 @@ describe('tool-call-presenter', () => {
         modelId: 'image-model',
       },
     });
-    expect(projection.resultJson).not.toContain('renderUri');
+    expect(projection.resultJson).not.toContain('previewDescriptor');
   });
 
   it('projects Canvas authoring feedback for follow-up turns', () => {
@@ -459,6 +459,55 @@ describe('tool-call-presenter', () => {
     ]);
   });
 
+  it('uses the authorized preview descriptor projected beside each ReadImage result', () => {
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
+      entryPath: 'pages/001.png',
+    };
+    const descriptor = {
+      descriptorId: 'agent-display:read-image:page-1',
+      sourceFingerprint: 'sha256:page-1',
+      contentLocator,
+      url: `openneko://resource/${'a'.repeat(32)}`,
+      contentKind: 'image' as const,
+      mediaType: 'image/png',
+      displayName: '001.png',
+      byteLength: 2048,
+    };
+    const projection = projectToolCallDisplayState({
+      id: 'tool-authorized-preview',
+      name: 'ReadImage',
+      arguments: {},
+      result: {
+        success: true,
+        data: {
+          images: [
+            {
+              label: 'Page 1',
+              width: 1200,
+              height: 1800,
+              mimeType: 'image/png',
+              contentLocator,
+              previewDescriptor: descriptor,
+            },
+          ],
+        },
+      },
+    });
+
+    expect(projection.documentThumbnails).toEqual([
+      expect.objectContaining({
+        path: 'pages/001.png',
+        filePath: 'books/comic.cbz',
+        src: descriptor.url,
+        previewDescriptor: descriptor,
+        contentLocator,
+      }),
+    ]);
+    expect(projection.documentThumbnails[0]?.referenceJson).not.toContain(descriptor.url);
+  });
+
   it('keeps an ordered locator-only placeholder when preview projection fails', () => {
     const contentLocator = {
       kind: 'document-entry' as const,
@@ -665,5 +714,18 @@ function generatedOutputLocator(outputId: string) {
     outputId,
     digest: `sha256:${outputId}`,
     path: `neko/generated/images/${outputId}.png`,
+  };
+}
+
+function previewDescriptor(outputId: string) {
+  return {
+    descriptorId: `agent-display:attachment-1:${outputId}`,
+    sourceFingerprint: `sha256:${outputId}`,
+    contentLocator: generatedOutputLocator(outputId),
+    url: `openneko://resource/${'a'.repeat(32)}`,
+    contentKind: 'image' as const,
+    mediaType: 'image/png',
+    displayName: `${outputId}.png`,
+    byteLength: 42,
   };
 }

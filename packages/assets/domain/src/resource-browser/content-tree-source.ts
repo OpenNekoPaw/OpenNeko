@@ -31,6 +31,7 @@ export interface ReadResourceBrowserContentTreeInput {
   readonly rootDepth: number;
   readonly libraryName?: string;
   readonly excludedDirectoryNames: ReadonlySet<string>;
+  readonly excludedLocatorPaths?: ReadonlySet<string>;
   readonly files: ResourceBrowserContentTreePort;
   readonly joinAbsolutePath: (directory: string, childName: string) => string;
   readonly relativePath: (root: string, target: string) => string;
@@ -95,6 +96,7 @@ async function readDirectoryChildren(
     const absolutePath = input.joinAbsolutePath(absoluteDirectory, child.name);
     const relativePath = portableRelativePath(input.relativePath(input.absoluteRoot, absolutePath));
     const locatorPath = createLocatorPath(input.locatorPrefix, relativePath);
+    if (input.excludedLocatorPaths?.has(locatorPath.toLocaleLowerCase('en-US'))) continue;
     if (child.type === 'directory') {
       if (input.excludedDirectoryNames.has(child.name)) continue;
       directories.push(absolutePath);

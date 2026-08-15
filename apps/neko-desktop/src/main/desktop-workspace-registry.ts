@@ -9,7 +9,7 @@ import {
 import {
   initializeAgentStateTables,
   initializeCoreLocalMetadataTables,
-  initializeEntityAssetProjectionTables,
+  initializeProjectEntityProjectionTables,
   initializeMediaMetadataTables,
   initializeSearchProjectionTables,
 } from '@neko/local-metadata/sqlite';
@@ -75,7 +75,7 @@ export async function createDesktopWorkspaceRegistry(options: {
   await initializeAgentStateTables(metadataStore);
   await initializeMediaMetadataTables(metadataStore);
   await initializeSearchProjectionTables(metadataStore);
-  await initializeEntityAssetProjectionTables(metadataStore);
+  await initializeProjectEntityProjectionTables(metadataStore);
   return new NodeDesktopWorkspaceRegistry(homedir, metadataStore, ownsMetadataStore);
 }
 

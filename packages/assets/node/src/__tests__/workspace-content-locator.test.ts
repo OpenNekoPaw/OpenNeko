@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -37,18 +37,57 @@ describe('resolveWorkspaceContentLocator', () => {
     ).rejects.toThrow('Generated output content is unavailable: content-changed.');
   });
 
-  it('rejects locator kinds without a file-backed Workspace path', async () => {
-    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-non-file-content-path-'));
-    roots.push(workspacePath);
+  it('authorizes a managed linked-media workspace path', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-linked-media-path-'));
+    const externalPath = await mkdtemp(path.join(tmpdir(), 'openneko-linked-media-target-'));
+    roots.push(workspacePath, externalPath);
+    await writeFile(path.join(externalPath, 'shot.mov'), 'retired-link');
+    await mkdir(path.join(workspacePath, 'neko', 'assets'), { recursive: true });
+    await symlink(
+      externalPath,
+      path.join(workspacePath, 'neko', 'assets', 'Footage'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
 
     await expect(
       resolveWorkspaceContentLocator(workspace(workspacePath), {
-        kind: 'package-resource',
-        packageId: 'package-1',
-        revision: 'release-1',
-        resourcePath: 'image.png',
+        kind: 'workspace-file',
+        path: 'neko/assets/Footage/shot.mov',
       }),
-    ).rejects.toThrow('workspace-file or generated-output ContentLocator');
+    ).resolves.toBe(await realpath(path.join(externalPath, 'shot.mov')));
+  });
+
+  it('rejects a real directory in the managed media-library namespace', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-linked-media-path-'));
+    roots.push(workspacePath);
+    await mkdir(path.join(workspacePath, 'neko', 'assets', 'Footage'), { recursive: true });
+    await writeFile(path.join(workspacePath, 'neko', 'assets', 'Footage', 'shot.mov'), 'owned');
+
+    await expect(
+      resolveWorkspaceContentLocator(workspace(workspacePath), {
+        kind: 'workspace-file',
+        path: 'neko/assets/Footage/shot.mov',
+      }),
+    ).rejects.toMatchObject({ code: 'library-entry-not-link' });
+  });
+
+  it('rejects an unmanaged workspace symlink', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-unmanaged-link-path-'));
+    const externalPath = await mkdtemp(path.join(tmpdir(), 'openneko-unmanaged-link-target-'));
+    roots.push(workspacePath, externalPath);
+    await writeFile(path.join(externalPath, 'secret.txt'), 'secret');
+    await symlink(
+      externalPath,
+      path.join(workspacePath, 'external'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+
+    await expect(
+      resolveWorkspaceContentLocator(workspace(workspacePath), {
+        kind: 'workspace-file',
+        path: 'external/secret.txt',
+      }),
+    ).rejects.toMatchObject({ code: 'unmanaged-symlink' });
   });
 });
 

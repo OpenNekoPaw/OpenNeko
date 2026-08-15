@@ -3,15 +3,27 @@ import {
   type CharacterAuthoringCommand,
   type CharacterAuthoringSnapshot,
 } from '@neko/chara/contracts';
-import type { CharacterAuthoringCatalogPort } from './character-durable-catalog';
+import type {
+  CharacterAuthoringCatalogPort,
+  CharacterAuthoringCatalogScope,
+} from './character-durable-catalog';
 import type { CharacterAuthoringService } from './character-authoring-service';
+import type { CharacterStorylineService } from './character-storyline-service';
+import type { CharacterVersionDeletionService } from './character-version-deletion-service';
+import type { CharacterVersionLineageRepository } from './character-version-lineage-repository';
+import type { CharacterVersionReferenceInventoryService } from './character-version-reference-service';
 
 export class CharacterAuthoringHostService {
   constructor(
     private readonly options: {
-      readonly contentProjectId: string;
+      readonly scope: Extract<CharacterAuthoringCatalogScope, { readonly kind: 'project' }>;
+      readonly characterProjectId: string;
       readonly catalog: CharacterAuthoringCatalogPort;
       readonly authoring: CharacterAuthoringService;
+      readonly storylines: CharacterStorylineService;
+      readonly lineage: CharacterVersionLineageRepository;
+      readonly references: CharacterVersionReferenceInventoryService;
+      readonly deletion: CharacterVersionDeletionService;
     },
   ) {}
 
@@ -20,14 +32,12 @@ export class CharacterAuthoringHostService {
     signal?: AbortSignal,
   ): Promise<CharacterAuthoringSnapshot> {
     signal?.throwIfAborted();
+    if (characterProjectId !== this.options.characterProjectId) {
+      throw new Error('Character authoring snapshot targets another CharacterProject.');
+    }
     const catalog = await this.options.catalog.readAuthoringCatalog(signal);
-    if (
-      catalog.scope.kind !== 'content-project' ||
-      catalog.scope.contentProjectId !== this.options.contentProjectId
-    ) {
-      throw new Error(
-        `Character authoring catalog does not match Content Project '${this.options.contentProjectId}'.`,
-      );
+    if (!sameScope(catalog.scope, this.options.scope)) {
+      throw new Error('Character authoring catalog does not match its exact authority.');
     }
     const project = catalog.projects.find(
       (candidate) => candidate.characterProjectId === characterProjectId,
@@ -41,28 +51,58 @@ export class CharacterAuthoringHostService {
         diagnostic?.message ?? `CharacterProject '${characterProjectId}' is unavailable.`,
       );
     }
+    const versions = catalog.versions.filter(
+      (version) => version.characterProjectId === characterProjectId,
+    );
+    const [storylineCatalog, lineageResult, referenceInventories] = await Promise.all([
+      this.options.storylines.readCatalog(characterProjectId, signal),
+      this.readLineage(characterProjectId, signal),
+      this.options.references.readInventories(
+        versions.map((version) => version.characterVersionId),
+        signal,
+      ),
+    ]);
     return parseCharacterAuthoringSnapshot({
       project,
-      versions: catalog.versions.filter(
-        (version) => version.characterProjectId === characterProjectId,
+      versions,
+      authoringTestSnapshots: catalog.authoringTestSnapshots.filter(
+        (snapshot) => snapshot.characterProjectId === characterProjectId,
       ),
-      diagnostics: catalog.diagnostics
-        .filter(
-          (diagnostic) =>
-            diagnostic.recordId === characterProjectId ||
-            catalog.versions.some(
-              (version) =>
-                version.characterProjectId === characterProjectId &&
-                version.characterVersionId === diagnostic.recordId,
-            ),
-        )
-        .filter(
-          (diagnostic) =>
-            diagnostic.recordKind === 'character-project' ||
-            diagnostic.recordKind === 'character-version' ||
-            diagnostic.recordKind === 'authoring-test-snapshot',
-        )
-        .map((diagnostic) => ({ owner: 'character' as const, ...diagnostic })),
+      storylines: storylineCatalog.map((entry) => entry.storyline),
+      storylineDrafts: storylineCatalog.flatMap((entry) =>
+        entry.draft === undefined ? [] : [entry.draft],
+      ),
+      storylineVersions: storylineCatalog.flatMap((entry) => entry.versions),
+      lineage: lineageResult.lineage,
+      referenceInventories,
+      diagnostics: [
+        ...catalog.diagnostics
+          .filter(
+            (diagnostic) =>
+              diagnostic.recordId === characterProjectId ||
+              versions.some((version) => version.characterVersionId === diagnostic.recordId),
+          )
+          .filter(
+            (diagnostic) =>
+              diagnostic.recordKind === 'character-project' ||
+              diagnostic.recordKind === 'character-version' ||
+              diagnostic.recordKind === 'authoring-test-snapshot' ||
+              diagnostic.recordKind === 'character-storyline' ||
+              diagnostic.recordKind === 'character-storyline-draft' ||
+              diagnostic.recordKind === 'character-storyline-version',
+          )
+          .map((diagnostic) => ({ owner: 'character' as const, ...diagnostic })),
+        ...(lineageResult.diagnostic === undefined
+          ? []
+          : [
+              {
+                owner: 'character' as const,
+                recordKind: 'character-version-lineage' as const,
+                recordId: characterProjectId,
+                message: lineageResult.diagnostic,
+              },
+            ]),
+      ],
     });
   }
 
@@ -71,6 +111,25 @@ export class CharacterAuthoringHostService {
     signal?: AbortSignal,
   ): Promise<CharacterAuthoringSnapshot> {
     signal?.throwIfAborted();
+    if (
+      'characterProjectId' in command.input &&
+      command.input.characterProjectId !== this.options.characterProjectId
+    ) {
+      throw new Error('Character authoring command targets another CharacterProject.');
+    }
+    if (!('characterProjectId' in command.input)) {
+      const snapshot = await this.getSnapshot(this.options.characterProjectId, signal);
+      const characterStorylineId = command.input.characterStorylineId;
+      if (
+        !snapshot.storylines.some(
+          (storyline) => storyline.characterStorylineId === characterStorylineId,
+        )
+      ) {
+        throw new Error(
+          `CharacterStoryline '${characterStorylineId}' does not belong to the exact authoring target.`,
+        );
+      }
+    }
     switch (command.operation) {
       case 'character-project-update-draft':
         await this.options.authoring.updateDraft(command.input, signal);
@@ -81,7 +140,58 @@ export class CharacterAuthoringHostService {
       case 'character-version-publish':
         await this.options.authoring.publish(command.input, signal);
         break;
+      case 'character-version-continue':
+        await this.options.authoring.continueFromVersion(command.input, signal);
+        break;
+      case 'character-version-delete':
+        await this.options.deletion.deleteVersion(command.input, signal);
+        break;
+      case 'character-authoring-test-capture':
+        await this.options.authoring.captureAuthoringTest(command.input, signal);
+        break;
+      case 'character-storyline-create':
+        await this.options.storylines.create(command.input, signal);
+        break;
+      case 'character-storyline-update-draft':
+        await this.options.storylines.updateDraft(command.input, signal);
+        break;
+      case 'character-storyline-restore-as-draft':
+        await this.options.storylines.restoreAsDraft(command.input, signal);
+        break;
+      case 'character-storyline-delete':
+        await this.options.storylines.delete(command.input.characterStorylineId, signal);
+        break;
+      case 'character-storyline-publish':
+        await this.options.storylines.publish(command.input, signal);
+        break;
     }
-    return this.getSnapshot(command.input.characterProjectId, signal);
+    return this.getSnapshot(this.options.characterProjectId, signal);
   }
+
+  private async readLineage(
+    characterProjectId: string,
+    signal?: AbortSignal,
+  ): Promise<{
+    readonly lineage: Awaited<ReturnType<CharacterVersionLineageRepository['readLineage']>> | null;
+    readonly diagnostic?: string;
+  }> {
+    try {
+      return {
+        lineage: (await this.options.lineage.readLineage(characterProjectId, signal)) ?? null,
+      };
+    } catch (error) {
+      signal?.throwIfAborted();
+      return {
+        lineage: null,
+        diagnostic: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+}
+
+function sameScope(
+  actual: CharacterAuthoringCatalogScope,
+  expected: Extract<CharacterAuthoringCatalogScope, { readonly kind: 'project' }>,
+): boolean {
+  return actual.kind === 'project' && actual.projectId === expected.projectId;
 }

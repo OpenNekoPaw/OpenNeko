@@ -38,6 +38,7 @@ import {
 import type {
   PiSkillHostSnapshot,
   SkillContentReadResult,
+  SkillHostRecord,
   SkillLocator,
   SkillResourceLocator,
 } from './skill-host';
@@ -177,7 +178,7 @@ export class PiConversationRuntime {
   }
 
   async executeSkill(input: ExecutePiConversationSkillInput): Promise<void> {
-    const prompt = input.skillSnapshot.invokeExact(
+    const invocation = input.skillSnapshot.invokeExactWithReceipt(
       input.skillName,
       input.activationId,
       input.additionalInstructions,
@@ -190,7 +191,7 @@ export class PiConversationRuntime {
             input.activationId,
             input.durableAdditionalInstructions,
           );
-    await this.runPrompt(input, prompt, input.images, durablePrompt);
+    await this.runPrompt(input, invocation.prompt, input.images, durablePrompt, invocation.receipt);
   }
 
   cancel(identity: Pick<PiToolRunIdentity, 'turnId' | 'runId'>): void {
@@ -350,6 +351,7 @@ export class PiConversationRuntime {
     prompt: string,
     images?: readonly ImageContent[],
     durablePrompt?: string,
+    activatedSkill?: Pick<SkillHostRecord, 'name' | 'source' | 'fingerprint'>,
   ): Promise<void> {
     this.assertReady();
     validateTurnIdentity(input.turnId, input.runId);
@@ -362,7 +364,12 @@ export class PiConversationRuntime {
       runId: input.runId,
     });
     const toolBridge = bridgePiCapabilityTools({
-      tools: [...input.capabilityTools, createSkillReadTool(input.skillSnapshot)],
+      tools: [
+        ...input.capabilityTools,
+        ...(input.skillSnapshot.skills.length === 0
+          ? []
+          : [createSkillReadTool(input.skillSnapshot)]),
+      ],
       identity,
       workspaceTrusted: input.workspaceTrusted,
       modelPolicy: input.modelPolicy,
@@ -452,6 +459,13 @@ export class PiConversationRuntime {
       }
       await projector.project(event);
       if (event.type === 'agent_start') {
+        if (activatedSkill) {
+          await projector.skillActivated({
+            skillName: activatedSkill.name,
+            source: activatedSkill.source.kind,
+            fingerprint: activatedSkill.fingerprint,
+          });
+        }
         await projector.persistenceChanged('volatile');
       }
     });
@@ -581,7 +595,6 @@ function startLeaseRenewal(
         onFailure();
       }
     }, authority.leaseRenewalDelay(current()));
-    timer.unref?.();
   };
   schedule();
   return {

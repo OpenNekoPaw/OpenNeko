@@ -1,10 +1,8 @@
-import type { ProjectEntityRecord } from '@neko/entity-domain';
 import { describe, expect, it, vi } from 'vitest';
 import {
   RESOURCE_BROWSER_ROUTES,
   ResourceBrowserContractError,
   createResourceBrowserChildrenRequest,
-  createResourceBrowserEntityIntentRequest,
   createResourceBrowserSearchRequest,
   createResourceBrowserThumbnailRequest,
   type ResourceBrowserIdentity,
@@ -26,7 +24,7 @@ const identity: ResourceBrowserIdentity = {
 };
 
 describe('Resource Browser controller', () => {
-  it('uses one projection source for snapshot, facets, reconciliation and monotonic events', async () => {
+  it('uses one projection source for snapshot, sources, reconciliation and monotonic events', async () => {
     const source = createSource();
     const interactions = createInteractions();
     const controller = new ResourceBrowserController({
@@ -61,80 +59,65 @@ describe('Resource Browser controller', () => {
       descriptorId: thumbnail?.descriptorId,
       dataUrl: 'data:image/png;base64,aW1hZ2U=',
     });
-    const entities = await controller.search(
+    const withImportedFiles = await controller.execute({
+      requestId: 'import-files-1',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.importFiles,
+    });
+    const assets = await controller.search(
       createResourceBrowserSearchRequest({
         requestId: 'search-1',
         identity,
-        facet: 'entities',
-        query: 'neko',
+        source: 'assets',
+        query: 'lighting',
       }),
     );
     const refreshed = await controller.reconcile();
-    const withGlobalLibrary = await controller.execute({
-      requestId: 'global-library-1',
-      identity,
-      route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
-    });
     const withDirectoryLibrary = await controller.execute({
       requestId: 'directory-library-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.addDirectoryLibrary,
     });
 
-    expect(snapshot.facet).toBe('files');
-    expect(entities.items[0]).toMatchObject({
-      facet: 'entities',
-      kind: 'character',
-      label: 'Neko',
-      representationLocator: { kind: 'workspace-file', path: 'characters/neko.png' },
+    expect(snapshot.source).toBe('files');
+    expect(assets.items[0]).toMatchObject({
+      source: 'assets',
+      kind: 'asset',
+      label: 'Lighting preset',
     });
     expect(source.refresh).toHaveBeenCalledWith(identity);
-    expect(refreshed.facet).toBe('entities');
-    expect(interactions.linkGlobalLibrary).toHaveBeenCalledWith({ identity });
+    expect(refreshed.source).toBe('assets');
+    expect(interactions.importFiles).toHaveBeenCalledWith({ identity });
     expect(interactions.addDirectoryLibrary).toHaveBeenCalledWith({ identity });
-    expect(withGlobalLibrary.facet).toBe('entities');
-    expect(withDirectoryLibrary.facet).toBe('entities');
+    expect(withImportedFiles.source).toBe('files');
+    expect(withDirectoryLibrary.source).toBe('assets');
     expect(listener.mock.calls.map(([event]) => event.sequence)).toEqual([1, 2, 3, 4]);
   });
 
-  it('keeps valid Entity items available beside an exact record diagnostic', async () => {
+  it('switches directly to Installed Assets when the current source cannot load', async () => {
     const source = createSource();
-    const entityResult = await source.entities.list({ identity, query: '', limit: 20 });
-    vi.mocked(source.entities.list).mockResolvedValue({
-      ...entityResult,
-      diagnostics: [
-        {
-          code: 'invalid-project-entity-document',
-          message: "Project Entity 'character-invalid' violates the canonical fact contract.",
-          entityId: 'character-invalid',
-        },
-      ],
-    });
+    vi.mocked(source.files.list).mockRejectedValue(
+      new Error('Project Content projection is invalid.'),
+    );
     const controller = new ResourceBrowserController({
       identity,
       source,
       interactions: createInteractions(),
+      initialSource: 'files',
     });
 
-    await expect(
-      controller.search(
-        createResourceBrowserSearchRequest({
-          requestId: 'search-local-diagnostic',
-          identity,
-          facet: 'entities',
-          query: '',
-        }),
-      ),
-    ).resolves.toMatchObject({
-      items: [expect.objectContaining({ label: 'Neko' })],
-      diagnostics: [
-        {
-          code: 'invalid-project-entity-document',
-          message: "Project Entity 'character-invalid' violates the canonical fact contract.",
-          recordId: 'character-invalid',
-        },
-      ],
-    });
+    const result = await controller.search(
+      createResourceBrowserSearchRequest({
+        requestId: 'open-installed-assets',
+        identity,
+        source: 'assets',
+        query: '',
+      }),
+    );
+
+    expect(result.source).toBe('assets');
+    expect(source.assets.list).toHaveBeenCalledOnce();
+    expect(source.files.list).not.toHaveBeenCalled();
   });
 
   it('allows Rescan only after an observation failure and clears the local diagnostic', async () => {
@@ -177,7 +160,7 @@ describe('Resource Browser controller', () => {
         createResourceBrowserSearchRequest({
           requestId: 'stale-search',
           identity: { ...identity, viewInstanceId: 'view-instance-stale' },
-          facet: 'media',
+          source: 'media',
           query: '',
         }),
       ),
@@ -217,7 +200,7 @@ describe('Resource Browser controller', () => {
     expect(interactions.resolveThumbnail).not.toHaveBeenCalled();
   });
 
-  it('retains opened facet projections and does not reload an unchanged facet', async () => {
+  it('retains opened source projections and does not reload an unchanged source', async () => {
     const source = createSource();
     const controller = new ResourceBrowserController({
       identity,
@@ -230,7 +213,7 @@ describe('Resource Browser controller', () => {
       createResourceBrowserSearchRequest({
         requestId: 'open-media',
         identity,
-        facet: 'media',
+        source: 'media',
         query: '',
       }),
     );
@@ -238,18 +221,18 @@ describe('Resource Browser controller', () => {
       createResourceBrowserSearchRequest({
         requestId: 'restore-files',
         identity,
-        facet: 'files',
+        source: 'files',
         query: '',
       }),
     );
 
-    expect(media.facet).toBe('media');
+    expect(media.source).toBe('media');
     expect(restoredFiles).toBe(files);
     expect(source.files.list).toHaveBeenCalledTimes(1);
     expect(source.media.search).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps a valid sibling facet available when one facet entry read fails', async () => {
+  it('keeps a valid sibling source available when one source entry read fails', async () => {
     const source = createSource();
     source.media.search = vi.fn(async () => {
       throw new Error('Media entry media:broken is invalid.');
@@ -266,7 +249,7 @@ describe('Resource Browser controller', () => {
         createResourceBrowserSearchRequest({
           requestId: 'media-invalid-entry',
           identity,
-          facet: 'media',
+          source: 'media',
           query: '',
         }),
       ),
@@ -277,7 +260,7 @@ describe('Resource Browser controller', () => {
         createResourceBrowserSearchRequest({
           requestId: 'files-after-media-failure',
           identity,
-          facet: 'files',
+          source: 'files',
           query: '',
         }),
       ),
@@ -447,7 +430,7 @@ describe('Resource Browser controller', () => {
       createResourceBrowserChildrenRequest({
         requestId: 'load-creation-directory',
         identity,
-        facet: 'files',
+        source: 'files',
         parentResourceId: directoryItem.resourceId,
       }),
     );
@@ -489,48 +472,6 @@ describe('Resource Browser controller', () => {
       identity,
       name: 'README.md',
     });
-  });
-
-  it('delegates Entity intents only after capability and exact identity checks', async () => {
-    const interactions = createInteractions();
-    const controller = new ResourceBrowserController({
-      identity,
-      source: createSource(),
-      interactions,
-      initialFacet: 'entities',
-    });
-    const snapshot = await controller.getSnapshot();
-    const item = snapshot.items[0];
-    if (!item || item.facet !== 'entities' || item.entityStatus === 'candidate') {
-      throw new Error('Missing confirmed Entity fixture.');
-    }
-    const intent = {
-      type: 'edit' as const,
-      entityId: item.entityRef.entityId,
-      changes: { names: { canonical: 'Neko Aoki', aliases: ['Neko'] } },
-    };
-
-    await controller.execute(
-      createResourceBrowserEntityIntentRequest({
-        requestId: 'entity-edit',
-        identity,
-        resourceId: item.resourceId,
-        intent,
-      }),
-    );
-    expect(interactions.manageEntity).toHaveBeenCalledWith({ identity, item, intent });
-
-    await expect(
-      controller.execute(
-        createResourceBrowserEntityIntentRequest({
-          requestId: 'entity-wrong-owner',
-          identity,
-          resourceId: item.resourceId,
-          intent: { ...intent, entityId: 'character-other' },
-        }),
-      ),
-    ).rejects.toMatchObject({ code: 'resource-browser-stale-identity' });
-    expect(interactions.manageEntity).toHaveBeenCalledTimes(1);
   });
 
   it('requires an explicit Canvas target and releases subscriptions on dispose', async () => {
@@ -580,7 +521,7 @@ describe('Resource Browser controller', () => {
       identity,
       source,
       interactions,
-      initialFacet: 'files',
+      initialSource: 'files',
     });
     const snapshot = await controller.getSnapshot();
     const item = snapshot.items[0];
@@ -632,7 +573,7 @@ describe('Resource Browser controller', () => {
       identity,
       source,
       interactions: createInteractions(),
-      initialFacet: 'entities',
+      initialSource: 'assets',
     });
     await controller.getSnapshot();
     const listener = vi.fn();
@@ -642,7 +583,7 @@ describe('Resource Browser controller', () => {
       createResourceBrowserSearchRequest({
         requestId: 'search-older',
         identity,
-        facet: 'files',
+        source: 'files',
         query: 'older',
       }),
     );
@@ -650,7 +591,7 @@ describe('Resource Browser controller', () => {
       createResourceBrowserSearchRequest({
         requestId: 'search-newer',
         identity,
-        facet: 'files',
+        source: 'files',
         query: 'newer',
       }),
     );
@@ -689,7 +630,7 @@ describe('Resource Browser controller', () => {
       identity,
       source,
       interactions: createInteractions(),
-      initialFacet: 'files',
+      initialSource: 'files',
     });
     const snapshot = await controller.getSnapshot();
     const parentItem = snapshot.items[0];
@@ -699,7 +640,7 @@ describe('Resource Browser controller', () => {
       createResourceBrowserChildrenRequest({
         requestId: 'children-1',
         identity,
-        facet: 'files',
+        source: 'files',
         parentResourceId: parentItem.resourceId,
       }),
     );
@@ -740,7 +681,7 @@ describe('Resource Browser controller', () => {
       identity,
       source,
       interactions: createInteractions(),
-      initialFacet: 'files',
+      initialSource: 'files',
     });
     const snapshot = await controller.getSnapshot();
     const parentItem = snapshot.items[0];
@@ -750,7 +691,7 @@ describe('Resource Browser controller', () => {
       createResourceBrowserChildrenRequest({
         requestId: 'load-empty-directory',
         identity,
-        facet: 'files',
+        source: 'files',
         parentResourceId: parentItem.resourceId,
       }),
     );
@@ -773,24 +714,6 @@ function createSource(): ResourceBrowserProjectionSource & {
     role: 'content',
     depth: 0,
   };
-  const entity: ProjectEntityRecord = {
-    entityId: 'character-neko',
-    kind: 'character',
-    names: { canonical: 'Neko', aliases: ['猫'] },
-    facts: {},
-    representations: [
-      {
-        bindingId: 'binding-neko',
-        target: { kind: 'workspace-file', path: 'characters/neko.png' },
-        role: 'portrait',
-        source: 'user',
-        acceptedAt: '2026-07-28T00:00:00.000Z',
-      },
-    ],
-    lifecycle: { state: 'active' },
-    createdAt: '2026-07-28T00:00:00.000Z',
-    updatedAt: '2026-07-28T00:00:00.000Z',
-  };
   return {
     files: {
       list: vi.fn(async () => [media]),
@@ -811,26 +734,12 @@ function createSource(): ResourceBrowserProjectionSource & {
         },
       ]),
     },
-    entities: {
-      list: vi.fn(async () => ({
-        projections: [
-          {
-            projectionId: `entity:${entity.entityId}`,
-            status: 'confirmed' as const,
-            entity,
-            bindingAvailability: [],
-            sourceOwners: ['project-entity'] as const,
-          },
-        ],
-      })),
-    },
     refresh: vi.fn(async () => undefined),
   };
 }
 
 function createInteractions(): ResourceBrowserInteractionPort & {
-  readonly manageEntity: ReturnType<typeof vi.fn>;
-  readonly linkGlobalLibrary: ReturnType<typeof vi.fn>;
+  readonly importFiles: ReturnType<typeof vi.fn>;
   readonly addDirectoryLibrary: ReturnType<typeof vi.fn>;
   readonly preview: ReturnType<typeof vi.fn>;
   readonly openCreativeDocument: ReturnType<typeof vi.fn>;
@@ -844,8 +753,8 @@ function createInteractions(): ResourceBrowserInteractionPort & {
     createCreativeDocument: vi.fn(async () => ({ status: 'opened' as const })),
     createFile: vi.fn(async () => undefined),
     createDirectory: vi.fn(async () => undefined),
+    importFiles: vi.fn(async () => 'imported' as const),
     trashContent: vi.fn(async () => undefined),
-    manageEntity: vi.fn(async () => undefined),
     linkGlobalLibrary: vi.fn(async () => 'linked' as const),
     addDirectoryLibrary: vi.fn(async () => 'added' as const),
     relinkSource: vi.fn(async () => 'relinked' as const),

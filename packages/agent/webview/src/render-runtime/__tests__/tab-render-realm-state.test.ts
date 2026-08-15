@@ -237,7 +237,59 @@ describe('Tab render realm state', () => {
           workspaceId: 'workspace-1',
           workspaceGrantId: 'grant-1',
         },
-        target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+        target: { kind: 'content-document' as const, documentId: 'documents/story.md' },
+        authority: { kind: 'project' as const, projectId: 'project-1' },
+      },
+    };
+
+    expect(parseTabRenderRealmState({ drafts: [], entryDraft: stored })).toEqual({
+      state: { drafts: [], entryDraft: stored },
+      diagnostics: [],
+    });
+  });
+
+  it('restores an exact Project-only Creation context without fabricating a domain target', () => {
+    const stored = {
+      ...entryDraft('draft-project', 'create a setting'),
+      entryMode: 'authoring' as const,
+      workspaceTarget: {
+        label: 'OpenNeko',
+        context: {
+          kind: 'workspace' as const,
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        },
+        authority: { kind: 'project' as const, projectId: 'project-1' },
+      },
+    };
+
+    expect(parseTabRenderRealmState({ drafts: [], entryDraft: stored })).toEqual({
+      state: { drafts: [], entryDraft: stored },
+      diagnostics: [],
+    });
+  });
+
+  it('restores multiple Characters and one exact World together', () => {
+    const stored = {
+      ...entryDraft('draft-world', 'begin the scene'),
+      entryMode: 'character-dialogue' as const,
+      characterLaunches: [
+        {
+          globalCharacterId: 'global-character-1',
+          characterVersionId: 'character-version-1',
+          label: 'Aster',
+        },
+        {
+          globalCharacterId: 'global-character-2',
+          characterVersionId: 'character-version-2',
+          label: 'Beryl',
+        },
+      ],
+      worldLaunch: {
+        globalWorldId: 'global-world-1',
+        worldVersionId: 'world-version-1',
+        label: 'Rain Station',
+        versionLabel: 'Published v1',
       },
     };
 

@@ -10,7 +10,7 @@ describe('DocumentContentAccessRuntime', () => {
   it('authorizes the source and archive entry through ContentReadService', async () => {
     const source: WorkspaceFileContentLocator = {
       kind: 'workspace-file',
-      path: 'neko/assets/Library/book.epub',
+      path: 'documents/Library/book.epub',
     };
     const hostPath = '/external/library/book.epub';
     const contentRead = createContentRead();

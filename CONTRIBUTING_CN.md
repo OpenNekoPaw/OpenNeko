@@ -14,6 +14,8 @@
 
 非平凡功能、跨包修改、公共契约或架构变更必须先建立或更新 OpenSpec artifacts。简单文档和局部修正可以直接实施，但仍需符合当前架构。
 
+每个 OpenSpec 提案的 `tasks.md` 最多包含 30 个可执行复选任务。超过上限时，必须按独立目标、owner 或交付边界拆分为多个可独立评审和验收的提案，不得把无关工作合并为单个任务规避上限。
+
 触及 `apps/*`、`packages/*` 或 `packages/*/*` 生产模块时，OpenSpec design/tasks 和交付 review 必须记录 owning
 responsibility、package role、canonical public path、producer/consumer、runtime boundary、旧路径
 删除/poison 条件、用户数据语义与验证命令。仅说明“当前只有 Desktop”或只给最终测试结果不算完成证据。

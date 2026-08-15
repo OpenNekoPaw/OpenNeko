@@ -7,8 +7,6 @@ import {
   sameAutomationTarget,
 } from './index';
 
-const DIGEST = `sha256:${'a'.repeat(64)}`;
-
 describe('Automation contracts', () => {
   it('compares canonical targets independently of object property insertion order', () => {
     const canonical = parseAutomationTarget({
@@ -42,16 +40,15 @@ describe('Automation contracts', () => {
       parseAutomationProfile({
         id: 'browser.observe',
         provider: {
-          extensionId: 'browser-use@openneko',
+          extensionId: 'browser-use',
           providerId: 'browser-use',
           kind: 'browser',
-          upstreamRelease: '0.13.7',
-          deliverySource: { kind: 'github-release' },
+          deliverySource: { kind: 'bundled-adapter' },
         },
         operations: [
           {
             name: 'browser_screenshot',
-            inputSchemaDigest: DIGEST,
+            requiredInputProperties: [],
             modes: ['observe'],
             trait: {
               effect: 'observe',
@@ -67,15 +64,17 @@ describe('Automation contracts', () => {
     ).toMatchObject({ id: 'browser.observe' });
   });
 
-  it('keeps a user-managed endpoint as an opaque exact identity without endpoint secrets', () => {
+  it('keeps a user-managed local runtime as an opaque exact identity without Host paths', () => {
     const profile = {
-      id: 'browser.observe.endpoint',
+      id: 'browser.observe.local',
       provider: {
-        extensionId: 'browser-use@openneko',
+        extensionId: 'browser-use',
         providerId: 'browser-use',
         kind: 'browser',
-        upstreamRelease: '0.13.7',
-        deliverySource: { kind: 'user-managed-endpoint', endpointId: 'endpoint-1' },
+        deliverySource: {
+          kind: 'user-managed-local-runtime',
+          runtimeId: 'local-runtime:browser-1',
+        },
       },
       operations: [],
       requiredPermissions: {},
@@ -83,7 +82,10 @@ describe('Automation contracts', () => {
 
     expect(parseAutomationProfile(profile)).toMatchObject({
       provider: {
-        deliverySource: { kind: 'user-managed-endpoint', endpointId: 'endpoint-1' },
+        deliverySource: {
+          kind: 'user-managed-local-runtime',
+          runtimeId: 'local-runtime:browser-1',
+        },
       },
     });
     expect(() =>
@@ -93,7 +95,7 @@ describe('Automation contracts', () => {
           ...profile.provider,
           deliverySource: {
             ...profile.provider.deliverySource,
-            authorization: 'must-stay-in-host',
+            path: '/usr/local/bin/browser-use',
           },
         },
       }),
@@ -104,11 +106,10 @@ describe('Automation contracts', () => {
     const base = {
       id: 'browser.observe',
       provider: {
-        extensionId: 'browser-use@openneko',
+        extensionId: 'browser-use',
         providerId: 'browser-use',
         kind: 'browser',
-        upstreamRelease: '0.13.7',
-        deliverySource: { kind: 'github-release' },
+        deliverySource: { kind: 'bundled-adapter' },
       },
       operations: [],
       requiredPermissions: {},
@@ -123,7 +124,7 @@ describe('Automation contracts', () => {
         operations: [
           {
             name: 'click',
-            inputSchemaDigest: DIGEST,
+            requiredInputProperties: [],
             modes: ['interact'],
             trait: {
               effect: 'input',
@@ -190,14 +191,13 @@ function sessionRequest() {
     grant: {
       grantId: 'grant-1',
       sessionId: 'session-1',
-      extensionId: 'browser-use@openneko',
+      extensionId: 'browser-use',
       profileId: 'browser.observe',
       provider: {
-        extensionId: 'browser-use@openneko',
+        extensionId: 'browser-use',
         providerId: 'browser-use',
         kind: 'browser',
-        upstreamRelease: '0.13.7',
-        deliverySource: { kind: 'github-release' },
+        deliverySource: { kind: 'bundled-adapter' },
       },
       target: {
         kind: 'browser',

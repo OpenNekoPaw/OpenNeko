@@ -5,7 +5,11 @@ import {
   AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES,
 } from '@neko/agent-contracts';
 import { getMimeType } from '@neko/media';
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import {
+  serializeContentReferenceTarget,
+  validateContentLocator,
+  type ContentLocator,
+} from '@neko/content';
 import {
   TOOL_NAMES_MEDIA,
   TOOL_NAMES_PERCEPTION,
@@ -85,6 +89,9 @@ export interface PiToolResultImageBatchOptions {
 
 export interface PiToolResultAssetLoader {
   load(ref: PerceptualAssetRef): Promise<PiToolResultAssetPayload>;
+  loadTransientImage?(
+    ref: NonNullable<ToolResultAttachment['transientImage']>,
+  ): Promise<PiToolResultAssetPayload>;
   loadBatch?(
     refs: readonly PerceptualAssetRef[],
     options: PiToolResultImageBatchOptions,
@@ -418,6 +425,31 @@ async function projectToolResultContent(
       `Pi image Tool result contains ${imageAttachments.length} source images; maximum is ${MAX_PI_TOOL_RESULT_SOURCE_IMAGES}.`,
     );
   }
+
+  const transientImages = imageAttachments.filter(
+    (attachment) => attachment.transientImage !== undefined,
+  );
+  if (transientImages.length > 0) {
+    if (imageAttachments.length !== 1 || transientImages.length !== 1) {
+      throw new Error('Pi transient image Tool results cannot be combined with other images.');
+    }
+    const attachment = transientImages[0];
+    if (!attachment?.transientImage || attachment.contentLocator || attachment.assetRef) {
+      throw new Error('Pi transient image Tool result contains conflicting image authorities.');
+    }
+    if (!assetLoader.loadTransientImage) {
+      throw new Error('Pi transient image Tool result requires a Host receipt loader.');
+    }
+    const payload = await assetLoader.loadTransientImage(attachment.transientImage);
+    const parsed = parsePiImageContent(payload);
+    if (parsed.byteLength > MAX_PI_TOOL_RESULT_IMAGE_PAYLOAD_BYTES) {
+      throw new Error(
+        `Pi image Tool result payload is ${parsed.byteLength} bytes; maximum is ${MAX_PI_TOOL_RESULT_IMAGE_PAYLOAD_BYTES}.`,
+      );
+    }
+    content.push(parsed.content);
+    return content;
+  }
   const refs = imageAttachments.map(projectToolResultImageRef);
   const projected = await projectProviderImagePayloads(result, refs, assetLoader);
   if (refs.length > 1) {
@@ -487,8 +519,10 @@ function contentLocatorPortablePath(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return locator.path;
+    case 'media-library':
+      return `${locator.libraryName}/${locator.relativePath}`;
     case 'document-entry':
-      return `${locator.source.path}#${locator.entryPath}`;
+      return `${serializeContentReferenceTarget(locator.source)}#${locator.entryPath}`;
     case 'package-resource':
       return `${locator.packageId}/${locator.resourcePath}`;
   }
@@ -500,7 +534,9 @@ async function projectProviderImagePayloads(
   assetLoader: PiToolResultAssetLoader,
 ): Promise<readonly PiToolResultImageBatchItem[]> {
   if (refs.length === 1) {
-    return [{ payload: await assetLoader.load(refs[0]!), sourceIndexes: [0] }];
+    const ref = refs[0];
+    if (!ref) throw new Error('Pi image Tool result is missing its exact source reference.');
+    return [{ payload: await assetLoader.load(ref), sourceIndexes: [0] }];
   }
   if (!assetLoader.loadBatch) {
     throw new Error('Pi multi-image Tool result requires a Host batch image projector.');

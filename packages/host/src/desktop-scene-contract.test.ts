@@ -73,7 +73,7 @@ describe('Desktop Scene contract', () => {
         main: {
           kind: 'character-authoring' as const,
           workspaceId: 'workspace-1',
-          projectId: 'project-1',
+          authority: { kind: 'project' as const, projectId: 'project-1' },
           viewId: 'character-view-1',
           viewInstanceId: 'character-view-instance-1',
           characterProjectId: 'character-project-1',
@@ -107,7 +107,7 @@ describe('Desktop Scene contract', () => {
         main: {
           kind: 'world-authoring' as const,
           workspaceId: 'workspace-1',
-          projectId: 'project-1',
+          authority: { kind: 'project' as const, projectId: 'project-1' },
           viewId: 'world-view-1',
           viewInstanceId: 'world-view-instance-1',
           worldProjectId: 'world-project-1',
@@ -282,9 +282,89 @@ describe('Desktop Scene contract', () => {
     ).toThrow("Unknown Manager Surface kind 'extension-catalog'");
   });
 
+  it('binds Character Presentation and separate Timeline refs to one exact owner', () => {
+    const projection = characterRoomScene();
+    expect(parseDesktopWorkbenchSceneProjection(projection)).toEqual(projection);
+    expect(
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          interaction: projection.slots.interaction,
+          main: projection.slots.main,
+          rightManager: projection.slots.rightManager,
+          status: projection.slots.status,
+        },
+      }),
+    ).toEqual({
+      ...projection,
+      slots: {
+        interaction: projection.slots.interaction,
+        main: projection.slots.main,
+        rightManager: projection.slots.rightManager,
+        status: projection.slots.status,
+      },
+    });
+
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          main: {
+            ...projection.slots.main,
+            owner: { kind: 'room', roomId: 'room-other', roomRunId: 'room-run-other' },
+          },
+        },
+      }),
+    ).toThrow('exact Presentation Main Surface');
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          cutPanel: {
+            ...projection.slots.cutPanel,
+            timelines: projection.slots.cutPanel.timelines.map((timeline, index) =>
+              index === 0
+                ? { ...timeline, timelineId: 'timeline-duplicate' }
+                : { ...timeline, timelineId: 'timeline-duplicate' },
+            ),
+          },
+        },
+      }),
+    ).toThrow('unique Timeline identities');
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          cutPanel: {
+            ...projection.slots.cutPanel,
+            timelines: [
+              {
+                ...projection.slots.cutPanel.timelines[0],
+                owner: { kind: 'room', roomId: 'room-other', roomRunId: 'room-run-other' },
+              },
+              projection.slots.cutPanel.timelines[1],
+            ],
+          },
+        },
+      }),
+    ).toThrow('does not match its Stack owner');
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          cutPanel: { kind: 'character-room-timeline', owner: projection.context.owner },
+        },
+      }),
+    ).toThrow("contains unknown field 'owner'");
+  });
+
   it('owns Creative Management Character catalog and exact detail as one Window scene', () => {
     const sceneId = 'scene:window-1:creative-management';
-    const detail = { kind: 'project' as const, characterProjectId: 'character-project:lin' };
+    const detail = { kind: 'global' as const, globalCharacterId: 'global-character:lin' };
     const projection = {
       sceneId,
       windowId: 'window-1',
@@ -311,9 +391,9 @@ describe('Desktop Scene contract', () => {
         rendererSessionId: 'endpoint-1',
         windowId: 'window-1',
         sceneId,
-        intent: { kind: 'select-character-detail', selection: { kind: 'create' } },
+        intent: { kind: 'select-character-detail', selection: detail },
       }).intent,
-    ).toEqual({ kind: 'select-character-detail', selection: { kind: 'create' } });
+    ).toEqual({ kind: 'select-character-detail', selection: detail });
     expect(() =>
       parseDesktopWorkbenchSceneProjection({
         ...projection,
@@ -327,7 +407,7 @@ describe('Desktop Scene contract', () => {
 
   it('owns the World catalog and exact detail without an Experience runtime slot', () => {
     const sceneId = 'scene:window-1:creative-management';
-    const detail = { kind: 'project' as const, worldProjectId: 'world-project:archive-city' };
+    const detail = { kind: 'global' as const, globalWorldId: 'global-world:archive-city' };
     const projection = {
       sceneId,
       windowId: 'window-1',
@@ -354,9 +434,28 @@ describe('Desktop Scene contract', () => {
         rendererSessionId: 'endpoint-1',
         windowId: 'window-1',
         sceneId,
-        intent: { kind: 'select-world-detail', selection: { kind: 'create' } },
+        intent: { kind: 'select-world-detail', selection: detail },
       }).intent,
-    ).toEqual({ kind: 'select-world-detail', selection: { kind: 'create' } });
+    ).toEqual({ kind: 'select-world-detail', selection: detail });
+    expect(
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-world-authoring',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId,
+        intent: {
+          kind: 'open-world-authoring',
+          workspaceGrantId: 'world-grant-1',
+          authority: { kind: 'project', projectId: 'project-1' },
+          worldProjectId: 'world-project-1',
+        },
+      }).intent,
+    ).toEqual({
+      kind: 'open-world-authoring',
+      workspaceGrantId: 'world-grant-1',
+      authority: { kind: 'project', projectId: 'project-1' },
+      worldProjectId: 'world-project-1',
+    });
     expect(() =>
       parseDesktopWorkbenchSceneProjection({
         ...projection,
@@ -374,11 +473,100 @@ describe('Desktop Scene contract', () => {
           ...projection.slots,
           secondaryMain: {
             kind: 'character-detail',
-            selection: { kind: 'project', characterProjectId: 'character-project:wrong-owner' },
+            selection: { kind: 'global', globalCharacterId: 'global-character:wrong-owner' },
           },
         },
       }),
     ).toThrow('World Detail Surface does not match Scene selection');
+  });
+
+  it('owns one fixed World Runtime composition for an exact participant binding', () => {
+    const binding = {
+      worldProjectId: 'world-project-1',
+      worldVersionId: 'world-version-1',
+      worldRunId: 'world-run-1',
+      worldSaveId: 'world-save-1',
+      branchId: 'branch-main',
+      participantId: 'participant-1',
+      actorId: 'actor-1',
+    };
+    const surface = {
+      worldRunId: binding.worldRunId,
+      worldSaveId: binding.worldSaveId,
+      branchId: binding.branchId,
+      participantId: binding.participantId,
+    };
+    const sceneId = 'scene:window-1:world-runtime:world-run-1';
+    const projection = {
+      sceneId,
+      windowId: 'window-1',
+      context: { kind: 'world-runtime' as const, binding },
+      slots: {
+        interaction: { kind: 'world-runtime-interaction' as const, ...surface },
+        main: { kind: 'world-runtime-main' as const, ...surface },
+        rightManager: { kind: 'world-runtime-manager' as const, ...surface },
+        cutPanel: { kind: 'world-runtime-timeline' as const, ...surface },
+        status: { kind: 'world-runtime-status' as const, sceneId, ...surface },
+      },
+    };
+    expect(parseDesktopWorkbenchSceneProjection(projection)).toEqual(projection);
+    expect(
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-runtime',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId: 'scene-management',
+        intent: { kind: 'open-world-runtime', binding },
+      }).intent,
+    ).toEqual({ kind: 'open-world-runtime', binding });
+
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          rightManager: { ...projection.slots.rightManager, branchId: 'branch-other' },
+        },
+      }),
+    ).toThrow('exact right Manager Surface');
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          secondaryMain: {
+            kind: 'world-detail',
+            selection: { kind: 'global', globalWorldId: 'global-world:unrelated' },
+          },
+        },
+      }),
+    ).toThrow('cannot mount unrelated secondary or left surfaces');
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          interaction: { kind: 'world-runtime-wildcard', worldRunId: '*' },
+        },
+      }),
+    ).toThrow("contains unknown field 'worldRunId'");
+  });
+
+  it('rejects the retired standalone authoring authority without a compatibility decoder', () => {
+    expect(() =>
+      parseDesktopSceneTransitionRequest({
+        requestId: 'request-standalone-character-authoring',
+        rendererSessionId: 'endpoint-1',
+        windowId: 'window-1',
+        sceneId: 'scene-1',
+        intent: {
+          kind: 'open-character-authoring',
+          workspaceGrantId: 'character-library-grant',
+          authority: { kind: 'standalone-library', library: 'character' },
+          characterProjectId: 'character-project-1',
+        },
+      }),
+    ).toThrow("Unknown Desktop authoring authority 'standalone-library'");
   });
 
   it('creates exact Scene identity transition requests and rejects arbitrary intent', () => {
@@ -622,6 +810,61 @@ function workspaceScene() {
         ownerId: 'cut-owner-1',
       },
       status: { kind: 'scene-status' as const, sceneId: 'scene:window-1:workspace-1' },
+    },
+  };
+}
+
+function characterRoomScene() {
+  const sceneId = 'scene:window-1:character-interaction:conversation-room-1';
+  const owner = { kind: 'room' as const, roomId: 'room-1', roomRunId: 'room-run-1' };
+  const scope = {
+    kind: 'assistant' as const,
+    draftId: 'draft-room-1',
+    assistantSpaceId: 'assistant-space:user',
+    conversationId: 'conversation-room-1',
+  };
+  return {
+    sceneId,
+    windowId: 'window-1',
+    context: {
+      kind: 'character-interaction' as const,
+      agentViewId: 'agent-view-room-1',
+      owner,
+      scope,
+    },
+    slots: {
+      interaction: {
+        kind: 'agent' as const,
+        agentSurfaceId: 'agent-surface-room-1',
+        agentViewId: 'agent-view-room-1',
+        phase: 'session' as const,
+        scope,
+      },
+      main: {
+        kind: 'character-presentation' as const,
+        owner,
+        surfaceKind: 'avatar' as const,
+        providerId: 'chara.representation',
+        surfaceId: 'character-presentation:conversation-room-1',
+      },
+      rightManager: { kind: 'character-runtime-manager' as const, owner },
+      cutPanel: {
+        kind: 'character-timeline-stack' as const,
+        owner,
+        timelines: [
+          {
+            kind: 'character-storyline-timeline' as const,
+            owner,
+            timelineId: 'storyline-timeline:conversation-room-1',
+          },
+          {
+            kind: 'character-room-event-timeline' as const,
+            owner,
+            timelineId: 'room-event-timeline:conversation-room-1',
+          },
+        ],
+      },
+      status: { kind: 'scene-status' as const, sceneId },
     },
   };
 }

@@ -9,6 +9,7 @@ import {
 import {
   applyWorkbenchDisplayMode,
   createManagementMainSplitResizeBinding,
+  createDesktopAgentSurfaceProps,
   DesktopShellView,
   MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO,
   MANAGEMENT_MAIN_SPLIT_MIN_RATIO,
@@ -42,6 +43,56 @@ import assetManagementSurfaceSource from './DesktopAssetManagementSurface.tsx?ra
 import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 describe('Desktop scene Workbench', () => {
+  it('binds a finalized CharacterVersion handoff only to its exact fresh Agent Draft', () => {
+    const projection = agentProjection();
+    const composition = resolveActiveDesktopWindowWorkbench(projection.window);
+    const interaction = composition.scene.slots.interaction;
+    if (!interaction || interaction.kind !== 'agent' || interaction.scope.kind === 'workspace') {
+      throw new Error('Agent projection requires an unbound interaction surface.');
+    }
+    const intent = {
+      kind: 'character-dialogue' as const,
+      intentId: 'character-dialogue:1',
+      label: 'Rin',
+      binding: {
+        kind: 'character-dialogue' as const,
+        mode: 'companion' as const,
+        participants: [
+          {
+            globalCharacterId: 'global-character:rin',
+            characterVersionId: 'character-version:rin-2',
+          },
+        ],
+      },
+    };
+    const common = {
+      projection,
+      workbenchInstanceId: composition.workbenchInstanceId,
+      interaction,
+      onChooseWorkspaceTarget: vi.fn(async () => undefined),
+      onSelectWorkspaceProjectTarget: vi.fn(async () => undefined),
+      onLoadAuthoringTargets: vi.fn(async () => ({
+        targets: [],
+        creationContexts: [],
+        diagnostics: [],
+      })),
+      onSelectAuthoringTarget: vi.fn(async () => undefined),
+      onCreateAuthoringTarget: vi.fn(async () => undefined),
+    };
+
+    expect(
+      createDesktopAgentSurfaceProps({
+        ...common,
+        characterDialogueHandoff: { draftId: interaction.scope.draftId, intent },
+      }),
+    ).toMatchObject({ characterDialogueHandoff: intent });
+    expect(
+      createDesktopAgentSurfaceProps({
+        ...common,
+        characterDialogueHandoff: { draftId: 'wrong-draft', intent },
+      }),
+    ).not.toHaveProperty('characterDialogueHandoff');
+  });
   it('locks only controls owned by the pending Shell mutation scope', () => {
     const base = {
       scene: false,
@@ -178,6 +229,28 @@ describe('Desktop scene Workbench', () => {
     );
   });
 
+  it('restores a fresh empty Main from Cut-only without fabricating a Main View', () => {
+    const fresh = createDefaultDesktopWorkbenchLayout('window-empty');
+    const withCut = openOrFocusCutView(fresh, {
+      viewId: 'cut:empty',
+      viewInstanceId: 'cut-view:empty',
+      projectId: 'content:empty',
+      workspaceId: 'workspace-empty',
+      kind: 'cut',
+      ownerId: 'cut-session:empty',
+      displayLabel: 'empty.otio',
+      documentId: 'cuts/empty.otio',
+    });
+    const withoutMain = toggleWorkbenchRegion(withCut, 'main');
+    const cutOnly = toggleWorkbenchRegion(withoutMain, 'agent');
+    const restoredMain = toggleWorkbenchRegion(cutOnly, 'main');
+
+    expect(cutOnly.display.mode).toBe('empty-main');
+    expect(restoredMain.display.mode).toBe('main-only');
+    expect(restoredMain.main.views).toEqual([]);
+    expect(restoredMain.main.groups).toEqual([{ groupId: 'main:primary', viewIds: [] }]);
+  });
+
   it('switches Cut Panel tabs without replacing the active Main Canvas', () => {
     const initial = activeWorkbenchLayout(workspaceProjection());
     const firstCut = initial.cutPanel!.views[0]!;
@@ -281,6 +354,24 @@ describe('Desktop scene Workbench', () => {
 
     expect(markup.match(/primary-sidebar-toggle/gu) ?? []).toHaveLength(1);
     expect(markup).toContain('aria-label="Expand sidebar"');
+  });
+
+  it('preserves the existing primary Sidebar navigation', () => {
+    const markup = renderShell(<DesktopShellView projection={agentProjection()} />);
+    const primaryNavigation = markup.match(
+      /<nav class="home-primary-navigation"[\s\S]*?<\/nav>/u,
+    )?.[0];
+    if (!primaryNavigation) throw new Error('Primary product navigation is missing.');
+
+    expect(primaryNavigation.match(/class="home-nav-button/gu) ?? []).toHaveLength(6);
+    expect(primaryNavigation).toContain('aria-label="Start creating"');
+    expect(primaryNavigation).toContain('aria-label="Characters"');
+    expect(primaryNavigation).toContain('aria-label="Worlds"');
+    expect(primaryNavigation).toContain('aria-label="Asset Center"');
+    expect(primaryNavigation).toContain('aria-label="Extensions"');
+    expect(primaryNavigation).toContain('aria-label="All projects"');
+    expect(primaryNavigation).not.toContain('aria-label="Conversation"');
+    expect(primaryNavigation).not.toContain('aria-label="Creation"');
   });
 
   it('places structural Workspace controls in shared Workbench title chrome only', () => {
@@ -678,7 +769,7 @@ describe('Desktop scene Workbench', () => {
     const characterSurface = {
       kind: 'character-authoring' as const,
       workspaceId: 'workspace-1',
-      projectId: 'project-1',
+      authority: { kind: 'project' as const, projectId: 'project-1' },
       viewId: 'view:character-1',
       viewInstanceId: 'view-instance:character-1',
       characterProjectId: 'character-project-1',
@@ -704,7 +795,7 @@ describe('Desktop scene Workbench', () => {
         {
           kind: 'world-authoring',
           workspaceId: 'workspace-1',
-          projectId: 'project-1',
+          authority: { kind: 'project', projectId: 'project-1' },
           viewId: 'view:character-1',
           viewInstanceId: 'view-instance:character-1',
           worldProjectId: 'world-project-1',
@@ -722,7 +813,7 @@ describe('Desktop scene Workbench', () => {
   });
 
   it('maps project-local authoring through public package Roots without domain file access', () => {
-    expect(desktopShellSource).toContain('CharacterAuthoringStudioRoot');
+    expect(desktopShellSource).toContain('CharacterAuthoringSurface');
     expect(desktopShellSource).toContain('WorldAuthoringStudioRoot');
     expect(desktopShellSource).toContain('ProjectAuthoringTargetSwitchRoot');
     expect(desktopShellSource).toContain('@neko/chara-webview/root');
@@ -730,6 +821,95 @@ describe('Desktop scene Workbench', () => {
     expect(desktopShellSource).not.toContain('@neko/chara-node');
     expect(desktopShellSource).not.toContain('@neko/world-node');
     expect(desktopShellSource).not.toMatch(/node:fs|readFile|writeFile|workspacePath/u);
+  });
+
+  it('opens project-local World authoring in Secondary Main without replacing the Board', () => {
+    const start = desktopShellSource.indexOf('const openWorkspaceTarget =');
+    const end = desktopShellSource.indexOf('const resourceDock =', start);
+    const source = desktopShellSource.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(source).toContain("target.kind === 'character-project'");
+    expect(source).toContain('groupId: DESKTOP_SECONDARY_MAIN_GROUP_ID');
+  });
+
+  it('mounts only the visible management or authoring Root during exact Scene switching', () => {
+    const portalDeckStart = desktopShellSource.indexOf('const portalDeck =');
+    const portalDeckEnd = desktopShellSource.indexOf('return (', portalDeckStart);
+    const portalDeckSource = desktopShellSource.slice(portalDeckStart, portalDeckEnd);
+    expect(portalDeckSource).toContain('visible ?');
+    expect(portalDeckSource).toContain('<DesktopWorkbenchPortalTarget');
+    expect(portalDeckSource).not.toMatch(/display:\s*none|visibility:\s*hidden/u);
+
+    const runtimeStart = desktopShellSource.indexOf('function DesktopWorkbenchRuntimePortals(');
+    const runtimeEnd = desktopShellSource.indexOf('type DesktopWorkbenchPortalSlot', runtimeStart);
+    const runtimeSource = desktopShellSource.slice(runtimeStart, runtimeEnd);
+    expect(runtimeSource).toContain("scene.context.kind === 'creative-management'");
+    expect(runtimeSource).toContain("scene.context.scope.kind === 'workspace'");
+    expect(runtimeSource).not.toMatch(/retainedManagement|hiddenCharacter|studioPortalDeck/u);
+  });
+
+  it('keeps Character management read-only and does not open Project authoring from management', () => {
+    const detailStart = desktopShellSource.indexOf('<CharacterDetailSurface');
+    const detailEnd = desktopShellSource.indexOf('/>', detailStart);
+    const detailSource = desktopShellSource.slice(detailStart, detailEnd);
+    expect(detailSource).toContain('onExport: actions.onExportCharacterPackage');
+    expect(detailSource).toContain('onImport: () =>');
+    expect(detailSource).toContain('globalCharacterId: character.globalCharacterId');
+    expect(detailSource).toContain(
+      'expectedCurrentCharacterVersionId: character.currentCharacterVersionId',
+    );
+    expect(detailSource).not.toContain('onOpenAuthoring');
+    expect(detailSource).not.toContain('CharacterAuthoringSurface');
+    expect(desktopShellSource).not.toMatch(/CharacterStudio(?:Scene|Workbench|Controller)/u);
+    expect(desktopShellSource).not.toMatch(/rawPath|zipPath|recentWorkspace|activeWorkspace/u);
+  });
+
+  it('does not retain standalone Character package selection producers', () => {
+    expect(desktopShellSource).not.toContain('const exportCharacterPackage = (');
+    expect(desktopShellSource).not.toContain('const previewCharacterPackageImport = (');
+    expect(desktopShellSource).not.toContain('selectAuthoringLibrary');
+    expect(desktopShellSource).not.toMatch(/readFile|writeFile|rawPath|zipPath|packagePath/u);
+  });
+
+  it('finalizes before opening the exact Character Dialogue entry and never infers a version', () => {
+    const start = desktopShellSource.indexOf(
+      'onFinalizeAndStartCharacterConversation: async (input) =>',
+    );
+    const end = desktopShellSource.indexOf('onCharacterProductHandoff:', start);
+    const source = desktopShellSource.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(source).toContain("{ kind: 'open-agent-entry' }");
+    expect(source).toContain('characterVersionId: input.characterVersionId');
+    expect(source).toContain('createCharacterDialogueHandoffIntent');
+    expect(source).not.toMatch(/latest|versions\[0\]|activeCharacter|recentCharacter/u);
+  });
+
+  it('adds the exact Workspace Project to Creation context without navigating', () => {
+    const start = desktopShellSource.indexOf(
+      'onSelectWorkspaceProjectTarget: async (projectId) =>',
+    );
+    const end = desktopShellSource.indexOf('onLoadAuthoringTargets: async', start);
+    const projectSelectionSource = desktopShellSource.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(projectSelectionSource).toContain('workspaceGrants.selectProject');
+    expect(projectSelectionSource).toContain('projectId');
+    expect(projectSelectionSource).toContain('workspaceGrantId: result.grant.workspaceGrantId');
+    expect(projectSelectionSource).toContain("kind: 'project' as const");
+    expect(projectSelectionSource).not.toContain('projectAuthoring.getCatalog');
+    expect(projectSelectionSource).not.toContain('scenes.transition');
+    expect(projectSelectionSource).not.toContain("kind: 'open-project-workspace'");
+  });
+
+  it('removes standalone management creation producers', () => {
+    const actionsStart = desktopShellSource.indexOf('const actions: ShellActions = {');
+    expect(actionsStart).toBeGreaterThanOrEqual(0);
+    expect(desktopShellSource).not.toContain('onManualCreateCharacter:');
+    expect(desktopShellSource).not.toContain('onOpenCharacterAuthoring:');
+    expect(desktopShellSource).not.toContain("kind: 'standalone-library'");
+    expect(desktopShellSource).toContain('DesktopResourceBrowserSurface');
+    expect(desktopShellSource).toContain('onCharacterCreated');
   });
 });
 

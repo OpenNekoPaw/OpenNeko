@@ -1,5 +1,6 @@
 import type { ToolCall } from '@neko/agent-contracts';
-import { ImageGridCard } from '../MediaPreview/ImageGridCard';
+import type { PreviewMediaDescriptor } from '@neko/preview-domain';
+import { AgentPreviewCollection } from '../MediaPreview/AgentPreviewCollection';
 import { useTranslation } from '../../../i18n/I18nContext';
 import type { GenerationJobCardProjection } from '../../../presenters/tool-call-presenter';
 import { ErrorIcon, SuccessIcon, ToolLoadingSpinner, WarningIcon } from './icons';
@@ -7,9 +8,9 @@ import { ErrorIcon, SuccessIcon, ToolLoadingSpinner, WarningIcon } from './icons
 interface GenerationJobCardProps {
   readonly toolCall: ToolCall;
   readonly job: GenerationJobCardProjection;
-  readonly imageUrls: readonly string[];
-  readonly videoUrls: readonly string[];
-  readonly audioUrls: readonly string[];
+  readonly imageDescriptors: readonly PreviewMediaDescriptor[];
+  readonly videoDescriptors: readonly PreviewMediaDescriptor[];
+  readonly audioDescriptors: readonly PreviewMediaDescriptor[];
   readonly isPending: boolean;
   readonly isSuccess: boolean;
   readonly isFailed: boolean;
@@ -18,9 +19,9 @@ interface GenerationJobCardProps {
 export function GenerationJobCard({
   toolCall,
   job,
-  imageUrls,
-  videoUrls,
-  audioUrls,
+  imageDescriptors,
+  videoDescriptors,
+  audioDescriptors,
   isPending,
   isSuccess,
   isFailed,
@@ -111,30 +112,22 @@ export function GenerationJobCard({
             </div>
           )}
 
-          {isSuccess && imageUrls.length > 0 && (
+          {isSuccess && imageDescriptors.length > 0 && (
             <div className="mt-2">
               <div className="agent-produced-outputs-title">{t('chat.toolCall.outputs')}</div>
-              <ImageGridCard
-                urls={[...imageUrls]}
-                name={t('toolCalls.generation.result')}
-                className="mt-1"
-              />
+              <AgentPreviewCollection descriptors={imageDescriptors} className="mt-1" />
             </div>
           )}
-          {isSuccess && videoUrls.length > 0 && (
+          {isSuccess && videoDescriptors.length > 0 && (
             <div className="mt-2 space-y-2">
               <div className="agent-produced-outputs-title">{t('chat.toolCall.outputs')}</div>
-              {videoUrls.map((url) => (
-                <video key={url} className="max-h-[260px] w-full rounded" src={url} controls />
-              ))}
+              <AgentPreviewCollection descriptors={videoDescriptors} />
             </div>
           )}
-          {isSuccess && audioUrls.length > 0 && (
+          {isSuccess && audioDescriptors.length > 0 && (
             <div className="mt-2 space-y-2">
               <div className="agent-produced-outputs-title">{t('chat.toolCall.outputs')}</div>
-              {audioUrls.map((url) => (
-                <audio key={url} className="w-full" src={url} controls />
-              ))}
+              <AgentPreviewCollection descriptors={audioDescriptors} />
             </div>
           )}
 

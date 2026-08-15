@@ -9,13 +9,11 @@ import {
 import {
   CopyIcon,
   LayersIcon,
+  LockIcon,
   PlusIcon,
   RefreshIcon,
-  ScissorsIcon,
-  SendIcon,
   UndoIcon,
   RedoIcon,
-  PlayIcon,
 } from '@neko/ui/icons';
 import { t } from '../../i18n';
 import { createCanvasAddActionIcon } from '../adapters/sharedCanvasUiAdapter';
@@ -61,23 +59,21 @@ export interface CanvasMenuContext {
   onSelectAll: () => void;
   onFitContent: () => void;
   onResetView: () => void;
-  onCopy?: () => void;
-  onCut?: () => void;
   onPaste?: () => void;
   onPasteInPlace?: () => void;
-  onDuplicate?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
   onGroup?: () => void;
   onUngroup?: () => void;
-  onSetPlaybackEntry?: (nodeId: string) => void;
+  onBringToFront?: () => void;
+  onSendToBack?: () => void;
+  onToggleLock?: () => void;
   contextNodeId?: string;
   canGroup?: boolean;
   canUngroup?: boolean;
   canPaste?: boolean;
   canUndo?: boolean;
   canRedo?: boolean;
-  onSendToAgent?: (intent?: string) => void;
 }
 
 /**
@@ -168,66 +164,40 @@ function buildCanvasAddActionMenu(ctx: CanvasMenuContext): MenuAction {
  * Build context menu items for node right-click
  */
 export function buildNodeMenuItems(ctx: CanvasMenuContext): MenuEntry[] {
-  return [
-    {
-      label: t('menu.copy'),
-      icon: menuIcon(<CopyIcon size={MENU_ICON_SIZE} />),
-      shortcut: '⌘C',
-      onClick: () => ctx.onCopy?.(),
-    },
-    {
-      label: t('menu.cut'),
-      icon: menuIcon(<ScissorsIcon size={MENU_ICON_SIZE} />),
-      shortcut: '⌘X',
-      onClick: () => ctx.onCut?.(),
-    },
-    {
-      label: t('menu.duplicate'),
-      icon: menuIcon(<LayersIcon size={MENU_ICON_SIZE} />),
-      shortcut: '⌘D',
-      onClick: () => ctx.onDuplicate?.(),
-    },
-    { separator: true },
-    {
+  const grouping: MenuEntry[] = [];
+  if (ctx.canGroup) {
+    grouping.push({
       label: t('menu.group'),
       icon: menuIcon(<LayersIcon size={MENU_ICON_SIZE} />),
       shortcut: '⌘G',
       onClick: () => ctx.onGroup?.(),
-      disabled: !ctx.canGroup,
-    },
-    {
+    });
+  }
+  if (ctx.canUngroup) {
+    grouping.push({
       label: t('menu.ungroup'),
       icon: menuIcon(<LayersIcon size={MENU_ICON_SIZE} />),
       shortcut: '⇧⌘G',
       onClick: () => ctx.onUngroup?.(),
-      disabled: !ctx.canUngroup,
-    },
-    { separator: true },
+    });
+  }
+  return [
+    ...grouping,
+    ...(grouping.length > 0 ? ([{ separator: true }] satisfies MenuEntry[]) : []),
     {
       label: t('menu.bringToFront'),
       icon: menuIcon(<LayersIcon size={MENU_ICON_SIZE} />),
-      onClick: () => {},
+      onClick: () => ctx.onBringToFront?.(),
     },
     {
       label: t('menu.sendToBack'),
       icon: menuIcon(<LayersIcon size={MENU_ICON_SIZE} />),
-      onClick: () => {},
+      onClick: () => ctx.onSendToBack?.(),
     },
     {
-      label: t('menu.setPlaybackEntry'),
-      icon: menuIcon(<PlayIcon size={MENU_ICON_SIZE} />),
-      onClick: () => {
-        if (ctx.contextNodeId) {
-          ctx.onSetPlaybackEntry?.(ctx.contextNodeId);
-        }
-      },
-      disabled: !ctx.contextNodeId || !ctx.onSetPlaybackEntry,
-    },
-    { separator: true },
-    {
-      label: t('menu.ai.sendToAgent'),
-      icon: menuIcon(<SendIcon size={MENU_ICON_SIZE} />),
-      onClick: () => ctx.onSendToAgent?.(),
+      label: ctx.isNodeLocked ? t('menu.unlock') : t('menu.lock'),
+      icon: menuIcon(<LockIcon size={MENU_ICON_SIZE} />),
+      onClick: () => ctx.onToggleLock?.(),
     },
   ];
 }

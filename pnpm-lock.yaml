@@ -243,9 +243,6 @@ importers:
         specifier: 18.3.1
         version: 18.3.1(react@18.3.1)
     devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: ^0.80.7
-        version: 0.80.7(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.18.3)(zod@4.4.3)
       '@electron-forge/cli':
         specifier: 7.11.2
         version: 7.11.2(encoding@0.1.13)(postcss@8.5.6)
@@ -264,6 +261,9 @@ importers:
       '@electron/fuses':
         specifier: 2.1.3
         version: 2.1.3
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
@@ -373,9 +373,6 @@ importers:
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:../../cut/domain
-      '@neko/entity-domain':
-        specifier: workspace:*
-        version: link:../../entity/domain
       '@neko/entity-node':
         specifier: workspace:*
         version: link:../../entity/node
@@ -440,9 +437,6 @@ importers:
       '@neko/content':
         specifier: workspace:*
         version: link:../../content
-      '@neko/generation':
-        specifier: workspace:*
-        version: link:../../generation
       '@neko/markdown':
         specifier: workspace:*
         version: link:../../markdown
@@ -452,6 +446,9 @@ importers:
       '@neko/preview-domain':
         specifier: workspace:*
         version: link:../../preview/domain
+      '@neko/preview-webview':
+        specifier: workspace:*
+        version: link:../../preview/webview
       '@neko/search-domain':
         specifier: workspace:*
         version: link:../../search/domain
@@ -587,6 +584,9 @@ importers:
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../../canvas/domain
+      '@neko/chara-node':
+        specifier: workspace:*
+        version: link:../../chara-node
       '@neko/content':
         specifier: workspace:*
         version: link:../../content
@@ -608,6 +608,12 @@ importers:
       '@neko/preview-domain':
         specifier: workspace:*
         version: link:../../preview/domain
+      '@neko/project':
+        specifier: workspace:*
+        version: link:../../project
+      '@neko/world-node':
+        specifier: workspace:*
+        version: link:../../world-node
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -627,9 +633,9 @@ importers:
       '@neko/content':
         specifier: workspace:*
         version: link:../../content
-      '@neko/entity-webview':
+      '@neko/preview-webview':
         specifier: workspace:*
-        version: link:../../entity/webview
+        version: link:../../preview/webview
       '@neko/ui':
         specifier: workspace:*
         version: link:../../ui
@@ -803,12 +809,12 @@ importers:
       '@neko/markdown':
         specifier: workspace:*
         version: link:../../markdown
-      '@neko/media':
-        specifier: workspace:*
-        version: link:../../media
       '@neko/preview-domain':
         specifier: workspace:*
         version: link:../../preview/domain
+      '@neko/preview-webview':
+        specifier: workspace:*
+        version: link:../../preview/webview
       '@neko/shared':
         specifier: workspace:*
         version: link:../../shared
@@ -861,6 +867,9 @@ importers:
 
   packages/chara:
     dependencies:
+      '@neko/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent/contracts
       '@neko/content':
         specifier: workspace:*
         version: link:../content
@@ -892,6 +901,9 @@ importers:
       '@neko/local-metadata':
         specifier: workspace:*
         version: link:../local-metadata
+      '@zip.js/zip.js':
+        specifier: ^2.8.26
+        version: 2.8.26
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1247,6 +1259,9 @@ importers:
       '@neko/shared':
         specifier: workspace:*
         version: link:../shared
+      '@neko/world':
+        specifier: workspace:*
+        version: link:../world
       smol-toml:
         specifier: 1.6.1
         version: 1.6.1
@@ -1467,6 +1482,15 @@ importers:
       '@neko/chara':
         specifier: workspace:*
         version: link:../chara
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../content
+      '@neko/entity-domain':
+        specifier: workspace:*
+        version: link:../entity/domain
+      '@neko/search-domain':
+        specifier: workspace:*
+        version: link:../search/domain
       '@neko/world':
         specifier: workspace:*
         version: link:../world
@@ -1483,9 +1507,27 @@ importers:
 
   packages/project-node:
     dependencies:
+      '@neko/chara':
+        specifier: workspace:*
+        version: link:../chara
+      '@neko/chara-node':
+        specifier: workspace:*
+        version: link:../chara-node
+      '@neko/entity-domain':
+        specifier: workspace:*
+        version: link:../entity/domain
+      '@neko/local-metadata':
+        specifier: workspace:*
+        version: link:../local-metadata
       '@neko/project':
         specifier: workspace:*
         version: link:../project
+      '@neko/world':
+        specifier: workspace:*
+        version: link:../world
+      '@neko/world-node':
+        specifier: workspace:*
+        version: link:../world-node
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1651,6 +1693,9 @@ importers:
       '@neko/assets-node':
         specifier: workspace:*
         version: link:../../assets/node
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../../content
       '@neko/entity-node':
         specifier: workspace:*
         version: link:../../entity/node
@@ -1833,6 +1878,10 @@ importers:
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
 
   packages/world:
+    dependencies:
+      '@neko/agent-contracts':
+        specifier: workspace:*
+        version: link:../agent/contracts
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1852,6 +1901,9 @@ importers:
       '@neko/world':
         specifier: workspace:*
         version: link:../world
+      '@zip.js/zip.js':
+        specifier: ^2.8.26
+        version: 2.8.26
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

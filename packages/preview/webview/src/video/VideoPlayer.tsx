@@ -14,6 +14,8 @@ import { EmptyState } from '@neko/ui/primitives';
 import { InfoIcon, PlayIcon, WarningIcon } from '@neko/ui/icons';
 import type { PreviewOperationDiagnosticCode } from '../shared/types';
 import type { PreviewMediaViewerSnapshot } from '../root/viewer-snapshot';
+import type { PreviewViewerPlayback } from '../root/viewer-kernel';
+import { useProgrammaticMediaPlayback } from '../shared/useProgrammaticMediaPlayback';
 import '../styles/player.css';
 
 const CONTROLS_HIDE_DELAY = 3000;
@@ -24,9 +26,12 @@ export interface VideoPlayerProps {
   readonly displayName?: string;
   readonly autoPlay?: boolean;
   readonly compact?: boolean;
+  readonly ambient?: boolean;
   readonly muted?: boolean;
+  readonly controls?: boolean;
   readonly initialSnapshot?: PreviewMediaViewerSnapshot;
   readonly onSnapshotChange?: (snapshot: PreviewMediaViewerSnapshot) => void;
+  readonly playback?: PreviewViewerPlayback;
 }
 
 export function VideoPlayer({
@@ -34,9 +39,12 @@ export function VideoPlayer({
   displayName,
   autoPlay = false,
   compact = false,
+  ambient = false,
   muted = false,
+  controls = true,
   initialSnapshot,
   onSnapshotChange,
+  playback,
 }: VideoPlayerProps = {}) {
   return sourceUrl ? (
     <SourceVideoPlayer
@@ -44,9 +52,12 @@ export function VideoPlayer({
       displayName={displayName ?? ''}
       autoPlay={autoPlay}
       compact={compact}
+      ambient={ambient}
       muted={muted}
+      controls={controls}
       initialSnapshot={initialSnapshot}
       onSnapshotChange={onSnapshotChange}
+      playback={playback}
     />
   ) : (
     <EngineVideoPlayer />
@@ -55,13 +66,19 @@ export function VideoPlayer({
 
 function SourceVideoPlayer({
   sourceUrl,
+  displayName,
   autoPlay,
   compact,
+  ambient,
   muted,
+  controls,
   initialSnapshot,
   onSnapshotChange,
-}: Required<Pick<VideoPlayerProps, 'sourceUrl' | 'autoPlay' | 'compact' | 'muted'>> &
-  Pick<VideoPlayerProps, 'displayName' | 'initialSnapshot' | 'onSnapshotChange'>) {
+  playback,
+}: Required<
+  Pick<VideoPlayerProps, 'sourceUrl' | 'autoPlay' | 'compact' | 'ambient' | 'muted' | 'controls'>
+> &
+  Pick<VideoPlayerProps, 'displayName' | 'initialSnapshot' | 'onSnapshotChange' | 'playback'>) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -73,43 +90,67 @@ function SourceVideoPlayer({
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isPiPActive, setIsPiPActive] = useState(false);
   const [failed, setFailed] = useState(false);
+  const consumedRequestRef = useRef<string>();
+  const programmaticPlayback = useProgrammaticMediaPlayback();
+  const onSnapshotChangeRef = useRef(onSnapshotChange);
+  onSnapshotChangeRef.current = onSnapshotChange;
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.playbackRate = initialSnapshot?.playbackRate ?? 1;
+    video.volume = initialSnapshot?.volume ?? 1;
+    const entered = () => setIsPiPActive(true);
+    const left = () => setIsPiPActive(false);
+    video.addEventListener('enterpictureinpicture', entered);
+    video.addEventListener('leavepictureinpicture', left);
+    return () => {
+      onSnapshotChangeRef.current?.({
+        currentTime: video.currentTime,
+        playbackRate: video.playbackRate,
+        volume: video.volume,
+      });
+      programmaticPlayback.pause(video);
+      video.removeEventListener('enterpictureinpicture', entered);
+      video.removeEventListener('leavepictureinpicture', left);
+    };
+  }, [programmaticPlayback, sourceUrl]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     video.muted = muted;
     video.defaultMuted = muted;
-    video.playbackRate = initialSnapshot?.playbackRate ?? 1;
-    video.volume = initialSnapshot?.volume ?? 1;
-    if (autoPlay) {
-      setFailed(false);
-      void video.play().catch(() => {
-        setIsPlaying(false);
-        setFailed(true);
-      });
+  }, [muted, sourceUrl]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !autoPlay) return;
+    setFailed(false);
+    programmaticPlayback.play(video, () => {
+      setIsPlaying(false);
+    });
+  }, [autoPlay, programmaticPlayback, sourceUrl]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !playback) return;
+    if (
+      consumedRequestRef.current !== playback.requestId &&
+      typeof playback.startTimeSeconds === 'number'
+    ) {
+      consumedRequestRef.current = playback.requestId;
+      video.currentTime = Math.max(0, playback.startTimeSeconds);
     }
-    const entered = () => setIsPiPActive(true);
-    const left = () => setIsPiPActive(false);
-    video.addEventListener('enterpictureinpicture', entered);
-    video.addEventListener('leavepictureinpicture', left);
-    return () => {
-      onSnapshotChange?.({
-        currentTime: video.currentTime,
-        playbackRate: video.playbackRate,
-        volume: video.volume,
+    if (playback.state === 'playing') {
+      setFailed(false);
+      programmaticPlayback.play(video, () => {
+        setIsPlaying(false);
       });
-      video.pause();
-      video.removeEventListener('enterpictureinpicture', entered);
-      video.removeEventListener('leavepictureinpicture', left);
-    };
-  }, [
-    autoPlay,
-    initialSnapshot?.playbackRate,
-    initialSnapshot?.volume,
-    muted,
-    onSnapshotChange,
-    sourceUrl,
-  ]);
+    } else {
+      programmaticPlayback.pause(video);
+    }
+  }, [playback?.requestId, playback?.startTimeSeconds, playback?.state, programmaticPlayback]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
@@ -118,7 +159,6 @@ function SourceVideoPlayer({
     if (video.paused) {
       void video.play().catch(() => {
         setIsPlaying(false);
-        setFailed(true);
       });
     } else {
       video.pause();
@@ -160,8 +200,12 @@ function SourceVideoPlayer({
       <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
         <video
           ref={videoRef}
-          className="max-w-full max-h-full object-contain"
+          className="h-full w-full object-contain"
           src={sourceUrl}
+          aria-label={displayName}
+          autoPlay={autoPlay}
+          controls={controls && compact && !ambient}
+          loop={ambient}
           playsInline
           preload="metadata"
           onLoadedMetadata={(event) => {
@@ -180,16 +224,26 @@ function SourceVideoPlayer({
             const nextTime = event.currentTarget.currentTime;
             setCurrentTime(nextTime);
             onSnapshotChange?.({ currentTime: nextTime, playbackRate: speed, volume });
+            playback?.onTimeUpdate?.(nextTime, duration);
           }}
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-          onEnded={() => setIsPlaying(false)}
+          onPlay={() => {
+            setIsPlaying(true);
+          }}
+          onPause={() => {
+            setIsPlaying(false);
+          }}
+          onEnded={(event) => {
+            setIsPlaying(false);
+            if (!ambient) {
+              playback?.onEnded?.(event.currentTarget.currentTime, duration);
+            }
+          }}
           onError={() => {
             setIsPlaying(false);
             setFailed(true);
           }}
         />
-        {!compact && !isPlaying && !failed ? (
+        {controls && !compact && !isPlaying && !failed ? (
           <button
             type="button"
             data-testid="preview-video-toggle-playback"
@@ -216,7 +270,7 @@ function SourceVideoPlayer({
           </div>
         ) : null}
       </div>
-      {!compact ? (
+      {controls && !compact ? (
         <div
           className={`absolute bottom-0 left-0 right-0 transition-opacity ${
             controlsVisible ? 'opacity-100' : 'opacity-0'
@@ -589,7 +643,7 @@ function EngineVideoPlayer() {
       <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
         <video
           ref={videoRef}
-          className="max-w-full max-h-full object-contain"
+          className="h-full w-full object-contain"
           poster={posterUrl}
           playsInline
           muted

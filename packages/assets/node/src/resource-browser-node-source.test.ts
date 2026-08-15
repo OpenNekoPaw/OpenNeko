@@ -44,7 +44,7 @@ describe('Resource Browser Workspace File mutations', () => {
     const composition = createComposition(workspacePath, createFilePort());
     const parent = {
       resourceId: 'content:references',
-      facet: 'files' as const,
+      source: 'files' as const,
       kind: 'directory' as const,
       label: 'references',
       role: 'directory' as const,
@@ -68,7 +68,7 @@ describe('Resource Browser Workspace File mutations', () => {
     const composition = createComposition(workspacePath, createFilePort());
     const parent = {
       resourceId: 'content:references',
-      facet: 'files' as const,
+      source: 'files' as const,
       kind: 'directory' as const,
       label: 'references',
       role: 'directory' as const,
@@ -173,7 +173,7 @@ describe('Resource Browser Workspace File mutations', () => {
     ).rejects.toThrow('content-conflict');
     const item = {
       resourceId: 'content:notes.txt',
-      facet: 'files' as const,
+      source: 'files' as const,
       kind: 'file' as const,
       label: 'notes.txt',
       role: 'content' as const,
@@ -187,6 +187,71 @@ describe('Resource Browser Workspace File mutations', () => {
 
     expect(trashWorkspaceItem).toHaveBeenCalledWith(
       await realpath(path.join(workspacePath, 'notes.txt')),
+    );
+  });
+
+  it('rejects generic mutations of package-owned project facts and local state', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-owned-storage-'));
+    roots.push(root);
+    const workspacePath = path.join(root, 'workspace');
+    await mkdir(path.join(workspacePath, 'neko'), { recursive: true });
+    await mkdir(path.join(workspacePath, '.neko'), { recursive: true });
+    await writeFile(path.join(workspacePath, 'neko', 'project.json'), '{}', 'utf8');
+    await writeFile(path.join(workspacePath, '.neko', 'local.json'), '{}', 'utf8');
+    const trashWorkspaceItem = vi.fn(async (_absolutePath: string) => undefined);
+    const composition = createComposition(workspacePath, createFilePort(), { trashWorkspaceItem });
+    const factsDirectory = {
+      resourceId: 'content:neko',
+      source: 'files' as const,
+      kind: 'directory' as const,
+      label: 'neko',
+      role: 'directory' as const,
+      depth: 0,
+      locator: { kind: 'workspace-file' as const, path: 'neko' },
+      capabilities: [],
+    };
+    const factsFile = {
+      resourceId: 'content:neko/project.json',
+      source: 'files' as const,
+      kind: 'file' as const,
+      label: 'project.json',
+      role: 'content' as const,
+      depth: 0,
+      locator: { kind: 'workspace-file' as const, path: 'neko/project.json' },
+      capabilities: [],
+    };
+    const localStateFile = {
+      resourceId: 'content:.neko/local.json',
+      source: 'files' as const,
+      kind: 'file' as const,
+      label: 'local.json',
+      role: 'content' as const,
+      depth: 0,
+      locator: { kind: 'workspace-file' as const, path: '.neko/local.json' },
+      capabilities: [],
+    };
+
+    await expect(
+      composition.interactions.createFile({
+        identity,
+        parent: factsDirectory,
+        name: 'bypass.json',
+      }),
+    ).rejects.toThrow('project-facts');
+    await expect(
+      composition.interactions.trashContent({ identity, item: factsFile }),
+    ).rejects.toThrow('project-facts');
+    await expect(
+      composition.interactions.trashContent({ identity, item: localStateFile }),
+    ).rejects.toThrow('project-local-state');
+
+    expect(trashWorkspaceItem).not.toHaveBeenCalled();
+    await expect(stat(path.join(workspacePath, 'neko', 'bypass.json'))).rejects.toThrow();
+    await expect(readFile(path.join(workspacePath, 'neko', 'project.json'), 'utf8')).resolves.toBe(
+      '{}',
+    );
+    await expect(readFile(path.join(workspacePath, '.neko', 'local.json'), 'utf8')).resolves.toBe(
+      '{}',
     );
   });
 
@@ -215,6 +280,7 @@ function createComposition(
   } = {},
 ) {
   return createResourceBrowserNodeProjectionSource({
+    projectId: identity.projectId,
     globalAssetRoot: path.join(path.dirname(workspacePath), 'assets'),
     globalMediaLibraryRoot: path.join(path.dirname(workspacePath), 'media-libraries'),
     workspace: {
@@ -231,13 +297,13 @@ function createComposition(
     openCreativeDocument: overrides.openCreativeDocument ?? (async () => undefined),
     openTextEditor: async () => undefined,
     selectSource: async () => undefined,
+    selectWorkspaceFiles: async () => undefined,
     trashWorkspaceItem: overrides.trashWorkspaceItem ?? (async () => undefined),
     selectGlobalLibrary: async () => undefined,
     mutateGlobalMediaLibraries: (operation) => operation(),
     createThumbnail: async () => 'data:image/png;base64,AA==',
     addToCanvas: async () => undefined,
     addToCut: async () => undefined,
-    manageEntity: async () => undefined,
   });
 }
 

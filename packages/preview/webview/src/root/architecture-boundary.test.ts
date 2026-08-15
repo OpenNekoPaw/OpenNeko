@@ -1,9 +1,10 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 describe('Preview Root architecture boundary', () => {
   it('mounts the existing ModelViewer through an injected host without a second model renderer', async () => {
-    const source = await readFile(new URL('./index.tsx', import.meta.url), 'utf8');
+    const rootSource = await readFile(new URL('./index.tsx', import.meta.url), 'utf8');
+    const source = await readFile(new URL('./viewer-kernel.tsx', import.meta.url), 'utf8');
     const modelViewer = await readFile(
       new URL('../model/ModelViewer.tsx', import.meta.url),
       'utf8',
@@ -24,7 +25,8 @@ describe('Preview Root architecture boundary', () => {
     expect(modelViewer).not.toContain('getBrowserHostState');
     expect(modelViewer).not.toContain("window.addEventListener('message'");
     for (const [fileName, productionSource] of [
-      ['root/index.tsx', source],
+      ['root/index.tsx', rootSource],
+      ['root/viewer-kernel.tsx', source],
       ['model/ModelViewer.tsx', modelViewer],
       ['model/sourceModelViewerHost.ts', sourceModelViewerHost],
     ] as const) {
@@ -33,20 +35,28 @@ describe('Preview Root architecture boundary', () => {
   });
 
   it('consumes only opaque authorized media URLs without renderer-owned file transport', async () => {
-    const source = await readFile(new URL('./index.tsx', import.meta.url), 'utf8');
+    const rootSource = await readFile(new URL('./index.tsx', import.meta.url), 'utf8');
+    const source = await readFile(new URL('./viewer-kernel.tsx', import.meta.url), 'utf8');
+    const lightweightSource = await readFile(
+      new URL('./lightweight-preview.tsx', import.meta.url),
+      'utf8',
+    );
 
-    expect(source).toContain('sourceUrl: descriptor.url,');
-    expect(source).toContain('snapshotStore.read(descriptor.descriptorId)');
-    expect(source).toContain('onSnapshotChange: updateSnapshot');
-    expect(source.match(/<PreviewPresentation/gu)).toHaveLength(2);
-    expect(source).not.toContain('neko-media:');
-    expect(source).not.toContain('file:');
-    expect(source).not.toMatch(/\b(?:https?|blob):\/\//u);
-    expect(source).not.toContain('URL.createObjectURL');
-    expect(source).not.toContain('FileReader');
-    expect(source).not.toContain('new Blob');
-    expect(source).not.toContain('absolutePath');
-    expect(source).not.toContain('workspacePath');
+    expect(source).toContain('src={descriptor.url}');
+    expect(rootSource).toContain('snapshotStore.read(descriptor.descriptorId)');
+    expect(rootSource).toContain('onSnapshotChange: updateSnapshot');
+    expect(rootSource.match(/<PreviewPresentation/gu)).toHaveLength(2);
+    expect(lightweightSource).toContain('parsePreviewMediaDescriptor(inputDescriptor)');
+    for (const candidate of [rootSource, source, lightweightSource]) {
+      expect(candidate).not.toContain('neko-media:');
+      expect(candidate).not.toContain('file:');
+      expect(candidate).not.toMatch(/\b(?:https?|blob):\/\//u);
+      expect(candidate).not.toContain('URL.createObjectURL');
+      expect(candidate).not.toContain('FileReader');
+      expect(candidate).not.toContain('new Blob');
+      expect(candidate).not.toContain('absolutePath');
+      expect(candidate).not.toContain('workspacePath');
+    }
     for (const viewerModule of [
       '../audio/AudioPlayer',
       '../video/VideoPlayer',
@@ -59,9 +69,124 @@ describe('Preview Root architecture boundary', () => {
       expect(source).toContain(`await import('${viewerModule}')`);
       expect(source).not.toContain(`from '${viewerModule}'`);
     }
-    expectProductionRootSource('root/index.tsx', source);
+    expectProductionRootSource('root/index.tsx', rootSource);
+    expectProductionRootSource('root/viewer-kernel.tsx', source);
+    expectProductionRootSource('root/lightweight-preview.tsx', lightweightSource);
+  });
+
+  it('exposes one canonical lightweight entry without Cut or Desktop Viewer ownership', async () => {
+    const packageManifest = JSON.parse(
+      await readFile(new URL('../../package.json', import.meta.url), 'utf8'),
+    ) as { readonly exports?: Readonly<Record<string, string>> };
+    const cutManifest = await readFile(
+      new URL('../../../../cut/webview/package.json', import.meta.url),
+      'utf8',
+    );
+    const cutSources = await readSourceTree(
+      new URL('../../../../cut/webview/src', import.meta.url),
+    );
+    const desktopPreviewSources = await Promise.all(
+      [
+        'DesktopPreviewSurface.tsx',
+        'DesktopAuthorizedPreviewSurface.tsx',
+        'DesktopAssistantPreviewSurface.tsx',
+      ].map((fileName) =>
+        readFile(
+          new URL(`../../../../../apps/neko-desktop/src/renderer/${fileName}`, import.meta.url),
+          'utf8',
+        ),
+      ),
+    );
+
+    expect(packageManifest.exports?.['./lightweight']).toBeUndefined();
+    expect(packageManifest.exports?.['./embedded']).toBeUndefined();
+    expect(cutManifest).not.toContain('@neko/preview-webview');
+    expect(cutSources).not.toContain('LightweightPreview');
+    for (const source of desktopPreviewSources) {
+      expect(source).not.toContain('LightweightPreview');
+      expect(source).not.toContain('renderPreviewViewer');
+      expect(source).not.toMatch(/<(?:img|video|audio)\b/u);
+    }
+  });
+
+  it('poisons raw paths, alternate URLs, hidden roots and wildcard lightweight renderers', async () => {
+    const lightweightSource = await readFile(
+      new URL('./lightweight-preview.tsx', import.meta.url),
+      'utf8',
+    );
+    const kernelSource = await readFile(new URL('./viewer-kernel.tsx', import.meta.url), 'utf8');
+    const agentConsumer = await readFile(
+      new URL(
+        '../../../../agent/webview/src/components/ChatView/MediaPreview/AgentPreviewCollection.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    const agentRichMediaConsumers = await Promise.all(
+      ['ImageRenderer.tsx', 'VideoRenderer.tsx', 'AudioRenderer.tsx', 'CompositeRenderers.tsx'].map(
+        (fileName) =>
+          readFile(
+            new URL(
+              `../../../../agent/webview/src/components/ChatView/RichContent/renderers/${fileName}`,
+              import.meta.url,
+            ),
+            'utf8',
+          ),
+      ),
+    );
+    const agentMessageItem = await readFile(
+      new URL('../../../../agent/webview/src/components/ChatView/MessageItem.tsx', import.meta.url),
+      'utf8',
+    );
+    const assetConsumer = await readFile(
+      new URL('../../../../assets/webview/src/resource-browser/root.tsx', import.meta.url),
+      'utf8',
+    );
+    const canvasConsumer = await readFile(
+      new URL(
+        '../../../../canvas/webview/src/components/selection/CanvasImagePreviewOverlay.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+    expect(lightweightSource).toContain('parsePreviewMediaDescriptor(inputDescriptor)');
+    expect(lightweightSource).not.toContain('PreviewRoot');
+    expect(lightweightSource).not.toMatch(/\b(?:path|absolutePath|workspacePath)\s*:/u);
+    expect(lightweightSource).not.toMatch(/\b(?:https?|file|blob):\/\//u);
+    expect(kernelSource).toContain("{ kind: 'image'");
+    expect(kernelSource).toContain("{ kind: 'model'");
+    expect(kernelSource).not.toMatch(/kind:\s*['"]\*['"]/u);
+    for (const consumer of [agentConsumer, assetConsumer, canvasConsumer]) {
+      expect(consumer).toContain("from '@neko/preview-webview/root'");
+      expect(consumer).not.toContain("from '@neko/preview-webview/src/");
+      expect(consumer).not.toContain('<PreviewRoot');
+    }
+    for (const consumer of [agentConsumer, ...agentRichMediaConsumers]) {
+      expect(consumer).toContain("from '@neko/preview-webview/root'");
+      expect(consumer).not.toMatch(/<(?:img|video|audio)\b/u);
+      expect(consumer).not.toMatch(/\b(?:previewSrc|renderUri)\b/u);
+    }
+    for (const consumer of [agentMessageItem, ...agentRichMediaConsumers]) {
+      expect(consumer).not.toMatch(/\b(?:ImagePreview|VideoCard|AudioCard)\b/u);
+    }
   });
 });
+
+async function readSourceTree(directory: URL): Promise<string> {
+  const normalizedDirectory = new URL(
+    directory.href.endsWith('/') ? directory.href : `${directory.href}/`,
+  );
+  const entries = await readdir(normalizedDirectory, { withFileTypes: true });
+  const sources = await Promise.all(
+    entries.map(async (entry) => {
+      const child = new URL(`${entry.name}${entry.isDirectory() ? '/' : ''}`, normalizedDirectory);
+      if (entry.isDirectory()) return readSourceTree(child);
+      return /\.(?:ts|tsx|js|jsx)$/u.test(entry.name) ? readFile(child, 'utf8') : '';
+    }),
+  );
+  return sources.join('\n');
+}
 
 function expectProductionRootSource(fileName: string, source: string): void {
   const forbidden = [

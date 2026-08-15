@@ -86,7 +86,7 @@ describe('creative workbench shell primitives', () => {
     expect(tablist?.style.overflow).toBe('hidden');
     expect(tablist?.style.boxShadow).toContain('inset 0 1px 2px');
     const thumb = host.querySelector<HTMLElement>('.neko-segmented-control-thumb');
-    expect(thumb?.style.width).toBe('50%');
+    expect(thumb?.style.width).toBe('calc(0.5 * (100% - 4px))');
     expect(thumb?.style.transform).toBe('translateX(0%)');
     expect(host.querySelector('.neko-creative-workbench-right-panel-groups')).not.toBeNull();
     expect(activeTab?.style.borderRadius).toBe('999px');

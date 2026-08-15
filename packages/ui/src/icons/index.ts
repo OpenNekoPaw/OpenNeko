@@ -56,6 +56,7 @@ export {
   RedoIcon,
   ScissorsIcon,
   LayersIcon,
+  ListIcon,
   StorylineIcon,
   LeftPanelIcon,
   RightPanelIcon,

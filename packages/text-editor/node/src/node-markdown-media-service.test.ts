@@ -64,6 +64,7 @@ describe('Node Text Editor Markdown media service', () => {
     const resolveWorkspace = vi.fn(async () => workspace(workspacePath));
     const isolated = new NodeTextEditorMarkdownMediaService({
       resolveWorkspace,
+      globalMediaLibraryRoot: '/private/global-media-libraries',
       resources,
       createLeaseId: () => 'lease-1',
     });
@@ -93,6 +94,19 @@ describe('Node Text Editor Markdown media service', () => {
       diagnostic: { code: 'text-editor-markdown-media-missing' },
     });
     expect(resources.registerFile).not.toHaveBeenCalled();
+
+    const linkedProjection = '![[neko/assets/References/cover.png]]';
+    await expect(
+      service.prepare({
+        request: mediaRequest(linkedProjection, 'neko/assets/References/cover.png'),
+        source: linkedProjection,
+        resourceOwner: resourceOwner(),
+        isCurrent: () => true,
+      }),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'text-editor-markdown-media-unauthorized' },
+    });
   });
 
   it('rejects an escaped symlink without registering its physical target', async () => {
@@ -165,6 +179,7 @@ describe('Node Text Editor Markdown media service', () => {
     const secondLease = lease(`openneko://resource/${'d'.repeat(32)}`);
     const service = new NodeTextEditorMarkdownMediaService({
       resolveWorkspace: async () => workspace(workspacePath),
+      globalMediaLibraryRoot: '/private/global-media-libraries',
       resources: {
         registerFile: vi.fn().mockResolvedValueOnce(firstLease).mockResolvedValueOnce(secondLease),
       },
@@ -233,6 +248,7 @@ function createService(
 ): NodeTextEditorMarkdownMediaService {
   return new NodeTextEditorMarkdownMediaService({
     resolveWorkspace: async () => workspace(workspacePath),
+    globalMediaLibraryRoot: '/private/global-media-libraries',
     resources,
     createLeaseId: () => 'lease-1',
   });

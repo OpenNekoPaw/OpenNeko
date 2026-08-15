@@ -76,6 +76,46 @@ describe('Resource Browser content tree source', () => {
     expect(entries.map((entry) => entry.label)).toEqual(['visible.png']);
   });
 
+  it('does not inspect owner-declared excluded paths beside canonical siblings', async () => {
+    const stat = vi.fn(async () => ({ sizeBytes: 4, modifiedAtMs: 20 }));
+    const readDirectory = vi.fn(async (directory: string) => {
+      if (directory === '/workspace/neko') {
+        return [
+          { name: 'assets', type: 'directory' as const },
+          { name: 'project.json', type: 'file' as const },
+        ];
+      }
+      if (directory === '/workspace/neko/assets') {
+        throw new Error('Retired linked-media storage must not be inspected.');
+      }
+      return [];
+    });
+
+    const entries = await searchResourceBrowserContentTree({
+      absoluteRoot: '/workspace',
+      absoluteDirectory: '/workspace/neko',
+      locatorPrefix: '',
+      query: '',
+      limit: 20,
+      rootDepth: -1,
+      excludedDirectoryNames: new Set(),
+      excludedLocatorPaths: new Set(['neko/assets']),
+      files: { readDirectory, stat },
+      joinAbsolutePath: (directory, childName) => `${directory}/${childName}`,
+      relativePath: (root, target) => target.slice(root.length + 1),
+      classify: () => ({
+        include: true,
+        mediaType: 'file',
+        capabilities: ['read'],
+      }),
+    });
+
+    expect(entries.map((entry) => entry.label)).toEqual(['project.json']);
+    expect(entries[0]?.locator).toEqual({ kind: 'workspace-file', path: 'neko/project.json' });
+    expect(readDirectory).not.toHaveBeenCalledWith('/workspace/neko/assets');
+    expect(stat).toHaveBeenCalledTimes(1);
+  });
+
   it('projects portable hierarchy through the injected host-neutral file port', async () => {
     const readDirectory = vi.fn(async (directory: string) => {
       switch (directory) {

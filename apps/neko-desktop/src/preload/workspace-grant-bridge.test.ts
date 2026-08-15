@@ -6,7 +6,13 @@ import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
 } from '@neko/chara/contracts';
-import { WORLD_AUTHORING_HOST_CHANNEL } from '@neko/world/contracts';
+import {
+  WORLD_AUTHORING_HOST_CHANNEL,
+  WORLD_PORTABLE_HOST_CHANNELS,
+  WORLD_RUNTIME_HOST_CHANNEL,
+  type WorldPortableHostBinding,
+  type WorldRuntimeBinding,
+} from '@neko/world/contracts';
 import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
 import {
   createDefaultDesktopAgentScene,
@@ -153,31 +159,19 @@ describe('Desktop Workspace grant preload bridge', () => {
     });
   });
 
-  it('creates Content targets and selects configured authoring libraries through closed operations', async () => {
+  it('creates Content targets through one closed Host operation', async () => {
     electron.invoke.mockImplementation(
-      async (_channel: string, request: Record<string, unknown>) =>
-        request['operation'] === 'create-content-project'
-          ? {
-              requestId: request['requestId'],
-              status: 'authorized-project',
-              workspaceId: 'workspace-1',
-              projectId: 'content:workspace-1',
-              grant: {
-                workspaceGrantId: 'grant-content',
-                windowId: 'window-1',
-                label: 'Novel',
-              },
-            }
-          : {
-              requestId: request['requestId'],
-              status: 'authorized',
-              workspaceId: 'library-worlds',
-              grant: {
-                workspaceGrantId: 'grant-worlds',
-                windowId: 'window-1',
-                label: 'Worlds',
-              },
-            },
+      async (_channel: string, request: Record<string, unknown>) => ({
+        requestId: request['requestId'],
+        status: 'authorized-project',
+        workspaceId: 'workspace-1',
+        projectId: 'content:workspace-1',
+        grant: {
+          workspaceGrantId: 'grant-content',
+          windowId: 'window-1',
+          label: 'Novel',
+        },
+      }),
     );
     const bridge = electron.bridge;
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
@@ -185,12 +179,8 @@ describe('Desktop Workspace grant preload bridge', () => {
       status: 'authorized-project',
       projectId: 'content:workspace-1',
     });
-    await expect(
-      bridge.workspaceGrants.selectAuthoringLibrary('window-1', 'world'),
-    ).resolves.toMatchObject({ status: 'authorized', workspaceId: 'library-worlds' });
     expect(electron.invoke.mock.calls.map((call) => call[1])).toEqual([
       expect.objectContaining({ operation: 'create-content-project' }),
-      expect.objectContaining({ operation: 'select-authoring-library', library: 'world' }),
     ]);
   });
 
@@ -204,18 +194,18 @@ describe('Desktop Workspace grant preload bridge', () => {
           windowId: 'window-1',
           workspaceId: 'workspace-1',
           workspaceGrantId: 'workspace-grant:1',
-          contentProjectId: 'project-1',
+          projectId: 'project-1',
         });
         expect(request).not.toHaveProperty('path');
         return {
           requestId: request['requestId'],
           workspaceId: 'workspace-1',
-          contentProjectId: 'project-1',
+          projectId: 'project-1',
           navigation: [
             {
               kind: 'authoring-target',
-              target: { kind: 'content-project', contentProjectId: 'project-1' },
-              identity: 'content-project:project-1',
+              target: { kind: 'content-document', documentId: 'document-1' },
+              identity: 'content-document:document-1',
               label: 'Demo',
             },
           ],
@@ -228,16 +218,134 @@ describe('Desktop Workspace grant preload bridge', () => {
       bridge.projectAuthoring.getNavigation('window-1', {
         workspaceId: 'workspace-1',
         workspaceGrantId: 'workspace-grant:1',
-        contentProjectId: 'project-1',
+        projectId: 'project-1',
       }),
-    ).resolves.toMatchObject({ navigation: [{ identity: 'content-project:project-1' }] });
+    ).resolves.toMatchObject({ navigation: [{ identity: 'content-document:document-1' }] });
+  });
+
+  it('requests the aggregate Project authoring catalog without minting Renderer grants', async () => {
+    electron.invoke.mockImplementation(
+      async (channel: string, request: Record<string, unknown>) => {
+        expect(channel).toBe(PROJECT_AUTHORING_HOST_CHANNEL);
+        expect(request).toEqual(
+          expect.objectContaining({
+            operation: 'catalog-get',
+            rendererSessionId: 'application-1:window-1:1',
+            windowId: 'window-1',
+          }),
+        );
+        expect(request).not.toHaveProperty('workspaceGrantId');
+        expect(request).not.toHaveProperty('path');
+        return { requestId: request['requestId'], projects: [], diagnostics: [] };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+    await expect(bridge.projectAuthoring.getCatalog('window-1')).resolves.toEqual(
+      expect.objectContaining({ projects: [], diagnostics: [] }),
+    );
+  });
+
+  it('requests Project Content through the same exact Project authority', async () => {
+    electron.invoke.mockImplementation(
+      async (channel: string, request: Record<string, unknown>) => {
+        expect(channel).toBe(PROJECT_AUTHORING_HOST_CHANNEL);
+        expect(request).toMatchObject({
+          operation: 'content-get',
+          rendererSessionId: 'application-1:window-1:1',
+          windowId: 'window-1',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'workspace-grant:1',
+          projectId: 'project-1',
+        });
+        expect(request).not.toHaveProperty('path');
+        return {
+          requestId: request['requestId'],
+          workspaceId: 'workspace-1',
+          projectId: 'project-1',
+          projection: {
+            projectId: 'project-1',
+            characters: [],
+            worlds: [],
+            elements: [],
+            candidates: [],
+            diagnostics: [],
+          },
+        };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+    await expect(
+      bridge.projectAuthoring.getContent('window-1', {
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant:1',
+        projectId: 'project-1',
+      }),
+    ).resolves.toMatchObject({ projection: { projectId: 'project-1' } });
+  });
+
+  it('round-trips the Creative Workspace projection without publication planning', async () => {
+    const binding = {
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant:1',
+      projectId: 'project-1',
+    };
+    electron.invoke.mockImplementation(
+      async (channel: string, request: Record<string, unknown>) => {
+        expect(channel).toBe(PROJECT_AUTHORING_HOST_CHANNEL);
+        expect(request).not.toHaveProperty('path');
+        expect(['creative-workspace-get', 'creative-workspace-reference-mutate']).toContain(
+          request['operation'],
+        );
+        return {
+          requestId: request['requestId'],
+          ...binding,
+          projection: {
+            composition: {
+              projectId: binding.projectId,
+              content: [],
+              characters: [],
+              worlds: [],
+              globalCharacters: [],
+              globalWorlds: [],
+              availableGlobalCharacters: [],
+              availableGlobalWorlds: [],
+              diagnostics: [],
+            },
+          },
+        };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+    await expect(
+      bridge.projectAuthoring.getCreativeWorkspace('window-1', binding),
+    ).resolves.toMatchObject({ projection: { composition: { projectId: binding.projectId } } });
+    await expect(
+      bridge.projectAuthoring.mutateCreativeWorkspaceReference('window-1', binding, {
+        kind: 'remove',
+        reference: {
+          kind: 'world-version',
+          globalWorldId: 'global-world-1',
+          worldVersionId: 'world-version-1',
+        },
+      }),
+    ).resolves.toMatchObject({ projection: { composition: { projectId: binding.projectId } } });
+    expect(electron.invoke).toHaveBeenLastCalledWith(
+      PROJECT_AUTHORING_HOST_CHANNEL,
+      expect.objectContaining({
+        operation: 'creative-workspace-reference-mutate',
+        mutation: expect.objectContaining({ kind: 'remove' }),
+      }),
+    );
   });
 
   it('binds Character Studio reads and commands to the exact project-local target', async () => {
     const binding = {
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant:1',
-      contentProjectId: 'project-1',
+      authority: { kind: 'project' as const, projectId: 'project-1' },
       characterProjectId: 'character-1',
     };
     electron.invoke.mockImplementation(
@@ -252,7 +360,17 @@ describe('Desktop Workspace grant preload bridge', () => {
         return {
           requestId: request['requestId'],
           ...binding,
-          snapshot: { project: characterProject(), versions: [], diagnostics: [] },
+          snapshot: {
+            project: characterProject(),
+            versions: [],
+            authoringTestSnapshots: [],
+            storylines: [],
+            storylineDrafts: [],
+            storylineVersions: [],
+            lineage: null,
+            referenceInventories: [],
+            diagnostics: [],
+          },
         };
       },
     );
@@ -278,7 +396,7 @@ describe('Desktop Workspace grant preload bridge', () => {
     const binding = {
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant:1',
-      contentProjectId: 'project-1',
+      authority: { kind: 'project' as const, projectId: 'project-1' },
       worldProjectId: 'world-1',
     };
     electron.invoke.mockImplementation(
@@ -312,7 +430,124 @@ describe('Desktop Workspace grant preload bridge', () => {
       operation: 'world-project-set-review',
     });
   });
+
+  it('binds World portable operations without exposing paths or archive bytes', async () => {
+    const binding: WorldPortableHostBinding = {
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant:1',
+      authority: { kind: 'project', projectId: 'project-1' },
+    };
+    electron.invoke.mockImplementation(
+      async (channel: string, request: Record<string, unknown>) => {
+        expect(Object.values(WORLD_PORTABLE_HOST_CHANNELS)).toContain(channel);
+        expect(request).toMatchObject({
+          rendererSessionId: 'application-1:window-1:1',
+          windowId: 'window-1',
+        });
+        if (request['operation'] === 'export') expect(request).toMatchObject({ binding });
+        expect(request).not.toHaveProperty('path');
+        expect(request).not.toHaveProperty('archiveBytes');
+        return {
+          requestId: request['requestId'],
+          status: 'completed',
+          result:
+            request['operation'] === 'export'
+              ? {
+                  kind: 'export-completed',
+                  worldProjectId: 'world-1',
+                  worldVersionId: 'version-1',
+                  archiveByteLength: 3,
+                }
+              : {
+                  kind: 'import-completed',
+                  worldProjectId: 'world-1',
+                  worldVersionId: 'version-1',
+                },
+        };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await bridge.worldPortable.exportPackage('window-1', binding, {
+      worldProjectId: 'world-1',
+      worldVersionId: 'version-1',
+      embeddedResourceIds: [],
+    });
+    await bridge.worldPortable.importPackage('window-1', {
+      kind: 'new',
+      globalWorldId: 'global-world-1',
+    });
+  });
+
+  it('binds World Runtime launch, reattach and action to one sender-scoped authority', async () => {
+    const binding: WorldRuntimeBinding = {
+      worldProjectId: 'world-1',
+      worldVersionId: 'world-version-1',
+      worldRunId: 'world-run-1',
+      worldSaveId: 'world-save-1',
+      branchId: 'branch-main',
+      participantId: 'participant-1',
+      actorId: 'actor-1',
+    };
+    electron.invoke.mockImplementation(
+      async (channel: string, request: Record<string, unknown>) => {
+        expect(channel).toBe(WORLD_RUNTIME_HOST_CHANNEL);
+        expect(request).toMatchObject({
+          rendererSessionId: 'application-1:window-1:1',
+          windowId: 'window-1',
+        });
+        expect(request).not.toHaveProperty('path');
+        return {
+          requestId: request['requestId'],
+          projection: runtimeProjection(binding),
+        };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await bridge.worldRuntime.launch('window-1', { ...binding, saveLabel: 'First run' });
+    await bridge.worldRuntime.getSnapshot('window-1', binding);
+    await bridge.worldRuntime.submitAction('window-1', binding, {
+      worldActionIntentId: 'intent-1',
+      worldRunId: binding.worldRunId,
+      worldSaveId: binding.worldSaveId,
+      branchId: binding.branchId,
+      actorId: 'actor-1',
+      action: 'world.foundation.fact.set',
+      parameters: {},
+      observedTimepoint: 0,
+      expectedWorldStateRevision: 0,
+      createdAt: '2026-08-14T00:00:00.000Z',
+    });
+    expect(electron.invoke.mock.calls.map((call) => call[1])).toEqual([
+      expect.objectContaining({
+        operation: 'runtime-launch',
+        launch: { ...binding, saveLabel: 'First run' },
+      }),
+      expect.objectContaining({ operation: 'runtime-snapshot-get', binding }),
+      expect.objectContaining({ operation: 'runtime-action-submit', binding }),
+    ]);
+  });
 });
+
+function runtimeProjection(binding: WorldRuntimeBinding) {
+  return {
+    binding,
+    status: 'ready' as const,
+    background: 'Archive City',
+    locations: [],
+    facts: [],
+    availableActions: ['world.foundation.fact.set'],
+    participants: [{ participantId: binding.participantId, actorId: 'actor-1' }],
+    worldStateRevision: 0,
+    timepoint: 0,
+    branches: [{ branchId: binding.branchId, active: true, eventCount: 0 }],
+    timeline: [],
+    diagnostics: [],
+  };
+}
 
 function characterProject() {
   return {

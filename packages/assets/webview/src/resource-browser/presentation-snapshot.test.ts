@@ -9,27 +9,21 @@ describe('Resource Browser presentation snapshot store', () => {
     const expandedResourceIds = ['content:shots'];
     store.write(first, {
       query: 'shot',
-      activeFacet: 'files',
+      activeSource: 'files',
       viewMode: 'list',
       expandedResourceIds,
       selectedResourceIds: { files: 'content:shots/one.png' },
       activeContainerResourceIds: {},
-      entityDrafts: {
-        'entity:rin': { canonicalName: 'Rin draft', mergeTargetId: '', bindingPath: '' },
-      },
     });
     expandedResourceIds.push('content:mutated');
 
     expect(store.read(first)).toEqual({
       query: 'shot',
-      activeFacet: 'files',
+      activeSource: 'files',
       viewMode: 'list',
       expandedResourceIds: ['content:shots'],
       selectedResourceIds: { files: 'content:shots/one.png' },
       activeContainerResourceIds: {},
-      entityDrafts: {
-        'entity:rin': { canonicalName: 'Rin draft', mergeTargetId: '', bindingPath: '' },
-      },
     });
     expect(store.read(second)).toBeUndefined();
     expect(JSON.stringify(store.read(first))).not.toMatch(
@@ -42,12 +36,11 @@ describe('Resource Browser presentation snapshot store', () => {
     const identity = { projectId: 'project-1', workspaceId: 'workspace-1' };
     store.write(identity, {
       query: 'shot',
-      activeFacet: 'files',
+      activeSource: 'files',
       viewMode: 'list',
       expandedResourceIds: [],
       selectedResourceIds: {},
       activeContainerResourceIds: {},
-      entityDrafts: {},
     });
     store.write(identity, undefined);
 

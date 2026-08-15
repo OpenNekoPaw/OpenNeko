@@ -17,6 +17,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactElement,
 } from 'react';
+import type { TextEditorRuntimeBootstrap } from './runtime-bootstrap';
 import type { TextEditorHostRuntime } from './host-runtime';
 import type { MilkdownEditorActions } from './milkdown-rich-editor';
 import {
@@ -36,7 +37,7 @@ import { refreshSourceDecorations, sourceLanguageExtensions } from './source-lan
 import './style.css';
 
 export interface TextEditorRootProps {
-  readonly runtime: TextEditorHostRuntime;
+  readonly bootstrap: TextEditorRuntimeBootstrap;
   readonly locale: TextEditorLocale;
   readonly cspNonce?: string;
   readonly initialSnapshot?: unknown;
@@ -55,13 +56,14 @@ const MilkdownRichEditor = lazy(async () => {
 });
 
 export function TextEditorRoot({
-  runtime,
+  bootstrap,
   locale,
   cspNonce,
   initialSnapshot,
   onSnapshotChange,
   renderContextActions,
 }: TextEditorRootProps): ReactElement {
+  const runtime = bootstrap.runtime;
   const parsedSnapshot = useMemo(
     () =>
       initialSnapshot === undefined
@@ -96,19 +98,25 @@ export function TextEditorRoot({
   const activateRichEditor = useCallback(() => setActiveEditor('rich'), []);
   const activateSourceEditor = useCallback(() => setActiveEditor('source'), []);
 
-  const load = useCallback(async () => {
-    setState({ status: 'loading' });
-    try {
-      setState({ status: 'ready', projection: await runtime.project() });
-    } catch (error) {
-      setState({ status: 'error', message: errorMessage(error) });
-    }
-  }, [runtime]);
+  const load = useCallback(
+    async (retry = false) => {
+      setState({ status: 'loading' });
+      try {
+        setState({
+          status: 'ready',
+          projection: await (retry ? bootstrap.retryProjection() : bootstrap.getProjection()),
+        });
+      } catch (error) {
+        setState({ status: 'error', message: errorMessage(error) });
+      }
+    },
+    [bootstrap],
+  );
 
   useEffect(() => void load(), [load]);
   useEffect(
-    () => runtime.subscribe((projection) => setState({ status: 'ready', projection })),
-    [runtime],
+    () => bootstrap.subscribe((projection) => setState({ status: 'ready', projection })),
+    [bootstrap],
   );
 
   useEffect(() => {
@@ -143,7 +151,7 @@ export function TextEditorRoot({
     return (
       <section className="neko-text-editor-status" role="alert">
         <span>{presentError(locale, state.message)}</span>
-        <button type="button" onClick={() => void load()}>
+        <button type="button" onClick={() => void load(true)}>
           {textEditorLabel(locale, 'retry')}
         </button>
       </section>

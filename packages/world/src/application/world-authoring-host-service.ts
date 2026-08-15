@@ -3,13 +3,16 @@ import {
   type WorldAuthoringCommand,
   type WorldAuthoringSnapshot,
 } from '@neko/world/contracts';
-import type { WorldAuthoringCatalogPort } from './world-durable-catalog';
+import type {
+  WorldAuthoringCatalogPort,
+  WorldAuthoringCatalogScope,
+} from './world-durable-catalog';
 import type { WorldAuthoringService } from './world-authoring-service';
 
 export class WorldAuthoringHostService {
   constructor(
     private readonly options: {
-      readonly contentProjectId: string;
+      readonly scope: Extract<WorldAuthoringCatalogScope, { readonly kind: 'project' }>;
       readonly catalog: WorldAuthoringCatalogPort;
       readonly authoring: WorldAuthoringService;
     },
@@ -18,13 +21,8 @@ export class WorldAuthoringHostService {
   async getSnapshot(worldProjectId: string, signal?: AbortSignal): Promise<WorldAuthoringSnapshot> {
     signal?.throwIfAborted();
     const catalog = await this.options.catalog.readAuthoringCatalog(signal);
-    if (
-      catalog.scope.kind !== 'content-project' ||
-      catalog.scope.contentProjectId !== this.options.contentProjectId
-    ) {
-      throw new Error(
-        `World authoring catalog does not match Content Project '${this.options.contentProjectId}'.`,
-      );
+    if (!sameScope(catalog.scope, this.options.scope)) {
+      throw new Error('World authoring catalog does not match its exact authority.');
     }
     const project = catalog.projects.find(
       (candidate) => candidate.worldProjectId === worldProjectId,
@@ -63,6 +61,9 @@ export class WorldAuthoringHostService {
   ): Promise<WorldAuthoringSnapshot> {
     signal?.throwIfAborted();
     switch (command.operation) {
+      case 'world-project-create':
+        await this.options.authoring.createProject(command.input, signal);
+        break;
       case 'world-project-update-draft':
         await this.options.authoring.updateDraft(command.input, signal);
         break;
@@ -75,4 +76,11 @@ export class WorldAuthoringHostService {
     }
     return this.getSnapshot(command.input.worldProjectId, signal);
   }
+}
+
+function sameScope(
+  left: WorldAuthoringCatalogScope,
+  right: Extract<WorldAuthoringCatalogScope, { readonly kind: 'project' }>,
+): boolean {
+  return left.kind === 'project' && left.projectId === right.projectId;
 }

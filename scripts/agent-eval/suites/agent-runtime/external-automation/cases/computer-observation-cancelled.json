@@ -11,20 +11,21 @@
     "lifecycleChecks": ["graceful-close"]
   },
   "evidenceContract": {
-    "userBehavior": "Cancel a pending long-running Computer observation request and return the exact conversation to terminal idle without raw-provider fallback.",
+    "userBehavior": "Cancel a pending long-running Computer observation request and return the exact conversation to terminal idle without raw-provider fallback; the companion session-control test covers explicit Take over.",
     "canonicalPath": [
       "visible Desktop Agent composer",
-      "pending qualified Computer Tool request",
+      "pending compatible Computer Tool request",
       "Pi turn cancellation",
       "AbortSignal propagation",
       "owned automation session cleanup",
+      "exact-session Stop/Take over companion contract",
       "terminal idle projection"
     ],
     "observables": [
       {
         "ref": "computer-cancel-facts",
         "kind": "runtime-fact",
-        "description": "Accepted cancellation of the pending qualified Tool request, terminal idle state, and absence of raw Cua Driver fallback.",
+        "description": "Accepted cancellation of the pending compatible Tool request, exact-session cleanup, terminal idle state, and absence of raw Cua Driver fallback.",
         "required": true
       }
     ],

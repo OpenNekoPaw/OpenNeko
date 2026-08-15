@@ -1,6 +1,6 @@
 # @neko/assets-domain
 
-Neko Assets owns the Desktop Media Library surface and composes the Creative Entity browser. It does not maintain an Asset catalog or a second semantic identity model.
+Neko Assets owns the Desktop Resources surface for local files, linked Media Libraries, and installed Assets. It does not own project semantic content or a second semantic identity model.
 
 ## Responsibilities
 
@@ -10,14 +10,13 @@ Neko Assets owns the Desktop Media Library surface and composes the Creative Ent
 - Add, relink, and remove library links. Link removal never mutates target contents.
 - Copy to or delete from a selected writable library through authorized Content I/O operations.
 - Build rebuildable technical metadata, recent-use, and search projections.
-- Compose Creative Entity UI and Agent capabilities through `@neko/entity-domain`.
 - Generate thumbnail bytes for the shared representation/cache boundary without exposing cache paths.
 
 ## Boundaries
 
 - The OS link is the only mapping from a Media Library name to its target. No settings variable, source registry, or `library.json` duplicates that mapping.
 - Files use `neko/assets/<libraryName>/...` locators directly. Discovery does not create entities or bindings.
-- Creative Entity owns character, scene, object, location, and style identity plus representation bindings.
+- Project Entity owns project-local semantic identity and accepted representation bindings outside this package.
 - Generated outputs, document entries, and package resources retain their owner-specific identities and lifecycle.
 - Cache paths, absolute link targets, Webview URIs, and runtime tokens are implementation details that never become durable content identity.
 
@@ -28,12 +27,11 @@ Desktop Main composes the package's host-neutral services through public entries
 projections, and `SemanticSourceDiscoveryService` emits reviewable semantic evidence without writing
 Entity facts. The package-owned renderer root projects those services through typed Desktop IPC.
 
-The project Resource Browser is independent from the global Library Browser. It exposes the four
-owner-preserving `files`, `media`, `assets`, and `entities` facets and keeps per-facet selection,
-navigation, query, and list/grid state. Asset results retain exact Asset identity; Entity and candidate
-results retain their Entity owner identity. The package-owned `entity.manage` route validates selection,
-capability, identity, and expected project revision before delegating to the exact Entity owner. It does
-not infer Entity operations or write project files in the Renderer or Desktop application root.
+The project Resource Browser is independent from the global Library Browser. It exposes exactly three
+owner-preserving `files`, `media`, and `assets` sources and keeps per-source selection, navigation,
+query, and list/grid state. Asset results retain exact Asset identity. Project Characters, Worlds, other
+confirmed elements, and candidates are presented by the separate Project-owned Project Content read
+model; Entity is not a Resource Browser source or mutation route.
 
 The `files` facet is a live projection of the authorized Workspace system directory. Assets Node owns
 Workspace-scoped observation and treats filesystem notifications only as invalidation hints before an
@@ -54,9 +52,9 @@ receiving a physical target. Recovery is an explicit revisioned plan followed by
 generic repair routes fail closed. Add and relink create OS links through the machine-global alias
 topology and never copy a whole library.
 
-Entity Asset intents remain capability-gated until the manifest-backed Asset package runtime,
-publication lifecycle, and remote provider are production-wired. The flat global Asset file surface is
-not a fallback package provider.
+The Asset source covers only the local manifest-backed package lifecycle. Cloud distribution is outside
+this package's current product path, and the flat global Asset file surface is not a fallback package
+provider.
 
 Portable snapshot execution is owned by the Desktop project lifecycle surface, not this browser.
 That operation creates a new independent project, collects only authoritative referenced bytes, and

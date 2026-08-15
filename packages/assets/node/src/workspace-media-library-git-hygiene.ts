@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   assertWorkspaceLinkedMediaLibraryName,
   workspaceLinkedMediaLibraryPath,
@@ -16,10 +16,11 @@ export async function ensureWorkspaceLinkedMediaLibraryGitExclude(options: {
   const excludePath = await resolveGitExcludePath(options.workDir);
   if (!excludePath) return;
   const existing = await readFileIfExists(excludePath);
-  if (existing.split(/\r?\n/u).includes(exactRule)) return;
-  await mkdir(dirname(excludePath), { recursive: true });
-  const separator = existing.length === 0 ? '' : existing.endsWith('\n') ? '' : '\n';
-  await appendFile(excludePath, `${separator}${exactRule}\n`, 'utf8');
+  if (!existing.split(/\r?\n/u).includes(exactRule)) {
+    await mkdir(dirname(excludePath), { recursive: true });
+    const separator = existing.length === 0 || existing.endsWith('\n') ? '' : '\n';
+    await appendFile(excludePath, `${separator}${exactRule}\n`, 'utf8');
+  }
   const match = await checkIgnore(options.workDir, relativePath);
   if (!match.ignored || match.matchedRule !== exactRule) {
     throw new Error('Git did not apply the exact workspace media library exclude rule.');
@@ -30,7 +31,10 @@ async function resolveGitExcludePath(workDir: string): Promise<string | undefine
   const gitDir = await executeGit(workDir, ['rev-parse', '--git-dir']);
   if (!gitDir.ok) return undefined;
   const raw = gitDir.stdout.trim();
-  return raw ? join(workDir, raw, 'info', 'exclude') : undefined;
+  if (!raw) return undefined;
+  return isAbsolute(raw)
+    ? join(raw, 'info', 'exclude')
+    : join(resolve(workDir, raw), 'info', 'exclude');
 }
 
 async function readFileIfExists(filePath: string): Promise<string> {
@@ -56,9 +60,8 @@ async function checkIgnore(
   if (!result.ok) return { ignored: false, matchedRule: null };
   const match = /^.+?:\d+:(.*)\t[^\n]+\n?$/u.exec(result.stdout);
   const matchedRule = match?.[1]?.trim();
-  if (!matchedRule) {
+  if (!matchedRule)
     throw new Error(`Git returned an invalid check-ignore result for ${relativePath}.`);
-  }
   return { ignored: true, matchedRule };
 }
 
@@ -66,10 +69,10 @@ function executeGit(
   workDir: string,
   args: readonly string[],
 ): Promise<{ readonly ok: boolean; readonly stdout: string }> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolveResult, reject) => {
     execFile('git', ['-C', workDir, ...args], { encoding: 'utf8' }, (error, stdout, stderr) => {
-      if (!error) return resolve({ ok: true, stdout });
-      if (error.code === 1 || error.code === 128) return resolve({ ok: false, stdout: '' });
+      if (!error) return resolveResult({ ok: true, stdout });
+      if (error.code === 1 || error.code === 128) return resolveResult({ ok: false, stdout: '' });
       reject(new Error(stderr || error.message));
     });
   });

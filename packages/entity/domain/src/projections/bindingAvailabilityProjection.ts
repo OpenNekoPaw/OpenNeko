@@ -2,6 +2,7 @@ import type {
   EntityBindingAvailabilityProjectionValue,
   ProjectEntityBindingAttentionAction,
 } from '../contracts';
+import { serializeContentReferenceTarget } from '@neko/content';
 
 export interface EntityBindingAvailabilityProjection {
   readonly label: string;
@@ -41,8 +42,10 @@ function representationLabel(
   switch (representation.kind) {
     case 'workspace-file':
       return representation.path;
+    case 'media-library':
+      return `${representation.libraryName}/${representation.relativePath}`;
     case 'document-entry':
-      return `${representation.source.path}#${representation.entryPath}`;
+      return `${serializeContentReferenceTarget(representation.source)}#${representation.entryPath}`;
     case 'generated-output':
       return representation.path;
     case 'package-resource':

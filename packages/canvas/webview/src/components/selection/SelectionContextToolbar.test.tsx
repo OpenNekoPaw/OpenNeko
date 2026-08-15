@@ -86,7 +86,84 @@ describe('SelectionContextToolbar', () => {
     container.remove();
   });
 
-  it('keeps Video edit, audio separation, save material and preview visible while grouping advanced edits in More', async () => {
+  it('keeps the toolbar preview owned by Main Preview without duplicating Canvas fullscreen', async () => {
+    const node = mediaNode('image-preview', 'image', 'assets/image.png');
+    const executeMaterialAction = vi.fn(async () => materialActionSnapshot());
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <CanvasHostProvider
+          host={createMaterialHost(
+            [descriptor('preview:open', 'Full-screen preview', 'read')],
+            executeMaterialAction,
+          )}
+        >
+          <SelectionContextToolbar
+            nodes={[node]}
+            selectedNodeIds={[node.id]}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            viewportSize={{ width: 800, height: 600 }}
+          />
+        </CanvasHostProvider>,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(container.querySelector('[data-selection-action="canvas:preview"]')).toBeNull();
+    expect(
+      container.querySelector('[data-selection-action="preview:open"]')?.getAttribute('aria-label'),
+    ).toBe('Full-screen preview');
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-selection-action="preview:open"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(executeMaterialAction).toHaveBeenCalledWith('preview:open', [node.id], {});
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it('keeps file toolbar preview Main Preview-only', async () => {
+    const textNode = fileNode('notes', 'notes/scene.md');
+    const epubNode = fileNode('book', 'books/story.epub');
+    const host = createMaterialHost([descriptor('preview:open', 'Main Preview', 'read')]);
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const render = (node: CanvasNode): void =>
+      root.render(
+        <CanvasHostProvider host={host}>
+          <SelectionContextToolbar
+            nodes={[node]}
+            selectedNodeIds={[node.id]}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            viewportSize={{ width: 800, height: 600 }}
+          />
+        </CanvasHostProvider>,
+      );
+
+    await act(async () => {
+      render(textNode);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(container.querySelector('[data-selection-action="canvas:preview"]')).toBeNull();
+    expect(container.querySelector('[data-selection-action="preview:open"]')).not.toBeNull();
+
+    await act(async () => {
+      render(epubNode);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(container.querySelector('[data-selection-action="canvas:preview"]')).toBeNull();
+    expect(container.querySelector('[data-selection-action="preview:open"]')).not.toBeNull();
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it('omits resource-library actions while keeping Video operations in one flat More list', async () => {
     const node: CanvasNode = {
       id: 'video',
       type: 'media',
@@ -151,32 +228,24 @@ describe('SelectionContextToolbar', () => {
       Array.from(container.querySelectorAll('[data-selection-action-location="primary"]')).map(
         (element) => element.getAttribute('data-selection-action'),
       ),
-    ).toEqual([
-      'cut:add-resource',
-      'video:separate-audio',
-      'media-library:copy-to-project',
-      'node:duplicate',
-      'preview:open',
-    ]);
+    ).toEqual(['cut:add-resource', 'video:separate-audio', 'node:duplicate', 'preview:open']);
     expect(
       container
         .querySelector('[data-selection-overflow]')
         ?.getAttribute('data-selection-overflow-actions'),
     ).toBe(
-      'video:enhance video:extract-frame video:remove-subtitles video:generate-subtitles video:color-grade video:open-editor-tools desktop:reveal media-library:copy-to-global',
+      'video:enhance video:extract-frame video:remove-subtitles video:generate-subtitles video:color-grade video:open-editor-tools',
     );
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-selection-overflow]')?.click();
     });
-    const mediaLibraryGroup = document.body.querySelector(
-      '[data-selection-overflow-group="media-library"]',
-    );
-    expect(mediaLibraryGroup?.textContent).toContain('Media Library');
-    expect(mediaLibraryGroup?.textContent).toContain('Copy to global Media Library');
-    expect(
-      document.body.querySelector('[data-selection-overflow-group="media-edit"]')?.textContent,
-    ).toContain('Enhance & interpolate');
+    expect(document.body.querySelector('[data-selection-overflow-group]')).toBeNull();
+    expect(document.body.querySelector('.selection-action-overflow__label')).toBeNull();
+    expect(document.body.textContent).toContain('Enhance & interpolate');
+    expect(document.body.textContent).not.toContain('Reveal in Finder');
+    expect(document.body.textContent).not.toContain('Copy to project Media Library');
+    expect(document.body.textContent).not.toContain('Copy to global Media Library');
     expect(document.body.textContent).not.toContain('Delete');
 
     await act(async () => {
@@ -193,7 +262,7 @@ describe('SelectionContextToolbar', () => {
     container.remove();
   });
 
-  it('orders Audio edit, denoise, save and preview only when owners contribute them', async () => {
+  it('orders Audio edit, denoise and preview while omitting resource-library actions', async () => {
     const node = mediaNode('audio', 'audio', 'media/voice.wav');
     const toolbar = await renderToolbar(
       [node],
@@ -210,13 +279,7 @@ describe('SelectionContextToolbar', () => {
       Array.from(
         toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
       ).map((element) => element.getAttribute('data-selection-action')),
-    ).toEqual([
-      'cut:add-resource',
-      'audio:voice-denoise',
-      'media-library:copy-to-project',
-      'node:duplicate',
-      'preview:open',
-    ]);
+    ).toEqual(['cut:add-resource', 'audio:voice-denoise', 'node:duplicate', 'preview:open']);
     expect(toolbar.container.textContent).toContain('Voice denoise');
     expect(toolbar.container.innerHTML).not.toContain('video:separate-audio');
     expect(toolbar.container.innerHTML).not.toContain('delete-selection');
@@ -248,14 +311,7 @@ describe('SelectionContextToolbar', () => {
       Array.from(
         toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
       ).map((element) => element.getAttribute('data-selection-action')),
-    ).toEqual([
-      'image:crop',
-      'image:upscale',
-      'image:redraw',
-      'media-library:copy-to-project',
-      'node:duplicate',
-      'preview:open',
-    ]);
+    ).toEqual(['image:crop', 'image:upscale', 'image:redraw', 'node:duplicate', 'preview:open']);
     expect(
       toolbar.container
         .querySelector('[data-selection-overflow]')
@@ -311,11 +367,7 @@ describe('SelectionContextToolbar', () => {
     expect(
       generated.container.querySelector('[data-selection-action="generation:regenerate"]'),
     ).not.toBeNull();
-    expect(
-      generated.container
-        .querySelector('[data-selection-overflow]')
-        ?.getAttribute('data-selection-overflow-actions'),
-    ).toContain('desktop:reveal');
+    expect(generated.container.innerHTML).not.toContain('desktop:reveal');
     await generated.dispose();
   });
 
@@ -341,7 +393,7 @@ describe('SelectionContextToolbar', () => {
     expect(markup).not.toContain('node:open-content-overlay');
   });
 
-  it('keeps referenced text editing and preview visible while placing Finder in More', async () => {
+  it('keeps referenced text editing and preview visible while omitting Finder operations', async () => {
     const node = fileNode('notes', 'notes/scene.md');
     const toolbar = await renderToolbar(
       [node],
@@ -358,11 +410,7 @@ describe('SelectionContextToolbar', () => {
         toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
       ).map((element) => element.getAttribute('data-selection-action')),
     ).toEqual(['text:edit', 'node:duplicate', 'preview:open']);
-    expect(
-      toolbar.container
-        .querySelector('[data-selection-overflow]')
-        ?.getAttribute('data-selection-overflow-actions'),
-    ).toBe('desktop:reveal');
+    expect(toolbar.container.innerHTML).not.toContain('desktop:reveal');
     expect(toolbar.container.querySelector('[data-selection-kind-label]')?.textContent).toBe(
       'File',
     );
@@ -414,7 +462,8 @@ describe('SelectionContextToolbar', () => {
     expect(markup).toContain('data-selection-kind-label="true"');
     expect(markup).toContain('>Image</span>');
     expect(markup).toContain('data-selection-action="node:duplicate"');
-    expect(markup).not.toContain('preview:open');
+    expect(markup).toContain('data-selection-action="preview:open"');
+    expect(markup).toContain('data-disabled-reason="This capability is unavailable"');
     expect(markup).not.toContain('text:edit');
     expect(markup).not.toContain('cut:add-resource');
   });
@@ -459,17 +508,16 @@ describe('SelectionContextToolbar', () => {
       Array.from(
         toolbar.container.querySelectorAll('[data-selection-action-location="primary"]'),
       ).map((element) => element.getAttribute('data-selection-action')),
-    ).toEqual(['media-library:copy-to-project', 'node:duplicate', 'preview:open']);
-    expect(toolbar.container.innerHTML).not.toContain('data-selection-action="text:edit"');
+    ).toEqual(['text:edit', 'node:duplicate', 'preview:open']);
     expect(
-      toolbar.container
-        .querySelector('[data-selection-overflow]')
-        ?.getAttribute('data-selection-overflow-actions'),
-    ).toBe('desktop:reveal');
+      toolbar.container.querySelector<HTMLButtonElement>('[data-selection-action="text:edit"]')
+        ?.disabled,
+    ).toBe(true);
+    expect(toolbar.container.innerHTML).not.toContain('desktop:reveal');
     await toolbar.dispose();
   });
 
-  it('refreshes material actions when a selected Generation node receives its first output', async () => {
+  it('enables and disables stable Video slots without reordering as capability changes', async () => {
     const emptyNode: CanvasNode = {
       id: 'generation-video',
       type: 'generation',
@@ -505,7 +553,8 @@ describe('SelectionContextToolbar', () => {
       .mockResolvedValueOnce([
         descriptor('cut:add-resource', 'Edit', 'handoff'),
         descriptor('video:separate-audio', 'Separate audio', 'derive'),
-      ]);
+      ])
+      .mockResolvedValueOnce([]);
     const host = { ...createMaterialHost([]), resolveMaterialActions };
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -526,7 +575,13 @@ describe('SelectionContextToolbar', () => {
       render(emptyNode);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(container.querySelector('[data-selection-action="cut:add-resource"]')).toBeNull();
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-selection-action="cut:add-resource"]')
+        ?.disabled,
+    ).toBe(true);
+    const stableOrder = Array.from(
+      container.querySelectorAll('[data-selection-action-location="primary"]'),
+    ).map((element) => element.getAttribute('data-selection-action'));
 
     await act(async () => {
       render(completedNode);
@@ -535,6 +590,30 @@ describe('SelectionContextToolbar', () => {
 
     expect(resolveMaterialActions).toHaveBeenCalledTimes(2);
     expect(container.querySelector('[data-selection-action="cut:add-resource"]')).not.toBeNull();
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-selection-action="cut:add-resource"]')
+        ?.disabled,
+    ).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll('[data-selection-action-location="primary"]')).map(
+        (element) => element.getAttribute('data-selection-action'),
+      ),
+    ).toEqual(stableOrder);
+
+    await act(async () => {
+      render(emptyNode);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(resolveMaterialActions).toHaveBeenCalledTimes(3);
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-selection-action="cut:add-resource"]')
+        ?.disabled,
+    ).toBe(true);
+    expect(
+      Array.from(container.querySelectorAll('[data-selection-action-location="primary"]')).map(
+        (element) => element.getAttribute('data-selection-action'),
+      ),
+    ).toEqual(stableOrder);
     expect(
       container.querySelector('[data-selection-action="video:separate-audio"]'),
     ).not.toBeNull();
@@ -573,6 +652,42 @@ describe('SelectionContextToolbar', () => {
     expect(diagnostic?.getAttribute('title')).toBe('Image action owner is unavailable.');
     expect(diagnostic?.textContent).toContain('Actions unavailable');
     expect(container.querySelector('[data-selection-action="node:duplicate"]')).not.toBeNull();
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it('does not restart material action resolution for an equivalent selection projection', async () => {
+    const node = mediaNode('video-stable-selection', 'video', 'media/clip.mp4');
+    const resolveMaterialActions = vi
+      .fn<CanvasWebviewHostPort['resolveMaterialActions']>()
+      .mockResolvedValue([descriptor('preview:open', 'Preview', 'read')]);
+    const host = { ...createMaterialHost([]), resolveMaterialActions };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const render = (): void =>
+      root.render(
+        <CanvasHostProvider host={host}>
+          <SelectionContextToolbar
+            nodes={[node]}
+            selectedNodeIds={[node.id]}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            viewportSize={{ width: 800, height: 600 }}
+          />
+        </CanvasHostProvider>,
+      );
+
+    await act(async () => {
+      render();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      render();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(resolveMaterialActions).toHaveBeenCalledTimes(1);
+    expect(resolveMaterialActions).toHaveBeenCalledWith([node.id]);
     await act(async () => root.unmount());
     container.remove();
   });

@@ -28,4 +28,22 @@ if (result.error) {
   process.exit(1);
 }
 
-process.exit(result.status ?? 1);
+if ((result.status ?? 1) !== 0) {
+  process.exit(result.status ?? 1);
+}
+
+const dispositionArgs = ['scripts/check-openspec-successor-dispositions.mjs'];
+console.log(`[quality] ${process.execPath} ${dispositionArgs.join(' ')}`);
+const dispositionResult = spawnSync(process.execPath, dispositionArgs, {
+  stdio: 'inherit',
+  env: process.env,
+});
+
+if (dispositionResult.error) {
+  console.error(
+    `[quality] Failed to audit OpenSpec successor dispositions: ${dispositionResult.error.message}`,
+  );
+  process.exit(1);
+}
+
+process.exit(dispositionResult.status ?? 1);

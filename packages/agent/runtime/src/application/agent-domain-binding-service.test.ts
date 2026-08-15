@@ -43,12 +43,26 @@ describe('Agent domain binding application service', () => {
     expect(workspace).toHaveBeenCalledWith(workspaceBinding);
   });
 
-  it('returns owner-qualified unavailable results for uncomposed Chara and World providers', async () => {
+  it('returns owner-qualified unavailable results for uncomposed Chara, Room and World providers', async () => {
     const service = createAgentDomainBindingApplicationService({
       assistant: { resolve: async () => available(assistantBinding) },
       workspace: { resolve: async () => available(workspaceBinding) },
     });
 
+    await expect(
+      service.resolve({
+        kind: 'room',
+        scope: 'interaction',
+        roomId: 'room:one',
+        roomRunId: 'room-run:two',
+      }),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: {
+        code: 'room-binding-provider-unavailable',
+        owner: 'room:room:one:room-run:two',
+      },
+    });
     await expect(
       service.resolve({
         kind: 'character',
@@ -72,6 +86,7 @@ describe('Agent domain binding application service', () => {
         worldExperienceVersionId: 'world-version:two',
         participantId: 'participant:one',
         roleScopeId: 'scope:one',
+        characters: [],
       }),
     ).resolves.toMatchObject({
       status: 'unavailable',
@@ -109,6 +124,7 @@ describe('Agent domain binding application service', () => {
       worldExperienceVersionId: 'world-version:one',
       participantId: 'participant:one',
       roleScopeId: 'role-scope:one',
+      characters: [],
     };
 
     await expect(service.resolve(requested)).resolves.toEqual({

@@ -303,7 +303,7 @@ function mutationTool(
     category: 'project',
     requiresConfirmation: true,
     safetyKind: 'confirmation-gated',
-    requirements: { writableProject: true, authoringTargetKind: 'content-project' },
+    requirements: { writableProject: true, authoringTargetKind: 'content-document' },
     queryBeforeMutate: {
       preferredQueryTools: [TOOL_NAMES_CANVAS.CANVAS_LIST_NODES],
       reason: 'Resolve the exact Canvas target and current fingerprint before mutation.',

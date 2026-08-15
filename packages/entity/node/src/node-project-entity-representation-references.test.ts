@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { contentLocatorKey } from '@neko/content';
 import { NodeProjectEntityRepository } from './node-project-entity-repository';
 import { NodeProjectEntityRepresentationReferenceService } from './node-project-entity-representation-references';
 
@@ -20,13 +21,22 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
     const before = await service.inspect();
     expect(before).toMatchObject({
       references: [
-        { kind: 'workspace-file', path: 'neko/assets/Library/rin.png' },
+        { kind: 'media-library', libraryName: 'Library', relativePath: 'rin.png' },
         { kind: 'generated-output', outputId: 'output-rin', digest: 'a'.repeat(64) },
       ],
     });
 
-    const after = await service.rewriteWorkspacePaths({
-      replacements: new Map([['neko/assets/Library/rin.png', 'media/rin.png']]),
+    const after = await service.rewriteContentLocators({
+      replacements: new Map([
+        [
+          contentLocatorKey({
+            kind: 'media-library',
+            libraryName: 'Library',
+            relativePath: 'rin.png',
+          }),
+          'media/rin.png',
+        ],
+      ]),
     });
     expect(after).toMatchObject({
       references: [
@@ -52,7 +62,6 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
       entityId: 'character-invalid',
       kind: 'character',
       names: { canonical: '', aliases: [] },
-      facts: {},
       representations: [],
       lifecycle: { state: 'active' },
       createdAt: '2026-08-05T00:00:00.000Z',
@@ -62,7 +71,7 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
 
     await expect(createService(workspacePath).inspect()).resolves.toMatchObject({
       references: [
-        { kind: 'workspace-file', path: 'neko/assets/Library/rin.png' },
+        { kind: 'media-library', libraryName: 'Library', relativePath: 'rin.png' },
         { kind: 'generated-output', outputId: 'output-rin' },
       ],
       diagnostics: [{ code: 'invalid-project-entity-document', entityId: 'character-invalid' }],
@@ -109,12 +118,15 @@ async function writeCanonicalDocument(workspacePath: string): Promise<void> {
         entityId: 'character-rin',
         kind: 'character',
         names: { canonical: 'Rin', aliases: [] },
-        facts: {},
         representations: [
           {
             bindingId: 'workspace-binding',
             role: 'portrait',
-            target: { kind: 'workspace-file', path: 'neko/assets/Library/rin.png' },
+            target: {
+              kind: 'media-library',
+              libraryName: 'Library',
+              relativePath: 'rin.png',
+            },
             source: 'user',
             acceptedAt: '2026-08-05T00:00:00.000Z',
           },

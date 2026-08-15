@@ -31,6 +31,15 @@ export function useProjectionEndpoint(
         realmId,
         createAttachmentId: () => createProjectionAttachmentId(),
         reportError: (error, context) => {
+          if (context.operation === 'drop-stale-frame') {
+            logger.warn(error.message, {
+              operation: context.operation,
+              attachmentId: context.key.attachmentId,
+              tabId: context.key.tabId,
+              conversationId: context.key.conversationId,
+            });
+            return;
+          }
           logger.error(error.message, {
             operation: context.operation,
             attachmentId: context.key.attachmentId,

@@ -32,18 +32,18 @@ import {
   type AutomationSessionPhase,
 } from '@neko/automation-contracts/session-control';
 import {
-  qualifyAutomationProviderProfile,
-  type AutomationQualificationDiagnostic,
-} from './qualification';
+  inspectAutomationProviderSupport,
+  type AutomationSupportDiagnostic,
+} from './provider-support';
 
 export * from './browser-use';
+export * from './browser-use-targets';
 export * from './computer-use';
 export * from './cua-driver-targets';
-export * from './endpoint-management';
+export * from './local-runtime-management';
 export * from './mcp-provider';
 export * from './permission-management';
-export * from './qualification';
-export * from './schema-digest';
+export * from './provider-support';
 export * from './session-authorization';
 export * from './session-owned-mcp-runtime';
 export * from './target-selection-coordinator';
@@ -174,7 +174,7 @@ export class AutomationError extends Error {
 }
 
 export interface AutomationApplicationService {
-  listQualificationDiagnostics(): readonly AutomationQualificationDiagnostic[];
+  listSupportDiagnostics(): readonly AutomationSupportDiagnostic[];
   listAvailableOperations(profileId: string): readonly AutomationReviewedOperation[];
   listOwnedSessions(extensionId: string): readonly AutomationSessionSnapshot[];
   listSessionControls(scope: unknown): readonly AutomationSessionControlProjection[];
@@ -214,12 +214,15 @@ export async function createAutomationApplicationService(options: {
     providers.set(key, provider);
   }
 
-  const qualifications = new Map<string, ReadonlyMap<string, AutomationReviewedOperation>>();
-  const diagnostics: AutomationQualificationDiagnostic[] = [];
+  const supportedOperationsByProfile = new Map<
+    string,
+    ReadonlyMap<string, AutomationReviewedOperation>
+  >();
+  const diagnostics: AutomationSupportDiagnostic[] = [];
   for (const profile of profiles) {
     const provider = providers.get(providerKey(profile.provider));
     if (!provider) {
-      qualifications.set(profile.id, new Map());
+      supportedOperationsByProfile.set(profile.id, new Map());
       diagnostics.push(
         ...profile.operations.map((operation) => ({
           profileId: profile.id,
@@ -233,7 +236,7 @@ export async function createAutomationApplicationService(options: {
     try {
       inspection = parseAutomationProviderInspection(await provider.inspect());
     } catch {
-      qualifications.set(profile.id, new Map());
+      supportedOperationsByProfile.set(profile.id, new Map());
       diagnostics.push(
         ...profile.operations.map((operation) => ({
           profileId: profile.id,
@@ -243,18 +246,18 @@ export async function createAutomationApplicationService(options: {
       );
       continue;
     }
-    const qualification = qualifyAutomationProviderProfile(profile, inspection);
+    const support = inspectAutomationProviderSupport(profile, inspection);
     const available = new Map(
-      qualification.availableOperations.map((operation) => [operation.name, operation]),
+      support.supportedOperations.map((operation) => [operation.name, operation]),
     );
-    diagnostics.push(...qualification.diagnostics);
-    qualifications.set(profile.id, available);
+    diagnostics.push(...support.diagnostics);
+    supportedOperationsByProfile.set(profile.id, available);
   }
 
   return new DefaultAutomationApplicationService(
     new Map(profiles.map((profile) => [profile.id, profile])),
     providers,
-    qualifications,
+    supportedOperationsByProfile,
     Object.freeze(diagnostics),
     options.extensionRuntime,
     options.sessionGrants,
@@ -284,23 +287,23 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
   constructor(
     private readonly profiles: ReadonlyMap<string, AutomationProfile>,
     private readonly providers: ReadonlyMap<string, AutomationProviderPort>,
-    private readonly qualifications: ReadonlyMap<
+    private readonly supportedOperationsByProfile: ReadonlyMap<
       string,
       ReadonlyMap<string, AutomationReviewedOperation>
     >,
-    private readonly diagnostics: readonly AutomationQualificationDiagnostic[],
+    private readonly diagnostics: readonly AutomationSupportDiagnostic[],
     private readonly extensionRuntime: AutomationExtensionRuntimePort,
     private readonly sessionGrants: AutomationSessionGrantPort,
     private readonly hostPermissions: AutomationHostPermissionPort,
     private readonly transientObservations: AutomationTransientObservationPort,
   ) {}
 
-  listQualificationDiagnostics(): readonly AutomationQualificationDiagnostic[] {
+  listSupportDiagnostics(): readonly AutomationSupportDiagnostic[] {
     return this.diagnostics;
   }
 
   listAvailableOperations(profileId: string): readonly AutomationReviewedOperation[] {
-    const operations = this.qualifications.get(profileId);
+    const operations = this.supportedOperationsByProfile.get(profileId);
     if (!operations) {
       throw new AutomationError(
         'provider-unavailable',
@@ -602,7 +605,9 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
     if (session.remainingSteps <= 0) {
       throw new AutomationError('step-budget-exhausted', 'Automation step budget is exhausted.');
     }
-    const operation = this.qualifications.get(session.profile.id)?.get(request.operation);
+    const operation = this.supportedOperationsByProfile
+      .get(session.profile.id)
+      ?.get(request.operation);
     if (!operation || !operation.modes.includes(session.request.mode)) {
       throw new AutomationError(
         'operation-unreviewed',
@@ -831,7 +836,6 @@ function projectSessionControl(session: RuntimeSession): AutomationSessionContro
       extensionId: session.profile.provider.extensionId,
       providerId: session.profile.provider.providerId,
       kind: session.profile.provider.kind,
-      upstreamRelease: session.profile.provider.upstreamRelease,
     },
     target: {
       kind: session.request.target.kind,
@@ -875,7 +879,9 @@ function combineAbortSignals(
 function providerKey(identity: AutomationProviderIdentity): string {
   const source = identity.deliverySource;
   return `${identity.extensionId}:${identity.providerId}:${
-    source.kind === 'user-managed-endpoint' ? `${source.kind}:${source.endpointId}` : source.kind
+    source.kind === 'user-managed-local-runtime'
+      ? `${source.kind}:${source.runtimeId}`
+      : source.kind
   }`;
 }
 
@@ -887,7 +893,6 @@ function sameProviderIdentity(
     left.extensionId === right.extensionId &&
     left.providerId === right.providerId &&
     left.kind === right.kind &&
-    left.upstreamRelease === right.upstreamRelease &&
     sameProviderDeliverySource(left.deliverySource, right.deliverySource)
   );
 }
@@ -897,8 +902,8 @@ function sameProviderDeliverySource(
   right: AutomationProviderIdentity['deliverySource'],
 ): boolean {
   if (left.kind !== right.kind) return false;
-  if (left.kind === 'user-managed-endpoint' && right.kind === 'user-managed-endpoint') {
-    return left.endpointId === right.endpointId;
+  if (left.kind === 'user-managed-local-runtime' && right.kind === 'user-managed-local-runtime') {
+    return left.runtimeId === right.runtimeId;
   }
   return true;
 }

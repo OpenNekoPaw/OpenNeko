@@ -19,7 +19,11 @@ import type { AutomationTargetRevalidationPort } from './session-owned-mcp-runti
 const MAX_SELECTION_CANDIDATES = 100;
 
 export interface AutomationTargetDiscoveryPort extends AutomationTargetRevalidationPort {
-  listCandidates(input?: { readonly signal?: AbortSignal }): Promise<readonly AutomationTarget[]>;
+  listCandidates(input: {
+    readonly sessionId: string;
+    readonly targetHint?: unknown;
+    readonly signal?: AbortSignal;
+  }): Promise<readonly AutomationTarget[]>;
 }
 
 export interface AutomationTargetSelectionPort {
@@ -39,6 +43,7 @@ export interface AutomationSessionAuthorizationInput {
     readonly runId: string;
     readonly toolCallId: string;
   };
+  readonly targetHint?: unknown;
   readonly signal?: AbortSignal;
 }
 
@@ -110,6 +115,8 @@ export function createAutomationSessionAuthorizationService(options: {
       });
       const authorizationId = identity(createAuthorizationId(), 'Automation target authorization');
       const discovered = await registration.targets.listCandidates({
+        sessionId,
+        ...(input.targetHint === undefined ? {} : { targetHint: input.targetHint }),
         ...(input.signal === undefined ? {} : { signal: input.signal }),
       });
       throwIfAborted(input.signal);
@@ -214,7 +221,7 @@ function sameProfile(left: AutomationProfile, right: AutomationProfile): boolean
       return (
         candidate !== undefined &&
         operation.name === candidate.name &&
-        operation.inputSchemaDigest === candidate.inputSchemaDigest &&
+        sameOrderedStrings(operation.requiredInputProperties, candidate.requiredInputProperties) &&
         sameOrderedStrings(operation.modes, candidate.modes) &&
         operation.trait.effect === candidate.trait.effect &&
         operation.trait.readOnly === candidate.trait.readOnly &&
@@ -240,15 +247,17 @@ function sameProvider(
     left.extensionId !== right.extensionId ||
     left.providerId !== right.providerId ||
     left.kind !== right.kind ||
-    left.upstreamRelease !== right.upstreamRelease ||
     left.deliverySource.kind !== right.deliverySource.kind
   ) {
     return false;
   }
-  return left.deliverySource.kind === 'user-managed-endpoint' &&
-    right.deliverySource.kind === 'user-managed-endpoint'
-    ? left.deliverySource.endpointId === right.deliverySource.endpointId
-    : true;
+  if (
+    left.deliverySource.kind === 'user-managed-local-runtime' &&
+    right.deliverySource.kind === 'user-managed-local-runtime'
+  ) {
+    return left.deliverySource.runtimeId === right.deliverySource.runtimeId;
+  }
+  return true;
 }
 
 function sameOrderedStrings(left: readonly string[], right: readonly string[]): boolean {

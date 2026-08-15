@@ -11,7 +11,12 @@ import {
   type NekoMarkdownSemanticPromptSpan,
   type NekoMarkdownStableRef,
 } from '@neko/markdown';
-import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/content';
+import {
+  contentLocatorKey,
+  isContentLocator,
+  serializeContentReferenceTarget,
+  type ContentLocator,
+} from '@neko/content';
 import { type PerceptionCard, type ToolResultAttachment } from '@neko/agent-contracts';
 import { type PerceptualAssetRef } from '@neko/media';
 import {
@@ -1107,10 +1112,12 @@ function contentLocatorLookupTokens(contentLocator: ContentLocator): readonly st
     contentLocator.kind === 'workspace-file'
       ? [contentLocator.path]
       : contentLocator.kind === 'document-entry'
-        ? [contentLocator.source.path, contentLocator.entryPath]
+        ? [serializeContentReferenceTarget(contentLocator.source), contentLocator.entryPath]
         : contentLocator.kind === 'generated-output'
           ? [contentLocator.path, contentLocator.outputId]
-          : [contentLocator.resourcePath, contentLocator.manifestPath];
+          : contentLocator.kind === 'media-library'
+            ? [contentLocator.libraryName, contentLocator.relativePath]
+            : [contentLocator.resourcePath, contentLocator.manifestPath];
   return uniqueStrings(paths.filter(isNonEmptyString).flatMap(pathLookupTokens));
 }
 

@@ -13,7 +13,7 @@ import type {
 } from './tab-render-runtime';
 
 export interface ProjectionEndpointControllerErrorContext {
-  readonly operation: 'route-frame' | 'attachment-fatal';
+  readonly operation: 'drop-stale-frame' | 'route-frame' | 'attachment-fatal';
   readonly key: ProjectionAttachmentKey;
 }
 
@@ -147,9 +147,9 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
     if (!activeKey || !isSameProjectionAttachment(activeKey, frame.key)) {
       this.options.reportError(
         new Error(
-          `Rejected stale projection frame for Tab ${frame.key.tabId} attachment ${frame.key.attachmentId}.`,
+          `Dropped stale projection frame for Tab ${frame.key.tabId} attachment ${frame.key.attachmentId}.`,
         ),
-        { operation: 'route-frame', key: frame.key },
+        { operation: 'drop-stale-frame', key: frame.key },
       );
       return;
     }

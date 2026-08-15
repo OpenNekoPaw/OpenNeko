@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { basename, dirname, isAbsolute, relative } from 'node:path';
+import { dirname, isAbsolute, relative } from 'node:path';
 
 import {
   formatSkillInvocation,
@@ -10,8 +10,6 @@ import {
   type SkillDiagnostic,
 } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
-import type { ExternalProcessorResult } from '@neko/agent-contracts';
-import { parse as parseYaml } from 'yaml';
 
 export type SkillSourceKind = 'builtin' | 'personal' | 'plugin' | 'project';
 
@@ -22,7 +20,6 @@ export type SkillSource =
 export interface SkillSourceRoot {
   readonly path: string;
   readonly source: SkillSource;
-  readonly entryPointKind: 'skill' | 'command-artifact';
 }
 
 export interface SkillLocator {
@@ -42,27 +39,16 @@ export interface SkillHostRecord {
   readonly name: string;
   readonly description: string;
   readonly source: SkillSource;
-  readonly trusted: boolean;
-  readonly enabled: boolean;
   readonly fingerprint: string;
   readonly locator: SkillLocator;
-  readonly entryPoint:
-    | { readonly kind: 'skill' }
-    | {
-        readonly kind: 'command-artifact';
-        readonly commandId: string;
-        readonly artifactId: string;
-        readonly argumentHint?: string;
-        readonly supportsArguments: boolean;
-      };
 }
 
 export function buildSkillActivationId(
-  record: Pick<SkillHostRecord, 'source' | 'fingerprint' | 'entryPoint'>,
+  record: Pick<SkillHostRecord, 'source' | 'fingerprint'>,
 ): string {
   const source =
     record.source.kind === 'plugin' ? `plugin:${record.source.pluginId}` : record.source.kind;
-  return `skill:${source}:${record.entryPoint.kind}:${record.fingerprint}`;
+  return `skill:${source}:${record.fingerprint}`;
 }
 
 export interface SkillContentReadResult {
@@ -99,53 +85,8 @@ export interface SkillHostWarning {
   readonly shadowedPluginId?: string;
 }
 
-export interface SkillExternalProcessorPermissionInput {
-  readonly skillName: string;
-  readonly source: SkillSource;
-  readonly fingerprint: string;
-  readonly script: SkillResourceLocator;
-  readonly args: readonly string[];
-  readonly conversationId: string;
-  readonly turnId: string;
-  readonly workspaceTrusted: boolean;
-}
-
-export type SkillExternalProcessorPermissionDecision =
-  { readonly allowed: true } | { readonly allowed: false; readonly reason: string };
-
-export interface SkillExternalProcessorAuthorizer {
-  authorize(
-    input: SkillExternalProcessorPermissionInput,
-  ): SkillExternalProcessorPermissionDecision | Promise<SkillExternalProcessorPermissionDecision>;
-}
-
-export interface SkillExternalProcessorExecutor {
-  execute(input: {
-    readonly physicalScriptPath: string;
-    readonly args: readonly string[];
-    readonly signal?: AbortSignal;
-  }): Promise<SkillExternalProcessorResult>;
-}
-
-export type SkillExternalProcessorResult = ExternalProcessorResult;
-
-export interface ExecuteSkillExternalProcessorInput {
-  readonly skillName: string;
-  readonly script: SkillResourceLocator;
-  readonly args?: readonly string[];
-  readonly conversationId: string;
-  readonly turnId: string;
-  readonly workspaceTrusted: boolean;
-  readonly signal?: AbortSignal;
-}
-
 export type SkillHostErrorCode =
-  | 'skill-not-found'
-  | 'invalid-locator'
-  | 'invalid-resource-path'
-  | 'resource-outside-skill'
-  | 'external-processor-denied'
-  | 'external-processor-unavailable';
+  'skill-not-found' | 'invalid-locator' | 'invalid-resource-path' | 'resource-outside-skill';
 
 export class SkillHostError extends Error {
   readonly code: SkillHostErrorCode;
@@ -166,10 +107,6 @@ interface StoredSkill {
 interface LoadedSkillEntry {
   readonly skill: Skill;
   readonly root: SkillSourceRoot;
-  readonly commandMetadata?: {
-    readonly argumentHint?: string;
-    readonly supportsArguments: boolean;
-  };
 }
 
 const SOURCE_PRIORITY: Readonly<Record<SkillSourceKind, number>> = {
@@ -185,10 +122,6 @@ export class PiSkillHost {
   constructor(
     private readonly env: ExecutionEnv,
     private readonly policy: SkillHostPolicy,
-    private readonly externalProcessor?: {
-      readonly authorizer: SkillExternalProcessorAuthorizer;
-      readonly executor: SkillExternalProcessorExecutor;
-    },
   ) {}
 
   async discover(inputs: readonly SkillSourceRoot[]): Promise<PiSkillHostSnapshot> {
@@ -196,12 +129,6 @@ export class PiSkillHost {
     const loadedEntries: LoadedSkillEntry[] = [];
     const diagnostics: Array<SkillDiagnostic & { readonly source: SkillSource }> = [];
     for (const input of inputs) {
-      if (input.entryPointKind === 'command-artifact') {
-        const loaded = await loadCommandArtifacts(this.env, input);
-        loadedEntries.push(...loaded.entries);
-        diagnostics.push(...loaded.diagnostics);
-        continue;
-      }
       const loaded = await loadSourcedSkills(this.env, [
         { path: input.path, source: input.source },
       ]);
@@ -209,7 +136,7 @@ export class PiSkillHost {
       diagnostics.push(...loaded.diagnostics);
     }
     const candidates: StoredSkill[] = [];
-    for (const { skill, root, commandMetadata } of loadedEntries) {
+    for (const { skill, root } of loadedEntries) {
       const source = root.source;
       const trusted = await this.policy.isTrusted({
         name: skill.name,
@@ -220,10 +147,7 @@ export class PiSkillHost {
       if (!trusted || !enabled) continue;
 
       const physicalRoot = getOrThrow(await this.env.canonicalPath(dirname(skill.filePath)));
-      const fingerprint =
-        root.entryPointKind === 'command-artifact'
-          ? fingerprintCommandArtifact(skill, commandMetadata)
-          : await fingerprintSkillPackage(this.env, skill, physicalRoot);
+      const fingerprint = await fingerprintSkillPackage(this.env, skill, physicalRoot);
       const locator = createSkillLocator(this.namespace, fingerprint);
       const projectedSkill = Object.freeze({
         ...skill,
@@ -234,22 +158,8 @@ export class PiSkillHost {
           name: skill.name,
           description: skill.description,
           source: Object.freeze({ ...source }),
-          trusted,
-          enabled,
           fingerprint,
           locator,
-          entryPoint:
-            root.entryPointKind === 'command-artifact'
-              ? Object.freeze({
-                  kind: 'command-artifact' as const,
-                  commandId: skill.name,
-                  artifactId: `command:${skill.name}`,
-                  ...(commandMetadata?.argumentHint === undefined
-                    ? {}
-                    : { argumentHint: commandMetadata.argumentHint }),
-                  supportsArguments: commandMetadata?.supportsArguments ?? false,
-                })
-              : Object.freeze({ kind: 'skill' as const }),
         }),
         skill: projectedSkill,
         physicalRoot,
@@ -265,7 +175,6 @@ export class PiSkillHost {
       candidates.filter((candidate) => !selected.includes(candidate)),
       Object.freeze(diagnostics),
       Object.freeze(warnings),
-      this.externalProcessor,
     );
   }
 }
@@ -273,21 +182,12 @@ export class PiSkillHost {
 export function createNodePiSkillHost(input: {
   readonly cwd: string;
   readonly policy: SkillHostPolicy;
-  readonly externalProcessor?: {
-    readonly authorizer: SkillExternalProcessorAuthorizer;
-    readonly executor: SkillExternalProcessorExecutor;
-  };
 }): PiSkillHost {
-  return new PiSkillHost(
-    new NodeExecutionEnv({ cwd: input.cwd }),
-    input.policy,
-    input.externalProcessor,
-  );
+  return new PiSkillHost(new NodeExecutionEnv({ cwd: input.cwd }), input.policy);
 }
 
 export class PiSkillHostSnapshot {
   private readonly selected: readonly StoredSkill[];
-  private readonly byName: ReadonlyMap<string, StoredSkill>;
   private readonly byFingerprint: ReadonlyMap<string, StoredSkill>;
   private readonly byActivationId: ReadonlyMap<string, StoredSkill>;
 
@@ -298,17 +198,8 @@ export class PiSkillHostSnapshot {
     private readonly shadowed: readonly StoredSkill[],
     readonly diagnostics: readonly (SkillDiagnostic & { readonly source: SkillSource })[],
     readonly warnings: readonly SkillHostWarning[],
-    private readonly externalProcessor?: {
-      readonly authorizer: SkillExternalProcessorAuthorizer;
-      readonly executor: SkillExternalProcessorExecutor;
-    },
   ) {
     this.selected = selected;
-    this.byName = new Map(
-      selected
-        .filter((entry) => entry.record.entryPoint.kind === 'skill')
-        .map((entry) => [entry.record.name, entry]),
-    );
     this.byFingerprint = new Map(selected.map((entry) => [entry.record.fingerprint, entry]));
     this.byActivationId = new Map(
       selected.map((entry) => [buildSkillActivationId(entry.record), entry]),
@@ -320,22 +211,25 @@ export class PiSkillHostSnapshot {
   }
 
   get skills(): readonly Readonly<Skill>[] {
-    return Object.freeze([...this.byName.values()].map((entry) => entry.skill));
+    return Object.freeze(this.selected.map((entry) => entry.skill));
   }
 
   get shadowedRecords(): readonly SkillHostRecord[] {
     return Object.freeze(this.shadowed.map((entry) => entry.record));
   }
 
-  invoke(skillName: string, additionalInstructions?: string): string {
-    const stored = this.byName.get(skillName);
-    if (stored === undefined) {
-      throw new SkillHostError('skill-not-found', `Skill ${skillName} is not available.`);
-    }
-    return formatSkillInvocation(stored.skill, additionalInstructions);
+  invokeExact(skillName: string, activationId: string, additionalInstructions?: string): string {
+    return this.invokeExactWithReceipt(skillName, activationId, additionalInstructions).prompt;
   }
 
-  invokeExact(skillName: string, activationId: string, additionalInstructions?: string): string {
+  invokeExactWithReceipt(
+    skillName: string,
+    activationId: string,
+    additionalInstructions?: string,
+  ): {
+    readonly prompt: string;
+    readonly receipt: Pick<SkillHostRecord, 'name' | 'source' | 'fingerprint'>;
+  } {
     const stored = this.byActivationId.get(activationId);
     if (stored === undefined || stored.record.name !== skillName) {
       throw new SkillHostError(
@@ -343,13 +237,23 @@ export class PiSkillHostSnapshot {
         `Skill activation ${activationId} for ${skillName} is not available in this turn snapshot.`,
       );
     }
-    return formatSkillInvocation(stored.skill, additionalInstructions);
+    return Object.freeze({
+      prompt: formatSkillInvocation(stored.skill, additionalInstructions),
+      receipt: Object.freeze({
+        name: stored.record.name,
+        source: stored.record.source,
+        fingerprint: stored.record.fingerprint,
+      }),
+    });
   }
 
-  resource(skillName: string, relativePath: string): SkillResourceLocator {
-    const stored = this.byName.get(skillName);
-    if (stored === undefined) {
-      throw new SkillHostError('skill-not-found', `Skill ${skillName} is not available.`);
+  resource(skillName: string, activationId: string, relativePath: string): SkillResourceLocator {
+    const stored = this.byActivationId.get(activationId);
+    if (stored === undefined || stored.record.name !== skillName) {
+      throw new SkillHostError(
+        'skill-not-found',
+        `Skill activation ${activationId} for ${skillName} is not available in this turn snapshot.`,
+      );
     }
     const normalized = validateRelativeResourcePath(relativePath);
     return createResourceLocator(this.namespace, stored.record.fingerprint, normalized);
@@ -375,63 +279,6 @@ export class PiSkillHostSnapshot {
         locator: locator.value,
         locatorKind: locator.kind,
       }),
-    });
-  }
-
-  async executeExternalProcessor(
-    input: ExecuteSkillExternalProcessorInput,
-  ): Promise<SkillExternalProcessorResult> {
-    if (this.externalProcessor === undefined) {
-      throw new SkillHostError(
-        'external-processor-unavailable',
-        'No Skill external processor executor is configured.',
-      );
-    }
-    if (!input.workspaceTrusted) {
-      throw new SkillHostError(
-        'external-processor-denied',
-        'Skill external processors require a trusted workspace.',
-      );
-    }
-    const stored = this.byName.get(input.skillName);
-    if (stored === undefined) {
-      throw new SkillHostError('skill-not-found', `Skill ${input.skillName} is not available.`);
-    }
-    this.validateResourceLocator(input.script);
-    if (input.script.fingerprint !== stored.record.fingerprint) {
-      throw new SkillHostError(
-        'invalid-locator',
-        `Script locator does not belong to Skill ${input.skillName}.`,
-      );
-    }
-    if (!input.script.relativePath.startsWith('scripts/')) {
-      throw new SkillHostError(
-        'invalid-resource-path',
-        'External processors must be located under the Skill scripts/ directory.',
-      );
-    }
-    const args = Object.freeze([...(input.args ?? [])]);
-    const decision = await this.externalProcessor.authorizer.authorize({
-      skillName: stored.record.name,
-      source: stored.record.source,
-      fingerprint: stored.record.fingerprint,
-      script: input.script,
-      args,
-      conversationId: input.conversationId,
-      turnId: input.turnId,
-      workspaceTrusted: input.workspaceTrusted,
-    });
-    if (!decision.allowed) {
-      throw new SkillHostError('external-processor-denied', decision.reason);
-    }
-    const physicalScriptPath = await this.resolvePhysicalResource(
-      stored,
-      input.script.relativePath,
-    );
-    return this.externalProcessor.executor.execute({
-      physicalScriptPath,
-      args,
-      ...(input.signal === undefined ? {} : { signal: input.signal }),
     });
   }
 
@@ -502,7 +349,7 @@ function selectBySourcePriority(
   });
   const selected = new Map<string, StoredSkill>();
   for (const candidate of ordered) {
-    const key = `${candidate.record.entryPoint.kind}\u0000${candidate.record.name}`;
+    const key = candidate.record.name;
     const winner = selected.get(key);
     if (winner === undefined) {
       selected.set(key, candidate);
@@ -531,7 +378,7 @@ function selectBySourcePriority(
 function validateSkillSource(source: SkillSource): void {
   if (
     source.kind === 'plugin' &&
-    !/^[A-Za-z0-9][A-Za-z0-9._:-]*@[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(source.pluginId)
+    !/^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/u.test(source.pluginId)
   ) {
     throw new Error(`Plugin Skill source has invalid plugin id '${source.pluginId}'.`);
   }
@@ -539,142 +386,6 @@ function validateSkillSource(source: SkillSource): void {
 
 function sourceStableId(source: SkillSource): string {
   return source.kind === 'plugin' ? `plugin:${source.pluginId}` : source.kind;
-}
-
-async function loadCommandArtifacts(
-  env: ExecutionEnv,
-  root: SkillSourceRoot,
-): Promise<{
-  readonly entries: readonly LoadedSkillEntry[];
-  readonly diagnostics: readonly (SkillDiagnostic & { readonly source: SkillSource })[];
-}> {
-  const entries: LoadedSkillEntry[] = [];
-  const diagnostics: Array<SkillDiagnostic & { readonly source: SkillSource }> = [];
-  const rootInfo = await env.fileInfo(root.path);
-  if (!rootInfo.ok) {
-    if (rootInfo.error.code !== 'not_found') {
-      diagnostics.push(
-        commandDiagnostic('file_info_failed', rootInfo.error.message, root.path, root),
-      );
-    }
-    return { entries, diagnostics };
-  }
-  if (rootInfo.value.kind !== 'directory') {
-    diagnostics.push(
-      commandDiagnostic(
-        'invalid_metadata',
-        'Command artifact root must be a directory.',
-        root.path,
-        root,
-      ),
-    );
-    return { entries, diagnostics };
-  }
-  const listed = await env.listDir(root.path);
-  if (!listed.ok) {
-    diagnostics.push(commandDiagnostic('list_failed', listed.error.message, root.path, root));
-    return { entries, diagnostics };
-  }
-  for (const file of [...listed.value].sort((left, right) => left.name.localeCompare(right.name))) {
-    if (file.kind !== 'file' || !file.name.endsWith('.md')) continue;
-    const content = await env.readTextFile(file.path);
-    if (!content.ok) {
-      diagnostics.push(commandDiagnostic('read_failed', content.error.message, file.path, root));
-      continue;
-    }
-    try {
-      entries.push(parseCommandArtifact(content.value, file.path, root));
-    } catch (error) {
-      diagnostics.push(
-        commandDiagnostic(
-          'invalid_metadata',
-          error instanceof Error ? error.message : String(error),
-          file.path,
-          root,
-        ),
-      );
-    }
-  }
-  return { entries, diagnostics };
-}
-
-function parseCommandArtifact(
-  content: string,
-  filePath: string,
-  root: SkillSourceRoot,
-): LoadedSkillEntry {
-  const normalized = content.replace(/\r\n?/gu, '\n');
-  if (!normalized.startsWith('---\n')) {
-    throw new Error('Command artifact requires YAML frontmatter.');
-  }
-  const end = normalized.indexOf('\n---\n', 4);
-  if (end === -1) throw new Error('Command artifact frontmatter is not terminated.');
-  const parsed = parseYaml(normalized.slice(4, end));
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error('Command artifact frontmatter must be an object.');
-  }
-  const metadata = parsed as Record<string, unknown>;
-  const allowed = new Set([
-    'name',
-    'description',
-    'argument-hint',
-    'supports-arguments',
-    'disable-model-invocation',
-  ]);
-  const unknown = Object.keys(metadata).find((key) => !allowed.has(key));
-  if (unknown) throw new Error(`Command artifact contains unsupported field '${unknown}'.`);
-  const commandId = basename(filePath, '.md');
-  if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u.test(commandId)) {
-    throw new Error(`Command artifact filename '${commandId}' is not a valid command identity.`);
-  }
-  if (metadata['name'] !== undefined && metadata['name'] !== commandId) {
-    throw new Error(`Command artifact name must match filename '${commandId}'.`);
-  }
-  const description = metadata['description'];
-  if (typeof description !== 'string' || description.trim().length === 0) {
-    throw new Error('Command artifact description is required.');
-  }
-  if (description.length > 1024) throw new Error('Command artifact description is too long.');
-  const argumentHint = metadata['argument-hint'];
-  if (
-    argumentHint !== undefined &&
-    (typeof argumentHint !== 'string' || argumentHint.trim().length === 0)
-  ) {
-    throw new Error('Command artifact argument hint must be a non-empty string.');
-  }
-  const supportsArguments = metadata['supports-arguments'] ?? false;
-  if (typeof supportsArguments !== 'boolean') {
-    throw new Error('Command artifact supports-arguments must be a boolean.');
-  }
-  const disableModelInvocation = metadata['disable-model-invocation'] ?? true;
-  if (typeof disableModelInvocation !== 'boolean') {
-    throw new Error('Command artifact disable-model-invocation must be a boolean.');
-  }
-  const body = normalized.slice(end + 5).trim();
-  if (!body) throw new Error('Command artifact body is required.');
-  return {
-    root,
-    skill: {
-      name: commandId,
-      description,
-      content: body,
-      filePath,
-      disableModelInvocation,
-    },
-    commandMetadata: {
-      ...(argumentHint === undefined ? {} : { argumentHint }),
-      supportsArguments,
-    },
-  };
-}
-
-function commandDiagnostic(
-  code: SkillDiagnostic['code'],
-  message: string,
-  path: string,
-  root: SkillSourceRoot,
-): SkillDiagnostic & { readonly source: SkillSource } {
-  return { type: 'warning', code, message, path, source: root.source };
 }
 
 async function fingerprintSkillPackage(
@@ -713,27 +424,6 @@ async function fingerprintSkillPackage(
       }
     }
   }
-  return hash.digest('hex');
-}
-
-function fingerprintCommandArtifact(
-  skill: Skill,
-  metadata: LoadedSkillEntry['commandMetadata'],
-): string {
-  const hash = createHash('sha256')
-    .update('command-artifact')
-    .update('\u0000')
-    .update(skill.name)
-    .update('\u0000')
-    .update(skill.description)
-    .update('\u0000')
-    .update(skill.content)
-    .update('\u0000')
-    .update(skill.disableModelInvocation ? 'explicit-only' : 'model-visible')
-    .update('\u0000')
-    .update(metadata?.argumentHint ?? '')
-    .update('\u0000')
-    .update(metadata?.supportsArguments ? 'supports-arguments' : 'no-arguments');
   return hash.digest('hex');
 }
 

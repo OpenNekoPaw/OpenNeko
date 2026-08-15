@@ -15,19 +15,14 @@ interface RequestBase {
 export type AgentExtensionManagementHostRequest =
   | (RequestBase & { readonly route: 'snapshot.get' })
   | (RequestBase & {
-      readonly route:
-        'plugin.install' | 'plugin.update' | 'plugin.enable' | 'plugin.disable' | 'plugin.remove';
+      readonly route: 'plugin.enable' | 'plugin.disable' | 'plugin.remove';
       readonly pluginId: string;
     })
   | (RequestBase & {
-      readonly route: 'plugin.operation.cancel';
-      readonly operationId: string;
+      readonly route: 'plugin.install' | 'sources.rescan' | 'skill.install';
     })
   | (RequestBase & {
-      readonly route: 'marketplaces.refresh' | 'skill.install';
-    })
-  | (RequestBase & {
-      readonly route: 'skill.remove';
+      readonly route: 'skill.open' | 'skill.reveal' | 'skill.remove';
       readonly managementId: string;
     });
 
@@ -65,8 +60,6 @@ export function parseAgentExtensionManagementHostRequest(
     case 'snapshot.get':
       requireExactKeys(record, BASE_KEYS);
       return { ...base, route: 'snapshot.get' };
-    case 'plugin.install':
-    case 'plugin.update':
     case 'plugin.enable':
     case 'plugin.disable':
     case 'plugin.remove':
@@ -76,25 +69,21 @@ export function parseAgentExtensionManagementHostRequest(
         route: record['route'],
         pluginId: requireId(record['pluginId'], 'plugin'),
       };
-    case 'plugin.operation.cancel':
-      requireExactKeys(record, [...BASE_KEYS, 'operationId']);
-      return {
-        ...base,
-        route: 'plugin.operation.cancel',
-        operationId: requireId(record['operationId'], 'artifact operation'),
-      };
-    case 'marketplaces.refresh':
+    case 'plugin.install':
+    case 'sources.rescan':
     case 'skill.install':
       requireExactKeys(record, BASE_KEYS);
       return {
         ...base,
         route: record['route'],
       };
+    case 'skill.open':
+    case 'skill.reveal':
     case 'skill.remove':
       requireExactKeys(record, [...BASE_KEYS, 'managementId']);
       return {
         ...base,
-        route: 'skill.remove',
+        route: record['route'],
         managementId: requireId(record['managementId'], 'Skill management'),
       };
     default:

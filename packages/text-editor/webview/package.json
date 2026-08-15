@@ -5,6 +5,7 @@
   "exports": {
     "./root": "./src/root.tsx",
     "./host-adapter": "./src/host-runtime.ts",
+    "./runtime-bootstrap": "./src/runtime-bootstrap.ts",
     "./presentation-snapshot": "./src/presentation-snapshot.ts"
   },
   "scripts": {

@@ -2,9 +2,8 @@
  * BaseNode - Base node component
  * Provides common node frame with selection, dragging, and port/anchor points.
  *
- * Port system:
- * - If node.ports is defined and non-empty, renders typed input/output ports
- * - Otherwise renders node-level endpoint handles on each side
+ * Domain endpoints remain typed, while the Canvas presents one predictable
+ * input handle and one output handle.
  */
 
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
@@ -90,27 +89,6 @@ export interface BaseNodeProps {
   renderZIndex?: number;
   onActivate?: (nodeId: string) => void;
 }
-
-type AnchorPosition = 'top' | 'right' | 'bottom' | 'left';
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-const ANCHOR_POSITIONS: AnchorPosition[] = ['top', 'right', 'bottom', 'left'];
-
-const PORT_COLORS: Record<string, string> = {
-  input: '#3b82f6', // blue-500
-  output: '#22c55e', // green-500
-};
-
-const PORT_DATA_COLORS: Record<string, string> = {
-  image: '#f59e0b', // amber-500
-  video: '#8b5cf6', // violet-500
-  audio: '#ec4899', // pink-500
-  text: '#06b6d4', // cyan-500
-  any: '#6b7280', // gray-500
-};
 
 const NODE_TYPE_DESCRIPTORS = createBuiltInNodeTypeDescriptors();
 
@@ -228,7 +206,8 @@ export function BaseNode({
 
   // Resolve ports: explicit node.ports > default ports for type > empty
   const ports = node.ports ?? getDefaultPorts(node.type as CanvasNodeType);
-  const hasPorts = ports.length > 0;
+  const inputPort = ports.find((port) => port.type === 'input');
+  const outputPort = ports.find((port) => port.type === 'output');
   const targetState = connectionTargetState?.nodeId === node.id ? connectionTargetState : undefined;
 
   // Handle node click for selection
@@ -250,74 +229,22 @@ export function BaseNode({
     [node.id, onConnectionStart],
   );
 
-  const getEndpointHandleStyle = (side: AnchorPosition): React.CSSProperties => {
-    const base: React.CSSProperties = {
+  const getEndpointHandleStyle = (direction: 'input' | 'output'): React.CSSProperties => {
+    const hitSize = 18 / viewport.zoom;
+    const visualSize = 10 / viewport.zoom;
+    return {
       position: 'absolute',
-      width: 12,
-      height: 12,
+      width: hitSize,
+      height: hitSize,
       borderRadius: '50%',
-      backgroundColor: 'var(--node-border)',
-      border: '2px solid var(--node-bg)',
+      background: `radial-gradient(circle, var(--node-border) 0 ${visualSize / 2}px, transparent ${visualSize / 2}px)`,
       cursor: 'crosshair',
       zIndex: 10,
+      top: '50%',
+      ...(direction === 'input' ? { left: -hitSize / 2 } : { right: -hitSize / 2 }),
+      transform: 'translateY(-50%)',
     };
-
-    switch (side) {
-      case 'top':
-        return { ...base, top: -6, left: '50%', transform: 'translateX(-50%)' };
-      case 'right':
-        return { ...base, right: -6, top: '50%', transform: 'translateY(-50%)' };
-      case 'bottom':
-        return { ...base, bottom: -6, left: '50%', transform: 'translateX(-50%)' };
-      case 'left':
-        return { ...base, left: -6, top: '50%', transform: 'translateY(-50%)' };
-    }
   };
-
-  // Get port position styles
-  const getPortStyle = (
-    port: PortDefinition,
-    index: number,
-    totalOnSide: number,
-  ): React.CSSProperties => {
-    const portColor = PORT_DATA_COLORS[port.dataType ?? 'any'] ?? PORT_COLORS[port.type];
-    const base: React.CSSProperties = {
-      position: 'absolute',
-      width: 14,
-      height: 14,
-      borderRadius: '50%',
-      backgroundColor: portColor,
-      border: '2px solid var(--node-bg)',
-      cursor: 'crosshair',
-      zIndex: 10,
-    };
-
-    // Calculate offset for multiple ports on the same side
-    const spacing = 100 / (totalOnSide + 1);
-    const percent = `${spacing * (index + 1)}%`;
-
-    switch (port.position) {
-      case 'top':
-        return { ...base, top: -7, left: percent, transform: 'translateX(-50%)' };
-      case 'right':
-        return { ...base, right: -7, top: percent, transform: 'translateY(-50%)' };
-      case 'bottom':
-        return { ...base, bottom: -7, left: percent, transform: 'translateX(-50%)' };
-      case 'left':
-        return { ...base, left: -7, top: percent, transform: 'translateY(-50%)' };
-    }
-  };
-
-  // Group ports by side for spacing calculation
-  const portsBySide = new Map<string, { port: PortDefinition; index: number }[]>();
-  for (const port of ports) {
-    const side = port.position;
-    if (!portsBySide.has(side)) {
-      portsBySide.set(side, []);
-    }
-    const sideList = portsBySide.get(side)!;
-    sideList.push({ port, index: sideList.length });
-  }
 
   // Auto-height: sync node height to content (expand or shrink)
   const contentRef = useRef<HTMLDivElement>(null);
@@ -468,53 +395,46 @@ export function BaseNode({
         </>
       )}
 
-      {/* Port-based connections (always visible for data flow clarity) */}
-      {hasPorts &&
-        Array.from(portsBySide.entries()).map(([_side, portsOnSide]) =>
-          portsOnSide.map(({ port, index }) => (
-            <div
-              key={port.id}
-              data-port-id={port.id}
-              data-port-type={port.type}
-              data-endpoint-scope="port"
-              data-node-id={node.id}
-              data-connection-handle={port.id}
-              style={getPortStyle(port, index, portsOnSide.length)}
-              onMouseDown={port.type === 'output' ? handleAnchorMouseDown(port.id) : undefined}
-              className={clsx(
-                'transition-all duration-150',
-                isConnecting && port.type === 'input'
-                  ? targetState?.validity === 'invalid'
-                    ? 'scale-125 opacity-100 ring-2 ring-red-500'
-                    : 'scale-125 opacity-100 ring-2 ring-blue-500'
-                  : isSelected
-                    ? 'scale-110 opacity-100'
-                    : 'scale-75 opacity-60 hover:scale-110 hover:opacity-100',
-              )}
-              title={port.label ?? resolvePortTooltip(port)}
-            >
-              {/* Port type indicator: input has inner dot, output is solid */}
-              {port.type === 'input' && (
-                <div
-                  className="absolute inset-[3px] rounded-full"
-                  style={{ backgroundColor: 'var(--node-bg)' }}
-                />
-              )}
-            </div>
-          )),
-        )}
+      {/* One visual input and one visual output; domain endpoints remain typed. */}
+      {[inputPort, outputPort].map((port) =>
+        port ? (
+          <div
+            key={port.id}
+            data-port-id={port.id}
+            data-port-type={port.type}
+            data-endpoint-scope="port"
+            data-node-id={node.id}
+            data-connection-handle={port.id}
+            data-canvas-port-direction={port.type}
+            style={getEndpointHandleStyle(port.type)}
+            onMouseDown={port.type === 'output' ? handleAnchorMouseDown(port.id) : undefined}
+            className={clsx(
+              'transition-all duration-150',
+              isConnecting && port.type === 'input'
+                ? targetState?.validity === 'invalid'
+                  ? 'scale-125 opacity-100 ring-2 ring-red-500'
+                  : 'scale-125 opacity-100 ring-2 ring-blue-500'
+                : isSelected
+                  ? 'scale-110 opacity-100'
+                  : 'scale-75 opacity-60 hover:scale-110 hover:opacity-100',
+            )}
+            title={resolvePortTooltip(port)}
+          />
+        ) : null,
+      )}
 
       {/* Node-level endpoint handles (only when selected) */}
-      {!hasPorts &&
+      {ports.length === 0 &&
         isSelected &&
-        ANCHOR_POSITIONS.filter((side) => side === 'left' || side === 'right').map((side) => (
+        (['input', 'output'] as const).map((direction) => (
           <div
-            key={side}
+            key={direction}
             data-node-id={node.id}
-            data-connection-handle={side}
-            data-port-type={side === 'left' ? 'input' : 'output'}
-            style={getEndpointHandleStyle(side)}
-            onMouseDown={side === 'right' ? handleAnchorMouseDown(side) : undefined}
+            data-connection-handle={direction === 'input' ? 'left' : 'right'}
+            data-port-type={direction}
+            data-canvas-port-direction={direction}
+            style={getEndpointHandleStyle(direction)}
+            onMouseDown={direction === 'output' ? handleAnchorMouseDown('right') : undefined}
             className="hover:bg-[var(--node-selected)] hover:scale-125 transition-all duration-150"
           />
         ))}
@@ -530,22 +450,5 @@ export function BaseNode({
 }
 
 function resolvePortTooltip(port: PortDefinition): string {
-  const direction = port.type === 'input' ? t('port.direction.input') : t('port.direction.output');
-  const dataType = resolvePortDataTypeLabel(port.dataType ?? 'any');
-  return t('port.tooltip', { direction, dataType });
-}
-
-function resolvePortDataTypeLabel(dataType: NonNullable<PortDefinition['dataType']>): string {
-  switch (dataType) {
-    case 'any':
-      return t('port.dataType.any');
-    case 'image':
-      return t('port.dataType.image');
-    case 'video':
-      return t('port.dataType.video');
-    case 'audio':
-      return t('port.dataType.audio');
-    case 'text':
-      return t('port.dataType.text');
-  }
+  return port.type === 'input' ? t('port.direction.input') : t('port.direction.output');
 }

@@ -291,7 +291,7 @@ export async function copyDesktopGlobalMediaLibraryContent(input: {
   }
 }
 
-function createGlobalMediaLibraryId(
+export function createGlobalMediaLibraryId(
   locationKind: GlobalMediaLibraryLocationKind,
   name: string,
 ): string {

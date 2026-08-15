@@ -1,3 +1,7 @@
+> Superseded scope (2026-08-13): completed tasks record the existing `neko/assets` implementation.
+> Replacing that path with project `.neko` target-free bindings and owner-qualified Media Library locators
+> is tracked only by `separate-project-facts-local-state-and-media-bindings`; do not extend the old path.
+
 ## 1. Contracts And Storage Ownership
 
 - [x] 1.1 Define host-neutral requirement, owner/source-fingerprint, link-state, recovery-plan, portability, and

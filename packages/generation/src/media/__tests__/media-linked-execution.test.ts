@@ -15,6 +15,7 @@ import type {
   MediaTaskDescriber,
   MediaVideoSubmitter,
 } from '@neko/generation';
+import { GenerationExecutionOutcomeUnknownError } from '@neko/generation';
 import { getMediaAdapterRegistry } from '../adapters/media-adapter-registry';
 import { MediaGenerationExecutor } from '../media-generation-executor';
 import { MediaGenerationService } from '../media-generation-service';
@@ -121,6 +122,27 @@ describe('MediaGenerationExecutor linked execution', () => {
         request: { prompt: 'cat' },
       }),
     ).rejects.toThrow(/does not support asynchronous task description/);
+  });
+
+  it('preserves an ambiguous synchronous provider submission as outcome unknown', async () => {
+    const generateImage = vi.fn(async (): Promise<MediaAdapterResult> => {
+      throw Object.assign(new Error('connection closed after submission'), {
+        isRetryable: false,
+        outcomeUnknown: true,
+      });
+    });
+    getMediaAdapterRegistry().registerBuiltin('runway', createAdapter({ generateImage }));
+    const executor = new MediaGenerationExecutor(createConfig(), createProviderResolver());
+
+    await expect(
+      executor.executeLinked({
+        generationType: 'text-to-image',
+        providerId: provider.id,
+        modelId: model.id,
+        request: { prompt: 'cat', count: 2 },
+      }),
+    ).rejects.toBeInstanceOf(GenerationExecutionOutcomeUnknownError);
+    expect(generateImage).toHaveBeenCalledTimes(1);
   });
 
   it('fails before provider execution when the exact credential disappears', async () => {

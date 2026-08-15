@@ -89,12 +89,53 @@ binding receipt matching the current Draft, connection, `workspaceId`, and `work
 - **WHEN** the user selects a Project from the entry chooser
 - **THEN** Host returns its exact Workspace identity and grant
 - **AND** the Draft receives a matching binding receipt without leaving Agent Entry
+- **AND** the selected Project is presented in the composer's binding-context bar instead of a duplicate current-target card below the composer
 
 #### Scenario: User authorizes a directory
 
 - **WHEN** the user chooses a directory from the entry chooser
 - **THEN** Host returns an opaque Workspace identity and grant
 - **AND** raw filesystem path is not stored in Agent presentation state
+- **AND** the authorized directory label is presented in the same composer binding-context bar
+
+### Requirement: Entry binding context is consolidated below the composer
+
+The Agent Entry composer SHALL present the directory-selection action together with selected Project,
+directory, Character, and World bindings in one compact horizontal binding-context bar attached to the
+bottom of the composer. Binding items SHALL be a read-only projection of the current Draft selection and
+exact binding receipt. The bar MUST NOT become a second authority, retain a selection after its owner is
+cleared, or duplicate the selected target in the chooser panel.
+
+The same bar SHALL expose the exact selection entry for Authoring and Character Dialogue. World Experience
+SHALL expose its World entry in a disabled, owner-qualified unavailable state until the World launch owner is
+composed; it MUST NOT fabricate a World selection or successful binding.
+
+Character Dialogue SHALL expose an explicit `Daily | Narrative` mode switch for both single-Character
+Dialogue and multi-participant Room selection. The switch SHALL configure the strict Chara-owned mode
+selection supplied by `character-conversation-modes`; it MUST NOT infer mode from Storyline, prompt,
+active/recent state or external Composition availability. Until the Character product promotion gate is
+removed by a later qualified change, both modes MAY remain visibly unavailable for production submit, but
+their owner-qualified diagnostics MUST preserve the selected intent and MUST NOT downgrade Narrative to Daily.
+
+#### Scenario: User selects Narrative in the entry draft
+
+- **WHEN** the user selects Narrative for an exact Character or Room draft
+- **THEN** the Draft keeps Narrative intent and exposes exact optional Storyline/Node configuration supplied by Chara
+- **AND** no external Composition is required or inferred
+- **AND** a closed product promotion gate blocks submit visibly without changing the selection to Daily
+
+#### Scenario: Selected bindings share one composer bar
+
+- **WHEN** an Entry Draft has one or more selected authoring or Character bindings
+- **THEN** the composer bar shows each selected item with its owner-qualified label and kind
+- **AND** clearing an item invokes the owning Draft configuration operation
+- **AND** the chooser remains responsible only for browsing, selecting, and showing the selected option state
+
+#### Scenario: Entry Draft has no selected binding
+
+- **WHEN** the current Authoring Entry Draft has no selected Project, directory, Character, or World binding
+- **THEN** the binding-context bar renders only the directory-selection action
+- **AND** it does not reserve empty binding-item space
 
 #### Scenario: Target selection is cancelled or fails
 

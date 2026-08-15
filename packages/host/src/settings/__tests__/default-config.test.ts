@@ -27,6 +27,7 @@ describe('default agent provider configuration', () => {
 
     expect(providers.get(NEKO_GATEWAY_PROVIDER_ID)).toMatchObject({
       type: 'newapi',
+      apiUrl: 'https://www.nekoapi.com',
       connectionKind: 'gateway',
       protocolProfile: 'newapi',
       supportLevel: 'verified',
@@ -34,6 +35,7 @@ describe('default agent provider configuration', () => {
     });
     expect(providers.get(CUSTOM_NEWAPI_PROVIDER_ID)).toMatchObject({
       type: 'newapi',
+      apiUrl: '',
       connectionKind: 'gateway',
       protocolProfile: 'newapi',
       supportLevel: 'custom',

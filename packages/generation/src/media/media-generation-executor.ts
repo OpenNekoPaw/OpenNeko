@@ -5,6 +5,7 @@
  */
 
 import { sleepWithAbort } from '@neko/shared';
+import { GenerationExecutionOutcomeUnknownError } from '../execution';
 import type { MediaModel as Model, MediaProvider as Provider } from './types';
 import type {
   MediaAdapter,
@@ -38,6 +39,7 @@ import {
 import {
   formatMediaGenerationErrorSummary,
   getMediaGenerationHttpStatus,
+  isMediaGenerationOutcomeUnknown,
   summarizeMediaGenerationError,
   type MediaGenerationErrorSummary,
 } from './media-generation-error';
@@ -447,6 +449,10 @@ export class MediaGenerationExecutor {
         error: errorSummary,
       });
 
+      if (isMediaGenerationOutcomeUnknown(errorSummary)) {
+        throw new GenerationExecutionOutcomeUnknownError(errorContext);
+      }
+
       // Determine if the error is retryable (network, rate limit, server errors)
       if (retryable) {
         throw new Error(errorContext);
@@ -579,6 +585,9 @@ export class MediaGenerationExecutor {
         modelId: model.id,
         error: errorSummary,
       });
+      if (isMediaGenerationOutcomeUnknown(errorSummary)) {
+        throw new GenerationExecutionOutcomeUnknownError(errorContext);
+      }
       if (this.isRetryableError(error, errorSummary)) throw new Error(errorContext);
       return { error: errorContext };
     }

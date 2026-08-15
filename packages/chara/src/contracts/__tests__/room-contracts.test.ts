@@ -83,38 +83,39 @@ describe('Dialogue and Chatroom canonical contracts', () => {
     ).toThrow(/opaque non-file reference/u);
   });
 
-  it('accepts the canonical companion path and rejects external narrative fields', () => {
+  it('accepts canonical Companion and Narrative modes and rejects external authority fields', () => {
     const companionDialogue = parseDialogueRun({
       topology: 'dialogue',
       dialogueRunId: 'dialogue-companion',
       userParticipantId: 'user-participant',
       characterParticipantId: 'character-participant',
       characterRunId: 'character-run-a',
-      runtimeKind: 'companion',
+      mode: 'companion',
       relationshipIds: ['relationship-a'],
       createdAt: now,
     });
     const companionRoom = parseRoomRun({
       ...baseRoomRun(),
-      runtimeKind: 'companion',
+      mode: 'companion',
       relationshipIds: ['relationship-a', 'relationship-b'],
     });
-    expect(companionDialogue.runtimeKind).toBe('companion');
+    expect(companionDialogue.mode).toBe('companion');
     expect(companionRoom.topology).toBe('chatroom');
     expect(companionRoom).not.toHaveProperty('worldBinding');
     expect(() =>
       parseDialogueRun({
         ...companionDialogue,
-        runtimeKind: 'narrative',
+        mode: 'narrative',
+        relationshipIds: undefined,
         worldBinding: { externalCompositionRef: 'composition:run-a' },
       }),
-    ).toThrow(/unsupported fields|runtimeKind/u);
+    ).toThrow(/unsupported fields.*worldBinding/u);
   });
 
   it('binds every agent participant to a distinct CharacterRun and AgentSession', () => {
     const run = parseRoomRun({
       ...baseRoomRun(),
-      runtimeKind: 'companion',
+      mode: 'companion',
       relationshipIds: ['relationship-a', 'relationship-b'],
     });
     const agents = run.participants.filter(
@@ -162,9 +163,26 @@ describe('Dialogue and Chatroom canonical contracts', () => {
       ...baseRoomRun(),
       roomRevision: 2,
       events: [publicMessage, privateMessage],
-      runtimeKind: 'companion',
+      mode: 'companion',
       relationshipIds: ['relationship-a', 'relationship-b'],
     });
+
+    expect(() =>
+      parseRoomRun({
+        ...baseRoomRun(),
+        roomRevision: 1,
+        events: [
+          {
+            ...publicMessage,
+            storylineTransition: {
+              characterStorylineVersionId: 'storyline-version-next',
+              storylineNodeId: 'next-node',
+            },
+          },
+        ],
+        mode: 'narrative',
+      }),
+    ).toThrow(/unsupported fields.*storylineTransition/u);
 
     expect(
       parseRoomView({
@@ -216,7 +234,7 @@ describe('Dialogue and Chatroom canonical contracts', () => {
   it('isolates one invalid RoomRun while retaining valid siblings', () => {
     const valid = {
       ...baseRoomRun(),
-      runtimeKind: 'companion',
+      mode: 'companion',
       relationshipIds: ['relationship-a', 'relationship-b'],
     };
     const result = decodeRoomRecords(

@@ -10,7 +10,7 @@ const owners = vi.hoisted(() => ({
 
 vi.mock('@neko/assets-node', () => ({
   searchWorkspaceContentEntries: owners.workspaceFiles,
-  searchWorkspaceLinkedMediaLibraryContentEntries: owners.linkedMedia,
+  searchProjectMediaLibraryContentEntries: owners.linkedMedia,
 }));
 vi.mock('@neko/entity-node', () => ({ readProjectEntityResources: owners.entities }));
 
@@ -33,14 +33,13 @@ beforeEach(() => {
   owners.workspaceFiles.mockReset().mockResolvedValue([contentEntry('notes/story.md', 'story.md')]);
   owners.linkedMedia
     .mockReset()
-    .mockResolvedValue([contentEntry('neko/assets/Reference/cover.png', 'cover.png', 'image')]);
+    .mockResolvedValue([mediaContentEntry('Reference', 'cover.png', 'cover.png', 'image')]);
   owners.entities.mockReset().mockResolvedValue({
     entities: [
       {
         entityId: 'character-1',
         kind: 'character',
         names: { canonical: '小橘', aliases: ['橘子'] },
-        facts: {},
         representations: [],
         lifecycle: { state: 'active' },
         createdAt: '2026-08-09T00:00:00.000Z',
@@ -56,6 +55,7 @@ describe('Node Text Editor Markdown reference catalog', () => {
     const resolveWorkspace = vi.fn(async () => workspace);
     const catalog = createNodeTextEditorMarkdownReferenceCatalog({
       files: {} as NekoHostPorts['files'],
+      globalMediaLibraryRoot: '/private/global-media-libraries',
       resolveWorkspace,
     });
 
@@ -75,8 +75,9 @@ describe('Node Text Editor Markdown reference catalog', () => {
         candidates: [
           {
             source: 'asset',
-            target: 'neko/assets/Reference/cover.png',
-            detail: 'neko/assets/Reference/cover.png',
+            ref: { kind: 'media-library', namespace: 'Reference', id: 'cover.png' },
+            target: 'media-library:Reference/cover.png',
+            detail: 'Reference/cover.png',
             embeddable: true,
           },
         ],
@@ -93,6 +94,7 @@ describe('Node Text Editor Markdown reference catalog', () => {
     owners.entities.mockRejectedValue(new Error('entity-store-unavailable'));
     const catalog = createNodeTextEditorMarkdownReferenceCatalog({
       files: {} as NekoHostPorts['files'],
+      globalMediaLibraryRoot: '/private/global-media-libraries',
       resolveWorkspace: vi.fn(async () => workspace),
     });
 
@@ -140,5 +142,17 @@ function contentEntry(path: string, label: string, mediaType: string = 'file') {
     metadata: { mediaType },
     role: 'content' as const,
     depth: 0,
+  };
+}
+
+function mediaContentEntry(
+  libraryName: string,
+  relativePath: string,
+  label: string,
+  mediaType: string,
+) {
+  return {
+    ...contentEntry('unused', label, mediaType),
+    locator: { kind: 'media-library' as const, libraryName, relativePath },
   };
 }

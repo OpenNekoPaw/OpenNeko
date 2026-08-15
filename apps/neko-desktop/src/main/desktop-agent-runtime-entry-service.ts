@@ -1,12 +1,13 @@
 import type {
   AgentBoundDomainBinding,
   AgentCharacterDialogueLaunchBinding,
-  AgentDraftInputIntent,
+  AgentWorldExperienceLaunchBinding,
 } from '@neko/agent-contracts';
 import type { AgentEntryRuntimeMaterializationPort } from '@neko/agent-runtime/application';
 import type {
   CharacterConversationLaunchResult,
   CharacterConversationLaunchSelection,
+  GlobalCharacterCatalog,
   CharacterVersion,
 } from '@neko/chara/contracts';
 
@@ -22,6 +23,7 @@ interface DesktopCharacterConversationLaunchPort {
 
 interface DesktopCharacterPublicationReader {
   readPublication(characterVersionId: string): Promise<CharacterVersion | undefined>;
+  readCatalog(): Promise<GlobalCharacterCatalog>;
 }
 
 interface DesktopCharacterInteractionPort {
@@ -31,36 +33,45 @@ interface DesktopCharacterInteractionPort {
     readonly characterRunId: string;
     readonly dialogueRunId: string;
   }): Promise<void>;
-  submitTurn(input: {
-    readonly topology: 'dialogue';
-    readonly dialogueRunId: string;
-    readonly characterRunId: string;
-    readonly message: string;
-  }): Promise<unknown>;
 }
 
 interface DesktopCharacterRoomPort {
   readRun(roomRunId: string): Promise<{ readonly characterRoomId: string }>;
 }
 
-interface DesktopCharacterRoomConversationPort {
-  submitUserMessage(input: {
-    readonly submissionId: string;
-    readonly roomRunId: string;
-    readonly userId: string;
-    readonly message: string;
-  }): Promise<{ readonly outcomes: readonly { readonly status: string }[] }>;
+interface DesktopWorldRuntimePort {
+  createRun(input: {
+    readonly worldVersionId: string;
+    readonly worldRunId: string;
+    readonly worldSaveId: string;
+    readonly branchId: string;
+    readonly saveLabel: string;
+  }): Promise<void>;
+  validateBinding(input: {
+    readonly worldVersionId: string;
+    readonly worldRunId: string;
+    readonly worldSaveId?: string;
+    readonly branchId?: string;
+  }): Promise<void>;
+  readRuntime(worldRunId: string): Promise<
+    | {
+        readonly publication: { readonly worldVersionId: string };
+        readonly run: {
+          readonly worldRunId: string;
+          readonly worldVersionId: string;
+          readonly worldSaveId: string;
+          readonly branchId: string;
+        };
+        readonly save: { readonly worldSaveId: string };
+      }
+    | undefined
+  >;
 }
 
 export interface DesktopAgentRuntimeEntryService extends AgentEntryRuntimeMaterializationPort {
   validateContext(
-    context: Extract<AgentBoundDomainBinding, { readonly kind: 'character' | 'room' }>,
+    context: Extract<AgentBoundDomainBinding, { readonly kind: 'character' | 'room' | 'world' }>,
   ): Promise<void>;
-  executeInitialInput(input: {
-    readonly requestId: string;
-    readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'character' | 'room' }>;
-    readonly intent: AgentDraftInputIntent;
-  }): Promise<void>;
 }
 
 export function createDesktopAgentCharacterDialogueTargetValidator(options: {
@@ -70,13 +81,14 @@ export function createDesktopAgentCharacterDialogueTargetValidator(options: {
   return async (binding: AgentCharacterDialogueLaunchBinding): Promise<void> => {
     const selection = projectCharacterSelection(binding);
     await options.conversations.validateSelection(selection);
+    const catalog = await options.publications.readCatalog();
     for (const participant of binding.participants) {
-      const publication = await options.publications.readPublication(
-        participant.characterVersionId,
+      const character = catalog.characters.find(
+        (candidate) => candidate.globalCharacterId === participant.globalCharacterId,
       );
-      if (!publication || publication.characterProjectId !== participant.characterProjectId) {
+      if (!character?.characterVersionIds.includes(participant.characterVersionId)) {
         throw new Error(
-          `CharacterVersion '${participant.characterVersionId}' does not belong to exact CharacterProject '${participant.characterProjectId}'.`,
+          `CharacterVersion '${participant.characterVersionId}' does not belong to exact GlobalCharacter '${participant.globalCharacterId}'.`,
         );
       }
     }
@@ -87,11 +99,40 @@ export function createDesktopAgentRuntimeEntryService(options: {
   readonly characterConversations: DesktopCharacterConversationLaunchPort;
   readonly characterInteractions: DesktopCharacterInteractionPort;
   readonly characterRooms: DesktopCharacterRoomPort;
-  readonly characterRoomConversations: DesktopCharacterRoomConversationPort;
+  readonly characterPublications: DesktopCharacterPublicationReader;
+  readonly validateCharacterDialogue: (
+    binding: AgentCharacterDialogueLaunchBinding,
+  ) => Promise<void>;
+  readonly worldRuntime: DesktopWorldRuntimePort;
+  readonly validateWorldExperience: (binding: AgentWorldExperienceLaunchBinding) => Promise<void>;
   readonly userId: string;
   readonly userDisplayName: string;
 }): DesktopAgentRuntimeEntryService {
   return {
+    async validate({ receipt, input, references, resourceGrantIds }) {
+      if (input.kind !== 'message') {
+        throw new Error('Runtime Entry first submit requires an ordinary message input.');
+      }
+      if (receipt.binding.kind === 'world-experience') {
+        await options.validateWorldExperience(receipt.binding);
+        return;
+      }
+      await options.validateCharacterDialogue(receipt.binding);
+      if (
+        receipt.binding.mode === 'narrative' &&
+        (references.length > 0 || resourceGrantIds.length > 0)
+      ) {
+        throw new Error('Narrative Character Dialogue forbids external references.');
+      }
+      if (
+        receipt.binding.participants.length > 1 &&
+        (references.length > 0 || resourceGrantIds.length > 0)
+      ) {
+        throw new Error(
+          'Character Room references require an exact participant turn and are unavailable.',
+        );
+      }
+    },
     async materialize({ requestId, connection, receipt, input }) {
       if (
         receipt.draftId !== connection.draftId ||
@@ -100,13 +141,13 @@ export function createDesktopAgentRuntimeEntryService(options: {
         throw new Error('Agent runtime Entry receipt belongs to another Draft or connection.');
       }
       if (receipt.binding.kind === 'world-experience') {
-        throw new Error(
-          '[world/agent-world-experience-provider-unavailable] Complete World Experience launch is unavailable until the WorldExperienceVersion owner is composed.',
-        );
+        await options.validateWorldExperience(receipt.binding);
+        return materializeWorldExperience(options, requestId, receipt.binding);
       }
       if (input.kind !== 'message') {
         throw new Error('Character Dialogue first submit requires an ordinary message input.');
       }
+      await options.validateCharacterDialogue(receipt.binding);
       const result = await options.characterConversations.launch({
         requestId,
         userId: options.userId,
@@ -118,16 +159,35 @@ export function createDesktopAgentRuntimeEntryService(options: {
           result.topology === 'dialogue'
             ? result.primaryAgentSessionId
             : `conversation:room:${result.roomRunId}`,
-        context: projectCharacterContext(receipt.binding, result),
+        context: await projectCharacterContext(
+          receipt.binding,
+          result,
+          options.characterPublications,
+        ),
       };
     },
     async validateContext(context) {
+      if (context.kind === 'world') {
+        if (!context.worldRunId) {
+          throw new Error('World Conversation has no exact WorldRun authority.');
+        }
+        await options.worldRuntime.validateBinding({
+          worldVersionId: context.worldExperienceVersionId,
+          worldRunId: context.worldRunId,
+        });
+        return;
+      }
       if (context.kind === 'character') {
         if (!context.characterRunId || !context.dialogueRunId) {
           throw new Error('Character Conversation has no exact Run and Dialogue authority.');
         }
+        const publication = await requireCharacterPublication(
+          context.characterId,
+          context.characterVersionId,
+          options.characterPublications,
+        );
         await options.characterInteractions.validateDialogueBinding({
-          characterProjectId: context.characterId,
+          characterProjectId: publication.characterProjectId,
           characterVersionId: context.characterVersionId,
           characterRunId: context.characterRunId,
           dialogueRunId: context.dialogueRunId,
@@ -139,32 +199,66 @@ export function createDesktopAgentRuntimeEntryService(options: {
         throw new Error('Room Conversation does not match the exact CharacterRoom authority.');
       }
     },
-    async executeInitialInput({ requestId, context, intent }) {
-      if (intent.kind !== 'message') {
-        throw new Error('Character Dialogue and Room first submit require an ordinary message.');
-      }
-      await this.validateContext(context);
-      if (context.kind === 'character') {
-        await options.characterInteractions.submitTurn({
-          topology: 'dialogue',
-          dialogueRunId: context.dialogueRunId!,
-          characterRunId: context.characterRunId!,
-          message: intent.text,
-        });
-        return;
-      }
-      const result = await options.characterRoomConversations.submitUserMessage({
-        submissionId: requestId,
-        roomRunId: context.roomRunId,
-        userId: options.userId,
-        message: intent.text,
-      });
+  };
+}
+
+async function materializeWorldExperience(
+  options: Parameters<typeof createDesktopAgentRuntimeEntryService>[0],
+  requestId: string,
+  binding: AgentWorldExperienceLaunchBinding,
+): Promise<{
+  readonly conversationId: string;
+  readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'world' }>;
+}> {
+  const participantId = `world-participant:${requestId}`;
+  const roleScopeId = `world-role:${requestId}`;
+  let worldRunId: string;
+  if (binding.launch.kind === 'continue') {
+    worldRunId = binding.launch.worldRunId;
+    await options.worldRuntime.validateBinding({
+      worldVersionId: binding.worldVersionId,
+      worldRunId,
+      worldSaveId: binding.launch.worldSaveId,
+      ...(binding.launch.branchId === undefined ? {} : { branchId: binding.launch.branchId }),
+    });
+  } else {
+    worldRunId = `world-run:${requestId}`;
+    const worldSaveId = `world-save:${requestId}`;
+    const branchId = `world-branch:${requestId}`;
+    const existing = await options.worldRuntime.readRuntime(worldRunId);
+    if (existing) {
       if (
-        result.outcomes.length > 0 &&
-        result.outcomes.every((outcome) => outcome.status === 'rejected')
+        existing.publication.worldVersionId !== binding.worldVersionId ||
+        existing.run.worldVersionId !== binding.worldVersionId ||
+        existing.run.worldSaveId !== worldSaveId ||
+        existing.save.worldSaveId !== worldSaveId ||
+        existing.run.branchId !== branchId
       ) {
-        throw new Error('Every scheduled Room participant response was rejected.');
+        throw new Error(`WorldRun '${worldRunId}' belongs to another exact launch request.`);
       }
+    } else {
+      await options.worldRuntime.createRun({
+        worldVersionId: binding.worldVersionId,
+        worldRunId,
+        worldSaveId,
+        branchId,
+        saveLabel: 'Agent World Experience',
+      });
+    }
+  }
+  return {
+    conversationId: `conversation:world:${worldRunId}:${participantId}`,
+    context: {
+      kind: 'world',
+      worldExperienceId: binding.globalWorldId,
+      worldExperienceVersionId: binding.worldVersionId,
+      worldRunId,
+      participantId,
+      roleScopeId,
+      characters: binding.participants.map((participant) => ({
+        characterId: participant.globalCharacterId,
+        characterVersionId: participant.characterVersionId,
+      })),
     },
   };
 }
@@ -172,11 +266,6 @@ export function createDesktopAgentRuntimeEntryService(options: {
 function projectCharacterSelection(
   binding: AgentCharacterDialogueLaunchBinding,
 ): CharacterConversationLaunchSelection {
-  if (binding.storylineVersionId !== undefined && binding.participants.length !== 1) {
-    throw new Error(
-      'Character Dialogue storyline selection requires exactly one Character participant.',
-    );
-  }
   if (
     binding.participants.length > 1 &&
     binding.participants.some((participant) => participant.roleProfileId !== undefined)
@@ -185,36 +274,56 @@ function projectCharacterSelection(
       'Character Room role profile selection is unavailable without participant-level Room authority.',
     );
   }
+  if (binding.mode === 'companion') {
+    return {
+      mode: binding.mode,
+      characters: binding.participants.map((participant) => ({
+        characterVersionId: participant.characterVersionId,
+        ...(participant.roleProfileId === undefined
+          ? {}
+          : { roleProfileId: participant.roleProfileId }),
+      })),
+    };
+  }
   return {
-    runtimeKind: 'companion',
+    mode: binding.mode,
     characters: binding.participants.map((participant) => ({
       characterVersionId: participant.characterVersionId,
+      ...(participant.storyline === undefined ? {} : { storyline: participant.storyline }),
       ...(participant.roleProfileId === undefined
         ? {}
         : { roleProfileId: participant.roleProfileId }),
-      ...(binding.storylineVersionId === undefined
-        ? {}
-        : { characterStorylineVersionId: binding.storylineVersionId }),
     })),
   };
 }
 
-function projectCharacterContext(
+async function projectCharacterContext(
   binding: AgentCharacterDialogueLaunchBinding,
   result: CharacterConversationLaunchResult,
-): Extract<AgentBoundDomainBinding, { readonly kind: 'character' | 'room' }> {
+  publications: DesktopCharacterPublicationReader,
+): Promise<Extract<AgentBoundDomainBinding, { readonly kind: 'character' | 'room' }>> {
   if (binding.participants.length === 1) {
-    const participant = binding.participants[0]!;
+    const participant = binding.participants[0];
+    if (!participant) {
+      throw new Error('Character Dialogue target has no exact participant.');
+    }
     if (
       result.topology !== 'dialogue' ||
-      result.characterProjectId !== participant.characterProjectId ||
       result.characterVersionId !== participant.characterVersionId
     ) {
       throw new Error('Chara launch result does not match the exact Character Dialogue target.');
     }
+    const publication = await requireCharacterPublication(
+      participant.globalCharacterId,
+      participant.characterVersionId,
+      publications,
+    );
+    if (result.characterProjectId !== publication.characterProjectId) {
+      throw new Error('Chara launch result belongs to another CharacterProject source.');
+    }
     return {
       kind: 'character',
-      characterId: result.characterProjectId,
+      characterId: participant.globalCharacterId,
       characterVersionId: result.characterVersionId,
       characterRunId: result.characterRunId,
       dialogueRunId: result.dialogueRunId,
@@ -226,16 +335,37 @@ function projectCharacterContext(
   if (
     result.topology !== 'chatroom' ||
     result.participants.length !== binding.participants.length ||
-    result.participants.some(
-      (participant, index) =>
-        participant.characterVersionId !== binding.participants[index]!.characterVersionId,
-    )
+    result.participants.some((participant, index) => {
+      const expected = binding.participants[index];
+      return !expected || participant.characterVersionId !== expected.characterVersionId;
+    })
   ) {
     throw new Error('Chara launch result does not match the exact Character Room target.');
   }
   return {
     kind: 'room',
+    scope: 'interaction',
     roomId: result.characterRoomId,
     roomRunId: result.roomRunId,
   };
+}
+
+async function requireCharacterPublication(
+  globalCharacterId: string,
+  characterVersionId: string,
+  publications: DesktopCharacterPublicationReader,
+): Promise<CharacterVersion> {
+  const [catalog, publication] = await Promise.all([
+    publications.readCatalog(),
+    publications.readPublication(characterVersionId),
+  ]);
+  const character = catalog.characters.find(
+    (candidate) => candidate.globalCharacterId === globalCharacterId,
+  );
+  if (!character?.characterVersionIds.includes(characterVersionId) || !publication) {
+    throw new Error(
+      `CharacterVersion '${characterVersionId}' does not belong to exact GlobalCharacter '${globalCharacterId}'.`,
+    );
+  }
+  return publication;
 }

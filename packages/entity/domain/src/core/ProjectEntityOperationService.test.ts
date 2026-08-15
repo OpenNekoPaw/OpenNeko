@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PROJECT_ENTITY_REFERENCE_OWNER_IDS,
   ProjectEntityOperationService,
@@ -45,33 +45,32 @@ describe('ProjectEntityOperationService', () => {
     });
   });
 
-  it('merges a candidate into an existing Entity and dismisses without writing canonical facts', async () => {
+  it('merges a candidate into an existing Entity and dismisses the discovery evidence', async () => {
     harness.document = document([record('character-rin', 'Rin')]);
 
     await harness.service.mergeCandidateInto({
       candidateId: CANDIDATE.candidateId,
       targetEntityId: 'character-rin',
-      targetSemantic: semantic('Rin', { role: 'lead' }),
+      targetSemantic: semantic('Rin Aoki'),
       updatedAt: LATER,
     });
     await harness.service.dismissCandidate({
       candidateId: CANDIDATE.candidateId,
     });
 
-    expect(harness.document.entities[0]?.facts).toEqual({ role: 'lead' });
+    expect(harness.document.entities[0]?.names.canonical).toBe('Rin Aoki');
     expect(harness.commits[0]?.candidateDecision?.kind).toBe('merge-into');
     expect(harness.dismissed).toEqual([{ kind: 'dismiss', candidate: CANDIDATE }]);
     expect(harness.commits).toHaveLength(1);
   });
 
-  it('edits facts and bindings only through the canonical commit port', async () => {
+  it('edits names and bindings only through the canonical commit port', async () => {
     harness.document = document([record('character-rin', 'Rin')]);
 
     await harness.service.edit({
       entityId: 'character-rin',
       changes: {
         names: { canonical: 'Rin', display: 'Rin Aoki', aliases: ['Aoki'] },
-        facts: { role: 'lead' },
       },
       updatedAt: LATER,
     });
@@ -94,7 +93,6 @@ describe('ProjectEntityOperationService', () => {
     expect(harness.commits).toHaveLength(4);
     expect(harness.document.entities[0]).toMatchObject({
       names: { canonical: 'Rin', display: 'Rin Aoki', aliases: ['Aoki'] },
-      facts: { role: 'lead' },
       representations: [expect.objectContaining({ bindingId: 'binding-rin-primary' })],
       updatedAt: LATER,
     });
@@ -104,7 +102,7 @@ describe('ProjectEntityOperationService', () => {
     ]);
   });
 
-  it('rejects empty edits, duplicate binding IDs, and missing unbind targets', async () => {
+  it('rejects duplicate binding IDs and missing unbind targets', async () => {
     harness.document = document([
       {
         ...record('character-rin', 'Rin'),
@@ -112,13 +110,6 @@ describe('ProjectEntityOperationService', () => {
       },
     ]);
 
-    await expect(
-      harness.service.edit({
-        entityId: 'character-rin',
-        changes: {},
-        updatedAt: LATER,
-      }),
-    ).rejects.toMatchObject({ diagnostics: [{ code: 'project-entity-operation-invalid' }] });
     await expect(
       harness.service.bind({
         entityId: 'character-rin',
@@ -146,7 +137,7 @@ describe('ProjectEntityOperationService', () => {
       operationId: 'merge-rin',
       sourceEntityId: 'character-old',
       targetEntityId: 'character-rin',
-      targetSemantic: semantic('Rin', { merged: true }),
+      targetSemantic: semantic('Merged Rin'),
       committedAt: LATER,
     });
 
@@ -159,7 +150,7 @@ describe('ProjectEntityOperationService', () => {
       deprecatedAt: LATER,
       replacementEntityId: 'character-rin',
     });
-    expect(harness.document.entities[1]?.facts).toEqual({ merged: true });
+    expect(harness.document.entities[1]?.names.canonical).toBe('Merged Rin');
   });
 
   it('uses complete reference plans for deprecation and deletion', async () => {
@@ -213,6 +204,25 @@ describe('ProjectEntityOperationService', () => {
     expect(harness.document.entities).toHaveLength(2);
   });
 
+  it('never consults a stale usage projection to authorize deletion', async () => {
+    harness.document = document([record('character-rin', 'Rin')]);
+    harness.blockedOwner = 'document';
+    const staleUsageProjection = {
+      list: vi.fn((): never => {
+        throw new Error('usage projection must not authorize destructive operations');
+      }),
+    };
+
+    await expect(
+      harness.service.delete({ operationId: 'delete-rin', entityId: 'character-rin' }),
+    ).rejects.toMatchObject({
+      diagnostics: [expect.objectContaining({ message: 'Agent reference is immutable.' })],
+    });
+    expect(staleUsageProjection.list).not.toHaveBeenCalled();
+    expect(harness.prepared).toEqual(PROJECT_ENTITY_REFERENCE_OWNER_IDS);
+    expect(harness.document.entities).toHaveLength(1);
+  });
+
   it('rejects missing candidates, duplicate IDs, and cross-kind merges locally', async () => {
     harness.document = document([
       record('character-rin', 'Rin'),
@@ -240,7 +250,7 @@ describe('ProjectEntityOperationService', () => {
         operationId: 'merge-cross-kind',
         sourceEntityId: 'character-rin',
         targetEntityId: 'location-home',
-        targetSemantic: semantic('Home', {}, 'location'),
+        targetSemantic: semantic('Home', 'location'),
         committedAt: LATER,
       }),
     ).rejects.toMatchObject({ diagnostics: [{ code: 'project-entity-operation-invalid' }] });
@@ -342,10 +352,9 @@ class OperationHarness {
 
 function semantic(
   canonical: string,
-  facts: ProjectEntitySemanticSnapshot['facts'] = {},
   kind: ProjectEntitySemanticSnapshot['kind'] = 'character',
 ): ProjectEntitySemanticSnapshot {
-  return { kind, names: { canonical, aliases: [] }, facts, representations: [] };
+  return { kind, names: { canonical, aliases: [] }, representations: [] };
 }
 
 function record(
@@ -355,7 +364,7 @@ function record(
 ) {
   return {
     entityId,
-    ...semantic(canonical, {}, kind),
+    ...semantic(canonical, kind),
     lifecycle: { state: 'active' as const },
     createdAt: NOW,
     updatedAt: NOW,

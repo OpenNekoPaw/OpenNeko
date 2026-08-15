@@ -10,6 +10,9 @@ const files = {
   surface: 'apps/neko-desktop/src/renderer/DesktopCanvasSurface.tsx',
   hostRuntime: 'apps/neko-desktop/src/renderer/desktop-canvas-host-runtime.ts',
   workspace: 'packages/canvas/webview/src/components/playback/PlaybackWorkspace.tsx',
+  previewRegistry: 'packages/canvas/webview/src/preview/PreviewRendererRegistry.tsx',
+  desktopBridge: 'apps/neko-desktop/src/shared/canvas-bridge-contract.ts',
+  webviewHost: 'packages/canvas/webview/src/host-runtime/canvas-webview-host.ts',
 };
 
 export async function checkCanvasPlaybackBoundary(root = repositoryRoot) {
@@ -33,6 +36,42 @@ export async function checkCanvasPlaybackBoundary(root = repositoryRoot) {
     'createElectronCanvasHostRuntime(identity)',
     'Desktop Canvas must inject an instance-scoped host runtime.',
   );
+  requireAnchor(
+    findings,
+    'previewRegistry',
+    sources.previewRegistry,
+    'LightweightPreview',
+    'Canvas media must compose the shared Preview viewer.',
+  );
+  requireAnchor(
+    findings,
+    'previewRegistry',
+    sources.previewRegistry,
+    "type: 'preview:resolveResource'",
+    'Canvas media must resolve the canonical authorized Preview resource.',
+  );
+  if (/Inline(?:Video|Audio)Player|CanvasMediaHostRequest|media:(?:probe|prepare|release)/u.test(
+    sources.previewRegistry,
+  )) {
+    findings.push(
+      `${files.previewRegistry}: Canvas must not retain a parallel media player or media Host path.`,
+    );
+  }
+
+  if (
+    /DesktopCanvasMedia(?:Request|Response|Info)|parseDesktopCanvasMedia(?:Request|Response)/u.test(
+      sources.desktopBridge,
+    )
+  ) {
+    findings.push(
+      `${files.desktopBridge}: Desktop must not retain a package-local Canvas media contract or codec.`,
+    );
+  }
+  if (/default:\s*[\s\S]*delegate\.postMessage\(value\)/u.test(sources.webviewHost)) {
+    findings.push(
+      `${files.webviewHost}: Canvas Webview Host must not delegate unknown message kinds.`,
+    );
+  }
   requireAnchor(
     findings,
     'hostRuntime',

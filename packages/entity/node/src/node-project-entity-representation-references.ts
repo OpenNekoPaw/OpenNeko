@@ -5,7 +5,7 @@ import {
   type ProjectEntityDocumentRepository,
   type ProjectEntityDiagnostic,
 } from '@neko/entity-domain';
-import type { ContentLocator } from '@neko/content';
+import { contentLocatorKey, type ContentLocator } from '@neko/content';
 import {
   NodeProjectEntityRepository,
   type ProjectEntityAvailableDocumentReader,
@@ -41,7 +41,7 @@ export class NodeProjectEntityRepresentationReferenceService {
     return snapshot(result.document, result.diagnostics);
   }
 
-  async rewriteWorkspacePaths(
+  async rewriteContentLocators(
     input: {
       readonly replacements: ReadonlyMap<string, string>;
     },
@@ -53,8 +53,7 @@ export class NodeProjectEntityRepresentationReferenceService {
         const entities = current.entities.map((entity) => ({
           ...entity,
           representations: entity.representations.map((binding) => {
-            if (binding.target.kind !== 'workspace-file') return binding;
-            const replacement = input.replacements.get(binding.target.path);
+            const replacement = input.replacements.get(contentLocatorKey(binding.target));
             if (!replacement) return binding;
             rewrittenCount += 1;
             return { ...binding, target: { kind: 'workspace-file' as const, path: replacement } };

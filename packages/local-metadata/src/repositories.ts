@@ -2,14 +2,22 @@ import type { WorkspaceIdentityDescriptor, WorkspacePortableLocator } from './st
 import type { ResourceCacheEntry } from '@neko/local-metadata/resource-cache';
 import type { MediaFileMetadata } from '@neko/media';
 import type { CompactMediaSemanticIndex } from '@neko/search-domain';
-import type { EntityAssetProjectionRepository } from '@neko/entity-domain';
+import type { ProjectEntityProjectionRepository } from '@neko/entity-domain';
 import type {
   ProjectIndexFreshness,
+  ResourceUsageProjectionRepository,
   ProjectSemanticCoverageAnalysisKind,
   ProjectSemanticProviderMetadata,
   ProjectSearchItemKind,
   ProjectSearchPartitionKind,
   ProjectSearchSourceRef,
+} from '@neko/search-domain';
+
+export type {
+  ResourceUsageProjectionQuery,
+  ResourceUsageProjectionQueryResult,
+  ResourceUsageProjectionReplaceSourceRequest,
+  ResourceUsageProjectionRepository,
 } from '@neko/search-domain';
 import type { LocalMetadataPartition } from './model';
 import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/global-library/membership';
@@ -304,7 +312,8 @@ export type LocalMetadataCacheTable =
   | 'media_metadata'
   | 'search_documents'
   | 'semantic_sources'
-  | 'entity_asset_projections'
+  | 'resource_usage_projections'
+  | 'project_entity_projections'
   | 'catalog_items';
 export type LocalMetadataCacheCleanupReason = 'rebuild' | 'quota' | 'orphan-gc' | 'manual';
 
@@ -386,7 +395,8 @@ export interface LocalMetadataRepositories {
   readonly mediaMetadata: MediaMetadataRepository;
   readonly searchDocuments: SearchDocumentRepository;
   readonly semanticProjections: SemanticProjectionRepository;
-  readonly entityAssetProjections: EntityAssetProjectionRepository;
+  readonly resourceUsageProjections: ResourceUsageProjectionRepository;
+  readonly projectEntityProjections: ProjectEntityProjectionRepository;
   readonly catalogItems: CatalogProjectionRepository;
   readonly cacheMaintenance: LocalMetadataCacheMaintenanceRepository;
 }

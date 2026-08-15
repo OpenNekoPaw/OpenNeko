@@ -108,7 +108,7 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(cssSource).toMatch(/--canvas-card-shadow-hover:/);
     expect(cssSource).toMatch(/--canvas-card-shadow-selected:/);
     expect(cssSource).toMatch(
-      /\.selection-context-toolbar\s*\{[^}]*background:\s*var\(--canvas-overlay-surface\);[^}]*box-shadow:\s*var\(--canvas-floating-shadow\);/s,
+      /\.selection-context-toolbar\s*\{[^}]*background:\s*var\(--canvas-card-surface\);[^}]*box-shadow:\s*var\(--canvas-floating-shadow\);[^}]*backdrop-filter:\s*none;/s,
     );
     expect(cssSource).toMatch(
       /\.selection-generation-input-panel\s*\{[^}]*background:\s*var\(--canvas-card-surface\);[^}]*box-shadow:\s*var\(--canvas-floating-shadow\);[^}]*backdrop-filter:\s*none;/s,
@@ -175,6 +175,13 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/createViewportSnapshotPolicy/);
     expect(appSource).toMatch(/writeCanvasViewportSnapshot/);
     expect(appSource).toMatch(/readCanvasViewportSnapshot/);
+  });
+
+  it('queues whole-document synchronization before selected-node passive action resolution', () => {
+    expect(appSource).toContain('useLayoutEffect(() => {');
+    expect(appSource).toMatch(
+      /useLayoutEffect\(\(\) => \{[\s\S]*?type: 'canvasStatus'[\s\S]*?\}, \[nodes\.length, connections\.length, selectedNodeIds, canvasData, nodeTypeSummary\]\);/,
+    );
   });
 
   it('keeps derived projection dependencies memoized and degradable', () => {
@@ -290,7 +297,7 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/revealPlaybackWorkspace\(\{ focusOwner: 'route' \}\)/);
     expect(appSource).not.toMatch(/panes:/);
     expect(appSource).toMatch(
-      /const canOpenHostPlayback = hostPort\.supportsMessage\('media:probe'\)/,
+      /const canOpenHostPlayback = hostPort\.supportsMessage\('preview:resolveResource'\)/,
     );
     expect(playbackWorkspaceSource).toMatch(
       /if \(!hostPort \|\| !\(hostPort\.supportsMessage\?\.\('playback:getPreviewPlan'\) \?\? true\)\)/,
@@ -357,18 +364,7 @@ describe('Canvas creative workbench layout boundary', () => {
       cssSource.indexOf(".canvas-audio-transport[data-state='idle']"),
     );
     expect(audioTransportCss).not.toMatch(/\b(?:border|background|box-shadow):/);
-    expect(cssSource).toMatch(
-      /\.canvas-audio-node-player\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto;/,
-    );
-    expect(cssSource).toMatch(
-      /\.canvas-audio-node-controls\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto\s+minmax\(0,\s*1fr\);/,
-    );
-    expect(cssSource).toMatch(/\.canvas-audio-node-playback\s*\{[\s\S]*?grid-column:\s*2;/);
-    const audioNodePlayerCss = cssSource.slice(
-      cssSource.indexOf('.canvas-audio-node-player {'),
-      cssSource.indexOf('.canvas-audio-node-waveform {'),
-    );
-    expect(audioNodePlayerCss).not.toMatch(/\b(?:border|box-shadow):/);
+    expect(cssSource).not.toMatch(/\.canvas-audio-node-(?:player|waveform|controls)/);
     expect(cssSource).toMatch(
       /\.canvas-playback-controller-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto\s+minmax\(0,\s*1fr\);/,
     );

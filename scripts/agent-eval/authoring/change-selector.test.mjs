@@ -181,6 +181,43 @@ describe('Agent Evaluation change-to-suite selector', () => {
     );
   });
 
+  it('maps canonical builtin Skill content and its current execution path', () => {
+    const paths = [
+      'packages/skills/skills/character-creator/SKILL.md',
+      'packages/agent/runtime/src/pi/skill-host.ts',
+      'packages/agent/runtime/src/pi/conversation-runtime.ts',
+      'packages/agent/contracts/src/character-creation-handoff.ts',
+      'packages/agent/webview/src/components/ConversationController.tsx',
+    ];
+    expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
+    expect(selectEvaluationCoverage(paths)).toEqual([
+      {
+        behaviorId: 'launch-domain-binding',
+        suiteId: 'agent-runtime.launch-binding',
+        suiteIds: ['agent-runtime.launch-binding', 'agent-runtime.skill-runtime'],
+        changedPaths: [
+          'packages/agent/contracts/src/character-creation-handoff.ts',
+          'packages/agent/webview/src/components/ConversationController.tsx',
+        ],
+      },
+      {
+        behaviorId: 'portable-skill-content',
+        suiteId: 'skill.character-creator',
+        suiteIds: ['skill.character-creator'],
+        changedPaths: ['packages/skills/skills/character-creator/SKILL.md'],
+      },
+      {
+        behaviorId: 'skill-runtime',
+        suiteId: 'agent-runtime.skill-runtime',
+        suiteIds: ['agent-runtime.skill-runtime', 'skill.storyboard'],
+        changedPaths: [
+          'packages/agent/runtime/src/pi/skill-host.ts',
+          'packages/agent/runtime/src/pi/conversation-runtime.ts',
+        ],
+      },
+    ]);
+  });
+
   it('maps external automation packages and Desktop boundaries to their exact suite', () => {
     const paths = [
       'packages/automation/contracts/src/index.ts',

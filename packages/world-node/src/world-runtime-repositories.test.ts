@@ -55,7 +55,7 @@ describe('World runtime repositories', () => {
     await initializeWorldRuntimePersistenceTables(store);
     const authoringRepository = createWorldAuthoringFileRepository({
       workspaceRoot: libraryRoot,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-runtime' },
     });
     const authoring = new WorldAuthoringService({
       repository: authoringRepository,

@@ -1,5 +1,6 @@
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
+import { createCanvasWebviewHost } from '@neko/canvas-webview/host-runtime';
 import type {
   DesktopProjectCatalogItem,
   DesktopShellProjection,
@@ -48,6 +49,21 @@ export function DesktopCanvasSurface({
   );
   const runtime = useMemo(() => createElectronCanvasHostRuntime(identity), [identity]);
   const delegate = useMemo(() => createDesktopCanvasWebviewDelegate(identity), [identity]);
+  const hostLifetime = useMemo(
+    () => ({ host: createCanvasWebviewHost(runtime, delegate), mounted: false }),
+    [delegate, runtime],
+  );
+  const host = hostLifetime.host;
+  useEffect(() => {
+    hostLifetime.mounted = true;
+    host.prepare();
+    return () => {
+      hostLifetime.mounted = false;
+      queueMicrotask(() => {
+        if (!hostLifetime.mounted) host.dispose();
+      });
+    };
+  }, [host, hostLifetime]);
   return (
     <section
       className="desktop-canvas-surface"
@@ -62,12 +78,7 @@ export function DesktopCanvasSurface({
           </div>
         }
       >
-        <CanvasWebviewRoot
-          delegate={delegate}
-          lifecyclePresentation="active"
-          locale={locale}
-          runtime={runtime}
-        />
+        <CanvasWebviewRoot host={host} lifecyclePresentation="active" locale={locale} />
       </Suspense>
     </section>
   );

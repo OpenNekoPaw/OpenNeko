@@ -10,17 +10,15 @@ import type {
 } from '../contracts';
 import type { ContentFingerprint, WorkspaceFileContentLocator } from '../contracts';
 import {
-  authorizeWorkspaceLinkedPath,
-  type AuthorizeWorkspaceLinkedPathInput,
-  type WorkspaceLinkedPathGuardResult,
-} from './workspace-linked-path-guard';
+  authorizeWorkspaceContainedPath,
+  type AuthorizeWorkspacePathInput,
+  type WorkspacePathGuardResult,
+} from './workspace-path-guard';
 
 export interface NodeWorkspaceContentReadHandlerOptions {
   readonly workspaceRoot: string;
   readonly defaultMaxBytes?: number;
-  readonly authorize?: (
-    input: AuthorizeWorkspaceLinkedPathInput,
-  ) => Promise<WorkspaceLinkedPathGuardResult>;
+  readonly authorize?: (input: AuthorizeWorkspacePathInput) => Promise<WorkspacePathGuardResult>;
 }
 
 export class NodeWorkspaceContentReadHandler implements ContentReadHandler<WorkspaceFileContentLocator> {
@@ -122,7 +120,7 @@ export class NodeWorkspaceContentReadHandler implements ContentReadHandler<Works
     | { readonly ok: false; readonly code: ContentIoDiagnosticCode }
   > {
     const requestedPath = path.join(this.options.workspaceRoot, ...locator.path.split('/'));
-    const result = await (this.options.authorize ?? authorizeWorkspaceLinkedPath)({
+    const result = await (this.options.authorize ?? authorizeWorkspaceContainedPath)({
       workspaceRoot: this.options.workspaceRoot,
       requestedPath,
     });
@@ -206,7 +204,7 @@ function requestedFingerprint(
 }
 
 function guardDiagnosticCode(
-  code: import('./workspace-linked-path-guard').WorkspaceLinkedPathGuardDiagnosticCode,
+  code: import('./workspace-path-guard').WorkspacePathGuardDiagnosticCode,
 ): ContentIoDiagnosticCode {
   switch (code) {
     case 'workspace-path-unavailable':

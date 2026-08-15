@@ -53,6 +53,7 @@ const preview: MessageBundle = {
   'preview.audio.volumeLabel': 'Volume: {percent}%',
   'preview.audio.skipBack': 'Skip back 10s',
   'preview.audio.skipForward': 'Skip forward 10s',
+  'preview.audio.seek': 'Audio progress',
   'preview.audio.speedLabel': 'Playback speed',
   'preview.audio.noLyrics': 'No lyrics available',
   'preview.audio.viewCover': 'Cover',
@@ -84,6 +85,9 @@ const preview: MessageBundle = {
   'preview.epub.toc': 'Table of Contents',
   'preview.epub.theme': 'Reading theme',
   'preview.epub.fontSize': 'Font size',
+  'preview.epub.toolbar': 'Book navigation',
+  'preview.epub.previousChapter': 'Previous chapter',
+  'preview.epub.nextChapter': 'Next chapter',
   'preview.epub.modePaginated': 'Switch to page mode',
   'preview.epub.modeWaterfall': 'Switch to waterfall mode',
   // DOCX

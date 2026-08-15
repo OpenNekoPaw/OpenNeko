@@ -6,10 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./core": "./src/core/index.ts",
-    "./providers": "./src/providers/index.ts",
     "./projections": "./src/projections/index.ts",
-    "./search": "./src/search/index.ts",
-    "./testing": "./src/testing/index.ts"
+    "./search": "./src/search/index.ts"
   },
   "scripts": {
     "test": "vitest run",

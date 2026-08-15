@@ -544,7 +544,7 @@ export async function typeDesktopText(cdp, selector, text, index = 0, options = 
   await clickElement(cdp, selector, index, options.position);
   if (options.clear !== false) {
     const selectionModifier = options.platform === 'darwin' ? 'Meta' : 'Control';
-    await pressDesktopKey(cdp, 'a', [selectionModifier]);
+    await dispatchDesktopKey(cdp, 'a', [selectionModifier], ['selectAll']);
     await pressDesktopKey(cdp, 'Backspace');
   }
   if (text.length > 0) {
@@ -566,8 +566,15 @@ export async function composeDesktopText(cdp, selector, text, index = 0, options
 }
 
 export async function pressDesktopKey(cdp, key, modifiers = []) {
+  await dispatchDesktopKey(cdp, key, modifiers);
+}
+
+async function dispatchDesktopKey(cdp, key, modifiers, commands = []) {
   if (typeof key !== 'string' || key.length === 0) {
     throw new Error('Desktop keyboard input requires a non-empty key.');
+  }
+  if (!Array.isArray(commands) || commands.some((command) => typeof command !== 'string')) {
+    throw new Error('Desktop keyboard commands must be an array of strings.');
   }
   const modifierMask = resolveModifierMask(modifiers);
   const descriptor = describeKey(key);
@@ -579,7 +586,11 @@ export async function pressDesktopKey(cdp, key, modifiers = []) {
     nativeVirtualKeyCode: descriptor.virtualKeyCode,
     ...(key === 'Enter' ? { text: '\r', unmodifiedText: '\r' } : {}),
   };
-  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', ...event });
+  await cdp.send('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    ...event,
+    ...(commands.length > 0 ? { commands } : {}),
+  });
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...event });
 }
 

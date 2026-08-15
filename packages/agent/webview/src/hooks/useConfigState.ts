@@ -12,7 +12,7 @@ import type { MentionItem, PluginSlashCommandDef } from '../components/ChatView/
  * Project file info
  */
 export interface ProjectFileInfo {
-  locator: import('@neko/content').WorkspaceFileContentLocator;
+  locator: import('@neko/content').ContentLocator;
   name: string;
   type: 'file' | 'folder';
   icon?: string;

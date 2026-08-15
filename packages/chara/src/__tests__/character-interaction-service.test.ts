@@ -1,10 +1,10 @@
 import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
+  type CharacterCompanionContinuity,
+  type CharacterNarrativeTurnReceipt,
   type CharacterRun,
   type CharacterRunPresentationConfiguration,
-  type CharacterMemoryScope,
-  type CharacterStorylineRun,
   type CharacterStorylineVersion,
   type CharacterVersion,
   type DialogueRun,
@@ -15,9 +15,8 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   CharacterInteractionService,
-  type CharacterAgentTurnContext,
+  type CharacterAgentConversationPort,
   type CharacterInteractionRepository,
-  type CharacterPrimaryAgentSessionPort,
   type CharacterRoomViewPort,
 } from '../application/character-interaction-service';
 
@@ -50,7 +49,8 @@ function relationship(
   return {
     relationshipId,
     userId: 'user-a',
-    characterVersionId,
+    characterProjectId: `project:${characterVersionId}`,
+    relationshipRevision: 0,
     memories: [],
     candidates: [],
     createdAt: now,
@@ -65,8 +65,8 @@ class MemoryInteractionRepository implements CharacterInteractionRepository {
   readonly dialogues = new Map<string, DialogueRun>();
   readonly rooms = new Map<string, RoomRun>();
   readonly storylineVersions = new Map<string, CharacterStorylineVersion>();
-  readonly storylineRuns = new Map<string, CharacterStorylineRun>();
-  readonly memoryScopes = new Map<string, CharacterMemoryScope>();
+  readonly companionContinuities = new Map<string, CharacterCompanionContinuity>();
+  readonly narrativeTurnReceipts = new Map<string, CharacterNarrativeTurnReceipt>();
 
   async readPublication(characterVersionId: string): Promise<CharacterVersion | undefined> {
     return cloneOptional(this.versions.get(characterVersionId));
@@ -100,22 +100,31 @@ class MemoryInteractionRepository implements CharacterInteractionRepository {
     return cloneOptional(this.storylineVersions.get(id));
   }
 
-  async readStorylineRun(id: string): Promise<CharacterStorylineRun | undefined> {
-    return cloneOptional(this.storylineRuns.get(id));
+  async readCompanionContinuity(id: string): Promise<CharacterCompanionContinuity | undefined> {
+    return cloneOptional(this.companionContinuities.get(id));
   }
 
-  async readMemoryScope(id: string): Promise<CharacterMemoryScope | undefined> {
-    return cloneOptional(this.memoryScopes.get(id));
+  async freezeNarrativeTurnReceipt(receipt: CharacterNarrativeTurnReceipt): Promise<void> {
+    if (this.narrativeTurnReceipts.has(receipt.turnId)) {
+      throw new Error(`Narrative turn '${receipt.turnId}' already exists.`);
+    }
+    this.narrativeTurnReceipts.set(receipt.turnId, structuredClone(receipt));
+  }
+
+  async readNarrativeTurnReceipt(
+    turnId: string,
+  ): Promise<CharacterNarrativeTurnReceipt | undefined> {
+    return cloneOptional(this.narrativeTurnReceipts.get(turnId));
   }
 }
 
-class RecordingAgentSessions implements CharacterPrimaryAgentSessionPort {
+class RecordingAgentConversations implements CharacterAgentConversationPort {
   readonly created: string[] = [];
   readonly released: string[] = [];
   readonly turns: {
+    readonly requestId: string;
     readonly primaryAgentSessionId: string;
     readonly characterRunId: string;
-    readonly context: CharacterAgentTurnContext;
   }[] = [];
 
   async createPrimarySession(input: {
@@ -130,19 +139,17 @@ class RecordingAgentSessions implements CharacterPrimaryAgentSessionPort {
   }
 
   async submitTurn(input: {
+    readonly requestId: string;
     readonly primaryAgentSessionId: string;
     readonly characterRunId: string;
     readonly message: string;
-    readonly context: CharacterAgentTurnContext;
-    readonly onTurnStarted?: (turnId: string) => Promise<void>;
   }): Promise<{ readonly turnId: string; readonly content: string }> {
     this.turns.push({
+      requestId: input.requestId,
       primaryAgentSessionId: input.primaryAgentSessionId,
       characterRunId: input.characterRunId,
-      context: input.context,
     });
     const turnId = `turn:${input.characterRunId}`;
-    await input.onTurnStarted?.(turnId);
     return { turnId, content: `Response to ${input.message}` };
   }
 }
@@ -192,16 +199,28 @@ function serviceFixture(presentationTurns?: {
   }): Promise<unknown>;
 }) {
   const repository = new MemoryInteractionRepository();
-  const agentSessions = new RecordingAgentSessions();
+  for (const suffix of ['a', 'b']) {
+    repository.companionContinuities.set(`continuity-${suffix}`, {
+      companionContinuityId: `continuity-${suffix}`,
+      userId: 'user-a',
+      characterProjectId: `project:character-version-${suffix}`,
+      continuityRevision: 0,
+      candidates: [],
+      entries: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+  const agentConversations = new RecordingAgentConversations();
   const roomViews = new StubRoomViews();
   const service = new CharacterInteractionService({
     repository,
-    agentSessions,
+    agentConversations,
     roomViews,
     ...(presentationTurns === undefined ? {} : { presentationTurns }),
     now: () => now,
   });
-  return { repository, agentSessions, roomViews, service };
+  return { repository, agentConversations, roomViews, service };
 }
 
 describe('CharacterInteractionService', () => {
@@ -219,121 +238,167 @@ describe('CharacterInteractionService', () => {
       userParticipantId: 'participant-user',
       characterParticipantId: 'participant-character',
       controller: { kind: 'agent' },
-      runtimeKind: 'companion',
+      mode: 'companion',
+      companionContinuityId: 'continuity-a',
       relationshipId: 'relationship-a',
     });
     const result = await fixture.service.submitTurn({
+      requestId: 'request-dialogue-a',
       topology: 'dialogue',
       dialogueRunId: 'dialogue-a',
       characterRunId: 'character-run-a',
       message: 'Hello.',
     });
 
-    expect(fixture.agentSessions.created).toEqual(['character-run-a']);
+    const prepared = await fixture.service.prepareTurn({
+      topology: 'dialogue',
+      dialogueRunId: 'dialogue-a',
+      characterRunId: 'character-run-a',
+    });
+    expect(fixture.agentConversations.created).toEqual(['character-run-a']);
     expect(created.characterRun.controller).toEqual({
       kind: 'agent',
       primaryAgentSessionId: 'pi-session:character-run-a',
     });
-    expect(fixture.agentSessions.turns).toHaveLength(1);
-    expect(fixture.agentSessions.turns[0]?.context.characterVersion.characterVersionId).toBe(
-      'character-version-a',
-    );
-    expect(fixture.agentSessions.turns[0]?.context.relationship?.relationshipId).toBe(
-      'relationship-a',
-    );
+    expect(fixture.agentConversations.turns).toHaveLength(1);
+    expect(prepared.context.characterVersion.characterVersionId).toBe('character-version-a');
+    expect(prepared.context.relationship?.relationshipId).toBe('relationship-a');
     expect(result.turnId).toBe('turn:character-run-a');
+    await expect(fixture.service.resolveAgentModeConstraint('character-run-a')).resolves.toEqual({
+      mode: 'companion',
+      skills: 'configured',
+      tools: 'configured',
+      externalReferences: 'configured',
+    });
   });
 
-  it('materializes only the exact frozen StorylineRun and MemoryScope into a turn', async () => {
+  it('materializes only the exact bounded Narrative node context into a turn', async () => {
     const fixture = serviceFixture();
     fixture.repository.versions.set('character-version-a', publication());
-    fixture.repository.relationships.set(
-      'relationship-a',
-      relationship('relationship-a', 'character-version-a'),
-    );
-    await fixture.service.createDialogue({
-      dialogueRunId: 'dialogue-a',
+    fixture.repository.characterRuns.set('character-run-a', {
       characterRunId: 'character-run-a',
       characterVersionId: 'character-version-a',
+      participantId: 'participant-character',
+      controller: { kind: 'agent', primaryAgentSessionId: 'pi-session:character-run-a' },
+      runtimeBinding: {
+        kind: 'narrative',
+        storyline: {
+          characterStorylineId: 'storyline-a',
+          characterStorylineVersionId: 'storyline-version-a',
+          storylineNodeId: 'arrival',
+        },
+      },
+      createdAt: now,
+    });
+    fixture.repository.dialogues.set('dialogue-a', {
+      topology: 'dialogue',
+      dialogueRunId: 'dialogue-a',
       userParticipantId: 'participant-user',
       characterParticipantId: 'participant-character',
-      controller: { kind: 'agent' },
-      runtimeKind: 'companion',
-      relationshipId: 'relationship-a',
-    });
-    fixture.repository.characterRuns.set('character-run-a', {
-      ...fixture.repository.characterRuns.get('character-run-a')!,
-      characterStorylineRunId: 'storyline-run-a',
-      characterMemoryScopeId: 'memory-scope-a',
+      characterRunId: 'character-run-a',
+      mode: 'narrative',
+      createdAt: now,
     });
     fixture.repository.storylineVersions.set('storyline-version-a', {
       characterStorylineVersionId: 'storyline-version-a',
+      characterStorylineId: 'storyline-a',
       characterVersionId: 'character-version-a',
       label: 'Arc A',
       premise: 'Learn to trust.',
-      desire: 'Belonging',
-      conflict: 'Suspicion',
-      growthArc: 'From guarded to open.',
-      stages: [{ stageId: 'guarded', title: 'Guarded', description: 'Keeps distance.' }],
-      turningPoints: [],
       constraints: [],
-      acceptedEvidenceIds: [],
+      nodeOrder: ['arrival'],
+      nodes: [
+        {
+          storylineNodeId: 'arrival',
+          title: 'Arrival',
+          spoilerVisibility: 'visible',
+          context: {
+            situation: 'The gate opens.',
+            allowedStoryFacts: ['The gate is open.'],
+            forbiddenStoryFacts: ['The messenger is the traitor.'],
+            narrativeMemories: ['A promise was made here.'],
+            knowledgeBoundary: ['The sender is unknown.'],
+            behaviorConstraints: ['Stay cautious.'],
+            expressionConstraints: ['Speak tersely.'],
+            authorOnlyNotes: ['The messenger watches nearby.'],
+          },
+        },
+      ],
+      edges: [],
       publishedAt: now,
     });
-    fixture.repository.storylineRuns.set('storyline-run-a', {
-      characterStorylineRunId: 'storyline-run-a',
-      characterStorylineVersionId: 'storyline-version-a',
-      characterRunId: 'character-run-a',
-      currentStageId: 'guarded',
-      acceptedTransitions: [],
-      storylineRevision: 0,
-      createdAt: now,
-      updatedAt: now,
-    });
-    fixture.repository.memoryScopes.set('memory-scope-a', {
-      characterMemoryScopeId: 'memory-scope-a',
-      characterRunId: 'character-run-a',
-      characterStorylineRunId: 'storyline-run-a',
-      memoryRevision: 0,
-      candidates: [],
-      entries: [],
-      createdAt: now,
-      updatedAt: now,
-    });
 
-    await fixture.service.submitTurn({
+    const bindingBefore = structuredClone(
+      fixture.repository.characterRuns.get('character-run-a')?.runtimeBinding,
+    );
+    await expect(fixture.service.resolveAgentModeConstraint('character-run-a')).resolves.toEqual({
+      mode: 'narrative',
+      skills: 'none',
+      tools: 'none',
+      externalReferences: 'none',
+    });
+    const publicationBefore = structuredClone(
+      fixture.repository.storylineVersions.get('storyline-version-a'),
+    );
+    const prepared = await fixture.service.prepareTurn({
       topology: 'dialogue',
       dialogueRunId: 'dialogue-a',
       characterRunId: 'character-run-a',
-      message: 'Remember this exact context.',
     });
+    const result = await fixture.service.submitPreparedTurn(
+      prepared,
+      'request-narrative-a',
+      'The gate scene is complete. Transition us to the successor node now.',
+    );
+    await fixture.service.freezePreparedTurn(prepared, result.turnId);
 
-    const context = fixture.agentSessions.turns[0]?.context;
-    expect(context?.characterStorylineRun?.characterStorylineRunId).toBe('storyline-run-a');
-    expect(context?.characterMemoryScope?.characterMemoryScopeId).toBe('memory-scope-a');
+    const context = prepared.context;
+    expect(context?.narrative?.storylineNodeId).toBe('arrival');
+    expect(context?.narrative?.node.situation).toBe('The gate opens.');
+    expect(context?.narrative?.node).not.toHaveProperty('forbiddenStoryFacts');
+    expect(context?.narrative?.node).not.toHaveProperty('authorOnlyNotes');
+    expect(context).not.toHaveProperty('companionContinuity');
+    expect(context).not.toHaveProperty('relationship');
     expect(Object.isFrozen(context)).toBe(true);
-    expect(Object.isFrozen(context?.characterStorylineRun)).toBe(true);
-
-    fixture.repository.storylineRuns.set('storyline-run-a', {
-      ...fixture.repository.storylineRuns.get('storyline-run-a')!,
-      characterRunId: 'character-run-other',
+    expect(Object.isFrozen(context?.narrative)).toBe(true);
+    expect(result.content).toContain('Transition us to the successor node now.');
+    expect(fixture.repository.narrativeTurnReceipts.get(result.turnId)).toEqual({
+      turnId: result.turnId,
+      primaryAgentSessionId: 'pi-session:character-run-a',
+      characterRunId: 'character-run-a',
+      characterVersionId: 'character-version-a',
+      conversation: { topology: 'dialogue', dialogueRunId: 'dialogue-a' },
+      storyline: {
+        characterStorylineId: 'storyline-a',
+        characterStorylineVersionId: 'storyline-version-a',
+        storylineNodeId: 'arrival',
+      },
+      startedAt: now,
     });
+    expect(fixture.repository.characterRuns.get('character-run-a')?.runtimeBinding).toEqual(
+      bindingBefore,
+    );
+    expect(fixture.repository.storylineVersions.get('storyline-version-a')).toEqual(
+      publicationBefore,
+    );
+
+    fixture.repository.storylineVersions.delete('storyline-version-a');
     await expect(
       fixture.service.submitTurn({
+        requestId: 'request-narrative-missing',
         topology: 'dialogue',
         dialogueRunId: 'dialogue-a',
         characterRunId: 'character-run-a',
         message: 'Do not cross run authority.',
       }),
-    ).rejects.toMatchObject({ code: 'character-storyline-run-unavailable' });
+    ).rejects.toMatchObject({ code: 'character-storyline-context-unavailable' });
   });
 
   it('freezes the presentation configuration prepared before the Agent turn starts', async () => {
-    const frozen: { readonly turnId: string; readonly modelRef: string }[] = [];
+    const frozen: { readonly turnId: string; readonly speed: number }[] = [];
     let configuration: CharacterRunPresentationConfiguration = {
       characterRunId: 'character-run-a',
       participantId: 'participant-character',
-      chat: { providerRef: 'provider:chat-a', modelRef: 'model:chat-a' },
       tts: {
         providerRef: 'provider:tts-a',
         voiceRepresentationId: 'voice-a',
@@ -347,7 +412,7 @@ describe('CharacterInteractionService', () => {
         return structuredClone(configuration);
       },
       async freezePreparedTurn(input) {
-        frozen.push({ turnId: input.turnId, modelRef: input.configuration.chat.modelRef });
+        frozen.push({ turnId: input.turnId, speed: input.configuration.tts.speed });
       },
     });
     fixture.repository.versions.set('character-version-a', publication());
@@ -362,7 +427,8 @@ describe('CharacterInteractionService', () => {
       userParticipantId: 'participant-user',
       characterParticipantId: 'participant-character',
       controller: { kind: 'agent' },
-      runtimeKind: 'companion',
+      mode: 'companion',
+      companionContinuityId: 'continuity-a',
       relationshipId: 'relationship-a',
     });
 
@@ -373,12 +439,17 @@ describe('CharacterInteractionService', () => {
     });
     configuration = {
       ...configuration,
-      chat: { providerRef: 'provider:chat-next', modelRef: 'model:chat-next' },
+      tts: { ...configuration.tts, speed: 1.25 },
     };
-    await fixture.service.submitPreparedTurn(prepared, 'Use the prepared model.');
+    const result = await fixture.service.submitPreparedTurn(
+      prepared,
+      'request-presentation-a',
+      'Use the prepared voice.',
+    );
+    await fixture.service.freezePreparedTurn(prepared, result.turnId);
 
-    expect(prepared.context.presentationConfiguration?.chat.modelRef).toBe('model:chat-a');
-    expect(frozen).toEqual([{ turnId: 'turn:character-run-a', modelRef: 'model:chat-a' }]);
+    expect(prepared.context.presentationConfiguration?.tts.speed).toBe(1);
+    expect(frozen).toEqual([{ turnId: 'turn:character-run-a', speed: 1 }]);
   });
 
   it('does not create a hidden AgentSession for a human-controlled Character', async () => {
@@ -395,13 +466,15 @@ describe('CharacterInteractionService', () => {
       userParticipantId: 'participant-user',
       characterParticipantId: 'participant-character',
       controller: { kind: 'human', userId: 'user-a' },
-      runtimeKind: 'companion',
+      mode: 'companion',
+      companionContinuityId: 'continuity-a',
       relationshipId: 'relationship-a',
     });
 
-    expect(fixture.agentSessions.created).toEqual([]);
+    expect(fixture.agentConversations.created).toEqual([]);
     await expect(
       fixture.service.submitTurn({
+        requestId: 'request-human',
         topology: 'dialogue',
         dialogueRunId: 'dialogue-human',
         characterRunId: 'character-run-human',
@@ -429,7 +502,11 @@ describe('CharacterInteractionService', () => {
           kind: 'agent',
           primaryAgentSessionId: `pi-session:character-run-${suffix}`,
         },
-        runtimeBinding: { kind: 'companion', relationshipId: `relationship-${suffix}` },
+        runtimeBinding: {
+          kind: 'companion',
+          companionContinuityId: `continuity-${suffix}`,
+          relationshipId: `relationship-${suffix}`,
+        },
         createdAt: now,
       });
     }
@@ -450,30 +527,36 @@ describe('CharacterInteractionService', () => {
       })),
       schedulingPolicy: { kind: 'mentioned' },
       events: [],
-      runtimeKind: 'companion',
+      mode: 'companion',
       relationshipIds: ['relationship-a', 'relationship-b'],
       createdAt: now,
     });
 
+    const preparedTurns = [];
     for (const suffix of ['a', 'b']) {
-      await fixture.service.submitTurn({
+      const prepared = await fixture.service.prepareTurn({
         topology: 'chatroom',
         roomRunId: 'room-run-a',
         primaryAgentSessionId: `pi-session:character-run-${suffix}`,
-        message: `Respond as ${suffix}.`,
       });
+      preparedTurns.push(prepared);
+      await fixture.service.submitPreparedTurn(
+        prepared,
+        `request-room-${suffix}`,
+        `Respond as ${suffix}.`,
+      );
     }
 
-    expect(fixture.agentSessions.turns.map((turn) => turn.primaryAgentSessionId)).toEqual([
+    expect(fixture.agentConversations.turns.map((turn) => turn.primaryAgentSessionId)).toEqual([
       'pi-session:character-run-a',
       'pi-session:character-run-b',
     ]);
     expect(
-      fixture.agentSessions.turns.map((turn) => turn.context.roomView?.events[0]?.roomEventId),
+      preparedTurns.map((prepared) => prepared.context.roomView?.events[0]?.roomEventId),
     ).toEqual(['private:participant-a', 'private:participant-b']);
     expect(
-      fixture.agentSessions.turns.map((turn) => turn.context.relationship?.characterVersionId),
-    ).toEqual(['character-version-a', 'character-version-b']);
+      preparedTurns.map((prepared) => prepared.context.relationship?.characterProjectId),
+    ).toEqual(['project:character-version-a', 'project:character-version-b']);
   });
 
   it('cannot start a formal run from an authoring-test snapshot identity', async () => {
@@ -491,11 +574,12 @@ describe('CharacterInteractionService', () => {
         userParticipantId: 'participant-user',
         characterParticipantId: 'participant-character',
         controller: { kind: 'agent' },
-        runtimeKind: 'companion',
+        mode: 'companion',
+        companionContinuityId: 'continuity-a',
         relationshipId: 'relationship-a',
       }),
     ).rejects.toMatchObject({ code: 'character-version-unavailable' });
-    expect(fixture.agentSessions.created).toEqual([]);
+    expect(fixture.agentConversations.created).toEqual([]);
   });
 });
 

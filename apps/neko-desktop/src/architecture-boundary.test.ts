@@ -142,6 +142,26 @@ describe('Desktop architecture boundaries', () => {
     }
   });
 
+  it('wires Character and World creator Tools through exact Project repositories', () => {
+    const application = readFileSync(path.join(sourceRoot, 'main', 'index.ts'), 'utf8');
+    const start = application.indexOf('resolveWorkspaceCapabilityProviders:');
+    const end = application.indexOf('pluginToolAdapters:', start);
+    const providerComposition = application.slice(start, end);
+
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(providerComposition).toContain('createCharacterAuthoringCapabilityProvider');
+    expect(providerComposition).toContain('createWorldAuthoringCapabilityProvider');
+    expect(providerComposition).toContain('workspaceGrantAuthority.resolveAuthorizedWorkspace');
+    expect(providerComposition).toContain('requireProjectIdentity');
+    expect(providerComposition).toContain('createCharacterAuthoringFileRepository');
+    expect(providerComposition).toContain('createWorldAuthoringFileRepository');
+    expect(providerComposition).toContain('binding.target.characterProjectId');
+    expect(providerComposition).toContain('binding.target.worldProjectId');
+    expect(providerComposition.match(/\.fillFreshDraft\(/gu)).toHaveLength(2);
+    expect(providerComposition).not.toMatch(/\b(?:active|current|recent|default)Project\b/u);
+  });
+
   it('keeps domain management routing in the application sidebar only', () => {
     const shell = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopShell.tsx'), 'utf8');
 
@@ -149,8 +169,8 @@ describe('Desktop architecture boundaries', () => {
     expect(shell).not.toContain('creative-management__catalog-switcher');
     expect(shell).not.toContain('parseCreativeManagementCatalog');
     expect(shell).not.toContain('<WorldFoundationRoot');
-    expect(shell).toContain('<WorldCatalogSurface');
-    expect(shell).toContain('<WorldDetailSurface');
+    expect(shell).toContain('<WorldManagementCatalogRoot');
+    expect(shell).toContain('<WorldManagementDetailRoot');
   });
 
   it('composes Content, Character, and World authoring through one Workbench Main path', () => {
@@ -160,7 +180,7 @@ describe('Desktop architecture boundaries', () => {
     expect(shell).toContain('renderTarget={(item) =>');
     expect(shell).toContain('return renderWorkbenchMainView({');
     expect(shell).toContain('<DesktopTextEditorSurface');
-    expect(shell).toContain('<CharacterAuthoringStudioRoot');
+    expect(shell).toContain('<CharacterAuthoringSurface');
     expect(shell).toContain('<WorldAuthoringStudioRoot');
     expect(shell.match(/<ControlledWorkbenchShell/gu)).toHaveLength(1);
   });
@@ -215,7 +235,10 @@ describe('Desktop architecture boundaries', () => {
       path.join(assetsNodeRoot, 'resource-browser-node-source.ts'),
       'utf8',
     );
-    const sync = readFileSync(path.join(assetsNodeRoot, 'workspace-media-library-sync.ts'), 'utf8');
+    const managedLinks = readFileSync(
+      path.join(assetsNodeRoot, 'workspace-linked-media-libraries.ts'),
+      'utf8',
+    );
     const locator = readFileSync(
       path.join(repositoryRoot, 'packages/assets/node/src/workspace-content-locator.ts'),
       'utf8',
@@ -224,17 +247,32 @@ describe('Desktop architecture boundaries', () => {
       path.join(sourceRoot, 'shared', 'resource-browser-bridge-contract.ts'),
       'utf8',
     );
+    const contentLocatorContract = readFileSync(
+      path.join(repositoryRoot, 'packages/content/src/contracts/content-locator.ts'),
+      'utf8',
+    );
 
     expect(runtime).toContain('assertResourceBrowserIdentity');
     expect(runtime).toContain('resolveAgentWorkspace');
-    expect(source).toContain('listWorkspaceLinkedMediaLibraries');
     expect(locator).toContain('realpath');
     expect(source).toContain('resolveWorkspaceContentLocator');
-    expect(source).toContain('WorkspaceMediaLibrarySyncService');
-    expect(source).not.toContain('createWorkspaceLinkedMediaLibrary');
-    expect(sync).toContain('createWorkspaceLinkedMediaLibrary');
-    expect(sync).toContain('planRecovery');
-    expect(sync).toContain('applyRecovery');
+    expect(source).toContain('ProjectMediaLibraryBindingService');
+    expect(source).toContain('initializeProjectMediaLibraryBindings');
+    expect(source).toContain('resolveProjectMediaLibraryContentPath');
+    expect(source).not.toContain('WorkspaceMediaLibrarySyncService');
+    expect(managedLinks).toContain('materializeWorkspaceLinkedMediaLibrary');
+    expect(managedLinks).toContain('restoreWorkspaceLinkedMediaLibrary');
+    expect(managedLinks).toContain('removeExactWorkspaceLinkedMediaLibrary');
+    expect(existsSync(path.join(assetsNodeRoot, 'workspace-media-library-sync.ts'))).toBe(false);
+    expect(existsSync(path.join(assetsNodeRoot, 'workspace-linked-media-libraries.ts'))).toBe(true);
+    expect(existsSync(path.join(assetsNodeRoot, 'project-media-library-binding-service.ts'))).toBe(
+      true,
+    );
+    expect(existsSync(path.join(assetsNodeRoot, 'project-media-library-content-handler.ts'))).toBe(
+      true,
+    );
+    expect(contentLocatorContract).toContain('interface MediaLibraryContentLocator');
+    expect(contentLocatorContract).toContain('| MediaLibraryContentLocator');
     expect(bridgeContract).not.toContain('absolutePath');
     expect(bridgeContract).not.toContain('selectedDirectory');
   });
@@ -311,10 +349,7 @@ describe('Desktop architecture boundaries', () => {
       path.join(mainRoot, 'desktop-resource-registry.ts'),
       'utf8',
     );
-    const canvasMediaRuntime = readFileSync(
-      path.join(mainRoot, 'desktop-canvas-media-runtime.ts'),
-      'utf8',
-    );
+    const canvasRuntime = readFileSync(path.join(mainRoot, 'desktop-canvas-runtime.ts'), 'utf8');
     const canvasPreviewResolver = readFileSync(
       path.join(repositoryRoot, 'packages/canvas/webview/src/preview/previewResolver.ts'),
       'utf8',
@@ -330,10 +365,9 @@ describe('Desktop architecture boundaries', () => {
     expect(resourceRegistry).not.toContain('ResourceRef');
     expect(resourceRegistry).not.toMatch(/\b(?:MediaStream|RTCPeerConnection|getUserMedia)\b/u);
 
-    expect(canvasMediaRuntime).toContain(
-      'Desktop Canvas PCM is not available for ordinary node playback.',
-    );
-    expect(canvasMediaRuntime).not.toMatch(/\.(?:startPcm|prepareAudio)\s*\(/u);
+    expect(existsSync(path.join(mainRoot, 'desktop-canvas-media-runtime.ts'))).toBe(false);
+    expect(canvasRuntime).not.toMatch(/\.(?:startPcm|prepareAudio|prepareVideo)\s*\(/u);
+    expect(canvasRuntime).toContain("'viewer-source'");
     expect(canvasPreviewResolver).not.toContain('assetPath:');
     expect(canvasPreviewResolver).not.toContain('activeCanvas');
     expect(canvasPreviewResolver).not.toContain('recentCanvas');

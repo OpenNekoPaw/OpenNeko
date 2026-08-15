@@ -8,7 +8,7 @@ You help users convert Fountain format screenplays into neko-cut timeline projec
 
 ## Conversion Semantics
 
-Use the owning story/cut authoring capability for durable conversion and project writes. Do not depend on an active editor, hidden Webview, or interactive UI flow as the source of truth.
+Keep durable conversion facts in the target story or cut project. Visible presentation state is not the source of truth.
 
 ### Fountain Format Reference
 
@@ -38,6 +38,6 @@ Fountain is a plain-text screenplay format:
 
 ## Handoff Rules
 
-- Return a reviewable conversion summary when no durable target capability is available.
-- Do not output project-internal JSON unless a local capability explicitly requests that payload shape.
-- Do not claim timeline creation succeeded until the story/cut authoring capability reports success.
+- Return a reviewable conversion summary when the result cannot be saved to a durable target.
+- Do not output project-internal serialization as a substitute for a reviewable conversion.
+- Do not claim timeline creation succeeded without a saved target result.

@@ -1,7 +1,7 @@
 import type { AgentExtensionManagementRuntime } from '@neko/agent-contracts/extension-management';
 import { lazy, Suspense, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { DesktopAutomationEndpointManagementRuntime } from './desktop-automation-endpoint-management-runtime';
+import { DesktopAutomationLocalRuntimeManagementRuntime } from './desktop-automation-local-runtime-management-runtime';
 import { DesktopAutomationPermissionManagementRuntime } from './desktop-automation-permission-management-runtime';
 import { WorkbenchMainPanelSurface } from './WorkbenchMainPanelSurface';
 
@@ -10,9 +10,9 @@ const AgentExtensionManagementRoot = lazy(async () => {
   return { default: module.AgentExtensionManagementRoot };
 });
 
-const AutomationEndpointManagementRoot = lazy(async () => {
-  const module = await import('@neko/automation-webview/endpoint-management/root');
-  return { default: module.AutomationEndpointManagementRoot };
+const AutomationLocalRuntimeManagementRoot = lazy(async () => {
+  const module = await import('@neko/automation-webview/local-runtime-management/root');
+  return { default: module.AutomationLocalRuntimeManagementRoot };
 });
 
 const AutomationPermissionManagementRoot = lazy(async () => {
@@ -34,8 +34,8 @@ export function DesktopExtensionManagementSurface({
   readonly runtime: AgentExtensionManagementRuntime;
 }): JSX.Element {
   const identity = runtime.identity;
-  const endpointRuntime = useMemo(
-    () => new DesktopAutomationEndpointManagementRuntime(identity, window.openNekoDesktop),
+  const localRuntime = useMemo(
+    () => new DesktopAutomationLocalRuntimeManagementRuntime(identity, window.openNekoDesktop),
     [identity],
   );
   const permissionRuntime = useMemo(
@@ -49,7 +49,7 @@ export function DesktopExtensionManagementSurface({
           confirmAction={(message) => window.confirm(message)}
           interactive={interactive}
           onDetailVisibilityChange={onDetailVisibilityChange}
-          renderDetail={({ content, tab }) =>
+          renderDetail={({ content, selectedItemId, tab }) =>
             detailTarget
               ? createPortal(
                   <WorkbenchMainPanelSurface
@@ -63,12 +63,21 @@ export function DesktopExtensionManagementSurface({
                       data-extension-configuration-kind={tab}
                     >
                       {content}
-                      {tab === 'extensions' ? (
+                      {tab === 'extensions' && selectedItemId === 'browser-use' ? (
+                        <AutomationLocalRuntimeManagementRoot
+                          confirmAction={(message) => window.confirm(message)}
+                          interactive={interactive}
+                          runtime={localRuntime}
+                          sourceId="browser-use.observe.local"
+                        />
+                      ) : null}
+                      {tab === 'extensions' && selectedItemId === 'computer-use' ? (
                         <>
-                          <AutomationEndpointManagementRoot
+                          <AutomationLocalRuntimeManagementRoot
                             confirmAction={(message) => window.confirm(message)}
                             interactive={interactive}
-                            runtime={endpointRuntime}
+                            runtime={localRuntime}
+                            sourceId="computer-use.observe.local"
                           />
                           <AutomationPermissionManagementRoot
                             interactive={interactive}

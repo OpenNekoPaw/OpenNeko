@@ -39,11 +39,11 @@ accept exactly `darwin-arm64` and MUST reject every other target before staging 
 - **WHEN** a release staging or descriptor command receives `win32-x64` or `linux-x64`
 - **THEN** it SHALL fail with an unsupported-target diagnostic
 
-#### Scenario: Sharp native closure is executed in CI
+#### Scenario: Sharp native closure is executed for native package validation
 
-- **WHEN** CI validates the staged Sharp runtime used by Desktop packaging
+- **WHEN** the local Apple Silicon host validates the staged Sharp runtime used by Desktop packaging
 - **THEN** the executable closure SHALL run on the matching `darwin-arm64` host
-- **AND** Windows/Linux test jobs SHALL NOT stage a product-native Sharp closure
+- **AND** GitHub Actions and Windows/Linux test jobs SHALL NOT stage a product-native Sharp closure
 
 ### Requirement: Platform documentation distinguishes tests from release support
 

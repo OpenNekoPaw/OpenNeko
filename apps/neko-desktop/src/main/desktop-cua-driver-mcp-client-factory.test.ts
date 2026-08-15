@@ -1,9 +1,12 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { MCPServerConfig, MCPToolResult } from '@neko/agent-contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createDesktopCuaDriverMcpClientFactory } from './desktop-cua-driver-mcp-client-factory';
+import {
+  createDesktopCuaDriverMcpClientFactory,
+  validateDesktopCuaDriverRelease,
+} from './desktop-cua-driver-mcp-client-factory';
 
 const roots: string[] = [];
 
@@ -12,7 +15,7 @@ afterEach(async () => {
 });
 
 describe('Desktop Cua Driver MCP client factory', () => {
-  it('launches only direct bounded MCP with an exact app policy and no Host secrets', async () => {
+  it('launches only app-owned bounded MCP with an exact app policy and no Host secrets', async () => {
     const fixture = await createFixture();
     process.env['OPENNEKO_CUA_SECRET_FIXTURE'] = 'must-not-leak';
     try {
@@ -26,7 +29,7 @@ describe('Desktop Cua Driver MCP client factory', () => {
       const launch = fixture.configs[0]!;
       expect(launch).toMatchObject({
         command: fixture.executablePath,
-        args: ['mcp', '--direct'],
+        args: ['mcp'],
         inheritProcessEnv: false,
         requestTimeout: 4_321,
         env: {
@@ -55,7 +58,7 @@ describe('Desktop Cua Driver MCP client factory', () => {
     }
   });
 
-  it('keeps unqualified modes and platforms unavailable', async () => {
+  it('keeps unsupported modes and platforms unavailable', async () => {
     const fixture = await createFixture();
     expect(() =>
       fixture.factory.createSessionClient({
@@ -64,16 +67,16 @@ describe('Desktop Cua Driver MCP client factory', () => {
         mode: 'interact',
         timeoutMs: 5_000,
       }),
-    ).toThrow("mode 'interact' is not qualified");
+    ).toThrow("mode 'interact' is unavailable");
     expect(() =>
       createDesktopCuaDriverMcpClientFactory({
         runtime: {
-          runtimeRoot: fixture.runtimeRoot,
+          appBundlePath: fixture.appBundlePath,
           executablePath: fixture.executablePath,
-          binaryPath: fixture.binaryPath,
         },
         storageRoot: path.join(fixture.root, 'other-storage'),
         platform: 'win32',
+        validateRelease: async () => undefined,
       }),
     ).toThrow("unavailable on 'win32'");
   });
@@ -89,33 +92,77 @@ describe('Desktop Cua Driver MCP client factory', () => {
       allow: { tools: ['list_apps', 'list_windows'] },
       resources: { desktop: { display: true } },
     });
-    expect(launch.args).toEqual(['mcp', '--direct']);
+    expect(launch.args).toEqual(['mcp']);
     expect(launch.inheritProcessEnv).toBe(false);
     await client.disconnect();
     await expect(readFile(policyPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
+
+  it('locks the Cua bundle, publisher and notarization identities without release equality', async () => {
+    const fixture = await createFixture();
+    const validCommand = createReleaseCommand();
+    await expect(
+      validateDesktopCuaDriverRelease(
+        { appBundlePath: fixture.appBundlePath, executablePath: fixture.executablePath },
+        validCommand,
+      ),
+    ).resolves.toBeUndefined();
+    expect(validCommand).not.toHaveBeenCalledWith(
+      '/usr/bin/plutil',
+      expect.arrayContaining(['CFBundleShortVersionString']),
+    );
+
+    const wrongPublisher = createReleaseCommand('WRONGTEAM');
+    await expect(
+      validateDesktopCuaDriverRelease(
+        { appBundlePath: fixture.appBundlePath, executablePath: fixture.executablePath },
+        wrongPublisher,
+      ),
+    ).rejects.toThrow('signing identity does not match');
+  });
 });
 
+function createReleaseCommand(teamId = 'YCK386LBJ7') {
+  return vi.fn(async (command: string, args: readonly string[]) => {
+    if (command === '/usr/bin/plutil') {
+      return args.includes('CFBundleIdentifier') ? 'com.trycua.driver\n' : '0.19.2\n';
+    }
+    if (command === '/usr/bin/codesign' && args[0] === '-d') {
+      return [
+        'Identifier=com.trycua.driver',
+        `Authority=Developer ID Application: Cua AI, Inc. (${teamId})`,
+        `TeamIdentifier=${teamId}`,
+        'Notarization Ticket=stapled',
+      ].join('\n');
+    }
+    if (command === '/usr/sbin/spctl') {
+      return 'accepted\nsource=Notarized Developer ID\n';
+    }
+    return '';
+  });
+}
+
 async function createFixture() {
-  const root = await mkdtemp(path.join(tmpdir(), 'openneko-cua-driver-'));
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), 'openneko-cua-driver-')));
   roots.push(root);
-  const runtimeRoot = path.join(root, 'runtime');
-  const binaryPath = path.join(runtimeRoot, 'bin');
+  const appBundlePath = path.join(root, 'CuaDriver.app');
+  const binaryPath = path.join(appBundlePath, 'Contents', 'MacOS');
   await mkdir(binaryPath, { recursive: true });
   const executablePath = path.join(binaryPath, 'cua-driver');
   await writeFile(executablePath, 'fixture');
   const configs: MCPServerConfig[] = [];
   const client = createFakeClient();
   const factory = createDesktopCuaDriverMcpClientFactory({
-    runtime: { runtimeRoot, executablePath, binaryPath },
+    runtime: { appBundlePath, executablePath },
     storageRoot: path.join(root, 'storage'),
     platform: 'darwin',
+    validateRelease: async () => undefined,
     createClient: (config) => {
       configs.push(config);
       return client;
     },
   });
-  return { root, runtimeRoot, binaryPath, executablePath, configs, client, factory };
+  return { root, appBundlePath, executablePath, configs, client, factory };
 }
 
 function createFakeClient() {
@@ -125,6 +172,11 @@ function createFakeClient() {
   return {
     connect: vi.fn(async () => undefined),
     disconnect: vi.fn(async () => undefined),
+    getConnectionInfo: vi.fn(() => ({
+      protocolVersion: '2025-06-18',
+      server: { name: 'cua-driver', version: '0.19.2' },
+      capabilities: {},
+    })),
     listTools: vi.fn(async () => []),
     callTool: vi.fn(async () => result),
   };

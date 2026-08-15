@@ -20,6 +20,7 @@ import {
 } from './canvas-host-runtime-contract';
 import {
   createUnavailableCanvasTextFilePreview,
+  resolveCanvasTextFilePreviewKind,
   type CanvasTextFilePreviewRequest,
   type CanvasTextFilePreviewResult,
 } from './canvas-text-file-preview';
@@ -61,6 +62,7 @@ export interface CanvasHostRuntimeSessionEffects {
   readonly saveDocument?: (input: {
     readonly canvas: CanvasData;
     readonly identity: CanvasHostRuntimeIdentity;
+    readonly removedNodeIds: readonly string[];
   }) => Promise<void>;
   readonly authorMaterial?: (input: {
     readonly canvas: CanvasData;
@@ -233,6 +235,38 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     return this.enqueueOperation(() => this.readTextFilePreviewSerial(request));
   }
 
+  authorizePreviewSource(input: {
+    readonly nodeId: string;
+    readonly outputId: string;
+    readonly locator: ContentLocator;
+    readonly contentKind: 'image' | 'video' | 'audio' | 'text' | 'document' | 'model';
+  }): void {
+    this.assertActive();
+    const node = this.canvas.nodes.find((candidate) => candidate.id === input.nodeId);
+    if (!node) throw new Error(`Canvas preview resource node "${input.nodeId}" is stale.`);
+    if (node.type === 'generation') {
+      const output = node.data.outputs.find((candidate) => candidate.outputId === input.outputId);
+      if (!output || !contentLocatorsEqual(output.locator, input.locator)) {
+        throw new Error(`Canvas preview resource output "${input.outputId}" is stale.`);
+      }
+      if (output.kind !== input.contentKind) {
+        throw new Error(`Canvas preview resource output "${input.outputId}" kind is stale.`);
+      }
+      return;
+    }
+    const locator =
+      node.type === 'media' || node.type === 'file' ? node.data.contentLocator : undefined;
+    if (input.outputId !== node.id || !locator || !contentLocatorsEqual(locator, input.locator)) {
+      throw new Error(`Canvas preview resource source "${input.outputId}" is stale.`);
+    }
+    if (node.type !== 'media' && node.type !== 'file') {
+      throw new Error(`Canvas preview resource source "${input.outputId}" kind is unavailable.`);
+    }
+    if (!isAuthorizedPreviewKind(node, input.contentKind)) {
+      throw new Error(`Canvas preview resource source "${input.outputId}" kind is unavailable.`);
+    }
+  }
+
   private async readTextFilePreviewSerial(
     request: CanvasTextFilePreviewRequest,
   ): Promise<CanvasTextFilePreviewResult> {
@@ -304,7 +338,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
 
   async reattachGenerationNodes(): Promise<void> {
     await this.enqueueOperation(async () => {
-      this.assertActive();
+      if (this.disposed) return;
       const generation = this.options.effects.generation;
       if (!generation) return;
       for (const node of this.canvas.nodes) {
@@ -317,10 +351,13 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
             run: node.data.latestRun,
             persistCanvas: (canvas) => this.persistCanvas(canvas),
           });
+          if (this.disposed) return;
           this.canvas = cloneCanvas(result.canvas);
           this.generationNodes.set(node.id, result.projection);
+          this.commitProjectionChange();
           this.startGenerationObservation(node.id);
         } catch (error) {
+          if (this.disposed) return;
           this.generationNodes.set(node.id, {
             nodeId: node.id,
             submissionId: node.data.latestRun.submissionId,
@@ -333,6 +370,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
                 error instanceof Error ? error.message : 'Canvas Generation reattachment failed.',
             },
           });
+          this.commitProjectionChange();
         }
       }
     });
@@ -416,6 +454,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       await saveDocument({
         canvas: cloneCanvas(this.canvas),
         identity: { ...this.identity },
+        removedNodeIds: [...(intent.removedNodeIds ?? [])],
       });
       this.commitStateChange(false, request.commandId);
       return this.accepted(request);
@@ -727,7 +766,11 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   private async persistCanvas(canvas: CanvasData): Promise<void> {
     const saveDocument = this.options.effects.saveDocument;
     if (!saveDocument) throw new Error('Canvas durable save capability is unavailable.');
-    await saveDocument({ canvas: cloneCanvas(canvas), identity: { ...this.identity } });
+    await saveDocument({
+      canvas: cloneCanvas(canvas),
+      identity: { ...this.identity },
+      removedNodeIds: [],
+    });
   }
 
   private startGenerationObservation(nodeId: string): void {
@@ -886,6 +929,23 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     );
     return result;
   }
+}
+
+function isAuthorizedPreviewKind(
+  node: Extract<CanvasData['nodes'][number], { readonly type: 'media' | 'file' }>,
+  contentKind: 'image' | 'video' | 'audio' | 'text' | 'document' | 'model',
+): boolean {
+  if (node.type === 'media') return node.data.mediaType === contentKind;
+  if (contentKind === 'image' || contentKind === 'video' || contentKind === 'audio') {
+    return node.data.mediaKind === contentKind;
+  }
+  if (contentKind !== 'text') return false;
+  return Boolean(
+    resolveCanvasTextFilePreviewKind({
+      path: node.data.path || node.data.title,
+      ...(node.data.mediaType ? { mediaType: node.data.mediaType } : {}),
+    }),
+  );
 }
 
 function areJsonValuesEqual(left: unknown, right: unknown): boolean {

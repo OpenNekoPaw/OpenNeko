@@ -451,6 +451,46 @@ describe('DesktopTextEditorRuntime', () => {
     restoredRuntime.dispose();
   });
 
+  it('closes a released clean View without reopening its deleted Workspace file', async () => {
+    const root = await createWorkspace('notes/deleted.md', '# Deleted\n');
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell = createShell(
+      root,
+      () => workbench,
+      (next) => {
+        workbench = next;
+      },
+    );
+    const originalRuntime = new DesktopTextEditorRuntime({
+      shell,
+      referenceCatalog: emptyReferenceCatalog(),
+      media: emptyMediaService(),
+    });
+    const opened = await originalRuntime.open({
+      identity: resourceIdentity,
+      item: textItem('notes/deleted.md'),
+    });
+    if (opened.status !== 'ready') throw new Error('Expected a ready Text Editor.');
+    originalRuntime.dispose();
+    await rm(path.join(root, 'notes/deleted.md'));
+
+    const restoredRuntime = new DesktopTextEditorRuntime({
+      shell,
+      referenceCatalog: emptyReferenceCatalog(),
+      media: emptyMediaService(),
+    });
+    await expect(
+      restoredRuntime.execute('window-1', {
+        route: TEXT_EDITOR_HOST_ROUTES.close,
+        requestId: 'close-deleted-clean-view',
+        identity: opened.identity,
+        decision: 'cancel',
+      }),
+    ).resolves.toMatchObject({ status: 'closed' });
+    expect(workbench.main.views).toHaveLength(0);
+    restoredRuntime.dispose();
+  });
+
   it('publishes clean reload and dirty conflict from one parent-directory watcher', async () => {
     const root = await createWorkspace('notes/readme.md', '# Initial\n');
     let workbench = createDefaultDesktopWorkbenchLayout('window-1');
@@ -713,7 +753,7 @@ function createShellProjection(
 function textItem(relativePath: string) {
   return {
     resourceId: `content:${relativePath}`,
-    facet: 'files' as const,
+    source: 'files' as const,
     role: 'content' as const,
     depth: 0,
     kind: 'file' as const,

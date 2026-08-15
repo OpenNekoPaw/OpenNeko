@@ -1,10 +1,6 @@
 import { isCreativeEntityRef, type CreativeEntityRef } from '@neko/entity-domain';
-import { isContentLocator } from '@neko/content';
-import {
-  isEntityRepresentationRole,
-  type EntityRepresentationRole,
-  type EntityRepresentationTarget,
-} from '@neko/entity-domain';
+import { isContentLocator, type ContentLocator } from '@neko/content';
+import { isEntityRepresentationRole, type EntityRepresentationRole } from '@neko/entity-domain';
 
 export const NPC_TEST_BENCH_AS_SLASH_COMMAND_NAME = 'as';
 export const NPC_TEST_BENCH_AS_SLASH_COMMAND = '/as';
@@ -87,7 +83,7 @@ export interface NpcProfileRelationshipValue {
 
 export interface NpcProfileRepresentationBinding {
   readonly role: EntityRepresentationRole;
-  readonly representation: EntityRepresentationTarget;
+  readonly representation: ContentLocator;
   readonly isDefault?: boolean;
   readonly sourceRef?: string;
   readonly summary?: string;

@@ -1,4 +1,4 @@
-import { validateContentLocator } from '@neko/content';
+import { parseContentReferenceTarget, validateContentLocator } from '@neko/content';
 import type { TextDocumentIdentity } from './contracts';
 
 export type TextEditorMarkdownReferenceQueryKind = 'mention' | 'resource-link' | 'resource-embed';
@@ -178,10 +178,7 @@ export function isTextEditorMarkdownReferenceCandidate(
   ) {
     return false;
   }
-  const path = value['target'].split('#', 1)[0];
-  if (!path) return false;
-  const locator = validateContentLocator({ kind: 'workspace-file', path });
-  return locator.ok && locator.locator.kind === 'workspace-file';
+  return parseContentReferenceTarget(value['target']) !== undefined;
 }
 
 export function isTextEditorMarkdownReferenceDiagnostic(

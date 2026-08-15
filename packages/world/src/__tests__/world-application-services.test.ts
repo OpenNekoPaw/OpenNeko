@@ -188,6 +188,74 @@ function createRuntimeService(repository: MemoryWorldRepository): WorldRuntimeSe
 }
 
 describe('World application services', () => {
+  it('fills only a fresh exact WorldProject draft without publication or runtime side effects', async () => {
+    const repository = new MemoryWorldRepository();
+    const authoring = new WorldAuthoringService({ repository, now: () => now });
+    await authoring.createProject({
+      worldProjectId: 'world-project-fresh',
+      title: 'Archive City',
+      draft: {
+        background: '',
+        worldBook: [],
+        locations: [],
+        organizations: [],
+        rules: [],
+        initialFacts: [],
+      },
+    });
+
+    const project = await authoring.fillFreshDraft({
+      worldProjectId: 'world-project-fresh',
+      title: 'Lantern Archive',
+      draft: creatorDefinition(),
+    });
+
+    expect(project.title).toBe('Lantern Archive');
+    expect(project.draft.background).toContain('archive city');
+    expect(repository.publications).toEqual(new Map());
+    expect(repository.runtimes).toEqual(new Map());
+    const stored = structuredClone(repository.projects.get('world-project-fresh'));
+    await expect(
+      authoring.fillFreshDraft({
+        worldProjectId: 'world-project-fresh',
+        title: 'Lantern Archive',
+        draft: { ...creatorDefinition(), background: 'A sibling overwrite attempt.' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'world-authoring-operation-invalid',
+      worldProjectId: 'world-project-fresh',
+    });
+    expect(repository.projects.get('world-project-fresh')).toEqual(stored);
+  });
+
+  it('rejects sourced WorldProjects as creator targets without changing bytes', async () => {
+    for (const project of [
+      {
+        ...freshWorldProject('world-project-sourced'),
+        sourceRefs: [
+          {
+            sourceRefId: 'source-1',
+            sourceRef: 'document:world-notes',
+            reviewedAt: now,
+          },
+        ],
+      },
+    ]) {
+      const repository = new MemoryWorldRepository();
+      repository.projects.set(project.worldProjectId, structuredClone(project));
+      const before = structuredClone(repository.projects.get(project.worldProjectId));
+
+      await expect(
+        new WorldAuthoringService({ repository, now: () => now }).fillFreshDraft({
+          worldProjectId: project.worldProjectId,
+          title: project.title,
+          draft: creatorDefinition(),
+        }),
+      ).rejects.toMatchObject({ code: 'world-authoring-operation-invalid' });
+      expect(repository.projects.get(project.worldProjectId)).toEqual(before);
+    }
+  });
+
   it('publishes an immutable WorldVersion without changing it after draft edits', async () => {
     const repository = new MemoryWorldRepository();
     const publication = await publishWorld(repository);
@@ -552,6 +620,34 @@ describe('World application services', () => {
     expect(repository.runtimes.get('world-run-b')?.run.worldStateRevision).toBe(0);
   });
 });
+
+function freshWorldProject(worldProjectId: string): WorldProject {
+  return {
+    worldProjectId,
+    title: 'Fresh World',
+    draft: {
+      background: '',
+      worldBook: [],
+      locations: [],
+      organizations: [],
+      rules: [],
+      initialFacts: [],
+    },
+    sourceRefs: [],
+    reviewStatus: 'draft',
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function creatorDefinition() {
+  const draft = definition();
+  return {
+    ...draft,
+    worldBook: draft.worldBook.map((entry) => ({ ...entry, sourceRefIds: [] })),
+    rules: draft.rules.map((rule) => ({ ...rule, sourceRefIds: [] })),
+  };
+}
 
 function cloneOptional<T>(value: T | undefined): T | undefined {
   return value === undefined ? undefined : structuredClone(value);

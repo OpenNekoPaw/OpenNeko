@@ -1,0 +1,54 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "roleplay-request-does-not-author",
+  "suiteId": "skill.character-creator",
+  "caseGroup": "boundary",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Ask for ordinary roleplay without requesting Character authoring.",
+    "canonicalPath": ["ordinary user turn", "ordinary assistant response"],
+    "observables": [
+      {
+        "ref": "roleplay-boundary-facts",
+        "kind": "runtime-fact",
+        "description": "Non-empty response with no Character draft mutation.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent responds without creating or mutating Character authoring facts.",
+    "expectedFailure": "Character draft mutation, publication or runtime creation for an adjacent roleplay request fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "请用一句话扮演一位谨慎的旧书店店员回答：今天打烊了吗？不要创建、编辑或保存角色。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "roleplay-boundary-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "non-empty",
+      "evidenceRef": "roleplay-boundary-facts"
+    },
+    {
+      "id": "no-draft-mutation",
+      "kind": "tool-call",
+      "name": "chara.character.fillDraft",
+      "status": "absent",
+      "evidenceRef": "roleplay-boundary-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

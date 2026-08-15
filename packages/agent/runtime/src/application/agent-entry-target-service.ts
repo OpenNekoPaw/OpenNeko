@@ -1,7 +1,10 @@
 import {
+  entryModeAcceptsTargetBinding,
   parseAgentEntryIntentProjection,
   parseAgentEntryTargetBinding,
   type AgentAuthoringBinding,
+  type AgentAuthoringTargetBinding,
+  type AgentAuthoringTargetRef,
   type AgentAvailabilityDiagnostic,
   type AgentCharacterDialogueLaunchBinding,
   type AgentEntryIntentProjection,
@@ -15,14 +18,19 @@ export type AgentEntryTargetValidation<T extends AgentEntryTargetBinding> =
   | { readonly status: 'ready'; readonly binding: T }
   | { readonly status: 'unavailable'; readonly diagnostic: AgentAvailabilityDiagnostic };
 
-export interface AgentAuthoringTargetProvider<
-  TKind extends AgentAuthoringBinding['target']['kind'],
-> {
+export interface AgentAuthoringTargetProvider<TKind extends AgentAuthoringTargetRef['kind']> {
   validate(
     connection: AgentLaunchConnectionIdentity,
-    binding: AgentAuthoringBinding & {
-      readonly target: Extract<AgentAuthoringBinding['target'], { readonly kind: TKind }>;
+    binding: AgentAuthoringTargetBinding & {
+      readonly target: Extract<AgentAuthoringTargetRef, { readonly kind: TKind }>;
     },
+  ): Promise<AgentEntryTargetValidation<AgentAuthoringBinding>>;
+}
+
+export interface AgentProjectAuthoringContextProvider {
+  validate(
+    connection: AgentLaunchConnectionIdentity,
+    binding: Extract<AgentAuthoringBinding, { readonly target: null }>,
   ): Promise<AgentEntryTargetValidation<AgentAuthoringBinding>>;
 }
 
@@ -50,7 +58,8 @@ export interface AgentEntryTargetApplicationService {
 }
 
 export function createAgentEntryTargetApplicationService(input: {
-  readonly contentAuthoring: AgentAuthoringTargetProvider<'content-project'>;
+  readonly projectAuthoring: AgentProjectAuthoringContextProvider;
+  readonly contentAuthoring: AgentAuthoringTargetProvider<'content-document'>;
   readonly characterAuthoring: AgentAuthoringTargetProvider<'character-project'>;
   readonly worldAuthoring: AgentAuthoringTargetProvider<'world-project'>;
   readonly characterDialogue: AgentCharacterDialogueTargetProvider;
@@ -62,15 +71,9 @@ export function createAgentEntryTargetApplicationService(input: {
       if (connection.draftId !== draftId) {
         throw new Error('Agent Entry target configuration belongs to another Draft.');
       }
-      if (mode === 'assistant') {
-        if (bindingValue !== undefined) {
-          throw new Error('Assistant Entry mode cannot accept a domain target.');
-        }
-        return { mode, targetReceipt: null };
-      }
       if (bindingValue === undefined) return { mode, targetReceipt: null };
       const binding = parseAgentEntryTargetBinding(bindingValue);
-      if (binding.kind !== mode) {
+      if (!entryModeAcceptsTargetBinding(mode, binding)) {
         throw new Error('Agent Entry target does not match the requested mode.');
       }
       const result = await validateTarget(input, connection, binding);
@@ -107,7 +110,10 @@ async function validateTarget(
   if (binding.kind === 'world-experience') {
     return providers.worldExperience.validate(connection, binding);
   }
-  if (binding.target.kind === 'content-project') {
+  if (binding.target === null) {
+    return providers.projectAuthoring.validate(connection, binding);
+  }
+  if (binding.target.kind === 'content-document') {
     return providers.contentAuthoring.validate(connection, {
       ...binding,
       target: binding.target,

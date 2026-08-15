@@ -63,7 +63,7 @@ describe('Entity project search projections', () => {
     const partition = {
       scope: 'workspace' as const,
       workspaceId: 'workspace-1',
-      domain: 'entity-asset-projection',
+      domain: 'project-entity-projection',
     };
     const adapter = createEntitySearchAdapter({
       projectRoot: '/workspace',
@@ -148,7 +148,7 @@ describe('Entity project search projections', () => {
     const partition = {
       scope: 'workspace' as const,
       workspaceId: 'workspace-1',
-      domain: 'entity-asset-projection',
+      domain: 'project-entity-projection',
     };
     const adapter = createEntitySearchAdapter({
       projectRoot: '/workspace',
@@ -224,7 +224,6 @@ function projectEntity(
     entityId,
     kind: entityId.startsWith('location') ? ('location' as const) : ('character' as const),
     names: { canonical, aliases: [] },
-    facts: {},
     representations: withBinding
       ? [
           {

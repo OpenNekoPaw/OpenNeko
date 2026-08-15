@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
+  MCPConnectionInfo,
   MCPRequestOptions,
   MCPServerConfig,
   MCPToolDefinition,
@@ -17,17 +18,22 @@ import type {
 } from '@neko/automation-node';
 
 export interface DesktopCuaDriverRuntimeLayout {
-  readonly runtimeRoot: string;
+  readonly appBundlePath: string;
   readonly executablePath: string;
-  readonly binaryPath: string;
 }
 
 export type DesktopCuaDriverMcpClientFactory = AutomationMcpClientFactoryPort &
-  CuaDriverTargetClientFactoryPort;
+  CuaDriverTargetClientFactoryPort & {
+    inspectProvider(signal?: AbortSignal): Promise<{
+      readonly server: MCPConnectionInfo['server'];
+      readonly tools: readonly AutomationMcpToolDefinition[];
+    }>;
+  };
 
 interface DesktopCuaDriverMcpClient {
   connect(options?: MCPRequestOptions): Promise<void>;
   disconnect(): Promise<void>;
+  getConnectionInfo(): MCPConnectionInfo | undefined;
   listTools(options?: MCPRequestOptions): Promise<MCPToolDefinition[]>;
   callTool(
     name: string,
@@ -41,6 +47,7 @@ export function createDesktopCuaDriverMcpClientFactory(options: {
   readonly storageRoot: string;
   readonly platform?: NodeJS.Platform;
   readonly createClient?: (config: MCPServerConfig) => DesktopCuaDriverMcpClient;
+  readonly validateRelease?: (runtime: DesktopCuaDriverRuntimeLayout) => Promise<void>;
 }): DesktopCuaDriverMcpClientFactory {
   const platform = options.platform ?? process.platform;
   if (platform !== 'darwin') {
@@ -48,24 +55,27 @@ export function createDesktopCuaDriverMcpClientFactory(options: {
   }
   validateLayout(options.runtime, options.storageRoot);
   const createClient = options.createClient ?? ((config) => createMCPClient(config));
+  const validateRelease = options.validateRelease ?? validateDesktopCuaDriverRelease;
+  const createInspectionClient = () =>
+    createPreparedClient({
+      id: `inspection-${randomUUID()}`,
+      timeoutMs: 30_000,
+      removeDataOnDisconnect: true,
+      runtime: options.runtime,
+      storageRoot: options.storageRoot,
+      createClient,
+      validateRelease,
+      policy: { kind: 'application', applicationId: 'invalid.openneko.inspection' },
+    });
 
   const factory: DesktopCuaDriverMcpClientFactory = {
-    createQualificationClient: () =>
-      createPreparedClient({
-        id: 'qualification',
-        timeoutMs: 30_000,
-        removeDataOnDisconnect: true,
-        runtime: options.runtime,
-        storageRoot: options.storageRoot,
-        createClient,
-        policy: { kind: 'application', applicationId: 'invalid.openneko.qualification' },
-      }),
+    createInspectionClient,
     createSessionClient: (input) => {
       if (input.target.kind !== 'computer') {
         throw new Error('Cua Driver requires a Computer Automation target.');
       }
       if (input.mode !== 'observe') {
-        throw new Error(`Cua Driver mode '${input.mode}' is not qualified.`);
+        throw new Error(`Cua Driver mode '${input.mode}' is unavailable.`);
       }
       return createPreparedClient({
         id: input.sessionId,
@@ -74,6 +84,7 @@ export function createDesktopCuaDriverMcpClientFactory(options: {
         runtime: options.runtime,
         storageRoot: options.storageRoot,
         createClient,
+        validateRelease,
         policy: { kind: 'application', applicationId: input.target.applicationId },
       });
     },
@@ -85,8 +96,24 @@ export function createDesktopCuaDriverMcpClientFactory(options: {
         runtime: options.runtime,
         storageRoot: options.storageRoot,
         createClient,
+        validateRelease,
         policy: { kind: 'target-discovery' },
       }),
+    async inspectProvider(signal) {
+      const client = createInspectionClient();
+      try {
+        await client.connect({ ...(signal === undefined ? {} : { signal }) });
+        const connection = client.getConnectionInfo();
+        if (!connection) throw new Error('Cua Driver returned no negotiated MCP identity.');
+        const tools = await client.listTools({ ...(signal === undefined ? {} : { signal }) });
+        return Object.freeze({
+          server: Object.freeze({ ...connection.server }),
+          tools: Object.freeze(tools),
+        });
+      } finally {
+        await client.disconnect();
+      }
+    },
   };
   return Object.freeze(factory);
 }
@@ -98,10 +125,11 @@ function createPreparedClient(input: {
   readonly runtime: DesktopCuaDriverRuntimeLayout;
   readonly storageRoot: string;
   readonly createClient: (config: MCPServerConfig) => DesktopCuaDriverMcpClient;
+  readonly validateRelease: (runtime: DesktopCuaDriverRuntimeLayout) => Promise<void>;
   readonly policy:
     | { readonly kind: 'application'; readonly applicationId: string }
     | { readonly kind: 'target-discovery' };
-}): AutomationMcpClientPort {
+}): AutomationMcpClientPort & { getConnectionInfo(): MCPConnectionInfo | undefined } {
   let client: DesktopCuaDriverMcpClient | undefined;
   let sessionRoot: string | undefined;
   return {
@@ -109,6 +137,7 @@ function createPreparedClient(input: {
       if (client) throw new Error(`Cua Driver MCP client '${input.id}' is already connected.`);
       if (signal?.aborted) throw signal.reason;
       await validateInstalledRuntime(input.runtime);
+      await input.validateRelease(input.runtime);
       const prepared = await prepareConfiguration(input);
       sessionRoot = prepared.sessionRoot;
       if (signal?.aborted) throw signal.reason;
@@ -116,6 +145,7 @@ function createPreparedClient(input: {
       client = created;
       try {
         await created.connect({ ...(signal === undefined ? {} : { signal }) });
+        requireReviewedConnection(created);
       } catch (error) {
         client = undefined;
         try {
@@ -125,6 +155,9 @@ function createPreparedClient(input: {
         }
         throw error;
       }
+    },
+    getConnectionInfo() {
+      return client?.getConnectionInfo();
     },
     async disconnect() {
       const connected = client;
@@ -161,6 +194,70 @@ function createPreparedClient(input: {
       return projectToolResult(result);
     },
   };
+}
+
+export async function validateDesktopCuaDriverRelease(
+  runtime: DesktopCuaDriverRuntimeLayout,
+  runCommand: (command: string, args: readonly string[]) => Promise<string> = runHostCommand,
+): Promise<void> {
+  const infoPlist = path.join(runtime.appBundlePath, 'Contents', 'Info.plist');
+  const [bundleId, signature, assessment] = await Promise.all([
+    runCommand('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', infoPlist]),
+    runCommand('/usr/bin/codesign', ['-d', '--verbose=4', runtime.appBundlePath]),
+    runCommand('/usr/sbin/spctl', [
+      '--assess',
+      '--type',
+      'execute',
+      '--verbose=4',
+      runtime.appBundlePath,
+    ]),
+    runCommand('/usr/bin/codesign', [
+      '--verify',
+      '--deep',
+      '--strict',
+      '--verbose=2',
+      runtime.appBundlePath,
+    ]),
+  ]);
+  if (bundleId.trim() !== 'com.trycua.driver') {
+    throw new Error('Cua Driver bundle identity is incompatible.');
+  }
+  if (
+    !signature.includes('Identifier=com.trycua.driver') ||
+    !signature.includes('TeamIdentifier=YCK386LBJ7') ||
+    !signature.includes('Authority=Developer ID Application: Cua AI, Inc. (YCK386LBJ7)') ||
+    !signature.includes('Notarization Ticket=stapled')
+  ) {
+    throw new Error('Cua Driver signing identity does not match the reviewed publisher.');
+  }
+  if (!assessment.includes('accepted') || !assessment.includes('source=Notarized Developer ID')) {
+    throw new Error('Cua Driver is not accepted as a notarized Developer ID application.');
+  }
+}
+
+async function runHostCommand(command: string, args: readonly string[]): Promise<string> {
+  const { execFile } = await import('node:child_process');
+  return await new Promise<string>((resolve, reject) => {
+    execFile(
+      command,
+      [...args],
+      {
+        env: {},
+        timeout: 15_000,
+        maxBuffer: 64 * 1024,
+        encoding: 'utf8',
+      },
+      (error, stdout, stderr) => (error ? reject(error) : resolve(`${stdout}${stderr}`)),
+    );
+  });
+}
+
+function requireReviewedConnection(client: DesktopCuaDriverMcpClient): MCPConnectionInfo {
+  const connection = client.getConnectionInfo();
+  if (!connection || connection.server.name !== 'cua-driver') {
+    throw new Error('Cua Driver MCP server identity is incompatible.');
+  }
+  return connection;
 }
 
 async function prepareConfiguration(input: {
@@ -208,11 +305,11 @@ async function prepareConfiguration(input: {
     config: {
       id: `cua-driver:${input.id}`,
       name: 'Cua Driver',
-      description: 'Contained reviewed Cua Driver Computer Use runtime',
+      description: 'Reviewed user-managed Cua Driver Computer Use runtime',
       category: 'productivity',
       transport: 'stdio',
       command: input.runtime.executablePath,
-      args: ['mcp', '--direct'],
+      args: ['mcp'],
       cwd: sessionRoot,
       inheritProcessEnv: false,
       env: {
@@ -220,7 +317,7 @@ async function prepareConfiguration(input: {
         TMPDIR: temporary,
         TMP: temporary,
         TEMP: temporary,
-        PATH: input.runtime.binaryPath,
+        PATH: path.dirname(input.runtime.executablePath),
         CUA_DRIVER_PERMISSION_MODE: 'bounded',
         CUA_DRIVER_SESSION_POLICY_FILE: policyPath,
         CUA_DRIVER_SESSION_POLICY_APPROVED: '1',
@@ -275,30 +372,40 @@ function projectToolResult(result: MCPToolResult): AutomationMcpCallResult {
 }
 
 async function validateInstalledRuntime(runtime: DesktopCuaDriverRuntimeLayout): Promise<void> {
-  const [root, executable, executableInfo] = await Promise.all([
-    realpath(runtime.runtimeRoot),
+  const [appBundle, executable, executableInfo] = await Promise.all([
+    realpath(runtime.appBundlePath),
     realpath(runtime.executablePath),
     stat(runtime.executablePath),
   ]);
-  if (!isInside(root, executable) || !executableInfo.isFile()) {
-    throw new Error('Cua Driver executable escapes the installed extension runtime.');
+  if (appBundle !== runtime.appBundlePath || executable !== runtime.executablePath) {
+    throw new Error('Cua Driver local runtime authorization changed before launch.');
+  }
+  if (!isInside(appBundle, executable) || !executableInfo.isFile()) {
+    throw new Error('Cua Driver executable escapes the authorized application bundle.');
   }
 }
 
 function validateLayout(runtime: DesktopCuaDriverRuntimeLayout, storageRoot: string): void {
   for (const [label, value] of [
-    ['runtime root', runtime.runtimeRoot],
+    ['application bundle', runtime.appBundlePath],
     ['executable', runtime.executablePath],
-    ['binary path', runtime.binaryPath],
     ['storage root', storageRoot],
   ] as const) {
     if (!path.isAbsolute(value)) throw new Error(`Cua Driver ${label} must be absolute.`);
   }
-  if (!isInside(runtime.runtimeRoot, runtime.executablePath)) {
-    throw new Error('Cua Driver executable must be contained by its runtime root.');
+  if (path.basename(runtime.appBundlePath) !== 'CuaDriver.app') {
+    throw new Error('Cua Driver local runtime must be the authorized CuaDriver.app bundle.');
   }
-  if (isInside(runtime.runtimeRoot, storageRoot) || isInside(storageRoot, runtime.runtimeRoot)) {
-    throw new Error('Cua Driver runtime and session storage roots must be separate.');
+  if (!isInside(runtime.appBundlePath, runtime.executablePath)) {
+    throw new Error(
+      'Cua Driver executable must be contained by its authorized application bundle.',
+    );
+  }
+  if (
+    isInside(runtime.appBundlePath, storageRoot) ||
+    isInside(storageRoot, runtime.appBundlePath)
+  ) {
+    throw new Error('Cua Driver application bundle and session storage roots must be separate.');
   }
 }
 

@@ -5,6 +5,7 @@ export {
   UnavailableContentReadHandler,
   type CreateNodeHostContentReadServiceOptions,
   type NodeDocumentEntryReader,
+  type NodeDocumentEntryMediaSourcePathResolver,
 } from './content-read-service';
 export {
   NodeAuthorizedWorkspaceWriter,
@@ -14,3 +15,10 @@ export {
   NodeAuthorizedWorkspaceDirectoryCreator,
   type NodeAuthorizedWorkspaceDirectoryCreatorOptions,
 } from './workspace-directory-creator';
+export {
+  authorizeWorkspaceContainedPath,
+  type AuthorizeWorkspacePathInput,
+  type WorkspacePathGuardDiagnostic,
+  type WorkspacePathGuardDiagnosticCode,
+  type WorkspacePathGuardResult,
+} from './workspace-path-guard';

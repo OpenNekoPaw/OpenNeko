@@ -30,6 +30,7 @@ describe('persistent Agent conversation lifecycle repository', () => {
     };
     const room = {
       kind: 'room' as const,
+      scope: 'interaction' as const,
       roomId: 'room:studio',
       roomRunId: 'room-run:studio:1',
     };
@@ -52,6 +53,38 @@ describe('persistent Agent conversation lifecycle repository', () => {
     await fixture.store.dispose();
   });
 
+  it('reopens the original exact CharacterVersion after a sibling branch conversation exists', async () => {
+    const fixture = await createFixture();
+    const original = {
+      kind: 'character' as const,
+      characterId: 'character:neko',
+      characterVersionId: 'character-version:original',
+      characterRunId: 'character-run:original',
+      dialogueRunId: 'dialogue-run:original',
+    };
+    const siblingBranch = {
+      ...original,
+      characterVersionId: 'character-version:new-branch',
+      characterRunId: 'character-run:new-branch',
+      dialogueRunId: 'dialogue-run:new-branch',
+    };
+    await fixture.contexts.bindContext('conversation:original', original);
+    await fixture.contexts.bindContext('conversation:new-branch', siblingBranch);
+    await fixture.store.dispose();
+
+    const reopenedStore = createNodeSqliteLocalMetadataStore({ homedir: fixture.root });
+    await reopenedStore.open({
+      databasePath: join(fixture.root, '.neko', 'neko.db'),
+      busyTimeoutMs: 1_000,
+    });
+    const reopened = createPersistentAgentConversationContextAuthority({
+      metadataStore: reopenedStore,
+    });
+    await expect(reopened.readContext('conversation:original')).resolves.toEqual(original);
+    await expect(reopened.readContext('conversation:new-branch')).resolves.toEqual(siblingBranch);
+    await reopenedStore.dispose();
+  });
+
   it('recovers the exact canonical first-submit record, context and provider claim', async () => {
     const fixture = await createFixture();
     const record = createRecord('conversation:1', 'request:1', 'turn:1', 'openai', 'gpt-5', {
@@ -63,6 +96,7 @@ describe('persistent Agent conversation lifecycle repository', () => {
         kind: 'authoring',
         workspaceId: 'workspace:1',
         workspaceGrantId: 'workspace-grant:1',
+        authority: { kind: 'project', projectId: 'project:1' },
         target: { kind: 'world-project', worldProjectId: 'world:1' },
       },
     });
@@ -195,6 +229,65 @@ describe('persistent Agent conversation lifecycle repository', () => {
     await fixture.store.dispose();
   });
 
+  it('classifies an obsolete Character participant field as a local lifecycle decode failure', async () => {
+    const fixture = await createFixture();
+    const valid = createRecord('conversation:valid', 'request:valid', 'turn:valid');
+    await fixture.repository.commitFirstSubmit(valid);
+    const obsolete = createRecord('conversation:obsolete', 'request:obsolete', 'turn:obsolete');
+    const obsoletePayload = JSON.stringify({
+      ...obsolete,
+      initialInput: {
+        ...obsolete.initialInput,
+        entryTargetReceipt: {
+          targetReceiptId: 'target-receipt:obsolete',
+          draftId: 'draft:obsolete',
+          connectionId: 'connection:obsolete',
+          mode: 'character-dialogue',
+          binding: {
+            kind: 'character-dialogue',
+            mode: 'companion',
+            participants: [
+              {
+                characterProjectId: 'character-project:obsolete',
+                characterVersionId: 'character-version:obsolete',
+              },
+            ],
+          },
+        },
+      },
+    });
+    await fixture.store.transaction(
+      {
+        mode: 'state-write',
+        ownership: 'state',
+        operation: 'insert-obsolete-character-participant',
+      },
+      async ({ sql }) => {
+        await sql.run(
+          `INSERT INTO agent_conversation_records(
+             conversation_id, request_id, turn_id, payload_json, provider_claimed
+           ) VALUES (?, ?, ?, ?, 0)`,
+          [
+            obsolete.conversationId,
+            obsolete.pendingTurn.requestId,
+            obsolete.pendingTurn.turnId,
+            obsoletePayload,
+          ],
+        );
+      },
+    );
+
+    await expect(
+      fixture.repository.readConversation(obsolete.conversationId),
+    ).rejects.toMatchObject({
+      operation: 'decode-agent-conversation-lifecycle',
+      message:
+        "Agent Character Dialogue participant contains unsupported field 'characterProjectId'.",
+    });
+    await expect(fixture.repository.readConversation(valid.conversationId)).resolves.toEqual(valid);
+    await fixture.store.dispose();
+  });
+
   it('restores independent future-turn configuration without changing the Turn snapshot', async () => {
     const fixture = await createFixture();
     const first = createRecord('conversation:first', 'request:first', 'turn:first');
@@ -261,6 +354,7 @@ async function createFixture() {
   await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
   await initializeAgentConversationLifecycleTables(store);
   return {
+    root,
     store,
     repository: createPersistentAgentConversationLifecycleRepository({ metadataStore: store }),
     contexts: createPersistentAgentConversationContextAuthority({ metadataStore: store }),
@@ -336,6 +430,12 @@ function createRecord(
       turnId,
       status: 'pending',
       configuration: { conversationId, turnId, request, projection },
+      capabilityConstraint: {
+        owner: { kind: 'assistant', id: 'assistant-space:local-user' },
+        skills: 'configured',
+        tools: 'configured',
+        references: 'configured',
+      },
     },
     scratchArtifacts: [],
   };

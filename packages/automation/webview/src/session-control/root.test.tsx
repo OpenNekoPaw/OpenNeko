@@ -169,7 +169,6 @@ function projection() {
       extensionId: 'computer-use@openneko',
       providerId: 'cua-driver',
       kind: 'computer' as const,
-      upstreamRelease: '0.19.2',
     },
     target: { kind: 'computer' as const, targetKey: 'target-1', label: 'Editor' },
     mode: 'observe' as const,

@@ -29,7 +29,7 @@ describe('composite content presenter', () => {
           {
             toolCallId: 'call-1',
             type: 'image',
-            src: 'http://127.0.0.1:43125/resources/asset-1.png',
+            descriptor: expect.objectContaining({ displayName: 'asset-1.png' }),
             assetId: 'asset-1',
             stableUri: '${WORKSPACE}/neko/generated/image/out.png',
             caption: 'Wide',
@@ -115,12 +115,12 @@ describe('composite content presenter', () => {
             data: {
               images: [
                 {
-                  renderUri: 'http://127.0.0.1:43125/resources/image-1.jpg',
+                  previewDescriptor: previewDescriptor('image-1.jpg'),
                   label: 'Image #1',
                   mimeType: 'image/jpeg',
                 },
                 {
-                  renderUri: 'http://127.0.0.1:43125/resources/image-2.jpg',
+                  previewDescriptor: previewDescriptor('image-2.jpg'),
                   label: 'Image #2',
                   mimeType: 'image/jpeg',
                 },
@@ -152,7 +152,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image-current-result',
         assetIndex: 1,
-        src: 'http://127.0.0.1:43125/resources/image-2.jpg',
+        descriptor: expect.objectContaining({ displayName: 'image-2.jpg' }),
       }),
     ]);
     expect(projection.data.diagnostics).toEqual([]);
@@ -167,19 +167,17 @@ describe('composite content presenter', () => {
       reviewPolicy: 'requires-user-review',
       entityCandidates: [
         {
-          id: 'candidate-rin',
+          candidateId: 'candidate-rin',
           kind: 'character',
-          name: 'Rin',
-          status: 'open',
-          identityBasis: 'user-named',
-          provenance: [
+          proposedNames: { canonical: 'Rin', aliases: [] },
+          freshness: 'fresh',
+          evidence: [
             {
-              providerId: 'neko-agent',
-              sourceKind: 'agent',
-              sourceRef: 'read-doc#0',
+              evidenceId: 'evidence-rin',
+              owner: 'document',
+              sourceId: 'read-doc#0',
             },
           ],
-          sourceRefs: ['read-doc#0'],
         },
       ],
     };
@@ -271,7 +269,7 @@ describe('composite content presenter', () => {
     ]);
     expect(projection.data.entityMemoryContribution).toMatchObject({
       contributionId: 'contribution-page-1',
-      entityCandidates: [expect.objectContaining({ id: 'candidate-rin' })],
+      entityCandidates: [expect.objectContaining({ candidateId: 'candidate-rin' })],
     });
     expect(projection.data.sections[0]?.media).toEqual([
       expect.objectContaining({
@@ -344,7 +342,6 @@ describe('composite content presenter', () => {
         toolCallId: 'document-entry:page-1',
         assetIndex: 0,
         type: 'image',
-        src: '',
         contentLocator: contentLocator,
         mimeType: 'image/jpeg',
         caption: 'Page 1',
@@ -413,7 +410,7 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/cache/page-1.jpg',
-                  renderUri: 'http://127.0.0.1:43125/resources/page-1.jpg',
+                  previewDescriptor: previewDescriptor('page-1.jpg'),
                   label: 'Page 1',
                   mimeType: 'image/jpeg',
                 },
@@ -446,7 +443,7 @@ describe('composite content presenter', () => {
     expect(projection.data.sections[0]?.media).toEqual([
       expect.objectContaining({
         toolCallId: 'read-image',
-        src: 'http://127.0.0.1:43125/resources/page-1.jpg',
+        descriptor: expect.objectContaining({ displayName: 'page-1.jpg' }),
       }),
     ]);
     expect(projection.data.sections[0]?.media[0]).not.toHaveProperty('localPath');
@@ -640,13 +637,13 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/cache/page-1.jpg',
-                  renderUri: 'http://127.0.0.1:43125/resources/page-1.jpg',
+                  previewDescriptor: previewDescriptor('page-1.jpg'),
                   label: 'Page 1',
                   mimeType: 'image/jpeg',
                 },
                 {
                   path: '/cache/page-2.jpg',
-                  renderUri: 'http://127.0.0.1:43125/resources/page-2.jpg',
+                  previewDescriptor: previewDescriptor('page-2.jpg'),
                   label: 'Page 2',
                   mimeType: 'image/jpeg',
                 },
@@ -678,7 +675,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image-real',
         assetIndex: 1,
-        src: 'http://127.0.0.1:43125/resources/page-2.jpg',
+        descriptor: expect.objectContaining({ displayName: 'page-2.jpg' }),
       }),
     ]);
     expect(projection.data.sections[0]?.media[0]).not.toHaveProperty('localPath');
@@ -740,12 +737,12 @@ describe('composite content presenter', () => {
             data: {
               images: [
                 {
-                  renderUri: 'http://127.0.0.1:43125/resources/page-1.jpg',
+                  previewDescriptor: previewDescriptor('page-1.jpg'),
                   label: 'Image #1',
                   mimeType: 'image/jpeg',
                 },
                 {
-                  renderUri: 'http://127.0.0.1:43125/resources/page-2.jpg',
+                  previewDescriptor: previewDescriptor('page-2.jpg'),
                   label: 'Image #2',
                   mimeType: 'image/jpeg',
                 },
@@ -764,7 +761,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'real-read-image-call',
         assetIndex: 1,
-        src: 'http://127.0.0.1:43125/resources/page-2.jpg',
+        descriptor: expect.objectContaining({ displayName: 'page-2.jpg' }),
       }),
     ]);
     expect(projection.data.diagnostics).toEqual([]);
@@ -827,7 +824,7 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/cache/page-1.jpg',
-                  renderUri: 'http://127.0.0.1:43125/resources/page-1.jpg',
+                  previewDescriptor: previewDescriptor('page-1.jpg'),
                   label: 'Page 1',
                   mimeType: 'image/jpeg',
                 },
@@ -843,7 +840,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image',
         type: 'image',
-        src: 'http://127.0.0.1:43125/resources/page-1.jpg',
+        descriptor: expect.objectContaining({ displayName: 'page-1.jpg' }),
         caption: 'Page 1',
         role: 'source',
       }),
@@ -870,10 +867,9 @@ describe('composite content presenter', () => {
     });
 
     expect(projection.kind).toBe('comparison-grid');
-    expect(projection.data.sections.map((section) => section.media[0]?.src)).toEqual([
-      'http://127.0.0.1:43125/resources/asset-1.png',
-      'http://127.0.0.1:43125/resources/asset-2.png',
-    ]);
+    expect(
+      projection.data.sections.map((section) => section.media[0]?.descriptor?.displayName),
+    ).toEqual(['asset-1.png', 'asset-2.png']);
   });
 
   it('projects storyboard media refs from document image pages and generated variants', () => {
@@ -954,13 +950,13 @@ describe('composite content presenter', () => {
       },
       {
         toolCallId: 'colorize',
-        src: 'http://127.0.0.1:43125/resources/color.png',
+        descriptor: expect.objectContaining({ displayName: 'color.png' }),
         caption: '上色图',
         role: 'colorized',
       },
       {
         toolCallId: 'generate',
-        src: 'http://127.0.0.1:43125/resources/generated.png',
+        descriptor: expect.objectContaining({ displayName: 'generated.png' }),
         caption: '生成图',
         role: 'generated',
       },
@@ -990,7 +986,7 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/images/reference.png',
-                  renderUri: 'http://127.0.0.1:43125/resources/reference.png',
+                  previewDescriptor: previewDescriptor('reference.png'),
                   label: 'reference',
                   mimeType: 'image/png',
                   byteSize: 100,
@@ -1006,7 +1002,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image',
         type: 'image',
-        src: 'http://127.0.0.1:43125/resources/reference.png',
+        descriptor: expect.objectContaining({ displayName: 'reference.png' }),
         caption: 'reference',
       }),
     ]);
@@ -1033,7 +1029,7 @@ describe('composite content presenter', () => {
     });
   });
 
-  it('diagnoses generated 3D model assets until an adapter provides a render URI', () => {
+  it('diagnoses generated 3D model assets until Preview provides an authorized descriptor', () => {
     const projection = projectCompositeBlockRichContent({
       composite: {
         template: 'gallery',
@@ -1075,13 +1071,13 @@ describe('composite content presenter', () => {
         toolCallId: 'call-model',
         assetIndex: 0,
         assetId: 'model-1',
-        message: 'Asset 0 does not have an adapter-provided model URI',
+        message: 'Asset 0 does not have an authorized Preview descriptor',
       },
     ]);
     expect(projection.data.plugins).toEqual({ canvas: true });
   });
 
-  it('diagnoses stable asset refs that lack adapter-provided webview URIs', () => {
+  it('diagnoses stable asset refs that lack authorized Preview descriptors', () => {
     const projection = projectCompositeBlockRichContent({
       composite: {
         template: 'storyboard-table',
@@ -1119,12 +1115,12 @@ describe('composite content presenter', () => {
         toolCallId: 'call-stable',
         assetIndex: 0,
         assetId: 'asset-stable',
-        message: 'Asset 0 does not have a renderable webview URI',
+        message: 'Asset 0 does not have an authorized Preview descriptor',
       },
     ]);
   });
 
-  it('does not leak provider context, file URIs, inline base64, or absolute paths into render srcs', () => {
+  it('does not promote provider URLs, inline data, or absolute paths into preview success', () => {
     const projection = projectCompositeBlockRichContent({
       composite: {
         template: 'gallery',
@@ -1162,9 +1158,8 @@ describe('composite content presenter', () => {
     expect(JSON.stringify(projection)).not.toContain('openai');
     expect(JSON.stringify(projection)).not.toContain('file://');
     expect(JSON.stringify(projection)).not.toContain('base64');
-    expect(projection.data.sections[0]?.media).toEqual([
-      expect.objectContaining({ src: 'http://127.0.0.1:43125/resources/safe.png' }),
-    ]);
+    expect(JSON.stringify(projection)).not.toContain('safe.png');
+    expect(projection.data.sections[0]?.media).toEqual([]);
   });
 
   it('projects AnimationPlan domain blocks as storyboard shot overlays', () => {
@@ -1251,7 +1246,7 @@ function makeImageToolCall(
             id: assetId,
             type: 'generated-image',
             path: '/repo/neko/generated/image/out.png',
-            renderUri,
+            previewDescriptor: previewDescriptor(renderUri.split('/').at(-1) ?? assetId),
             mimeType: 'image/png',
             generatedAt: '2026-01-01T00:00:00.000Z',
             width: 1024,
@@ -1267,7 +1262,7 @@ function makeImageToolCall(
             id: 'asset-2',
             type: 'generated-image',
             path: '/repo/neko/generated/image/out-2.png',
-            renderUri: 'http://127.0.0.1:43125/resources/asset-2.png',
+            previewDescriptor: previewDescriptor('asset-2.png'),
             mimeType: 'image/png',
             generatedAt: '2026-01-01T00:00:00.000Z',
             width: 1024,
@@ -1277,6 +1272,19 @@ function makeImageToolCall(
         ],
       },
     },
+  };
+}
+
+function previewDescriptor(displayName: string) {
+  return {
+    descriptorId: `descriptor-${displayName}`,
+    sourceFingerprint: `fingerprint-${displayName}`,
+    contentLocator: { kind: 'workspace-file' as const, path: `assets/${displayName}` },
+    url: 'openneko://resource/12345678901234567890123456789012',
+    contentKind: 'image' as const,
+    mediaType: displayName.endsWith('.jpg') ? 'image/jpeg' : 'image/png',
+    displayName,
+    byteLength: 1024,
   };
 }
 

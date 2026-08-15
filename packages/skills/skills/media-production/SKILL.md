@@ -21,7 +21,7 @@ Use an optional living `plan.md` only when it improves review or coordination. F
 
 Keep near-term progress bounded with `pending`, `in_progress`, `completed`, or `blocked`, with at most one current unit per executing Agent task. Large shot, asset, and project graphs stay in their owning Storyboard, project revision, generated output, Quality result, or asynchronous task result. Progress text never proves completion.
 
-Do not persist selected executors, provider handles, operation schemas, polling state, or workflow nodes in Markdown. Editing Markdown does not execute it. On continuation, reread the current documents and files, discover current capabilities again, and execute through their normal authorization and result lifecycle.
+Do not turn temporary execution details into production truth. On continuation, reread current documents, assets, and results before deciding the next useful work unit.
 
 ## Capability-aware execution and recovery
 

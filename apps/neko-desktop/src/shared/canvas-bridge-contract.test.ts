@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createCanvasHostSessionId } from '@neko/canvas-domain';
+import { createCanvasHostSessionId, parseCanvasHostRuntimeIdentity } from '@neko/canvas-domain';
 import {
   isSameCanvasHostIdentity,
-  parseDesktopCanvasHostIdentity,
-  parseDesktopCanvasMediaRequest,
-  parseDesktopCanvasMediaResponse,
+  parseDesktopCanvasPreviewResourceReleaseRequest,
+  parseDesktopCanvasPreviewResourceRequest,
+  parseDesktopCanvasPreviewResourceResult,
   parseDesktopCanvasPreviewVariantRequest,
   parseDesktopCanvasPreviewVariantResult,
 } from './canvas-bridge-contract';
@@ -22,7 +22,7 @@ const identity = {
 
 describe('Desktop Canvas bridge contract', () => {
   it('parses every explicit owner identity field', () => {
-    expect(parseDesktopCanvasHostIdentity(identity)).toEqual(identity);
+    expect(parseCanvasHostRuntimeIdentity(identity)).toEqual(identity);
     expect(createCanvasHostSessionId(identity.viewId, identity.viewInstanceId)).toBe(
       identity.sessionId,
     );
@@ -31,7 +31,7 @@ describe('Desktop Canvas bridge contract', () => {
 
   it('rejects missing and stale identity input instead of using active Canvas state', () => {
     expect(() =>
-      parseDesktopCanvasHostIdentity({
+      parseCanvasHostRuntimeIdentity({
         ...identity,
         documentId: '',
       }),
@@ -98,74 +98,55 @@ describe('Desktop Canvas bridge contract', () => {
     ).toThrow('preview result is invalid');
   });
 
-  it('parses owner-bound Canvas media requests and rejects escaping paths', () => {
+  it('parses exact embedded Preview ownership and rejects non-opaque transport values', () => {
     const request = {
       identity,
-      type: 'media:probe',
-      nodeId: 'audio-1',
-      locator: { kind: 'workspace-file', path: 'cases/test.aac' },
-      mediaType: 'audio',
-    };
-    expect(parseDesktopCanvasMediaRequest(request)).toEqual(request);
-    expect(() =>
-      parseDesktopCanvasMediaRequest({
-        ...request,
-        locator: { kind: 'workspace-file', path: '../test.aac' },
-      }),
-    ).toThrow('portable workspace-file');
-  });
-
-  it('parses package media responses without accepting mismatched node ownership', () => {
-    const response = {
-      type: 'media:probeResult',
-      nodeId: 'audio-1',
-      mediaInfo: {
-        duration: 12,
-        width: 0,
-        height: 0,
-        fps: 0,
-        codec: 'aac',
-        format: 'aac',
-        hasAudio: true,
+      requestId: 'embedded-1',
+      nodeId: 'generation-1',
+      outputId: 'output-1',
+      locator: {
+        kind: 'generated-output' as const,
+        outputId: 'output-1',
+        digest: 'sha256:output-1',
+        path: 'neko/generated/output-1.png',
       },
+      contentKind: 'image' as const,
+      mediaType: 'image/png',
+      displayName: 'Output 1',
     };
-    expect(parseDesktopCanvasMediaResponse(response, 'audio-1')).toEqual(response);
-    expect(() => parseDesktopCanvasMediaResponse(response, 'audio-2')).toThrow(
-      'owner does not match',
-    );
-  });
-
-  it('retains locator-backed native media descriptors and rejects path-only success', () => {
-    const response = {
-      type: 'media:streamReady',
-      nodeId: 'audio-1',
-      mediaInfo: {
-        duration: 12,
-        width: 0,
-        height: 0,
-        fps: 0,
-        codec: 'aac',
-        format: 'aac',
-        hasAudio: true,
-      },
-      contentLocator: { kind: 'workspace-file', path: 'media/voice.aac' },
-      audio: {
+    const result = {
+      requestId: 'embedded-1',
+      descriptor: {
+        descriptorId: 'canvas-preview-session-1-output-1',
+        sourceFingerprint: 'sha256-output-1',
+        contentLocator: request.locator,
         url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        mimeType: 'audio/aac',
-        durationSeconds: 12,
+        contentKind: 'image' as const,
+        mediaType: 'image/png',
+        displayName: 'Output 1',
+        byteLength: 42,
       },
     };
 
-    expect(parseDesktopCanvasMediaResponse(response, 'audio-1')).toEqual(response);
+    expect(parseDesktopCanvasPreviewResourceRequest(request)).toEqual(request);
+    expect(parseDesktopCanvasPreviewResourceResult(result, 'embedded-1')).toEqual(result);
+    expect(
+      parseDesktopCanvasPreviewResourceReleaseRequest({
+        identity,
+        descriptorId: result.descriptor.descriptorId,
+      }),
+    ).toEqual({ identity, descriptorId: result.descriptor.descriptorId });
     expect(() =>
-      parseDesktopCanvasMediaResponse(
+      parseDesktopCanvasPreviewResourceRequest({ ...request, identity: undefined }),
+    ).toThrow();
+    expect(() =>
+      parseDesktopCanvasPreviewResourceResult(
         {
-          ...response,
-          contentLocator: undefined,
-          assetPath: 'media/voice.aac',
+          ...result,
+          descriptor: { ...result.descriptor, url: 'file:///private/output-1.png' },
         },
-        'audio-1',
+        'embedded-1',
       ),
-    ).toThrow('stream response is incomplete');
+    ).toThrow();
   });
 });

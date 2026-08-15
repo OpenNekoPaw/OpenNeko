@@ -3,10 +3,10 @@
 // =============================================================================
 
 import {
-  isCreativeEntity,
   isCreativeEntityKind,
-  type CreativeEntity,
+  isProjectEntityRecord,
   type CreativeEntityKind,
+  type ProjectEntityRecord,
 } from '@neko/entity-domain';
 
 export const AGENT_RESOLVED_ENTITY_CONTEXT_KIND = 'resolved-entity-context' as const;
@@ -17,7 +17,7 @@ export interface AgentResolvedEntityContextData {
     readonly entityId: string;
     readonly entityKind: CreativeEntityKind;
   };
-  readonly entity: CreativeEntity & { readonly status: 'confirmed' };
+  readonly entity: ProjectEntityRecord;
 }
 
 export function isAgentResolvedEntityContextData(
@@ -26,7 +26,7 @@ export function isAgentResolvedEntityContextData(
   if (!isRecord(value)) return false;
   const entityRef = value['entityRef'];
   const entity = value['entity'];
-  if (!isRecord(entityRef) || !isCreativeEntity(entity)) return false;
+  if (!isRecord(entityRef) || !isProjectEntityRecord(entity)) return false;
   return (
     hasOnlyFields(value, new Set(['kind', 'entityRef', 'entity'])) &&
     hasOnlyFields(entityRef, new Set(['entityId', 'entityKind'])) &&
@@ -34,9 +34,9 @@ export function isAgentResolvedEntityContextData(
     typeof entityRef['entityId'] === 'string' &&
     entityRef['entityId'].length > 0 &&
     isCreativeEntityKind(entityRef['entityKind']) &&
-    entity.id === entityRef['entityId'] &&
+    entity.entityId === entityRef['entityId'] &&
     entity.kind === entityRef['entityKind'] &&
-    entity.status === 'confirmed'
+    entity.lifecycle.state === 'active'
   );
 }
 

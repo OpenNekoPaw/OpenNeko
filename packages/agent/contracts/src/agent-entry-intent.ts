@@ -8,34 +8,125 @@ export const AGENT_ENTRY_MODES = [
 export type AgentEntryMode = (typeof AGENT_ENTRY_MODES)[number];
 
 export type AgentAuthoringTargetRef =
-  | { readonly kind: 'content-project'; readonly contentProjectId: string }
+  | { readonly kind: 'content-document'; readonly documentId: string }
   | { readonly kind: 'character-project'; readonly characterProjectId: string }
   | { readonly kind: 'world-project'; readonly worldProjectId: string };
 
-export interface AgentAuthoringBinding {
+export type AgentAuthoringAuthority = {
+  readonly kind: 'project';
+  readonly projectId: string;
+};
+
+interface AgentAuthoringContextBinding {
   readonly kind: 'authoring';
   readonly workspaceId: string;
   readonly workspaceGrantId: string;
+  readonly authority: AgentAuthoringAuthority;
+}
+
+export interface AgentProjectAuthoringBinding extends AgentAuthoringContextBinding {
+  readonly target: null;
+}
+
+export interface AgentAuthoringTargetBinding extends AgentAuthoringContextBinding {
   readonly target: AgentAuthoringTargetRef;
 }
 
-export interface AgentCharacterDialogueParticipant {
-  readonly characterProjectId: string;
+export type AgentAuthoringBinding = AgentProjectAuthoringBinding | AgentAuthoringTargetBinding;
+
+export const AGENT_AUTHORING_BINDING_METADATA_KEY = 'agentAuthoringBinding';
+
+export function readAgentAuthoringBindingMetadata(
+  metadata: Readonly<Record<string, unknown>> | undefined,
+): AgentAuthoringTargetBinding {
+  if (metadata === undefined || !(AGENT_AUTHORING_BINDING_METADATA_KEY in metadata)) {
+    throw new Error('Agent authoring Tool execution is missing its exact target binding.');
+  }
+  const binding = parseAgentEntryTargetBinding(metadata[AGENT_AUTHORING_BINDING_METADATA_KEY]);
+  if (binding.kind !== 'authoring') {
+    throw new Error('Agent authoring Tool execution received a non-authoring target binding.');
+  }
+  if (binding.target === null) {
+    throw new Error('Agent authoring Tool execution is missing its exact target binding.');
+  }
+  return binding;
+}
+
+export interface AgentCompanionCharacterDialogueParticipant {
+  readonly globalCharacterId: string;
   readonly characterVersionId: string;
   readonly roleProfileId?: string;
 }
 
-export interface AgentCharacterDialogueLaunchBinding {
-  readonly kind: 'character-dialogue';
-  readonly participants: readonly AgentCharacterDialogueParticipant[];
-  readonly storylineVersionId?: string;
+export interface AgentNarrativeStorylineNodeSelection {
+  readonly characterStorylineId: string;
+  readonly characterStorylineVersionId: string;
+  readonly storylineNodeId: string;
 }
+
+export interface AgentNarrativeCharacterDialogueParticipant {
+  readonly globalCharacterId: string;
+  readonly characterVersionId: string;
+  readonly storyline?: AgentNarrativeStorylineNodeSelection;
+  readonly roleProfileId?: string;
+}
+
+export type AgentCharacterDialogueParticipant =
+  AgentCompanionCharacterDialogueParticipant | AgentNarrativeCharacterDialogueParticipant;
+
+export interface AgentCharacterDialogueStorylineOption {
+  readonly storylineVersionId: string;
+  readonly label: string;
+}
+
+export interface AgentCharacterDialogueLineageSegment {
+  readonly characterVersionId: string;
+  readonly label: string;
+}
+
+export type AgentCharacterDialogueLineage =
+  | {
+      readonly coverage: 'complete';
+      readonly state: 'declared-root' | 'linked' | 'unlinked';
+      readonly isHead: boolean;
+      readonly path: readonly AgentCharacterDialogueLineageSegment[];
+    }
+  | {
+      readonly coverage: 'unavailable';
+      readonly message: string;
+    };
+
+export interface AgentCharacterDialogueTargetOption {
+  readonly globalCharacterId: string;
+  readonly characterVersionId: string;
+  readonly displayName: string;
+  readonly versionLabel: string;
+  readonly lineage: AgentCharacterDialogueLineage;
+  readonly storylines: readonly AgentCharacterDialogueStorylineOption[];
+}
+
+export interface AgentWorldExperienceTargetOption {
+  readonly globalWorldId: string;
+  readonly worldVersionId: string;
+  readonly displayName: string;
+  readonly versionLabel: string;
+}
+
+export type AgentCharacterDialogueLaunchBinding =
+  | {
+      readonly kind: 'character-dialogue';
+      readonly mode: 'companion';
+      readonly participants: readonly AgentCompanionCharacterDialogueParticipant[];
+    }
+  | {
+      readonly kind: 'character-dialogue';
+      readonly mode: 'narrative';
+      readonly participants: readonly AgentNarrativeCharacterDialogueParticipant[];
+    };
 
 export type AgentWorldExperienceLaunch =
   | {
       readonly kind: 'new';
-      readonly participantId: string;
-      readonly roleScopeId: string;
     }
   | {
       readonly kind: 'continue';
@@ -46,8 +137,9 @@ export type AgentWorldExperienceLaunch =
 
 export interface AgentWorldExperienceLaunchBinding {
   readonly kind: 'world-experience';
-  readonly worldExperienceId: string;
-  readonly worldExperienceVersionId: string;
+  readonly globalWorldId: string;
+  readonly worldVersionId: string;
+  readonly participants: readonly AgentCompanionCharacterDialogueParticipant[];
   readonly launch: AgentWorldExperienceLaunch;
 }
 
@@ -58,7 +150,7 @@ export interface AgentEntryTargetReceipt {
   readonly targetReceiptId: string;
   readonly draftId: string;
   readonly connectionId: string;
-  readonly mode: Exclude<AgentEntryMode, 'assistant'>;
+  readonly mode: AgentEntryMode;
   readonly binding: AgentEntryTargetBinding;
 }
 
@@ -77,10 +169,7 @@ export function parseAgentEntryIntentProjection(value: unknown): AgentEntryInten
   const mode = parseAgentEntryMode(record['mode']);
   const targetReceipt =
     record['targetReceipt'] === null ? null : parseAgentEntryTargetReceipt(record['targetReceipt']);
-  if (mode === 'assistant' && targetReceipt !== null) {
-    throw new Error('Assistant Entry intent cannot carry a domain target receipt.');
-  }
-  if (mode !== 'assistant' && targetReceipt !== null && targetReceipt.mode !== mode) {
+  if (targetReceipt !== null && targetReceipt.mode !== mode) {
     throw new Error('Agent Entry target receipt does not match the selected mode.');
   }
   return { mode, targetReceipt };
@@ -94,11 +183,8 @@ export function parseAgentEntryTargetReceipt(value: unknown): AgentEntryTargetRe
     'Agent Entry target receipt',
   );
   const mode = parseAgentEntryMode(record['mode']);
-  if (mode === 'assistant') {
-    throw new Error('Assistant Entry intent does not use a target receipt.');
-  }
   const binding = parseAgentEntryTargetBinding(record['binding']);
-  if (binding.kind !== mode) {
+  if (!entryModeAcceptsTargetBinding(mode, binding)) {
     throw new Error('Agent Entry target receipt binding does not match its mode.');
   }
   return {
@@ -130,61 +216,211 @@ export function parseAgentEntryTargetBinding(value: unknown): AgentEntryTargetBi
     case 'authoring':
       requireExactKeys(
         record,
-        ['kind', 'workspaceId', 'workspaceGrantId', 'target'],
+        ['kind', 'workspaceId', 'workspaceGrantId', 'authority', 'target'],
         'Agent authoring binding',
       );
+      const authority = parseAgentAuthoringAuthority(record['authority']);
+      const target =
+        record['target'] === null ? null : parseAgentAuthoringTargetRef(record['target']);
       return {
         kind: 'authoring',
         workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
         workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
-        target: parseAgentAuthoringTargetRef(record['target']),
+        authority,
+        target,
       };
     case 'character-dialogue': {
-      requireAllowedKeys(
+      requireExactKeys(
         record,
-        ['kind', 'participants', 'storylineVersionId'],
-        ['kind', 'participants'],
+        ['kind', 'mode', 'participants'],
         'Agent Character Dialogue binding',
       );
+      const mode = parseCharacterConversationMode(record['mode']);
       if (!Array.isArray(record['participants']) || record['participants'].length === 0) {
         throw new Error('Agent Character Dialogue requires at least one participant.');
       }
-      const participants = record['participants'].map(parseCharacterParticipant);
-      const versionIds = participants.map((participant) => participant.characterVersionId);
-      if (new Set(versionIds).size !== versionIds.length) {
-        throw new Error('Agent Character Dialogue participants must use unique CharacterVersions.');
+      if (mode === 'companion') {
+        const participants = record['participants'].map(parseCompanionCharacterParticipant);
+        requireUniqueCharacterVersions(participants);
+        return { kind: 'character-dialogue', mode, participants };
       }
-      return {
-        kind: 'character-dialogue',
-        participants,
-        ...(record['storylineVersionId'] === undefined
-          ? {}
-          : {
-              storylineVersionId: requireIdentity(
-                record['storylineVersionId'],
-                'Storyline Version',
-              ),
-            }),
-      };
+      const participants = record['participants'].map(parseNarrativeCharacterParticipant);
+      requireUniqueCharacterVersions(participants);
+      return { kind: 'character-dialogue', mode, participants };
     }
     case 'world-experience':
       requireExactKeys(
         record,
-        ['kind', 'worldExperienceId', 'worldExperienceVersionId', 'launch'],
+        ['kind', 'globalWorldId', 'worldVersionId', 'participants', 'launch'],
         'Agent World Experience binding',
       );
+      if (!Array.isArray(record['participants'])) {
+        throw new Error('Agent World Experience participants must be an array.');
+      }
+      const participants = record['participants'].map(parseCompanionCharacterParticipant);
+      requireUniqueCharacterVersions(participants);
       return {
         kind: 'world-experience',
-        worldExperienceId: requireIdentity(record['worldExperienceId'], 'World Experience'),
-        worldExperienceVersionId: requireIdentity(
-          record['worldExperienceVersionId'],
-          'World Experience Version',
-        ),
+        globalWorldId: requireIdentity(record['globalWorldId'], 'Global World'),
+        worldVersionId: requireIdentity(record['worldVersionId'], 'World Version'),
+        participants,
         launch: parseWorldLaunch(record['launch']),
       };
     default:
       throw new Error(`Unknown Agent Entry target binding '${String(record['kind'])}'.`);
   }
+}
+
+export function entryModeAcceptsTargetBinding(
+  mode: AgentEntryMode,
+  binding: AgentEntryTargetBinding,
+): boolean {
+  return mode === 'assistant' ? binding.kind === 'authoring' : binding.kind === mode;
+}
+
+export function parseAgentCharacterDialogueTargetOptions(
+  value: unknown,
+): readonly AgentCharacterDialogueTargetOption[] {
+  if (!Array.isArray(value)) {
+    throw new Error('Agent Character Dialogue target options must be an array.');
+  }
+  const options = value.map((item) => {
+    const record = requireRecord(item, 'Agent Character Dialogue target option');
+    requireExactKeys(
+      record,
+      [
+        'globalCharacterId',
+        'characterVersionId',
+        'displayName',
+        'versionLabel',
+        'lineage',
+        'storylines',
+      ],
+      'Agent Character Dialogue target option',
+    );
+    if (!Array.isArray(record['storylines'])) {
+      throw new Error('Agent Character Dialogue storyline options must be an array.');
+    }
+    const storylines = record['storylines'].map((storylineValue) => {
+      const storyline = requireRecord(storylineValue, 'Agent Character Dialogue storyline option');
+      requireExactKeys(
+        storyline,
+        ['storylineVersionId', 'label'],
+        'Agent Character Dialogue storyline option',
+      );
+      return {
+        storylineVersionId: requireIdentity(storyline['storylineVersionId'], 'Storyline Version'),
+        label: requireIdentity(storyline['label'], 'storyline label'),
+      };
+    });
+    if (
+      new Set(storylines.map((storyline) => storyline.storylineVersionId)).size !==
+      storylines.length
+    ) {
+      throw new Error('Agent Character Dialogue storyline options must use unique versions.');
+    }
+    return {
+      globalCharacterId: requireIdentity(record['globalCharacterId'], 'GlobalCharacter'),
+      characterVersionId: requireIdentity(record['characterVersionId'], 'CharacterVersion'),
+      displayName: requireIdentity(record['displayName'], 'Character display name'),
+      versionLabel: requireIdentity(record['versionLabel'], 'Character version label'),
+      lineage: parseAgentCharacterDialogueLineage(record['lineage']),
+      storylines,
+    };
+  });
+  if (new Set(options.map((option) => option.characterVersionId)).size !== options.length) {
+    throw new Error('Agent Character Dialogue target options must use unique CharacterVersions.');
+  }
+  return options;
+}
+
+export function parseAgentWorldExperienceTargetOptions(
+  value: unknown,
+): readonly AgentWorldExperienceTargetOption[] {
+  if (!Array.isArray(value)) {
+    throw new Error('Agent World Experience target options must be an array.');
+  }
+  const options = value.map((item) => {
+    const record = requireRecord(item, 'Agent World Experience target option');
+    requireExactKeys(
+      record,
+      ['globalWorldId', 'worldVersionId', 'displayName', 'versionLabel'],
+      'Agent World Experience target option',
+    );
+    return {
+      globalWorldId: requireIdentity(record['globalWorldId'], 'GlobalWorld'),
+      worldVersionId: requireIdentity(record['worldVersionId'], 'WorldVersion'),
+      displayName: requireIdentity(record['displayName'], 'World display name'),
+      versionLabel: requireIdentity(record['versionLabel'], 'World version label'),
+    };
+  });
+  if (new Set(options.map((option) => option.worldVersionId)).size !== options.length) {
+    throw new Error('Agent World Experience target options must use unique WorldVersions.');
+  }
+  return options;
+}
+
+function parseAgentCharacterDialogueLineage(value: unknown): AgentCharacterDialogueLineage {
+  const record = requireRecord(value, 'Agent Character Dialogue lineage');
+  if (record['coverage'] === 'unavailable') {
+    requireExactKeys(
+      record,
+      ['coverage', 'message'],
+      'Unavailable Agent Character Dialogue lineage',
+    );
+    return {
+      coverage: 'unavailable',
+      message: requireIdentity(record['message'], 'Character lineage diagnostic'),
+    };
+  }
+  requireExactKeys(
+    record,
+    ['coverage', 'state', 'isHead', 'path'],
+    'Complete Agent Character Dialogue lineage',
+  );
+  if (record['coverage'] !== 'complete') {
+    throw new Error(`Unknown Agent Character Dialogue lineage '${String(record['coverage'])}'.`);
+  }
+  if (
+    record['state'] !== 'declared-root' &&
+    record['state'] !== 'linked' &&
+    record['state'] !== 'unlinked'
+  ) {
+    throw new Error(`Unknown Agent Character Dialogue lineage state '${String(record['state'])}'.`);
+  }
+  if (typeof record['isHead'] !== 'boolean') {
+    throw new Error('Agent Character Dialogue lineage head state must be boolean.');
+  }
+  if (!Array.isArray(record['path'])) {
+    throw new Error('Agent Character Dialogue lineage path must be an array.');
+  }
+  const path = record['path'].map((value) => {
+    const segment = requireRecord(value, 'Agent Character Dialogue lineage path segment');
+    requireExactKeys(
+      segment,
+      ['characterVersionId', 'label'],
+      'Agent Character Dialogue lineage path segment',
+    );
+    return {
+      characterVersionId: requireIdentity(
+        segment['characterVersionId'],
+        'Character lineage path version',
+      ),
+      label: requireIdentity(segment['label'], 'Character lineage path label'),
+    };
+  });
+  if (
+    path.length === 0 ||
+    new Set(path.map((segment) => segment.characterVersionId)).size !== path.length
+  ) {
+    throw new Error('Agent Character Dialogue lineage path must be non-empty and unique.');
+  }
+  return {
+    coverage: 'complete',
+    state: record['state'],
+    isHead: record['isHead'],
+    path,
+  };
 }
 
 function parseAgentEntryMode(value: unknown): AgentEntryMode {
@@ -196,11 +432,11 @@ function parseAgentEntryMode(value: unknown): AgentEntryMode {
 
 export function parseAgentAuthoringTargetRef(value: unknown): AgentAuthoringTargetRef {
   const record = requireRecord(value, 'Agent authoring target');
-  if (record['kind'] === 'content-project') {
-    requireExactKeys(record, ['kind', 'contentProjectId'], 'Content authoring target');
+  if (record['kind'] === 'content-document') {
+    requireExactKeys(record, ['kind', 'documentId'], 'Content document authoring target');
     return {
-      kind: 'content-project',
-      contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project'),
+      kind: 'content-document',
+      documentId: requireIdentity(record['documentId'], 'Content document'),
     };
   }
   if (record['kind'] === 'character-project') {
@@ -220,16 +456,52 @@ export function parseAgentAuthoringTargetRef(value: unknown): AgentAuthoringTarg
   throw new Error(`Unknown Agent authoring target '${String(record['kind'])}'.`);
 }
 
-function parseCharacterParticipant(value: unknown): AgentCharacterDialogueParticipant {
+export function parseAgentAuthoringAuthority(value: unknown): AgentAuthoringAuthority {
+  const record = requireRecord(value, 'Agent authoring authority');
+  if (record['kind'] !== 'project') {
+    throw new Error(`Unknown Agent authoring authority '${String(record['kind'])}'.`);
+  }
+  requireExactKeys(record, ['kind', 'projectId'], 'Project authoring authority');
+  return {
+    kind: 'project',
+    projectId: requireIdentity(record['projectId'], 'Project'),
+  };
+}
+
+function parseCharacterConversationMode(value: unknown): 'companion' | 'narrative' {
+  if (value !== 'companion' && value !== 'narrative') {
+    throw new Error(`Unknown Character Conversation mode '${String(value)}'.`);
+  }
+  return value;
+}
+
+function requireUniqueCharacterVersions(
+  participants: readonly AgentCharacterDialogueParticipant[],
+): void {
+  const versionIds = participants.map((participant) => participant.characterVersionId);
+  if (new Set(versionIds).size !== versionIds.length) {
+    throw new Error('Agent Character Dialogue participants must use unique CharacterVersions.');
+  }
+  const characterIds = participants.map((participant) => participant.globalCharacterId);
+  if (new Set(characterIds).size !== characterIds.length) {
+    throw new Error(
+      'Agent Character Dialogue participants must select at most one version of each Character.',
+    );
+  }
+}
+
+function parseCompanionCharacterParticipant(
+  value: unknown,
+): AgentCompanionCharacterDialogueParticipant {
   const record = requireRecord(value, 'Agent Character Dialogue participant');
   requireAllowedKeys(
     record,
-    ['characterProjectId', 'characterVersionId', 'roleProfileId'],
-    ['characterProjectId', 'characterVersionId'],
+    ['globalCharacterId', 'characterVersionId', 'roleProfileId'],
+    ['globalCharacterId', 'characterVersionId'],
     'Agent Character Dialogue participant',
   );
   return {
-    characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
+    globalCharacterId: requireIdentity(record['globalCharacterId'], 'GlobalCharacter'),
     characterVersionId: requireIdentity(record['characterVersionId'], 'CharacterVersion'),
     ...(record['roleProfileId'] === undefined
       ? {}
@@ -237,15 +509,52 @@ function parseCharacterParticipant(value: unknown): AgentCharacterDialoguePartic
   };
 }
 
+function parseNarrativeCharacterParticipant(
+  value: unknown,
+): AgentNarrativeCharacterDialogueParticipant {
+  const record = requireRecord(value, 'Agent Narrative Character participant');
+  requireAllowedKeys(
+    record,
+    ['globalCharacterId', 'characterVersionId', 'storyline', 'roleProfileId'],
+    ['globalCharacterId', 'characterVersionId'],
+    'Agent Narrative Character participant',
+  );
+  return {
+    globalCharacterId: requireIdentity(record['globalCharacterId'], 'GlobalCharacter'),
+    characterVersionId: requireIdentity(record['characterVersionId'], 'CharacterVersion'),
+    ...(record['storyline'] === undefined
+      ? {}
+      : { storyline: parseNarrativeStorylineNodeSelection(record['storyline']) }),
+    ...(record['roleProfileId'] === undefined
+      ? {}
+      : { roleProfileId: requireIdentity(record['roleProfileId'], 'role profile') }),
+  };
+}
+
+function parseNarrativeStorylineNodeSelection(
+  value: unknown,
+): AgentNarrativeStorylineNodeSelection {
+  const record = requireRecord(value, 'Agent Narrative Storyline node selection');
+  requireExactKeys(
+    record,
+    ['characterStorylineId', 'characterStorylineVersionId', 'storylineNodeId'],
+    'Agent Narrative Storyline node selection',
+  );
+  return {
+    characterStorylineId: requireIdentity(record['characterStorylineId'], 'Character Storyline'),
+    characterStorylineVersionId: requireIdentity(
+      record['characterStorylineVersionId'],
+      'Character Storyline Version',
+    ),
+    storylineNodeId: requireIdentity(record['storylineNodeId'], 'Storyline Node'),
+  };
+}
+
 function parseWorldLaunch(value: unknown): AgentWorldExperienceLaunch {
   const record = requireRecord(value, 'Agent World Experience launch');
   if (record['kind'] === 'new') {
-    requireExactKeys(record, ['kind', 'participantId', 'roleScopeId'], 'New World launch');
-    return {
-      kind: 'new',
-      participantId: requireIdentity(record['participantId'], 'World participant'),
-      roleScopeId: requireIdentity(record['roleScopeId'], 'World role scope'),
-    };
+    requireExactKeys(record, ['kind'], 'New World launch');
+    return { kind: 'new' };
   }
   if (record['kind'] === 'continue') {
     requireAllowedKeys(

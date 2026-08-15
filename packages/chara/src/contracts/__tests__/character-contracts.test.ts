@@ -3,6 +3,7 @@ import {
   createEmptyCharacterOriginSetting,
 } from '../character-lore-storyline-memory';
 import {
+  createEmptyCharacterDefinition,
   decodeCharacterRecords,
   parseCharacterAuthoringTestSnapshot,
   parseCharacterProject,
@@ -30,6 +31,19 @@ function definition() {
 }
 
 describe('Character canonical contracts', () => {
+  it('creates one canonical unbound fresh Character definition', () => {
+    expect(createEmptyCharacterDefinition()).toEqual({
+      summary: '',
+      backgroundStory: createEmptyCharacterBackgroundStory(),
+      originSetting: createEmptyCharacterOriginSetting(),
+      canon: [],
+      knowledgeBoundary: [],
+      behaviorPolicy: [],
+      expressionPolicy: [],
+      representationRefs: [],
+    });
+  });
+
   it('requires author defaults to select exact compatible representations', () => {
     const selected = parseCharacterVersion({
       characterVersionId: 'character-version-avatar',
@@ -70,6 +84,7 @@ describe('Character canonical contracts', () => {
       characterProjectId: 'character-project-a',
       displayName: 'Lin',
       draft: definition(),
+      draftBasisCharacterVersionId: 'character-version-basis',
       evidence: [
         {
           evidenceId: 'evidence-a',
@@ -102,11 +117,43 @@ describe('Character canonical contracts', () => {
     });
 
     expect(published.characterVersionId).toBe('character-version-a');
+    expect(project.draftBasisCharacterVersionId).toBe('character-version-basis');
     expect(published.definition).not.toBe(project.draft);
     const forbiddenField = ['schema', 'Version'].join('');
     expect(() => parseCharacterVersion({ ...published, [forbiddenField]: 1 })).toThrow(
       /unsupported fields/u,
     );
+  });
+
+  it('keeps an absent draft basis as the canonical unbased state', () => {
+    const project = parseCharacterProject({
+      characterProjectId: 'character-project-unbased',
+      displayName: 'Unbased',
+      draft: definition(),
+      evidence: [],
+      candidates: [],
+      reviewStatus: 'draft',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    expect(project).not.toHaveProperty('draftBasisCharacterVersionId');
+  });
+
+  it('rejects retired installed-release provenance from canonical CharacterProject facts', () => {
+    expect(() =>
+      parseCharacterProject({
+        characterProjectId: 'character-project-adapted',
+        displayName: 'Adapted',
+        draft: definition(),
+        externalSource: { kind: 'installed-character-release' },
+        evidence: [],
+        candidates: [],
+        reviewStatus: 'draft',
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ).toThrow('unsupported fields: externalSource');
   });
 
   it('keeps an authoring-test snapshot separate from CharacterVersion identity', () => {
@@ -127,7 +174,11 @@ describe('Character canonical contracts', () => {
       characterVersionId: 'character-version-a',
       participantId: 'participant-agent',
       controller: { kind: 'agent', primaryAgentSessionId: 'agent-session-a' },
-      runtimeBinding: { kind: 'companion', relationshipId: 'relationship-a' },
+      runtimeBinding: {
+        kind: 'companion',
+        companionContinuityId: 'continuity-a',
+        relationshipId: 'relationship-a',
+      },
       createdAt: now,
     });
     const humanRun = parseCharacterRun({
@@ -135,7 +186,11 @@ describe('Character canonical contracts', () => {
       characterVersionId: 'character-version-a',
       participantId: 'participant-human',
       controller: { kind: 'human', userId: 'user-a' },
-      runtimeBinding: { kind: 'companion', relationshipId: 'relationship-a' },
+      runtimeBinding: {
+        kind: 'companion',
+        companionContinuityId: 'continuity-a',
+        relationshipId: 'relationship-a',
+      },
       createdAt: now,
     });
 
@@ -166,22 +221,39 @@ describe('Character canonical contracts', () => {
     const relationship = parseUserCharacterRelationship({
       relationshipId: 'relationship-a',
       userId: 'user-a',
-      characterVersionId: 'character-version-a',
+      characterProjectId: 'character-project-a',
+      relationshipRevision: 1,
       memories: [
         {
           memoryId: 'memory-a',
+          sourceCandidateId: 'memory-candidate-a',
+          sourceCharacterVersionId: 'character-version-a',
+          provenance: {
+            kind: 'conversation-turn',
+            conversationId: 'conversation-a',
+            turnId: 'turn-a',
+          },
           content: 'The user prefers tea.',
-          sourceRef: 'room-event:message-a',
+          status: 'active',
           acceptedAt: now,
         },
       ],
       candidates: [
         {
           candidateId: 'memory-candidate-a',
-          content: 'The user may prefer quiet rooms.',
-          sourceRef: 'agent-session:turn-a',
-          status: 'pending',
+          relationshipId: 'relationship-a',
+          sourceCharacterVersionId: 'character-version-a',
+          provenance: {
+            kind: 'conversation-turn',
+            conversationId: 'conversation-a',
+            turnId: 'turn-a',
+          },
+          content: 'The user prefers tea.',
+          expectedRelationshipRevision: 0,
+          status: 'accepted',
           createdAt: now,
+          reviewedAt: now,
+          acceptedMemoryId: 'memory-a',
         },
       ],
       createdAt: now,
@@ -189,7 +261,7 @@ describe('Character canonical contracts', () => {
     });
 
     expect(relationship.memories).toHaveLength(1);
-    expect(relationship.candidates[0]?.status).toBe('pending');
+    expect(relationship.candidates[0]?.status).toBe('accepted');
   });
 
   it('isolates one invalid CharacterVersion while retaining valid siblings', () => {

@@ -16,13 +16,13 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import { useOptionalCanvasHost } from '../../host-runtime';
 import { PreviewSurface } from '../../preview/PreviewRendererRegistry';
-import type {
-  PreviewPlaybackInteractionHandler,
-  PreviewPlaybackInteractionState,
-  PreviewSourceDescriptor,
-} from '../../preview/types';
+import type { PreviewSourceDescriptor } from '../../preview/types';
 import { BaseNode } from './BaseNode';
 import type { NodeRendererCommonProps } from './nodeRendererTypes';
+import {
+  readCanonicalContentLocator,
+  readCanonicalContentLocatorKey,
+} from '../../utils/stableContentLocator';
 
 type CanonicalNodeProps<TNode> = NodeRendererCommonProps & {
   readonly node: TNode;
@@ -37,32 +37,10 @@ type CanvasFilePreviewPresentation =
       readonly status: 'local-error';
       readonly code: CanvasTextFilePreviewDiagnosticCode;
     };
-export type MediaPlaybackOwner = 'idle' | 'hover' | 'manual-playing' | 'manual-paused';
-export type MediaPlaybackInteraction =
-  'pointer-enter' | 'pointer-leave' | PreviewPlaybackInteractionState;
-
 const CanvasMilkdownRichSurface = lazy(async () => {
   const module = await import('@neko/markdown/rich-surface');
   return { default: module.MilkdownRichSurface };
 });
-
-export function transitionMediaPlaybackOwner(
-  owner: MediaPlaybackOwner,
-  interaction: MediaPlaybackInteraction,
-): MediaPlaybackOwner {
-  switch (interaction) {
-    case 'pointer-enter':
-      return owner === 'idle' ? 'hover' : owner;
-    case 'pointer-leave':
-      return owner === 'hover' ? 'idle' : owner;
-    case 'playing':
-      return 'manual-playing';
-    case 'paused':
-      return 'manual-paused';
-    case 'ended':
-      return 'idle';
-  }
-}
 
 export function MarkdownNode({
   node,
@@ -154,54 +132,29 @@ export function MarkdownNode({
   );
 }
 
-export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps<MediaCanvasNode>) {
-  const host = useOptionalCanvasHost();
+export function MediaNode({
+  node,
+  isSelected,
+  onFullscreenPreview,
+  ...baseProps
+}: CanonicalNodeProps<MediaCanvasNode>) {
   const source = node.data.runtimeAssetPath || node.data.assetPath;
-  const contentLocator = node.data.contentLocator;
+  const contentLocatorIdentity = readCanonicalContentLocatorKey(node.data.contentLocator);
+  const contentLocator = useMemo(
+    () => readCanonicalContentLocator(node.data.contentLocator),
+    [contentLocatorIdentity],
+  );
   const mediaType = node.data.mediaType ?? 'image';
   const previewRole =
-    mediaType === 'image'
-      ? 'image'
-      : host?.supportsMessage('media:probe')
-        ? mediaType === 'audio'
-          ? 'audio-waveform'
-          : 'video-proxy'
-        : mediaType === 'video'
-          ? 'video-poster'
-          : 'unavailable';
+    mediaType === 'image' ? 'image' : mediaType === 'audio' ? 'audio-waveform' : 'video-proxy';
   const title =
     resolveCanvasNodeName([node.data.title, node.data.assetPath]) ||
     resolveMediaTypeLabel(mediaType);
-  const hoverSequence = useRef(0);
-  const [hoverRequestId, setHoverRequestId] = useState<string>();
-  const [playbackOwner, setPlaybackOwner] = useState<MediaPlaybackOwner>('idle');
-  const [manualPlaybackTime, setManualPlaybackTime] = useState(0);
-  const playbackControl = useMemo(() => {
-    if (mediaType === 'image' || !hoverRequestId) return undefined;
-    return {
-      requestId: hoverRequestId,
-      state:
-        playbackOwner === 'hover' || playbackOwner === 'manual-playing'
-          ? ('playing' as const)
-          : playbackOwner === 'manual-paused'
-            ? ('paused' as const)
-            : ('stopped' as const),
-      startTimeSeconds:
-        playbackOwner === 'manual-playing' || playbackOwner === 'manual-paused'
-          ? manualPlaybackTime
-          : 0,
-      persistence: 'transient' as const,
-    };
-  }, [hoverRequestId, manualPlaybackTime, mediaType, playbackOwner]);
-  const handlePlaybackInteraction: PreviewPlaybackInteractionHandler = (state, currentTime) => {
-    hoverSequence.current += 1;
-    setHoverRequestId(`canvas-manual:${node.id}:${hoverSequence.current}`);
-    setManualPlaybackTime(currentTime);
-    setPlaybackOwner((owner) => transitionMediaPlaybackOwner(owner, state));
-  };
   const previewSource = useMemo<PreviewSourceDescriptor>(
     () => ({
       id: `canvas-node:${node.id}`,
+      nodeId: node.id,
+      outputId: node.id,
       role: previewRole,
       title: node.data.title,
       asset: {
@@ -223,6 +176,9 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
       {...baseProps}
       presentation="foundational"
       opaqueSurface
+      onActivate={
+        contentLocator && onFullscreenPreview ? () => onFullscreenPreview(node.id) : undefined
+      }
       nodeLabel={{
         icon: (
           <span
@@ -236,32 +192,11 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
       <div
         data-testid="canvas-media-node"
         data-media-type={mediaType}
-        data-playback-state={
-          mediaType === 'image'
-            ? undefined
-            : playbackOwner === 'hover' || playbackOwner === 'manual-playing'
-              ? 'playing'
-              : playbackOwner === 'manual-paused'
-                ? 'paused'
-                : 'stopped'
-        }
-        data-playback-owner={mediaType === 'image' ? undefined : playbackOwner}
         className={
           mediaType === 'audio'
             ? 'canvas-audio-node flex h-full min-h-0 flex-col'
             : 'flex h-full min-h-0 flex-col'
         }
-        onPointerEnter={() => {
-          if (mediaType === 'image' || !contentLocator) return;
-          if (playbackOwner !== 'idle') return;
-          hoverSequence.current += 1;
-          setHoverRequestId(`canvas-hover:${node.id}:${hoverSequence.current}`);
-          setPlaybackOwner((owner) => transitionMediaPlaybackOwner(owner, 'pointer-enter'));
-        }}
-        onPointerLeave={() => {
-          if (mediaType === 'image') return;
-          setPlaybackOwner((owner) => transitionMediaPlaybackOwner(owner, 'pointer-leave'));
-        }}
       >
         <div
           className="min-h-0 flex-1 overflow-hidden"
@@ -284,8 +219,6 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
               surfaceKind="inline"
               chrome="full-bleed"
               audioLayout={mediaType === 'audio' ? 'node-card' : undefined}
-              playbackControl={playbackControl}
-              onPlaybackInteraction={handlePlaybackInteraction}
             />
           )}
         </div>
@@ -381,10 +314,11 @@ export function FileNode({
   node,
   isSelected,
   onOpen,
+  onFullscreenPreview,
   ...baseProps
 }: CanonicalNodeProps<FileCanvasNode>) {
   const fileName = resolveCanvasFileName(node.data);
-  const contentLocator = node.data.contentLocator;
+  const contentLocator = readCanonicalContentLocator(node.data.contentLocator);
   const contentLocatorIdentity = contentLocator ? contentLocatorKey(contentLocator) : undefined;
   const contentLocatorRef = useRef(contentLocator);
   contentLocatorRef.current = contentLocator;
@@ -424,7 +358,13 @@ export function FileNode({
       {...baseProps}
       presentation="foundational"
       opaqueSurface
-      onActivate={contentLocator && onOpen ? () => onOpen(contentLocator) : undefined}
+      onActivate={
+        contentLocator && isFullscreenPreviewFile(node.data) && onFullscreenPreview
+          ? () => onFullscreenPreview(node.id)
+          : contentLocator && onOpen
+            ? () => onOpen(contentLocator)
+            : undefined
+      }
       nodeLabel={{
         icon: <FileIcon size={13} strokeWidth={1.6} aria-hidden="true" />,
         text: fileName,
@@ -439,6 +379,20 @@ export function FileNode({
         <CanvasFileNodeContent contentLocator={contentLocator} preview={preview} />
       </div>
     </BaseNode>
+  );
+}
+
+function isFullscreenPreviewMediaKind(value: unknown): value is 'image' | 'video' | 'audio' {
+  return value === 'image' || value === 'video' || value === 'audio';
+}
+
+function isFullscreenPreviewFile(data: FileCanvasNode['data']): boolean {
+  if (isFullscreenPreviewMediaKind(data.mediaKind)) return true;
+  return Boolean(
+    resolveCanvasTextFilePreviewKind({
+      path: data.path || data.title,
+      ...(data.mediaType ? { mediaType: data.mediaType } : {}),
+    }),
   );
 }
 

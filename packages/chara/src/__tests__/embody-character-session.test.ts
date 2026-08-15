@@ -36,7 +36,6 @@ const profile: NpcProfileSource = {
 const evidence: EmbodyCharacterEvidenceSnapshot = {
   relationships: [],
   occurrences: [],
-  representationHints: [],
   scriptContextFacts: [],
 };
 

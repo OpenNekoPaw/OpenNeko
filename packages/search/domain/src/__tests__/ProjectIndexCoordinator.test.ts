@@ -49,18 +49,20 @@ describe('ProjectIndexCoordinator', () => {
     expect(result.items.map((item) => item.id)).toEqual(['media-2']);
   });
 
-  it('replaces the existing adapter when another adapter registers for the same partition', async () => {
+  it('rejects duplicate adapters without replacing or disposing the existing owner', async () => {
     const coordinator = createCoordinator();
     const existingAdapter = makeAdapter('media-library', [
       makeItem('media:existing', 'media', '小橘 existing projection', 'media-library', 0),
     ]);
     const disposeExisting = vi.fn();
     coordinator.registerAdapter({ ...existingAdapter, dispose: disposeExisting });
-    coordinator.registerAdapter(
-      makeAdapter('media-library', [
-        makeItem('media:first-class', 'media', '小橘 source file', 'media-library', 5),
-      ]),
-    );
+    expect(() =>
+      coordinator.registerAdapter(
+        makeAdapter('media-library', [
+          makeItem('media:first-class', 'media', '小橘 source file', 'media-library', 5),
+        ]),
+      ),
+    ).toThrow("Project Search partition 'media-library' is already registered.");
 
     const result = await coordinator.query({
       text: '小橘',
@@ -68,8 +70,71 @@ describe('ProjectIndexCoordinator', () => {
       partitions: ['media-library'],
     });
 
-    expect(disposeExisting).toHaveBeenCalledTimes(1);
-    expect(result.items.map((item) => item.id)).toEqual(['media:first-class']);
+    expect(disposeExisting).not.toHaveBeenCalled();
+    expect(result.items.map((item) => item.id)).toEqual(['media:existing']);
+  });
+
+  it('rejects duplicate semantic providers without disposing the existing owner', () => {
+    const coordinator = createCoordinator();
+    const disposeExisting = vi.fn();
+    coordinator.registerSemanticCoverageProvider({
+      providerId: 'semantic.same',
+      querySemanticCoverage: vi.fn(),
+      dispose: disposeExisting,
+    });
+
+    expect(() =>
+      coordinator.registerSemanticCoverageProvider({
+        providerId: 'semantic.same',
+        querySemanticCoverage: vi.fn(),
+      }),
+    ).toThrow("Project Search semantic provider 'semantic.same' is already registered.");
+    expect(disposeExisting).not.toHaveBeenCalled();
+  });
+
+  it('requires every runtime port at construction', () => {
+    expect(() => Reflect.construct(ProjectIndexCoordinator, [{}])).toThrow(
+      'Project Search requires resolveContext, getWorkspaceRoots, logger, and now runtime ports.',
+    );
+  });
+
+  it('does not mark a project initialized when a partition initialization fails', async () => {
+    const coordinator = createCoordinator();
+    const initialize = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error('index unavailable'))
+      .mockResolvedValueOnce(undefined);
+    coordinator.registerAdapter({
+      ...makeAdapter('documents', []),
+      ensureInitialized: initialize,
+    });
+
+    await expect(coordinator.ensureInitialized('/mock/workspace')).rejects.toMatchObject({
+      code: 'partition-operation-failed',
+      failures: [expect.objectContaining({ identity: 'documents', operation: 'initialize' })],
+    });
+    await expect(coordinator.ensureInitialized('/mock/workspace')).resolves.toBeUndefined();
+    expect(initialize).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not emit fresh state when refresh fails', async () => {
+    const coordinator = createCoordinator();
+    const listener = vi.fn();
+    coordinator.onDidChangeProjectIndex(listener);
+    coordinator.registerAdapter({
+      ...makeAdapter('documents', []),
+      refresh: vi.fn(async () => {
+        throw new Error('refresh failed');
+      }),
+    });
+
+    await expect(
+      coordinator.refresh('/mock/workspace', 'manual-refresh', { partition: 'documents' }),
+    ).rejects.toMatchObject({
+      code: 'partition-operation-failed',
+      failures: [expect.objectContaining({ identity: 'documents', operation: 'refresh' })],
+    });
+    expect(listener).not.toHaveBeenCalled();
   });
 
   it('works without a semantic provider and preserves source refs for semantic results', async () => {
@@ -175,6 +240,7 @@ function createCoordinator(): ProjectIndexCoordinator {
     }),
     getWorkspaceRoots: () => ['/mock/workspace'],
     logger: { warn: vi.fn() },
+    now: () => new Date('2026-08-13T00:00:00.000Z'),
   });
 }
 

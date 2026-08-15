@@ -26,7 +26,7 @@ describe('Automation session authorization', () => {
     expect(authorized.grant).toMatchObject({
       grantId: 'grant-1',
       sessionId: 'session-1',
-      extensionId: 'computer-use@openneko',
+      extensionId: 'computer-use',
       profileId: CUA_DRIVER_OBSERVE_PROFILE.id,
       target,
       conversationId: 'conversation-1',
@@ -57,6 +57,7 @@ describe('Automation session authorization', () => {
     expect(JSON.stringify(selection.mock.calls[0]?.[0])).not.toMatch(
       /applicationId|processId|windowId/u,
     );
+    expect(targets.listCandidates).toHaveBeenCalledWith({ sessionId: 'session-1' });
     expect(targets.revalidate).toHaveBeenCalledWith({ target });
     expect(issue).toHaveBeenCalledOnce();
     await expect(grants.consume(authorized.grant)).resolves.toBe(true);
@@ -110,6 +111,12 @@ describe('Automation session authorization', () => {
     const authorized = await service.authorizeSession({
       ...request(),
       profile: BROWSER_USE_OBSERVE_PROFILE,
+      targetHint: { origin: 'https://example.test' },
+    });
+
+    expect(targets.listCandidates).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      targetHint: { origin: 'https://example.test' },
     });
 
     expect(authorized.target).toEqual(browserTarget);
@@ -184,7 +191,28 @@ describe('Automation session authorization', () => {
     expect(selection).not.toHaveBeenCalled();
   });
 
-  it('rejects a changed profile before reading Host target metadata', async () => {
+  it('treats third-party release metadata as informational', async () => {
+    const targets = createTargets();
+    const service = createService({
+      targets,
+      grants: createAutomationSessionGrantAuthority(),
+      selection: vi.fn(async (input) => ({
+        authorizationId: input.authorizationId,
+        targetKey: target.targetKey,
+      })),
+    });
+
+    await expect(
+      service.authorizeSession({
+        ...request(),
+        profile: {
+          ...CUA_DRIVER_OBSERVE_PROFILE,
+        },
+      }),
+    ).resolves.toMatchObject({ target });
+  });
+
+  it('rejects a changed provider identity before reading Host target metadata', async () => {
     const targets = createTargets();
     const service = createService({
       targets,
@@ -197,7 +225,7 @@ describe('Automation session authorization', () => {
         ...request(),
         profile: {
           ...CUA_DRIVER_OBSERVE_PROFILE,
-          provider: { ...CUA_DRIVER_OBSERVE_PROFILE.provider, upstreamRelease: 'changed' },
+          provider: { ...CUA_DRIVER_OBSERVE_PROFILE.provider, providerId: 'changed' },
         },
       }),
     ).rejects.toThrow('authorization profile is unavailable or changed');

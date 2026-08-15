@@ -470,6 +470,7 @@ function parseResourceDisplayProjection(input: unknown): AgentResourceDisplayPro
       record['locatorKind'],
       [
         'workspace-file',
+        'media-library',
         'document-entry',
         'generated-output',
         'package-resource',

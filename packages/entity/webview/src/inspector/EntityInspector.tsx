@@ -1,4 +1,4 @@
-import { EditIcon, PackageIcon, PlusIcon, SendIcon, WarningIcon } from '@neko/ui/icons';
+import { EditIcon, PlusIcon, SendIcon, WarningIcon } from '@neko/ui/icons';
 import React, { useState, type ReactElement } from 'react';
 import type {
   ProjectEntityInspectorIntent,
@@ -92,20 +92,6 @@ export function EntityInspector({
         </div>
       </header>
 
-      {Object.keys(projection.facts).length > 0 ? (
-        <section>
-          <h3>{labels.facts}</h3>
-          <dl>
-            {Object.entries(projection.facts).map(([key, value]) => (
-              <React.Fragment key={key}>
-                <dt>{key}</dt>
-                <dd>{presentFact(value)}</dd>
-              </React.Fragment>
-            ))}
-          </dl>
-        </section>
-      ) : null}
-
       {projection.evidence?.length ? (
         <section>
           <h3>{labels.evidence}</h3>
@@ -154,20 +140,6 @@ export function EntityInspector({
         </section>
       ) : null}
 
-      {projection.provenance ? (
-        <section>
-          <h3>{labels.provenance}</h3>
-          <dl>
-            <dt>{labels.origin}</dt>
-            <dd>{`${projection.provenance.origin.assetId} @ ${projection.provenance.applied.revision}`}</dd>
-            <dt>{labels.availability}</dt>
-            <dd>{projection.provenance.availability}</dd>
-            <dt>{labels.localChanges}</dt>
-            <dd>{projection.provenance.localModifications ? labels.yes : labels.no}</dd>
-          </dl>
-        </section>
-      ) : null}
-
       {projection.blockers.length > 0 ? (
         <section className="neko-entity-inspector__blockers">
           <h3>
@@ -192,7 +164,6 @@ export function EntityInspector({
                 accepted: {
                   kind: projection.kind,
                   names: projection.names,
-                  facts: projection.facts,
                 },
               })
             }
@@ -285,58 +256,12 @@ function DirectActions({
       intent: { type: 'deprecate', entityId },
     });
   }
-  if (projection.operations.includes('publish')) {
-    actions.push({
-      operation: 'publish',
-      intent: { type: 'publish', entityId },
-    });
-  }
-  if (projection.operations.includes('diff') && projection.provenance?.available) {
-    actions.push({
-      operation: 'diff',
-      intent: { type: 'diff', entityId, available: projection.provenance.available },
-    });
-  }
   if (projection.operations.includes('reference') && projection.interaction?.conversationId) {
     actions.push({
       operation: 'reference',
       intent: {
         type: 'reference',
         entityId,
-        conversationId: projection.interaction.conversationId,
-      },
-    });
-  }
-  if (projection.operations.includes('character-dialogue') && projection.interaction?.characterId) {
-    actions.push({
-      operation: 'character-dialogue',
-      intent: {
-        type: 'character-dialogue',
-        entityId,
-        characterId: projection.interaction.characterId,
-        ...(projection.interaction.conversationId
-          ? { conversationId: projection.interaction.conversationId }
-          : {}),
-      },
-    });
-  }
-  if (projection.operations.includes('room-open') && projection.interaction?.roomId) {
-    actions.push({
-      operation: 'room-open',
-      intent: { type: 'room-open', entityId, roomId: projection.interaction.roomId },
-    });
-  }
-  if (
-    projection.operations.includes('character-embody') &&
-    projection.interaction?.characterId &&
-    projection.interaction.conversationId
-  ) {
-    actions.push({
-      operation: 'character-embody',
-      intent: {
-        type: 'character-embody',
-        entityId,
-        characterId: projection.interaction.characterId,
         conversationId: projection.interaction.conversationId,
       },
     });
@@ -350,20 +275,12 @@ function DirectActions({
           key={operation}
           onClick={() => void onIntent(intent)}
         >
-          {operation === 'publish' ? <PackageIcon size={13} /> : <SendIcon size={13} />}
+          <SendIcon size={13} />
           {labels[operation]}
         </button>
       ))}
     </div>
   );
-}
-
-function presentFact(value: unknown): string {
-  if (value === null) return 'null';
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  return JSON.stringify(value);
 }
 
 const EN_LABELS = {
@@ -377,15 +294,8 @@ const EN_LABELS = {
   object: 'Object',
   location: 'Location',
   style: 'Style',
-  facts: 'Facts',
   evidence: 'Evidence',
   bindings: 'Bindings',
-  provenance: 'Provenance',
-  origin: 'Origin',
-  availability: 'Availability',
-  localChanges: 'Local changes',
-  yes: 'Yes',
-  no: 'No',
   blockers: 'Blockers',
   actions: 'Actions',
   confirm: 'Confirm',
@@ -397,14 +307,7 @@ const EN_LABELS = {
   mergeTarget: 'Target Entity ID',
   merge: 'Merge',
   deprecate: 'Deprecate',
-  publish: 'Publish',
-  diff: 'Review update',
   reference: 'Reference',
-  'character-dialogue': 'Start dialogue',
-  'room-open': 'Open room',
-  'character-embody': 'Embody',
-  instantiate: 'Instantiate',
-  'apply-update': 'Apply update',
   edit: 'Edit',
 } as const;
 
@@ -419,15 +322,8 @@ const ZH_LABELS = {
   object: '物件',
   location: '地点',
   style: '风格',
-  facts: '事实',
   evidence: '证据',
   bindings: '绑定',
-  provenance: '来源',
-  origin: '原始资产',
-  availability: '可用性',
-  localChanges: '本地修改',
-  yes: '是',
-  no: '否',
   blockers: '阻塞项',
   actions: '操作',
   confirm: '确认',
@@ -439,13 +335,6 @@ const ZH_LABELS = {
   mergeTarget: '目标实体 ID',
   merge: '合并',
   deprecate: '弃用',
-  publish: '发布',
-  diff: '检查更新',
   reference: '引用',
-  'character-dialogue': '开始对话',
-  'room-open': '打开群聊',
-  'character-embody': '代入角色',
-  instantiate: '实例化',
-  'apply-update': '应用更新',
   edit: '编辑',
 } satisfies Record<keyof typeof EN_LABELS, string>;

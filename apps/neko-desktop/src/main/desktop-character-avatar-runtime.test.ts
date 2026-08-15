@@ -151,7 +151,11 @@ function repository(): {
     characterVersionId: 'character-version-a',
     participantId: 'participant-a',
     controller: { kind: 'agent', primaryAgentSessionId: 'agent-session-a' },
-    runtimeBinding: { kind: 'companion', relationshipId: 'relationship-a' },
+    runtimeBinding: {
+      kind: 'companion',
+      companionContinuityId: 'continuity-a',
+      relationshipId: 'relationship-a',
+    },
     createdAt: '2026-08-10T00:00:00.000Z',
   };
   const publication: PublishedCharacter = {
@@ -202,7 +206,7 @@ function repository(): {
     ],
     schedulingPolicy: { kind: 'mentioned' },
     events: [],
-    runtimeKind: 'companion',
+    mode: 'companion',
     relationshipIds: ['relationship-a'],
     createdAt: '2026-08-10T00:00:00.000Z',
   };

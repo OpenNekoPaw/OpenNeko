@@ -1,4 +1,5 @@
 import {
+  parseCharacterCompanionContinuity,
   parseCharacterRoom,
   parseCharacterRun,
   parseCharacterVersion,
@@ -6,6 +7,7 @@ import {
   parseRoomRun,
   parseUserCharacterRelationship,
   type CharacterRoom,
+  type CharacterCompanionContinuity,
   type CharacterRun,
   type CharacterVersion,
   type CreateCharacterRoomRunInput,
@@ -13,7 +15,7 @@ import {
   type RoomRun,
   type UserCharacterRelationship,
 } from '@neko/chara/contracts';
-import type { CharacterPrimaryAgentSessionPort } from './character-interaction-service';
+import type { CharacterAgentConversationPort } from './character-interaction-service';
 
 export interface CharacterRoomInteractionRepository {
   readRoom(characterRoomId: string, signal?: AbortSignal): Promise<CharacterRoom | undefined>;
@@ -25,6 +27,10 @@ export interface CharacterRoomInteractionRepository {
     relationshipId: string,
     signal?: AbortSignal,
   ): Promise<UserCharacterRelationship | undefined>;
+  readCompanionContinuity(
+    companionContinuityId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterCompanionContinuity | undefined>;
 }
 
 export interface CharacterPreparedRoomRunPort {
@@ -38,6 +44,7 @@ export type CharacterRoomInteractionDiagnosticCode =
   | 'character-room-unavailable'
   | 'character-room-binding-invalid'
   | 'character-version-unavailable'
+  | 'companion-continuity-unavailable'
   | 'relationship-unavailable';
 
 export class CharacterRoomInteractionError extends Error {
@@ -59,7 +66,7 @@ export class CharacterRoomInteractionService {
     private readonly options: {
       readonly repository: CharacterRoomInteractionRepository;
       readonly roomRuns: CharacterPreparedRoomRunPort;
-      readonly agentSessions: CharacterPrimaryAgentSessionPort;
+      readonly agentConversations: CharacterAgentConversationPort;
       readonly now?: () => string;
       readonly createCharacterRunId?: (roomRunId: string, participantId: string) => string;
     },
@@ -102,7 +109,7 @@ export class CharacterRoomInteractionService {
           );
         }
         const publication = parseCharacterVersion(storedPublication);
-        const binding = command.relationshipBindings.find(
+        const binding = command.companionBindings.find(
           (candidate) => candidate.participantId === template.participantTemplateId,
         )!;
         const storedRelationship = await this.options.repository.readRelationship(
@@ -112,14 +119,33 @@ export class CharacterRoomInteractionService {
         const relationship = storedRelationship
           ? parseUserCharacterRelationship(storedRelationship)
           : undefined;
-        if (!relationship || relationship.characterVersionId !== publication.characterVersionId) {
+        if (!relationship || relationship.characterProjectId !== publication.characterProjectId) {
           throw roomInteractionError(
             'relationship-unavailable',
-            `Relationship '${binding.relationshipId}' does not bind CharacterVersion '${publication.characterVersionId}'.`,
+            `Relationship '${binding.relationshipId}' does not bind CharacterProject '${publication.characterProjectId}'.`,
             command.roomRunId,
           );
         }
-        return { template, publication, relationshipId: relationship.relationshipId };
+        const storedContinuity = await this.options.repository.readCompanionContinuity(
+          binding.companionContinuityId,
+          signal,
+        );
+        const continuity = storedContinuity
+          ? parseCharacterCompanionContinuity(storedContinuity)
+          : undefined;
+        if (!continuity || continuity.characterProjectId !== publication.characterProjectId) {
+          throw roomInteractionError(
+            'companion-continuity-unavailable',
+            `Companion continuity '${binding.companionContinuityId}' does not bind CharacterProject '${publication.characterProjectId}'.`,
+            command.roomRunId,
+          );
+        }
+        return {
+          template,
+          publication,
+          companionContinuityId: continuity.companionContinuityId,
+          relationshipId: relationship.relationshipId,
+        };
       }),
     );
 
@@ -133,7 +159,7 @@ export class CharacterRoomInteractionService {
           command.roomRunId,
           authority.template.participantTemplateId,
         );
-        const session = await this.options.agentSessions.createPrimarySession(
+        const session = await this.options.agentConversations.createPrimarySession(
           {
             characterRunId,
             characterVersionId: authority.publication.characterVersionId,
@@ -142,6 +168,7 @@ export class CharacterRoomInteractionService {
               kind: 'room',
               roomId: room.characterRoomId,
               roomRunId: command.roomRunId,
+              participantId: authority.template.participantTemplateId,
             },
           },
           signal,
@@ -152,7 +179,11 @@ export class CharacterRoomInteractionService {
           characterVersionId: authority.publication.characterVersionId,
           participantId: authority.template.participantTemplateId,
           controller: { kind: 'agent', primaryAgentSessionId: session.primaryAgentSessionId },
-          runtimeBinding: { kind: 'companion', relationshipId: authority.relationshipId },
+          runtimeBinding: {
+            kind: 'companion',
+            companionContinuityId: authority.companionContinuityId,
+            relationshipId: authority.relationshipId,
+          },
           createdAt: this.now(),
         });
         characterRuns.push(characterRun);
@@ -193,15 +224,15 @@ export class CharacterRoomInteractionService {
         }),
         schedulingPolicy: room.schedulingPolicy,
         events: [],
-        runtimeKind: 'companion',
-        relationshipIds: command.relationshipBindings.map((binding) => binding.relationshipId),
+        mode: 'companion',
+        relationshipIds: command.companionBindings.map((binding) => binding.relationshipId),
         createdAt: this.now(),
       });
       return await this.options.roomRuns.createPreparedRun({ run, characterRuns }, signal);
     } catch (error) {
       await Promise.allSettled(
         createdSessions.map((sessionId) =>
-          this.options.agentSessions.releaseUnboundSession(sessionId),
+          this.options.agentConversations.releaseUnboundSession(sessionId),
         ),
       );
       throw error;
@@ -213,7 +244,7 @@ function validateParticipantBindings(
   agentParticipantIds: readonly string[],
   input: CreateCharacterRoomRunInput,
 ): void {
-  const supplied = new Set(input.relationshipBindings.map((binding) => binding.participantId));
+  const supplied = new Set(input.companionBindings.map((binding) => binding.participantId));
   if (
     supplied.size !== agentParticipantIds.length ||
     agentParticipantIds.some((participantId) => !supplied.has(participantId))

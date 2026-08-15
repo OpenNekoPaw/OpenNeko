@@ -1,258 +1,269 @@
 # Chara 领域架构
 
-## 当前状态
+## 当前状态与收敛方向
 
-`@neko/chara` 是 CharacterProject/Version、Dialogue/Room、CharacterRun、UserCharacterRelationship 和角色语义的 host-neutral owner。Desktop 已接入 Character catalog/detail、Agent Entry Character selection、Character/Room scene、Room 调度和投影。
+`@neko/chara` 是 CharacterProject/Version、CharacterStoryline authoring、Companion continuity、Dialogue/Room、CharacterRun、UserCharacterRelationship 和角色语义的 host-neutral owner。当前 foundation 中的 `CharacterStorylineRun`、运行时 transition/revision、run-scoped `CharacterMemoryScope`、Narrative external Composition requirement 和固定 Avatar Runtime Manager 是待删除的原型路径，不构成目标架构。
 
-当前仍有两类缺口：
+目标调用链是：Chara 产出精确角色/模式/上下文投影，Agent application/session owner 执行 Conversation/turn，Host 组合 owner-qualified Scene surfaces，Desktop 只完成 Electron trust-boundary wiring。跨资源、Entity 与 World 的组合边界见 [`creative-resource-semantic-boundaries.md`](../../architecture/creative-resource-semantic-boundaries.md)。
 
-1. CharacterDefinition 尚未正式建模背景故事、原生背景设定、个人故事线和 narrative CharacterMemory；
-2. 历史 Character Foundation Host 仍包含外部 World CRUD、catalog 和 runtime command，这是待删除的组合边界漂移，不是 Chara authority。
+## 五层分析
 
-本领域文档只定义 Chara。外部 World Definition/Runtime、World Story、World Gameplay、存档和 Character + World Experience composition/binding 由 World 领域与活跃 OpenSpec 负责；Chara 只暴露精确 Character/CharacterStoryline 引用。
+| 层   | 结论                                                                                                                                                                                                       |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | Chara 拥有角色与故事线创作事实、Companion continuity、Dialogue/Room policy 和角色上下文；Agent 拥有消息、turn、provider 和任务；外部资料/表现由来源 owner 拥有；Desktop 只拥有 Electron 边界。             |
+| 依赖 | Chara core/application 只依赖 package contracts 和注入 port；不导入 Electron、React、Agent runtime implementation、World/Game 私有实现或本地资源路径。                                                     |
+| 接口 | 使用一个严格 Conversation mode union、精确 Storyline/Version/Node ref、稳定 continuity identity、owner-qualified context/presentation ref；无 optional bag、active identity 或 internal contract version。 |
+| 扩展 | 新 Storyline 内容扩展 node authoring context；新资料/表现类型由真实 owning provider 扩展 public union/registry；不得在 Chara 或 Desktop 添加 wildcard/default adapter。                                    |
+| 测试 | producer codec、application service、Node repository、Agent consumer、Host/Webview、Desktop delegation 和真实 Electron/Agent Evaluation 分层验证，旧路径必须 poison/fail-closed。                          |
 
 ## Owner 与事实模型
 
 ```text
 CharacterProject
   -> CharacterDefinition
-       -> CharacterBackgroundStory
-       -> CharacterOriginSetting
+       -> BackgroundStory / OriginSetting
        -> canon / knowledge / behavior / expression
        -> representation / voice refs
-  -> publish immutable CharacterVersion
+  -> immutable CharacterVersion
 
-CharacterVersion
-  -> CharacterStorylineVersion -> CharacterStorylineRun
-  -> CharacterRun -> CharacterMemoryScope
-  -> UserCharacterRelationship -> CompanionRun
-  -> CharacterRoom / RoomRun
+CharacterProject
+  -> CharacterStoryline
+       -> CharacterStorylineDraft
+       -> immutable CharacterStorylineVersion
+            -> immutable StorylineNode snapshots
+
+userId + CharacterProjectId
+  -> CompanionContinuity
+       -> CharacterMemory entries/candidates
+       -> UserCharacterRelationship entries/candidates
+
+CharacterConversationSelection
+  -> companion | narrative
+  -> CharacterRun / CharacterRoom / RoomRun
+  -> primary AgentSession per agent-controlled participant
 ```
 
-| 数据                                              | 唯一 owner                                        |
-| ------------------------------------------------- | ------------------------------------------------- |
-| 角色背景故事、原生背景设定、canon、知识边界、策略 | CharacterProject / CharacterVersion               |
-| 角色个人故事线定义与进度                          | CharacterStorylineVersion / CharacterStorylineRun |
-| 角色主观运行记忆                                  | CharacterMemoryScope                              |
-| 用户—角色关系记忆                                 | UserCharacterRelationship                         |
-| Character/Room 运行身份与 RoomEvent               | CharacterRun / CharacterRoom / RoomRun            |
-| turn、Tool Call、Approval、transcript、compaction | AgentSession                                      |
-| 图片、模型、动作、纹理和音频 bytes                | Assets / Content / Media / Voice owner            |
-| 外部内容、世界、故事线、状态、事件、存档和分支    | 对应外部 owner，不属于 Chara                      |
-| embedding、摘要、搜索和排序                       | 可重建 infrastructure projection                  |
+| 数据                                                                 | 唯一 owner                                              |
+| -------------------------------------------------------------------- | ------------------------------------------------------- |
+| Character draft、Background/Origin、canon、知识和行为策略            | CharacterProject                                        |
+| 用户管理的 immutable Character publication                           | CharacterVersion                                        |
+| Storyline identity、draft、publication、node authoring context       | CharacterStoryline owner under CharacterProject         |
+| 日常角色主观记忆                                                     | CompanionContinuity / CharacterMemory service           |
+| 日常用户—角色关系记忆                                                | CompanionContinuity / UserCharacterRelationship service |
+| Character/Room identity、participant policy、RoomEvent               | CharacterRun / CharacterRoom / RoomRun                  |
+| Conversation、turn、transcript、compaction、provider/model execution | Agent application/session owner                         |
+| 外部资料 bytes、授权和 locator                                       | Workspace / Content / Assets / Host owner               |
+| 图片、模型、音频、Web/Game/Scene facts 与昂贵 runtime                | 对应 Presentation/Media/Game owner                      |
+| Window Scene、slot 和 presentation geometry                          | Host / Desktop Window presentation                      |
 
-UI tab、active selection、presentation snapshot、Agent transcript、外部事件和搜索结果都不是上述事实的 owner。
+UI selection、Timeline、context cache、transcript summary、模型输出和 active/recent identity 都不是领域事实 owner。
 
-## 角色背景故事与原生背景设定
+管理页、Project Workspace Authoring 与 Interaction 必须是三种独立生命周期。管理页只投影全局目录与只读版本详情；Workspace 只挂载当前 exact Character authoring Surface；Conversation/Room runtime 可在 UI 卸载后继续，但不得保留 React tree、provider 或媒体资源。
 
-`CharacterBackgroundStory` 保存角色出生、家庭、经历、关系、形成性事件和个人历史。`CharacterOriginSetting` 保存角色原生时代、文化、社会环境、重要地点/组织的角色视角描述，以及角色相信或知道的背景规则。
+## 创建、管理与 Project Entity 关联
 
-二者随 CharacterProject 审阅并冻结进 CharacterVersion，但不是可运行世界：
+手动输入、提示词、文件 evidence、普通 Asset representation 和 confirmed Entity context 都是同一个
+fresh CharacterProject 创建操作的 seed。Project-bound 快速创建可以跳过 Studio，但必须通过同一个原子 owner
+command 写入精确 Project Workspace；Assistant-bound 快速创建直接提交 GlobalCharacter 和首个不可变
+CharacterVersion，不创建隐藏 Project 或工作区对象。Studio 只继续编辑工作区 definition、representation、
+voice、storyline 与版本图，不拥有第二套角色类型、格式或保存路径。
 
-- 不创建 WorldProject/Version；
-- 不拥有共享客观事实或规则提交；
-- 不创建 WorldRun/State/Event；
-- 不拥有 Save、branch、checkpoint 或 replay；
-- 不自动成为运行场景背景。
+`.neko-character` 是独立的 untrusted ZIP 导入导出 workflow，只传输一个选定的不可变版本和必要资源；
+它不是 Character Creator seed、实时 repository 或 Workspace。导入固定提交全局目录，不创建工作区对象、
+安装记录、适配副本或恢复记录。
 
-因此 canonical 名称固定为 `CharacterOriginSetting`，不得使用 `CharacterWorld`、`BackgroundWorldRun` 等容易表达运行 authority 的名称。角色可以带着同一个 OriginSetting 进入多个不同外部内容组合，其原生 lore 不因此被目标内容改写。
+全局 Character 不需要 Entity。项目内 Character 由 Project per-record association owner 在精确
+`projectId` 下保存 `entityId + characterProjectId` 关联；CharacterProject 不保存项目
+`entityId`。一个项目本地
+Character 必须有一个精确 Character Entity association，但 Character Entity 可以没有 CharacterProject。
+Chara 只在关联有效且用户选择了精确 CharacterVersion 时提供 Open Character、Open Studio 或 Start
+Interaction handoff。Entity 不拥有 Dialogue、Room、Embody、Conversation 或 Agent launch lifecycle。
 
-## CharacterStoryline
+项目内创建跨 CharacterProject、membership、Entity 与 association 时，必须由同一 Workspace storage
+transaction 原子提交。任一步失败都不得留下孤立角色、Entity、association 或待重试 receipt，也不得回退
+active/recent Project。
 
-角色故事线表达个人弧线，不表达共享世界历史：
+## Conversation mode contract
+
+Chara 使用一个严格判别联合，而不是 `runtimeKind` 加 optional 字段：
+
+```ts
+type CharacterConversationSelection =
+  | {
+      readonly mode: 'companion';
+      readonly characters: readonly CompanionCharacterSelection[];
+    }
+  | {
+      readonly mode: 'narrative';
+      readonly characters: readonly NarrativeCharacterSelection[];
+    };
+```
+
+Companion participant 只携带精确 CharacterVersion 和 Chara 解析的 continuity identity。Narrative participant 携带精确 CharacterVersion 和可选的精确 Storyline/Version/Node ref。任一模式出现另一模式字段必须 decode/validation 失败；不得通过空字段、default 或 provider failure 改变模式。
+
+模式与所有 participant 选择在首次 submit 前冻结。改变模式或节点只能建立新的 launch draft 和 Conversation，不能重解释旧 transcript。
+
+一个 participant 创建 Dialogue，多个 participant 创建 Room。每个 agent-controlled participant 都有独立 primary AgentSession、provider/model/TTS receipt、上下文和 RoomView；human-controlled participant 不创建隐藏 AgentSession。
+
+## CharacterStoryline authoring
+
+CharacterStoryline 是一条稳定个人故事弧的 identity。它拥有唯一可变 draft 和零到多个用户管理的不可变 publication。一个 publication 固定精确 CharacterVersion、premise、constraints、图/顺序关系和全部 node snapshots。
+
+StorylineNode authoring context 可包含：
+
+- situation、time、location；
+- Character/relationship state；
+- allowed/forbidden story facts；
+- authored narrative memories；
+- knowledge boundary；
+- behavior/expression constraints；
+- author-only note 与 spoiler visibility。
+
+Runtime 不拥有 Storyline 状态。Narrative 只物化用户确认的 exact publication/node，禁止创建 `CharacterStorylineRun`、observation candidate、accepted transition、progress revision、Save 或 branch。对话中出现“完成节点”的文本没有领域效果；需要修改故事线时只能生成带来源 authoring candidate，由作者显式编辑 draft 并重新发布。
+
+用户 Timeline 与 Character turn context 是两个投影：Timeline 可按 spoiler policy 展示结构；Character context 只包含当前情境、允许的前置背景、叙事记忆和知识/行为边界。未来事实、forbidden facts 和 author-only notes 不得进入模型上下文。
+
+## Companion continuity
+
+CompanionContinuity 在 `userId + CharacterProjectId` 下稳定存在，与任一 CharacterRun、Conversation、AgentSession 或 CharacterVersion 解耦。Character subjective memory 与 relationship memory 是两个独立集合和 review policy。
+
+已接受 entry 必须保存精确来源 CharacterVersion 以及 Conversation/Turn 或 RoomEvent ref。发布新 CharacterVersion 不改写历史 entry；canonical projector 根据新 publication 的知识/行为边界决定当前 turn 是否可用。不兼容或非法 entry 保留原内容并携带局部 diagnostic。
+
+Transcript、RoomEvent、native Assistant output 和外部资料都只是证据。只有显式 candidate/review operation 能接受、纠正、拒绝或删除记忆；Character 和 relationship 两个 owner 的操作互不决定。
+
+Narrative 在 validation/materialization 边界拒绝 continuity read/write/candidate。其 relationship state 和 narrative memories 只能来自精确 CharacterVersion/StorylineNode。
+
+## Agent context 与 transcript
+
+AgentSession 是完整消息的唯一 owner。Chara context materializer 按模式生成有界、participant-specific projection：
 
 ```text
-CharacterVersion
-  -> CharacterStorylineVersion
-       premise / desire / conflict / arc / stages / constraints
-  -> CharacterStorylineRun
-       current stage / accepted transition refs / revision
+Companion:
+  exact CharacterVersion
+  -> compatible accepted CharacterMemory
+  -> compatible UserCharacterRelationship
+  -> visibility-filtered RoomView
+  -> optional current-turn authorized external context
+
+Narrative:
+  exact CharacterVersion
+  -> optional exact StorylineVersion/Node character projection
+  -> visibility-filtered RoomView
 ```
 
-`CharacterStorylineVersion` 是用户可管理、不可变且可精确引用的领域版本。一个 CharacterVersion 可以没有故事线，也可以发布多个可选个人弧线。`CharacterStorylineRun` 绑定一个精确版本和 CharacterRun；切换版本必须创建新 run，不能重解释旧进度。
+Narrative started turn 保存紧凑 receipt：ConversationId、TurnId、CharacterVersionId 和可选 StorylineId/StorylineVersionId/StorylineNodeId。receipt 不复制消息或 node content，不表达 progress。Agent compaction 不能删除 Chara authoring facts；重开时从 exact immutable source rematerialize。source 缺失时只让受影响 Conversation fail-visible，禁止解析 newer/latest publication。
 
-Chara 只接受 `CharacterStorylineObservationCandidate`：候选携带 exact source ref、CharacterRun、StorylineRun、观察时间和 expected storyline revision。Chara application service 校验后接受或拒绝，并只推进角色个人弧线。外部事件、Room 消息或 Agent 声称“已经成长”都不能直接提交 storyline transition，也不能因此修改外部事实。
+Companion native-model lane 使用单独 Assistant-owned Conversation/AgentSession。它拥有明确 Assistant identity、provider/model receipt、transcript、取消和失败生命周期；不得在 Character AgentSession 内切换 System Prompt，也不得提交 Character/Room response。
 
-## CharacterMemory 与关系记忆
+## 外部资料与 Presentation
 
-Chara 拥有两类长期记忆，不能合并：
+Companion draft 可携带可移除的 exact owner-qualified source refs。提交时 Agent 通过既有 context provider 在来源 authority 下物化有界内容；raw path、bytes、Webview URI 和授权 token 不进入 Chara/Renderer durable contract。资料只服务当前 turn，自动持久化、后台检索或 UI mount 不能扩大后续上下文。
 
-### CharacterMemoryScope
+Narrative parser、UI 和 application service 都拒绝 external-material refs；这是 mode contract failure，不是 unavailable-provider fallback。
 
-保存角色主观经历、感受、个人回忆、认知变化和自我理解。它绑定精确 CharacterRun，可选绑定 CharacterStorylineRun 和 owning Composition 提供的 exact ref。
+Character representation 只保存语义和稳定 ref。Presentation provider 将它解析为 exact authorized Surface ref；Host registry 精确映射唯一 handler，duplicate/unknown/mismatched ref 局部失败。Chara 不拥有 Web content、World state、Gameplay rules、engine runtime 或外部资源 bytes。
+
+## Workspace 目录与可移植角色包
+
+工作区创作的持久 authority 是 Host 授权 Project Workspace 下的 Chara 目录记录：
 
 ```text
-external/room/activity/transcript evidence
-  -> CharacterMemoryCandidate
-  -> accepted / corrected / rejected / deleted
-  -> CharacterMemoryEntry
+neko/characters/<characterProjectId>/
+  project.json
+  lineage.json
+  versions/...
+  storylines/...
+  authoring-tests/...
+  localized-assets.json # exact opaque ref/representation 到入口文件与所属文件的绑定
+  assets/... # 仅用户显式本地化的角色自有副本
 ```
 
-候选必须保存稳定来源、观察者、时间、sensitivity 和 retention traits。模型输出或 transcript 可搜索不等于记忆已接受。跨 CharacterRun、跨 StorylineRun、跨外部 composition 的导入必须是显式、可审阅操作。
+`assets/` 中存在文件并不表示该素材可用。只有 `localized-assets.json` 中 exact `resourceRef + representationId + kind` 与入口相对路径、所属文件 inventory 完整匹配时，本地副本才是该 opaque ref 的 canonical realization；不得从目录名、文件存在或已释放的 ZIP manifest 推断或回退。
 
-### UserCharacterRelationship
-
-保存用户偏好、边界、约定、共同经历和关系里程碑。一个事件同时影响角色主观体验和用户关系时，可以产生两个独立候选，但必须由 CharacterMemoryScope 与 UserCharacterRelationship 分别接受、纠正或删除。
-
-### 与外部存档隔离
-
-外部存档只可作为来源引用。保存、恢复、分支、删除或损坏外部存档不得复制、重置或删除 CharacterMemory；CharacterMemory 的接受、纠正或删除也不得写回外部存档。来源失效时保留 Chara record，并在该 entry/candidate 显示 diagnostic，不隐藏 sibling memory。
-
-## 外部 Composition 边界
-
-内容创作与运行关联不是 CharacterProject 或 CharacterRun 的内部职责。Chara 只导出：
+`.neko-character` ZIP 只服务用户显式触发的导入和导出，不是 Character identity、live repository、Workspace、runtime 或同步源：
 
 ```text
-CharacterVersionRef
-CharacterStorylineVersionRef
-CharacterRunRef
-CharacterStorylineRunRef
-CharacterMemoryScopeRef
+export: one selected CharacterVersion + required resources -> bounded ZIP snapshot
+import: Host file grant -> archive validation -> atomic GlobalCharacter/CharacterVersion commit
 ```
 
-外部 Composition owner 可以在创作期关联角色/个人故事线与其他内容版本，在运行期关联 CharacterRun/StorylineRun/MemoryScope 与其他 runtime identity。Composition 只保存精确引用和映射，不复制 Chara facts。
+Node adapter 在 staging 中验证路径 containment、链接、重复条目、文件数量、展开大小、inventory 和 digest，
+随后由 Chara application service 原子提交全局对象和版本。失败不得改变 sibling 全局对象或任何 Project。
+产品不得保存 ZIP 路径、manifest 或打开状态作为角色事实，也不得挂载、监听、回读或从 ZIP 原地运行。
+导出包不包含工作区历史、完整版本图、Conversation、Room、memory、provider/model 配置、credential、cache
+或 presentation snapshot。
 
-Chara application 只允许通过 owning contract 提供的 consumer port 获取不可变关联 view 或提交 typed result。Chara 不得：
-
-- 定义外部 storyline/runtime/save DTO；
-- 导入外部领域私有实现；
-- 保存对方完整 aggregate；
-- 从 active/recent/latest selection 推断关联；
-- 在 provider 缺失时创建本地 placeholder、string bag 或成功 no-op adapter。
-
-Composition provider 缺失或绑定失效时，只拒绝当前 composed launch/operation；Character Studio、companion Dialogue、Room 和既有 Chara records 继续可用。
+普通 representation/voice 继续保存 opaque ref。只有用户明确选择、Host 授权且允许复制的素材 bytes 才可进入角色包；未内嵌资源作为 external dependency 显示，不静默复制全局库、项目 sibling 或任意本地路径。
 
 ## 分层与依赖
 
 ```text
-@neko/chara/contracts
+@neko/chara contracts/core
   -> shared stable refs / domain values
 
-@neko/chara/core
-  -> chara/contracts
-
-@neko/chara/application
-  -> chara/core
-  -> package-local Agent / Asset / Voice / Composition consumer ports
+@neko/chara application
+  -> chara core
+  -> package-local Agent / Context / Asset / Voice / Presentation ports
 
 @neko/chara-node
-  -> public Chara repository ports
+  -> public Chara directory repository ports
+  -> bounded import/export ZIP byte adapter only
 
 @neko/chara-webview
-  -> public Chara host contracts
+  -> public Chara contracts and projections
+
+@neko/host
+  -> version-free Scene / slot contract
 
 apps/neko-desktop
-  -> public Chara entry
-  -> concrete Agent / Asset / Voice / Composition adapters
+  -> sender-bound IPC / Window / resource authorization adapters
+  -> public Chara / Agent / Host / Presentation ports only
 ```
 
-Chara core/application 不导入 Electron、React、Agent runtime implementation 或外部领域私有 runtime。Agent、Assets、Voice 和 Composition 不反向依赖 Chara implementation；跨域只使用 public refs/ports。
+Desktop 不得选择 mode、continuity compatibility、Storyline node、memory eligibility、Narrative fact visibility、participant scheduling 或 Presentation fallback。Renderer/Webview 不得读取工作区文件或访问 Electron/Node API。
 
-## 角色创作与发布
+## Workbench 与生命周期
 
-CharacterProject 拥有 draft、evidence/candidate review、测试和发布。CharacterVersion 冻结：
+Character Interaction Scene 只有以下有界 slots：
 
-- BackgroundStory；
-- OriginSetting；
-- canon 与知识边界；
-- behavior/expression policy；
-- representation/voice refs；
-- memory policy；
-- accepted evidence refs。
+- Interaction：Agent Interaction 或 Room；
+- Main：一个 exact Character Presentation Surface；
+- Manager：Companion/Narrative Context 或 Room Participant Manager；
+- Timeline：可选 Storyline Timeline 和/或 RoomEvent Timeline；
+- Status：slot-local diagnostics。
 
-Character authoring-test snapshot 必须携带独立 identity 和 source project state，只用于 Dialogue/Embody 创作验证，不进入正式 CharacterRun、CharacterStorylineRun 或 CharacterMemoryScope。更新 draft 不得改变既有 CharacterVersion 和运行实例。
+所有 Surface ref 必须绑定同一 exact Conversation owner。Window layout 只保存 geometry/visibility，不保存 mode、Storyline、memory、participant 或 provider facts。Storyline Timeline 是 authoring structure，RoomEvent Timeline 是 runtime event order；两者不能互相推断 progress。
 
-图片、模型、音频和长文档 bytes 保持在 owning Content/Asset/Media/Voice service；CharacterVersion 只保存稳定引用和角色语义。raw path、Webview URI、runtime handle、provider secret、Agent transcript 和外部存档不得进入 Character records。
+离开场景时 React Roots 卸载，无保护 Presentation/Web/Game resource 释放。运行、排队、审批或未完成外部操作由 exact runtime owner 保护，不得因此保留 hidden Root。重开从 exact identities 和最小 presentation snapshot 重建。
 
-## CharacterRun、Dialogue 与 Room
+## 持久化、旧记录和错误隔离
 
-每个 agent-controlled CharacterRun 绑定：
+Chara Node 分别持久化 Character/Storyline authoring、Companion continuity、Dialogue/Room 和 mode receipts。repository 逐条 strict decode；一条非法 record 不阻止 sibling 或 workspace startup。
 
-- exact CharacterVersion；
-- participant/controller identity；
-- exact CharacterStorylineRun（可选）；
-- exact CharacterMemoryScope；
-- companion relationship 或 owning Composition typed ref；
-- one primary AgentSession。
+旧 `CharacterStorylineRun`、observation/transition 和 run-scoped memory bytes 必须保留为 owner-qualified invalid/obsolete records，但不得进入新 reader 的成功集合。用户通过显式 offline inspect/export/cleanup 操作处理；不得自动转成 Storyline publication、continuity memory 或空默认值。
 
-Agent runtime 继续拥有 turn、queue、Tool、Approval、streaming、取消、transcript 和 compaction。Chara 物化冻结 profile、授权 Character/relationship memory、RoomView 和可选 Composition view，不创建第二套 responder 或 transcript。
+以下情况必须 fail-visible、fail-local：
 
-`dialogue` 是单角色互动，`chatroom` 是多 participant 互动。CharacterRoom 只拥有 title、participant templates 和 scheduling policy；不保存 default world/version/save。每个 agent participant 拥有独立 CharacterRun、AgentSession、Chat/TTS config 和 memory view。human-controlled participant 不创建隐藏 AgentSession。
+- mode fields 混用或尝试原地切换；
+- exact CharacterVersion/StorylineVersion/Node 不存在或不匹配；
+- Narrative 请求 native lane、external material 或 Companion continuity；
+- missing native provider/model；
+- unknown/mismatched Presentation surface；
+- malformed continuity/memory/receipt record。
 
-RoomRun 拥有唯一、有序 RoomEvent timeline：message、membership、mention、moderation、scheduling 和对外部 accepted event 的 stable reference。并行 Agent inference 只是 provisional response，必须以 expected room revision 串行接受。RoomEvent 不自动成为 CharacterMemory 或 CharacterStoryline progress。
+Pre-commit launch failure 不得留下 partial CharacterRun、Room、AgentSession 或 first message。Post-commit provider failure 保留已创建的 Conversation owner 并记录 failed turn。所有失败都不得选择 active/recent/latest identity、另一 provider/source/renderer、旧 contract 或空成功值。
 
-## Chat、TTS、Avatar 与 Voice
+## Product promotion 与验证
 
-CharacterVersion 保存 voice identity/defaults、portrait/avatar refs 和表达边界。每个 CharacterRun/participant 保存本次有效 Chat/TTS config；started turn 冻结实际 provider/model/voice/parameters receipt。运行中修改只影响后续 turn，“全部应用”是逐 participant 的显式批量操作，不产生共享可变配置。
+Character production entry 仍受独立 promotion gate 保护。package implementation、deterministic fixture、test route 或保存的 experimental Scene 不得使生产入口成功。
 
-Voice/Media owner 保存生成音频产物。Avatar runtime 可消费 timing/viseme、pose/expression/action projection，但不拥有 TTS 配置、音频事实、Character canon 或 Agent turn。portrait、Live2D、VRM、MMD 和 PNGTuber 通过 exact representation ref 选择一个 renderer；失败时局部 diagnostic，不尝试其他格式或静默回退 portrait。
+验证必须覆盖：
 
-## Character Studio 与 Runtime Workbench
-
-Character Studio 是 Window 级单例管理场景：catalog 约占 30%，detail 约占 70%。detail 包含概览、背景故事、原生背景设定、认知与行为、角色故事线、角色/关系记忆、表现资源、声音、运行历史和发布版本。
-
-Character Runtime Workbench 使用独立 slots：
-
-- Agent Interaction/Room；
-- 唯一 Avatar/Scene Main；
-- Character Runtime Configuration；
-- 按需 Room Timeline；
-- Status diagnostic。
-
-Runtime manager 展示 CharacterRun、StorylineRun、MemoryScope、relationship、Agent Conversation、Chat/TTS 和 representation projection。外部 Composition 只能通过 owning provider 的只读摘要与 exact navigation target 出现，不得作为 `storyline / saves / world` Chara capability bag。
-
-离开场景时 React Roots 卸载；受保护 Agent turn 可以继续，但不得因此保留隐藏 Root。无运行、排队、审批或外部操作保护条件的 Avatar/Voice/runtime resource 必须释放。恢复使用原 exact identities，不回退 active/recent Character 或 Room。
-
-## 持久化与失效隔离
-
-CharacterProject、CharacterVersion、CharacterStorylineVersion、CharacterMemoryScope、UserCharacterRelationship 和 CharacterRoom 是 durable records。CharacterRun、CharacterStorylineRun、RoomRun 和 AgentSession 是可脱离 UI 的业务/runtime identities。presentation snapshot 只保存 viewport、pose、selection、layout、draft 等可丢弃展示状态。
-
-单条 lore/storyline/memory/run record 解码失败时必须：
-
-- 保留记录可见性；
-- 显示 exact diagnostic 和修复入口；
-- 禁用依赖该记录的操作；
-- 保持 sibling Character、Room、Memory 和其他产品场景可用；
-- 不伪造默认 lore、空记忆或最新 StorylineVersion。
-
-CharacterStorylineRun revision 和 CharacterMemoryScope revision 只服务真实 CAS 消费者，不能参与 schema、format、contract、cache 或实现分发。
-
-## Character Foundation 收敛
-
-当前以下生产路径属于架构漂移，必须原子删除：
-
-- Character Host contract 中的外部 WorldProject/Version/Run/Save types 和 operations；
-- `CharacterFoundationSnapshot.world`；
-- `CharacterFoundationCommandService.worldAuthoring/worldRuntime`；
-- `CharacterFoundationService.worldCatalog`；
-- Character IPC/preload/Webview 对上述操作的 producer/consumer；
-- Character Runtime manager 中表达外部 `storyline / saves / world` ownership 的占位项。
-
-替换时同时更新 producer、consumer、fixtures 和 tests，并用 poisoned old operation/field 证明旧路径不能成功。不得保留兼容 alias、dual read、optional old snapshot、fallback handler 或成功 no-op。外部 records 本身不由 Chara 删除、修改或迁移；其他会话负责其 owning surface。
-
-## 项目证据与 Agent context
-
-角色证据必须通过 Desktop-safe ContentLocator/Content port 读取。Entity/Search 只提供稳定 identity、候选和 locator；Chara 按 Character identity、来源权威性、新鲜度和预算排序、去重并裁剪。证据先进入 CharacterProject candidate/review，不直接修改 CharacterVersion、StorylineRun 或 MemoryEntry。
-
-Context Materializer 固定组合：
-
-```text
-exact CharacterVersion
-  -> authorized CharacterStoryline view
-  -> authorized CharacterMemory view
-  -> authorized RelationshipMemory view
-  -> participant-scoped RoomView
-  -> optional owning Composition view
-  -> turn permission/model/TTS receipt
-```
-
-每个 view 保留 owner identity、revision 和 source refs。缺失 required owner/revision/permission 必须返回 diagnostic；owner 成功但没有 eligible memory 是合法空 view。不得用另一 memory scope、transcript、模型常识或 active selection 伪装成功。
-
-## 错误与演进边界
-
-- 缺失 CharacterVersion、CharacterStorylineRun、CharacterMemoryScope、relationship、RoomRun、AgentSession、permission 或 required provider 必须 fail-visible、fail-local。
-- BackgroundStory/OriginSetting 失效不能升级为全局启动失败，也不能自动转换为 runnable world。
-- Chara 不提供平行 Agent controller、外部 World service、Activity engine 或跨域 registry。
-- 新增字段时一次性更新 canonical producer、consumer、fixture 和 test；不建立内部 contract generation、兼容读取或旧新路径。
-- 现有 Character 用户记录不得被静默覆盖。无法满足新 canonical shape 时保留原记录并在 owning Character 显示 diagnostic/修复入口。
-- 外部 Composition、World、Activity 和其他 runtime 未实现时保持 owner-qualified unavailable；不得由 Agent prompt、Webview state、静态占位或空 adapter 代替。
+- strict producer/consumer codecs 与旧 shape poison；
+- Storyline publication immutability 和 node context filtering；
+- Companion cross-Conversation continuity 与 Narrative isolation；
+- independent AgentSession/model/TTS/RoomView；
+- Host/Webview owner matching、slot-local failure 和 UI lifetime；
+- Desktop delegation/trust boundary；
+- key-free Evaluation authoring、provider-backed complete Desktop session 和 visible Electron flow；
+- promotion gate 继续 fail-visible。

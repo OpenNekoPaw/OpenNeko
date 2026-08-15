@@ -3,10 +3,11 @@ import {
   parseCharacterProject,
   parseCharacterRoom,
   parseCharacterRun,
-  parseCharacterMemoryScope,
+  parseCharacterCompanionContinuity,
+  parseCharacterNarrativeTurnReceipt,
   parseCharacterRunPresentationConfiguration,
-  parseCharacterStorylineObservationCandidate,
-  parseCharacterStorylineRun,
+  parseCharacterStoryline,
+  parseCharacterStorylineDraft,
   parseCharacterStorylineVersion,
   parseCharacterVersion,
   parseCharacterTurnPresentationReceipt,
@@ -25,12 +26,13 @@ import {
 } from '@neko/local-metadata';
 import type {
   CharacterAuthoringRepository,
+  CharacterPublicationReader,
   CharacterConversationLaunchAggregate,
   CharacterConversationLaunchRepository,
   CharacterDurableCatalogPort,
   CharacterRuntimeCatalogPort,
   CharacterInteractionRepository,
-  CharacterMemoryRepository,
+  CharacterCompanionContinuityRepository,
   CharacterAvatarAuthorityRepository,
   CharacterPresentationRepository,
   CharacterRoomRepository,
@@ -44,7 +46,7 @@ export interface CharacterPersistentRepository
     CharacterAuthoringRepository,
     CharacterConversationLaunchRepository,
     CharacterInteractionRepository,
-    CharacterMemoryRepository,
+    CharacterCompanionContinuityRepository,
     CharacterPresentationRepository,
     CharacterRoomRepository,
     CharacterStorylineRepository,
@@ -54,7 +56,7 @@ export interface CharacterPersistentRepository
 export interface CharacterRuntimeRepositories {
   readonly conversationLaunch: CharacterConversationLaunchRepository;
   readonly interaction: CharacterInteractionRepository;
-  readonly memory: CharacterMemoryRepository;
+  readonly companionContinuity: CharacterCompanionContinuityRepository;
   readonly avatarAuthority: CharacterAvatarAuthorityRepository;
   readonly presentation: CharacterPresentationRepository;
   readonly room: CharacterRoomRepository;
@@ -80,6 +82,8 @@ export function initializeCharacterRuntimePersistenceTables(
       table('chara_character_runs', 'character_run_id'),
       table('chara_dialogue_runs', 'dialogue_run_id'),
       table('chara_rooms', 'character_room_id'),
+      table('chara_storylines', 'character_storyline_id'),
+      table('chara_storyline_drafts', 'character_storyline_id'),
       table('chara_storyline_versions', 'character_storyline_version_id'),
       `CREATE TABLE IF NOT EXISTS chara_storyline_runs (
         character_storyline_run_id TEXT PRIMARY KEY,
@@ -87,6 +91,11 @@ export function initializeCharacterRuntimePersistenceTables(
         payload_json TEXT NOT NULL
       ) STRICT`,
       table('chara_storyline_observation_candidates', 'observation_candidate_id'),
+      `CREATE TABLE IF NOT EXISTS chara_companion_continuities (
+        companion_continuity_id TEXT PRIMARY KEY,
+        continuity_revision INTEGER NOT NULL CHECK (continuity_revision >= 0),
+        payload_json TEXT NOT NULL
+      ) STRICT`,
       `CREATE TABLE IF NOT EXISTS chara_memory_scopes (
         character_memory_scope_id TEXT PRIMARY KEY,
         memory_revision INTEGER NOT NULL CHECK (memory_revision >= 0),
@@ -94,6 +103,7 @@ export function initializeCharacterRuntimePersistenceTables(
       ) STRICT`,
       table('chara_presentation_configurations', 'character_run_id'),
       table('chara_presentation_turn_receipts', 'turn_id'),
+      table('chara_narrative_turn_receipts', 'turn_id'),
       `CREATE TABLE IF NOT EXISTS chara_room_runs (
         room_run_id TEXT PRIMARY KEY,
         room_revision INTEGER NOT NULL CHECK (room_revision >= 0),
@@ -119,6 +129,8 @@ export function initializeCharacterPersistenceTables(store: LocalMetadataStore):
       table('chara_character_runs', 'character_run_id'),
       table('chara_dialogue_runs', 'dialogue_run_id'),
       table('chara_rooms', 'character_room_id'),
+      table('chara_storylines', 'character_storyline_id'),
+      table('chara_storyline_drafts', 'character_storyline_id'),
       table('chara_storyline_versions', 'character_storyline_version_id'),
       `CREATE TABLE IF NOT EXISTS chara_storyline_runs (
         character_storyline_run_id TEXT PRIMARY KEY,
@@ -126,6 +138,11 @@ export function initializeCharacterPersistenceTables(store: LocalMetadataStore):
         payload_json TEXT NOT NULL
       ) STRICT`,
       table('chara_storyline_observation_candidates', 'observation_candidate_id'),
+      `CREATE TABLE IF NOT EXISTS chara_companion_continuities (
+        companion_continuity_id TEXT PRIMARY KEY,
+        continuity_revision INTEGER NOT NULL CHECK (continuity_revision >= 0),
+        payload_json TEXT NOT NULL
+      ) STRICT`,
       `CREATE TABLE IF NOT EXISTS chara_memory_scopes (
         character_memory_scope_id TEXT PRIMARY KEY,
         memory_revision INTEGER NOT NULL CHECK (memory_revision >= 0),
@@ -133,6 +150,7 @@ export function initializeCharacterPersistenceTables(store: LocalMetadataStore):
       ) STRICT`,
       table('chara_presentation_configurations', 'character_run_id'),
       table('chara_presentation_turn_receipts', 'turn_id'),
+      table('chara_narrative_turn_receipts', 'turn_id'),
       `CREATE TABLE IF NOT EXISTS chara_room_runs (
         room_run_id TEXT PRIMARY KEY,
         room_revision INTEGER NOT NULL CHECK (room_revision >= 0),
@@ -230,6 +248,24 @@ export function createPersistentCharacterRepository(options: {
             (record) => record.roomRunId,
             diagnostics,
           );
+          const storylines = await readCatalogRecords(
+            sql,
+            'chara_storylines',
+            'character_storyline_id',
+            'character-storyline',
+            parseCharacterStoryline,
+            (record) => record.characterStorylineId,
+            diagnostics,
+          );
+          const storylineDrafts = await readCatalogRecords(
+            sql,
+            'chara_storyline_drafts',
+            'character_storyline_id',
+            'character-storyline-draft',
+            parseCharacterStorylineDraft,
+            (record) => record.characterStorylineId,
+            diagnostics,
+          );
           const storylineVersions = await readCatalogRecords(
             sql,
             'chara_storyline_versions',
@@ -239,31 +275,40 @@ export function createPersistentCharacterRepository(options: {
             (record) => record.characterStorylineVersionId,
             diagnostics,
           );
-          const storylineRuns = await readCatalogRecords(
+          await readCatalogRecords(
             sql,
             'chara_storyline_runs',
             'character_storyline_run_id',
             'character-storyline-run',
-            parseCharacterStorylineRun,
-            (record) => record.characterStorylineRunId,
+            parseObsoleteStorylineRuntimeRecord,
+            () => '',
             diagnostics,
           );
-          const storylineObservationCandidates = await readCatalogRecords(
+          await readCatalogRecords(
             sql,
             'chara_storyline_observation_candidates',
             'observation_candidate_id',
             'character-storyline-observation-candidate',
-            parseCharacterStorylineObservationCandidate,
-            (record) => record.observationCandidateId,
+            parseObsoleteStorylineRuntimeRecord,
+            () => '',
             diagnostics,
           );
-          const memoryScopes = await readCatalogRecords(
+          const companionContinuities = await readCatalogRecords(
+            sql,
+            'chara_companion_continuities',
+            'companion_continuity_id',
+            'character-companion-continuity',
+            parseCharacterCompanionContinuity,
+            (record) => record.companionContinuityId,
+            diagnostics,
+          );
+          await readCatalogRecords(
             sql,
             'chara_memory_scopes',
             'character_memory_scope_id',
             'character-memory-scope',
-            parseCharacterMemoryScope,
-            (record) => record.characterMemoryScopeId,
+            parseObsoleteCompanionMemoryRecord,
+            () => '',
             diagnostics,
           );
           const presentationConfigurations = await readCatalogRecords(
@@ -283,10 +328,10 @@ export function createPersistentCharacterRepository(options: {
             dialogueRuns,
             rooms,
             roomRuns,
+            storylines,
+            storylineDrafts,
             storylineVersions,
-            storylineRuns,
-            storylineObservationCandidates,
-            memoryScopes,
+            companionContinuities,
             presentationConfigurations,
             diagnostics,
           };
@@ -650,6 +695,116 @@ export function createPersistentCharacterRepository(options: {
         (record) => record.characterVersionId,
       );
     },
+    readCharacterProject: (identity, signal) => {
+      signal?.throwIfAborted();
+      return read(
+        'read-character-project-for-storyline',
+        'chara_projects',
+        'character_project_id',
+        identity,
+        parseCharacterProject,
+        (record) => record.characterProjectId,
+      );
+    },
+    createStoryline: (storyline, draft, signal) => {
+      signal?.throwIfAborted();
+      const canonicalStoryline = parseCharacterStoryline(storyline);
+      const canonicalDraft = parseCharacterStorylineDraft(draft);
+      if (canonicalDraft.characterStorylineId !== canonicalStoryline.characterStorylineId) {
+        throw metadataError(
+          'create-character-storyline',
+          'CharacterStoryline and Draft identities must match.',
+        );
+      }
+      return options.metadataStore.transaction(
+        { mode: 'state-write', ownership: 'state', operation: 'create-character-storyline' },
+        async ({ sql }) => {
+          await insertNew(
+            sql,
+            'create-character-storyline',
+            'chara_storylines',
+            'character_storyline_id',
+            canonicalStoryline.characterStorylineId,
+            encode(canonicalStoryline, 'create-character-storyline'),
+          );
+          await insertNew(
+            sql,
+            'create-character-storyline',
+            'chara_storyline_drafts',
+            'character_storyline_id',
+            canonicalDraft.characterStorylineId,
+            encode(canonicalDraft, 'create-character-storyline'),
+          );
+        },
+      );
+    },
+    updateStoryline: (storyline, draft, signal) => {
+      signal?.throwIfAborted();
+      const canonicalStoryline = parseCharacterStoryline(storyline);
+      const canonicalDraft = parseCharacterStorylineDraft(draft);
+      if (canonicalDraft.characterStorylineId !== canonicalStoryline.characterStorylineId) {
+        throw metadataError(
+          'update-character-storyline',
+          'CharacterStoryline and Draft identities must match.',
+        );
+      }
+      return options.metadataStore.transaction(
+        { mode: 'state-write', ownership: 'state', operation: 'update-character-storyline' },
+        async ({ sql }) => {
+          await requireRecord(
+            sql,
+            'update-character-storyline',
+            'chara_storylines',
+            'character_storyline_id',
+            canonicalStoryline.characterStorylineId,
+            parseCharacterStoryline,
+            (record) => record.characterStorylineId,
+          );
+          const storylineResult = await sql.run(
+            `UPDATE chara_storylines SET payload_json = ? WHERE character_storyline_id = ?`,
+            [
+              encode(canonicalStoryline, 'update-character-storyline'),
+              canonicalStoryline.characterStorylineId,
+            ],
+          );
+          const draftResult = await sql.run(
+            `UPDATE chara_storyline_drafts SET payload_json = ? WHERE character_storyline_id = ?`,
+            [
+              encode(canonicalDraft, 'update-character-storyline'),
+              canonicalDraft.characterStorylineId,
+            ],
+          );
+          if (storylineResult.changes !== 1 || draftResult.changes !== 1) {
+            throw metadataError(
+              'update-character-storyline',
+              `CharacterStoryline '${canonicalStoryline.characterStorylineId}' is incomplete.`,
+            );
+          }
+        },
+      );
+    },
+    readStoryline: (identity, signal) => {
+      signal?.throwIfAborted();
+      return read(
+        'read-character-storyline',
+        'chara_storylines',
+        'character_storyline_id',
+        identity,
+        parseCharacterStoryline,
+        (record) => record.characterStorylineId,
+      );
+    },
+    readStorylineDraft: (identity, signal) => {
+      signal?.throwIfAborted();
+      return read(
+        'read-character-storyline-draft',
+        'chara_storyline_drafts',
+        'character_storyline_id',
+        identity,
+        parseCharacterStorylineDraft,
+        (record) => record.characterStorylineId,
+      );
+    },
     storeStorylineVersion: (version, signal) => {
       signal?.throwIfAborted();
       const canonical = parseCharacterStorylineVersion(version);
@@ -678,243 +833,227 @@ export function createPersistentCharacterRepository(options: {
         (record) => record.characterStorylineVersionId,
       );
     },
-    createStorylineRun: (run, signal) => {
+    listStorylines: (characterProjectId, signal) => {
       signal?.throwIfAborted();
-      const canonical = parseCharacterStorylineRun(run);
       return options.metadataStore.transaction(
-        { mode: 'state-write', ownership: 'state', operation: 'create-character-storyline-run' },
+        { mode: 'read', ownership: 'state', operation: 'list-character-storylines' },
+        async ({ sql }) => {
+          const diagnostics: import('@neko/chara/application').CharacterDurableRecordDiagnostic[] =
+            [];
+          const records = await readCatalogRecords(
+            sql,
+            'chara_storylines',
+            'character_storyline_id',
+            'character-storyline',
+            parseCharacterStoryline,
+            (record) => record.characterStorylineId,
+            diagnostics,
+          );
+          return records.filter((record) => record.characterProjectId === characterProjectId);
+        },
+      );
+    },
+    listStorylineVersions: (characterStorylineId, signal) => {
+      signal?.throwIfAborted();
+      return options.metadataStore.transaction(
+        { mode: 'read', ownership: 'state', operation: 'list-character-storyline-versions' },
+        async ({ sql }) => {
+          const diagnostics: import('@neko/chara/application').CharacterDurableRecordDiagnostic[] =
+            [];
+          const records = await readCatalogRecords(
+            sql,
+            'chara_storyline_versions',
+            'character_storyline_version_id',
+            'character-storyline-version',
+            parseCharacterStorylineVersion,
+            (record) => record.characterStorylineVersionId,
+            diagnostics,
+          );
+          return records.filter((record) => record.characterStorylineId === characterStorylineId);
+        },
+      );
+    },
+    deleteStoryline: (characterStorylineId, signal) => {
+      signal?.throwIfAborted();
+      return options.metadataStore.transaction(
+        { mode: 'state-write', ownership: 'state', operation: 'delete-character-storyline' },
+        async ({ sql }) => {
+          await requireRecord(
+            sql,
+            'delete-character-storyline',
+            'chara_storylines',
+            'character_storyline_id',
+            characterStorylineId,
+            parseCharacterStoryline,
+            (record) => record.characterStorylineId,
+          );
+          await sql.run(
+            `DELETE FROM chara_storyline_versions
+             WHERE json_extract(payload_json, '$.characterStorylineId') = ?`,
+            [characterStorylineId],
+          );
+          await sql.run(`DELETE FROM chara_storyline_drafts WHERE character_storyline_id = ?`, [
+            characterStorylineId,
+          ]);
+          const result = await sql.run(
+            `DELETE FROM chara_storylines WHERE character_storyline_id = ?`,
+            [characterStorylineId],
+          );
+          if (result.changes !== 1) {
+            throw metadataError(
+              'delete-character-storyline',
+              `CharacterStoryline '${characterStorylineId}' is missing.`,
+            );
+          }
+        },
+      );
+    },
+    createCompanionContinuity: (continuity, signal) => {
+      signal?.throwIfAborted();
+      const canonical = parseCharacterCompanionContinuity(continuity);
+      return options.metadataStore.transaction(
+        { mode: 'state-write', ownership: 'state', operation: 'create-companion-continuity' },
         async ({ sql }) => {
           await insertNew(
             sql,
-            'create-character-storyline-run',
-            'chara_storyline_runs',
-            'character_storyline_run_id',
-            canonical.characterStorylineRunId,
-            encode(canonical, 'create-character-storyline-run'),
-            ['storyline_revision'],
-            [canonical.storylineRevision],
+            'create-companion-continuity',
+            'chara_companion_continuities',
+            'companion_continuity_id',
+            canonical.companionContinuityId,
+            encode(canonical, 'create-companion-continuity'),
+            ['continuity_revision'],
+            [canonical.continuityRevision],
           );
         },
       );
     },
-    readStorylineRun: (identity, signal) => {
+    readCompanionContinuity: (identity, signal) => {
       signal?.throwIfAborted();
       return read(
-        'read-character-storyline-run',
-        'chara_storyline_runs',
-        'character_storyline_run_id',
+        'read-companion-continuity',
+        'chara_companion_continuities',
+        'companion_continuity_id',
         identity,
-        parseCharacterStorylineRun,
-        (record) => record.characterStorylineRunId,
+        parseCharacterCompanionContinuity,
+        (record) => record.companionContinuityId,
       );
     },
-    createStorylineObservationCandidate: (candidate, signal) => {
-      signal?.throwIfAborted();
-      const canonical = parseCharacterStorylineObservationCandidate(candidate);
-      return writeNew(options.metadataStore, {
-        operation: 'create-character-storyline-observation-candidate',
-        tableName: 'chara_storyline_observation_candidates',
-        idColumn: 'observation_candidate_id',
-        identity: canonical.observationCandidateId,
-        payload: encode(canonical, 'create-character-storyline-observation-candidate'),
-      });
-    },
-    readStorylineObservationCandidate: (identity, signal) => {
-      signal?.throwIfAborted();
-      return read(
-        'read-character-storyline-observation-candidate',
-        'chara_storyline_observation_candidates',
-        'observation_candidate_id',
-        identity,
-        parseCharacterStorylineObservationCandidate,
-        (record) => record.observationCandidateId,
-      );
-    },
-    commitStorylineObservationReview: (input, signal) => {
+    readCompanionContinuityByOwner: (userId, characterProjectId, signal) => {
       signal?.throwIfAborted();
       return options.metadataStore.transaction(
-        {
-          mode: 'state-write',
-          ownership: 'state',
-          operation: 'commit-character-storyline-observation-review',
-        },
+        { mode: 'read', ownership: 'state', operation: 'read-companion-continuity-owner' },
         async ({ sql }) => {
-          const currentRun = await requireRecord(
-            sql,
-            'commit-character-storyline-observation-review',
-            'chara_storyline_runs',
-            'character_storyline_run_id',
-            input.characterStorylineRunId,
-            parseCharacterStorylineRun,
-            (record) => record.characterStorylineRunId,
+          const rows = await sql.all(
+            `SELECT payload_json FROM chara_companion_continuities
+             WHERE json_extract(payload_json, '$.userId') = ?
+               AND json_extract(payload_json, '$.characterProjectId') = ?`,
+            [userId, characterProjectId],
           );
-          const currentCandidate = await requireRecord(
-            sql,
-            'commit-character-storyline-observation-review',
-            'chara_storyline_observation_candidates',
-            'observation_candidate_id',
-            input.observationCandidateId,
-            parseCharacterStorylineObservationCandidate,
-            (record) => record.observationCandidateId,
-          );
-          if (
-            currentRun.storylineRevision !== input.expectedStorylineRevision ||
-            currentCandidate.status !== 'pending' ||
-            currentCandidate.characterStorylineRunId !== currentRun.characterStorylineRunId
-          ) {
+          if (rows.length > 1) {
             throw metadataError(
-              'commit-character-storyline-observation-review',
-              `Character storyline observation '${input.observationCandidateId}' changed concurrently or belongs to another Run.`,
+              'read-companion-continuity-owner',
+              `Multiple Companion continuities bind user '${userId}' and CharacterProject '${characterProjectId}'.`,
             );
           }
-          const nextCandidate = parseCharacterStorylineObservationCandidate(input.nextCandidate);
-          if (
-            nextCandidate.observationCandidateId !== currentCandidate.observationCandidateId ||
-            nextCandidate.characterStorylineRunId !== currentRun.characterStorylineRunId ||
-            nextCandidate.status === 'pending'
-          ) {
-            throw metadataError(
-              'commit-character-storyline-observation-review',
-              'Character storyline review must preserve identities and finish the pending candidate.',
+          const row = rows[0];
+          if (row === undefined) return undefined;
+          try {
+            return structuredClone(
+              parseCharacterCompanionContinuity(JSON.parse(readText(row, 'payload_json'))),
             );
-          }
-          if (input.nextRun !== undefined) {
-            const nextRun = parseCharacterStorylineRun(input.nextRun);
-            if (
-              nextRun.characterStorylineRunId !== currentRun.characterStorylineRunId ||
-              nextRun.characterStorylineVersionId !== currentRun.characterStorylineVersionId ||
-              nextRun.characterRunId !== currentRun.characterRunId ||
-              nextRun.storylineRevision !== currentRun.storylineRevision + 1 ||
-              !isDeepStrictEqual(
-                nextRun.acceptedTransitions.slice(0, currentRun.acceptedTransitions.length),
-                currentRun.acceptedTransitions,
-              )
-            ) {
-              throw metadataError(
-                'commit-character-storyline-observation-review',
-                'Character storyline acceptance must preserve authority and append exactly one CAS step.',
-              );
-            }
-            const runResult = await sql.run(
-              `UPDATE chara_storyline_runs SET storyline_revision = ?, payload_json = ?
-               WHERE character_storyline_run_id = ? AND storyline_revision = ?`,
-              [
-                nextRun.storylineRevision,
-                encode(nextRun, 'commit-character-storyline-observation-review'),
-                currentRun.characterStorylineRunId,
-                currentRun.storylineRevision,
-              ],
-            );
-            if (runResult.changes !== 1) {
-              throw metadataError(
-                'commit-character-storyline-observation-review',
-                `CharacterStorylineRun '${currentRun.characterStorylineRunId}' changed concurrently.`,
-              );
-            }
-          } else if (nextCandidate.status !== 'rejected') {
+          } catch (error) {
             throw metadataError(
-              'commit-character-storyline-observation-review',
-              'A Character storyline acceptance must advance its owning Run.',
-            );
-          }
-          const candidateResult = await sql.run(
-            `UPDATE chara_storyline_observation_candidates SET payload_json = ?
-             WHERE observation_candidate_id = ?`,
-            [
-              encode(nextCandidate, 'commit-character-storyline-observation-review'),
-              currentCandidate.observationCandidateId,
-            ],
-          );
-          if (candidateResult.changes !== 1) {
-            throw metadataError(
-              'commit-character-storyline-observation-review',
-              `Character storyline observation '${currentCandidate.observationCandidateId}' is missing.`,
+              'read-companion-continuity-owner',
+              error instanceof Error ? error.message : String(error),
+              error,
             );
           }
         },
       );
     },
-    createMemoryScope: (scope, signal) => {
-      signal?.throwIfAborted();
-      const canonical = parseCharacterMemoryScope(scope);
-      return options.metadataStore.transaction(
-        { mode: 'state-write', ownership: 'state', operation: 'create-character-memory-scope' },
-        async ({ sql }) => {
-          await insertNew(
-            sql,
-            'create-character-memory-scope',
-            'chara_memory_scopes',
-            'character_memory_scope_id',
-            canonical.characterMemoryScopeId,
-            encode(canonical, 'create-character-memory-scope'),
-            ['memory_revision'],
-            [canonical.memoryRevision],
-          );
-        },
-      );
-    },
-    readMemoryScope: (identity, signal) => {
-      signal?.throwIfAborted();
-      return read(
-        'read-character-memory-scope',
-        'chara_memory_scopes',
-        'character_memory_scope_id',
-        identity,
-        parseCharacterMemoryScope,
-        (record) => record.characterMemoryScopeId,
-      );
-    },
-    mutateMemoryScope: (identity, expectedMemoryRevision, mutation, signal) => {
+    mutateCompanionContinuity: (identity, expectedContinuityRevision, mutation, signal) => {
       signal?.throwIfAborted();
       return options.metadataStore.transaction(
-        { mode: 'state-write', ownership: 'state', operation: 'mutate-character-memory-scope' },
+        { mode: 'state-write', ownership: 'state', operation: 'mutate-companion-continuity' },
         async ({ sql }) => {
           const current = await requireRecord(
             sql,
-            'mutate-character-memory-scope',
-            'chara_memory_scopes',
-            'character_memory_scope_id',
+            'mutate-companion-continuity',
+            'chara_companion_continuities',
+            'companion_continuity_id',
             identity,
-            parseCharacterMemoryScope,
-            (record) => record.characterMemoryScopeId,
+            parseCharacterCompanionContinuity,
+            (record) => record.companionContinuityId,
           );
-          if (current.memoryRevision !== expectedMemoryRevision) {
+          if (current.continuityRevision !== expectedContinuityRevision) {
             throw metadataError(
-              'mutate-character-memory-scope',
-              `CharacterMemoryScope '${identity}' changed concurrently.`,
+              'mutate-companion-continuity',
+              `CharacterCompanionContinuity '${identity}' changed concurrently.`,
             );
           }
-          const next = parseCharacterMemoryScope(mutation(structuredClone(current)));
+          const next = parseCharacterCompanionContinuity(mutation(structuredClone(current)));
           if (
-            next.characterMemoryScopeId !== current.characterMemoryScopeId ||
-            next.characterRunId !== current.characterRunId ||
-            next.characterStorylineRunId !== current.characterStorylineRunId ||
+            next.companionContinuityId !== current.companionContinuityId ||
+            next.userId !== current.userId ||
+            next.characterProjectId !== current.characterProjectId ||
             next.createdAt !== current.createdAt ||
-            next.memoryRevision !== current.memoryRevision + 1
+            next.continuityRevision !== current.continuityRevision + 1
           ) {
             throw metadataError(
-              'mutate-character-memory-scope',
-              `CharacterMemoryScope '${identity}' mutation must preserve authority and advance exactly one CAS step.`,
+              'mutate-companion-continuity',
+              `CharacterCompanionContinuity '${identity}' mutation must preserve authority and advance exactly one CAS step.`,
             );
           }
           const result = await sql.run(
-            `UPDATE chara_memory_scopes SET memory_revision = ?, payload_json = ?
-             WHERE character_memory_scope_id = ? AND memory_revision = ?`,
+            `UPDATE chara_companion_continuities SET continuity_revision = ?, payload_json = ?
+             WHERE companion_continuity_id = ? AND continuity_revision = ?`,
             [
-              next.memoryRevision,
-              encode(next, 'mutate-character-memory-scope'),
+              next.continuityRevision,
+              encode(next, 'mutate-companion-continuity'),
               identity,
-              current.memoryRevision,
+              current.continuityRevision,
             ],
           );
           if (result.changes !== 1) {
             throw metadataError(
-              'mutate-character-memory-scope',
-              `CharacterMemoryScope '${identity}' changed concurrently.`,
+              'mutate-companion-continuity',
+              `CharacterCompanionContinuity '${identity}' changed concurrently.`,
             );
           }
           return structuredClone(next);
         },
+      );
+    },
+    freezeNarrativeTurnReceipt: (receipt, signal) => {
+      signal?.throwIfAborted();
+      const canonical = parseCharacterNarrativeTurnReceipt(receipt);
+      return options.metadataStore.transaction(
+        {
+          mode: 'state-write',
+          ownership: 'state',
+          operation: 'freeze-character-narrative-turn-receipt',
+        },
+        async ({ sql }) => {
+          await insertImmutable(
+            sql,
+            'freeze-character-narrative-turn-receipt',
+            'chara_narrative_turn_receipts',
+            'turn_id',
+            canonical.turnId,
+            encode(canonical, 'freeze-character-narrative-turn-receipt'),
+          );
+        },
+      );
+    },
+    readNarrativeTurnReceipt: (identity, signal) => {
+      signal?.throwIfAborted();
+      return read(
+        'read-character-narrative-turn-receipt',
+        'chara_narrative_turn_receipts',
+        'turn_id',
+        identity,
+        parseCharacterNarrativeTurnReceipt,
+        (record) => record.turnId,
       );
     },
     readPresentationConfiguration: (identity, signal) => {
@@ -966,7 +1105,6 @@ export function createPersistentCharacterRepository(options: {
             turnId: input.turnId,
             characterRunId: configuration.characterRunId,
             participantId: configuration.participantId,
-            chat: configuration.chat,
             tts: configuration.tts,
             startedAt: input.startedAt,
           });
@@ -1015,17 +1153,77 @@ export function createPersistentCharacterRepository(options: {
         (record) => record.relationshipId,
       );
     },
-    mutate: (identity, mutation, signal) => {
+    readByOwner: (userId, characterProjectId, signal) => {
       signal?.throwIfAborted();
-      return mutateRecord(
-        options.metadataStore,
-        'mutate-character-relationship',
-        'chara_relationships',
-        'relationship_id',
-        identity,
-        parseUserCharacterRelationship,
-        (record) => record.relationshipId,
-        mutation,
+      return options.metadataStore.transaction(
+        { mode: 'read', ownership: 'state', operation: 'read-character-relationship-owner' },
+        async ({ sql }) => {
+          const rows = await sql.all(
+            `SELECT payload_json FROM chara_relationships
+             WHERE json_extract(payload_json, '$.userId') = ?
+               AND json_extract(payload_json, '$.characterProjectId') = ?`,
+            [userId, characterProjectId],
+          );
+          if (rows.length > 1) {
+            throw metadataError(
+              'read-character-relationship-owner',
+              `Multiple relationships bind user '${userId}' and CharacterProject '${characterProjectId}'.`,
+            );
+          }
+          const row = rows[0];
+          return row === undefined
+            ? undefined
+            : parseUserCharacterRelationship(JSON.parse(readText(row, 'payload_json')));
+        },
+      );
+    },
+    mutate: (identity, expectedRelationshipRevision, mutation, signal) => {
+      signal?.throwIfAborted();
+      return options.metadataStore.transaction(
+        { mode: 'state-write', ownership: 'state', operation: 'mutate-character-relationship' },
+        async ({ sql }) => {
+          const current = await requireRecord(
+            sql,
+            'mutate-character-relationship',
+            'chara_relationships',
+            'relationship_id',
+            identity,
+            parseUserCharacterRelationship,
+            (record) => record.relationshipId,
+          );
+          if (current.relationshipRevision !== expectedRelationshipRevision) {
+            throw metadataError(
+              'mutate-character-relationship',
+              `UserCharacterRelationship '${identity}' changed concurrently.`,
+            );
+          }
+          const next = parseUserCharacterRelationship(mutation(structuredClone(current)));
+          if (
+            next.relationshipId !== current.relationshipId ||
+            next.userId !== current.userId ||
+            next.characterProjectId !== current.characterProjectId ||
+            next.createdAt !== current.createdAt ||
+            next.relationshipRevision !== current.relationshipRevision + 1
+          ) {
+            throw metadataError(
+              'mutate-character-relationship',
+              `UserCharacterRelationship '${identity}' mutation must preserve authority and advance exactly one CAS step.`,
+            );
+          }
+          const result = await sql.run(
+            `UPDATE chara_relationships SET payload_json = ?
+             WHERE relationship_id = ?
+               AND json_extract(payload_json, '$.relationshipRevision') = ?`,
+            [encode(next, 'mutate-character-relationship'), identity, current.relationshipRevision],
+          );
+          if (result.changes !== 1) {
+            throw metadataError(
+              'mutate-character-relationship',
+              `UserCharacterRelationship '${identity}' changed concurrently.`,
+            );
+          }
+          return structuredClone(next);
+        },
       );
     },
   };
@@ -1034,15 +1232,26 @@ export function createPersistentCharacterRepository(options: {
 
 export function createPersistentCharacterRuntimeRepositories(options: {
   readonly metadataStore: LocalMetadataStore;
+  readonly publications?: Pick<CharacterPublicationReader, 'readPublication'>;
 }): CharacterRuntimeRepositories {
   const repository = createPersistentCharacterRepository(options);
+  const storylinePersistence = pickRepository(repository, [
+    'createStoryline',
+    'updateStoryline',
+    'readStoryline',
+    'readStorylineDraft',
+    'storeStorylineVersion',
+    'readStorylineVersion',
+    'listStorylines',
+    'listStorylineVersions',
+    'deleteStoryline',
+  ] as const);
   return Object.freeze({
     conversationLaunch: pickRepository(repository, [
       'readPublication',
       'readRelationship',
       'readStorylineVersion',
-      'readStorylineRun',
-      'readMemoryScope',
+      'readCompanionContinuity',
       'readCharacterRun',
       'readDialogueRun',
       'readRoom',
@@ -1056,16 +1265,17 @@ export function createPersistentCharacterRuntimeRepositories(options: {
       'readCharacterRun',
       'readDialogueRun',
       'readRoomRun',
-      'readStorylineRun',
       'readStorylineVersion',
-      'readMemoryScope',
+      'readCompanionContinuity',
+      'freezeNarrativeTurnReceipt',
+      'readNarrativeTurnReceipt',
     ] as const),
-    memory: pickRepository(repository, [
-      'readCharacterRun',
-      'readStorylineRun',
-      'createMemoryScope',
-      'readMemoryScope',
-      'mutateMemoryScope',
+    companionContinuity: pickRepository(repository, [
+      'createCompanionContinuity',
+      'readCompanionContinuity',
+      'readCompanionContinuityByOwner',
+      'mutateCompanionContinuity',
+      'readPublication',
     ] as const),
     avatarAuthority: pickRepository(repository, [
       'readCharacterRun',
@@ -1092,19 +1302,23 @@ export function createPersistentCharacterRuntimeRepositories(options: {
       'readRoom',
       'readPublication',
       'readRelationship',
+      'readCompanionContinuity',
     ] as const),
-    storyline: pickRepository(repository, [
-      'readCharacterVersion',
-      'readCharacterRun',
-      'storeStorylineVersion',
-      'readStorylineVersion',
-      'createStorylineRun',
-      'readStorylineRun',
-      'createStorylineObservationCandidate',
-      'readStorylineObservationCandidate',
-      'commitStorylineObservationReview',
+    storyline: Object.freeze({
+      ...storylinePersistence,
+      readCharacterProject: (characterProjectId: string, signal?: AbortSignal) =>
+        repository.readCharacterProject(characterProjectId, signal),
+      readCharacterVersion: (characterVersionId: string, signal?: AbortSignal) =>
+        options.publications?.readPublication(characterVersionId, signal) ??
+        repository.readCharacterVersion(characterVersionId, signal),
+    }),
+    relationship: pickRepository(repository, [
+      'create',
+      'read',
+      'readByOwner',
+      'readPublication',
+      'mutate',
     ] as const),
-    relationship: pickRepository(repository, ['create', 'read', 'mutate'] as const),
     catalog: createCharacterRuntimeCatalogPort(options),
   });
 }
@@ -1165,40 +1379,40 @@ function createCharacterRuntimeCatalogPort(options: {
             (record) => record.roomRunId,
             diagnostics,
           );
-          const storylineVersions = await readCatalogRecords(
-            sql,
-            'chara_storyline_versions',
-            'character_storyline_version_id',
-            'character-storyline-version',
-            parseCharacterStorylineVersion,
-            (record) => record.characterStorylineVersionId,
-            diagnostics,
-          );
-          const storylineRuns = await readCatalogRecords(
+          await readCatalogRecords(
             sql,
             'chara_storyline_runs',
             'character_storyline_run_id',
             'character-storyline-run',
-            parseCharacterStorylineRun,
-            (record) => record.characterStorylineRunId,
+            parseObsoleteStorylineRuntimeRecord,
+            () => '',
             diagnostics,
           );
-          const storylineObservationCandidates = await readCatalogRecords(
+          await readCatalogRecords(
             sql,
             'chara_storyline_observation_candidates',
             'observation_candidate_id',
             'character-storyline-observation-candidate',
-            parseCharacterStorylineObservationCandidate,
-            (record) => record.observationCandidateId,
+            parseObsoleteStorylineRuntimeRecord,
+            () => '',
             diagnostics,
           );
-          const memoryScopes = await readCatalogRecords(
+          const companionContinuities = await readCatalogRecords(
+            sql,
+            'chara_companion_continuities',
+            'companion_continuity_id',
+            'character-companion-continuity',
+            parseCharacterCompanionContinuity,
+            (record) => record.companionContinuityId,
+            diagnostics,
+          );
+          await readCatalogRecords(
             sql,
             'chara_memory_scopes',
             'character_memory_scope_id',
             'character-memory-scope',
-            parseCharacterMemoryScope,
-            (record) => record.characterMemoryScopeId,
+            parseObsoleteCompanionMemoryRecord,
+            () => '',
             diagnostics,
           );
           const presentationConfigurations = await readCatalogRecords(
@@ -1216,10 +1430,34 @@ function createCharacterRuntimeCatalogPort(options: {
             dialogueRuns,
             rooms,
             roomRuns,
-            storylineVersions,
-            storylineRuns,
-            storylineObservationCandidates,
-            memoryScopes,
+            storylines: await readCatalogRecords(
+              sql,
+              'chara_storylines',
+              'character_storyline_id',
+              'character-storyline',
+              parseCharacterStoryline,
+              (record) => record.characterStorylineId,
+              diagnostics,
+            ),
+            storylineDrafts: await readCatalogRecords(
+              sql,
+              'chara_storyline_drafts',
+              'character_storyline_id',
+              'character-storyline-draft',
+              parseCharacterStorylineDraft,
+              (record) => record.characterStorylineId,
+              diagnostics,
+            ),
+            storylineVersions: await readCatalogRecords(
+              sql,
+              'chara_storyline_versions',
+              'character_storyline_version_id',
+              'character-storyline-version',
+              parseCharacterStorylineVersion,
+              (record) => record.characterStorylineVersionId,
+              diagnostics,
+            ),
+            companionContinuities,
             presentationConfigurations,
             diagnostics,
           };
@@ -1253,8 +1491,9 @@ function parseLaunchAggregate(
   const relationships = value.relationships.map((relationship) =>
     parseUserCharacterRelationship(relationship),
   );
-  const storylineRuns = value.storylineRuns.map((run) => parseCharacterStorylineRun(run));
-  const memoryScopes = value.memoryScopes.map((scope) => parseCharacterMemoryScope(scope));
+  const companionContinuities = value.companionContinuities.map((continuity) =>
+    parseCharacterCompanionContinuity(continuity),
+  );
   if (value.topology === 'dialogue') {
     const characterRun = parseCharacterRun(value.characterRun);
     const dialogueRun = parseDialogueRun(value.dialogueRun);
@@ -1264,16 +1503,15 @@ function parseLaunchAggregate(
         'Character Dialogue launch aggregate has mismatched Run identities.',
       );
     }
-    assertLaunchRuntimeOwnership([characterRun], storylineRuns, memoryScopes);
+    assertLaunchRuntimeOwnership([characterRun], relationships, companionContinuities);
     assertLaunchPublications([characterRun], publicationIds);
     return {
       topology: 'dialogue',
       publications,
       relationships,
+      companionContinuities,
       characterRun,
       dialogueRun,
-      storylineRuns,
-      memoryScopes,
     };
   }
   const room = parseCharacterRoom(value.room);
@@ -1299,17 +1537,16 @@ function parseLaunchAggregate(
       'Character Room launch aggregate does not own exactly its participant CharacterRuns.',
     );
   }
-  assertLaunchRuntimeOwnership(characterRuns, storylineRuns, memoryScopes);
+  assertLaunchRuntimeOwnership(characterRuns, relationships, companionContinuities);
   assertLaunchPublications(characterRuns, publicationIds);
   return {
     topology: 'chatroom',
     publications,
     relationships,
+    companionContinuities,
     room,
     characterRuns,
     roomRun,
-    storylineRuns,
-    memoryScopes,
   };
 }
 
@@ -1330,59 +1567,38 @@ function assertLaunchPublications(
 
 function assertLaunchRuntimeOwnership(
   characterRuns: readonly ReturnType<typeof parseCharacterRun>[],
-  storylineRuns: readonly ReturnType<typeof parseCharacterStorylineRun>[],
-  memoryScopes: readonly ReturnType<typeof parseCharacterMemoryScope>[],
+  relationships: readonly ReturnType<typeof parseUserCharacterRelationship>[],
+  companionContinuities: readonly ReturnType<typeof parseCharacterCompanionContinuity>[],
 ): void {
-  const storylineById = new Map(
-    storylineRuns.map((run) => [run.characterStorylineRunId, run] as const),
+  const continuityIds = new Set(
+    companionContinuities.map((continuity) => continuity.companionContinuityId),
   );
-  const memoryById = new Map(
-    memoryScopes.map((scope) => [scope.characterMemoryScopeId, scope] as const),
-  );
-  if (storylineById.size !== storylineRuns.length || memoryById.size !== memoryScopes.length) {
+  const relationshipIds = new Set(relationships.map((relationship) => relationship.relationshipId));
+  if (
+    continuityIds.size !== companionContinuities.length ||
+    relationshipIds.size !== relationships.length
+  ) {
     throw metadataError(
       'commit-character-launch',
-      'Character launch runtime records contain duplicate identities.',
+      'Character launch Companion authority records contain duplicate identities.',
     );
   }
-  for (const characterRun of characterRuns) {
-    const memoryScope = characterRun.characterMemoryScopeId
-      ? memoryById.get(characterRun.characterMemoryScopeId)
-      : undefined;
-    if (!memoryScope || memoryScope.characterRunId !== characterRun.characterRunId) {
-      throw metadataError(
-        'commit-character-launch',
-        `CharacterRun '${characterRun.characterRunId}' does not own one exact launch MemoryScope.`,
-      );
-    }
-    if (characterRun.characterStorylineRunId === undefined) {
-      if (memoryScope.characterStorylineRunId !== undefined) {
-        throw metadataError(
-          'commit-character-launch',
-          `CharacterRun '${characterRun.characterRunId}' MemoryScope binds an unexpected StorylineRun.`,
-        );
-      }
-      continue;
-    }
-    const storylineRun = storylineById.get(characterRun.characterStorylineRunId);
-    if (
-      !storylineRun ||
-      storylineRun.characterRunId !== characterRun.characterRunId ||
-      memoryScope.characterStorylineRunId !== storylineRun.characterStorylineRunId
-    ) {
-      throw metadataError(
-        'commit-character-launch',
-        `CharacterRun '${characterRun.characterRunId}' launch StorylineRun binding is invalid.`,
-      );
-    }
-  }
+  const companionRuns = characterRuns.filter((run) => run.runtimeBinding.kind === 'companion');
   if (
-    memoryScopes.length !== characterRuns.length ||
-    storylineRuns.some(
-      (storylineRun) =>
-        !characterRuns.some(
-          (characterRun) =>
-            characterRun.characterStorylineRunId === storylineRun.characterStorylineRunId,
+    companionContinuities.some(
+      (continuity) =>
+        !companionRuns.some(
+          (run) =>
+            run.runtimeBinding.kind === 'companion' &&
+            run.runtimeBinding.companionContinuityId === continuity.companionContinuityId,
+        ),
+    ) ||
+    relationships.some(
+      (relationship) =>
+        !companionRuns.some(
+          (run) =>
+            run.runtimeBinding.kind === 'companion' &&
+            run.runtimeBinding.relationshipId === relationship.relationshipId,
         ),
     )
   ) {
@@ -1397,28 +1613,16 @@ async function insertLaunchRuntimeRecords(
   sql: LocalMetadataSqlExecutor,
   aggregate: CharacterConversationLaunchAggregate,
 ): Promise<void> {
-  for (const storylineRun of aggregate.storylineRuns) {
+  for (const continuity of aggregate.companionContinuities) {
     await insertNew(
       sql,
       'commit-character-launch',
-      'chara_storyline_runs',
-      'character_storyline_run_id',
-      storylineRun.characterStorylineRunId,
-      encode(storylineRun, 'commit-character-launch'),
-      ['storyline_revision'],
-      [storylineRun.storylineRevision],
-    );
-  }
-  for (const memoryScope of aggregate.memoryScopes) {
-    await insertNew(
-      sql,
-      'commit-character-launch',
-      'chara_memory_scopes',
-      'character_memory_scope_id',
-      memoryScope.characterMemoryScopeId,
-      encode(memoryScope, 'commit-character-launch'),
-      ['memory_revision'],
-      [memoryScope.memoryRevision],
+      'chara_companion_continuities',
+      'companion_continuity_id',
+      continuity.companionContinuityId,
+      encode(continuity, 'commit-character-launch'),
+      ['continuity_revision'],
+      [continuity.continuityRevision],
     );
   }
 }
@@ -1454,6 +1658,18 @@ async function readCatalogRecords<T>(
   return records;
 }
 
+function parseObsoleteStorylineRuntimeRecord(_value: unknown): never {
+  throw new Error(
+    'Obsolete Storyline runtime record is preserved for explicit inspection/export/cleanup only.',
+  );
+}
+
+function parseObsoleteCompanionMemoryRecord(_value: unknown): never {
+  throw new Error(
+    'Obsolete CharacterRun-owned memory record is preserved for explicit inspection/export/cleanup only.',
+  );
+}
+
 function diagnosticText(value: unknown): string {
   return typeof value === 'string' && value.trim().length > 0 ? value : '<invalid-identity>';
 }
@@ -1486,42 +1702,6 @@ async function writeNew(
         input.identity,
         input.payload,
       ),
-  );
-}
-
-async function mutateRecord<T>(
-  store: LocalMetadataStore,
-  operation: string,
-  tableName: string,
-  idColumn: string,
-  identity: string,
-  parse: (value: unknown) => T,
-  readIdentity: (value: T) => string,
-  mutation: (current: T) => T,
-): Promise<T> {
-  return store.transaction(
-    { mode: 'state-write', ownership: 'state', operation },
-    async ({ sql }) => {
-      const current = await requireRecord(
-        sql,
-        operation,
-        tableName,
-        idColumn,
-        identity,
-        parse,
-        readIdentity,
-      );
-      const next = parse(mutation(structuredClone(current)));
-      if (readIdentity(next) !== identity) {
-        throw metadataError(operation, `Record '${identity}' mutation changed its identity.`);
-      }
-      const result = await sql.run(
-        `UPDATE ${tableName} SET payload_json = ? WHERE ${idColumn} = ?`,
-        [encode(next, operation), identity],
-      );
-      if (result.changes !== 1) throw metadataError(operation, `Record '${identity}' is missing.`);
-      return structuredClone(next);
-    },
   );
 }
 

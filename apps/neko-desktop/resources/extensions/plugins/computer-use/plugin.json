@@ -1,0 +1,17 @@
+{
+  "name": "computer-use",
+  "version": "0.19.2",
+  "description": "Target-window observation on supported macOS hosts",
+  "author": { "name": "OpenNeko" },
+  "extensions": {
+    "io.openneko": {
+      "displayName": "Computer Use",
+      "localization": {
+        "zh-cn": {
+          "description": "在受支持的 macOS 主机上观察指定窗口"
+        }
+      },
+      "mcpToolExposure": "adapter-only"
+    }
+  }
+}

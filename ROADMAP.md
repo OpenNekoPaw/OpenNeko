@@ -2,15 +2,16 @@
 
 Status: directional roadmap; no release dates are promised.
 
-Updated: 2026-08-03
+Updated: 2026-08-11
 
 This roadmap defines delivery order and qualification gates. Current product facts remain defined by
 [`README.md`](README.md), [`docs/architecture/client-targets.md`](docs/architecture/client-targets.md),
 and the codebase. Phase 1 domain integration is still in progress and Desktop is not a supported
 release product. The sole native package/release target is `darwin-arm64`; macOS has a verified
-ad-hoc DMG prerelease path, while Developer ID/notarization remains a Phase 2 gate. Windows x64 and Linux are
-deterministic test hosts only and produce no Desktop artifact. Intel Mac and other architectures are
-unsupported. Desktop already has an OpenNeko-owned Skill and extension catalog with supported
+local ad-hoc DMG path published as an ordinary GitHub Release with explicit unnotarized disclosure,
+while Developer ID/notarization remains a Phase 2 gate. GitHub Actions does not build or upload native
+Desktop artifacts. Windows x64 and Linux are deterministic test hosts only. Intel Mac and other
+architectures are unsupported. Desktop already has an OpenNeko-owned Skill and extension catalog with supported
 Skill/MCP contribution wiring; a general extension ecosystem and professional-tool integrations are
 not implemented.
 

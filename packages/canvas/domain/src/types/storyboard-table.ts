@@ -1,9 +1,5 @@
 import type { CameraAngle, CameraMovement, ShotScale } from '@neko/generation';
-import {
-  isRepresentationKind,
-  type CreativeEntityRef,
-  type RepresentationKind,
-} from '@neko/entity-domain';
+import type { CreativeEntityRef } from '@neko/entity-domain';
 import { isContentLocator, type ContentLocator } from '@neko/content';
 import { isHostProjectedRuntimeValue } from '@neko/content';
 
@@ -289,6 +285,7 @@ export interface StoryboardTextCue {
 }
 
 export type StoryboardVoiceCueKind = 'dialogue' | 'voiceOver';
+export type StoryboardVoiceRepresentationKind = 'voice';
 
 export interface StoryboardVoiceCue {
   readonly cueId: string;
@@ -300,7 +297,7 @@ export interface StoryboardVoiceCue {
   readonly emotion?: string;
   readonly delivery?: string;
   readonly voiceAssetId?: string;
-  readonly requestedRepresentationKind?: RepresentationKind;
+  readonly requestedRepresentationKind?: StoryboardVoiceRepresentationKind;
   readonly sourceRefId?: string;
   readonly extensions?: StoryboardExtensionMap;
 }
@@ -2360,8 +2357,10 @@ function normalizeCreativeEntityKind(value: unknown): CreativeEntityRef['entityK
     : undefined;
 }
 
-function normalizeRepresentationKind(value: unknown): RepresentationKind | undefined {
-  return isRepresentationKind(value) ? value : undefined;
+function normalizeRepresentationKind(
+  value: unknown,
+): StoryboardVoiceRepresentationKind | undefined {
+  return value === 'voice' ? value : undefined;
 }
 
 function normalizeStoryboardTableSource(

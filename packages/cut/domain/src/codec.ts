@@ -1,4 +1,5 @@
 import { OtioValidationError, type OtioDiagnostic, type OtioParseResult } from './diagnostics';
+import { parseContentReferenceTarget } from '@neko/content';
 import { readClipIdentity, readTrackIdentity, validateOpenNekoMetadata } from './metadata';
 import type {
   OtioClip,
@@ -430,12 +431,12 @@ function readExternalReference(
   const record = readSchemaObject(value, 'ExternalReference.1', path, diagnostics);
   if (!record) return undefined;
   const targetUrl = readString(record['target_url'], `${path}.target_url`, diagnostics);
-  if (targetUrl && !isCanonicalDocumentRelativeTarget(targetUrl)) {
+  if (targetUrl && !isCanonicalPersistentMediaTarget(targetUrl)) {
     diagnostics.push({
       code: 'invalid-value',
       path: `${path}.target_url`,
       message:
-        'ExternalReference target_url must be a normalized POSIX path relative to the OTIO document.',
+        'ExternalReference target_url must be a normalized document-relative path or canonical Media Library reference.',
     });
   }
   const name =
@@ -458,7 +459,9 @@ function readExternalReference(
   };
 }
 
-function isCanonicalDocumentRelativeTarget(value: string): boolean {
+function isCanonicalPersistentMediaTarget(value: string): boolean {
+  const portable = parseContentReferenceTarget(value);
+  if (portable?.kind === 'media-library') return true;
   if (
     value.length === 0 ||
     value.includes('\\') ||

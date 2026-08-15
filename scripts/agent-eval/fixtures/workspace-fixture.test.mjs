@@ -7,7 +7,11 @@ import { computeFixtureDigest, prepareWorkspaceFixture } from './workspace-fixtu
 const temporaryDirectories = [];
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((directory) => fs.rm(directory, { recursive: true, force: true })));
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => fs.rm(directory, { recursive: true, force: true })),
+  );
 });
 
 describe('Agent Evaluation workspace fixtures', () => {
@@ -35,9 +39,13 @@ describe('Agent Evaluation workspace fixtures', () => {
       { id: 'sample', root: 'fixtures/sample', digest },
       { agentEvalRoot: root },
     );
-    await expect(fs.readFile(join(prepared.workspace, 'marker.txt'), 'utf8')).resolves.toBe('source');
+    await expect(fs.readFile(join(prepared.workspace, 'marker.txt'), 'utf8')).resolves.toBe(
+      'source',
+    );
     await fs.writeFile(join(prepared.workspace, 'marker.txt'), 'mutated');
-    await expect(fs.readFile(join(root, 'fixtures', 'sample', 'marker.txt'), 'utf8')).resolves.toBe('source');
+    await expect(fs.readFile(join(root, 'fixtures', 'sample', 'marker.txt'), 'utf8')).resolves.toBe(
+      'source',
+    );
     await prepared.cleanup();
     await expect(fs.stat(prepared.workspace)).rejects.toMatchObject({ code: 'ENOENT' });
   });
@@ -55,21 +63,23 @@ describe('Agent Evaluation workspace fixtures', () => {
         id: 'sample',
         root: 'fixtures/sample',
         digest,
-        links: [{ path: 'neko/assets/Reference', target: 'media-source' }],
+        links: [{ path: 'references/Reference', target: 'media-source' }],
       },
       { agentEvalRoot: root },
     );
 
-    await expect(fs.lstat(join(prepared.workspace, 'neko/assets/Reference'))).resolves.toMatchObject({
-      isSymbolicLink: expect.any(Function),
-    });
-    expect((await fs.lstat(join(prepared.workspace, 'neko/assets/Reference'))).isSymbolicLink()).toBe(
-      true,
+    await expect(fs.lstat(join(prepared.workspace, 'references/Reference'))).resolves.toMatchObject(
+      {
+        isSymbolicLink: expect.any(Function),
+      },
     );
+    expect(
+      (await fs.lstat(join(prepared.workspace, 'references/Reference'))).isSymbolicLink(),
+    ).toBe(true);
     await expect(
-      fs.readFile(join(prepared.workspace, 'neko/assets/Reference/notes.txt'), 'utf8'),
+      fs.readFile(join(prepared.workspace, 'references/Reference/notes.txt'), 'utf8'),
     ).resolves.toBe('linked media');
-    await expect(fs.lstat(join(source, 'neko/assets/Reference'))).rejects.toMatchObject({
+    await expect(fs.lstat(join(source, 'references/Reference'))).rejects.toMatchObject({
       code: 'ENOENT',
     });
     await prepared.cleanup();
@@ -86,7 +96,10 @@ describe('Agent Evaluation workspace fixtures', () => {
         { agentEvalRoot: root },
       ),
     ).rejects.toThrow('digest mismatch');
-    await fs.symlink(join(root, 'fixtures', 'sample', 'marker.txt'), join(root, 'fixtures', 'sample', 'link'));
+    await fs.symlink(
+      join(root, 'fixtures', 'sample', 'marker.txt'),
+      join(root, 'fixtures', 'sample', 'link'),
+    );
     await expect(computeFixtureDigest(join(root, 'fixtures', 'sample'))).rejects.toThrow(
       'fixture contains a symlink',
     );

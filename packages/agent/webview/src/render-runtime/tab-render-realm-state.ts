@@ -6,6 +6,7 @@ import type {
 } from './tab-render-runtime';
 import {
   isAgentEntryMode,
+  parseAgentAuthoringAuthority,
   parseAgentAuthoringTargetRef,
   parseAgentBoundDomainBinding,
   type AgentBoundDomainBinding,
@@ -23,15 +24,35 @@ export interface AgentEntryDraftSnapshot {
   readonly inputValue: string;
   readonly contextReferences: readonly AgentContextPayload[];
   readonly characterLaunches: readonly {
-    readonly characterProjectId: string;
+    readonly globalCharacterId: string;
     readonly characterVersionId: string;
     readonly label: string;
   }[];
-  readonly workspaceTarget?: {
+  readonly worldLaunch?: {
+    readonly globalWorldId: string;
+    readonly worldVersionId: string;
     readonly label: string;
-    readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
-    readonly target?: import('@neko/agent-contracts').AgentAuthoringTargetRef;
+    readonly versionLabel: string;
   };
+  readonly workspaceTarget?:
+    | {
+        readonly label: string;
+        readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+        readonly target?: undefined;
+        readonly authority?: undefined;
+      }
+    | {
+        readonly label: string;
+        readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+        readonly target?: undefined;
+        readonly authority: import('@neko/agent-contracts').AgentAuthoringAuthority;
+      }
+    | {
+        readonly label: string;
+        readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+        readonly target: import('@neko/agent-contracts').AgentAuthoringTargetRef;
+        readonly authority: import('@neko/agent-contracts').AgentAuthoringAuthority;
+      };
   readonly selectedModel: string;
   readonly mediaModelSelection?: Readonly<Record<'image' | 'video' | 'audio', string>>;
   readonly executionMode: 'plan' | 'ask' | 'auto';
@@ -364,6 +385,7 @@ function parseEntryDraft(value: unknown, recoverInvalidEntryMode = false): Agent
     throw new Error(`${path}.characterLaunches must not contain duplicate CharacterVersions.`);
   }
   const workspaceTarget = parseEntryWorkspaceTarget(value.workspaceTarget, path);
+  const worldLaunch = parseEntryWorldLaunch(value.worldLaunch, path);
   const entryMode = value.entryMode;
   if (entryMode !== undefined && !isAgentEntryMode(entryMode) && !recoverInvalidEntryMode) {
     throw new Error(`${path}.entryMode is invalid.`);
@@ -375,6 +397,7 @@ function parseEntryDraft(value: unknown, recoverInvalidEntryMode = false): Agent
       parseEntryContextReference(reference, `${path}.contextReferences[${index}]`),
     ),
     characterLaunches: parsedCharacterLaunches,
+    ...(worldLaunch === undefined ? {} : { worldLaunch }),
     ...(workspaceTarget === undefined ? {} : { workspaceTarget }),
     selectedModel: stringValue(value.selectedModel, `${path}.selectedModel`),
     ...(value.mediaModelSelection === undefined
@@ -421,10 +444,24 @@ function parseEntryWorkspaceTarget(
   if (context.kind !== 'workspace') {
     throw new Error(`${path}.workspaceTarget.context must be Workspace-bound.`);
   }
+  const label = nonEmptyString(value.label, `${path}.workspaceTarget.label`);
+  if (value.target === undefined) {
+    return value.authority === undefined
+      ? { label, context }
+      : {
+          label,
+          context,
+          authority: parseAgentAuthoringAuthority(value.authority),
+        };
+  }
+  if (value.authority === undefined) {
+    throw new Error(`${path}.workspaceTarget target requires its exact authority.`);
+  }
   return {
-    label: nonEmptyString(value.label, `${path}.workspaceTarget.label`),
+    label,
     context,
-    ...(value.target === undefined ? {} : { target: parseAgentAuthoringTargetRef(value.target) }),
+    target: parseAgentAuthoringTargetRef(value.target),
+    authority: parseAgentAuthoringAuthority(value.authority),
   };
 }
 
@@ -435,16 +472,39 @@ function parseEntryCharacterLaunch(
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
   if (
     Object.keys(value).length !== 3 ||
-    !('characterProjectId' in value) ||
+    !('globalCharacterId' in value) ||
     !('characterVersionId' in value) ||
     !('label' in value)
   ) {
     throw new Error(`${path} has unsupported fields.`);
   }
   return {
-    characterProjectId: nonEmptyString(value.characterProjectId, `${path}.characterProjectId`),
+    globalCharacterId: nonEmptyString(value.globalCharacterId, `${path}.globalCharacterId`),
     characterVersionId: nonEmptyString(value.characterVersionId, `${path}.characterVersionId`),
     label: nonEmptyString(value.label, `${path}.label`),
+  };
+}
+
+function parseEntryWorldLaunch(
+  value: unknown,
+  path: string,
+): AgentEntryDraftSnapshot['worldLaunch'] {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error(`${path}.worldLaunch must be an object.`);
+  if (
+    Object.keys(value).length !== 4 ||
+    !('globalWorldId' in value) ||
+    !('worldVersionId' in value) ||
+    !('label' in value) ||
+    !('versionLabel' in value)
+  ) {
+    throw new Error(`${path}.worldLaunch has unsupported fields.`);
+  }
+  return {
+    globalWorldId: nonEmptyString(value.globalWorldId, `${path}.worldLaunch.globalWorldId`),
+    worldVersionId: nonEmptyString(value.worldVersionId, `${path}.worldLaunch.worldVersionId`),
+    label: nonEmptyString(value.label, `${path}.worldLaunch.label`),
+    versionLabel: nonEmptyString(value.versionLabel, `${path}.worldLaunch.versionLabel`),
   };
 }
 

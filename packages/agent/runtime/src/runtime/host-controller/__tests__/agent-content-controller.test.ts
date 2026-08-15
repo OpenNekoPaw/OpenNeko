@@ -97,7 +97,7 @@ describe('Agent content controller', () => {
     }
   });
 
-  it('merges linked Media Library locators and keeps contributor failures local', async () => {
+  it('merges workspace-linked media locators and keeps contributor failures local', async () => {
     const workspacePath = await mkdtemp(join(tmpdir(), 'agent-mention-linked-media-'));
     const missingGitignore = Object.assign(new Error('missing'), { code: 'ENOENT' });
     const reportMentionContributorError = vi.fn();
@@ -120,7 +120,7 @@ describe('Agent content controller', () => {
         host,
         filter: '',
         purpose: 'entry',
-        searchLinkedMediaLibraryFiles: async () => [
+        searchWorkspaceLinkedMediaFiles: async () => [
           { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
         ],
         reportMentionContributorError,
@@ -131,7 +131,7 @@ describe('Agent content controller', () => {
         expect.objectContaining({
           locator: { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
           name: 'hero.png',
-          source: 'media-library',
+          source: 'workspace',
           mediaType: 'image',
         }),
       ]);
@@ -142,13 +142,60 @@ describe('Agent content controller', () => {
         host,
         filter: '',
         purpose: 'entry',
-        searchLinkedMediaLibraryFiles: async () => Promise.reject(contributorFailure),
+        searchWorkspaceLinkedMediaFiles: async () => Promise.reject(contributorFailure),
         reportMentionContributorError,
       });
       expect(fallbackProjection.files).toEqual([
         expect.objectContaining({ name: 'local.md', source: 'workspace' }),
       ]);
       expect(reportMentionContributorError).toHaveBeenCalledWith(contributorFailure);
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true });
+    }
+  });
+
+  it('isolates a non-canonical Workspace subtree without blocking entry projection', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'agent-mention-invalid-locator-'));
+    const missingGitignore = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const reportMentionContributorError = vi.fn();
+    const readDirectory = vi.fn(async () => [
+      { name: 'guide.md', type: 'file' as const },
+      { name: 'world-project:retired', type: 'directory' as const },
+    ]);
+    try {
+      const projection = await searchAgentWorkspaceMentions({
+        workspace: {
+          workspaceId: 'workspace-1',
+          workspacePath,
+          displayName: 'Workspace',
+          locator: { kind: 'variable', value: '${HOME}/workspace' },
+        },
+        host: {
+          files: {
+            readDirectory,
+            readText: vi.fn(async () => Promise.reject(missingGitignore)),
+          },
+          paths: {},
+        } as Parameters<typeof searchAgentWorkspaceMentions>[0]['host'],
+        filter: '',
+        purpose: 'entry',
+        reportMentionContributorError,
+      });
+
+      expect(projection.files).toEqual([
+        expect.objectContaining({
+          locator: { kind: 'workspace-file', path: 'guide.md' },
+          name: 'guide.md',
+          source: 'workspace',
+        }),
+      ]);
+      expect(reportMentionContributorError).toHaveBeenCalledOnce();
+      expect(reportMentionContributorError.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          message: expect.stringContaining('world-project:retired'),
+        }),
+      );
+      expect(readDirectory).toHaveBeenCalledOnce();
     } finally {
       await rm(workspacePath, { recursive: true, force: true });
     }

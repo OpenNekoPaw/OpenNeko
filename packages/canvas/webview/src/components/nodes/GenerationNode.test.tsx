@@ -8,7 +8,7 @@ import type {
 import { createEmptyCanvasData } from '@neko/canvas-domain';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CanvasHostProvider, type CanvasWebviewHostPort } from '../../host-runtime';
 import { setLocale } from '../../i18n';
 import { GenerationNode } from './GenerationNode';
@@ -28,6 +28,7 @@ describe('GenerationNode', () => {
 
   afterEach(() => {
     act(() => root.unmount());
+    vi.restoreAllMocks();
     document.body.replaceChildren();
   });
 
@@ -49,12 +50,167 @@ describe('GenerationNode', () => {
     expect(container.textContent).toContain('Previously generated scene');
     expect(container.textContent).toContain('Text');
     expect(container.textContent).not.toContain('Text generation');
-    expect(container.textContent).not.toContain('Failed');
+    expect(container.textContent).toContain('Failed');
     expect(container.querySelector('[data-canvas-content-kind="text"]')).not.toBeNull();
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.querySelector('select')).toBeNull();
     expect(container.querySelector('button[title="Run"]')).toBeNull();
     expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('opens the Canvas fullscreen preview when a generated Text node is double-clicked', async () => {
+    const onFullscreenPreview = vi.fn();
+    const node = nodeWithHistory();
+    render(node, createHost(), onFullscreenPreview);
+
+    await act(async () => {
+      container
+        .querySelector<HTMLElement>('[data-node-id="generation-1"]')
+        ?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+
+    expect(onFullscreenPreview).toHaveBeenCalledWith('generation-1', 'output-2');
+  });
+
+  it('presents one Job image batch side by side and selects a visible member without hiding siblings', async () => {
+    const selectGenerationOutput = vi.fn(async () => snapshot());
+    const onFullscreenPreview = vi.fn();
+    const node = imageNodeWithBatch();
+
+    render(node, createHost(undefined, { selectGenerationOutput }), onFullscreenPreview);
+
+    expect(container.querySelector('[data-generation-result-count="2"]')).not.toBeNull();
+    expect(container.querySelector('[data-generation-layout="grid"]')).not.toBeNull();
+    expect(container.textContent).toContain('2 outputs');
+    const choices = container.querySelectorAll<HTMLButtonElement>(
+      '.canvas-generation-node__result-grid-item',
+    );
+    expect(choices).toHaveLength(2);
+    expect(choices[0]?.getAttribute('data-generation-output-id')).toBe('image-output-1');
+    expect(choices[1]?.getAttribute('data-generation-output-id')).toBe('image-output-2');
+    expect(choices[1]?.getAttribute('aria-pressed')).toBe('true');
+    const frame = container.querySelector<HTMLElement>('.canvas-generation-node-frame');
+    expect(frame?.style.width).toBe('320px');
+    expect(frame?.style.height).toBe('240px');
+
+    await act(async () => choices[0]?.click());
+    expect(selectGenerationOutput).toHaveBeenCalledWith('generation-image', 'image-output-1');
+    expect(container.querySelectorAll('.canvas-generation-node__result-grid-item')).toHaveLength(2);
+    expect(frame?.style.width).toBe('320px');
+    expect(frame?.style.height).toBe('240px');
+
+    await act(async () => {
+      choices[0]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+    expect(onFullscreenPreview).toHaveBeenCalledWith('generation-image', 'image-output-1');
+  });
+
+  it('keeps four outputs in one bounded two-column result grid', () => {
+    render(imageNodeWithBatch(4), createHost());
+
+    expect(container.querySelectorAll('.canvas-generation-node__result-grid-item')).toHaveLength(4);
+    expect(container.querySelector('.canvas-generation-node__result-grid--dense')).not.toBeNull();
+    expect(container.textContent).toContain('4 outputs');
+    const frame = container.querySelector<HTMLElement>('.canvas-generation-node-frame');
+    expect(frame?.style.width).toBe('320px');
+    expect(frame?.style.height).toBe('240px');
+  });
+
+  it('preserves an earlier image group and reports a later Job failure only at group level', () => {
+    const node = imageNodeWithBatch();
+    render(
+      node,
+      createHost({
+        nodeId: node.id,
+        submissionId: 'submission-later',
+        recipeInputFingerprint: 'sha256:later',
+        jobRef: { kind: 'generation', jobId: 'job-later' },
+        phase: 'failed',
+        createdAt: 1_000,
+        updatedAt: 4_000,
+        progress: { stage: 'waiting-provider', percent: 60 },
+        diagnostic: { code: 'provider-failed', message: 'The later Job failed.' },
+      }),
+    );
+
+    expect(container.querySelector('[data-generation-result-count="2"]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-generation-phase="failed"]')).toHaveLength(1);
+    expect(container.textContent).toContain('Failed');
+    expect(container.textContent).toContain('3s');
+    expect(container.querySelectorAll('.canvas-generation-node__result-grid-item')).toHaveLength(2);
+  });
+
+  it('shows authoritative progress stage, percentage and elapsed time', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(13_000);
+    const node: GenerationCanvasNode = {
+      id: 'generation-image',
+      type: 'generation',
+      position: { x: 20, y: 30 },
+      size: { width: 320, height: 240 },
+      zIndex: 1,
+      data: { recipe: { kind: 'image', prompt: '', count: 2 }, outputs: [] },
+    };
+    render(
+      node,
+      createHost({
+        nodeId: node.id,
+        submissionId: 'submission-image',
+        recipeInputFingerprint: 'sha256:image',
+        jobRef: { kind: 'generation', jobId: 'job-image' },
+        phase: 'running',
+        createdAt: 3_000,
+        updatedAt: 12_000,
+        progress: { stage: 'waiting-provider', percent: 42 },
+      }),
+    );
+
+    const status = container.querySelector('[data-generation-phase="running"]');
+    expect(status?.textContent).toContain('Generating');
+    expect(status?.textContent).toContain('10s');
+    expect(status?.textContent).toContain('42%');
+    expect(container.textContent).toContain('2 outputs');
+    expect(container.querySelector('.canvas-generation-node__activity-scan')).not.toBeNull();
+    expect(
+      container.querySelector('.canvas-generation-node__result-stack--pending'),
+    ).not.toBeNull();
+    expect(container.querySelector('.canvas-generation-node__result-grid')).toBeNull();
+  });
+
+  it('centers a failed Image placeholder in the full content surface without result stack layers', () => {
+    const node: GenerationCanvasNode = {
+      id: 'generation-image',
+      type: 'generation',
+      position: { x: 20, y: 30 },
+      size: { width: 320, height: 240 },
+      zIndex: 1,
+      data: { recipe: { kind: 'image', prompt: 'Two quiet frames', count: 2 }, outputs: [] },
+    };
+    render(
+      node,
+      createHost({
+        nodeId: node.id,
+        submissionId: 'submission-image',
+        recipeInputFingerprint: 'sha256:image',
+        jobRef: { kind: 'generation', jobId: 'job-image' },
+        phase: 'outcome-unknown',
+        createdAt: 3_000,
+        updatedAt: 304_000,
+        diagnostic: {
+          code: 'generation-outcome-unknown',
+          message: 'The provider outcome is unknown.',
+        },
+      }),
+    );
+
+    const empty = container.querySelector('.canvas-generation-node__empty');
+    expect(empty?.parentElement?.classList.contains('canvas-generation-node__result-stack')).toBe(
+      true,
+    );
+    expect(
+      empty?.parentElement?.classList.contains('canvas-generation-node__result-stack--pending'),
+    ).toBe(false);
+    expect(container.querySelector('.canvas-generation-node__result-grid')).toBeNull();
+    expect(container.querySelector('[data-generation-phase="outcome-unknown"]')).not.toBeNull();
   });
 
   it.each([
@@ -90,7 +246,23 @@ describe('GenerationNode', () => {
     },
   );
 
-  function render(node: GenerationCanvasNode, host: CanvasWebviewHostPort): void {
+  it('presents one input and one output handle without media-specific port fan-out', () => {
+    render(imageNodeWithBatch(), createHost());
+
+    const handles = container.querySelectorAll('[data-canvas-port-direction]');
+    expect(handles).toHaveLength(2);
+    expect(
+      Array.from(handles).map((handle) => handle.getAttribute('data-canvas-port-direction')),
+    ).toEqual(['input', 'output']);
+    expect(container.innerHTML).not.toContain('#f59e0b');
+    expect(container.innerHTML).not.toContain('#8b5cf6');
+  });
+
+  function render(
+    node: GenerationCanvasNode,
+    host: CanvasWebviewHostPort,
+    onFullscreenPreview?: (nodeId: string, outputId?: string) => void,
+  ): void {
     act(() => {
       root.render(
         <CanvasHostProvider host={host}>
@@ -99,6 +271,7 @@ describe('GenerationNode', () => {
             viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
             isSelected
             containerRef={{ current: container }}
+            onFullscreenPreview={onFullscreenPreview}
           />
         </CanvasHostProvider>,
       );
@@ -133,6 +306,39 @@ function nodeWithHistory(): GenerationCanvasNode {
       outputs: [first, second],
       selectedOutputId: second.outputId,
     },
+  };
+}
+
+function imageNodeWithBatch(count = 2): GenerationCanvasNode {
+  const outputs = Array.from({ length: count }, (_, index) =>
+    imageOutput(`image-output-${index + 1}`),
+  );
+  return {
+    id: 'generation-image',
+    type: 'generation',
+    position: { x: 20, y: 30 },
+    size: { width: 320, height: 240 },
+    zIndex: 1,
+    data: {
+      recipe: { kind: 'image', prompt: 'Two quiet frames', count: 2 },
+      outputs,
+      selectedOutputId: outputs[outputs.length - 1]?.outputId,
+    },
+  };
+}
+
+function imageOutput(outputId: string) {
+  return {
+    outputId,
+    jobRef: { kind: 'generation' as const, jobId: 'job-image' },
+    locator: {
+      kind: 'generated-output' as const,
+      outputId,
+      digest: `sha256:${outputId}`,
+      path: `neko/generated/image/${outputId}.png`,
+    },
+    kind: 'image' as const,
+    recipeInputFingerprint: 'sha256:image-recipe',
   };
 }
 

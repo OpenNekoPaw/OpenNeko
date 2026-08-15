@@ -102,6 +102,12 @@ export interface ToolResultAttachment {
   mimeType?: string;
   /** Stable asset reference for generated or perceptual assets. */
   assetRef?: import('@neko/media').PerceptualAssetRef;
+  /** One-shot Host receipt for sensitive image bytes that must not enter persisted Tool data. */
+  transientImage?: {
+    readonly receiptId: string;
+    readonly sessionId: string;
+    readonly actionId: string;
+  };
 }
 
 export interface ToolResultArtifactSnapshot {
@@ -225,7 +231,7 @@ export interface ToolRuntimeRequirements {
   readonly contentAccess?: boolean;
   readonly writableProject?: boolean;
   /** Exact Agent Entry authoring target kind required for a durable target mutation. */
-  readonly authoringTargetKind?: 'content-project' | 'character-project' | 'world-project';
+  readonly authoringTargetKind?: 'content-document' | 'character-project' | 'world-project';
 }
 
 /**

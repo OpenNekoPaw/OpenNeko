@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CreativeEntityRef } from '@neko/entity-domain';
+import type { CreativeEntityRef, ProjectEntityRecord } from '@neko/entity-domain';
 import {
   createCharacterEvidenceStrategy,
   dedupeCharacterEvidenceChunks,
@@ -19,6 +19,22 @@ const entityRef: CreativeEntityRef = {
   source: 'neko-entity',
 };
 
+function projectEntity(
+  entityId: string,
+  canonical: string,
+  aliases: readonly string[] = [],
+): ProjectEntityRecord {
+  return {
+    entityId,
+    kind: 'character',
+    names: { canonical, aliases },
+    lifecycle: { state: 'active' },
+    representations: [],
+    createdAt: '2026-08-12T00:00:00.000Z',
+    updatedAt: '2026-08-12T00:00:00.000Z',
+  };
+}
+
 describe('character evidence runtime helpers', () => {
   it('normalizes query tokens without host dependencies', () => {
     expect(normalizeCharacterEvidenceTokens('  Lin, LIN! Scene-42_Alpha  ')).toEqual([
@@ -34,14 +50,7 @@ describe('character evidence runtime helpers', () => {
     const strategy = createCharacterEvidenceStrategy({
       projectRoot: '/project',
       entityReader: {
-        getEntity: async () => ({
-          id: 'char-xiaoju',
-          kind: 'character',
-          canonicalName: '小橘',
-          displayName: '小橘',
-          aliases: ['Xiaoju'],
-          status: 'confirmed',
-        }),
+        getEntity: async () => projectEntity('char-xiaoju', '小橘', ['Xiaoju']),
       },
       projectSearchReader: { search },
       textReader: { readTextFile: async () => '' },
@@ -76,13 +85,12 @@ describe('character evidence runtime helpers', () => {
     const strategy = createCharacterEvidenceStrategy({
       projectRoot: '/project',
       entityReader: {
-        getEntity: async () => ({
-          id: 'char-xiaoju',
-          kind: 'character',
-          canonicalName: '小橘',
-          aliases: Array.from({ length: 20 }, (_, index) => `alias-${index + 1}`),
-          status: 'confirmed',
-        }),
+        getEntity: async () =>
+          projectEntity(
+            'char-xiaoju',
+            '小橘',
+            Array.from({ length: 20 }, (_, index) => `alias-${index + 1}`),
+          ),
       },
       projectSearchReader: { search },
       textReader: { readTextFile: async () => '' },
@@ -109,13 +117,7 @@ describe('character evidence runtime helpers', () => {
     const strategy = createCharacterEvidenceStrategy({
       projectRoot: '/project',
       entityReader: {
-        getEntity: async () => ({
-          id: 'char-xiaoju',
-          kind: 'character',
-          canonicalName: '小橘',
-          aliases: [],
-          status: 'confirmed',
-        }),
+        getEntity: async () => projectEntity('char-xiaoju', '小橘'),
       },
       projectSearchReader: {
         search: async () => [
@@ -362,13 +364,7 @@ describe('character evidence runtime helpers', () => {
     const strategy = createCharacterEvidenceStrategy({
       projectRoot: '/project',
       entityReader: {
-        getEntity: async () => ({
-          id: 'char-lin',
-          kind: 'character',
-          canonicalName: 'Lin',
-          aliases: [],
-          status: 'confirmed',
-        }),
+        getEntity: async () => projectEntity('char-lin', 'Lin'),
       },
       occurrenceReader: {
         listOccurrences: async () => [
@@ -445,13 +441,7 @@ describe('character evidence runtime helpers', () => {
     const strategy = createCharacterEvidenceStrategy({
       projectRoot: '/project',
       entityReader: {
-        getEntity: async () => ({
-          id: 'char-lin',
-          kind: 'character',
-          canonicalName: 'Lin',
-          aliases: [],
-          status: 'confirmed',
-        }),
+        getEntity: async () => projectEntity('char-lin', 'Lin'),
       },
       projectSearchReader: {
         search: async () => [makeSearchItem('scene-stale', 'cases/search.fountain', 5, 8, 'stale')],

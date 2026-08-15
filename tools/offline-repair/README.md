@@ -22,3 +22,9 @@ the tool does not impose a fixed `0600` mode.
 The Character authoring transfer implementation and its focused test also live in this isolated
 directory. They are intentionally not exported from `@neko/chara-node` or reachable from Desktop;
 an explicit maintenance invocation must provide the exact source store and destination repository.
+
+The retired Project-layout converter was removed because it generated the prohibited
+`.neko/media-libraries` binding records and rewrote managed-link Workspace paths into direct Media
+Library locators. Existing retired files remain untouched and fail visibly at their owning records.
+Any future offline converter must preserve `neko/assets/<libraryName>` managed links and emit only
+`workspace-file` descendants; it must not consult a global catalog as project content authority.

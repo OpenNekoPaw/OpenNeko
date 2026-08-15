@@ -8,6 +8,10 @@ import {
   type RoomRun,
   type RoomView,
 } from '@neko/chara/contracts';
+import {
+  projectCharacterAgentModeConstraint,
+  type CharacterAgentModeConstraint,
+} from './character-agent-mode-constraint';
 
 export type RoomEventDraft = RoomEvent extends infer TEvent
   ? TEvent extends RoomEvent
@@ -159,6 +163,14 @@ export class CharacterRoomService {
 
   async readRun(roomRunId: string, signal?: AbortSignal): Promise<RoomRun> {
     return structuredClone(await this.requireRun(roomRunId, signal));
+  }
+
+  async resolveAgentModeConstraint(
+    roomRunId: string,
+    signal?: AbortSignal,
+  ): Promise<CharacterAgentModeConstraint> {
+    const run = await this.requireRun(roomRunId, signal);
+    return projectCharacterAgentModeConstraint(run.mode);
   }
 
   async commitUserMessageAndScheduling(

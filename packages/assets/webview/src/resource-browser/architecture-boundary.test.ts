@@ -16,6 +16,24 @@ describe('Resource Browser architecture boundary', () => {
 
     expect(violations).toEqual([]);
   });
+
+  it('separates the acquisition action from the two-state view control', () => {
+    const styles = readFileSync(path.join(resourceBrowserRoot, 'style.css'), 'utf8');
+
+    expect(styles).toMatch(
+      /\.neko-resource-browser__search-field\s*\{[\s\S]*?border\s*:\s*1px solid/u,
+    );
+    expect(styles).not.toContain('.neko-resource-browser__search > div');
+    expect(styles).toMatch(
+      /\.neko-resource-browser__view-modes\s*\{[\s\S]*?gap\s*:\s*0;[\s\S]*?padding\s*:\s*1px;[\s\S]*?border\s*:\s*1px solid/u,
+    );
+    expect(styles).toMatch(
+      /\.neko-resource-browser__view-modes button\[aria-pressed='true'\]\s*\{[\s\S]*?background\s*:\s*var\(--neko-elevated[\s\S]*?box-shadow/u,
+    );
+    expect(styles).toMatch(
+      /\.neko-resource-browser__library-menu\s*>\s*\.neko-resource-browser__icon-button/u,
+    );
+  });
 });
 
 function walkTypeScript(directory: string): string[] {

@@ -342,16 +342,6 @@
     },
     {
       "category": "internal-version-field",
-      "externalOwner": "OpenNeko extension package manifest",
-      "fieldScope": "Invalid installed extension diagnostic preserves the third-party package release",
-      "id": "d04d1f1f328d4a1426e9",
-      "isolationRule": "The value reports the exact installed extension artifact even when its identity is invalid; it cannot dispatch an internal contract, migration, component state, or alternate extension implementation.",
-      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
       "externalOwner": "Three.js Material API",
       "fieldScope": "MeshStandardMaterial update counter asserted after changing blending flags",
       "id": "05e578b11e2fc9bb8545",
@@ -1841,166 +1831,6 @@
       "token": "version"
     },
     {
-      "category": "internal-version-field",
-      "externalOwner": "Browser Use extension package release",
-      "fieldScope": "Official-download marketplace package manifest fixture",
-      "id": "00adaec1494218543cc0",
-      "isolationRule": "The value is the user-visible Browser Use package release used to test one exact managed delivery source; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Browser Use extension package release",
-      "fieldScope": "GitHub-release marketplace package manifest rejection fixture",
-      "id": "4f6f56b709f81db288ed",
-      "isolationRule": "The value is the user-visible Browser Use package release used to prove a mismatched managed source is rejected; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Browser Use extension package release",
-      "fieldScope": "Installed Browser Use package manifest fixture",
-      "id": "8387a4f14a143f581834",
-      "isolationRule": "The value preserves the exact external Browser Use package release in an installed-artifact authority test and cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Browser Use extension package release",
-      "fieldScope": "Restart recovery fixture for the exact installed Browser Use package release",
-      "id": "b95bcbccc93bc5280d55",
-      "isolationRule": "The value preserves the external Browser Use package release while testing durable artifact and enable-grant recovery; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "OpenNeko extension package manifest",
-      "fieldScope": "Installed package integrity fixture for an external extension release",
-      "id": "83570ccbb6691d346ac2",
-      "isolationRule": "The value identifies the external extension package whose installed tree is checked after restart; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
-      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "OpenNeko extension package manifest",
-      "fieldScope": "Deterministic package-tree digest fixture for an external extension release",
-      "id": "9869d6560ec303d70ee6",
-      "isolationRule": "The value is external package manifest metadata included in the inspected package tree; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
-      "path": "packages/agent/runtime/src/extensions/extension-package-integrity.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Official MCP client connection fixture protocol release",
-      "id": "4eb7b9db8fc56cd4a872",
-      "isolationRule": "The fixture value is negotiated external MCP connection metadata and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
-      "token": "protocolVersion"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Official MCP client connection fixture server implementation release",
-      "id": "69dc3669fdc53adb6530",
-      "isolationRule": "The fixture value identifies one external MCP server implementation and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Mismatched MCP client connection fixture protocol release",
-      "id": "1e9a2a48858051030059",
-      "isolationRule": "The fixture value is negotiated external MCP connection metadata used to reject one mismatched endpoint and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
-      "token": "protocolVersion"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Mismatched MCP server implementation release fixture",
-      "id": "1a007bb84633e75e2716",
-      "isolationRule": "The fixture value identifies an external MCP server implementation used to prove exact endpoint rejection and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Browser Use MCP server",
-      "fieldScope": "Reviewed Browser Use MCP server implementation release identity",
-      "id": "224671a13582fcfda50f",
-      "isolationRule": "The value qualifies the exact external Browser Use MCP server implementation; mismatch rejects only that endpoint and cannot dispatch an internal contract, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Cua Driver MCP server",
-      "fieldScope": "Reviewed Cua Driver MCP server implementation release identity",
-      "id": "9f6fc68fbefdadfb5e67",
-      "isolationRule": "The value qualifies the exact external Cua Driver MCP server implementation; mismatch rejects only that endpoint and cannot dispatch an internal contract, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/injaneity/pi-computer-use/releases/tag/v0.19.2",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Automation endpoint server identity fixture implementation release",
-      "id": "412ed4af7eae2b63cad5",
-      "isolationRule": "The fixture value identifies one external MCP server implementation and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "packages/automation/node/src/endpoint-management.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Mismatched external MCP server implementation release fixture",
-      "id": "e49eefac1751f57f2076",
-      "isolationRule": "The fixture value proves that an unreviewed external MCP server identity is rejected and cannot select an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "packages/automation/node/src/endpoint-management.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Reviewed endpoint connector expected MCP server implementation release",
-      "id": "08bd6c7db65bd0a4ba90",
-      "isolationRule": "The field qualifies one external MCP server identity; mismatch rejects only that endpoint and cannot dispatch an internal contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "packages/automation/node/src/endpoint-management.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Endpoint probe result MCP server implementation release",
-      "id": "f47a5efe883f6940d3bb",
-      "isolationRule": "The field reports the connected external MCP server identity for qualification only and cannot dispatch an internal contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "packages/automation/node/src/endpoint-management.ts",
-      "token": "version"
-    },
-    {
       "category": "versioned-path-or-key",
       "externalOwner": "Configured DeepSeek-compatible model provider",
       "fieldScope": "Agent Evaluation explicit chat model identity",
@@ -2009,6 +1839,476 @@
       "normativeSource": "https://api-docs.deepseek.com/api/create-chat-completion",
       "path": "scripts/agent-eval/suites/agent-runtime/creative-media-workflow/suite.json",
       "token": "-v4-"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "Node Skill package validation copy of the optional portable compatibility declaration",
+      "id": "266d65a36fcedb4611d1",
+      "isolationRule": "The value remains external portable Skill frontmatter and cannot dispatch an OpenNeko contract, migration, provider, cache, or alternate implementation.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/pi/skill-package-creation-service.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "Node Skill package serialization of the optional portable compatibility declaration",
+      "id": "1bf8b4bb9a3a2adff5f2",
+      "isolationRule": "The value is written only to external portable SKILL.md frontmatter and cannot dispatch an OpenNeko contract, migration, provider, cache, or alternate implementation.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/pi/skill-package-creation-service.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill Tool schema declaration of the optional portable compatibility field",
+      "id": "ea11ba9f14eda0589e55",
+      "isolationRule": "The field is external portable Skill metadata only and cannot select an OpenNeko contract, migration, provider, cache, or alternate implementation.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill input allow-list entry for the optional portable compatibility field",
+      "id": "7530a835496cde70d5ea",
+      "isolationRule": "The field is external portable Skill metadata only and cannot select an OpenNeko contract, migration, provider, cache, or alternate implementation.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill parser presence check for the optional portable compatibility field",
+      "id": "d7972ddf61641a2f1f7a",
+      "isolationRule": "The field is copied as external portable Skill metadata and cannot dispatch internal generations, migrations, providers, or fallback paths.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill portable definition copy of the optional compatibility field",
+      "id": "93e378f3105ed25418ad",
+      "isolationRule": "The field is copied as external portable Skill metadata and cannot dispatch internal generations, migrations, providers, or fallback paths.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill parser read of the optional portable compatibility field",
+      "id": "f541cb4b46cf04e7cb2b",
+      "isolationRule": "The field is read as external portable Skill metadata and cannot dispatch internal generations, migrations, providers, or fallback paths.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills portable SKILL.md specification",
+      "fieldScope": "CreateSkill parser diagnostic label for the optional portable compatibility field",
+      "id": "2db43a6c8fdb40d8cf5b",
+      "isolationRule": "The text labels one external portable Skill field and cannot dispatch internal generations, migrations, providers, or fallback paths.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/runtime/src/application/skill-creation-capability-provider.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Browser Use release publisher",
+      "fieldScope": "Plugin manifest release occurrence: \"version\": \"0.13.7\",",
+      "id": "db443d6ee2934252d894",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
+      "path": "apps/neko-desktop/resources/extensions/plugins/browser-use/plugin.json",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Cua release publisher",
+      "fieldScope": "Plugin manifest release occurrence: \"version\": \"0.19.2\",",
+      "id": "2e8c2d8217d6b628e5c7",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
+      "path": "apps/neko-desktop/resources/extensions/plugins/computer-use/plugin.json",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.2',",
+      "id": "6b793b2de8d1bf497f1b",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '2.3.4',",
+      "id": "5558e57201e688483094",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(root, { name: 'duplicate', version: '1.0.0' });",
+      "id": "6bb9d723f15d29e1ef3b",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(sibling, { name: 'sibling', version: '1.0.0' });",
+      "id": "b6a2ca9e76e9c3566e9d",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(sourceRoot, { name: 'duplicate', version: '2.0.0' });",
+      "id": "c88da1886869d1b0a9c8",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(root, { name: 'mixed', version: '1.0.0' });",
+      "id": "6dad5e2535f49e836035",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(root, { name: 'metadata-only', version: '1.0.0' });",
+      "id": "3a78b96b82bbabf263e8",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: JSON.stringify({ name: 'private-only', version: '1.0.0' }),",
+      "id": "d8e12f1bcd8f3ac8ac60",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(linked, { name: 'linked', version: '1.0.0' });",
+      "id": "6b53666848422a04184f",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: await writePlugin(sourceRoot, { name: 'interrupted', version: '1.0.0' });",
+      "id": "2c13639566d07f0d72f4",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '0.1.0',",
+      "id": "bba394b247b6f8d45e99",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: return Object.freeze({ name: manifest.value['name'], version: manifest.value['version'] });",
+      "id": "d165dd6e39c0fcd439c7",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: return Object.freeze({ name: manifest.value['name'], version: manifest.value['version'] });",
+      "id": "71e18b26a8f44bbe9509",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: manifest.version,",
+      "id": "e1d3806b7f64403441dc",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: if (!isPluginId(value['name']) || !isNonEmptyString(value['version'])) return undefined;",
+      "id": "2569da8e8ac25d2ae1f5",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: value['version'],",
+      "id": "f5a93c747f57b5358687",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: value['version'],",
+      "id": "b0c404b0dd166794c78d",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: plugin.version,",
+      "id": "f8fb871787f180f475fe",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '',",
+      "id": "325e217a09203df06a3e",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.2',",
+      "id": "0e9b91eca3ee850a2bb5",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.0',",
+      "id": "b45745987016ad63231a",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.0',",
+      "id": "980bd08503dab36e2a01",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.0',",
+      "id": "5a46c3a6c5ffe6651236",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.0',",
+      "id": "fd112031c62e9bd41ca4",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: version: '1.0.0',",
+      "id": "f5da2b57a91ca74b466d",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: readonly version: string;",
+      "id": "41e9b74f125ce951ffa6",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: ): Promise<{ readonly name: string; readonly version: string } | undefined> {",
+      "id": "ab0ceeed90f30c5e71b3",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: !isNonEmptyString(manifest.value['version'])",
+      "id": "df790a69d54316d417ba",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Plugin package publisher",
+      "fieldScope": "Plugin manifest release occurrence: readonly version: string;",
+      "id": "8e00678f9136176097b8",
+      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
+      "normativeSource": "https://semver.org/",
+      "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'browser-use', version: '0.1.0' }, (apps/neko-desktop/src/main/desktop-automation-local-runtime-provider-inspector.test.ts:8)",
+      "id": "381fdbc139f5f24ac5f4",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-local-runtime-provider-inspector.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'cua-driver', version: '0.19.2' }, (apps/neko-desktop/src/main/desktop-automation-local-runtime-provider-inspector.test.ts:47)",
+      "id": "41b0261969aac3a4d64a",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-local-runtime-provider-inspector.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'cua-driver', version: 'fixture' }, (apps/neko-desktop/src/main/desktop-automation-plugin-tool-adapter.test.ts:41)",
+      "id": "2f5384f6562f5dc43dd0",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-plugin-tool-adapter.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'browser-use', version: 'fixture' }, (apps/neko-desktop/src/main/desktop-automation-plugin-tool-adapter.test.ts:163)",
+      "id": "f929884fd8b3e0ac6347",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-plugin-tool-adapter.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "protocolVersion: '2025-06-18', (apps/neko-desktop/src/main/desktop-browser-use-mcp-client-factory.test.ts:427)",
+      "id": "2fa332f38b9b6a102a71",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-browser-use-mcp-client-factory.test.ts",
+      "token": "protocolVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'browser-use', version: '0.1.0' }, (apps/neko-desktop/src/main/desktop-browser-use-mcp-client-factory.test.ts:428)",
+      "id": "f10296992fef3cb7ff79",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-browser-use-mcp-client-factory.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "protocolVersion: '2025-06-18', (apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.test.ts:176)",
+      "id": "1a6894bfb5658455d0c3",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.test.ts",
+      "token": "protocolVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'cua-driver', version: '0.19.2' }, (apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.test.ts:177)",
+      "id": "633ac34df171e8fec710",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.test.ts",
+      "token": "version"
     }
   ]
 }

@@ -1,6 +1,6 @@
 ## Verification
 
-Date: `2026-08-03`
+Date: `2026-08-11`
 
 Local host: `darwin-arm64`
 
@@ -18,10 +18,10 @@ Local host: `darwin-arm64`
   DMG and generated `SHASUMS256.txt` with SHA-256
   `dea6f2804b8dc33fbc62f014d28fa06deeff85f99f22ef72257191319e3f0550`.
 - `shasum -a 256 -c ../release/SHASUMS256.txt` passed from the DMG output directory.
-- Eight focused release tests passed. They cover tag-owned versioning, canonical DMG naming,
+- Focused release tests cover tag-owned versioning, canonical DMG naming,
   missing/stale/ambiguous output, ad-hoc-only Forge trust, required native dependency builds,
-  absent Apple credential/notarization branches, prerelease disclosure, and ZIP publication
-  removal.
+  absent Apple credential/notarization branches, local-only native build ownership, ordinary GitHub
+  Release metadata, and ZIP publication removal.
 - The focused Desktop architecture boundary passed 17 tests with MakerDMG as the sole configured
   maker, and the complete orchestration gate passed 86 tests.
 - `pnpm exec openspec validate establish-macos-release-pipeline --strict`,
@@ -30,15 +30,27 @@ Local host: `darwin-arm64`
   builds and tests, Desktop packaging, dependency analysis, repository architecture/quality gates,
   and strict validation of all 32 OpenSpec items.
 
-## External Acceptance Pending
+## Local-Only Publication Policy
 
-The local DMG and workflow implementation are verified, but no new GitHub prerelease claim is made.
-Final acceptance requires a new exact stable `v<semver>` tag whose commit is reachable from
-`origin/main`. The tag run must prove the ad-hoc identity, DMG integrity, checksum assets, explicit
-unnotarized installation warning, and GitHub prerelease publication on the hosted Apple Silicon
-runner.
+- `.github/workflows/release.yml` was removed; a pushed tag no longer triggers a GitHub build or
+  publication side effect.
+- The GitHub Manual/Merge Gate no longer contains `desktop-package`, Forge, or native Desktop
+  artifact upload. Native package, Sharp, signature, DMG, and checksum evidence is explicitly local
+  to an Apple Silicon host.
+- Repository tests reject any GitHub workflow that restores `package:desktop`, `make:desktop`,
+  Electron Forge, Desktop output upload, `gh release create`, or a prerelease flag.
+- Sixteen focused release/build/gate tests and the complete 121-test orchestration suite passed.
+- Strict validation passed for both affected OpenSpec changes. The complete repository quality gate
+  passed dependency, package/application/Webview/Agent/content/storage boundaries, legacy-debt,
+  unused-code, strict TypeScript, orchestration, and all 83 OpenSpec items.
 
-The current preview path intentionally does not use Apple repository secrets, Developer ID,
+## GitHub Release Metadata Evidence
+
+On `2026-08-11`, repository-owner commands normalized `v0.1.4` through `v0.1.8` without replacing or
+deleting their DMG/checksum assets. `gh release list` reported every version as
+`isPrerelease=false`; titles are the exact version tags, and `v0.1.8` is `isLatest=true`.
+
+The current release path intentionally does not use Apple repository secrets, Developer ID,
 notarization, stapling, or normal Gatekeeper assessment. Users may need macOS System Settings →
 Privacy & Security → Open Anyway. A normally trusted stable channel requires a separate future
 Developer ID/notarization change.

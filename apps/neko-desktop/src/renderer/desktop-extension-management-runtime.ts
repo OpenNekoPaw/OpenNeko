@@ -26,19 +26,9 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
     return this.execute({ route: 'snapshot.get' });
   }
 
-  async installPlugin(pluginId: string): Promise<void> {
+  async installLocalPlugin(): Promise<void> {
     this.requireActive();
-    await this.execute({ route: 'plugin.install', pluginId });
-  }
-
-  async updatePlugin(pluginId: string): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'plugin.update', pluginId });
-  }
-
-  async cancelPluginOperation(operationId: string): Promise<void> {
-    this.requireActive();
-    await this.execute({ route: 'plugin.operation.cancel', operationId });
+    await this.execute({ route: 'plugin.install' });
   }
 
   async enablePlugin(pluginId: string): Promise<void> {
@@ -56,14 +46,24 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
     await this.execute({ route: 'plugin.remove', pluginId });
   }
 
-  async refreshMarketplaces(): Promise<void> {
+  async rescanSources(): Promise<void> {
     this.requireActive();
-    await this.execute({ route: 'marketplaces.refresh' });
+    await this.execute({ route: 'sources.rescan' });
   }
 
   async installPersonalSkill(): Promise<void> {
     this.requireActive();
     await this.execute({ route: 'skill.install' });
+  }
+
+  async openPersonalSkill(managementId: string): Promise<void> {
+    this.requireActive();
+    await this.execute({ route: 'skill.open', managementId });
+  }
+
+  async showPersonalSkillInFolder(managementId: string): Promise<void> {
+    this.requireActive();
+    await this.execute({ route: 'skill.reveal', managementId });
   }
 
   async removePersonalSkill(managementId: string): Promise<void> {

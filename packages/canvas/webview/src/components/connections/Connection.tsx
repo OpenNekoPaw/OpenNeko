@@ -1,18 +1,11 @@
 /**
  * Connection - Single connection component
- * Renders a bezier curve with directional arrow and data-type coloring.
- *
- * Supports endpoint-based node and port connections.
- * Enhanced with:
- * - Directional arrow markers
- * - Data-type-based coloring
- * - Animated flow effect
- * - Port-aware anchor calculation
+ * Renders one neutral relationship line. Sequence is the only connection kind
+ * that adds a direction marker.
  */
 
 import { useMemo } from 'react';
 import type { CanvasConnection, CanvasNode } from '@neko/canvas-domain';
-import { findCanvasNodePort } from '@neko/canvas-domain';
 import { getConnectionPathGeometry } from './connectionGeometry';
 import { resolveConnectionTitle } from '../../i18n/connectionLabels';
 
@@ -26,52 +19,6 @@ export interface ConnectionProps {
   targetNode: CanvasNode;
   isSelected?: boolean;
   onSelect?: (connectionId: string) => void;
-}
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-/** Color mapping for port data types */
-const DATA_TYPE_COLORS: Record<string, string> = {
-  image: '#f59e0b', // amber
-  video: '#8b5cf6', // violet
-  audio: '#ec4899', // pink
-  text: '#06b6d4', // cyan
-  any: '#6b7280', // gray
-};
-
-// =============================================================================
-// Helpers
-// =============================================================================
-
-/**
- * Resolve connection color based on port data type or connection type.
- */
-function resolveConnectionColor(
-  connection: CanvasConnection,
-  sourceNode: CanvasNode,
-  _targetNode: CanvasNode,
-): string {
-  const sourcePortId =
-    connection.sourceEndpoint.scope === 'port' ? connection.sourceEndpoint.portId : undefined;
-  if (sourcePortId) {
-    const port = findCanvasNodePort(sourceNode, sourcePortId);
-    const portColor = port?.dataType ? DATA_TYPE_COLORS[port.dataType] : undefined;
-    if (portColor) return portColor;
-  }
-
-  // Fall back to connection type
-  switch (connection.type) {
-    case 'sequence':
-      return 'var(--connection-sequence)';
-    case 'reference':
-      return 'var(--connection-reference)';
-    case 'derived-from':
-      return 'var(--connection-association)';
-    default:
-      return 'var(--connection-default)';
-  }
 }
 
 // =============================================================================
@@ -94,7 +41,7 @@ export function Connection({
     [connection, sourceNode, targetNode],
   );
 
-  const strokeColor = resolveConnectionColor(connection, sourceNode, targetNode);
+  const strokeColor = 'var(--connection-default)';
   const strokeWidth = isSelected ? 2 : 1.25;
   const title = resolveConnectionTitle(connection, sourceNode, targetNode);
 
@@ -111,25 +58,26 @@ export function Connection({
       aria-label={title}
     >
       <title>{title}</title>
-      {/* Arrow marker definition */}
-      <defs>
-        <marker
-          id={markerId}
-          markerWidth="8"
-          markerHeight="6"
-          refX="7"
-          refY="3"
-          orient="auto"
-          markerUnits="userSpaceOnUse"
-        >
-          <path
-            className="connection-arrow"
-            d="M 0 0 L 8 3 L 0 6 Z"
-            fill={strokeColor}
-            opacity={isSelected ? 0.88 : 0.28}
-          />
-        </marker>
-      </defs>
+      {connection.type === 'sequence' ? (
+        <defs>
+          <marker
+            id={markerId}
+            markerWidth="8"
+            markerHeight="6"
+            refX="7"
+            refY="3"
+            orient="auto"
+            markerUnits="userSpaceOnUse"
+          >
+            <path
+              className="connection-arrow"
+              d="M 0 0 L 8 3 L 0 6 Z"
+              fill={strokeColor}
+              opacity={isSelected ? 0.88 : 0.28}
+            />
+          </marker>
+        </defs>
+      ) : null}
 
       {/* Invisible wider path for easier clicking */}
       <path
@@ -141,7 +89,7 @@ export function Connection({
         onClick={handleClick}
       />
 
-      {/* Glow effect for selected */}
+      {/* Selection remains a restrained emphasis, not an execution state. */}
       {isSelected && (
         <path
           d={pathData.pathD}
@@ -153,71 +101,15 @@ export function Connection({
         />
       )}
 
-      {/* Visible connection path with arrow */}
+      {/* Visible relation line; only sequence communicates order. */}
       <path
         className="connection-line"
         d={pathData.pathD}
         fill="none"
         stroke={strokeColor}
         strokeWidth={strokeWidth}
-        strokeDasharray={connection.type === 'reference' ? '6,4' : undefined}
-        strokeOpacity={isSelected ? 0.88 : 0.26}
-        markerEnd={`url(#${markerId})`}
-        style={{ pointerEvents: 'none' }}
-      />
-
-      {/* Motion is reserved for explicit selection so dense graphs remain visually quiet. */}
-      {isSelected && (
-        <circle className="connection-flow-dot" r={2.5} fill={strokeColor} opacity={0.72}>
-          <animateMotion dur="2s" repeatCount="indefinite" path={pathData.pathD} />
-        </circle>
-      )}
-
-      {/* Connection label */}
-      {connection.label && (
-        <g>
-          <rect
-            x={pathData.midX - 30}
-            y={pathData.midY - 10}
-            width={60}
-            height={18}
-            rx={4}
-            fill="var(--node-bg)"
-            stroke={strokeColor}
-            strokeWidth={1}
-            opacity={0.9}
-          />
-          <text
-            x={pathData.midX}
-            y={pathData.midY + 3}
-            textAnchor="middle"
-            fill="var(--toolbar-fg)"
-            fontSize={10}
-            fontFamily="var(--hostPort-font-family)"
-            style={{ pointerEvents: 'none' }}
-          >
-            {connection.label}
-          </text>
-        </g>
-      )}
-
-      {/* Source/target port dots */}
-      <circle
-        className="connection-endpoint"
-        cx={pathData.sourcePoint.x}
-        cy={pathData.sourcePoint.y}
-        r={isSelected ? 3.5 : 2.5}
-        fill={strokeColor}
-        opacity={isSelected ? 0.82 : 0.32}
-        style={{ pointerEvents: 'none' }}
-      />
-      <circle
-        className="connection-endpoint"
-        cx={pathData.targetPoint.x}
-        cy={pathData.targetPoint.y}
-        r={isSelected ? 3.5 : 2.5}
-        fill={strokeColor}
-        opacity={isSelected ? 0.82 : 0.32}
+        strokeOpacity={isSelected ? 0.88 : 0.38}
+        markerEnd={connection.type === 'sequence' ? `url(#${markerId})` : undefined}
         style={{ pointerEvents: 'none' }}
       />
     </g>

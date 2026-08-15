@@ -6,7 +6,7 @@ import { parse } from 'yaml';
 import { resolveMacOSForgeTrust } from '../resolve-macos-forge-trust.mjs';
 
 describe('macOS Forge trust configuration', () => {
-  it('keeps every preview package explicitly ad-hoc signed', () => {
+  it('keeps every local package explicitly ad-hoc signed', () => {
     const trust = resolveMacOSForgeTrust();
     assert.equal(trust.osxSign.identity, '-');
     assert.equal(trust.osxSign.identityValidation, false);

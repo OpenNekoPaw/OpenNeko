@@ -9,6 +9,7 @@ import {
   type OtioTimeline,
 } from '@neko/cut-domain';
 import { loadNkc, type CanvasData } from '@neko/canvas-domain';
+import { contentLocatorKey, serializeContentReferenceTarget } from '@neko/content';
 import { describe, expect, it } from 'vitest';
 import {
   readProjectContentReferences,
@@ -41,9 +42,9 @@ describe('Desktop project content reference readers', () => {
         descendants: requirement.descendants,
       })),
     ).toEqual([
-      { name: 'Footage', descendants: ['shot.mov'] },
       { name: 'Portraits', descendants: ['character-a.png'] },
       { name: 'References', descendants: ['board.png'] },
+      { name: 'Shots', descendants: ['project-shot.mov'] },
     ]);
   });
 
@@ -128,9 +129,30 @@ describe('Desktop project content reference readers', () => {
       stagedWorkspacePath: stagedWorkspace,
       projectId: 'project-neko',
       replacements: new Map([
-        ['neko/assets/References/board.png', 'media/collected/References/board.png'],
-        ['neko/assets/Footage/shot.mov', 'media/collected/Footage/shot.mov'],
-        ['neko/assets/Portraits/character-a.png', 'media/collected/Portraits/character-a.png'],
+        [
+          contentLocatorKey({
+            kind: 'media-library',
+            libraryName: 'References',
+            relativePath: 'board.png',
+          }),
+          'media/collected/References/board.png',
+        ],
+        [
+          contentLocatorKey({
+            kind: 'media-library',
+            libraryName: 'Shots',
+            relativePath: 'project-shot.mov',
+          }),
+          'media/collected/Shots/project-shot.mov',
+        ],
+        [
+          contentLocatorKey({
+            kind: 'media-library',
+            libraryName: 'Portraits',
+            relativePath: 'character-a.png',
+          }),
+          'media/collected/Portraits/character-a.png',
+        ],
       ]),
     });
 
@@ -153,7 +175,7 @@ describe('Desktop project content reference readers', () => {
     if (stagedCut.ok) {
       expect(stagedCut.document.tracks.children[0]?.children[0]).toMatchObject({
         media_reference: {
-          target_url: '../media/collected/Footage/shot.mov',
+          target_url: '../media/collected/Shots/project-shot.mov',
         },
       });
     }
@@ -193,13 +215,13 @@ async function writeCanonicalEntities(workspacePath: string): Promise<void> {
             entityId: 'character-a',
             kind: 'character',
             names: { canonical: 'Character A', aliases: [] },
-            facts: {},
             representations: [
               {
                 bindingId: 'binding-a',
                 target: {
-                  kind: 'workspace-file',
-                  path: 'neko/assets/Portraits/character-a.png',
+                  kind: 'media-library',
+                  libraryName: 'Portraits',
+                  relativePath: 'character-a.png',
                 },
                 role: 'portrait',
                 source: 'user',
@@ -230,10 +252,11 @@ function canvasFixture(): CanvasData {
         size: { width: 320, height: 180 },
         zIndex: 1,
         data: {
-          assetPath: 'neko/assets/References/board.png',
+          assetPath: 'References/board.png',
           contentLocator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/References/board.png',
+            kind: 'media-library',
+            libraryName: 'References',
+            relativePath: 'board.png',
           },
         },
       },
@@ -255,7 +278,11 @@ function cutFixture(): OtioTimeline {
     trackId: 'video-1',
     clipId: 'clip-a',
     name: 'Shot',
-    targetUrl: '../neko/assets/Footage/shot.mov',
+    targetUrl: serializeContentReferenceTarget({
+      kind: 'media-library',
+      libraryName: 'Shots',
+      relativePath: 'project-shot.mov',
+    }),
     durationFrames: 30,
     rate: 30,
     timelineStartFrames: 0,

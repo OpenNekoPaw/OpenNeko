@@ -1,4 +1,5 @@
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { platform } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parse as parseToml } from 'smol-toml';
@@ -12,6 +13,7 @@ const ACTIVE_AGENT_SURFACE_SELECTOR = '[data-primary-surface="agent"]';
 const ACTIVE_AGENT_TEXTAREA_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-textarea`;
 const ACTIVE_AGENT_SEND_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-send`;
 const ACTIVE_AGENT_APPROVE_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-inline-card.is-warning .neko-button:not(.neko-button-secondary)`;
+const DEVELOPMENT_RENDERER_STABILITY_MS = 6_000;
 
 export function createDesktopAgentEvaluationScenario(executionCase, authorization) {
   const mediaObservationRequired = requiresOpenNekoResourceObservation(executionCase.assertions);
@@ -27,6 +29,33 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         executionCase.fixture.root,
       );
       await cp(fixtureSource, workspacePath, { recursive: true, errorOnExist: true });
+      const mediaLibrary = executionCase.fixture.mediaLibrary;
+      if (mediaLibrary) {
+        if (mediaLibrary.libraryName !== 'workspace') {
+          throw infrastructureBlocker(
+            "Desktop Agent Evaluation currently owns one exact functional Media Library picker identity: 'workspace'.",
+          );
+        }
+        const source = resolve(workspacePath, mediaLibrary.source);
+        const target = join(fixtureHome, 'global-media', mediaLibrary.libraryName);
+        await mkdir(join(fixtureHome, 'global-media'), { recursive: true });
+        await cp(source, target, { recursive: true, errorOnExist: true });
+        await rm(source, { recursive: true, force: true });
+        const globalConnectionDirectory = join(fixtureHome, '.neko', 'media-libraries', 'local');
+        await mkdir(globalConnectionDirectory, { recursive: true });
+        await symlink(
+          target,
+          join(globalConnectionDirectory, mediaLibrary.libraryName),
+          platform() === 'win32' ? 'junction' : 'dir',
+        );
+        const assetsDirectory = join(workspacePath, 'neko', 'assets');
+        await mkdir(assetsDirectory, { recursive: true });
+        await symlink(
+          target,
+          join(assetsDirectory, mediaLibrary.libraryName),
+          platform() === 'win32' ? 'junction' : 'dir',
+        );
+      }
       const configText = await readAuthorizedConfiguration(authorization);
       await mkdir(join(fixtureHome, '.neko'), { recursive: true });
       await writeFile(join(fixtureHome, '.neko', 'config.toml'), configText, {
@@ -51,9 +80,23 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
       readOpenNekoResourceRequests,
     }) {
       const startSurface = executionCase.execution?.startSurface ?? 'workspace';
+      let mediaLibrarySetup;
+      if (executionCase.fixture.mediaLibrary) {
+        if (startSurface !== 'workspace') {
+          throw infrastructureBlocker(
+            'Desktop Agent Media Library Evaluation requires the Workspace start surface.',
+          );
+        }
+        mediaLibrarySetup = { mediaLibrary: executionCase.fixture.mediaLibrary };
+      }
       const opened =
         startSurface === 'workspace' ? await openFixtureWorkspace(evaluate) : undefined;
       await waitForSelector('[data-owner-root="agent"]', 30_000);
+      await waitForStableDesktopAgentRenderer({
+        evaluate,
+        waitForDesktopBridge,
+        waitForSelector,
+      });
       const driver = createDesktopAgentDriver({
         evaluate,
         waitForRenderer: async () => {
@@ -158,9 +201,41 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
           initial: initialInteraction,
           final: finalInteraction,
         },
+        ...(mediaLibrarySetup ? { mediaLibrarySetup } : {}),
       };
     },
   });
+}
+
+export async function waitForStableDesktopAgentRenderer(input) {
+  const stabilityMs = input.stabilityMs ?? DEVELOPMENT_RENDERER_STABILITY_MS;
+  const timeoutMs = input.timeoutMs ?? 30_000;
+  const now = input.now ?? Date.now;
+  const wait = input.delay ?? delay;
+  const deadline = now() + timeoutMs;
+  let timeOrigin;
+  let stableSince = now();
+  while (now() < deadline) {
+    try {
+      await input.waitForDesktopBridge(Math.min(timeoutMs, 5_000));
+      await input.waitForSelector('[data-owner-root="agent"]', Math.min(timeoutMs, 5_000));
+      const currentTimeOrigin = await input.evaluate('performance.timeOrigin');
+      if (typeof currentTimeOrigin !== 'number' || !Number.isFinite(currentTimeOrigin)) {
+        throw new Error('Desktop Renderer has no stable page time origin.');
+      }
+      if (currentTimeOrigin !== timeOrigin) {
+        timeOrigin = currentTimeOrigin;
+        stableSince = now();
+      } else if (now() - stableSince >= stabilityMs) {
+        return;
+      }
+    } catch {
+      timeOrigin = undefined;
+      stableSince = now();
+    }
+    await wait(100);
+  }
+  throw new Error('Desktop Agent Renderer did not remain stable before driver injection.');
 }
 
 function resolveWorkspaceAgentOwner(opened) {

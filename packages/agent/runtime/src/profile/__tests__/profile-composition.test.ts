@@ -1,33 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import type { ProviderExpressionProfileDescriptor, Skill } from '@neko/agent-contracts';
+import type { ProviderExpressionProfileDescriptor } from '@neko/agent-contracts';
 import type { ArtifactProfileDescriptor } from '@neko/agent-contracts';
 import { ArtifactProfileRegistry, ProviderExpressionProfileRegistry } from '../profile-registry';
 import { composeAgentProfiles } from '../profile-composition';
 
 describe('composeAgentProfiles', () => {
-  it('resolves Skill profile references through registries with visible diagnostics', () => {
+  it('resolves explicit profile references through registries with visible diagnostics', () => {
     const artifactProfileRegistry = new ArtifactProfileRegistry();
     const providerExpressionProfileRegistry = new ProviderExpressionProfileRegistry();
     const artifactProfile = makeArtifactProfile();
     const providerExpressionProfile = makeProviderExpressionProfile();
     artifactProfileRegistry.register(artifactProfile);
     providerExpressionProfileRegistry.register(providerExpressionProfile);
-    const skill: Pick<Skill, 'name' | 'profileReferences' | 'mediaWorkflow'> = {
-      name: 'studio-skill',
-      profileReferences: [
-        {
-          profileId: 'provider-expression:flux',
-          kind: 'provider-expression',
-          relationship: 'prefers',
-        },
-      ],
-      mediaWorkflow: {
-        artifactProfiles: ['studio.shot-review', 'studio.missing-table'],
-      },
-    };
-
     const result = composeAgentProfiles({
-      skill,
+      artifactProfileIds: ['studio.shot-review', 'studio.missing-table'],
+      providerExpressionProfileIds: ['provider-expression:flux'],
       artifactProfileRegistry,
       providerExpressionProfileRegistry,
     });

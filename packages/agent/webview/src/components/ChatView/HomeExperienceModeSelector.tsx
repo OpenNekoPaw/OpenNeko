@@ -16,14 +16,17 @@ export function HomeExperienceModeSelector({
 }: HomeExperienceModeSelectorProps): JSX.Element {
   const { t } = useTranslation();
   const label = t('chat.entryExperience.label');
+  const visibleMode = projection.options.some((option) => option.mode === projection.mode)
+    ? projection.mode
+    : 'assistant';
   return (
     <nav className="agent-entry-experience-selector" aria-label={label}>
       <SegmentedControl
         appearance="neutral"
-        density="comfortable"
+        density="compact"
         label={label}
-        maxWidth={544}
-        value={projection.mode}
+        maxWidth={480}
+        value={visibleMode}
         onValueChange={(value) => onChange?.(parseAgentEntryMode(value))}
         options={projection.options.map((option) => ({
           value: option.mode,

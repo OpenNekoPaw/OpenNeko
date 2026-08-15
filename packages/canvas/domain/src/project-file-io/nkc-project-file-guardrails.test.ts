@@ -73,7 +73,7 @@ describe('project file I/O guardrails', () => {
 
     expect(source).toContain('const session = new CanvasHostRuntimeSession({');
     expect(source).toMatch(
-      /saveDocument:\s*async\s*\(\{\s*canvas\s*\}\)\s*=>\s*\{\s*await this\.saveDocument\(documentPath, canvas\)/,
+      /saveDocument:\s*async\s*\(\{\s*canvas,\s*removedNodeIds\s*\}\)\s*=>\s*\{[\s\S]*await this\.saveDocument\(documentPath, canvas\)/,
     );
     expect(source).not.toMatch(/postMessage\(\{\s*type:\s*['"](?:save|document:save)['"]/);
   });

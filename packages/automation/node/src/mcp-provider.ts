@@ -4,7 +4,6 @@ import type {
   AutomationTarget,
 } from '@neko/automation-contracts';
 import type { AutomationProviderExecutionResult, AutomationProviderPort } from './index';
-import { digestAutomationInputSchema } from './schema-digest';
 
 export interface AutomationMcpToolDefinition {
   readonly name: string;
@@ -98,7 +97,7 @@ export function createReviewedMcpAutomationProvider(options: {
         provider: options.identity,
         operations: tools.map((tool) => ({
           name: tool.name,
-          inputSchemaDigest: digestAutomationInputSchema(tool.inputSchema),
+          inputSchema: tool.inputSchema,
           annotations: {
             ...(tool.annotations?.readOnlyHint === undefined
               ? {}

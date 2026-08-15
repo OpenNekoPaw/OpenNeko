@@ -172,7 +172,7 @@ describe('@neko/ui compound primitives', () => {
 
     expect(control?.getAttribute('aria-label')).toBe('Creation mode');
     expect(control?.style.maxWidth).toBe('176px');
-    expect(thumb?.style.width).toBe('50%');
+    expect(thumb?.style.width).toBe('calc(0.5 * (100% - 4px))');
     expect(thumb?.style.transform).toBe('translateX(100%)');
     expect(tabs[1]?.getAttribute('aria-selected')).toBe('true');
 
@@ -213,6 +213,9 @@ describe('@neko/ui compound primitives', () => {
     expect(
       control?.querySelector<HTMLElement>('.neko-segmented-control-thumb')?.style.borderStyle,
     ).toBe('none');
+    expect(control?.querySelector<HTMLElement>('.neko-segmented-control-thumb')?.style.width).toBe(
+      'calc(0.3333333333333333 * (100% - 4px))',
+    );
     expect(tabs[0]?.style.height).toBe('30px');
 
     const matchesFocusVisible = vi

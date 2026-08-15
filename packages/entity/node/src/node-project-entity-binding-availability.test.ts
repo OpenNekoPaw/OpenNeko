@@ -7,7 +7,7 @@ import {
   encodeProjectEntityDocument,
 } from '@neko/entity-domain';
 import type {
-  EntityAssetProjectionReplaceSourceRequest,
+  ProjectEntityProjectionReplaceSourceRequest,
   EntityBindingAvailabilityProjectionValue,
   ProjectEntityDocument,
 } from '@neko/entity-domain';
@@ -24,7 +24,9 @@ afterEach(async () => {
 
 describe('refreshProjectEntityBindingAvailability', () => {
   it('atomically replaces only the Project binding projection source', async () => {
-    const replaceSource = vi.fn(async (_request: EntityAssetProjectionReplaceSourceRequest) => {});
+    const replaceSource = vi.fn(
+      async (_request: ProjectEntityProjectionReplaceSourceRequest) => {},
+    );
     const value: EntityBindingAvailabilityProjectionValue = {
       bindingId: 'binding-rin',
       entityId: 'character-rin',
@@ -50,7 +52,7 @@ describe('refreshProjectEntityBindingAvailability', () => {
         partition: {
           scope: 'workspace',
           workspaceId: 'project-neko',
-          domain: 'entity-asset-projection',
+          domain: 'project-entity-projection',
         },
       },
       UPDATED_AT,
@@ -61,7 +63,7 @@ describe('refreshProjectEntityBindingAvailability', () => {
       partition: {
         scope: 'workspace',
         workspaceId: 'project-neko',
-        domain: 'entity-asset-projection',
+        domain: 'project-entity-projection',
       },
       sourceId: 'project-entity-bindings:project-neko',
       records: [
@@ -80,7 +82,9 @@ describe('refreshProjectEntityBindingAvailability', () => {
   });
 
   it('replaces the source with an empty batch when bindings disappear', async () => {
-    const replaceSource = vi.fn(async (_request: EntityAssetProjectionReplaceSourceRequest) => {});
+    const replaceSource = vi.fn(
+      async (_request: ProjectEntityProjectionReplaceSourceRequest) => {},
+    );
     await refreshProjectEntityBindingAvailability(
       {
         documentRepository: {
@@ -91,7 +95,7 @@ describe('refreshProjectEntityBindingAvailability', () => {
         partition: {
           scope: 'workspace',
           workspaceId: 'project-neko',
-          domain: 'entity-asset-projection',
+          domain: 'project-entity-projection',
         },
       },
       UPDATED_AT,
@@ -108,7 +112,9 @@ describe('refreshProjectEntityBindingAvailability', () => {
     const entityPath = join(workspacePath, 'neko', 'entities.json');
     await mkdir(join(workspacePath, 'neko'), { recursive: true });
     await writeFile(entityPath, source, 'utf8');
-    const replaceSource = vi.fn(async (_request: EntityAssetProjectionReplaceSourceRequest) => {});
+    const replaceSource = vi.fn(
+      async (_request: ProjectEntityProjectionReplaceSourceRequest) => {},
+    );
     const unavailable = (code: 'content-missing' | 'content-unauthorized') => ({
       stat: vi.fn(
         async (
@@ -129,6 +135,7 @@ describe('refreshProjectEntityBindingAvailability', () => {
         }),
         availability: new ProjectEntityBindingAvailabilityService({
           workspaceFile: unavailable('content-missing'),
+          mediaLibrary: unavailable('content-missing'),
           documentEntry: unavailable('content-missing'),
           generatedOutput: unavailable('content-unauthorized'),
           packageResource: unavailable('content-missing'),
@@ -137,7 +144,7 @@ describe('refreshProjectEntityBindingAvailability', () => {
         partition: {
           scope: 'workspace',
           workspaceId: document.projectId,
-          domain: 'entity-asset-projection',
+          domain: 'project-entity-projection',
         },
       },
       UPDATED_AT,
@@ -184,7 +191,6 @@ function documentWithBindings(): ProjectEntityDocument {
         entityId: 'character-rin',
         kind: 'character',
         names: { canonical: 'Rin', aliases: [] },
-        facts: { role: 'lead' },
         representations: [
           binding('binding-file', { kind: 'workspace-file', path: 'missing.png' }),
           binding('binding-document', {

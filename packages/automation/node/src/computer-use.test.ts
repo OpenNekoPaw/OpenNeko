@@ -13,9 +13,8 @@ describe('Cua Driver Computer Use profile', () => {
     expect(CUA_DRIVER_OBSERVE_PROFILE).toMatchObject({
       id: 'computer-use.observe.macos',
       provider: {
-        upstreamRelease: '0.19.2',
         kind: 'computer',
-        deliverySource: { kind: 'github-release' },
+        deliverySource: { kind: 'bundled-adapter' },
       },
       requiredPermissions: { observe: ['screen-recording'] },
     });

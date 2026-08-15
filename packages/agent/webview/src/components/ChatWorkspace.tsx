@@ -126,7 +126,7 @@ export interface ChatWorkspaceProps {
   setAmbientNodes: React.Dispatch<React.SetStateAction<AmbientCanvasNode[]>>;
   onNewChat: () => void;
   onUserMessageSent?: (event: { conversationId: string; message: Message }) => void;
-  onSendWithoutConversation?: (input: PendingSendInput) => void;
+  onSendWithoutConversation?: (input: PendingSendInput) => boolean;
   pendingSendRequest?: { id: number; input: PendingSendInput } | null;
   onPendingSendRequestConsumed?: (id: number) => void;
   initialInputRequest?: { id: number; messageText: string } | null;
@@ -404,8 +404,9 @@ export function ChatWorkspace({
   // ---- Behavior hooks ----
   const handleSendWithoutConversation = useCallback(
     (input: PendingSendInput) => {
+      if (!onSendWithoutConversation) return false;
       setVisibleSessionMode('agent');
-      onSendWithoutConversation?.(input);
+      return onSendWithoutConversation(input);
     },
     [onSendWithoutConversation, setVisibleSessionMode],
   );
@@ -477,8 +478,9 @@ export function ChatWorkspace({
       return;
     }
 
+    const accepted = handleSend(pendingSendRequest.input, pendingSendIdentity);
+    if (!accepted) return;
     consumedPendingSendRequestIdRef.current = pendingSendRequest.id;
-    handleSend(pendingSendRequest.input, pendingSendIdentity);
     onPendingSendRequestConsumed?.(pendingSendRequest.id);
   }, [
     handleSend,

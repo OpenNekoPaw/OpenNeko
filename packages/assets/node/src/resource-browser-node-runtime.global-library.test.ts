@@ -232,6 +232,7 @@ async function createFixture(): Promise<{
     openCreativeDocument: async () => undefined,
     openTextEditor: async () => undefined,
     selectSource: async () => undefined,
+    selectWorkspaceFiles: async () => undefined,
     trashWorkspaceItem: async () => undefined,
     selectConfiguredGlobalMediaLibrary: async () => undefined,
     selectGlobalMediaLibrarySource: async () => undefined,
@@ -249,11 +250,6 @@ async function createFixture(): Promise<{
       },
     },
     cut: { addResource: async () => undefined },
-    entity: {
-      executeIntent: async () => {
-        throw new Error('Entity intent is not expected.');
-      },
-    },
   } satisfies ResourceBrowserNodeRuntimeOptions);
   return {
     root,

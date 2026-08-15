@@ -2,14 +2,16 @@ import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
   type CharacterBackgroundStory,
+  type CharacterAuthoringCommand,
+  type CharacterAuthoringSnapshot,
   type CharacterDefinition,
-  type CharacterFoundationCommand,
-  type CharacterFoundationSnapshot,
   type CharacterProject,
   type CharacterOriginSetting,
   type CharacterRepresentationRef,
   type CharacterRepresentationDefaults,
   type CharacterRepresentationKind,
+  type CharacterStorylineDraft,
+  type CharacterStorylineVersion,
   type CharacterVoiceDefaults,
 } from '@neko/chara/contracts';
 import type { SupportedLocale } from '@neko/ui/i18n';
@@ -23,8 +25,9 @@ import {
   submitForm,
 } from './foundation-ui';
 import { formatCount, foundationLabel } from './labels';
+import { CharacterVersionWorkspace } from './character-version-workspace';
 
-type ExecuteCommand = (command: CharacterFoundationCommand) => Promise<CharacterFoundationSnapshot>;
+type ExecuteCommand = (command: CharacterAuthoringCommand) => Promise<CharacterAuthoringSnapshot>;
 
 interface CharacterDraftFields {
   readonly displayName: string;
@@ -45,29 +48,17 @@ interface CharacterDraftFields {
 }
 
 interface StorylineDraftFields {
+  readonly characterStorylineId: string;
+  readonly storylineNodeId: string;
   readonly characterVersionId: string;
   readonly label: string;
   readonly premise: string;
-  readonly desire: string;
-  readonly conflict: string;
-  readonly growthArc: string;
-  readonly stageTitle: string;
-  readonly stageDescription: string;
+  readonly characterState: string;
+  readonly relationshipState: string;
+  readonly narrativeMemories: string;
+  readonly nodeTitle: string;
+  readonly situation: string;
   readonly constraints: string;
-}
-
-interface MemoryDraftFields {
-  readonly characterMemoryScopeId: string;
-  readonly content: string;
-  readonly sourceRef: string;
-  readonly sensitivityTraits: string;
-  readonly retentionTraits: string;
-}
-
-interface RelationshipMemoryDraftFields {
-  readonly relationshipId: string;
-  readonly content: string;
-  readonly sourceRef: string;
 }
 
 const emptyFields: CharacterDraftFields = {
@@ -89,102 +80,81 @@ const emptyFields: CharacterDraftFields = {
 };
 
 const emptyStorylineFields: StorylineDraftFields = {
+  characterStorylineId: '',
+  storylineNodeId: '',
   characterVersionId: '',
   label: '',
   premise: '',
-  desire: '',
-  conflict: '',
-  growthArc: '',
-  stageTitle: '',
-  stageDescription: '',
+  characterState: '',
+  relationshipState: '',
+  narrativeMemories: '',
+  nodeTitle: '',
+  situation: '',
   constraints: '',
 };
 
-const emptyMemoryFields: MemoryDraftFields = {
-  characterMemoryScopeId: '',
-  content: '',
-  sourceRef: 'user-authored:character-studio',
-  sensitivityTraits: '',
-  retentionTraits: '',
-};
-
-const emptyRelationshipMemoryFields: RelationshipMemoryDraftFields = {
-  relationshipId: '',
-  content: '',
-  sourceRef: 'user-authored:character-studio',
-};
-
-export function CharacterPanel({
-  authoringOnly = false,
-  creating,
+export function CharacterAuthoringEditor({
   execute,
   locale,
-  onCreated,
+  onFinalizeAndStartConversation,
   pendingOperation,
   selectedProjectId,
   snapshot,
 }: {
-  readonly authoringOnly?: boolean;
-  readonly creating: boolean;
   readonly execute: ExecuteCommand;
   readonly locale: SupportedLocale;
-  readonly onCreated: (characterProjectId: string) => void;
+  readonly onFinalizeAndStartConversation?: (input: {
+    readonly characterProjectId: string;
+    readonly characterVersionId: string;
+    readonly label: string;
+  }) => Promise<void>;
   readonly pendingOperation?: string;
   readonly selectedProjectId?: string;
-  readonly snapshot: CharacterFoundationSnapshot;
+  readonly snapshot: CharacterAuthoringSnapshot;
 }): JSX.Element {
   const [fields, setFields] = useState<CharacterDraftFields>(emptyFields);
   const [versionLabel, setVersionLabel] = useState('');
   const [storylineFields, setStorylineFields] =
     useState<StorylineDraftFields>(emptyStorylineFields);
-  const [memoryFields, setMemoryFields] = useState<MemoryDraftFields>(emptyMemoryFields);
-  const [relationshipMemoryFields, setRelationshipMemoryFields] =
-    useState<RelationshipMemoryDraftFields>(emptyRelationshipMemoryFields);
-  const selectedProject = snapshot.character.projects.find(
-    (project) => project.characterProjectId === selectedProjectId,
-  );
+  const [comparisonVersionIds, setComparisonVersionIds] = useState<readonly string[]>(['', '']);
+  const [confirmStorylineDelete, setConfirmStorylineDelete] = useState(false);
+  const selectedProject =
+    snapshot.project.characterProjectId === selectedProjectId ? snapshot.project : undefined;
   const versions = useMemo(
     () =>
-      snapshot.character.versions.filter(
+      snapshot.versions.filter(
         (version) => version.characterProjectId === selectedProject?.characterProjectId,
       ),
-    [selectedProject?.characterProjectId, snapshot.character.versions],
+    [selectedProject?.characterProjectId, snapshot.versions],
   );
   const versionIds = useMemo(
     () => new Set(versions.map((version) => version.characterVersionId)),
     [versions],
   );
-  const characterRuns = snapshot.character.characterRuns.filter((run) =>
-    versionIds.has(run.characterVersionId),
+  const storylines = snapshot.storylines.filter(
+    (storyline) => storyline.characterProjectId === selectedProject?.characterProjectId,
   );
-  const characterRunIds = new Set(characterRuns.map((run) => run.characterRunId));
-  const storylineVersions = snapshot.character.storylineVersions.filter((storyline) =>
+  const storylineVersions = snapshot.storylineVersions.filter((storyline) =>
     versionIds.has(storyline.characterVersionId),
   );
-  const storylineVersionIds = new Set(
-    storylineVersions.map((storyline) => storyline.characterStorylineVersionId),
+  const selectedStorylineVersions = storylineVersions.filter(
+    (version) => version.characterStorylineId === storylineFields.characterStorylineId,
   );
-  const storylineRuns = snapshot.character.storylineRuns.filter((run) =>
-    storylineVersionIds.has(run.characterStorylineVersionId),
+  const comparisonVersions = comparisonVersionIds.map((versionId) =>
+    selectedStorylineVersions.find((version) => version.characterStorylineVersionId === versionId),
   );
-  const memoryScopes = snapshot.character.memoryScopes.filter((scope) =>
-    characterRunIds.has(scope.characterRunId),
-  );
-  const relationships = snapshot.character.relationships.filter((relationship) =>
-    versionIds.has(relationship.characterVersionId),
+  const hasUnsavedDraft = useMemo(
+    () => selectedProject !== undefined && !sameFields(fields, projectFields(selectedProject)),
+    [fields, selectedProject],
   );
 
   useEffect(() => {
     setVersionLabel('');
     setStorylineFields(emptyStorylineFields);
-    setMemoryFields(emptyMemoryFields);
-    setRelationshipMemoryFields(emptyRelationshipMemoryFields);
-    if (creating) {
-      setFields(emptyFields);
-      return;
-    }
+    setComparisonVersionIds(['', '']);
+    setConfirmStorylineDelete(false);
     if (selectedProject) setFields(projectFields(selectedProject));
-  }, [creating, selectedProject]);
+  }, [selectedProject]);
   const submitDraft = async () => {
     const definition = definitionFromFields(
       fields,
@@ -194,15 +164,6 @@ export function CharacterPanel({
       selectedProject?.draft.representationDefaults,
       selectedProject?.draft.voiceDefaults,
     );
-    if (creating) {
-      const characterProjectId = createDomainIdentity('character-project');
-      await execute({
-        operation: 'character-project-create',
-        input: { characterProjectId, displayName: fields.displayName, draft: definition },
-      });
-      onCreated(characterProjectId);
-      return;
-    }
     if (!selectedProject) throw new Error('CharacterProject selection is required.');
     await execute({
       operation: 'character-project-update-draft',
@@ -216,7 +177,11 @@ export function CharacterPanel({
       input: { characterProjectId: selectedProject.characterProjectId, reviewStatus },
     });
   };
-  const publish = async () => {
+  const createUsableVersion = async (): Promise<{
+    readonly characterProjectId: string;
+    readonly characterVersionId: string;
+    readonly label: string;
+  }> => {
     if (!selectedProject) throw new Error('CharacterProject selection is required.');
     const characterVersionId = createDomainIdentity('character-version');
     await execute({
@@ -228,86 +193,147 @@ export function CharacterPanel({
       },
     });
     setVersionLabel('');
+    return {
+      characterProjectId: selectedProject.characterProjectId,
+      characterVersionId,
+      label: selectedProject.displayName,
+    };
+  };
+  const publish = async () => {
+    await createUsableVersion();
+  };
+  const finalizeAndStartConversation = async () => {
+    if (!onFinalizeAndStartConversation) {
+      throw new Error('Finalize-and-start Conversation handoff is unavailable.');
+    }
+    const finalized = await createUsableVersion();
+    await onFinalizeAndStartConversation(finalized);
   };
   const publishStoryline = async () => {
     if (!storylineFields.characterVersionId) {
       throw new Error('CharacterVersion selection is required for storyline publication.');
     }
+    if (!selectedProject) throw new Error('CharacterProject selection is required.');
+    const characterStorylineId =
+      storylineFields.characterStorylineId || createDomainIdentity('character-storyline');
+    const storylineNodeId =
+      storylineFields.storylineNodeId || createDomainIdentity('storyline-node');
+    const draft = {
+      characterVersionId: storylineFields.characterVersionId,
+      premise: storylineFields.premise,
+      constraints: lines(storylineFields.constraints),
+      nodeOrder: [storylineNodeId],
+      nodes: [
+        {
+          storylineNodeId,
+          title: storylineFields.nodeTitle,
+          spoilerVisibility: 'visible' as const,
+          context: {
+            situation: storylineFields.situation,
+            characterState: storylineFields.characterState,
+            relationshipState: storylineFields.relationshipState,
+            allowedStoryFacts: [],
+            forbiddenStoryFacts: [],
+            narrativeMemories: lines(storylineFields.narrativeMemories),
+            knowledgeBoundary: [],
+            behaviorConstraints: [],
+            expressionConstraints: [],
+            authorOnlyNotes: [],
+          },
+        },
+      ],
+      edges: [],
+    };
+    await execute(
+      storylineFields.characterStorylineId
+        ? {
+            operation: 'character-storyline-update-draft',
+            input: {
+              characterStorylineId,
+              displayName: storylineFields.label,
+              draft,
+            },
+          }
+        : {
+            operation: 'character-storyline-create',
+            input: {
+              characterStorylineId,
+              characterProjectId: selectedProject.characterProjectId,
+              displayName: storylineFields.label,
+              draft,
+            },
+          },
+    );
     await execute({
       operation: 'character-storyline-publish',
       input: {
+        characterStorylineId,
         characterStorylineVersionId: createDomainIdentity('character-storyline-version'),
-        characterVersionId: storylineFields.characterVersionId,
         label: storylineFields.label,
-        premise: storylineFields.premise,
-        desire: storylineFields.desire,
-        conflict: storylineFields.conflict,
-        growthArc: storylineFields.growthArc,
-        stages: [
-          {
-            stageId: createDomainIdentity('character-storyline-stage'),
-            title: storylineFields.stageTitle,
-            description: storylineFields.stageDescription,
-          },
-        ],
-        turningPoints: [],
-        constraints: lines(storylineFields.constraints),
-        acceptedEvidenceIds: [],
       },
     });
     setStorylineFields(emptyStorylineFields);
+    setComparisonVersionIds(['', '']);
   };
-  const createMemoryScope = async (characterRunId: string) => {
-    await execute({
-      operation: 'character-memory-scope-create',
-      input: {
-        characterMemoryScopeId: createDomainIdentity('character-memory-scope'),
-        characterRunId,
-      },
-    });
-  };
-  const proposeMemory = async () => {
-    const scope = memoryScopes.find(
-      (item) => item.characterMemoryScopeId === memoryFields.characterMemoryScopeId,
+  const selectStoryline = (characterStorylineId: string) => {
+    if (!characterStorylineId) {
+      setStorylineFields(emptyStorylineFields);
+      setComparisonVersionIds(['', '']);
+      setConfirmStorylineDelete(false);
+      return;
+    }
+    const storyline = storylines.find(
+      (candidate) => candidate.characterStorylineId === characterStorylineId,
     );
-    if (!scope) throw new Error('CharacterMemoryScope selection is required.');
+    const draft = snapshot.storylineDrafts.find(
+      (candidate) => candidate.characterStorylineId === characterStorylineId,
+    );
+    if (!storyline || !draft) {
+      throw new Error(`CharacterStoryline '${characterStorylineId}' draft is unavailable.`);
+    }
+    setStorylineFields(storylineFieldsFromDraft(storyline.displayName, draft));
+    setComparisonVersionIds(['', '']);
+    setConfirmStorylineDelete(false);
+  };
+  const restoreStorylineVersion = async (version: CharacterStorylineVersion) => {
     await execute({
-      operation: 'character-memory-candidate-propose',
+      operation: 'character-storyline-restore-as-draft',
       input: {
-        characterMemoryScopeId: scope.characterMemoryScopeId,
-        characterMemoryCandidateId: createDomainIdentity('character-memory-candidate'),
-        content: memoryFields.content,
-        sourceRef: memoryFields.sourceRef,
-        observedAt: new Date().toISOString(),
-        sensitivityTraits: lines(memoryFields.sensitivityTraits),
-        retentionTraits: lines(memoryFields.retentionTraits),
-        expectedMemoryRevision: scope.memoryRevision,
+        characterStorylineId: version.characterStorylineId,
+        characterStorylineVersionId: version.characterStorylineVersionId,
       },
     });
-    setMemoryFields({ ...emptyMemoryFields, characterMemoryScopeId: scope.characterMemoryScopeId });
+    const storyline = storylines.find(
+      (candidate) => candidate.characterStorylineId === version.characterStorylineId,
+    );
+    if (!storyline) {
+      throw new Error(`CharacterStoryline '${version.characterStorylineId}' is unavailable.`);
+    }
+    setStorylineFields(storylineFieldsFromVersion(storyline.displayName, version));
   };
-  const proposeRelationshipMemory = async () => {
-    if (
-      !relationships.some((item) => item.relationshipId === relationshipMemoryFields.relationshipId)
-    ) {
-      throw new Error('UserCharacterRelationship selection is required.');
+  const deleteStoryline = async () => {
+    if (!storylineFields.characterStorylineId) {
+      throw new Error('CharacterStoryline selection is required.');
     }
     await execute({
-      operation: 'relationship-memory-candidate-propose',
+      operation: 'character-storyline-delete',
+      input: { characterStorylineId: storylineFields.characterStorylineId },
+    });
+    setStorylineFields(emptyStorylineFields);
+    setComparisonVersionIds(['', '']);
+    setConfirmStorylineDelete(false);
+  };
+  const captureAuthoringTest = async () => {
+    if (!selectedProject) throw new Error('CharacterProject selection is required.');
+    await execute({
+      operation: 'character-authoring-test-capture',
       input: {
-        relationshipId: relationshipMemoryFields.relationshipId,
-        candidateId: createDomainIdentity('relationship-memory-candidate'),
-        content: relationshipMemoryFields.content,
-        sourceRef: relationshipMemoryFields.sourceRef,
+        characterProjectId: selectedProject.characterProjectId,
+        authoringTestSnapshotId: createDomainIdentity('character-authoring-test'),
       },
     });
-    setRelationshipMemoryFields({
-      ...emptyRelationshipMemoryFields,
-      relationshipId: relationshipMemoryFields.relationshipId,
-    });
   };
-
-  if (!creating && !selectedProject) {
+  if (!selectedProject) {
     return (
       <div className="character-management__detail-empty" role="status">
         {foundationLabel(locale, '所选角色不可用。', 'The selected character is unavailable.')}
@@ -326,21 +352,11 @@ export function CharacterPanel({
       >
         <div className="character-foundation__form-heading">
           <div>
-            <span>
-              {creating
-                ? foundationLabel(locale, '新角色', 'New character')
-                : selectedProject?.characterProjectId}
-            </span>
-            <h3>
-              {creating
-                ? foundationLabel(locale, '定义角色', 'Define character')
-                : selectedProject?.displayName}
-            </h3>
+            <span>{selectedProject.characterProjectId}</span>
+            <h3>{selectedProject.displayName}</h3>
           </div>
           <FoundationSubmit pending={pendingOperation !== undefined}>
-            {creating
-              ? foundationLabel(locale, '创建项目', 'Create project')
-              : foundationLabel(locale, '保存草稿', 'Save draft')}
+            {foundationLabel(locale, '保存草稿', 'Save draft')}
           </FoundationSubmit>
         </div>
         <div className="character-foundation__form-sections">
@@ -357,7 +373,7 @@ export function CharacterPanel({
             <div className="character-foundation__form-grid character-foundation__form-grid--identity">
               <FoundationField label={foundationLabel(locale, '显示名称', 'Display name')}>
                 <input
-                  disabled={!creating}
+                  disabled
                   required
                   value={fields.displayName}
                   onChange={(event) => setFields({ ...fields, displayName: event.target.value })}
@@ -377,7 +393,6 @@ export function CharacterPanel({
           <details
             className="character-foundation__panel character-foundation__disclosure"
             data-character-studio-section="character-definition"
-            open={creating || undefined}
           >
             <summary>
               <FoundationSectionHeading
@@ -590,18 +605,18 @@ export function CharacterPanel({
           </details>
         </div>
       </form>
-      {!creating && selectedProject ? (
+      {selectedProject ? (
         <>
           <section className="character-foundation__publication">
             <div className="character-foundation__publication-heading">
               <FoundationSectionHeading
                 description={foundationLabel(
                   locale,
-                  '审阅当前草稿并发布不可变的角色版本。',
-                  'Review the current draft and publish an immutable character version.',
+                  '审阅当前草稿并创建不可变的本地可用版本。',
+                  'Review the current draft and create an immutable local usable version.',
                 )}
-                eyebrow={foundationLabel(locale, '版本管理', 'Publication')}
-                title={foundationLabel(locale, '审阅与发布', 'Review and publish')}
+                eyebrow={foundationLabel(locale, '版本管理', 'Versions')}
+                title={foundationLabel(locale, '定稿与版本', 'Finalize and versions')}
               />
             </div>
             <div>
@@ -610,7 +625,10 @@ export function CharacterPanel({
                 label={foundationLabel(locale, '角色审阅状态', 'Character review status')}
                 options={[
                   { value: 'draft', label: foundationLabel(locale, '草稿', 'Draft') },
-                  { value: 'ready', label: foundationLabel(locale, '可发布', 'Ready') },
+                  {
+                    value: 'ready',
+                    label: foundationLabel(locale, '可以定稿', 'Ready to finalize'),
+                  },
                   { value: 'blocked', label: foundationLabel(locale, '阻塞', 'Blocked') },
                 ]}
                 value={selectedProject.reviewStatus}
@@ -629,550 +647,351 @@ export function CharacterPanel({
                 disabled={selectedProject.reviewStatus !== 'ready'}
                 pending={pendingOperation !== undefined}
               >
-                {foundationLabel(locale, '发布版本', 'Publish version')}
+                {foundationLabel(locale, '创建可用版本', 'Create usable version')}
               </FoundationSubmit>
+              {onFinalizeAndStartConversation ? (
+                <button
+                  className="character-foundation__secondary-command"
+                  disabled={
+                    selectedProject.reviewStatus !== 'ready' || pendingOperation !== undefined
+                  }
+                  type="button"
+                  onClick={() => void finalizeAndStartConversation().catch(() => undefined)}
+                >
+                  {foundationLabel(locale, '定稿并开始对话', 'Finalize and start Conversation')}
+                </button>
+              ) : null}
             </form>
-            <div className="character-foundation__version-list">
-              <strong>
-                {formatCount(locale, versions.length, '个已发布版本', 'published version')}
-              </strong>
-              {versions.map((version) => (
-                <div key={version.characterVersionId}>
-                  <span>{version.label}</span>
-                  <code>{version.characterVersionId}</code>
+            <CharacterVersionWorkspace
+              execute={execute}
+              hasUnsavedDraft={hasUnsavedDraft}
+              locale={locale}
+              pendingOperation={pendingOperation}
+              project={selectedProject}
+              snapshot={snapshot}
+              versions={versions}
+            />
+          </section>
+          <details
+            className="character-foundation__studio-authoring character-foundation__studio-disclosure"
+            data-character-studio-section="storyline-authoring"
+          >
+            <summary>
+              <div className="character-foundation__studio-heading">
+                <div>
+                  <span>{foundationLabel(locale, '个人故事线', 'Character storylines')}</span>
+                  <h4>
+                    {foundationLabel(locale, '创建角色故事线版本', 'Create a storyline version')}
+                  </h4>
+                </div>
+                <strong>{storylineVersions.length}</strong>
+              </div>
+            </summary>
+            {versions.length === 0 ? (
+              <p>
+                {foundationLabel(
+                  locale,
+                  '先创建一个角色可用版本，再为该版本创建故事线。',
+                  'Create a usable character version before creating a storyline for it.',
+                )}
+              </p>
+            ) : (
+              <form
+                className="character-foundation__form-grid"
+                onSubmit={(event) => submitForm(event, publishStoryline)}
+              >
+                <FoundationField label={foundationLabel(locale, '故事线', 'Character storyline')}>
+                  <select
+                    value={storylineFields.characterStorylineId}
+                    onChange={(event) => selectStoryline(event.target.value)}
+                  >
+                    <option value="">
+                      {foundationLabel(locale, '创建新故事线', 'Create a new storyline')}
+                    </option>
+                    {storylines.map((storyline) => (
+                      <option
+                        key={storyline.characterStorylineId}
+                        value={storyline.characterStorylineId}
+                      >
+                        {storyline.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '角色版本', 'Character version')}>
+                  <select
+                    required
+                    value={storylineFields.characterVersionId}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        characterVersionId: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="">
+                      {foundationLabel(locale, '选择版本', 'Select a version')}
+                    </option>
+                    {versions.map((publication) => (
+                      <option
+                        key={publication.characterVersionId}
+                        value={publication.characterVersionId}
+                      >
+                        {publication.label}
+                      </option>
+                    ))}
+                  </select>
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '故事线名称', 'Storyline label')}>
+                  <input
+                    required
+                    value={storylineFields.label}
+                    onChange={(event) =>
+                      setStorylineFields({ ...storylineFields, label: event.target.value })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '前提', 'Premise')}>
+                  <textarea
+                    required
+                    rows={3}
+                    value={storylineFields.premise}
+                    onChange={(event) =>
+                      setStorylineFields({ ...storylineFields, premise: event.target.value })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '角色状态', 'Character state')}>
+                  <textarea
+                    required
+                    rows={3}
+                    value={storylineFields.characterState}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        characterState: event.target.value,
+                      })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '关系状态', 'Relationship state')}>
+                  <textarea
+                    required
+                    rows={3}
+                    value={storylineFields.relationshipState}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        relationshipState: event.target.value,
+                      })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '叙事记忆', 'Narrative memories')}>
+                  <textarea
+                    required
+                    rows={3}
+                    value={storylineFields.narrativeMemories}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        narrativeMemories: event.target.value,
+                      })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '节点标题', 'Node title')}>
+                  <input
+                    required
+                    value={storylineFields.nodeTitle}
+                    onChange={(event) =>
+                      setStorylineFields({ ...storylineFields, nodeTitle: event.target.value })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '当前情境', 'Current situation')}>
+                  <textarea
+                    required
+                    rows={3}
+                    value={storylineFields.situation}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        situation: event.target.value,
+                      })
+                    }
+                  />
+                </FoundationField>
+                <FoundationField
+                  hint={foundationLabel(locale, '每行一条约束', 'One constraint per line')}
+                  label={foundationLabel(locale, '故事线约束', 'Storyline constraints')}
+                >
+                  <textarea
+                    rows={3}
+                    value={storylineFields.constraints}
+                    onChange={(event) =>
+                      setStorylineFields({
+                        ...storylineFields,
+                        constraints: event.target.value,
+                      })
+                    }
+                  />
+                </FoundationField>
+                <FoundationSubmit pending={pendingOperation !== undefined}>
+                  {foundationLabel(locale, '发布故事线', 'Publish storyline')}
+                </FoundationSubmit>
+                {storylineFields.characterStorylineId ? (
+                  confirmStorylineDelete ? (
+                    <span className="character-foundation__review-actions">
+                      <button
+                        disabled={pendingOperation !== undefined}
+                        type="button"
+                        onClick={() => void deleteStoryline().catch(() => undefined)}
+                      >
+                        {foundationLabel(locale, '确认删除故事线', 'Confirm storyline deletion')}
+                      </button>
+                      <button type="button" onClick={() => setConfirmStorylineDelete(false)}>
+                        {foundationLabel(locale, '取消', 'Cancel')}
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      disabled={pendingOperation !== undefined}
+                      type="button"
+                      onClick={() => setConfirmStorylineDelete(true)}
+                    >
+                      {foundationLabel(locale, '删除所选故事线', 'Delete selected storyline')}
+                    </button>
+                  )
+                ) : null}
+              </form>
+            )}
+            <div className="character-foundation__review-list">
+              {storylineVersions.map((storyline) => (
+                <div
+                  className="character-foundation__storyline-record"
+                  key={storyline.characterStorylineVersionId}
+                >
+                  <strong>{storyline.label}</strong>
+                  <span>{storyline.premise}</span>
+                  <code>{storyline.characterStorylineVersionId}</code>
+                  <button
+                    disabled={pendingOperation !== undefined}
+                    type="button"
+                    onClick={() => void restoreStorylineVersion(storyline).catch(() => undefined)}
+                  >
+                    {foundationLabel(locale, '恢复为草稿', 'Restore as draft')}
+                  </button>
+                </div>
+              ))}
+            </div>
+            {selectedStorylineVersions.length >= 2 ? (
+              <section
+                aria-label={foundationLabel(
+                  locale,
+                  '故事线版本比较',
+                  'Compare storyline publications',
+                )}
+              >
+                <FoundationField label={foundationLabel(locale, '左侧版本', 'Left publication')}>
+                  <select
+                    value={comparisonVersionIds[0]}
+                    onChange={(event) =>
+                      setComparisonVersionIds([event.target.value, comparisonVersionIds[1] ?? ''])
+                    }
+                  >
+                    <option value="">
+                      {foundationLabel(locale, '选择版本', 'Select publication')}
+                    </option>
+                    {selectedStorylineVersions.map((version) => (
+                      <option
+                        key={version.characterStorylineVersionId}
+                        value={version.characterStorylineVersionId}
+                      >
+                        {version.label}
+                      </option>
+                    ))}
+                  </select>
+                </FoundationField>
+                <FoundationField label={foundationLabel(locale, '右侧版本', 'Right publication')}>
+                  <select
+                    value={comparisonVersionIds[1]}
+                    onChange={(event) =>
+                      setComparisonVersionIds([comparisonVersionIds[0] ?? '', event.target.value])
+                    }
+                  >
+                    <option value="">
+                      {foundationLabel(locale, '选择版本', 'Select publication')}
+                    </option>
+                    {selectedStorylineVersions.map((version) => (
+                      <option
+                        key={version.characterStorylineVersionId}
+                        value={version.characterStorylineVersionId}
+                      >
+                        {version.label}
+                      </option>
+                    ))}
+                  </select>
+                </FoundationField>
+                <div className="character-foundation__review-list">
+                  {comparisonVersions.map((version, index) =>
+                    version ? (
+                      <div key={`${index}:${version.characterStorylineVersionId}`}>
+                        <strong>{version.label}</strong>
+                        <span>{version.premise}</span>
+                        <span>
+                          {formatCount(locale, version.nodes.length, '个节点', 'storyline node')}
+                        </span>
+                        {version.nodes.map((node) => (
+                          <span key={node.storylineNodeId}>{node.title}</span>
+                        ))}
+                      </div>
+                    ) : null,
+                  )}
+                </div>
+              </section>
+            ) : null}
+          </details>
+          <section
+            className="character-foundation__studio-authoring"
+            data-character-studio-section="authoring-tests"
+          >
+            <div className="character-foundation__studio-heading">
+              <div>
+                <span>{foundationLabel(locale, '创作测试', 'Authoring tests')}</span>
+                <h4>
+                  {foundationLabel(
+                    locale,
+                    '保存当前草稿测试快照',
+                    'Capture the current draft for testing',
+                  )}
+                </h4>
+              </div>
+              <strong>{snapshot.authoringTestSnapshots.length}</strong>
+            </div>
+            <p>
+              {foundationLabel(
+                locale,
+                '测试快照不会成为可用版本，也不能用于开始对话。',
+                'Test snapshots are not usable versions and cannot start an interaction.',
+              )}
+            </p>
+            <button
+              disabled={pendingOperation !== undefined}
+              type="button"
+              onClick={() => void captureAuthoringTest().catch(() => undefined)}
+            >
+              {foundationLabel(locale, '保存测试快照', 'Capture test snapshot')}
+            </button>
+            <div className="character-foundation__review-list">
+              {snapshot.authoringTestSnapshots.map((testSnapshot) => (
+                <div key={testSnapshot.authoringTestSnapshotId}>
+                  <strong>{testSnapshot.definition.summary}</strong>
+                  <code>{testSnapshot.authoringTestSnapshotId}</code>
                 </div>
               ))}
             </div>
           </section>
-          {!authoringOnly ? (
-            <>
-              <details
-                className="character-foundation__studio-authoring character-foundation__studio-disclosure"
-                data-character-studio-section="storyline-authoring"
-              >
-                <summary>
-                  <div className="character-foundation__studio-heading">
-                    <div>
-                      <span>{foundationLabel(locale, '个人故事线', 'Character storylines')}</span>
-                      <h4>
-                        {foundationLabel(locale, '发布角色故事线', 'Publish a character storyline')}
-                      </h4>
-                    </div>
-                    <strong>{storylineVersions.length}</strong>
-                  </div>
-                </summary>
-                {versions.length === 0 ? (
-                  <p>
-                    {foundationLabel(
-                      locale,
-                      '先发布一个角色版本，再为该版本创建故事线。',
-                      'Publish a character version before creating a storyline for it.',
-                    )}
-                  </p>
-                ) : (
-                  <form
-                    className="character-foundation__form-grid"
-                    onSubmit={(event) => submitForm(event, publishStoryline)}
-                  >
-                    <FoundationField
-                      label={foundationLabel(locale, '角色版本', 'Character version')}
-                    >
-                      <select
-                        required
-                        value={storylineFields.characterVersionId}
-                        onChange={(event) =>
-                          setStorylineFields({
-                            ...storylineFields,
-                            characterVersionId: event.target.value,
-                          })
-                        }
-                      >
-                        <option value="">
-                          {foundationLabel(locale, '选择版本', 'Select a version')}
-                        </option>
-                        {versions.map((publication) => (
-                          <option
-                            key={publication.characterVersionId}
-                            value={publication.characterVersionId}
-                          >
-                            {publication.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '故事线名称', 'Storyline label')}
-                    >
-                      <input
-                        required
-                        value={storylineFields.label}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, label: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '前提', 'Premise')}>
-                      <textarea
-                        required
-                        rows={3}
-                        value={storylineFields.premise}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, premise: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '欲望', 'Desire')}>
-                      <textarea
-                        required
-                        rows={3}
-                        value={storylineFields.desire}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, desire: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '冲突', 'Conflict')}>
-                      <textarea
-                        required
-                        rows={3}
-                        value={storylineFields.conflict}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, conflict: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '成长弧', 'Growth arc')}>
-                      <textarea
-                        required
-                        rows={3}
-                        value={storylineFields.growthArc}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, growthArc: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '初始阶段', 'Initial stage')}>
-                      <input
-                        required
-                        value={storylineFields.stageTitle}
-                        onChange={(event) =>
-                          setStorylineFields({ ...storylineFields, stageTitle: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '阶段说明', 'Stage description')}
-                    >
-                      <textarea
-                        rows={3}
-                        value={storylineFields.stageDescription}
-                        onChange={(event) =>
-                          setStorylineFields({
-                            ...storylineFields,
-                            stageDescription: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      hint={foundationLabel(locale, '每行一条约束', 'One constraint per line')}
-                      label={foundationLabel(locale, '故事线约束', 'Storyline constraints')}
-                    >
-                      <textarea
-                        rows={3}
-                        value={storylineFields.constraints}
-                        onChange={(event) =>
-                          setStorylineFields({
-                            ...storylineFields,
-                            constraints: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationSubmit pending={pendingOperation !== undefined}>
-                      {foundationLabel(locale, '发布故事线', 'Publish storyline')}
-                    </FoundationSubmit>
-                  </form>
-                )}
-                <div className="character-foundation__review-list">
-                  {storylineVersions.map((storyline) => (
-                    <div
-                      className="character-foundation__storyline-record"
-                      key={storyline.characterStorylineVersionId}
-                    >
-                      <strong>{storyline.label}</strong>
-                      <span>{storyline.premise}</span>
-                      <code>{storyline.characterStorylineVersionId}</code>
-                    </div>
-                  ))}
-                </div>
-              </details>
-              <details
-                className="character-foundation__studio-authoring character-foundation__studio-disclosure"
-                data-character-studio-section="memory-review"
-              >
-                <summary>
-                  <div className="character-foundation__studio-heading">
-                    <div>
-                      <span>{foundationLabel(locale, '角色主观记忆', 'Character memory')}</span>
-                      <h4>
-                        {foundationLabel(
-                          locale,
-                          '候选与已接受记忆',
-                          'Candidates and accepted memories',
-                        )}
-                      </h4>
-                    </div>
-                    <strong>{memoryScopes.length}</strong>
-                  </div>
-                </summary>
-                <div className="character-foundation__review-list">
-                  {characterRuns.map((run) => {
-                    const scope = memoryScopes.find(
-                      (item) => item.characterRunId === run.characterRunId,
-                    );
-                    return (
-                      <div key={run.characterRunId}>
-                        <code>{run.characterRunId}</code>
-                        {scope ? (
-                          <span>{`${scope.entries.filter((entry) => entry.status === 'active').length} active · ${scope.candidates.filter((candidate) => candidate.status === 'pending').length} pending`}</span>
-                        ) : (
-                          <button
-                            disabled={pendingOperation !== undefined}
-                            type="button"
-                            onClick={() =>
-                              void createMemoryScope(run.characterRunId).catch(() => undefined)
-                            }
-                          >
-                            {foundationLabel(locale, '创建记忆域', 'Create memory scope')}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                {memoryScopes.length > 0 ? (
-                  <form
-                    className="character-foundation__form-grid"
-                    onSubmit={(event) => submitForm(event, proposeMemory)}
-                  >
-                    <FoundationField label={foundationLabel(locale, '记忆域', 'Memory scope')}>
-                      <select
-                        required
-                        value={memoryFields.characterMemoryScopeId}
-                        onChange={(event) =>
-                          setMemoryFields({
-                            ...memoryFields,
-                            characterMemoryScopeId: event.target.value,
-                          })
-                        }
-                      >
-                        <option value="">
-                          {foundationLabel(locale, '选择记忆域', 'Select a scope')}
-                        </option>
-                        {memoryScopes.map((scope) => (
-                          <option
-                            key={scope.characterMemoryScopeId}
-                            value={scope.characterMemoryScopeId}
-                          >
-                            {scope.characterMemoryScopeId}
-                          </option>
-                        ))}
-                      </select>
-                    </FoundationField>
-                    <FoundationField label={foundationLabel(locale, '记忆内容', 'Memory content')}>
-                      <textarea
-                        required
-                        rows={3}
-                        value={memoryFields.content}
-                        onChange={(event) =>
-                          setMemoryFields({ ...memoryFields, content: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '来源引用', 'Source reference')}
-                    >
-                      <input
-                        required
-                        value={memoryFields.sourceRef}
-                        onChange={(event) =>
-                          setMemoryFields({ ...memoryFields, sourceRef: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '敏感标签', 'Sensitivity traits')}
-                    >
-                      <textarea
-                        rows={2}
-                        value={memoryFields.sensitivityTraits}
-                        onChange={(event) =>
-                          setMemoryFields({
-                            ...memoryFields,
-                            sensitivityTraits: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '保留标签', 'Retention traits')}
-                    >
-                      <textarea
-                        rows={2}
-                        value={memoryFields.retentionTraits}
-                        onChange={(event) =>
-                          setMemoryFields({ ...memoryFields, retentionTraits: event.target.value })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationSubmit pending={pendingOperation !== undefined}>
-                      {foundationLabel(locale, '提出记忆候选', 'Propose memory candidate')}
-                    </FoundationSubmit>
-                  </form>
-                ) : null}
-                <div className="character-foundation__review-list">
-                  {memoryScopes.flatMap((scope) =>
-                    scope.candidates.map((candidate) => (
-                      <div key={candidate.characterMemoryCandidateId}>
-                        <strong>{candidate.content}</strong>
-                        <span>{candidate.status}</span>
-                        {candidate.status === 'pending' ? (
-                          <span className="character-foundation__review-actions">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void execute({
-                                  operation: 'character-memory-candidate-accept',
-                                  input: {
-                                    characterMemoryScopeId: scope.characterMemoryScopeId,
-                                    characterMemoryCandidateId:
-                                      candidate.characterMemoryCandidateId,
-                                    characterMemoryEntryId:
-                                      createDomainIdentity('character-memory-entry'),
-                                    expectedMemoryRevision: scope.memoryRevision,
-                                  },
-                                }).catch(() => undefined)
-                              }
-                            >
-                              {foundationLabel(locale, '接受', 'Accept')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void execute({
-                                  operation: 'character-memory-candidate-reject',
-                                  input: {
-                                    characterMemoryScopeId: scope.characterMemoryScopeId,
-                                    characterMemoryCandidateId:
-                                      candidate.characterMemoryCandidateId,
-                                    expectedMemoryRevision: scope.memoryRevision,
-                                  },
-                                }).catch(() => undefined)
-                              }
-                            >
-                              {foundationLabel(locale, '拒绝', 'Reject')}
-                            </button>
-                          </span>
-                        ) : null}
-                      </div>
-                    )),
-                  )}
-                </div>
-              </details>
-              <details
-                className="character-foundation__studio-authoring character-foundation__studio-disclosure"
-                data-character-studio-section="relationship-memory-review"
-              >
-                <summary>
-                  <div className="character-foundation__studio-heading">
-                    <div>
-                      <span>{foundationLabel(locale, '关系记忆', 'Relationship memory')}</span>
-                      <h4>
-                        {foundationLabel(
-                          locale,
-                          '独立审阅关系记忆',
-                          'Review relationship memory independently',
-                        )}
-                      </h4>
-                    </div>
-                    <strong>{relationships.length}</strong>
-                  </div>
-                </summary>
-                {relationships.length > 0 ? (
-                  <form
-                    className="character-foundation__form-grid"
-                    onSubmit={(event) => submitForm(event, proposeRelationshipMemory)}
-                  >
-                    <FoundationField label={foundationLabel(locale, '角色关系', 'Relationship')}>
-                      <select
-                        required
-                        value={relationshipMemoryFields.relationshipId}
-                        onChange={(event) =>
-                          setRelationshipMemoryFields({
-                            ...relationshipMemoryFields,
-                            relationshipId: event.target.value,
-                          })
-                        }
-                      >
-                        <option value="">
-                          {foundationLabel(locale, '选择关系', 'Select a relationship')}
-                        </option>
-                        {relationships.map((relationship) => (
-                          <option
-                            key={relationship.relationshipId}
-                            value={relationship.relationshipId}
-                          >
-                            {relationship.relationshipId}
-                          </option>
-                        ))}
-                      </select>
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '关系记忆内容', 'Relationship memory content')}
-                    >
-                      <textarea
-                        required
-                        rows={3}
-                        value={relationshipMemoryFields.content}
-                        onChange={(event) =>
-                          setRelationshipMemoryFields({
-                            ...relationshipMemoryFields,
-                            content: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationField
-                      label={foundationLabel(locale, '来源引用', 'Source reference')}
-                    >
-                      <input
-                        required
-                        value={relationshipMemoryFields.sourceRef}
-                        onChange={(event) =>
-                          setRelationshipMemoryFields({
-                            ...relationshipMemoryFields,
-                            sourceRef: event.target.value,
-                          })
-                        }
-                      />
-                    </FoundationField>
-                    <FoundationSubmit pending={pendingOperation !== undefined}>
-                      {foundationLabel(locale, '提出关系记忆', 'Propose relationship memory')}
-                    </FoundationSubmit>
-                  </form>
-                ) : (
-                  <p>
-                    {foundationLabel(
-                      locale,
-                      '角色进入 Companion 对话后会创建可独立审阅的关系记录。',
-                      'Companion dialogue creates relationship records that can be reviewed independently.',
-                    )}
-                  </p>
-                )}
-                <div className="character-foundation__review-list">
-                  {relationships.flatMap((relationship) => [
-                    ...relationship.candidates.map((candidate) => (
-                      <div key={`${relationship.relationshipId}:${candidate.candidateId}`}>
-                        <strong>{candidate.content}</strong>
-                        <span>{candidate.status}</span>
-                        {candidate.status === 'pending' ? (
-                          <span className="character-foundation__review-actions">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void execute({
-                                  operation: 'relationship-memory-candidate-accept',
-                                  input: {
-                                    relationshipId: relationship.relationshipId,
-                                    candidateId: candidate.candidateId,
-                                    memoryId: createDomainIdentity('relationship-memory'),
-                                  },
-                                }).catch(() => undefined)
-                              }
-                            >
-                              {foundationLabel(locale, '接受', 'Accept')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void execute({
-                                  operation: 'relationship-memory-candidate-reject',
-                                  input: {
-                                    relationshipId: relationship.relationshipId,
-                                    candidateId: candidate.candidateId,
-                                  },
-                                }).catch(() => undefined)
-                              }
-                            >
-                              {foundationLabel(locale, '拒绝', 'Reject')}
-                            </button>
-                          </span>
-                        ) : null}
-                      </div>
-                    )),
-                    ...relationship.memories.map((memory) => (
-                      <div key={`${relationship.relationshipId}:${memory.memoryId}`}>
-                        <strong>{memory.content}</strong>
-                        <span>{memory.sourceRef}</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void execute({
-                              operation: 'relationship-memory-delete',
-                              input: {
-                                relationshipId: relationship.relationshipId,
-                                memoryId: memory.memoryId,
-                              },
-                            }).catch(() => undefined)
-                          }
-                        >
-                          {foundationLabel(locale, '删除', 'Delete')}
-                        </button>
-                      </div>
-                    )),
-                  ])}
-                </div>
-              </details>
-              <section
-                className="character-foundation__studio-inventory"
-                data-character-studio-section="runtime-inventory"
-              >
-                <h4>
-                  {foundationLabel(locale, '角色能力与历史', 'Character capabilities and history')}
-                </h4>
-                <div className="character-foundation__studio-grid">
-                  <StudioSummary
-                    label={foundationLabel(locale, '个人故事线', 'Character storylines')}
-                    value={`${storylineVersions.length} / ${storylineRuns.length}`}
-                  />
-                  <StudioSummary
-                    label={foundationLabel(locale, '角色主观记忆', 'Character memory')}
-                    value={`${memoryScopes.length}`}
-                  />
-                  <StudioSummary
-                    label={foundationLabel(locale, '关系记忆', 'Relationship memory')}
-                    value={`${relationships.reduce((count, item) => count + item.memories.length, 0)}`}
-                  />
-                  <StudioSummary
-                    label={foundationLabel(locale, '表现资源', 'Presentation resources')}
-                    value={`${selectedProject.draft.representationRefs.length}`}
-                  />
-                  <StudioSummary
-                    label={foundationLabel(locale, '语音默认值', 'Voice defaults')}
-                    value={
-                      selectedProject.draft.voiceDefaults?.voiceRepresentationId ??
-                      foundationLabel(locale, '未配置', 'Not configured')
-                    }
-                  />
-                  <StudioSummary
-                    label={foundationLabel(locale, '运行历史', 'Runtime history')}
-                    value={`${characterRuns.length}`}
-                  />
-                </div>
-              </section>
-            </>
-          ) : null}
         </>
       ) : null}
     </div>
@@ -1214,6 +1033,60 @@ function projectFields(project: CharacterProject): CharacterDraftFields {
     voiceResourceRef: voice?.kind === 'voice' ? voice.resourceRef : '',
     voiceSpeed: project.draft.voiceDefaults?.speed ?? 1,
     voiceAutoRead: project.draft.voiceDefaults?.autoRead ?? false,
+  };
+}
+
+function sameFields(left: CharacterDraftFields, right: CharacterDraftFields): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function storylineFieldsFromDraft(
+  label: string,
+  draft: CharacterStorylineDraft,
+): StorylineDraftFields {
+  const nodeId = draft.nodeOrder[0];
+  const node = draft.nodes.find((candidate) => candidate.storylineNodeId === nodeId);
+  if (!nodeId || !node) {
+    throw new Error(`CharacterStoryline '${draft.characterStorylineId}' has no editable node.`);
+  }
+  return storylineFieldsFromContent(label, draft, nodeId, node);
+}
+
+function storylineFieldsFromVersion(
+  displayName: string,
+  version: CharacterStorylineVersion,
+): StorylineDraftFields {
+  const nodeId = version.nodeOrder[0];
+  const node = version.nodes.find((candidate) => candidate.storylineNodeId === nodeId);
+  if (!nodeId || !node) {
+    throw new Error(
+      `CharacterStorylineVersion '${version.characterStorylineVersionId}' has no editable node.`,
+    );
+  }
+  return storylineFieldsFromContent(displayName, version, nodeId, node);
+}
+
+function storylineFieldsFromContent(
+  displayName: string,
+  content: Pick<
+    CharacterStorylineDraft,
+    'characterStorylineId' | 'characterVersionId' | 'premise' | 'constraints'
+  >,
+  storylineNodeId: string,
+  node: CharacterStorylineDraft['nodes'][number],
+): StorylineDraftFields {
+  return {
+    characterStorylineId: content.characterStorylineId,
+    storylineNodeId,
+    characterVersionId: content.characterVersionId,
+    label: displayName,
+    premise: content.premise,
+    characterState: node.context.characterState ?? '',
+    relationshipState: node.context.relationshipState ?? '',
+    narrativeMemories: node.context.narrativeMemories.join('\n'),
+    nodeTitle: node.title,
+    situation: node.context.situation,
+    constraints: content.constraints.join('\n'),
   };
 }
 
@@ -1320,15 +1193,6 @@ function selectedRepresentation(
   return representationId === undefined
     ? undefined
     : refs.find((ref) => ref.representationId === representationId);
-}
-
-function StudioSummary({ label, value }: { readonly label: string; readonly value: string }) {
-  return (
-    <div className="character-foundation__studio-summary">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
 }
 
 function FoundationSectionHeading({

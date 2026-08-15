@@ -445,14 +445,23 @@ describe('Desktop Shell contract', () => {
     ).toEqual([diagnostic]);
   });
 
-  it('parses an exact experimental Scene reset diagnostic', () => {
+  it.each([
+    {
+      owner: 'character' as const,
+      resetSceneId: 'scene:window-1:character-management',
+      message: 'Character experimental presentation was reset.',
+    },
+    {
+      owner: 'workspace' as const,
+      resetSceneId: 'scene:window-1:workspace-stale',
+      message: 'Workspace presentation was reset.',
+    },
+  ])('parses an exact $owner Scene reset diagnostic', (reset) => {
     const diagnostic = {
       code: 'desktop-presentation-reset' as const,
       severity: 'warning' as const,
       windowId: 'window-1',
-      owner: 'character' as const,
-      resetSceneId: 'scene:window-1:character-management',
-      message: 'Character experimental presentation was reset.',
+      ...reset,
     };
 
     expect(

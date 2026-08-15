@@ -100,12 +100,34 @@ describe('Canvas Host runtime contract', () => {
     ).toThrowError(CanvasHostRuntimeContractError);
   });
 
+  it('preserves exact node removal evidence on save intents', () => {
+    const save = createCanvasHostIntentRequest({
+      requestId: 'request-save',
+      commandId: 'command-save',
+      identity,
+      intent: { type: 'save', removedNodeIds: ['node-1', 'node-2'] },
+    });
+
+    expect(parseCanvasHostIntentRequest(save).intent).toEqual({
+      type: 'save',
+      removedNodeIds: ['node-1', 'node-2'],
+    });
+    expect(() =>
+      parseCanvasHostIntentRequest({
+        ...save,
+        intent: { type: 'save', removedNodeIds: ['node-1', 'node-1'] },
+      }),
+    ).toThrowError(CanvasHostRuntimeContractError);
+  });
+
   it('preserves a stale-Recipe Generation projection and rejects invalid projection fields', () => {
     const projection = {
       nodeId: 'generation-1',
       submissionId: 'submission-1',
       recipeInputFingerprint: 'sha256:recipe-1',
       phase: 'succeeded',
+      createdAt: 100,
+      updatedAt: 250,
       recipeStale: true,
     };
     const snapshot = parseCanvasHostSnapshot({
@@ -126,6 +148,19 @@ describe('Canvas Host runtime contract', () => {
         generationNodes: [{ ...projection, staleReason: 'recipe-changed' }],
       }),
     ).toThrowError('Canvas Generation runtime projection contains unsupported fields.');
+    expect(() =>
+      parseCanvasHostSnapshot({
+        ...validSnapshot(),
+        generationNodes: [{ ...projection, updatedAt: 50 }],
+      }),
+    ).toThrowError('Canvas Generation runtime timestamp order is invalid.');
+    const { updatedAt: _updatedAt, ...missingUpdatedAt } = projection;
+    expect(() =>
+      parseCanvasHostSnapshot({
+        ...validSnapshot(),
+        generationNodes: [missingUpdatedAt],
+      }),
+    ).toThrowError('Canvas Generation runtime timestamps must be projected together.');
   });
 
   it('rejects removed fields, absolute identities and stale sessions', () => {

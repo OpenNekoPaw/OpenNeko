@@ -1,21 +1,313 @@
 import {
+  CubeIcon,
   FolderIcon,
   GridIcon,
   LayersIcon,
+  LoadingIcon,
   RemoveIcon,
   SearchIcon,
   TrashIcon,
+  UserIcon,
+  UsersIcon,
   WarningIcon,
 } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { EmptyState } from '@neko/ui/primitives';
-import type { ProjectCatalogItem } from '@neko/project/contracts';
-import { useMemo, useState } from 'react';
+import type {
+  OpenNekoDesktopProjectAuthoringBridge,
+  ProjectAuthoringNavigationBinding,
+  ProjectCatalogItem,
+  ProjectContentGroup,
+  ProjectContentProjection,
+} from '@neko/project/contracts';
+import { useEffect, useMemo, useState } from 'react';
 
 export * from './authoring-workbench';
+export * from './project-workspace';
 
 export type ProjectCatalogSort =
   'updated-descending' | 'updated-ascending' | 'name-ascending' | 'name-descending';
+
+export interface ProjectContentRootProps {
+  readonly binding: ProjectAuthoringNavigationBinding;
+  readonly chrome?: 'standalone' | 'embedded';
+  readonly host: OpenNekoDesktopProjectAuthoringBridge['projectAuthoring'];
+  readonly initialProjection?: ProjectContentProjection;
+  readonly onOpenCharacter?: (characterProjectId: string, label: string) => void;
+  readonly onOpenWorld?: (worldProjectId: string, label: string) => void;
+  readonly windowId: string;
+}
+
+export function ProjectContentRoot({
+  binding,
+  chrome = 'standalone',
+  host,
+  initialProjection,
+  onOpenCharacter,
+  onOpenWorld,
+  windowId,
+}: ProjectContentRootProps): JSX.Element {
+  const { t } = useTranslation();
+  const loadFailedLabel = t('projectContent.loadFailed');
+  const { workspaceId, workspaceGrantId, projectId } = binding;
+  const [state, setState] = useState<
+    | { readonly status: 'loading'; readonly projectId: string }
+    | {
+        readonly status: 'ready';
+        readonly projectId: string;
+        readonly projection: ProjectContentProjection;
+      }
+    | { readonly status: 'failed'; readonly projectId: string; readonly message: string }
+  >(
+    initialProjection?.projectId === projectId
+      ? { status: 'ready', projectId, projection: initialProjection }
+      : { status: 'loading', projectId },
+  );
+
+  useEffect(() => {
+    if (initialProjection?.projectId === projectId) {
+      setState({ status: 'ready', projectId, projection: initialProjection });
+      return;
+    }
+    const controller = new AbortController();
+    setState({ status: 'loading', projectId });
+    void host.getContent(windowId, { workspaceId, workspaceGrantId, projectId }).then(
+      (result) => {
+        if (!controller.signal.aborted)
+          setState({ status: 'ready', projectId, projection: result.projection });
+      },
+      (error: unknown) => {
+        if (!controller.signal.aborted) {
+          setState({
+            status: 'failed',
+            projectId,
+            message: describeProjectAuthoringError(error, loadFailedLabel),
+          });
+        }
+      },
+    );
+    return () => controller.abort();
+  }, [
+    projectId,
+    host,
+    initialProjection,
+    loadFailedLabel,
+    windowId,
+    workspaceGrantId,
+    workspaceId,
+  ]);
+
+  const visibleState = state.projectId === projectId ? state : undefined;
+  if (!visibleState || visibleState.status === 'loading') {
+    return (
+      <section className="project-content-root is-loading" aria-label={t('projectContent.title')}>
+        <LoadingIcon size={20} />
+        <span>{t('projectContent.loading')}</span>
+      </section>
+    );
+  }
+  if (visibleState.status === 'failed') {
+    return (
+      <section className="project-content-root" aria-label={t('projectContent.title')}>
+        <EmptyState
+          fill
+          icon={<WarningIcon size={24} />}
+          title={t('projectContent.unavailable')}
+          description={visibleState.message}
+        />
+      </section>
+    );
+  }
+  const projection = visibleState.projection;
+  return (
+    <section className={`project-content-root is-${chrome}`} aria-label={t('projectContent.title')}>
+      {chrome === 'standalone' ? (
+        <header className="project-content-header">
+          <h2>{t('projectContent.title')}</h2>
+        </header>
+      ) : null}
+      <div className="project-content-groups">
+        <ProjectContentGroupSection
+          group="characters"
+          icon={<UsersIcon size={17} />}
+          items={projection.characters.map((item) => ({
+            identity: `character:${item.characterProjectId}`,
+            label: item.label ?? item.characterProjectId,
+            metadata: item.characterProjectId,
+            availability: item.availability,
+            diagnostic: item.diagnostic,
+            ...(onOpenCharacter && item.availability === 'available'
+              ? {
+                  activate: () =>
+                    onOpenCharacter(item.characterProjectId, item.label ?? item.characterProjectId),
+                }
+              : {}),
+          }))}
+          projection={projection}
+        />
+        <ProjectContentGroupSection
+          group="worlds"
+          icon={<FolderIcon size={17} />}
+          items={projection.worlds.map((item) => ({
+            identity: `world:${item.worldProjectId}`,
+            label: item.label ?? item.worldProjectId,
+            metadata: item.worldProjectId,
+            availability: item.availability,
+            diagnostic: item.diagnostic,
+            ...(onOpenWorld && item.availability === 'available'
+              ? {
+                  activate: () =>
+                    onOpenWorld(item.worldProjectId, item.label ?? item.worldProjectId),
+                }
+              : {}),
+          }))}
+          projection={projection}
+        />
+        <ProjectContentGroupSection
+          group="elements"
+          icon={<CubeIcon size={17} />}
+          items={projection.elements.map((item) => ({
+            identity: `project-entity:${item.entityId}`,
+            label: item.label,
+            metadata: t(`projectContent.kinds.${item.entityKind}`),
+            availability: item.availability,
+            diagnostic: item.diagnostic,
+          }))}
+          projection={projection}
+        />
+        <ProjectContentGroupSection
+          group="candidates"
+          icon={<UserIcon size={17} />}
+          items={projection.candidates.map((item) => ({
+            identity: `entity-candidate:${item.candidateId}`,
+            label: item.label,
+            metadata: `${t(`projectContent.kinds.${item.entityKind}`)} · ${t(`projectContent.freshness.${item.freshness}`)}`,
+            availability: 'available',
+          }))}
+          projection={projection}
+        />
+      </div>
+    </section>
+  );
+}
+
+function describeProjectAuthoringError(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : fallback;
+  if (!message.startsWith("Error invoking remote method '")) return message;
+  const boundary = message.indexOf("':");
+  if (boundary < 0) return message;
+  const detail = message.slice(boundary + 2).trimStart();
+  return detail.startsWith('Error:') ? detail.slice('Error:'.length).trimStart() : detail;
+}
+
+function ProjectContentGroupSection({
+  group,
+  icon,
+  items,
+  projection,
+}: {
+  readonly group: ProjectContentGroup;
+  readonly icon: JSX.Element;
+  readonly items: readonly {
+    readonly identity: string;
+    readonly label: string;
+    readonly metadata: string;
+    readonly availability: string;
+    readonly diagnostic?: string;
+    readonly activate?: () => void;
+  }[];
+  readonly projection: ProjectContentProjection;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const diagnostics = projection.diagnostics.filter((item) => item.group === group);
+  return (
+    <section className="project-content-group" data-project-content-group={group}>
+      <header>
+        {icon}
+        <h3>{t(`projectContent.groups.${group}`)}</h3>
+        <span>{items.length}</span>
+      </header>
+      {items.length === 0 ? (
+        <p className="project-content-empty">{t(`projectContent.empty.${group}`)}</p>
+      ) : (
+        <div className="project-content-list">
+          {items.map((item) => (
+            <ProjectContentRow icon={icon} item={item} key={item.identity} />
+          ))}
+        </div>
+      )}
+      {diagnostics.map((diagnostic, index) => (
+        <p
+          className="project-content-diagnostic"
+          key={`${diagnostic.recordId ?? group}:${index}`}
+          role="status"
+        >
+          <WarningIcon size={14} />
+          <span>{diagnostic.message}</span>
+        </p>
+      ))}
+    </section>
+  );
+}
+
+function ProjectContentRow({
+  icon,
+  item,
+}: {
+  readonly icon: JSX.Element;
+  readonly item: {
+    readonly identity: string;
+    readonly label: string;
+    readonly metadata: string;
+    readonly availability: string;
+    readonly diagnostic?: string;
+    readonly activate?: () => void;
+  };
+}): JSX.Element {
+  const { t } = useTranslation();
+  const content = (
+    <>
+      <span className="project-content-row-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="project-content-row-copy">
+        <strong>{item.label}</strong>
+        <small>{item.metadata}</small>
+      </span>
+      {item.availability !== 'available' ? (
+        <span className="project-content-status">
+          {item.availability === 'needs-attention'
+            ? t('projectContent.availability.needs-attention')
+            : t('projectContent.availability.inactive')}
+        </span>
+      ) : null}
+      {item.diagnostic ? (
+        <span className="project-content-row-diagnostic" role="status">
+          {item.diagnostic}
+        </span>
+      ) : null}
+    </>
+  );
+  return item.activate ? (
+    <button
+      className="project-content-row is-actionable"
+      data-availability={item.availability}
+      data-owner-identity={item.identity}
+      onClick={item.activate}
+      type="button"
+    >
+      {content}
+    </button>
+  ) : (
+    <div
+      className="project-content-row"
+      data-availability={item.availability}
+      data-owner-identity={item.identity}
+    >
+      {content}
+    </div>
+  );
+}
 
 export interface ProjectCatalogRootProps {
   readonly associatedConversationCounts: Readonly<Record<string, number>>;

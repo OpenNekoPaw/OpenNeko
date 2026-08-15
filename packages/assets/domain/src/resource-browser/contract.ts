@@ -1,19 +1,4 @@
-import {
-  assertProjectEntityInspectorProjection,
-  assertProjectEntityInspectorIntent,
-  isEntityRepresentationRole,
-  isCreativeEntityKind,
-  type CreativeEntityKind,
-  type EntityRepresentationRole,
-  type ProjectEntityInspectorProjection,
-  type ProjectEntityInspectorIntent,
-} from '@neko/entity-domain';
 import { validateContentLocator, type ContentLocator } from '@neko/content';
-import {
-  validateWorkspaceLinkedMediaLibraryName,
-  type WorkspaceMediaLibraryRecoveryPlan,
-  type WorkspaceMediaLibraryStatus,
-} from '@neko/assets-domain/contracts';
 import { isPortablePathSegment } from '@neko/shared/path';
 
 export function createResourceBrowserViewId(projectViewId: string): string {
@@ -37,6 +22,7 @@ export const RESOURCE_BROWSER_ROUTES = {
   removeSource: 'source.remove',
   createFile: 'workspace-entry.create-file',
   createDirectory: 'workspace-entry.create-directory',
+  importFiles: 'workspace-entry.import-files',
   createCreativeDocument: 'creative-document.create',
   openCreativeDocument: 'creative-document.open',
   trashContent: 'content.trash',
@@ -45,25 +31,13 @@ export const RESOURCE_BROWSER_ROUTES = {
   addToCut: 'cut.add',
   reveal: 'reveal',
   addToCanvas: 'canvas.add',
-  manageEntity: 'entity.manage',
 } as const;
 
 export type ResourceBrowserRoute =
   (typeof RESOURCE_BROWSER_ROUTES)[keyof typeof RESOURCE_BROWSER_ROUTES];
-export type ResourceBrowserFacet = 'files' | 'media' | 'assets' | 'entities';
+export type ResourceBrowserSource = 'files' | 'media' | 'assets';
 export type ResourceBrowserItemKind =
-  | 'directory'
-  | 'file'
-  | 'image'
-  | 'video'
-  | 'audio'
-  | 'document'
-  | 'asset'
-  | 'character'
-  | 'scene'
-  | 'object'
-  | 'location'
-  | 'style';
+  'directory' | 'file' | 'image' | 'video' | 'audio' | 'document' | 'asset';
 export type ResourceBrowserCapability =
   'preview' | 'edit-text' | 'open-creative-document' | 'add-to-cut' | 'reveal' | 'add-to-canvas';
 
@@ -71,6 +45,33 @@ export interface ResourceBrowserDiagnostic {
   readonly code: string;
   readonly message: string;
   readonly recordId?: string;
+}
+
+export type ResourceBrowserMediaLibraryState =
+  | 'available'
+  | 'required-unlinked'
+  | 'connection-missing'
+  | 'target-unavailable'
+  | 'content-incomplete'
+  | 'binding-invalid'
+  | 'entry-conflict'
+  | 'unreferenced-local-binding';
+
+export interface ResourceBrowserMediaLibraryStatus {
+  readonly libraryName: string;
+  readonly state: ResourceBrowserMediaLibraryState;
+  readonly referenceCount: number;
+  readonly missingCount: number;
+  readonly operationFingerprint: string;
+  readonly diagnostic?: {
+    readonly code: Exclude<
+      ResourceBrowserMediaLibraryState,
+      'available' | 'unreferenced-local-binding'
+    >;
+    readonly severity: 'warning' | 'error';
+    readonly message: string;
+    readonly missingCount?: number;
+  };
 }
 
 export interface ResourceBrowserIdentity {
@@ -82,16 +83,6 @@ export interface ResourceBrowserIdentity {
   readonly rendererSessionId: string;
 }
 
-export interface ResourceBrowserEntityRef {
-  readonly entityId: string;
-  readonly entityKind: CreativeEntityKind;
-}
-
-export interface ResourceBrowserCandidateRef {
-  readonly candidateId: string;
-  readonly entityKind: CreativeEntityKind;
-}
-
 export interface ResourceBrowserThumbnailDescriptor {
   readonly descriptorId: string;
   readonly sourceFingerprint: string;
@@ -100,26 +91,35 @@ export interface ResourceBrowserThumbnailDescriptor {
 
 interface ResourceBrowserItemBase {
   readonly resourceId: string;
-  readonly facet: ResourceBrowserFacet;
+  readonly source: ResourceBrowserSource;
   readonly kind: ResourceBrowserItemKind;
   readonly label: string;
   readonly description?: string;
   readonly capabilities: readonly ResourceBrowserCapability[];
   readonly thumbnail?: ResourceBrowserThumbnailDescriptor;
-  readonly role: 'directory' | 'library-root' | 'content' | 'asset' | 'entity';
+  readonly role: 'directory' | 'library-root' | 'content' | 'asset';
   readonly parentResourceId?: string;
   readonly depth: number;
   readonly libraryName?: string;
-  readonly libraryStatus?: WorkspaceMediaLibraryStatus;
+  readonly libraryStatus?: ResourceBrowserMediaLibraryStatus;
 }
 
 export interface ResourceBrowserContentItem extends ResourceBrowserItemBase {
-  readonly facet: 'files' | 'media';
+  readonly source: 'files' | 'media';
+  readonly role: 'directory' | 'content';
   readonly locator: ContentLocator;
 }
 
+export interface ResourceBrowserMediaLibraryRootItem extends ResourceBrowserItemBase {
+  readonly source: 'media';
+  readonly kind: 'directory';
+  readonly role: 'library-root';
+  readonly libraryName: string;
+  readonly libraryStatus: ResourceBrowserMediaLibraryStatus;
+}
+
 export interface ResourceBrowserAssetItem extends ResourceBrowserItemBase {
-  readonly facet: 'assets';
+  readonly source: 'assets';
   readonly kind: 'asset';
   readonly role: 'asset';
   readonly assetRef: {
@@ -128,34 +128,12 @@ export interface ResourceBrowserAssetItem extends ResourceBrowserItemBase {
   readonly availability: 'available' | 'unavailable';
 }
 
-interface ResourceBrowserEntityItemBase extends ResourceBrowserItemBase {
-  readonly facet: 'entities';
-  readonly sourceOwners: readonly string[];
-  readonly inspector: ProjectEntityInspectorProjection;
-}
-
-export type ResourceBrowserEntityItem =
-  | (ResourceBrowserEntityItemBase & {
-      readonly entityRef: ResourceBrowserEntityRef;
-      readonly entityStatus: 'confirmed' | 'needs-attention' | 'deprecated';
-      readonly representationAvailability: 'active' | 'unbound' | 'needs-attention';
-      readonly attentionBindingIds: readonly string[];
-      readonly representationLocator?: ContentLocator;
-      readonly representationBindingId?: string;
-      readonly representationRole?: EntityRepresentationRole;
-    })
-  | (ResourceBrowserEntityItemBase & {
-      readonly candidateRef: ResourceBrowserCandidateRef;
-      readonly entityStatus: 'candidate';
-      readonly evidenceCount: number;
-    });
-
 export type ResourceBrowserItem =
-  ResourceBrowserContentItem | ResourceBrowserAssetItem | ResourceBrowserEntityItem;
+  ResourceBrowserContentItem | ResourceBrowserMediaLibraryRootItem | ResourceBrowserAssetItem;
 
 export interface ResourceBrowserProjection {
   readonly identity: ResourceBrowserIdentity;
-  readonly facet: ResourceBrowserFacet;
+  readonly source: ResourceBrowserSource;
   readonly query: string;
   readonly items: readonly ResourceBrowserItem[];
   readonly diagnostics?: readonly ResourceBrowserDiagnostic[];
@@ -168,14 +146,14 @@ export interface ResourceBrowserRequest {
 
 export interface ResourceBrowserSearchRequest extends ResourceBrowserRequest {
   readonly route: typeof RESOURCE_BROWSER_ROUTES.search;
-  readonly facet: ResourceBrowserFacet;
+  readonly source: ResourceBrowserSource;
   readonly query: string;
   readonly limit: number;
 }
 
 export interface ResourceBrowserChildrenRequest extends ResourceBrowserRequest {
   readonly route: typeof RESOURCE_BROWSER_ROUTES.children;
-  readonly facet: 'files' | 'media';
+  readonly source: 'files' | 'media';
   readonly parentResourceId: string;
   readonly limit: number;
 }
@@ -245,13 +223,30 @@ export interface ResourceBrowserRecoveryPlanRequest extends ResourceBrowserReque
   readonly candidate: 'existing-global' | 'select-directory';
 }
 
+export interface ResourceBrowserMediaLibraryRecoveryPlan {
+  readonly planId: string;
+  readonly workspaceId: string;
+  readonly libraryName: string;
+  readonly requirementFingerprint: string;
+  readonly operationFingerprint: string;
+  readonly candidate:
+    | {
+        readonly kind: 'global-alias';
+        readonly name: string;
+        readonly locationKind: 'local' | 'nas' | 'cloud';
+      }
+    | { readonly kind: 'directory-selection-required'; readonly name: string };
+  readonly referencedCount: number;
+  readonly validatedCount: number;
+}
+
 export type ResourceBrowserRecoveryPlanResult =
   | {
       readonly requestId: string;
       readonly identity: ResourceBrowserIdentity;
       readonly resourceId: string;
       readonly status: 'planned';
-      readonly plan: WorkspaceMediaLibraryRecoveryPlan;
+      readonly plan: ResourceBrowserMediaLibraryRecoveryPlan;
     }
   | {
       readonly requestId: string;
@@ -287,6 +282,7 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
     | typeof RESOURCE_BROWSER_ROUTES.removeSource
     | typeof RESOURCE_BROWSER_ROUTES.createFile
     | typeof RESOURCE_BROWSER_ROUTES.createDirectory
+    | typeof RESOURCE_BROWSER_ROUTES.importFiles
     | typeof RESOURCE_BROWSER_ROUTES.createCreativeDocument
     | typeof RESOURCE_BROWSER_ROUTES.openCreativeDocument
     | typeof RESOURCE_BROWSER_ROUTES.trashContent
@@ -294,8 +290,7 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
     | typeof RESOURCE_BROWSER_ROUTES.editText
     | typeof RESOURCE_BROWSER_ROUTES.addToCut
     | typeof RESOURCE_BROWSER_ROUTES.reveal
-    | typeof RESOURCE_BROWSER_ROUTES.addToCanvas
-    | typeof RESOURCE_BROWSER_ROUTES.manageEntity;
+    | typeof RESOURCE_BROWSER_ROUTES.addToCanvas;
   readonly resourceId?: string;
   readonly entryName?: string;
   readonly documentKind?: 'canvas' | 'cut';
@@ -313,7 +308,6 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
     readonly documentId: string;
     readonly sessionId: string;
   };
-  readonly entityIntent?: ProjectEntityInspectorIntent;
 }
 
 export interface ResourceBrowserIntentCompletedResult {
@@ -391,7 +385,7 @@ export class ResourceBrowserOperationRejectedError extends Error {
 export function createResourceBrowserSearchRequest(input: {
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
-  readonly facet: ResourceBrowserFacet;
+  readonly source: ResourceBrowserSource;
   readonly query: string;
   readonly limit?: number;
 }): ResourceBrowserSearchRequest {
@@ -399,7 +393,7 @@ export function createResourceBrowserSearchRequest(input: {
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.search,
-    facet: input.facet,
+    source: input.source,
     query: input.query,
     limit: input.limit ?? 100,
   });
@@ -408,7 +402,7 @@ export function createResourceBrowserSearchRequest(input: {
 export function createResourceBrowserChildrenRequest(input: {
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
-  readonly facet: 'files' | 'media';
+  readonly source: 'files' | 'media';
   readonly parentResourceId: string;
   readonly limit?: number;
 }): ResourceBrowserChildrenRequest {
@@ -416,7 +410,7 @@ export function createResourceBrowserChildrenRequest(input: {
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.children,
-    facet: input.facet,
+    source: input.source,
     parentResourceId: input.parentResourceId,
     limit: input.limit ?? 100,
   });
@@ -517,21 +511,6 @@ export function createResourceBrowserRecoveryCancelRequest(input: {
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.recoveryCancel,
     planId: input.planId,
-  });
-}
-
-export function createResourceBrowserEntityIntentRequest(input: {
-  readonly requestId: string;
-  readonly identity: ResourceBrowserIdentity;
-  readonly resourceId: string;
-  readonly intent: ProjectEntityInspectorIntent;
-}): ResourceBrowserIntentRequest {
-  return parseResourceBrowserIntentRequest({
-    requestId: input.requestId,
-    identity: input.identity,
-    route: RESOURCE_BROWSER_ROUTES.manageEntity,
-    resourceId: input.resourceId,
-    entityIntent: input.intent,
   });
 }
 
@@ -925,7 +904,7 @@ export function parseResourceBrowserSearchRequest(value: unknown): ResourceBrows
     ),
     identity: parseResourceBrowserIdentity(record['identity']),
     route: RESOURCE_BROWSER_ROUTES.search,
-    facet: requireFacet(record['facet']),
+    source: requireSource(record['source']),
     query: requireString(record['query'], 'Resource Browser query is invalid.').trim(),
     limit: requireBoundedInteger(
       record['limit'],
@@ -943,9 +922,9 @@ export function parseResourceBrowserChildrenRequest(
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.children) {
     throw invalidPayload('Resource Browser children route is invalid.');
   }
-  const facet = requireFacet(record['facet']);
-  if (facet !== 'files' && facet !== 'media') {
-    throw invalidPayload('Resource Browser children facet must be Directory or Media.');
+  const source = requireSource(record['source']);
+  if (source !== 'files' && source !== 'media') {
+    throw invalidPayload('Resource Browser children source must be Directory or Media.');
   }
   return {
     requestId: requireNonEmptyString(
@@ -954,7 +933,7 @@ export function parseResourceBrowserChildrenRequest(
     ),
     identity: parseResourceBrowserIdentity(record['identity']),
     route: RESOURCE_BROWSER_ROUTES.children,
-    facet,
+    source,
     parentResourceId: requireOpaqueIdentity(
       record['parentResourceId'],
       'Resource Browser parent identity is required.',
@@ -980,7 +959,6 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     'targetPreview',
     'targetCut',
     'targetCanvas',
-    'entityIntent',
   ]);
   const route = record['route'];
   if (
@@ -991,6 +969,7 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     route !== RESOURCE_BROWSER_ROUTES.removeSource &&
     route !== RESOURCE_BROWSER_ROUTES.createFile &&
     route !== RESOURCE_BROWSER_ROUTES.createDirectory &&
+    route !== RESOURCE_BROWSER_ROUTES.importFiles &&
     route !== RESOURCE_BROWSER_ROUTES.createCreativeDocument &&
     route !== RESOURCE_BROWSER_ROUTES.trashContent &&
     route !== RESOURCE_BROWSER_ROUTES.preview &&
@@ -998,8 +977,7 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     route !== RESOURCE_BROWSER_ROUTES.editText &&
     route !== RESOURCE_BROWSER_ROUTES.addToCut &&
     route !== RESOURCE_BROWSER_ROUTES.reveal &&
-    route !== RESOURCE_BROWSER_ROUTES.addToCanvas &&
-    route !== RESOURCE_BROWSER_ROUTES.manageEntity
+    route !== RESOURCE_BROWSER_ROUTES.addToCanvas
   ) {
     throw invalidPayload('Resource Browser intent route is invalid.');
   }
@@ -1019,6 +997,16 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary
   ) {
     return request;
+  }
+  if (route === RESOURCE_BROWSER_ROUTES.importFiles) {
+    const resourceId =
+      record['resourceId'] === undefined
+        ? undefined
+        : requireOpaqueIdentity(
+            record['resourceId'],
+            'Resource Browser import destination identity is invalid.',
+          );
+    return { ...request, ...(resourceId ? { resourceId } : {}) };
   }
   if (
     route === RESOURCE_BROWSER_ROUTES.createFile ||
@@ -1045,13 +1033,6 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     record['resourceId'],
     'Resource Browser item identity is required.',
   );
-  if (route === RESOURCE_BROWSER_ROUTES.manageEntity) {
-    return {
-      ...request,
-      resourceId,
-      entityIntent: parseEntityIntent(record['entityIntent']),
-    };
-  }
   if (
     route === RESOURCE_BROWSER_ROUTES.relinkSource ||
     route === RESOURCE_BROWSER_ROUTES.removeSource ||
@@ -1202,14 +1183,14 @@ function requirePortableEntryName(value: unknown): string {
 
 export function parseResourceBrowserProjection(value: unknown): ResourceBrowserProjection {
   const record = requireRecord(value, 'Resource Browser projection must be an object.');
-  requireOnlyKeys(record, ['identity', 'facet', 'query', 'items', 'diagnostics']);
-  const facet = requireFacet(record['facet']);
+  requireOnlyKeys(record, ['identity', 'source', 'query', 'items', 'diagnostics']);
+  const source = requireSource(record['source']);
   const items = requireArray(
     record['items'],
     'Resource Browser projection items must be an array.',
   ).map(parseResourceBrowserItem);
-  if (items.some((item) => item.facet !== facet)) {
-    throw invalidPayload('Resource Browser item facet does not match the active facet.');
+  if (items.some((item) => item.source !== source)) {
+    throw invalidPayload('Resource Browser item source does not match the active source.');
   }
   const resourceIds = new Set(items.map((item) => item.resourceId));
   if (resourceIds.size !== items.length) {
@@ -1223,7 +1204,7 @@ export function parseResourceBrowserProjection(value: unknown): ResourceBrowserP
         );
   return {
     identity: parseResourceBrowserIdentity(record['identity']),
-    facet,
+    source,
     query: requireString(record['query'], 'Resource Browser query is invalid.'),
     items,
     ...(diagnostics && diagnostics.length > 0 ? { diagnostics } : {}),
@@ -1311,7 +1292,7 @@ function parseResourceBrowserIdentity(value: unknown): ResourceBrowserIdentity {
 
 function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
   const record = requireRecord(value, 'Resource Browser item must be an object.');
-  const facet = requireFacet(record['facet']);
+  const source = requireSource(record['source']);
   const base = {
     resourceId: requireOpaqueIdentity(
       record['resourceId'],
@@ -1334,82 +1315,7 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     ...readOptionalLibraryName(record['libraryName']),
     ...readOptionalLibraryStatus(record['libraryStatus']),
   };
-  if (facet === 'entities') {
-    if (base.libraryStatus) {
-      throw invalidPayload('Resource Browser Entity must not contain Media Library status.');
-    }
-    if (base.role !== 'entity') {
-      throw invalidPayload('Resource Browser Entity item role is invalid.');
-    }
-    const entityStatus = requireEntityStatus(record['entityStatus']);
-    const sourceOwners = requireStringArray(record['sourceOwners'], 'Entity source owners');
-    const inspector = parseEntityInspector(record['inspector']);
-    if (inspector.status !== entityStatus || inspector.kind !== base.kind) {
-      throw invalidPayload('Resource Browser Entity Inspector identity is inconsistent.');
-    }
-    if (entityStatus === 'candidate') {
-      const candidateRef = parseResourceBrowserCandidateRef(record['candidateRef']);
-      if (base.kind !== candidateRef.entityKind) {
-        throw invalidPayload('Resource Browser candidate kind does not match its identity.');
-      }
-      if (inspector.candidateId !== candidateRef.candidateId) {
-        throw invalidPayload('Resource Browser candidate Inspector identity is inconsistent.');
-      }
-      if (
-        record['entityRef'] !== undefined ||
-        record['representationAvailability'] !== undefined ||
-        record['attentionBindingIds'] !== undefined ||
-        record['representationLocator'] !== undefined ||
-        record['representationBindingId'] !== undefined ||
-        record['representationRole'] !== undefined
-      ) {
-        throw invalidPayload('Resource Browser candidate contains confirmed Entity fields.');
-      }
-      return {
-        ...base,
-        facet,
-        candidateRef,
-        entityStatus,
-        sourceOwners,
-        inspector,
-        evidenceCount: requireNonNegativeInteger(
-          record['evidenceCount'],
-          'Resource Browser candidate evidence count is invalid.',
-        ),
-      };
-    }
-    const entityRef = parseResourceBrowserEntityRef(record['entityRef']);
-    if (base.kind !== entityRef.entityKind) {
-      throw invalidPayload('Resource Browser Entity kind does not match its Entity identity.');
-    }
-    if (inspector.entityId !== entityRef.entityId) {
-      throw invalidPayload('Resource Browser Entity Inspector identity is inconsistent.');
-    }
-    const representationAvailability = requireRepresentationAvailability(
-      record['representationAvailability'],
-    );
-    const representation = readEntityRepresentation(
-      representationAvailability,
-      record['representationLocator'],
-      record['representationBindingId'],
-      record['representationRole'],
-    );
-    return {
-      ...base,
-      facet,
-      entityRef,
-      entityStatus,
-      sourceOwners,
-      inspector,
-      attentionBindingIds: requireStringArray(
-        record['attentionBindingIds'],
-        'Entity attention binding identities',
-      ),
-      representationAvailability,
-      ...representation,
-    };
-  }
-  if (facet === 'assets') {
+  if (source === 'assets') {
     if (base.libraryStatus) {
       throw invalidPayload('Resource Browser Asset must not contain Media Library status.');
     }
@@ -1418,35 +1324,50 @@ function parseResourceBrowserItem(value: unknown): ResourceBrowserItem {
     }
     return {
       ...base,
-      facet,
+      source,
       kind: base.kind,
       role: base.role,
       assetRef: parseResourceBrowserAssetRef(record['assetRef']),
       availability: requireResourceAvailability(record['availability']),
     };
   }
-  if (base.role === 'asset' || base.role === 'entity') {
+  if (base.role === 'asset') {
     throw invalidPayload('Resource Browser content item role is invalid.');
   }
-  if (base.libraryStatus && base.role !== 'library-root') {
+  if (base.role === 'library-root') {
+    if (
+      source !== 'media' ||
+      base.kind !== 'directory' ||
+      !base.libraryName ||
+      !base.libraryStatus ||
+      record['locator'] !== undefined
+    ) {
+      throw invalidPayload('Resource Browser Media Library root is invalid.');
+    }
+    if (base.libraryStatus.libraryName !== base.libraryName) {
+      throw invalidPayload('Resource Browser Media Library status identity does not match.');
+    }
+    return {
+      ...base,
+      source,
+      kind: base.kind,
+      role: base.role,
+      libraryName: base.libraryName,
+      libraryStatus: base.libraryStatus,
+    };
+  }
+  if (base.libraryStatus) {
     throw invalidPayload('Resource Browser Media Library status requires a library root.');
   }
-  if (base.libraryStatus && base.libraryStatus.libraryName !== base.libraryName) {
-    throw invalidPayload('Resource Browser Media Library status identity does not match.');
+  if (base.role !== 'directory' && base.role !== 'content') {
+    throw invalidPayload('Resource Browser content role is invalid.');
   }
   return {
     ...base,
-    facet,
+    source,
+    role: base.role,
     locator: requireContentLocator(record['locator'], 'locator'),
   };
-}
-
-function parseEntityInspector(value: unknown): ProjectEntityInspectorProjection {
-  try {
-    return assertProjectEntityInspectorProjection(value);
-  } catch {
-    throw invalidPayload('Resource Browser Entity Inspector projection is invalid.');
-  }
 }
 
 function parseResourceBrowserAssetRef(value: unknown): { readonly assetId: string } {
@@ -1468,62 +1389,6 @@ function requireResourceAvailability(value: unknown): 'available' | 'unavailable
     throw invalidPayload('Resource Browser Asset availability is invalid.');
   }
   return value;
-}
-
-function requireEntityStatus(
-  value: unknown,
-): 'confirmed' | 'candidate' | 'needs-attention' | 'deprecated' {
-  if (
-    value !== 'confirmed' &&
-    value !== 'candidate' &&
-    value !== 'needs-attention' &&
-    value !== 'deprecated'
-  ) {
-    throw invalidPayload('Resource Browser Entity status is invalid.');
-  }
-  return value;
-}
-
-function requireRepresentationAvailability(
-  value: unknown,
-): 'active' | 'unbound' | 'needs-attention' {
-  if (value !== 'active' && value !== 'unbound' && value !== 'needs-attention') {
-    throw invalidPayload('Resource Browser Entity representation availability is invalid.');
-  }
-  return value;
-}
-
-function parseResourceBrowserCandidateRef(value: unknown): ResourceBrowserCandidateRef {
-  const record = requireRecord(value, 'Resource Browser candidate identity is required.');
-  const entityKind = record['entityKind'];
-  if (!isCreativeEntityKind(entityKind)) {
-    throw invalidPayload('Resource Browser candidate kind is invalid.');
-  }
-  return {
-    candidateId: requireOpaqueIdentity(
-      record['candidateId'],
-      'Resource Browser candidate identity is required.',
-    ),
-    entityKind,
-  };
-}
-
-function parseResourceBrowserEntityRef(value: unknown): ResourceBrowserEntityRef {
-  const record = requireRecord(value, 'Resource Browser Entity identity is required.');
-  if ('projectRoot' in record) {
-    throw invalidPayload('Resource Browser Entity identity must not expose a project path.');
-  }
-  const entityKind = record['entityKind'];
-  if (!isCreativeEntityKind(entityKind)) {
-    throw invalidPayload('Resource Browser Entity kind is invalid.');
-  }
-  return {
-    entityId: requireNonEmptyString(
-      record['entityId'],
-      'Resource Browser Entity identity is required.',
-    ),
-    entityKind,
-  };
 }
 
 function readOptionalDescription(value: unknown): { readonly description?: string } {
@@ -1558,12 +1423,14 @@ function readOptionalThumbnail(value: unknown): {
 }
 
 function readOptionalLibraryStatus(value: unknown): {
-  readonly libraryStatus?: WorkspaceMediaLibraryStatus;
+  readonly libraryStatus?: ResourceBrowserMediaLibraryStatus;
 } {
-  return value === undefined ? {} : { libraryStatus: parseWorkspaceMediaLibraryStatus(value) };
+  return value === undefined
+    ? {}
+    : { libraryStatus: parseResourceBrowserMediaLibraryStatus(value) };
 }
 
-function parseWorkspaceMediaLibraryStatus(value: unknown): WorkspaceMediaLibraryStatus {
+function parseResourceBrowserMediaLibraryStatus(value: unknown): ResourceBrowserMediaLibraryStatus {
   const record = requireRecord(value, 'Resource Browser Media Library status is invalid.');
   requireOnlyKeys(record, [
     'libraryName',
@@ -1577,18 +1444,19 @@ function parseWorkspaceMediaLibraryStatus(value: unknown): WorkspaceMediaLibrary
   if (
     state !== 'available' &&
     state !== 'required-unlinked' &&
-    state !== 'global-connection-missing' &&
+    state !== 'connection-missing' &&
     state !== 'target-unavailable' &&
     state !== 'content-incomplete' &&
+    state !== 'binding-invalid' &&
     state !== 'entry-conflict' &&
-    state !== 'unreferenced-linked'
+    state !== 'unreferenced-local-binding'
   ) {
     throw invalidPayload('Resource Browser Media Library state is invalid.');
   }
   const diagnostic =
     record['diagnostic'] === undefined
       ? undefined
-      : parseWorkspaceMediaLibraryDiagnostic(record['diagnostic']);
+      : parseResourceBrowserMediaLibraryDiagnostic(record['diagnostic']);
   return {
     libraryName: requireLibraryName(
       record['libraryName'],
@@ -1611,27 +1479,17 @@ function parseWorkspaceMediaLibraryStatus(value: unknown): WorkspaceMediaLibrary
   };
 }
 
-function parseWorkspaceMediaLibraryDiagnostic(
+function parseResourceBrowserMediaLibraryDiagnostic(
   value: unknown,
-): NonNullable<WorkspaceMediaLibraryStatus['diagnostic']> {
+): NonNullable<ResourceBrowserMediaLibraryStatus['diagnostic']> {
   const record = requireRecord(value, 'Resource Browser Media Library diagnostic is invalid.');
   requireOnlyKeys(record, ['code', 'severity', 'message', 'missingCount']);
   const code = record['code'];
   const allowedCodes = new Set([
-    'coverage-incomplete',
-    'global-connection-missing',
+    'required-unlinked',
     'target-unavailable',
     'content-incomplete',
     'entry-conflict',
-    'stale-recovery-plan',
-    'recovery-candidate-missing',
-    'recovery-candidate-incomplete',
-    'recovery-cancelled',
-    'snapshot-destination-conflict',
-    'snapshot-source-stale',
-    'snapshot-content-unavailable',
-    'snapshot-checkpoint-unavailable',
-    'nested-link-escape',
   ]);
   if (typeof code !== 'string' || !allowedCodes.has(code)) {
     throw invalidPayload('Resource Browser Media Library diagnostic code is invalid.');
@@ -1653,14 +1511,16 @@ function parseWorkspaceMediaLibraryDiagnostic(
           'Resource Browser Media Library diagnostic missing count is invalid.',
         );
   return {
-    code: code as NonNullable<WorkspaceMediaLibraryStatus['diagnostic']>['code'],
+    code: code as NonNullable<ResourceBrowserMediaLibraryStatus['diagnostic']>['code'],
     severity,
     message,
     ...(missingCount === undefined ? {} : { missingCount }),
   };
 }
 
-function parseWorkspaceMediaLibraryRecoveryPlan(value: unknown): WorkspaceMediaLibraryRecoveryPlan {
+function parseWorkspaceMediaLibraryRecoveryPlan(
+  value: unknown,
+): ResourceBrowserMediaLibraryRecoveryPlan {
   const record = requireRecord(value, 'Resource Browser Media Library recovery plan is invalid.');
   requireOnlyKeys(record, [
     'planId',
@@ -1738,43 +1598,6 @@ function requireMediaLibraryLocationKind(value: unknown): 'local' | 'nas' | 'clo
   return value;
 }
 
-function readEntityRepresentation(
-  availability: 'active' | 'unbound' | 'needs-attention',
-  locator: unknown,
-  bindingId: unknown,
-  role: unknown,
-):
-  | {
-      readonly representationLocator: ContentLocator;
-      readonly representationBindingId: string;
-      readonly representationRole: EntityRepresentationRole;
-    }
-  | Record<string, never> {
-  if (availability === 'unbound') {
-    if (locator !== undefined || bindingId !== undefined || role !== undefined) {
-      throw invalidPayload('Unbound Resource Browser Entity must not contain representation data.');
-    }
-    return {};
-  }
-  if (!isEntityRepresentationRole(role)) {
-    throw invalidPayload('Resource Browser Entity representation role is invalid.');
-  }
-  return {
-    representationLocator: requireContentLocator(locator, 'representationLocator'),
-    representationBindingId: requireOpaqueIdentity(
-      bindingId,
-      'Resource Browser Entity representation binding identity is required.',
-    ),
-    representationRole: role,
-  };
-}
-
-function requireStringArray(value: unknown, field: string): readonly string[] {
-  return requireArray(value, `Resource Browser ${field} must be an array.`).map((entry) =>
-    requireOpaqueIdentity(entry, `Resource Browser ${field} contains an invalid identity.`),
-  );
-}
-
 function requireContentLocator(value: unknown, field: string): ContentLocator {
   const result = validateContentLocator(value);
   if (!result.ok) {
@@ -1783,9 +1606,9 @@ function requireContentLocator(value: unknown, field: string): ContentLocator {
   return result.locator;
 }
 
-function requireFacet(value: unknown): ResourceBrowserFacet {
-  if (value !== 'files' && value !== 'media' && value !== 'assets' && value !== 'entities') {
-    throw invalidPayload('Resource Browser facet is invalid.');
+function requireSource(value: unknown): ResourceBrowserSource {
+  if (value !== 'files' && value !== 'media' && value !== 'assets') {
+    throw invalidPayload('Resource Browser source is invalid.');
   }
   return value;
 }
@@ -1799,11 +1622,6 @@ function requireItemKind(value: unknown): ResourceBrowserItemKind {
     'audio',
     'document',
     'asset',
-    'character',
-    'scene',
-    'object',
-    'location',
-    'style',
   ];
   const match = allowed.find((candidate) => candidate === value);
   if (!match) {
@@ -1812,15 +1630,12 @@ function requireItemKind(value: unknown): ResourceBrowserItemKind {
   return match;
 }
 
-function requireItemRole(
-  value: unknown,
-): 'directory' | 'library-root' | 'content' | 'asset' | 'entity' {
+function requireItemRole(value: unknown): 'directory' | 'library-root' | 'content' | 'asset' {
   if (
     value !== 'directory' &&
     value !== 'library-root' &&
     value !== 'content' &&
-    value !== 'asset' &&
-    value !== 'entity'
+    value !== 'asset'
   ) {
     throw invalidPayload('Resource Browser item role is invalid.');
   }
@@ -1848,7 +1663,7 @@ function readOptionalLibraryName(value: unknown): { readonly libraryName?: strin
 
 function requireLibraryName(value: unknown, message: string): string {
   const name = requireNonEmptyString(value, message);
-  if (validateWorkspaceLinkedMediaLibraryName(name)) throw invalidPayload(message);
+  if (!isPortablePathSegment(name)) throw invalidPayload(message);
   return name;
 }
 
@@ -1953,16 +1768,4 @@ function requireBoundedInteger(value: unknown, min: number, max: number, message
 
 function invalidPayload(message: string): ResourceBrowserContractError {
   return new ResourceBrowserContractError('invalid-resource-browser-payload', message);
-}
-
-function parseEntityIntent(value: unknown): ProjectEntityInspectorIntent {
-  try {
-    return assertProjectEntityInspectorIntent(value);
-  } catch (error: unknown) {
-    throw new ResourceBrowserContractError(
-      'invalid-resource-browser-payload',
-      'Resource Browser Entity intent is invalid.',
-      { cause: error },
-    );
-  }
 }

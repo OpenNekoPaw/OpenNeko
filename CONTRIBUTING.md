@@ -20,6 +20,10 @@ Non-trivial features, cross-package work, public contracts, and architecture cha
 OpenSpec artifacts before implementation. Small documentation and local corrections can proceed
 directly but must still follow the current architecture.
 
+Each OpenSpec proposal's `tasks.md` may contain at most 30 actionable checkbox tasks. Work beyond
+that limit must be split into independently reviewable and verifiable proposals by objective,
+owner, or delivery boundary; unrelated work must not be bundled into one task to evade the limit.
+
 Changes to production modules under `apps/*`, `packages/*`, or `packages/*/*` must record the
 owning responsibility, package role, canonical public path, producer/consumer, runtime boundary,
 legacy-path removal conditions, user-data semantics, and validation commands. Internal packages

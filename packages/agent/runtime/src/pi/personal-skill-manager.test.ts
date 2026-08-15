@@ -1,6 +1,15 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { createNodePiSkillHost } from '@neko/agent-runtime/pi';
 import { describe, expect, it, vi } from 'vitest';
@@ -18,6 +27,8 @@ describe('Personal Skill manager', () => {
         personalSkillRoot: personalRoot,
         selectDirectory: vi.fn(async () => source),
         trashItem: vi.fn(),
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
       });
 
       await expect(manager.install('window-1')).resolves.toEqual({
@@ -31,7 +42,18 @@ describe('Personal Skill manager', () => {
           source: { kind: 'personal' },
         }),
       ]);
+      const installedSkill = join(personalRoot, 'story-planner', 'SKILL.md');
+      const installedBytes = await readFile(installedSkill, 'utf8');
+      await writeFile(
+        join(source, 'SKILL.md'),
+        `---\nname: story-planner\ndescription: Replacement fixture\n---\nReplacement body.\n`,
+        'utf8',
+      );
       await expect(manager.install('window-1')).rejects.toThrow('already installed');
+      expect(await readFile(installedSkill, 'utf8')).toBe(installedBytes);
+      expect(
+        (await readdir(dirname(personalRoot))).filter((name) => name.includes('staging')),
+      ).toEqual([]);
     });
   });
 
@@ -45,21 +67,95 @@ describe('Personal Skill manager', () => {
         personalSkillRoot: personalRoot,
         selectDirectory: async () => source,
         trashItem,
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
       });
       await manager.install('window-1');
       const snapshot = await discoverPersonalSkills(personalRoot);
       const record = snapshot.records[0];
       if (!record) throw new Error('Fixture Skill was not discovered.');
+      const management = await manager.projectManagement(snapshot.records);
       const managementId = createPersonalSkillManagementId(record);
 
-      await expect(manager.remove(managementId, snapshot.records)).resolves.toEqual({
+      await expect(manager.remove(managementId, management)).resolves.toEqual({
         name: 'story-planner',
       });
       expect(trashItem).toHaveBeenCalledWith(expect.stringMatching(/\/personal\/story-planner$/u));
       await expect(discoverPersonalSkills(personalRoot)).resolves.toMatchObject({ records: [] });
-      await expect(
-        manager.remove(`/Users/private/${managementId}`, snapshot.records),
-      ).rejects.toThrow('identity is invalid');
+      await expect(manager.remove(`/Users/private/${managementId}`, management)).rejects.toThrow(
+        'identity is invalid',
+      );
+    });
+  });
+
+  it('rejects removal when package bytes changed after the management projection', async () => {
+    await withFixture(async ({ source, personalRoot }) => {
+      await writeSkill(source, 'story-planner');
+      const trashItem = vi.fn();
+      const manager = createPersonalSkillManager({
+        personalSkillRoot: personalRoot,
+        selectDirectory: async () => source,
+        trashItem,
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
+      });
+      await manager.install('window-1');
+      const snapshot = await discoverPersonalSkills(personalRoot);
+      const management = await manager.projectManagement(snapshot.records);
+      await writeFile(
+        join(personalRoot, 'story-planner', 'SKILL.md'),
+        `---\nname: story-planner\ndescription: Changed after projection\n---\nChanged body.\n`,
+        'utf8',
+      );
+
+      await expect(manager.remove(management[0]!.managementId, management)).rejects.toThrow(
+        'stale or unknown',
+      );
+      expect(trashItem).not.toHaveBeenCalled();
+    });
+  });
+
+  it('opens and reveals only the current managed SKILL.md through host ports', async () => {
+    await withFixture(async ({ source, personalRoot }) => {
+      await writeSkill(source, 'story-planner');
+      const openFile = vi.fn();
+      const revealFile = vi.fn();
+      const manager = createPersonalSkillManager({
+        personalSkillRoot: personalRoot,
+        selectDirectory: async () => source,
+        trashItem: vi.fn(),
+        openFile,
+        revealFile,
+      });
+      await manager.install('window-1');
+      const snapshot = await discoverPersonalSkills(personalRoot);
+      const management = await manager.projectManagement(snapshot.records);
+      const managementId = management[0]!.managementId;
+      const skillFile = join(personalRoot, 'story-planner', 'SKILL.md');
+      const canonicalSkillFile = await realpath(skillFile);
+
+      await expect(manager.openInEditor(managementId, management)).resolves.toEqual({
+        name: 'story-planner',
+      });
+      await expect(manager.showInFolder(managementId, management)).resolves.toEqual({
+        name: 'story-planner',
+      });
+      expect(openFile).toHaveBeenCalledWith(canonicalSkillFile);
+      expect(revealFile).toHaveBeenCalledWith(canonicalSkillFile);
+
+      await writeFile(
+        skillFile,
+        `---\nname: story-planner\ndescription: Changed after projection\n---\nChanged body.\n`,
+        'utf8',
+      );
+      await expect(manager.openInEditor(managementId, management)).rejects.toThrow(
+        'stale or unknown',
+      );
+      await expect(manager.showInFolder(managementId, management)).rejects.toThrow(
+        'stale or unknown',
+      );
+      expect(openFile).toHaveBeenCalledTimes(1);
+      expect(revealFile).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -72,10 +168,60 @@ describe('Personal Skill manager', () => {
         personalSkillRoot: personalRoot,
         selectDirectory: async () => source,
         trashItem: vi.fn(),
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
       });
 
       await expect(manager.install('window-1')).rejects.toThrow('symbolic links');
       await expect(discoverPersonalSkills(personalRoot)).resolves.toMatchObject({ records: [] });
+    });
+  });
+
+  it('rejects a Pi-invalid package without publishing or retaining staging', async () => {
+    await withFixture(async ({ root, source, personalRoot }) => {
+      await mkdir(source, { recursive: true });
+      await writeFile(
+        join(source, 'SKILL.md'),
+        `---\nname: invalid\ndescription: ${'x'.repeat(1_025)}\n---\nInvalid fixture.\n`,
+        'utf8',
+      );
+      const manager = createPersonalSkillManager({
+        personalSkillRoot: personalRoot,
+        selectDirectory: async () => source,
+        trashItem: vi.fn(),
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
+      });
+
+      await expect(manager.install('window-1')).rejects.toThrow('exactly one valid Skill package');
+      await expect(readdir(personalRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect((await readdir(root)).filter((name) => name.includes('staging'))).toEqual([]);
+    });
+  });
+
+  it('rejects oversized packages without modifying source bytes or retaining staging', async () => {
+    await withFixture(async ({ root, source, personalRoot }) => {
+      await writeSkill(source, 'too-large');
+      const sourceFile = join(source, 'large.bin');
+      const sourceBytes = 'x'.repeat(20_000_001);
+      await writeFile(sourceFile, sourceBytes, 'utf8');
+      const manager = createPersonalSkillManager({
+        personalSkillRoot: personalRoot,
+        selectDirectory: async () => source,
+        trashItem: vi.fn(),
+        openFile: vi.fn(),
+        revealFile: vi.fn(),
+      });
+
+      await expect(manager.install('window-1')).rejects.toThrow('size limit');
+      await expect((await import('node:fs/promises')).readFile(sourceFile, 'utf8')).resolves.toBe(
+        sourceBytes,
+      );
+      expect(
+        (await (await import('node:fs/promises')).readdir(root)).filter((name) =>
+          name.includes('staging'),
+        ),
+      ).toEqual([]);
     });
   });
 });
@@ -87,7 +233,7 @@ async function discoverPersonalSkills(personalRoot: string) {
       isTrusted: () => true,
       isEnabled: () => true,
     },
-  }).discover([{ path: personalRoot, source: { kind: 'personal' }, entryPointKind: 'skill' }]);
+  }).discover([{ path: personalRoot, source: { kind: 'personal' } }]);
 }
 
 async function writeSkill(root: string, name: string): Promise<void> {

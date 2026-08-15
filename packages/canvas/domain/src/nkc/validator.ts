@@ -6,7 +6,10 @@
 // =============================================================================
 
 import { CANVAS_CONNECTION_TYPES, CANVAS_NODE_TYPES } from '../types/canvas';
-import { validateCanvasMaterialNodePersistence } from '../types/canvas-material-contracts';
+import {
+  isSafeUnavailableCanvasMaterialLocator,
+  validateCanvasMaterialNodePersistence,
+} from '../types/canvas-material-contracts';
 import { isCanvasGenerationNodeData } from '../types/canvas-generation-node';
 import { isContentLocator, normalizeWorkspaceContentPath } from '@neko/content';
 import { validateNkcNodeDurableResourceIdentity } from '../utils/canvasDurableResourceIdentity';
@@ -284,6 +287,12 @@ function validateNode(
     if (
       diagnostic.code === 'canvas-material-content-locator-required' &&
       isSafePathOnlyMaterialNode(node['type'], node['data'])
+    ) {
+      warnings.push({ ...validation, severity: 'warning' });
+    } else if (
+      diagnostic.code === 'canvas-material-content-locator-invalid' &&
+      isRecord(node['data']) &&
+      isSafeUnavailableCanvasMaterialLocator(node['data']['contentLocator'])
     ) {
       warnings.push({ ...validation, severity: 'warning' });
     } else {

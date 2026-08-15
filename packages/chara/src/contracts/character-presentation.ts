@@ -14,11 +14,6 @@ import {
   type CharacterRepresentationRef,
 } from './character';
 
-export interface CharacterChatConfiguration {
-  readonly providerRef: string;
-  readonly modelRef: string;
-}
-
 export interface CharacterTtsConfiguration {
   readonly providerRef: string;
   readonly voiceRepresentationId: string;
@@ -29,7 +24,6 @@ export interface CharacterTtsConfiguration {
 export interface CharacterRunPresentationConfiguration {
   readonly characterRunId: string;
   readonly participantId: string;
-  readonly chat: CharacterChatConfiguration;
   readonly tts: CharacterTtsConfiguration;
   readonly updatedAt: string;
 }
@@ -38,7 +32,6 @@ export interface CharacterTurnPresentationReceipt {
   readonly turnId: string;
   readonly characterRunId: string;
   readonly participantId: string;
-  readonly chat: CharacterChatConfiguration;
   readonly tts: CharacterTtsConfiguration;
   readonly startedAt: string;
 }
@@ -73,13 +66,12 @@ export function parseCharacterRunPresentationConfiguration(
 ): CharacterRunPresentationConfiguration {
   const record = requireExactRecord(
     value,
-    ['characterRunId', 'participantId', 'chat', 'tts', 'updatedAt'],
+    ['characterRunId', 'participantId', 'tts', 'updatedAt'],
     'CharacterRun presentation configuration',
   );
   return {
     characterRunId: requireIdentity(record['characterRunId'], 'Presentation CharacterRun'),
     participantId: requireIdentity(record['participantId'], 'Presentation participant'),
-    chat: parseCharacterChatConfiguration(record['chat']),
     tts: parseCharacterTtsConfiguration(record['tts']),
     updatedAt: requireIsoDate(record['updatedAt'], 'Presentation configuration updatedAt'),
   };
@@ -90,14 +82,13 @@ export function parseCharacterTurnPresentationReceipt(
 ): CharacterTurnPresentationReceipt {
   const record = requireExactRecord(
     value,
-    ['turnId', 'characterRunId', 'participantId', 'chat', 'tts', 'startedAt'],
+    ['turnId', 'characterRunId', 'participantId', 'tts', 'startedAt'],
     'Character turn presentation receipt',
   );
   return {
     turnId: requireIdentity(record['turnId'], 'Presentation receipt turn'),
     characterRunId: requireIdentity(record['characterRunId'], 'Presentation receipt CharacterRun'),
     participantId: requireIdentity(record['participantId'], 'Presentation receipt participant'),
-    chat: parseCharacterChatConfiguration(record['chat']),
     tts: parseCharacterTtsConfiguration(record['tts']),
     startedAt: requireIsoDate(record['startedAt'], 'Presentation receipt startedAt'),
   };
@@ -154,18 +145,6 @@ export function parseCharacterAvatarRendererAvailabilities(
     (availability) => availability.kind,
     'Character Avatar renderer availabilities',
   );
-}
-
-export function parseCharacterChatConfiguration(value: unknown): CharacterChatConfiguration {
-  const record = requireExactRecord(
-    value,
-    ['providerRef', 'modelRef'],
-    'Character Chat configuration',
-  );
-  return {
-    providerRef: requireOpaqueRef(record['providerRef'], 'Character Chat provider'),
-    modelRef: requireOpaqueRef(record['modelRef'], 'Character Chat model'),
-  };
 }
 
 export function parseCharacterTtsConfiguration(value: unknown): CharacterTtsConfiguration {

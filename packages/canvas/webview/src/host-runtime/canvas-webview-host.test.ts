@@ -13,6 +13,60 @@ import { describe, expect, it, vi } from 'vitest';
 import { createCanvasWebviewHost } from './canvas-webview-host';
 
 describe('createCanvasWebviewHost', () => {
+  it('prepares one initial snapshot before UI subscription and replays it without refetching', async () => {
+    const identity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewInstanceId: 'view-instance-1',
+      documentId: 'neko/boards/workspace.nkc',
+      sessionId: 'session-1',
+      rendererSessionId: 'endpoint-1',
+    };
+    let releaseSnapshot = (): void => undefined;
+    const snapshotGate = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    const session = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: DEFAULT_CANVAS_DATA,
+      effects: {},
+    });
+    const getSnapshot = vi.fn(async () => {
+      await snapshotGate;
+      return session.getSnapshot();
+    });
+    const runtime: CanvasHostRuntime = {
+      identity,
+      getSnapshot,
+      resolveMaterialActions: (request) => session.resolveMaterialActions(request),
+      readTextFilePreview: (request) => session.readTextFilePreview(request),
+      subscribe: (listener) => session.subscribe(listener),
+      executeIntent: (request) => session.executeIntent(request),
+    };
+    const host = createCanvasWebviewHost(runtime);
+
+    host.prepare();
+    expect(getSnapshot).toHaveBeenCalledOnce();
+    const messages: unknown[] = [];
+    host.subscribe((message) => messages.push(message));
+    host.postMessage({ type: 'ready' });
+    expect(getSnapshot).toHaveBeenCalledOnce();
+
+    releaseSnapshot();
+    await vi.waitFor(() => {
+      expect(messages).toContainEqual({ type: 'update', data: DEFAULT_CANVAS_DATA });
+    });
+
+    const replayed: unknown[] = [];
+    host.subscribe((message) => replayed.push(message));
+    expect(replayed).toContainEqual({ type: 'update', data: DEFAULT_CANVAS_DATA });
+    expect(getSnapshot).toHaveBeenCalledOnce();
+    host.dispose();
+    session.dispose();
+  });
+
   it('routes the Add menu source picker through the injected runtime', async () => {
     const identity = {
       projectId: 'project-1',
@@ -466,7 +520,7 @@ describe('createCanvasWebviewHost', () => {
     };
     const session = new CanvasHostRuntimeSession({
       identity,
-      initialCanvas: { ...DEFAULT_CANVAS_DATA, nodes: [node] },
+      initialCanvas: DEFAULT_CANVAS_DATA,
       effects: {
         resolveMaterialActions: vi.fn(async () => [descriptor]),
       },
@@ -490,7 +544,7 @@ describe('createCanvasWebviewHost', () => {
     await vi.waitFor(() => {
       expect(messages).toContainEqual({
         type: 'update',
-        data: { ...DEFAULT_CANVAS_DATA, nodes: [node] },
+        data: DEFAULT_CANVAS_DATA,
       });
     });
 
@@ -736,12 +790,18 @@ describe('createCanvasWebviewHost', () => {
     await vi.waitFor(async () => {
       expect((await runtime.getSnapshot()).canvas.name).toBe('Edited Canvas');
     });
+    host.postMessage({
+      type: 'canvasContentNodeDeltaApplied',
+      removedNodeIds: ['removed-node-1'],
+      restoredNodeIds: [],
+    });
     host.postMessage({ type: 'requestSave' });
     await vi.waitFor(() => {
       expect(saveDocument).toHaveBeenCalledWith(
         expect.objectContaining({
           canvas: expect.objectContaining({ name: 'Edited Canvas' }),
           identity: runtime.identity,
+          removedNodeIds: ['removed-node-1'],
         }),
       );
     });
@@ -920,19 +980,57 @@ describe('createCanvasWebviewHost', () => {
       postMessage,
       getState: () => undefined,
       setState: () => undefined,
-      supportsMessage: (messageType) => messageType === 'canvasAction',
+      supportsMessage: (messageType) =>
+        messageType === 'canvasAction' || messageType.startsWith('preview:'),
     });
 
     expect(host.supportsMessage('canvasAction')).toBe(true);
+    expect(host.supportsMessage('preview:resolveResource')).toBe(true);
     expect(host.supportsMessage('sendToAgent')).toBe(false);
     host.postMessage({ type: 'canvasAction', action: 'selectNode' });
     host.postMessage({ type: 'canvasAction', action: 'openExport' });
+    host.postMessage({ type: 'preview:releaseResource', descriptorId: 'descriptor-video-1' });
 
-    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledTimes(2);
     expect(postMessage).toHaveBeenCalledWith({ type: 'canvasAction', action: 'openExport' });
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'preview:releaseResource',
+      descriptorId: 'descriptor-video-1',
+    });
     expect(() => host.postMessage({ type: 'sendToAgent' })).toThrow(
       "does not implement message 'sendToAgent'",
     );
+    host.dispose();
+    runtime.dispose();
+  });
+
+  it('rejects unknown delegated messages even when a delegate claims generic support', () => {
+    const runtime = new CanvasHostRuntimeSession({
+      identity: {
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        viewInstanceId: 'view-instance-1',
+        documentId: 'neko/boards/workspace.nkc',
+        sessionId: 'session-1',
+        rendererSessionId: 'endpoint-1',
+      },
+      initialCanvas: DEFAULT_CANVAS_DATA,
+      effects: {},
+    });
+    const postMessage = vi.fn();
+    const host = createCanvasWebviewHost(runtime, {
+      postMessage,
+      getState: () => undefined,
+      setState: () => undefined,
+      supportsMessage: () => true,
+    });
+
+    expect(() => host.postMessage({ type: 'unregistered:message' })).toThrow(
+      "does not implement message 'unregistered:message'",
+    );
+    expect(postMessage).not.toHaveBeenCalled();
     host.dispose();
     runtime.dispose();
   });

@@ -329,6 +329,23 @@ describe('Desktop automated functional runner contract', () => {
         (call) =>
           call.method === 'Input.dispatchKeyEvent' &&
           call.params.type === 'keyDown' &&
+          call.params.key === 'a',
+      )?.params,
+      {
+        type: 'keyDown',
+        modifiers: 4,
+        key: 'a',
+        code: 'KeyA',
+        windowsVirtualKeyCode: 65,
+        nativeVirtualKeyCode: 65,
+        commands: ['selectAll'],
+      },
+    );
+    assert.deepEqual(
+      calls.find(
+        (call) =>
+          call.method === 'Input.dispatchKeyEvent' &&
+          call.params.type === 'keyDown' &&
           call.params.key === 'Enter',
       )?.params,
       {

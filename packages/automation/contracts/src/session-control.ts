@@ -23,7 +23,6 @@ export interface AutomationSessionControlProjection {
     readonly extensionId: string;
     readonly providerId: string;
     readonly kind: AutomationProviderKind;
-    readonly upstreamRelease: string;
   };
   readonly target: {
     readonly kind: AutomationProviderKind;
@@ -100,7 +99,7 @@ export function parseAutomationSessionControlProjection(
   );
   const provider = exactRecord(
     record['provider'],
-    ['extensionId', 'providerId', 'kind', 'upstreamRelease'],
+    ['extensionId', 'providerId', 'kind'],
     'Automation session control provider',
   );
   const target = exactRecord(
@@ -130,7 +129,6 @@ export function parseAutomationSessionControlProjection(
       extensionId: identity(provider['extensionId'], 'Automation extension'),
       providerId: identity(provider['providerId'], 'Automation provider'),
       kind: providerKind,
-      upstreamRelease: nonEmptyString(provider['upstreamRelease'], 'Automation upstream release'),
     },
     target: {
       kind: targetKind,

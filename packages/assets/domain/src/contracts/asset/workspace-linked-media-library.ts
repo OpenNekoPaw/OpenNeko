@@ -1,6 +1,6 @@
-export const WORKSPACE_MEDIA_LIBRARY_DIRECTORY = 'neko/assets' as const;
+import { isPortablePathSegment } from '@neko/shared/path';
 
-export type WorkspaceLinkedMediaLibraryAvailability = 'available' | 'unavailable';
+export const WORKSPACE_MEDIA_LIBRARY_DIRECTORY = 'neko/assets' as const;
 
 export type WorkspaceLinkedMediaLibraryDiagnosticCode =
   | 'invalid-library-name'
@@ -23,11 +23,11 @@ export interface WorkspaceLinkedMediaLibraryDiagnostic {
   readonly workspacePath?: string;
 }
 
-/** Runtime projection derived from a direct child of `neko/assets/`. */
+/** Read-only projection derived from a direct link below `neko/assets/`. */
 export interface WorkspaceLinkedMediaLibrary {
   readonly name: string;
   readonly workspacePath: string;
-  readonly availability: WorkspaceLinkedMediaLibraryAvailability;
+  readonly availability: 'available' | 'unavailable';
   readonly diagnostic?: WorkspaceLinkedMediaLibraryDiagnostic;
 }
 
@@ -57,8 +57,7 @@ export function validateWorkspaceLinkedMediaLibraryName(
   value: string,
 ): WorkspaceLinkedMediaLibraryDiagnostic | undefined {
   const normalized = value.normalize('NFC');
-  const lower = normalized.toLocaleLowerCase('en-US');
-  if (!isPortablePathSegment(value) || lower === 'library.json') {
+  if (!isPortablePathSegment(value) || normalized.toLocaleLowerCase('en-US') === 'library.json') {
     return {
       code: 'invalid-library-name',
       severity: 'error',
@@ -72,5 +71,3 @@ export function assertWorkspaceLinkedMediaLibraryName(value: string): void {
   const diagnostic = validateWorkspaceLinkedMediaLibraryName(value);
   if (diagnostic) throw new Error(diagnostic.message);
 }
-
-import { isPortablePathSegment } from '@neko/shared/path';

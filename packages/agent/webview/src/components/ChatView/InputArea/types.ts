@@ -7,7 +7,7 @@ import type { AgentFileReference } from '@neko/agent-contracts';
 export type { AttachmentType, MessageAttachment } from '@neko/agent-contracts';
 
 // Command source type
-export type CommandSource = 'builtin' | 'command-artifact' | 'plugin';
+export type CommandSource = 'builtin' | 'command' | 'plugin';
 
 // Slash command definition
 export interface SlashCommand {
@@ -19,7 +19,7 @@ export interface SlashCommand {
   icon: string;
   /** Command source: builtin, command artifact, or plugin */
   source?: CommandSource;
-  /** Backing Skill ID if source is 'command-artifact' */
+  /** Backing command document id if source is 'command' */
   skillId?: string;
   /** Plugin ID if source is 'plugin'. */
   pluginId?: string;
@@ -55,6 +55,8 @@ export interface SkillSummary {
 
 export type GenCategory = 'image' | 'video' | 'audio';
 export type EntryPromptMenu = 'roleplay';
+export type CharacterConversationMode =
+  import('@neko/agent-contracts').AgentCharacterDialogueLaunchBinding['mode'];
 export type GenerationDuration = 'auto' | number;
 
 export interface GenerationParams {
@@ -87,7 +89,12 @@ export type ComposerConfigCategory = 'llm' | GenCategory;
 export type ComposerConfigSection = 'model' | 'params';
 
 export type ComposerControlMenuId =
-  'session-mode' | 'composer-config' | 'agent-model' | 'understanding-model' | 'execution-mode';
+  | 'session-mode'
+  | 'composer-config'
+  | 'agent-model'
+  | 'understanding-model'
+  | 'character-conversation-mode'
+  | 'execution-mode';
 
 export interface ComposerControlMenuState {
   readonly openMenu: ComposerControlMenuId | null;
@@ -155,9 +162,8 @@ export interface MentionItem {
   navigationData?: Record<string, string>;
   /** Exact owner selection used only by the unbound Agent Entry. */
   characterLaunchSelection?: {
-    readonly characterProjectId: string;
+    readonly globalCharacterId: string;
     readonly characterVersionId: string;
-    readonly characterStorylineVersionId?: string;
   };
   /** Host-provided normalized or expanded search text */
   searchText?: string;
@@ -168,10 +174,16 @@ export interface MentionItem {
 }
 
 export interface SelectedCharacterLaunch {
-  readonly characterProjectId: string;
+  readonly globalCharacterId: string;
   readonly characterVersionId: string;
-  readonly characterStorylineVersionId?: string;
   readonly label: string;
+}
+
+export interface SelectedWorldLaunch {
+  readonly globalWorldId: string;
+  readonly worldVersionId: string;
+  readonly label: string;
+  readonly versionLabel: string;
 }
 
 export interface SelectedFileReference extends AgentFileReference {

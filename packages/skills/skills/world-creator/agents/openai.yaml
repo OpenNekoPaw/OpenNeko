@@ -1,0 +1,4 @@
+interface:
+  display_name: "World Creator"
+  short_description: "Create reviewable evidence-aware Worlds"
+  default_prompt: "Use $world-creator to create a reviewable World from my concept and authorized references in the current creation authority."

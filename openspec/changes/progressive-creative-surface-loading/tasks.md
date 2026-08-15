@@ -28,5 +28,18 @@
 
 - [x] 5.1 Run scoped format, typecheck, Preview/Cut/Content/Desktop tests and production renderer/package build; record commands and canonical-path evidence in `verification.md`.
 - [ ] 5.2 Run visible authoritative Electron cold/warm Cut and large EPUB flows, inspect loading/ready/error visuals plus request counts, and apply `neko-ui-validation` without substituting browser-only evidence.
-  Blocked by the current local Desktop/Vite fixture startup conflict; attempts and report paths are recorded in `verification.md`.
+      Blocked by the current local Desktop/Vite fixture startup conflict; attempts and report paths are recorded in `verification.md`.
 - [x] 5.3 Apply `neko-quality-review`, scan changed paths for architecture/debt/redundancy issues, and record unresolved performance/runtime risk without claiming unmeasured latency budgets.
+
+## 6. Workbench Surface Bootstrap Convergence
+
+- [x] 6.1 Add a Canvas-owned idempotent bootstrap resource, start it from `DesktopCanvasSurface` beside the lazy module, and make `CanvasWebviewRoot` consume the same pending/latest Snapshot without a second `ready -> getSnapshot` request.
+- [x] 6.2 Publish the first Canvas document Snapshot before Generation node reattachment; run reattachment asynchronously through the same exact Session projection and keep node failures local.
+- [x] 6.3 Add Canvas producer/consumer tests proving one Snapshot request, StrictMode-safe disposal, stale View isolation, immediate document readiness and asynchronous Generation projection updates; delete or poison the Root-owned bootstrap path.
+- [x] 6.4 Add the same package-owned Surface bootstrap contract to Text Editor and remove its Root-owned duplicate first projection request, with exact identity and stale completion tests.
+- [x] 6.5 Add the same package-owned Surface bootstrap contract to Resource Browser and remove its Root-owned duplicate first projection request while preserving event ordering and presentation restore, with exact identity tests.
+- [x] 6.6 Run focused Canvas/Text Editor/Assets/Desktop tests and builds, strict OpenSpec and architecture checks, then use authoritative Electron to inspect cold/warm View switching and record remaining UI evidence or blockers.
+
+## 7. Canvas Media Content-Box Alignment
+
+- [x] 7.1 Make the shared Preview video element fill its owning Surface while retaining `object-fit: contain`, update shared-path tests, and verify Canvas node/frame alignment without adding a Canvas-only player.

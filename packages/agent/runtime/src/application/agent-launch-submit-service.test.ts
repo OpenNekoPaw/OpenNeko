@@ -194,9 +194,10 @@ describe('Agent launch Draft submission application service', () => {
         mode: 'character-dialogue' as const,
         binding: {
           kind: 'character-dialogue' as const,
+          mode: 'companion' as const,
           participants: [
             {
-              characterProjectId: 'character-project-1',
+              globalCharacterId: 'character-project-1',
               characterVersionId: 'character-version-1',
               roleProfileId: 'role-profile-1',
             },
@@ -220,6 +221,7 @@ describe('Agent launch Draft submission application service', () => {
     expect(first.session.binding).toEqual(characterBinding);
     expect(first.session.conversationId).toBe('conversation:character:character-run-1');
     expect(replay.session.conversationId).toBe(first.session.conversationId);
+    expect(fixture.runtimeEntry.validate).toHaveBeenCalledOnce();
     expect(fixture.runtimeEntry.materialize).toHaveBeenCalledOnce();
     expect(fixture.entry.materialize).not.toHaveBeenCalled();
     expect(fixture.bindings.resolve).not.toHaveBeenCalled();
@@ -248,13 +250,10 @@ describe('Agent launch Draft submission application service', () => {
         mode: 'world-experience' as const,
         binding: {
           kind: 'world-experience' as const,
-          worldExperienceId: 'world-experience-1',
-          worldExperienceVersionId: 'world-experience-version-1',
-          launch: {
-            kind: 'new' as const,
-            participantId: 'participant-1',
-            roleScopeId: 'role-scope-1',
-          },
+          globalWorldId: 'global-world-1',
+          worldVersionId: 'world-version-1',
+          participants: [],
+          launch: { kind: 'new' as const },
         },
       },
     };
@@ -402,6 +401,7 @@ function createFixture() {
     materialize: vi.fn(async () => binding),
   };
   const runtimeEntry = {
+    validate: vi.fn(async () => undefined),
     materialize: vi.fn(async () => {
       throw new Error('Formal runtime Entry owner is unavailable.');
     }),
@@ -419,7 +419,15 @@ function createFixture() {
   const lifecycle = createAgentConversationLifecycleService({
     repository: createInMemoryAgentConversationLifecycleRepository(),
     grants: { validate: async () => undefined, resolveForTurn: async () => [] },
-    domainContext: { resolveForTurn: async () => [] },
+    domainContext: {
+      resolveCapabilityConstraint: async ({ context }) => ({
+        owner: { kind: context.kind, id: 'test-binding' },
+        skills: 'configured' as const,
+        tools: 'configured' as const,
+        references: 'configured' as const,
+      }),
+      resolveForTurn: async () => [],
+    },
     scratch: {
       create: async () => undefined,
       release: async () => undefined,

@@ -13,7 +13,6 @@ describe('EntityInspector', () => {
           status: 'candidate',
           kind: 'character',
           names: { canonical: 'Nova', aliases: [] },
-          facts: {},
           candidateId: 'candidate-nova',
           evidence: [
             { evidenceId: 'evidence-nova', owner: 'document', sourceId: 'story.fountain' },
@@ -29,7 +28,7 @@ describe('EntityInspector', () => {
     expect(onIntent).toHaveBeenCalledWith({
       type: 'confirm',
       candidateId: 'candidate-nova',
-      accepted: { kind: 'character', names: { canonical: 'Nova', aliases: [] }, facts: {} },
+      accepted: { kind: 'character', names: { canonical: 'Nova', aliases: [] } },
     });
   });
 
@@ -42,7 +41,6 @@ describe('EntityInspector', () => {
           status: 'confirmed',
           kind: 'location',
           names: { canonical: 'School', aliases: [] },
-          facts: {},
           entityId: 'location-school',
           bindings: [],
           operations: ['edit'],
@@ -51,6 +49,11 @@ describe('EntityInspector', () => {
       />,
     );
     expect(screen.queryByRole('button', { name: 'Start dialogue' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open room' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Embody' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull();
+    expect(screen.queryByText('Facts')).toBeNull();
+    expect(screen.queryByText('Provenance')).toBeNull();
     expect(screen.getByText('Dialogue is unavailable.')).toBeTruthy();
   });
 });

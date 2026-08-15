@@ -1,4 +1,5 @@
 export * from './generation-params';
+export * from './recipe';
 export type {
   AudioGenerationRequest,
   ControlMode,
@@ -32,5 +33,6 @@ export type {
   PromptGenerationRequest,
   PromptGenerationResult,
 } from './execution';
+export { GenerationExecutionOutcomeUnknownError } from './execution';
 export * from './job/contracts';
 export * from './domain-contracts/index';

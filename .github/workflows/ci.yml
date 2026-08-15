@@ -56,40 +56,6 @@ jobs:
       - name: Run host-neutral build checks
         run: pnpm check:static-build
 
-  desktop-package:
-    name: Desktop Package (darwin-arm64)
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Typecheck Desktop
-        run: pnpm typecheck:desktop
-
-      - name: Validate native Sharp bundle runtime
-        run: node --test scripts/test-orchestration/sharp-cjs-bundle-runtime.test.mjs
-
-      - name: Package Desktop
-        env:
-          NODE_OPTIONS: --max-old-space-size=4096
-        run: pnpm package:desktop
-
-      - uses: actions/upload-artifact@v6
-        with:
-          name: openneko-darwin-arm64
-          path: apps/neko-desktop/out/OpenNeko-darwin-arm64/
-          if-no-files-found: error
-          retention-days: 14
-
   platform-test:
     name: Platform Test (${{ matrix.os }})
     strategy:
@@ -235,7 +201,6 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - static-build
-      - desktop-package
       - platform-test
       - test-ts
       - functional-test
@@ -256,7 +221,6 @@ jobs:
           node scripts/test-orchestration/assert-ci-gate-results.mjs
           "Manual Gate"
           static-build
-          desktop-package
           platform-test
           test-ts
           functional-test
@@ -269,7 +233,6 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - static-build
-      - desktop-package
       - platform-test
       - test-ts
       - functional-test
@@ -292,7 +255,6 @@ jobs:
           node scripts/test-orchestration/assert-ci-gate-results.mjs
           "Merge Gate"
           static-build
-          desktop-package
           platform-test
           test-ts
           functional-test

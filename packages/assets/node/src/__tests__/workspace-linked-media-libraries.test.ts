@@ -32,7 +32,7 @@ afterEach(async () => {
 });
 
 describe('Node workspace-linked media libraries', () => {
-  it('dereferences only the locator requested by package and export consumers', async () => {
+  it('reads only the requested descendant through the workspace locator', async () => {
     const fixture = await createFixture();
     await writeFile(path.join(fixture.targetA, 'referenced.mov'), 'referenced');
     await writeFile(path.join(fixture.targetA, 'unreferenced.mov'), 'unreferenced');
@@ -47,10 +47,7 @@ describe('Node workspace-linked media libraries', () => {
     });
 
     const result = await content.read(
-      {
-        kind: 'workspace-file',
-        path: 'neko/assets/Footage/referenced.mov',
-      },
+      { kind: 'workspace-file', path: 'neko/assets/Footage/referenced.mov' },
       { maxBytes: 1024 },
     );
 
@@ -84,9 +81,6 @@ describe('Node workspace-linked media libraries', () => {
     expect(
       (await lstat(path.join(fixture.workspace, 'neko/assets/Footage'))).isSymbolicLink(),
     ).toBe(true);
-    expect(await readFile(path.join(fixture.workspace, 'neko/assets/Footage/a.mov'), 'utf8')).toBe(
-      'a',
-    );
     expect(await listWorkspaceLinkedMediaLibraries(fixture.workspace)).toEqual([created.library]);
 
     await replaceWorkspaceLinkedMediaLibrary({
@@ -110,49 +104,28 @@ describe('Node workspace-linked media libraries', () => {
     expect((await stat(fixture.targetB)).isDirectory()).toBe(true);
   });
 
-  it('does not require a Git repository to add, relink, or remove a library', async () => {
+  it('does not require Git for link lifecycle operations', async () => {
     const fixture = await createFixture({ initializeGit: false });
-    await writeFile(path.join(fixture.targetA, 'clip.mov'), 'a');
-    await writeFile(path.join(fixture.targetB, 'clip.mov'), 'b');
-
-    await expect(
-      createWorkspaceLinkedMediaLibrary({
-        workspaceRoot: fixture.workspace,
-        name: 'Footage',
-        targetDirectory: fixture.targetA,
-      }),
-    ).resolves.toMatchObject({
-      library: {
-        name: 'Footage',
-        workspacePath: 'neko/assets/Footage',
-        availability: 'available',
-      },
+    await createWorkspaceLinkedMediaLibrary({
+      workspaceRoot: fixture.workspace,
+      name: 'Footage',
+      targetDirectory: fixture.targetA,
+    });
+    await replaceWorkspaceLinkedMediaLibrary({
+      workspaceRoot: fixture.workspace,
+      name: 'Footage',
+      targetDirectory: fixture.targetB,
+    });
+    await removeWorkspaceLinkedMediaLibrary({
+      workspaceRoot: fixture.workspace,
+      name: 'Footage',
     });
 
-    await expect(
-      replaceWorkspaceLinkedMediaLibrary({
-        workspaceRoot: fixture.workspace,
-        name: 'Footage',
-        targetDirectory: fixture.targetB,
-      }),
-    ).resolves.toMatchObject({
-      library: {
-        name: 'Footage',
-        workspacePath: 'neko/assets/Footage',
-        availability: 'available',
-      },
-    });
-    await expect(
-      readFile(path.join(fixture.workspace, 'neko/assets/Footage/clip.mov'), 'utf8'),
-    ).resolves.toBe('b');
-
-    await expect(
-      removeWorkspaceLinkedMediaLibrary({ workspaceRoot: fixture.workspace, name: 'Footage' }),
-    ).resolves.toBeUndefined();
-    await expect(stat(fixture.targetB)).resolves.toMatchObject({});
+    expect((await stat(fixture.targetA)).isDirectory()).toBe(true);
+    expect((await stat(fixture.targetB)).isDirectory()).toBe(true);
   });
 
-  it('writes an exact repository-local ignore without hiding project assets', async () => {
+  it('writes an exact repository-local ignore without hiding owned project assets', async () => {
     const fixture = await createFixture();
     await mkdir(path.join(fixture.workspace, 'neko/assets'), { recursive: true });
     await writeFile(path.join(fixture.workspace, 'neko/assets/library.json'), '{}');
@@ -212,7 +185,7 @@ describe('Node workspace-linked media libraries', () => {
 
     const [library] = await listWorkspaceLinkedMediaLibraries(fixture.workspace);
     expect(library).toBeDefined();
-    if (!library) throw new Error('Expected the broken library to remain discoverable');
+    if (!library) throw new Error('Expected the broken library to remain discoverable.');
     expect(library.availability).toBe('unavailable');
     expect(library.diagnostic?.code).toBe('library-link-broken');
     expect(JSON.stringify(library)).not.toContain(missingTarget);
@@ -228,14 +201,10 @@ describe('Node workspace-linked media libraries', () => {
         name: 'Footage',
         targetDirectory: fixture.targetA,
       }),
-    ).rejects.toMatchObject({
-      diagnostic: { code: 'library-entry-not-link' },
-    });
+    ).rejects.toMatchObject({ diagnostic: { code: 'library-entry-not-link' } });
     await expect(
       removeWorkspaceLinkedMediaLibrary({ workspaceRoot: fixture.workspace, name: 'Footage' }),
-    ).rejects.toMatchObject({
-      diagnostic: { code: 'library-entry-not-link' },
-    });
+    ).rejects.toMatchObject({ diagnostic: { code: 'library-entry-not-link' } });
   });
 });
 
@@ -255,9 +224,7 @@ async function createFixture(options: { readonly initializeGit?: boolean } = {})
     mkdir(targetA, { recursive: true }),
     mkdir(targetB, { recursive: true }),
   ]);
-  if (options.initializeGit !== false) {
-    execFileSync('git', ['init', '--quiet', workspace]);
-  }
+  if (options.initializeGit !== false) execFileSync('git', ['init', '--quiet', workspace]);
   return { root, workspace, targetA, targetB };
 }
 

@@ -3,7 +3,7 @@
 ### Requirement: Resource Browser exposes Asset Library as a distinct source
 
 Resource Browser SHALL expose Asset Library separately from workspace files, Media Library, and Project
-Entities. Asset entries MUST present package identity, type, installed revision, remote/update state, and
+Entities. Asset entries MUST present package identity, type, installed revision, local head state, and
 availability without replacing their package identity with a file path.
 
 #### Scenario: Browse installed Assets
@@ -18,8 +18,8 @@ availability without replacing their package identity with a file path.
 
 ### Requirement: Asset operations express explicit lifecycle intent
 
-The surface SHALL provide distinct typed intents for import, install, update, publish, synchronize,
-uninstall, and inspect diagnostics. It MUST NOT infer package membership or destructive intent from file
+The surface SHALL provide distinct typed intents for local import, install, update-head, remove-record,
+uninstall, garbage collection, and inspect diagnostics. It MUST NOT infer package membership or destructive intent from file
 selection, discovery, or removal from a view.
 
 #### Scenario: Remove a library record
@@ -33,26 +33,21 @@ selection, discovery, or removal from a view.
 - **WHEN** the user chooses Import as Asset for selected content
 - **THEN** the UI collects required package facts and submits an explicit validated import intent
 
-#### Scenario: Remove a remote search result from view
+### Requirement: Local package state is visible and actionable
 
-- **WHEN** an item ceases to match a filter or remote discovery result
-- **THEN** no local package bytes or remote revision are deleted
+The Asset Library surface SHALL distinguish active membership, removed membership, installed revision,
+update available from an explicitly selected local package, dependency-blocked, project-pinned and invalid
+package states and expose the relevant inspect, update, remove-record or uninstall operation.
 
-### Requirement: Synchronization state is visible and actionable
+#### Scenario: Local update collides with an installed revision
 
-The Asset Library surface SHALL distinguish local-only, synchronized, update-available, transferring,
-conflicted, tombstoned-remote, and unavailable-account states and expose the relevant retry, cancel,
-inspect, update, or uninstall operation.
+- **WHEN** a selected local package claims an installed `(assetId, revision)` with a different digest
+- **THEN** the item shows an integrity diagnostic and does not report update success
 
-#### Scenario: Publication conflicts
+#### Scenario: Open an installed Asset without network access
 
-- **WHEN** a publish operation fails because the expected remote head changed
-- **THEN** the item shows a conflict diagnostic and offers refresh or explicit reconciliation without reporting success
-
-#### Scenario: Work offline
-
-- **WHEN** the account is unavailable but an Asset is installed
-- **THEN** the UI marks remote state unavailable while retaining local open/use operations
+- **WHEN** the exact revision and dependency closure are installed
+- **THEN** local open/use operations require no provider, account, or network state
 
 ### Requirement: Asset search preserves model boundaries
 
@@ -64,3 +59,19 @@ Entity owner and owner-specific operations.
 
 - **WHEN** a query matches an ordinary linked file and a managed Asset package
 - **THEN** the results retain distinct identities and do not promote the file or flatten the Asset into a locator
+
+### Requirement: Resource source failure is isolated
+
+Resources SHALL read each owner-preserving source independently. Failure to read Project Elements or
+Character associations MUST NOT prevent the user from opening or searching Installed Assets, Project
+Files, or Shared Media.
+
+#### Scenario: Project composition is invalid while opening Installed Assets
+
+- **WHEN** the current Project Elements source cannot parse its Project composition and the user selects Installed Assets
+- **THEN** Resources reads Installed Assets directly without first requiring Project Elements to succeed
+
+#### Scenario: Character association projection is unavailable
+
+- **WHEN** Entity records are valid but the exact Project composition cannot produce Character associations
+- **THEN** valid Entity items remain visible beside a Project Elements diagnostic and no empty composition is invented

@@ -1,5 +1,10 @@
 ## Why
 
+> World first-closure reconciliation (2026-08-14):
+> `refine-world-management-authoring-and-runtime` owns World Management, World authoring preview,
+> portable transfer and deterministic Runtime product composition while this change continues to own
+> shared Workspace authority, placement and slot geometry.
+
 OpenNeko currently treats a directory-backed Workspace as a Content Project context while Character and World authoring use separate product surfaces and persistence assumptions. This prevents one project from coherently authoring content, project-local Characters, and project-local Worlds, and it also encourages Agent entry, management navigation, authoring targets, and runtime modes to be expressed by one ambiguous selector.
 
 ## What Changes
@@ -34,3 +39,5 @@ OpenNeko currently treats a directory-backed Workspace as a Content Project cont
 - Adjacent active changes requiring reconciliation: `add-home-experience-entry-modes`, `compose-desktop-workbench-scenes`, `unify-agent-launch-and-domain-bindings`, `define-character-dialogue-chatroom-world-foundation`, `define-ai-native-interactive-world`, and its World implementation follow-ups.
 - User data: new project-local Character/World facts use owning-domain files below an authorized Workspace root; standalone authoring uses library-managed authorized roots; all persisted paths remain relative or variable-based. Existing durable Character/World records are not silently copied, migrated, promoted, hidden, or overwritten. Any later relocation/export must be an explicit owning-domain workflow that preserves the source until success.
 - No new internal contract/schema/format version, compatibility reader, dual-write path, active-target fallback, global open-instance registry, retained hidden Root, or cloud/multi-tenant assumption is introduced.
+<!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+> **Successor disposition (2026-08-14):** New standalone mutable Character/World authoring, direct domain authoring destinations, and standalone Agent targets are retired. The successor owns project-only editable targets, installed read-only libraries, Conversation/Creation entry, generic Project-bound Creative Workspaces, and recovery; Conversation navigation itself is not a durable Agent Conversation, and compatible Project-local Workspace ownership work in this change remains valid only where it does not require a Content-root identity.

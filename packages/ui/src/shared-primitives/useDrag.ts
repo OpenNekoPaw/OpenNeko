@@ -61,16 +61,22 @@ export function useDrag<T = void>(
   cbRef.current = callbacks;
   const optsRef = useRef(options);
   optsRef.current = options;
+  const cleanupListenersRef = useRef<() => void>(() => undefined);
+  const lastPointerRef = useRef({ clientX: 0, clientY: 0 });
 
   // For threshold support: track whether threshold has been exceeded
   const thresholdRef = useRef<{ startX: number; startY: number; activated: boolean } | null>(null);
 
-  // Attach document-level listeners while dragging
-  useEffect(() => {
-    if (!isDragging) return;
-
+  const attachListeners = useCallback(() => {
+    cleanupListenersRef.current();
     const onMove = (e: MouseEvent) => {
-      const ctx = ctxRef.current as T;
+      const ctx = ctxRef.current;
+      if (ctx === undefined) return;
+      if (e.buttons === 0) {
+        onUp(e);
+        return;
+      }
+      lastPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
       const thr = thresholdRef.current;
       if (thr && !thr.activated) {
         const dx = e.clientX - thr.startX;
@@ -83,8 +89,9 @@ export function useDrag<T = void>(
       cbRef.current.onMove(e, ctx);
     };
 
-    const onUp = (e: MouseEvent) => {
-      const ctx = ctxRef.current as T;
+    function onUp(e: MouseEvent): void {
+      const ctx = ctxRef.current;
+      if (ctx === undefined) return;
       // Only fire onEnd if threshold was reached (or no threshold)
       const thr = thresholdRef.current;
       if (!thr || thr.activated) {
@@ -92,41 +99,77 @@ export function useDrag<T = void>(
       }
       ctxRef.current = undefined;
       thresholdRef.current = null;
+      cleanupListenersRef.current();
+      setIsDragging(false);
+    }
+
+    const onWindowBlur = () => {
+      const ctx = ctxRef.current;
+      if (ctx === undefined) return;
+      const thr = thresholdRef.current;
+      if (!thr || thr.activated) {
+        cbRef.current.onEnd(
+          new MouseEvent('mouseup', {
+            clientX: lastPointerRef.current.clientX,
+            clientY: lastPointerRef.current.clientY,
+          }),
+          ctx,
+        );
+      }
+      ctxRef.current = undefined;
+      thresholdRef.current = null;
+      cleanupListenersRef.current();
       setIsDragging(false);
     };
 
     const passiveOpt = optsRef.current?.passive === true;
     window.addEventListener('mousemove', onMove, { passive: passiveOpt });
     window.addEventListener('mouseup', onUp);
-
-    return () => {
+    window.addEventListener('blur', onWindowBlur);
+    const cleanup = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('blur', onWindowBlur);
     };
-  }, [isDragging]);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    const opts = optsRef.current;
-    if (opts?.stopPropagation !== false) e.stopPropagation();
-    if (opts?.preventDefault !== false) e.preventDefault();
-
-    const nativeEvent = e.nativeEvent;
-    const ctx = cbRef.current.onStart(nativeEvent);
-    if (ctx === undefined) return; // cancelled
-
-    ctxRef.current = ctx;
-    const threshold = opts?.threshold ?? 0;
-    if (threshold > 0) {
-      thresholdRef.current = {
-        startX: nativeEvent.clientX,
-        startY: nativeEvent.clientY,
-        activated: false,
-      };
-    } else {
-      thresholdRef.current = { startX: 0, startY: 0, activated: true };
-    }
-    setIsDragging(true);
+    cleanupListenersRef.current = cleanup;
   }, []);
+
+  useEffect(
+    () => () => {
+      cleanupListenersRef.current();
+      ctxRef.current = undefined;
+      thresholdRef.current = null;
+    },
+    [],
+  );
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      const opts = optsRef.current;
+      if (opts?.stopPropagation !== false) e.stopPropagation();
+      if (opts?.preventDefault !== false) e.preventDefault();
+
+      const nativeEvent = e.nativeEvent;
+      const ctx = cbRef.current.onStart(nativeEvent);
+      if (ctx === undefined) return; // cancelled
+
+      ctxRef.current = ctx;
+      lastPointerRef.current = { clientX: nativeEvent.clientX, clientY: nativeEvent.clientY };
+      const threshold = opts?.threshold ?? 0;
+      if (threshold > 0) {
+        thresholdRef.current = {
+          startX: nativeEvent.clientX,
+          startY: nativeEvent.clientY,
+          activated: false,
+        };
+      } else {
+        thresholdRef.current = { startX: 0, startY: 0, activated: true };
+      }
+      attachListeners();
+      setIsDragging(true);
+    },
+    [attachListeners],
+  );
 
   return {
     isDragging,

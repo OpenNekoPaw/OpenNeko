@@ -1,3 +1,13 @@
+> Gated by [`simplify-resource-entity-character-world-boundaries`](../simplify-resource-entity-character-world-boundaries/):
+> Foundation surfaces may consume only existing exact World owners. Experience-ready UI or success paths
+> remain unavailable until their runtime producer, persistence and product qualification are complete.
+>
+> Foundation handoff (2026-08-14):
+> [`refine-world-management-authoring-and-runtime`](../refine-world-management-authoring-and-runtime/)
+> supersedes this change's Foundation Library, Studio and Runtime surface scope. This change may proceed
+> later only for a fully qualified WorldExperience interaction surface and MUST NOT register parallel
+> Foundation scenes, IPC, Webview Roots or product availability.
+
 ## Why
 
 Headless World 能力只有通过 package-owned Interaction Surface 和薄 Desktop composition 才能形成真实用户闭环。该工作必须独立于业务事实与 provider/Gameplay 实现，并在产品晋级后才能开放默认入口。

@@ -32,7 +32,7 @@
 
 - 用一个 canonical Launch Draft application model 支持未绑定 Entry 和从领域直接发起的 bound Draft。
 - 将 presentation phase、domain binding、Conversation owner、execution state 和 configuration policy 建模为正交状态。
-- 让 Entry 与 Session 使用同一 input catalog 和 typed invocation contract，并支持 Builtin/Personal/Project/Plugin Skill 与 builtin/command-artifact/plugin command 的精确来源。
+- 让 Entry 与 Session 使用同一 input catalog 和 typed invocation contract，并支持 Builtin/Personal/Project/Plugin Skill 与 builtin/CommandHost/plugin command 的精确来源。
 - 在首次提交时原子验证目标、授权、配置、input invocation、Conversation/领域 runtime materialization 和 Scene handoff。
 - 支持同一 Conversation 在 Turn 间切换合法模型与参数，同时保持 transcript、context 和 owner 不变。
 - 为 Character 和未来 World 提供可选 typed binding/context 扩展边界；owner 未实现时保持 unavailable，不建立第二套 Agent runtime。

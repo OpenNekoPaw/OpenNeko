@@ -1,5 +1,29 @@
 # Evaluation: Canvas Generation Recipe Nodes
 
+## 2026-08-13 Canvas Interaction Simplification Follow-up
+
+### Scope And Ownership
+
+- `@neko/generation` now owns the single canonical Recipe union, typed defaults, exact validator, purpose mapping and GenerationJob request projection. Canvas owns only the node wrapper, graph references, run/output binding and selected output.
+- Canvas selected-node operations now use fixed type templates. Runtime capability loss disables the same declared slot in place and dispatches nothing; resource-library/Finder operations and Delete presentation remain outside the toolbar. The node context menu is limited to group/ungroup, layer order and lock state.
+- Connections use one neutral relation grammar, with a direction marker only for sequence order. Nodes expose one visible input and one visible output while preserving the typed endpoint contract internally. Drag completion uses screen-space-tolerant alignment and new Generation nodes reuse collision-free placement.
+- Node cards remain world-space; toolbar, handles and other interaction targets retain screen-space usability. Distant zoom suppresses nonessential labels/status without changing durable size or selection. Node surfaces and the selected toolbar use opaque neutral surfaces without a transparency acceptance requirement.
+- Preview ownership is explicit: inline content is the quick preview; node double-click opens the Canvas full-screen overlay; toolbar `preview:open` delegates to Main Preview. All three reuse the authorized locator and Preview renderer path, and Canvas does not add a duplicate full-screen toolbar action.
+
+### Deterministic Evidence
+
+- Focused Canvas Webview regressions passed: 6 files / 55 tests. Coverage includes stable enable/disable ordering, disabled no-dispatch behavior, resource/Delete absence, simplified context menu, one input/output handle, neutral relation versus sequence marker, screen-space alignment, generated Text double-click and shared overlay resolution/input isolation.
+- `@neko/generation` typecheck and full tests passed: 30 files / 186 tests. `@neko/canvas-node` typecheck and full tests passed: 4 files / 22 tests. Canvas Webview TypeScript build passed. The updated Canvas layout test passed: 29/29.
+- Canvas Webview full tests reached 408/410. The follow-up-owned layout failure was corrected and passed; the remaining failure is the concurrent File fixture omitting the newly required canonical `ContentLocator`, outside this follow-up. Canvas Domain typecheck passed and its full test run reached 279/287; all eight failures are the concurrent workspace-relative `ContentLocator` validation change, not Recipe or interaction behavior.
+- `pnpm test:agent:eval` passed as key-free harness evidence: 45 files / 309 tests and 26 suites / 76 dry-run cases. This non-Agent UI/Recipe follow-up does not change Agent prompts, Skills, tool routing or Conversation/Turn behavior. No paid provider run was attempted without explicit provider/model and cost authorization.
+- Strict OpenSpec, OpenSpec catalog, package/product-status, application, Agent and Webview boundaries plus `git diff --check` passed. The repository-wide internal-versioning audit remains blocked by concurrent unrelated Character and Project work; no follow-up-owned file is named by those diagnostics.
+
+### Visible UI Validation
+
+- The authoritative visible command was attempted twice: reports `2026-08-13T12-55-36.449Z` and `2026-08-13T12-57-52.721Z` under `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/`.
+- Both runs reached the real Electron Renderer but failed before Canvas mounted. Main reported `project-composition-not-found` for the exact fixture Workspace, and the scenario timed out waiting for the two package-owned Canvas views. The only captured screenshot is the unified entry page and was inspected directly; it contains no Canvas surface, so no graphical Canvas pass is claimed.
+- Result: implementation items `8.1` through `8.6` are complete with deterministic coverage. Visible evidence items `7.17` and `7.24` remain open until the fixture can create/read its exact Content Project composition and the scenario reaches Canvas.
+
 ## Agent Evaluation
 
 ### Scope
@@ -185,3 +209,76 @@
 - `pnpm check:unused` remains blocked by pre-existing exports in `DesktopShell.tsx` and `agent-contract.ts`; neither is introduced by this change.
 - Pre-release rollback is valid only before user documents contain Generation Nodes. After such documents exist, recovery is fix-forward so an older build cannot silently discard the new canonical node.
 - The remaining product risk is provider-backed behavior and the corresponding visible running/history/stale presentation. It must be closed with explicit provider/model selection and cost authorization before release acceptance.
+
+### Follow-up: Generation Status And Grouped Image Results
+
+- Canvas Node now projects the authoritative GenerationJob `createdAt` and `updatedAt` timestamps together with its existing phase and provider-derived progress. The strict Host decoder rejects missing timestamp pairs, non-finite values and reversed timestamp order at the current message boundary.
+- Image outputs from one exact JobRef render as one compact result stack. The selected output remains the primary preview, the badge exposes the exact count and current index, and a transient two-column in-node comparison selects through the existing canonical output-selection intent without resizing the durable node or creating sibling Media/Group nodes.
+- Active presentation derives preparation, queue, provider execution and commit labels from real projection facts, shows elapsed time and an available percentage, and uses the scan animation only as a non-measured activity cue. Terminal failure/cancellation preserves prior results and displays one Job-level diagnostic; no per-output failure slot or ETA is fabricated.
+- Deterministic evidence passed: Canvas Node 4 files / 22 tests; Canvas Webview full run 63 files / 388 tests before the final additional grouped-failure assertion, then focused Generation Node 1 file / 8 tests and TypeScript build; strict OpenSpec; package/Webview/no-internal-versioning boundaries; repository OpenSpec validation; `git diff --check`.
+- Visible Electron inspection used the running development Desktop and the real persisted `generation-2` Image node. At fit-to-content and selected-node views, the failed provider outcome stayed local to the node, the prior Canvas remained usable and the node exposed a compact `失败 · 5:01` status derived from projected timestamps. The selected composer remained anchored below the node.
+- No existing persisted Job in the inspected Workspace contained two successful outputs, and no paid generation was authorized for this validation. Therefore the grouped success/active pixel review remains blocked; deterministic production-component coverage verifies the two-output stack, fixed `320×240` node size, comparison toggle, exact output selection and prior-group preservation. Implementation task `4.19` is complete; evidence task `7.19` remains open until a no-cost fixture or explicitly authorized provider run supplies visible active and multi-success states.
+
+### Follow-up: Active Multi-Image Placeholder Surface
+
+- The active multi-image placeholder no longer reuses the completed result group's stacked-card class. Pending requests retain the BaseNode-owned single white content surface and show only the requested output count, restrained scan cue and authoritative stage/progress pill; the bounded stack layers remain exclusive to two or more committed image outputs.
+- Focused component coverage asserts that an active two-image request renders the pending presentation and does not render the completed `result-stack--multiple` presentation. Existing grouped-output coverage continues to assert the committed two-output stack, exact count/index, comparison toggle and canonical selection intent. Canvas Webview passed 63 files / 389 tests plus TypeScript build; strict OpenSpec validation, Webview boundaries, focused formatting and `git diff --check` passed.
+- Direct visible inspection used the already-running OpenNeko Desktop and its existing `generation-2` two-image active Job, without starting another provider request. After HMR, the node retained its `2 张`, scan cue and `正在提交 · 0%` status while showing one BaseNode border; the duplicate right/bottom stack outlines from the reported defect were absent. Selecting the node kept the toolbar and composer attached without reintroducing the overlap.
+- This is a browser-owned presentation correction with no Canvas Domain, GenerationJob, Host contract, provider or Agent routing change. Agent Evaluation remains excluded, and no paid generation is required for the deterministic regression.
+
+### Follow-up: Ambiguous NewAPI Submission And Empty-State Alignment
+
+- The configured NewAPI image path is the synchronous `POST /v1/images/generations` endpoint. A
+  transport close after submission now retains one provider-neutral `outcomeUnknown` fact through AI
+  SDK error normalization and Media execution, then terminates the canonical GenerationJob as
+  `outcome-unknown` even when the provider returned no recoverable task identity. The coordinator does
+  not invent a task, report success or automatically submit the paid request again.
+- Existing persisted Job facts are not rewritten. The inspected `generation-2` record therefore keeps
+  the ordinary `failed` phase authored before this correction; a future ambiguous submission follows
+  the corrected classification. This preserves authoritative history instead of adding a legacy
+  projection override.
+- No-preview Image/Audio/Video nodes now always use one full-height result surface. The failed Image
+  placeholder is centered independently from its lower-right terminal status, while pending multi-image
+  styling and completed multi-output stack layers remain mutually exclusive.
+- Deterministic evidence passed: AI SDK 3 files / 8 tests; Generation 29 files / 182 tests and
+  typecheck; Canvas Webview 63 files / 390 tests and TypeScript build; strict OpenSpec validation and
+  Webview boundaries. The added tests cover the NewAPI transport marker, nested wrapper preservation,
+  executor conversion, coordinator classification without a provider task, zero automatic resubmission
+  and the failed two-image placeholder surface.
+- Visible validation reused the running development Desktop and the already persisted failed Image Job;
+  it did not start another provider request. After HMR and node selection, the kind icon was centered in
+  the full white card, the terminal pill stayed lower-right and the attached composer remained below the
+  node without overlap. Evidence:
+  `reports/desktop-functional/add-canvas-generation-recipe-nodes/unknown-outcome-icon/failed-image-icon-centered.jpeg`.
+- The provider outcome itself remains unrecoverable because this endpoint returned no external task
+  identity. Operational resolution requires the gateway owner to allow the request to finish or expose a
+  recoverable task API; the Desktop cannot safely infer success or retry without risking duplicate charge.
+- Final repository gates passed for OpenSpec (83 items), strict change validation, package boundaries,
+  the canonical-path/internal-versioning audit and every touched package. The current full-workspace
+  `pnpm typecheck` is independently blocked in `@neko/chara-webview` because two existing test fixtures
+  omit the required `getConversationLaunchCatalog` port; neither fixture is in this change's dependency
+  or modification set.
+
+### Follow-up: Canvas-local Multi-Image Preview Gallery
+
+- Canvas preview remains a Webview-owned, discardable presentation state. An ordinary Image resolves to
+  one preview item; a generated Image resolves only the Image outputs that share the selected output's
+  exact Generation Job identity. Gallery navigation never writes `selectedOutputId`, Canvas viewport or
+  downstream connection facts.
+- The selected-node toolbar opens at the canonical selected output, while double-clicking an exact
+  generated result opens at that result. The overlay supports previous/next buttons, arrow keys,
+  numbered thumbnails, bounded `1x..8x` fit-relative zoom, pointer pan, reset and Escape. Captured key,
+  wheel, pointer and context-menu input cannot reach the covered Canvas viewport.
+- Deterministic evidence passed: Canvas Webview 64 files / 397 tests; focused preview, toolbar and node
+  interaction coverage 4 files / 36 tests; Canvas Webview TypeScript build; focused ESLint and Prettier;
+  strict OpenSpec validation; Webview boundaries; `git diff --check`. Coverage proves exact-Job grouping,
+  historical-Job exclusion, exact-output double-click entry, local navigation/zoom, wheel isolation and
+  unchanged Host execution for Canvas-local Image preview.
+- The authoritative Electron scenario was attempted four times. The first, third and fourth runs reached
+  the Workspace, then concurrent unrelated Automation/Character source edits triggered Vite HMR and
+  invalidated or refreshed the active Canvas renderer before the preview checkpoint. The second attempt was
+  blocked by the first failed run's isolated Vite owner and was cleaned up by terminating only that exact
+  validation process. Reports under
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/` contain zero
+  console errors, warnings or poisoned resource requests, but no current preview screenshot; therefore
+  graphical evidence task `7.24` remains open and no visible pass is claimed.

@@ -17,12 +17,18 @@ import {
   type PreviewSessionSnapshot,
   type PreviewViewPresentation,
 } from '@neko/preview-domain';
+import {
+  createPreviewResourceProjectionService,
+  type PreviewResourceProjectionService,
+  type PreviewResourceSource,
+} from '@neko/preview-domain/resource-projection';
 import { createNodeArchiveResource } from '@neko/content/document/node';
 import type {
   ResourceBrowserIdentity,
   ResourceBrowserItem,
   ResourceBrowserQuickPreviewDescriptor,
 } from '@neko/assets-domain/resource-browser/contract';
+import type { ContentLocator } from '@neko/content';
 import {
   closeMainView,
   findMainGroupForView,
@@ -68,10 +74,25 @@ export class DesktopPreviewRuntime {
   private readonly pendingSources = new Map<string, PendingPreviewSource>();
   private readonly sourcePreparations = new Map<string, Promise<PreviewProjection>>();
   private readonly createIdentity: () => string;
+  private readonly previewResources: PreviewResourceProjectionService<DesktopPreviewResourceOwner>;
   private disposed = false;
 
   constructor(private readonly options: DesktopPreviewRuntimeOptions) {
     this.createIdentity = options.createIdentity ?? randomUUID;
+    this.previewResources = createPreviewResourceProjectionService({
+      resolveSource: async ({ owner }) => ({ status: 'ready', source: owner.source }),
+      registerSource: async ({ owner, source }) => ({
+        status: 'ready',
+        lease: await publishPreviewResource({
+          resources: this.options.resources,
+          owner: owner.resourceOwner,
+          source,
+          displayName: owner.displayName,
+          contentKind: owner.contentKind,
+          signal: owner.signal,
+        }),
+      }),
+    });
   }
 
   async open(
@@ -138,7 +159,7 @@ export class DesktopPreviewRuntime {
         },
       });
     } else {
-      const source = await resolvePreviewSource(input);
+      const source = await resolvePreviewSource(input, mediaType);
       const descriptorId = `preview:${sessionId}`;
       const contentLocator = resolvePreviewContentLocator(input.item);
       projection = parsePreviewProjection({
@@ -147,14 +168,11 @@ export class DesktopPreviewRuntime {
         status: 'loading',
       });
       pendingSource = {
-        source: source.source,
+        source,
         displayName: input.item.label,
         contentKind,
-        mediaType,
-        byteLength: source.byteLength,
         contentLocator,
         descriptorId,
-        sourceFingerprint: source.sourceFingerprint,
         identity: runtimeIdentity,
         presentation,
         abortController: new AbortController(),
@@ -235,43 +253,50 @@ export class DesktopPreviewRuntime {
     ) {
       throw new Error(`Desktop quick Preview does not support '${input.item.label}'.`);
     }
-    const file = await stat(input.absolutePath);
-    if (!file.isFile()) throw new Error('Desktop quick Preview source is not a file.');
     const previewSessionId = `preview-hover:${this.createIdentity()}`;
-    const sourceFingerprint = `${file.mtimeMs}:${file.size}`;
     const descriptorId = `preview:${previewSessionId}`;
-    const lease = await this.options.resources.registerFile(
-      {
-        windowId: input.identity.windowId,
-        viewId: input.identity.viewId,
-        sessionId: previewSessionId,
-        rendererSessionId: input.identity.rendererSessionId,
+    const source = await resolvePreviewSource({ absolutePath: input.absolutePath }, mediaType);
+    const projected = await this.previewResources.project({
+      descriptorId,
+      locator: resolvePreviewContentLocator(input.item),
+      displayName: input.item.label,
+      owner: {
+        source,
+        displayName: input.item.label,
+        contentKind,
+        signal: new AbortController().signal,
+        resourceOwner: {
+          windowId: input.identity.windowId,
+          viewId: input.identity.viewId,
+          sessionId: previewSessionId,
+          rendererSessionId: input.identity.rendererSessionId,
+        },
       },
-      {
-        absolutePath: input.absolutePath,
-        mediaType,
-      },
-    );
-    this.sessions.registerTransient(input.identity.windowId, previewSessionId);
+      requestedMediaType: mediaType,
+    });
+    if (projected.status === 'unavailable') {
+      throw new Error(projected.diagnostic.message);
+    }
+    if (projected.descriptor.contentKind !== contentKind) {
+      projected.lease.release();
+      throw new Error('Desktop quick Preview descriptor kind does not match its item.');
+    }
+    try {
+      this.sessions.registerTransient(input.identity.windowId, previewSessionId);
+    } catch (error) {
+      this.previewResources.release(descriptorId);
+      throw error;
+    }
     return {
       previewSessionId,
-      descriptor: {
-        descriptorId,
-        sourceFingerprint,
-        contentLocator: resolvePreviewContentLocator(input.item),
-        url: lease.url,
-        contentKind,
-        mediaType,
-        displayName: input.item.label,
-        byteLength: file.size,
-      },
+      descriptor: { ...projected.descriptor, contentKind },
     };
   }
 
   releaseQuickPreview(windowId: string, previewSessionId: string): void {
     this.requireActive();
     this.sessions.releaseTransient(windowId, previewSessionId);
-    this.options.resources.releaseSession(previewSessionId);
+    this.previewResources.release(`preview:${previewSessionId}`);
   }
 
   async getSnapshot(
@@ -398,6 +423,7 @@ export class DesktopPreviewRuntime {
     for (const sessionId of this.sessions.dispose()) {
       this.releaseSessionResources(sessionId);
     }
+    this.previewResources.dispose();
   }
 
   private requireActive(): void {
@@ -427,43 +453,38 @@ export class DesktopPreviewRuntime {
   ): Promise<PreviewProjection> {
     try {
       source.abortController.signal.throwIfAborted();
-      const resource = await publishPreviewResource({
-        resources: this.options.resources,
-        owner: {
-          windowId: source.identity.windowId,
-          viewId: source.identity.viewId,
-          sessionId: source.identity.sessionId,
-          rendererSessionId: source.identity.rendererSessionId,
-        },
-        source: source.source,
+      const projected = await this.previewResources.project({
+        descriptorId: source.descriptorId,
+        locator: source.contentLocator,
         displayName: source.displayName,
-        contentKind: source.contentKind,
-        mediaType: source.mediaType,
-        signal: source.abortController.signal,
+        owner: {
+          source: source.source,
+          displayName: source.displayName,
+          contentKind: source.contentKind,
+          signal: source.abortController.signal,
+          resourceOwner: {
+            windowId: source.identity.windowId,
+            viewId: source.identity.viewId,
+            sessionId: source.identity.sessionId,
+            rendererSessionId: source.identity.rendererSessionId,
+          },
+        },
+        requestedMediaType: source.source.mediaType,
       });
+      if (projected.status === 'unavailable') throw new Error(projected.diagnostic.message);
       if (source.abortController.signal.aborted) {
-        this.options.resources.releaseSession(source.identity.sessionId);
+        this.previewResources.release(source.descriptorId);
         source.abortController.signal.throwIfAborted();
       }
       if (this.pendingSources.get(source.identity.sessionId) !== source) {
-        this.options.resources.releaseSession(source.identity.sessionId);
+        this.previewResources.release(source.descriptorId);
         throw new Error(`Preview session '${source.identity.sessionId}' preparation is stale.`);
       }
       const ready = parsePreviewProjection({
         identity: source.identity,
         presentation: source.presentation,
         status: 'ready',
-        descriptor: {
-          descriptorId: source.descriptorId,
-          sourceFingerprint: source.sourceFingerprint,
-          contentLocator: source.contentLocator,
-          url: resource.url,
-          ...(resource.resourceUris ? { resourceUris: resource.resourceUris } : {}),
-          contentKind: source.contentKind,
-          mediaType: source.mediaType,
-          displayName: source.displayName,
-          byteLength: source.byteLength,
-        },
+        descriptor: projected.descriptor,
       });
       const transition = this.sessions.planPreparation(session.identity.sessionId, ready);
       this.pendingSources.delete(session.identity.sessionId);
@@ -497,7 +518,7 @@ export class DesktopPreviewRuntime {
       this.pendingSources.delete(sessionId);
       source.abortController.abort(new Error('Preview source preparation was released.'));
     }
-    this.options.resources.releaseSession(sessionId);
+    this.previewResources.release(`preview:${sessionId}`);
   }
 
   private async updatePresentation(
@@ -572,34 +593,18 @@ export class DesktopPreviewRuntime {
 }
 
 function resolvePreviewContentLocator(item: ResourceBrowserItem): ResourceBrowserContentLocator {
-  if (item.facet === 'files' || item.facet === 'media') {
+  if ((item.source === 'files' || item.source === 'media') && item.role !== 'library-root') {
     return item.locator;
-  }
-  if (
-    item.facet === 'entities' &&
-    item.entityStatus !== 'candidate' &&
-    item.representationLocator
-  ) {
-    return item.representationLocator;
   }
   throw new Error(`Desktop Preview item '${item.resourceId}' has no content locator.`);
 }
 
-type ResourceBrowserContentLocator =
-  | Extract<ResourceBrowserItem, { readonly facet: 'files' | 'media' }>['locator']
-  | NonNullable<
-      Extract<
-        ResourceBrowserItem,
-        {
-          readonly facet: 'entities';
-          readonly entityStatus: 'confirmed' | 'needs-attention' | 'deprecated';
-        }
-      >['representationLocator']
-    >;
+type ResourceBrowserContentLocator = ContentLocator;
 
 interface PublishedPreviewResource {
   readonly url: string;
   readonly resourceUris?: Readonly<Record<string, string>>;
+  release(): void;
 }
 
 type PreviewSourceInput =
@@ -612,44 +617,48 @@ type PreviewSourceInput =
       readonly bytes: Uint8Array;
     };
 
-type PreviewSource =
-  | { readonly kind: 'file'; readonly absolutePath: string }
-  | { readonly kind: 'bytes'; readonly bytes: Uint8Array };
-
-async function resolvePreviewSource(input: PreviewSourceInput): Promise<{
-  readonly source: PreviewSource;
-  readonly byteLength: number;
-  readonly sourceFingerprint: string;
-}> {
+async function resolvePreviewSource(
+  input: PreviewSourceInput,
+  mediaType: string,
+): Promise<PreviewResourceSource> {
   if (input.absolutePath !== undefined) {
     const file = await stat(input.absolutePath);
     if (!file.isFile()) throw new Error('Desktop Preview source is not a file.');
     return {
-      source: { kind: 'file', absolutePath: input.absolutePath },
+      kind: 'file',
+      absolutePath: input.absolutePath,
+      mediaType,
       byteLength: file.size,
       sourceFingerprint: `${file.mtimeMs}:${file.size}`,
     };
   }
   const bytes = input.bytes.slice();
   return {
-    source: { kind: 'bytes', bytes },
+    kind: 'bytes',
+    bytes,
+    mediaType,
     byteLength: bytes.byteLength,
     sourceFingerprint: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
   };
 }
 
 interface PendingPreviewSource {
-  readonly source: PreviewSource;
+  readonly source: PreviewResourceSource;
   readonly displayName: string;
   readonly contentKind: PreviewContentKind;
-  readonly mediaType: string;
-  readonly byteLength: number;
   readonly contentLocator: ResourceBrowserContentLocator;
   readonly descriptorId: string;
-  readonly sourceFingerprint: string;
   readonly identity: PreviewRuntimeIdentity;
   readonly presentation: PreviewViewPresentation;
   readonly abortController: AbortController;
+}
+
+interface DesktopPreviewResourceOwner {
+  readonly source: PreviewResourceSource;
+  readonly displayName: string;
+  readonly contentKind: PreviewContentKind;
+  readonly signal: AbortSignal;
+  readonly resourceOwner: Parameters<DesktopResourceRegistry['registerFile']>[0];
 }
 
 async function publishPreviewResource(input: {
@@ -658,10 +667,9 @@ async function publishPreviewResource(input: {
     'registerFile' | 'registerResourceSet' | 'registerResourceTree'
   >;
   readonly owner: Parameters<DesktopResourceRegistry['registerFile']>[0];
-  readonly source: PreviewSource;
+  readonly source: PreviewResourceSource;
   readonly displayName: string;
   readonly contentKind: PreviewContentKind;
-  readonly mediaType: string;
   readonly signal: AbortSignal;
 }): Promise<PublishedPreviewResource> {
   input.signal.throwIfAborted();
@@ -672,7 +680,7 @@ async function publishPreviewResource(input: {
         {
           virtualPath: 'content',
           byteLength: bytes.byteLength,
-          contentType: input.mediaType,
+          contentType: input.source.mediaType,
           read: async (signal) => {
             signal.throwIfAborted();
             return bytes;
@@ -682,10 +690,10 @@ async function publishPreviewResource(input: {
       release: () => undefined,
     });
     releaseLeaseIfAborted(lease, input.signal);
-    return { url: new URL('content', lease.url).toString() };
+    return { url: new URL('content', lease.url).toString(), release: lease.release };
   }
   const absolutePath = input.source.absolutePath;
-  if (input.mediaType === 'application/epub+zip') {
+  if (input.source.mediaType === 'application/epub+zip') {
     const archive = await createNodeArchiveResource(absolutePath, {
       signal: input.signal,
     });
@@ -717,7 +725,7 @@ async function publishPreviewResource(input: {
   ) {
     const lease = await input.resources.registerFile(input.owner, {
       absolutePath,
-      mediaType: input.mediaType,
+      mediaType: input.source.mediaType,
     });
     releaseLeaseIfAborted(lease, input.signal);
     return lease;
@@ -730,7 +738,7 @@ async function publishPreviewResource(input: {
       {
         virtualPath: entryPath,
         path: absolutePath,
-        contentType: input.mediaType,
+        contentType: input.source.mediaType,
       },
       ...dependencies.map((dependency) => ({
         virtualPath: dependency.virtualPath,
@@ -743,6 +751,7 @@ async function publishPreviewResource(input: {
   releaseLeaseIfAborted(lease, input.signal);
   return {
     url: lease.url,
+    release: lease.release,
     resourceUris: {
       [input.displayName]: lease.url,
       ...Object.fromEntries(

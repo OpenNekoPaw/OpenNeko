@@ -4,7 +4,7 @@ import { createAgentAuthoringMutationAuthority } from './agent-authoring-mutatio
 
 describe('Agent authoring mutation authority', () => {
   it.each([
-    ['content-project', { kind: 'content-project', contentProjectId: 'content-1' }, 'content'],
+    ['content-document', { kind: 'content-document', documentId: 'documents/story.md' }, 'content'],
     [
       'character-project',
       { kind: 'character-project', characterProjectId: 'character-1' },
@@ -24,6 +24,25 @@ describe('Agent authoring mutation authority', () => {
     }
   });
 
+  it('revalidates the same exact Character authority for an Assistant operation receipt', async () => {
+    const fixture = createFixture();
+    const receipt = {
+      ...authoringReceipt({
+        kind: 'character-project' as const,
+        characterProjectId: 'character-1',
+      }),
+      mode: 'assistant' as const,
+    };
+
+    await expect(
+      fixture.authority.authorize({
+        receipt,
+        expectedTargetKind: 'character-project',
+      }),
+    ).resolves.toEqual(receipt.binding);
+    expect(fixture.character.validate).toHaveBeenCalledOnce();
+  });
+
   it('rejects cross-target and runtime receipts without touching any owner', async () => {
     const fixture = createFixture();
     const character = authoringReceipt({
@@ -33,7 +52,7 @@ describe('Agent authoring mutation authority', () => {
     await expect(
       fixture.authority.authorize({
         receipt: character,
-        expectedTargetKind: 'content-project',
+        expectedTargetKind: 'content-document',
       }),
     ).rejects.toThrow("cannot use 'character-project' authority");
 
@@ -44,8 +63,9 @@ describe('Agent authoring mutation authority', () => {
       mode: 'character-dialogue',
       binding: {
         kind: 'character-dialogue',
+        mode: 'companion',
         participants: [
-          { characterProjectId: 'character-1', characterVersionId: 'character-version-1' },
+          { globalCharacterId: 'character-1', characterVersionId: 'character-version-1' },
         ],
       },
     };
@@ -60,9 +80,10 @@ describe('Agent authoring mutation authority', () => {
       mode: 'world-experience',
       binding: {
         kind: 'world-experience',
-        worldExperienceId: 'world-experience-1',
-        worldExperienceVersionId: 'world-experience-version-1',
-        launch: { kind: 'new', participantId: 'participant-1', roleScopeId: 'role-1' },
+        globalWorldId: 'global-world-1',
+        worldVersionId: 'world-version-1',
+        participants: [],
+        launch: { kind: 'new' },
       },
     };
     await expect(
@@ -84,12 +105,12 @@ describe('Agent authoring mutation authority', () => {
   ])("rejects inferred authority field '%s' before owner routing", async (field) => {
     const fixture = createFixture();
     const receipt = {
-      ...authoringReceipt({ kind: 'content-project', contentProjectId: 'content-1' }),
+      ...authoringReceipt({ kind: 'content-document', documentId: 'documents/story.md' }),
       [field]: 'content-1',
     } as unknown as AgentEntryTargetReceipt;
 
     await expect(
-      fixture.authority.authorize({ receipt, expectedTargetKind: 'content-project' }),
+      fixture.authority.authorize({ receipt, expectedTargetKind: 'content-document' }),
     ).rejects.toThrow(`unsupported field '${field}'`);
     expect(fixture.content.validate).not.toHaveBeenCalled();
     expect(fixture.character.validate).not.toHaveBeenCalled();
@@ -119,6 +140,7 @@ function authoringReceipt(target: AgentAuthoringTargetRef): AgentEntryTargetRece
       kind: 'authoring',
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant-1',
+      authority: { kind: 'project', projectId: 'project-1' },
       target,
     },
   };

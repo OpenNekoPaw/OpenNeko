@@ -7,6 +7,7 @@ export interface CanvasKeyboardState extends Record<string, unknown> {
   readonly canDeleteSelection: boolean;
   readonly hasNodes: boolean;
   readonly isKeyboardFocused: boolean;
+  readonly isModalPreviewOpen?: boolean;
 }
 
 export interface UseCanvasKeyboardControllerOptions {
@@ -138,11 +139,11 @@ export function useCanvasKeyboardController({
   );
 
   useKeyboardDispatcher(bindings, state, {
-    enabled: state.isKeyboardFocused,
+    enabled: state.isKeyboardFocused && state.isModalPreviewOpen !== true,
     target,
   });
   useKeyboardDispatcher(keyUpBindings, state, {
-    enabled: state.isKeyboardFocused,
+    enabled: state.isKeyboardFocused && state.isModalPreviewOpen !== true,
     eventType: 'keyup',
     target,
     validateDuplicates: false,

@@ -5,6 +5,8 @@
 import {
   isContentSourceRef,
   isHostProjectedRuntimeValue,
+  isProjectDurableContentLocator,
+  type ContentLocator,
   type ContentSourceRef,
 } from '@neko/content';
 import { isContentRepresentationLocator, type ContentRepresentationLocator } from '@neko/content';
@@ -134,6 +136,7 @@ export type ProjectSemanticIndexingTrigger =
 
 export interface ProjectSearchSourceRef {
   readonly partition: ProjectSearchPartitionKind;
+  readonly contentLocator?: ContentLocator;
   readonly sourceId?: string;
   readonly sourceKind?: string;
   readonly refId?: string;
@@ -792,11 +795,24 @@ export function isProjectSearchItem(value: unknown): value is ProjectSearchItem 
     isProjectSearchItemKind(value['kind']) &&
     typeof value['label'] === 'string' &&
     isProjectSearchPartitionKind(value['source']['partition']) &&
+    (value['source']['contentLocator'] === undefined ||
+      isProjectSearchDurableContentLocator(value['source']['contentLocator'])) &&
     typeof value['projectRoot'] === 'string' &&
     typeof value['searchText'] === 'string' &&
     isProjectIndexFreshness(value['freshness']) &&
-    optionalProjectSearchVisualResource(value['visualResource'])
+    optionalProjectSearchVisualResource(value['visualResource']) &&
+    isProjectSearchDurableVisualResource(value['visualResource'])
   );
+}
+
+function isProjectSearchDurableContentLocator(value: unknown): value is ContentLocator {
+  return isProjectDurableContentLocator(value);
+}
+
+function isProjectSearchDurableVisualResource(value: unknown): boolean {
+  if (!isRecord(value) || value['representationLocator'] === undefined) return true;
+  if (!isContentRepresentationLocator(value['representationLocator'])) return false;
+  return isProjectSearchDurableContentLocator(value['representationLocator'].source);
 }
 
 export function projectMediaSemanticIndexToSearchItems(
@@ -818,7 +834,7 @@ export function projectCharacterObservationToSearchItem(
   const observation = input.observation;
   const label =
     observation.entityRef?.entityId ??
-    observation.candidate?.name ??
+    observation.candidate?.canonicalName ??
     observation.mention?.text ??
     observation.candidateId ??
     observation.observationId;

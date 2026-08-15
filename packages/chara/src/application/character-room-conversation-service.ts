@@ -115,7 +115,12 @@ export class CharacterRoomConversationService {
           },
           signal,
         );
-        response = await this.options.interactions.submitPreparedTurn(prepared, message, signal);
+        response = await this.options.interactions.submitPreparedTurn(
+          prepared,
+          `agent-turn:${submissionId}:${participantId}`,
+          message,
+          signal,
+        );
       } catch (error) {
         signal?.throwIfAborted();
         outcomes.push({

@@ -72,7 +72,7 @@ describe('Desktop build platform contract', () => {
     }
   });
 
-  it('packages only on macOS and keeps Windows/Linux test-only', async () => {
+  it('keeps GitHub validation free of native Desktop builds', async () => {
     const workflow = parse(await readFile('.github/workflows/ci.yml', 'utf8'));
     const staticBuild = workflow.jobs?.['static-build'];
     const nativePackage = workflow.jobs?.['desktop-package'];
@@ -84,22 +84,7 @@ describe('Desktop build platform contract', () => {
     );
     assert.equal(findRunStep(staticBuild, 'Package Desktop'), undefined);
 
-    assert.equal(nativePackage?.strategy, undefined);
-    assert.equal(nativePackage?.['runs-on'], 'macos-15');
-    assert.equal(findRunStep(nativePackage, 'Typecheck Desktop'), 'pnpm typecheck:desktop');
-    assert.equal(
-      findRunStep(nativePackage, 'Validate native Sharp bundle runtime'),
-      'node --test scripts/test-orchestration/sharp-cjs-bundle-runtime.test.mjs',
-    );
-    const packageStep = findStep(nativePackage, 'Package Desktop');
-    assert.equal(packageStep?.run, 'pnpm package:desktop');
-    assert.equal(packageStep?.env?.NODE_OPTIONS, '--max-old-space-size=4096');
-    assert.equal(nativePackage?.steps?.at(-1)?.with?.name, 'openneko-darwin-arm64');
-    assert.equal(
-      nativePackage?.steps?.at(-1)?.with?.path,
-      'apps/neko-desktop/out/OpenNeko-darwin-arm64/',
-    );
-    assert.equal(nativePackage?.steps?.at(-1)?.with?.['if-no-files-found'], 'error');
+    assert.equal(nativePackage, undefined);
     const platformTest = workflow.jobs?.['platform-test'];
     assert.deepEqual(platformTest?.strategy?.matrix?.os, ['ubuntu-latest', 'windows-2025']);
     assert.equal(platformTest?.['runs-on'], '${{ matrix.os }}');
@@ -110,6 +95,10 @@ describe('Desktop build platform contract', () => {
     );
     const forbidden = JSON.stringify(platformTest);
     assert.doesNotMatch(forbidden, /package:desktop|electron-forge|upload-artifact|make:desktop/u);
+    assert.doesNotMatch(
+      JSON.stringify(workflow.jobs),
+      /package:desktop|make:desktop|electron-forge|openneko-darwin-arm64|apps\/neko-desktop\/out/u,
+    );
   });
 });
 

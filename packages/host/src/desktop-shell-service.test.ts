@@ -98,6 +98,101 @@ describe('DesktopShellService', () => {
     expect(second.registry.restore).not.toHaveBeenCalled();
   });
 
+  it('locally resets a cross-Workspace persisted Scene without losing Project presentations', async () => {
+    const repository = createMemoryFile();
+    const firstWorkspace: AssetWorkspaceResolution = {
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath: '/workspace/first',
+      displayName: 'First',
+      locator: { kind: 'variable', value: '${HOME}/workspace/first' },
+    };
+    const secondWorkspace: AssetWorkspaceResolution = {
+      workspaceId: '22222222-2222-4222-8222-222222222222',
+      workspacePath: '/workspace/second',
+      displayName: 'Second',
+      locator: { kind: 'variable', value: '${HOME}/workspace/second' },
+    };
+    const workspaces = new Map(
+      [firstWorkspace, secondWorkspace].map((workspace) => [workspace.workspacePath, workspace]),
+    );
+    const first = createFixture(repository);
+    first.registry.resolve.mockImplementation(async (workspacePath: string) => {
+      const workspace = workspaces.get(workspacePath);
+      if (!workspace) throw new Error(`Unknown fixture Workspace '${workspacePath}'.`);
+      return workspace;
+    });
+    const windowId = await first.service.claimWindowId();
+    first.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await first.service.getProjection(windowId);
+    const firstOpened = await openContent(
+      first,
+      windowId,
+      firstWorkspace.workspacePath,
+      initial.rendererSessionId,
+    );
+    const firstScene = activeScene(firstOpened.projection.window);
+    const secondOpened = await openContent(
+      first,
+      windowId,
+      secondWorkspace.workspacePath,
+      firstOpened.projection.rendererSessionId,
+    );
+    const secondComposition = activeInstance(secondOpened.projection.window);
+    const stored = await repository.read();
+    await repository.commit({
+      ...stored,
+      windows: stored.windows.map((window) =>
+        window.windowId === windowId
+          ? {
+              ...window,
+              workbench: createDesktopWindowComposition({
+                workbenchInstanceId: secondComposition.workbenchInstanceId,
+                layout: secondComposition.layout,
+                scene: firstScene,
+              }),
+            }
+          : window,
+      ),
+    });
+    first.service.releaseWindow(windowId);
+    await first.service.dispose();
+
+    const restored = createFixture(repository);
+    await expect(restored.service.claimWindowId()).resolves.toBe(windowId);
+    restored.service.setRendererSessionId(windowId, 'renderer-session-restored');
+    const entry = await restored.service.getProjection(windowId);
+
+    expect(entry.window.activeTarget).toEqual({ kind: 'home' });
+    expect(entry.window.tabs).toHaveLength(2);
+    expect(entry.catalog.projects).toHaveLength(2);
+    expect(activeScene(entry.window).context).toMatchObject({
+      kind: 'agent',
+      scope: { kind: 'unbound' },
+    });
+    expect(entry.stateDiagnostics).toContainEqual({
+      code: 'desktop-presentation-reset',
+      severity: 'warning',
+      windowId,
+      owner: 'workspace',
+      resetSceneId: firstScene.sceneId,
+      message: expect.stringContaining('another Workspace'),
+    });
+    const canonicalState = await repository.read();
+    expect(canonicalState.projects).toHaveLength(2);
+    expect(canonicalState.windows[0]?.tabs).toHaveLength(2);
+    expect(
+      canonicalState.windows[0]?.tabs.find(
+        (tab) => tab.projectId === `content:${secondWorkspace.workspaceId}`,
+      )?.presentation?.main.views,
+    ).toEqual([
+      expect.objectContaining({
+        kind: 'canvas',
+        workspaceId: secondWorkspace.workspaceId,
+        documentId: 'neko/boards/workspace.nkc',
+      }),
+    ]);
+  });
+
   it('opens and explicitly removes a Project retained by the stable Workspace authority', async () => {
     const retainedProject: DesktopProjectCatalogItem = {
       projectId: 'content:11111111-1111-4111-8111-111111111111',
@@ -717,7 +812,7 @@ describe('DesktopShellService', () => {
         sceneId: transitioned.scene.sceneId,
         intent: {
           kind: 'select-world-detail',
-          selection: { kind: 'project', worldProjectId: 'world-project:archive-city' },
+          selection: { kind: 'global', globalWorldId: 'global-world:archive-city' },
         },
       }),
     );
@@ -727,17 +822,60 @@ describe('DesktopShellService', () => {
         context: {
           kind: 'creative-management',
           catalog: 'worlds',
-          detail: { kind: 'project', worldProjectId: 'world-project:archive-city' },
+          detail: { kind: 'global', globalWorldId: 'global-world:archive-city' },
         },
         slots: {
           main: { kind: 'creative-management', catalog: 'worlds' },
           secondaryMain: {
             kind: 'world-detail',
-            selection: { kind: 'project', worldProjectId: 'world-project:archive-city' },
+            selection: { kind: 'global', globalWorldId: 'global-world:archive-city' },
           },
         },
       },
     });
+  });
+
+  it('transitions to one exact fixed World Runtime scene and preserves it across renderer reload', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const projection = await fixture.service.getProjection(windowId);
+    const binding = {
+      worldProjectId: 'world-project-1',
+      worldVersionId: 'world-version-1',
+      worldRunId: 'world-run-1',
+      worldSaveId: 'world-save-1',
+      branchId: 'branch-main',
+      participantId: 'participant-1',
+      actorId: 'actor-1',
+    };
+
+    const transitioned = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'world-runtime-1',
+        rendererSessionId: projection.rendererSessionId,
+        windowId,
+        sceneId: activeScene(projection.window).sceneId,
+        intent: { kind: 'open-world-runtime', binding },
+      }),
+    );
+
+    expect(transitioned).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: { kind: 'world-runtime', binding },
+        slots: {
+          interaction: { kind: 'world-runtime-interaction', worldRunId: 'world-run-1' },
+          main: { kind: 'world-runtime-main', worldRunId: 'world-run-1' },
+          rightManager: { kind: 'world-runtime-manager', worldRunId: 'world-run-1' },
+          cutPanel: { kind: 'world-runtime-timeline', worldRunId: 'world-run-1' },
+          status: { kind: 'world-runtime-status', worldRunId: 'world-run-1' },
+        },
+      },
+    });
+    if (transitioned.status !== 'transitioned') throw new Error('Expected World Runtime Scene.');
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-2');
+    expect(await fixture.service.getSceneProjection(windowId)).toEqual(transitioned.scene);
   });
 
   it('preserves qualified Character Interaction while resetting unavailable management scenes', async () => {
@@ -793,13 +931,16 @@ describe('DesktopShellService', () => {
               },
             },
             main: {
-              kind: 'character-avatar',
+              kind: 'character-presentation',
               owner: {
                 kind: 'character',
                 characterId: 'character-project-a',
                 characterRunId: 'character-run-a',
                 dialogueRunId: 'dialogue-run-a',
               },
+              surfaceKind: 'avatar',
+              providerId: 'chara.representation',
+              surfaceId: 'character-presentation:conversation-a',
             },
             rightManager: {
               kind: 'character-runtime-manager',
@@ -809,6 +950,27 @@ describe('DesktopShellService', () => {
                 characterRunId: 'character-run-a',
                 dialogueRunId: 'dialogue-run-a',
               },
+            },
+            cutPanel: {
+              kind: 'character-timeline-stack',
+              owner: {
+                kind: 'character',
+                characterId: 'character-project-a',
+                characterRunId: 'character-run-a',
+                dialogueRunId: 'dialogue-run-a',
+              },
+              timelines: [
+                {
+                  kind: 'character-storyline-timeline',
+                  owner: {
+                    kind: 'character',
+                    characterId: 'character-project-a',
+                    characterRunId: 'character-run-a',
+                    dialogueRunId: 'dialogue-run-a',
+                  },
+                  timelineId: 'character-storyline-timeline:conversation-a',
+                },
+              ],
             },
             status: {
               kind: 'scene-status',
@@ -1372,6 +1534,7 @@ describe('DesktopShellService', () => {
     const restoredMainView = activeWorkbench(restoredProjection.window).main.views[0]!;
     expect(restoredMainView).toMatchObject({
       kind: 'canvas',
+      projectId: 'content:11111111-1111-4111-8111-111111111111',
       documentId: 'neko/boards/workspace.nkc',
     });
     expect(activeScene(restoredProjection.window).slots.main).toEqual({
@@ -1636,11 +1799,26 @@ describe('DesktopShellService', () => {
       },
       slots: {
         interaction: { phase: 'session' },
-        main: { kind: 'character-avatar' },
+        main: {
+          kind: 'character-presentation',
+          surfaceKind: 'avatar',
+          providerId: 'chara.representation',
+        },
         rightManager: { kind: 'character-runtime-manager' },
       },
     });
-    expect(attached.slots.cutPanel).toBeUndefined();
+    expect(attached.slots.cutPanel).toMatchObject({
+      kind: 'character-timeline-stack',
+      timelines: [{ kind: 'character-storyline-timeline' }],
+    });
+    expect(
+      (await fixture.service.getProjection(windowId)).domains.find(
+        (domain) => domain.surface === 'character',
+      ),
+    ).toMatchObject({ status: 'unavailable', ownerSlice: 'P1.6' });
+    expect(
+      (fixture.service as unknown as Record<string, unknown>)['setCharacterCapabilityReady'],
+    ).toBeUndefined();
     await expect(fixture.service.attachAgentConversation(input)).resolves.toEqual(attached);
   });
 
@@ -1659,7 +1837,12 @@ describe('DesktopShellService', () => {
       rendererSessionId: initial.rendererSessionId,
       agentViewId: entryScene.context.agentViewId,
       draftId: entryScene.context.scope.draftId,
-      context: { kind: 'room', roomId: 'character-room-1', roomRunId: 'room-run-1' },
+      context: {
+        kind: 'room',
+        scope: 'interaction',
+        roomId: 'character-room-1',
+        roomRunId: 'room-run-1',
+      },
       conversationId: 'conversation-room-1',
     });
 
@@ -1670,9 +1853,19 @@ describe('DesktopShellService', () => {
       },
       slots: {
         interaction: { phase: 'session' },
-        main: { kind: 'character-avatar' },
+        main: {
+          kind: 'character-presentation',
+          surfaceKind: 'avatar',
+          providerId: 'chara.representation',
+        },
         rightManager: { kind: 'character-runtime-manager' },
-        cutPanel: { kind: 'character-room-timeline' },
+        cutPanel: {
+          kind: 'character-timeline-stack',
+          timelines: [
+            { kind: 'character-storyline-timeline' },
+            { kind: 'character-room-event-timeline' },
+          ],
+        },
       },
     });
   });
@@ -2020,7 +2213,7 @@ describe('DesktopShellService', () => {
     expect(fixture.registry.resolve).toHaveBeenCalledTimes(3);
   });
 
-  it('opens the canonical Workspace Canvas when a Project has no stored Main View', async () => {
+  it('opens the canonical Workspace Board when a Project has no stored Main View', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -2041,6 +2234,7 @@ describe('DesktopShellService', () => {
             projectId: 'content:11111111-1111-4111-8111-111111111111',
             workspaceId: '11111111-1111-4111-8111-111111111111',
             kind: 'canvas',
+            ownerId: 'canvas:content:11111111-1111-4111-8111-111111111111',
             documentId: 'neko/boards/workspace.nkc',
           },
         ],
@@ -2050,6 +2244,59 @@ describe('DesktopShellService', () => {
       viewIds: [activeWorkbench(opened.projection.window).main.views[0]?.viewId],
       activeViewId: activeWorkbench(opened.projection.window).main.views[0]?.viewId,
     });
+  });
+
+  it('replaces a special-target-only Project presentation with the canonical Workspace Board', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await fixture.service.getProjection(windowId);
+    const opened = await openContent(
+      fixture,
+      windowId,
+      '/workspace/demo',
+      initial.rendererSessionId,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+    const specialOnly = openOrFocusMainView(createDefaultDesktopWorkbenchLayout(windowId), {
+      viewId: `project-content:${project.projectId}`,
+      viewInstanceId: 'project-content-instance',
+      projectId: project.projectId,
+      workspaceId: project.workspaceId,
+      kind: 'project-content',
+      ownerId: `project-content:${project.projectId}`,
+      displayLabel: project.displayName,
+    });
+    const regressed = await fixture.service.updateWorkbench(
+      windowId,
+      opened.projection.rendererSessionId,
+      activeInstance(opened.projection.window).workbenchInstanceId,
+      specialOnly,
+    );
+    const entry = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'leave-special-target-only-workspace',
+        rendererSessionId: regressed.rendererSessionId,
+        windowId,
+        sceneId: activeScene(regressed.window).sceneId,
+        intent: { kind: 'open-agent-entry' },
+      }),
+    );
+    if (entry.status !== 'transitioned') throw new Error('Expected Agent Entry transition.');
+
+    const reopened = await openContent(
+      fixture,
+      windowId,
+      '/workspace/demo',
+      regressed.rendererSessionId,
+    );
+    expect(activeWorkbench(reopened.projection.window).main.views).toEqual([
+      expect.objectContaining({
+        kind: 'canvas',
+        documentId: 'neko/boards/workspace.nkc',
+        projectId: project.projectId,
+      }),
+    ]);
   });
 
   it('projects exact Character and World authoring targets from the active Workspace View', async () => {
@@ -2066,55 +2313,95 @@ describe('DesktopShellService', () => {
     const current = activeWorkbench(opened.projection.window);
     const project = opened.projection.catalog.projects[0];
     if (!project) throw new Error('Expected a Content Project.');
-    const characterLayout = openOrFocusMainView(current, {
-      viewId: 'view:character-1',
-      viewInstanceId: 'view-instance:character-1',
-      projectId: project.projectId,
-      workspaceId: project.workspaceId,
-      kind: 'character-authoring',
-      ownerId: 'character',
-      displayLabel: 'Lead',
-      characterProjectId: 'character-project-1',
-    });
+    const characterLayout = openOrFocusMainView(
+      current,
+      {
+        viewId: 'view:character-1',
+        viewInstanceId: 'view-instance:character-1',
+        projectId: project.projectId,
+        workspaceId: project.workspaceId,
+        kind: 'character-authoring',
+        ownerId: 'character',
+        displayLabel: 'Lead',
+        characterProjectId: 'character-project-1',
+      },
+      { groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID, splitAxis: 'columns' },
+    );
     const character = await fixture.service.updateWorkbench(
       windowId,
       opened.projection.rendererSessionId,
       activeInstance(opened.projection.window).workbenchInstanceId,
       characterLayout,
     );
-    expect(activeScene(character.window).slots.main).toEqual({
+    expect(activeScene(character.window).slots.main).toMatchObject({
+      kind: 'workspace-main',
+      workspaceId: project.workspaceId,
+    });
+    expect(activeScene(character.window).slots.secondaryMain).toEqual({
       kind: 'character-authoring',
       workspaceId: project.workspaceId,
-      projectId: project.projectId,
+      authority: { kind: 'project', projectId: project.projectId },
       viewId: 'view:character-1',
       viewInstanceId: 'view-instance:character-1',
       characterProjectId: 'character-project-1',
     });
 
-    const worldLayout = openOrFocusMainView(activeWorkbench(character.window), {
-      viewId: 'view:world-1',
-      viewInstanceId: 'view-instance:world-1',
-      projectId: project.projectId,
-      workspaceId: project.workspaceId,
-      kind: 'world-authoring',
-      ownerId: 'world',
-      displayLabel: 'Setting',
-      worldProjectId: 'world-project-1',
-    });
+    const worldLayout = openOrFocusMainView(
+      activeWorkbench(character.window),
+      {
+        viewId: 'view:world-1',
+        viewInstanceId: 'view-instance:world-1',
+        projectId: project.projectId,
+        workspaceId: project.workspaceId,
+        kind: 'world-authoring',
+        ownerId: 'world',
+        displayLabel: 'Setting',
+        worldProjectId: 'world-project-1',
+      },
+      { groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID, splitAxis: 'columns' },
+    );
     const world = await fixture.service.updateWorkbench(
       windowId,
       character.rendererSessionId,
       activeInstance(character.window).workbenchInstanceId,
       worldLayout,
     );
-    expect(activeScene(world.window).slots.main).toEqual({
+    expect(activeScene(world.window).slots.main).toMatchObject({
+      kind: 'workspace-main',
+      workspaceId: project.workspaceId,
+    });
+    expect(activeScene(world.window).slots.secondaryMain).toEqual({
       kind: 'world-authoring',
       workspaceId: project.workspaceId,
-      projectId: project.projectId,
+      authority: { kind: 'project', projectId: project.projectId },
       viewId: 'view:world-1',
       viewInstanceId: 'view-instance:world-1',
       worldProjectId: 'world-project-1',
     });
+    const withoutWorld = await fixture.service.updateWorkbench(
+      windowId,
+      world.rendererSessionId,
+      activeInstance(world.window).workbenchInstanceId,
+      closeMainView(activeWorkbench(world.window), 'view:world-1'),
+    );
+    expect(activeScene(withoutWorld.window).slots.main).toMatchObject({
+      kind: 'workspace-main',
+    });
+    expect(activeScene(withoutWorld.window).slots.secondaryMain).toMatchObject({
+      kind: 'character-authoring',
+      characterProjectId: 'character-project-1',
+    });
+    const withoutSpecialTarget = await fixture.service.updateWorkbench(
+      windowId,
+      withoutWorld.rendererSessionId,
+      activeInstance(withoutWorld.window).workbenchInstanceId,
+      closeMainView(activeWorkbench(withoutWorld.window), 'view:character-1'),
+    );
+    expect(activeScene(withoutSpecialTarget.window).slots.main).toMatchObject({
+      kind: 'workspace-main',
+    });
+    expect(activeScene(withoutSpecialTarget.window).slots.secondaryMain).toBeUndefined();
+    expect(activeWorkbench(withoutSpecialTarget.window).main.groups).toHaveLength(1);
   });
 
   it('restores the canonical Workspace Canvas before projecting an active Project with an empty Main group', async () => {
@@ -2125,13 +2412,13 @@ describe('DesktopShellService', () => {
     const initial = await first.service.getProjection(windowId);
     const opened = await openContent(first, windowId, '/workspace/demo', initial.rendererSessionId);
     const current = activeWorkbench(opened.projection.window);
-    const canvasView = current.main.views[0];
-    if (!canvasView) throw new Error('Expected the default Workspace Canvas View.');
+    const contentView = current.main.views[0];
+    if (!contentView) throw new Error('Expected the default Workspace Canvas View.');
     await first.service.updateWorkbench(
       windowId,
       opened.projection.rendererSessionId,
       activeInstance(opened.projection.window).workbenchInstanceId,
-      closeMainView(current, canvasView.viewId),
+      closeMainView(current, contentView.viewId),
     );
     first.service.releaseWindow(windowId);
     await first.service.dispose();
@@ -2153,6 +2440,7 @@ describe('DesktopShellService', () => {
     expect(activeWorkbench(projection.window).main.views).toEqual([
       expect.objectContaining({
         kind: 'canvas',
+        projectId: 'content:11111111-1111-4111-8111-111111111111',
         documentId: 'neko/boards/workspace.nkc',
       }),
     ]);
@@ -2836,7 +3124,7 @@ describe('DesktopShellService', () => {
     );
   });
 
-  it('drops a persisted temporary Preview View and restores the default Workspace Canvas', async () => {
+  it('drops a persisted temporary Preview View and restores the Workspace Board', async () => {
     const file = createMemoryFile();
     const first = createFixture(file);
     const windowId = await first.service.claimWindowId();
@@ -2898,6 +3186,7 @@ describe('DesktopShellService', () => {
         views: [
           {
             kind: 'canvas',
+            projectId: 'content:11111111-1111-4111-8111-111111111111',
             documentId: 'neko/boards/workspace.nkc',
           },
         ],

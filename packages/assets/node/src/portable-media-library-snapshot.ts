@@ -1,8 +1,21 @@
 import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { createNodeHostContentReadService } from '@neko/content/node';
-import { type ContentReadService, type WorkspaceFileContentLocator } from '@neko/content';
+import {
+  contentLocatorKey,
+  type ContentReadService,
+  type MediaLibraryContentLocator,
+} from '@neko/content';
+import { createCharacterAuthoringFileRepository } from '@neko/chara-node';
+import { createWorldAuthoringFileRepository } from '@neko/world-node';
+import {
+  deriveProjectDependencySnapshot,
+  type ProjectContentReferenceCatalog,
+} from '@neko/project/application';
+import {
+  projectPublicationDependencyKey,
+  type ProjectDependencySnapshot,
+} from '@neko/project/contracts';
 import {
   parsePortableMediaLibrarySnapshotPlan,
   parsePortableMediaLibrarySnapshotProgress,
@@ -10,21 +23,21 @@ import {
   type PortableMediaLibrarySnapshotProgress,
   type WorkspaceMediaLibrarySyncDiagnosticCode,
 } from '@neko/assets-domain/contracts';
-import { type LocalMetadataRepositories } from '@neko/local-metadata';
+import { decideProjectTraversal, type LocalMetadataRepositories } from '@neko/local-metadata';
 import {
   createWorkspaceMediaLibrarySyncMetadataBinding,
   type WorkspaceMediaLibrarySyncMetadataBinding,
 } from './workspace-media-library-sync-binding';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
-  readProjectContentReferences,
   rewriteProjectContentReferences,
   type ProjectContentReferenceSnapshot,
 } from './project-content-reference-readers';
 import {
-  WorkspaceMediaLibrarySyncService,
-  type WorkspaceMediaLibrarySyncProjection,
-} from './workspace-media-library-sync';
+  inspectProjectMediaLibraryPortability,
+  type ProjectMediaLibraryPortabilityInspection,
+} from './project-media-library-portability';
+import { createProjectContentReadService } from './project-content-read-service';
 
 const COPY_CHUNK_BYTE_LENGTH = 8 * 1024 * 1024;
 const EXCLUDED_PROJECT_DIRECTORIES = new Set([
@@ -46,7 +59,7 @@ const EXCLUDED_PROJECT_DIRECTORIES = new Set([
 interface PortableSnapshotEntry {
   readonly key: string;
   readonly libraryName: string;
-  readonly source: WorkspaceFileContentLocator;
+  readonly source: MediaLibraryContentLocator;
   readonly destinationPath: string;
   readonly byteLength: number;
   readonly fingerprint: string;
@@ -55,12 +68,14 @@ interface PortableSnapshotEntry {
 
 interface InternalPortableSnapshotPlan {
   readonly publicPlan: PortableMediaLibrarySnapshotPlan;
+  readonly projectId: string;
   readonly workspacePath: string;
   readonly destinationPath: string;
   readonly stagingPath: string;
   readonly entries: readonly PortableSnapshotEntry[];
   readonly replacements: ReadonlyMap<string, string>;
   readonly projectTreeByteLength: number;
+  readonly dependencyFingerprint: string;
 }
 
 export interface PortableMediaLibrarySnapshotResult {
@@ -85,25 +100,29 @@ export class PortableMediaLibrarySnapshotService {
   private readonly plans = new Map<string, InternalPortableSnapshotPlan>();
   private readonly progress = new Map<string, PortableMediaLibrarySnapshotProgress>();
   private readonly activeControllers = new Map<string, AbortController>();
-  private readonly createReader: (workspacePath: string) => ContentReadService;
+  private readonly createReader: (workspacePath: string, projectId: string) => ContentReadService;
 
   constructor(
     private readonly options: {
       readonly metadataRepositories: LocalMetadataRepositories;
-      readonly syncService: WorkspaceMediaLibrarySyncService;
-      readonly createReader?: (workspacePath: string) => ContentReadService;
+      readonly globalMediaLibraryRoot: string;
+      readonly createReader?: (workspacePath: string, projectId: string) => ContentReadService;
     },
   ) {
     this.createReader =
       options.createReader ??
-      ((workspacePath) =>
-        createNodeHostContentReadService({
+      ((workspacePath, projectId) => {
+        return createProjectContentReadService({
+          projectId,
           workspaceRoot: workspacePath,
+          globalMediaLibraryRoot: options.globalMediaLibraryRoot,
           defaultMaxBytes: COPY_CHUNK_BYTE_LENGTH,
-        }));
+        });
+      });
   }
 
   async plan(input: {
+    readonly projectId: string;
     readonly workspace: AssetWorkspaceResolution;
     readonly destinationPath: string;
   }): Promise<PortableMediaLibrarySnapshotPlan> {
@@ -116,6 +135,7 @@ export class PortableMediaLibrarySnapshotService {
   }
 
   async resume(input: {
+    readonly projectId: string;
     readonly workspace: AssetWorkspaceResolution;
     readonly snapshotId: string;
     readonly destinationPath: string;
@@ -145,6 +165,7 @@ export class PortableMediaLibrarySnapshotService {
   }
 
   async execute(input: {
+    readonly projectId: string;
     readonly workspace: AssetWorkspaceResolution;
     readonly snapshotId: string;
     readonly expectedOperationFingerprint: string;
@@ -153,6 +174,7 @@ export class PortableMediaLibrarySnapshotService {
     const plan = this.plans.get(input.snapshotId);
     if (
       !plan ||
+      plan.projectId !== input.projectId ||
       plan.publicPlan.workspaceId !== input.workspace.workspaceId ||
       plan.publicPlan.operationFingerprint !== input.expectedOperationFingerprint
     ) {
@@ -179,7 +201,7 @@ export class PortableMediaLibrarySnapshotService {
           : new Set<string>();
       const completedKeys: string[] = [];
       let completedByteLength = 0;
-      const reader = this.createReader(plan.workspacePath);
+      const reader = this.createReader(plan.workspacePath, plan.projectId);
       for (const entry of plan.entries) {
         assertNotCancelled(controller.signal);
         const stagedEntryPath = path.join(plan.stagingPath, ...entry.destinationPath.split('/'));
@@ -222,7 +244,7 @@ export class PortableMediaLibrarySnapshotService {
       try {
         stagedReferences = await rewriteProjectContentReferences({
           stagedWorkspacePath: plan.stagingPath,
-          projectId: input.workspace.workspaceId,
+          projectId: plan.projectId,
           replacements: plan.replacements,
         });
       } catch (error: unknown) {
@@ -242,6 +264,7 @@ export class PortableMediaLibrarySnapshotService {
           'Portable snapshot still contains linked Media Library requirements.',
         );
       }
+      await assertTargetFreeStagedProjectFacts(plan.stagingPath);
       await this.assertPlanFresh(input.workspace, plan);
       if (await optionalLstat(plan.destinationPath)) {
         throw new PortableMediaLibrarySnapshotError(
@@ -319,11 +342,16 @@ export class PortableMediaLibrarySnapshotService {
   }
 
   async cancel(input: {
+    readonly projectId: string;
     readonly workspace: AssetWorkspaceResolution;
     readonly snapshotId: string;
   }): Promise<void> {
     const plan = this.plans.get(input.snapshotId);
-    if (!plan || plan.publicPlan.workspaceId !== input.workspace.workspaceId) {
+    if (
+      !plan ||
+      plan.projectId !== input.projectId ||
+      plan.publicPlan.workspaceId !== input.workspace.workspaceId
+    ) {
       throw staleSnapshot();
     }
     const controller = this.activeControllers.get(input.snapshotId);
@@ -342,6 +370,7 @@ export class PortableMediaLibrarySnapshotService {
   }
 
   private async buildPlan(input: {
+    readonly projectId: string;
     readonly workspace: AssetWorkspaceResolution;
     readonly destinationPath: string;
     readonly snapshotId: string;
@@ -354,15 +383,20 @@ export class PortableMediaLibrarySnapshotService {
       snapshotId: input.snapshotId,
       allowExistingStaging: input.allowExistingStaging,
     });
-    const [projection, references] = await Promise.all([
-      this.options.syncService.inspect(input.workspace),
-      readProjectContentReferences({
-        workspacePath: input.workspace.workspacePath,
-        projectId: input.workspace.workspaceId,
-      }),
-    ]);
-    requireSnapshotReady(projection, references);
-    const reader = this.createReader(input.workspace.workspacePath);
+    const inspection = await inspectProjectMediaLibraryPortability({
+      projectId: input.projectId,
+      workspace: input.workspace,
+      globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+    });
+    const references = inspection.references;
+    requireSnapshotReady(inspection);
+    const dependencies = await inspectPortableProjectDependencies({
+      projectId: input.projectId,
+      workspacePath: input.workspace.workspacePath,
+      references,
+    });
+    requirePortableDependenciesReady(dependencies);
+    const reader = this.createReader(input.workspace.workspacePath, input.projectId);
     const entries = await buildSnapshotEntries({
       references,
       reader,
@@ -386,19 +420,26 @@ export class PortableMediaLibrarySnapshotService {
       snapshotId: input.snapshotId,
       workspaceId: input.workspace.workspaceId,
       requirementFingerprint: references.requirements.fingerprint,
-      operationFingerprint: projection.operationFingerprint,
+      operationFingerprint: combinedOperationFingerprint(
+        inspection.operationFingerprint,
+        dependencies.fingerprint,
+      ),
       entryCount: entries.length,
       totalByteLength,
       libraries,
     });
     const plan: InternalPortableSnapshotPlan = {
       publicPlan,
+      projectId: input.projectId,
       workspacePath: input.workspace.workspacePath,
       destinationPath,
       stagingPath,
       entries,
-      replacements: new Map(entries.map((entry) => [entry.source.path, entry.destinationPath])),
+      replacements: new Map(
+        entries.map((entry) => [contentLocatorKey(entry.source), entry.destinationPath]),
+      ),
       projectTreeByteLength,
+      dependencyFingerprint: dependencies.fingerprint,
     };
     if (input.writePlannedTask) {
       try {
@@ -422,16 +463,22 @@ export class PortableMediaLibrarySnapshotService {
     workspace: AssetWorkspaceResolution,
     plan: InternalPortableSnapshotPlan,
   ): Promise<void> {
-    const [projection, references] = await Promise.all([
-      this.options.syncService.inspect(workspace),
-      readProjectContentReferences({
-        workspacePath: workspace.workspacePath,
-        projectId: workspace.workspaceId,
-      }),
-    ]);
+    const inspection = await inspectProjectMediaLibraryPortability({
+      projectId: plan.projectId,
+      workspace,
+      globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+    });
+    const dependencies = await inspectPortableProjectDependencies({
+      projectId: plan.projectId,
+      workspacePath: workspace.workspacePath,
+      references: inspection.references,
+    });
+    requirePortableDependenciesReady(dependencies);
     if (
-      references.requirements.fingerprint !== plan.publicPlan.requirementFingerprint ||
-      projection.operationFingerprint !== plan.publicPlan.operationFingerprint
+      inspection.references.requirements.fingerprint !== plan.publicPlan.requirementFingerprint ||
+      dependencies.fingerprint !== plan.dependencyFingerprint ||
+      combinedOperationFingerprint(inspection.operationFingerprint, dependencies.fingerprint) !==
+        plan.publicPlan.operationFingerprint
     ) {
       throw staleSnapshot();
     }
@@ -451,6 +498,127 @@ export class PortableMediaLibrarySnapshotService {
     this.progress.set(progress.snapshotId, progress);
     listener?.(progress);
   }
+}
+
+async function inspectPortableProjectDependencies(input: {
+  readonly projectId: string;
+  readonly workspacePath: string;
+  readonly references: ProjectContentReferenceSnapshot;
+}): Promise<{
+  readonly snapshot: ProjectDependencySnapshot;
+  readonly fingerprint: string;
+  readonly characterVersionIds: ReadonlySet<string>;
+  readonly worldVersionIds: ReadonlySet<string>;
+}> {
+  const characters = createCharacterAuthoringFileRepository({
+    workspaceRoot: input.workspacePath,
+    scope: { kind: 'project', projectId: input.projectId },
+  });
+  const worlds = createWorldAuthoringFileRepository({
+    workspaceRoot: input.workspacePath,
+    scope: { kind: 'project', projectId: input.projectId },
+  });
+  const [characterCatalog, worldCatalog] = await Promise.all([
+    characters.readAuthoringCatalog(),
+    worlds.readAuthoringCatalog(),
+  ]);
+  const content: ProjectContentReferenceCatalog = {
+    owners: input.references.owners,
+    coveredOwnerKinds: (['canvas', 'cut', 'entity-representation'] as const).filter(
+      (kind) => !input.references.requirements.missingOwnerKinds.includes(kind),
+    ),
+    diagnostics: input.references.diagnostics.map((diagnostic) => ({
+      ownerKind: diagnostic.ownerKind,
+      ownerId: diagnostic.ownerId,
+      message: `Project document '${diagnostic.ownerId}' is invalid.`,
+    })),
+  };
+  const snapshot = deriveProjectDependencySnapshot({
+    projectId: input.projectId,
+    content,
+    characters: characterCatalog,
+    worlds: worldCatalog,
+  });
+  const fingerprint = `sha256:${createHash('sha256')
+    .update(
+      JSON.stringify([
+        snapshot.coverage,
+        snapshot.missingOwnerKinds,
+        snapshot.dependencies.map((item) => [
+          projectPublicationDependencyKey(item.dependency),
+          item.occurrences.map((occurrence) => [
+            occurrence.ownerKind,
+            occurrence.ownerId,
+            occurrence.ownerFingerprint,
+          ]),
+        ]),
+        snapshot.diagnostics.map((diagnostic) => [
+          diagnostic.ownerKind,
+          diagnostic.ownerId,
+          diagnostic.message,
+        ]),
+      ]),
+    )
+    .digest('hex')}`;
+  return {
+    snapshot,
+    fingerprint,
+    characterVersionIds: new Set(
+      characterCatalog.versions.map((version) => version.characterVersionId),
+    ),
+    worldVersionIds: new Set(worldCatalog.versions.map((version) => version.worldVersionId)),
+  };
+}
+
+function requirePortableDependenciesReady(
+  input: Awaited<ReturnType<typeof inspectPortableProjectDependencies>>,
+): void {
+  if (input.snapshot.coverage !== 'complete') {
+    throw new PortableMediaLibrarySnapshotError(
+      'snapshot-source-stale',
+      `Portable snapshot reference coverage is incomplete for: ${input.snapshot.missingOwnerKinds.join(', ')}.`,
+    );
+  }
+  for (const item of input.snapshot.dependencies) {
+    const dependency = item.dependency;
+    if (
+      dependency.kind === 'character-version' &&
+      !input.characterVersionIds.has(dependency.characterVersionId)
+    ) {
+      throw new PortableMediaLibrarySnapshotError(
+        'snapshot-source-stale',
+        `Referenced CharacterVersion '${dependency.characterVersionId}' is unavailable.`,
+      );
+    }
+    if (
+      dependency.kind === 'world-experience-version' &&
+      !input.worldVersionIds.has(dependency.worldExperienceVersionId)
+    ) {
+      throw new PortableMediaLibrarySnapshotError(
+        'snapshot-source-stale',
+        `Referenced WorldVersion '${dependency.worldExperienceVersionId}' is unavailable.`,
+      );
+    }
+  }
+  const packageDependency = input.snapshot.dependencies.find(
+    (item) =>
+      item.dependency.kind === 'asset-revision' || item.dependency.kind === 'package-resource',
+  );
+  if (packageDependency) {
+    throw new PortableMediaLibrarySnapshotError(
+      'snapshot-content-unavailable',
+      `Referenced Asset/package dependency '${projectPublicationDependencyKey(packageDependency.dependency)}' cannot be collected because the exact package export owner is unavailable.`,
+    );
+  }
+}
+
+function combinedOperationFingerprint(
+  mediaFingerprint: string,
+  dependencyFingerprint: string,
+): string {
+  return `sha256:${createHash('sha256')
+    .update(JSON.stringify([mediaFingerprint, dependencyFingerprint]))
+    .digest('hex')}`;
 }
 
 async function buildSnapshotEntries(input: {
@@ -513,7 +681,7 @@ async function buildSnapshotEntries(input: {
 
 async function fingerprintSnapshotSource(
   reader: ContentReadService,
-  source: WorkspaceFileContentLocator,
+  source: MediaLibraryContentLocator,
 ): Promise<{
   readonly byteLength: number;
   readonly fingerprint: string;
@@ -635,8 +803,15 @@ async function copyProjectTree(input: {
     const entries = await fs.readdir(sourceDirectory, { withFileTypes: true });
     for (const entry of entries) {
       assertNotCancelled(input.signal);
-      if (entry.name.startsWith('.') || EXCLUDED_PROJECT_DIRECTORIES.has(entry.name)) continue;
       const sourcePath = path.join(sourceDirectory, entry.name);
+      const relativePath = path.relative(input.sourceRoot, sourcePath).split(path.sep).join('/');
+      const decision = decideProjectTraversal(
+        relativePath,
+        entry.isSymbolicLink() ? 'symbolic-link' : entry.isDirectory() ? 'directory' : 'file',
+        'package',
+      );
+      if (decision.action === 'exclude-project-local') continue;
+      if (entry.name.startsWith('.') || EXCLUDED_PROJECT_DIRECTORIES.has(entry.name)) continue;
       const destinationPath = path.join(destinationDirectory, entry.name);
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
@@ -658,8 +833,15 @@ async function measureProjectTree(workspacePath: string): Promise<number> {
   async function visit(directory: string): Promise<void> {
     const entries = await fs.readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.name.startsWith('.') || EXCLUDED_PROJECT_DIRECTORIES.has(entry.name)) continue;
       const entryPath = path.join(directory, entry.name);
+      const relativePath = path.relative(workspacePath, entryPath).split(path.sep).join('/');
+      const decision = decideProjectTraversal(
+        relativePath,
+        entry.isSymbolicLink() ? 'symbolic-link' : entry.isDirectory() ? 'directory' : 'file',
+        'package',
+      );
+      if (decision.action === 'exclude-project-local') continue;
+      if (entry.name.startsWith('.') || EXCLUDED_PROJECT_DIRECTORIES.has(entry.name)) continue;
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
         await visit(entryPath);
@@ -686,6 +868,84 @@ async function requireCapacity(directory: string, requiredByteLength: number): P
       'Portable snapshot destination does not have enough available capacity.',
     );
   }
+}
+
+const FORBIDDEN_PROJECT_FACT_KEYS = new Set([
+  'absolutePath',
+  'authorizationHandle',
+  'connectionId',
+  'credential',
+  'credentials',
+  'nativePath',
+  'physicalTarget',
+  'resolvedPath',
+  'runtimeUrl',
+]);
+
+async function assertTargetFreeStagedProjectFacts(stagingRoot: string): Promise<void> {
+  const factsRoot = path.join(stagingRoot, 'neko');
+  const root = await optionalLstat(factsRoot);
+  if (!root) return;
+  if (!root.isDirectory() || root.isSymbolicLink()) {
+    throw invalidStagedFacts('Portable snapshot Project facts root is invalid.');
+  }
+  await visit(factsRoot);
+
+  async function visit(directory: string): Promise<void> {
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) {
+        throw invalidStagedFacts('Portable snapshot Project facts cannot contain symbolic links.');
+      }
+      if (entry.isDirectory()) {
+        await visit(entryPath);
+        continue;
+      }
+      if (!entry.isFile() || path.extname(entry.name).toLocaleLowerCase() !== '.json') continue;
+      let value: unknown;
+      try {
+        value = JSON.parse(await fs.readFile(entryPath, 'utf8')) as unknown;
+      } catch {
+        throw invalidStagedFacts('Portable snapshot contains an invalid Project fact record.');
+      }
+      inspect(value);
+    }
+  }
+
+  function inspect(value: unknown): void {
+    if (Array.isArray(value)) {
+      for (const item of value) inspect(item);
+      return;
+    }
+    if (typeof value !== 'object' || value === null) return;
+    const record = value as Readonly<Record<string, unknown>>;
+    for (const [key, item] of Object.entries(record)) {
+      if (FORBIDDEN_PROJECT_FACT_KEYS.has(key)) {
+        throw invalidStagedFacts(
+          `Portable snapshot Project facts contain forbidden machine-local field '${key}'.`,
+        );
+      }
+      inspect(item);
+    }
+    if (record['kind'] === 'workspace-file' && typeof record['path'] === 'string') {
+      const normalized = record['path'].replaceAll('\\', '/');
+      if (
+        normalized === '.neko' ||
+        normalized.startsWith('.neko/') ||
+        normalized === 'neko/assets' ||
+        normalized.startsWith('neko/assets/')
+      ) {
+        throw invalidStagedFacts(
+          'Portable snapshot Project facts contain a retired machine-local content locator.',
+        );
+      }
+    }
+  }
+}
+
+function invalidStagedFacts(message: string): PortableMediaLibrarySnapshotError {
+  return new PortableMediaLibrarySnapshotError('snapshot-rewrite-failed', message);
 }
 
 async function copySnapshotEntry(input: {
@@ -755,19 +1015,25 @@ async function matchesStagedEntry(
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}` === entry.fingerprint;
 }
 
-function requireSnapshotReady(
-  projection: WorkspaceMediaLibrarySyncProjection,
-  references: ProjectContentReferenceSnapshot,
-): void {
-  if (projection.coverage !== 'complete' || references.requirements.coverage !== 'complete') {
+function requireSnapshotReady(inspection: ProjectMediaLibraryPortabilityInspection): void {
+  if (inspection.references.requirements.coverage !== 'complete') {
     throw new PortableMediaLibrarySnapshotError(
       'coverage-incomplete',
       'Portable snapshot requires complete project-document owner coverage.',
     );
   }
+  if (inspection.nestedLinkEscapeCount > 0) {
+    throw new PortableMediaLibrarySnapshotError(
+      'nested-link-escape',
+      'Portable snapshot rejects referenced content that escapes through a nested link.',
+    );
+  }
   if (
-    projection.requirementFingerprint !== references.requirements.fingerprint ||
-    projection.statuses.some((status) => status.referenceCount > 0 && status.state !== 'available')
+    inspection.portability.requirementFingerprint !==
+      inspection.references.requirements.fingerprint ||
+    inspection.portability.libraries.some(
+      (status) => status.referenceCount > 0 && status.state !== 'available',
+    )
   ) {
     throw new PortableMediaLibrarySnapshotError(
       'snapshot-content-unavailable',

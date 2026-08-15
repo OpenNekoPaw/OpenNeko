@@ -1,14 +1,10 @@
 import type {
-  CreativeEntity,
-  CreativeEntityCandidate,
   CreativeEntityOccurrenceProjection,
   CreativeEntityRef,
   CreativeEntityRelationshipProjection,
-  CreativeEntityRepresentationHint,
-  EntityRepresentationBinding,
-  EntityRepresentationTarget,
-  VisualIdentityDraft,
+  ProjectEntityRecord,
 } from '@neko/entity-domain';
+import type { ContentLocator } from '@neko/content';
 import type {
   NpcProfileFact,
   NpcProfileFactSource,
@@ -28,25 +24,15 @@ export interface NpcProfileRepresentationMetadata {
 }
 
 export interface NpcProfileAssemblerReaders {
-  readonly getEntity: (entityId: string) => Promise<CreativeEntity | undefined>;
-  readonly getCandidate?: (candidateId: string) => Promise<CreativeEntityCandidate | undefined>;
-  readonly listBindings?: (
-    entityRef: CreativeEntityRef,
-  ) => Promise<readonly EntityRepresentationBinding[]>;
-  readonly listVisualDrafts?: (
-    entityRef: CreativeEntityRef,
-  ) => Promise<readonly VisualIdentityDraft[]>;
+  readonly getEntity: (entityId: string) => Promise<ProjectEntityRecord | undefined>;
   readonly listRelationships?: (
     entityRef: CreativeEntityRef,
   ) => Promise<readonly CreativeEntityRelationshipProjection[]>;
   readonly listOccurrences?: (
     entityRef: CreativeEntityRef,
   ) => Promise<readonly CreativeEntityOccurrenceProjection[]>;
-  readonly listRepresentationHints?: (
-    entityRef: CreativeEntityRef,
-  ) => Promise<readonly CreativeEntityRepresentationHint[]>;
   readonly describeRepresentation?: (
-    representation: EntityRepresentationTarget,
+    representation: ContentLocator,
     entityRef: CreativeEntityRef,
   ) => Promise<NpcProfileRepresentationMetadata | undefined>;
 }
@@ -97,43 +83,29 @@ export class NpcProfileAssembler {
 
     const entityRef = toEntityRef(entity, input.entityRef);
     const facts = this.collectEntityFacts(entity);
-    const [bindings, drafts, relationships, occurrences, representationHints] = await Promise.all([
-      this.callOptionalReader('listBindings', entityRef),
-      this.callOptionalReader('listVisualDrafts', entityRef),
+    const [relationships, occurrences] = await Promise.all([
       this.callOptionalReader('listRelationships', entityRef),
       this.callOptionalReader('listOccurrences', entityRef),
-      this.callOptionalReader('listRepresentationHints', entityRef),
     ]);
 
-    if (bindings.status === 'unavailable') return this.providerUnavailable(input, bindings);
-    if (drafts.status === 'unavailable') return this.providerUnavailable(input, drafts);
     if (relationships.status === 'unavailable')
       return this.providerUnavailable(input, relationships);
     if (occurrences.status === 'unavailable') return this.providerUnavailable(input, occurrences);
-    if (representationHints.status === 'unavailable') {
-      return this.providerUnavailable(input, representationHints);
-    }
 
-    const representationBindings = this.collectRepresentationBindings(
-      entityRef,
-      bindings.value,
-      representationHints.value,
-    );
+    const representationBindings = this.collectRepresentationBindings(entity);
     const representationFacts = await this.collectRepresentationFacts(
       entityRef,
       representationBindings,
     );
-    const visualFacts = this.collectVisualFacts(drafts.value);
     const relationshipFacts = this.collectRelationshipFacts(entityRef, relationships.value);
     const occurrenceFacts = this.collectOccurrenceFacts(occurrences.value);
     const userSupplementFacts = collectUserSupplementFacts(input.userSupplements);
     const suggestedFacts = input.suggestedFacts ?? [];
-    const dialogueSamples = collectDialogueSamples(entity, occurrences.value);
+    const dialogueSamples = collectDialogueSamples(occurrences.value);
     const sceneAppearances = collectSceneAppearances(occurrences.value);
     const allFacts = dedupeFacts([
       ...facts,
       ...representationFacts,
-      ...visualFacts,
       ...occurrenceFacts,
       ...userSupplementFacts,
       ...suggestedFacts,
@@ -150,8 +122,8 @@ export class NpcProfileAssembler {
       status: 'assembled',
       profile: {
         entityRef,
-        displayName: entity.displayName ?? entity.canonicalName,
-        aliases: entity.aliases,
+        displayName: entity.names.display ?? entity.names.canonical,
+        aliases: entity.names.aliases,
         facts: allFacts,
         relationships: relationshipFacts,
         representationBindings,
@@ -164,81 +136,38 @@ export class NpcProfileAssembler {
     };
   }
 
-  private async resolveEntity(entityRef: CreativeEntityRef): Promise<CreativeEntity | undefined> {
-    const entity = await this.readers.getEntity(entityRef.entityId);
-    if (entity) return entity;
-
-    const candidate = await this.readers.getCandidate?.(entityRef.entityId);
-    if (!candidate) return undefined;
-
-    return {
-      id: candidate.resolvedEntityRef?.entityId ?? candidate.id,
-      kind: candidate.kind,
-      canonicalName: candidate.name,
-      aliases: candidate.aliases ?? [],
-      status: candidate.status === 'confirmed' ? 'confirmed' : 'candidate',
-      metadata: {
-        candidateId: candidate.id,
-        provenance: candidate.provenance,
-        ...(candidate.metadata ?? {}),
-      },
-    };
+  private resolveEntity(entityRef: CreativeEntityRef): Promise<ProjectEntityRecord | undefined> {
+    return this.readers.getEntity(entityRef.entityId);
   }
 
-  private collectEntityFacts(entity: CreativeEntity): NpcProfileFact[] {
+  private collectEntityFacts(entity: ProjectEntityRecord): NpcProfileFact[] {
     const facts: NpcProfileFact[] = [
-      fact('identity.name', entity.canonicalName, 'registry', 'confirmed', {
+      fact('identity.name', entity.names.canonical, 'registry', 'confirmed', {
         label: 'Canonical name',
-        sourceRef: entity.id,
+        sourceRef: entity.entityId,
       }),
     ];
 
-    if (entity.displayName && entity.displayName !== entity.canonicalName) {
+    if (entity.names.display && entity.names.display !== entity.names.canonical) {
       facts.push(
-        fact('identity.displayName', entity.displayName, 'registry', 'confirmed', {
+        fact('identity.displayName', entity.names.display, 'registry', 'confirmed', {
           label: 'Display name',
-          sourceRef: entity.id,
+          sourceRef: entity.entityId,
         }),
       );
     }
-
-    for (const key of ['role', 'ageRange', 'age', 'gender', 'notes', 'personality'] as const) {
-      const value = entity.metadata?.[key];
-      if (isNpcSerializableValue(value)) {
-        facts.push(
-          fact(`metadata.${key}`, value, 'registry', 'confirmed', { sourceRef: entity.id }),
-        );
-      }
-    }
-
     return facts;
   }
 
   private collectRepresentationBindings(
-    entityRef: CreativeEntityRef,
-    bindings: readonly EntityRepresentationBinding[],
-    hints: readonly CreativeEntityRepresentationHint[],
+    entity: ProjectEntityRecord,
   ): readonly NpcProfileRepresentationBinding[] {
-    const fromBindings = bindings
-      .filter((binding) => binding.entityId === entityRef.entityId && binding.status !== 'rejected')
-      .map((binding): NpcProfileRepresentationBinding => ({
-        role: binding.role,
-        representation: binding.representation,
-        isDefault: binding.isDefault,
-        sourceRef: binding.id,
-      }));
-    const fromHints = hints
-      .filter((hint) => isSameEntityRef(hint.entityRef, entityRef))
-      .flatMap((hint) =>
-        hint.roles.map((role): NpcProfileRepresentationBinding => ({
-          role,
-          representation: hint.representation,
-          sourceRef: hint.source.sourceRef,
-          summary: hint.reason,
-        })),
-      );
-
-    return dedupeRepresentationBindings([...fromBindings, ...fromHints]);
+    return entity.representations.map((binding): NpcProfileRepresentationBinding => ({
+      role: binding.role,
+      representation: binding.target,
+      isDefault: binding.isDefault,
+      sourceRef: binding.bindingId,
+    }));
   }
 
   private async collectRepresentationFacts(
@@ -276,19 +205,6 @@ export class NpcProfileAssembler {
       facts.push(...(metadata.facts ?? []));
     }
     return facts;
-  }
-
-  private collectVisualFacts(drafts: readonly VisualIdentityDraft[]): NpcProfileFact[] {
-    return drafts.flatMap((draft) =>
-      (draft.extractedVisualFacts ?? [])
-        .filter((visualFact) => visualFact.accepted !== false)
-        .map((visualFact) =>
-          fact(`visual.${visualFact.key}`, visualFact.value, 'visual-draft', 'confirmed', {
-            confidence: visualFact.confidence,
-            sourceRef: draft.id,
-          }),
-        ),
-    );
   }
 
   private collectRelationshipFacts(
@@ -329,14 +245,6 @@ export class NpcProfileAssembler {
   }
 
   private async callOptionalReader(
-    key: 'listBindings',
-    entityRef: CreativeEntityRef,
-  ): Promise<ReaderResult<readonly EntityRepresentationBinding[]>>;
-  private async callOptionalReader(
-    key: 'listVisualDrafts',
-    entityRef: CreativeEntityRef,
-  ): Promise<ReaderResult<readonly VisualIdentityDraft[]>>;
-  private async callOptionalReader(
     key: 'listRelationships',
     entityRef: CreativeEntityRef,
   ): Promise<ReaderResult<readonly CreativeEntityRelationshipProjection[]>>;
@@ -344,10 +252,6 @@ export class NpcProfileAssembler {
     key: 'listOccurrences',
     entityRef: CreativeEntityRef,
   ): Promise<ReaderResult<readonly CreativeEntityOccurrenceProjection[]>>;
-  private async callOptionalReader(
-    key: 'listRepresentationHints',
-    entityRef: CreativeEntityRef,
-  ): Promise<ReaderResult<readonly CreativeEntityRepresentationHint[]>>;
   private async callOptionalReader(
     key: keyof OptionalNpcProfileReaders,
     entityRef: CreativeEntityRef,
@@ -383,11 +287,7 @@ export class NpcProfileAssembler {
 
 type OptionalNpcProfileReaders = Pick<
   NpcProfileAssemblerReaders,
-  | 'listBindings'
-  | 'listVisualDrafts'
-  | 'listRelationships'
-  | 'listOccurrences'
-  | 'listRepresentationHints'
+  'listRelationships' | 'listOccurrences'
 >;
 
 type ReaderResult<TValue> =
@@ -454,15 +354,13 @@ function collectUserSupplementFacts(
 }
 
 function collectDialogueSamples(
-  entity: CreativeEntity,
   occurrences: readonly CreativeEntityOccurrenceProjection[],
 ): readonly string[] {
-  const metadataSamples = readStringArray(entity.metadata?.['dialogueSamples']);
   const occurrenceSamples = occurrences
     .map((occurrence) => occurrence.detail)
     .filter((detail): detail is string => Boolean(detail?.trim()))
     .filter((detail) => /[：:「"']/.test(detail));
-  return uniqueStrings([...metadataSamples, ...occurrenceSamples]);
+  return uniqueStrings(occurrenceSamples);
 }
 
 function collectSceneAppearances(
@@ -520,9 +418,9 @@ function scoreProfile(input: {
   };
 }
 
-function toEntityRef(entity: CreativeEntity, requested: CreativeEntityRef): CreativeEntityRef {
+function toEntityRef(entity: ProjectEntityRecord, requested: CreativeEntityRef): CreativeEntityRef {
   return {
-    entityId: entity.id,
+    entityId: entity.entityId,
     entityKind: entity.kind,
     ...(requested.projectRoot ? { projectRoot: requested.projectRoot } : {}),
     ...(requested.source ? { source: requested.source } : {}),
@@ -550,48 +448,6 @@ function dedupeFacts(facts: readonly NpcProfileFact[]): readonly NpcProfileFact[
   return deduped;
 }
 
-function dedupeRepresentationBindings(
-  bindings: readonly NpcProfileRepresentationBinding[],
-): readonly NpcProfileRepresentationBinding[] {
-  const seen = new Set<string>();
-  const deduped: NpcProfileRepresentationBinding[] = [];
-  for (const binding of bindings) {
-    const key = `${binding.role}\u0000${contentLocatorKey(binding.representation)}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(binding);
-  }
-  return deduped;
-}
-
-function readStringArray(value: unknown): readonly string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : [];
-}
-
 function uniqueStrings(values: readonly string[]): readonly string[] {
   return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
-}
-
-function isNpcSerializableValue(value: unknown): value is NpcSerializableValue {
-  if (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'boolean' ||
-    (typeof value === 'number' && Number.isFinite(value))
-  ) {
-    return true;
-  }
-  if (Array.isArray(value)) {
-    return value.every(isNpcSerializableValue);
-  }
-  if (!isRecord(value)) {
-    return false;
-  }
-  return Object.values(value).every(isNpcSerializableValue);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

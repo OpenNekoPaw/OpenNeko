@@ -33,8 +33,8 @@ describe('Character runtime repositories', () => {
 
     const repositories = createPersistentCharacterRuntimeRepositories({ metadataStore: store });
     expect('authoring' in repositories).toBe(false);
-    expect(repositories.interaction).not.toBe(repositories.memory);
-    expect(repositories.memory).not.toBe(repositories.presentation);
+    expect(repositories.interaction).not.toBe(repositories.companionContinuity);
+    expect(repositories.companionContinuity).not.toBe(repositories.presentation);
     expect('saveProject' in repositories.interaction).toBe(false);
     await expect(repositories.catalog.readRuntimeCatalog()).resolves.toMatchObject({
       relationships: [],
@@ -50,6 +50,7 @@ describe('Character runtime repositories', () => {
     );
     expect(tableNames).not.toContain('chara_projects');
     expect(tableNames).not.toContain('chara_authoring_test_snapshots');
+    expect(tableNames).not.toContain('chara_companion_assistant_lanes');
     expect(tableNames).toContain('chara_character_runs');
     await store.dispose();
   });
@@ -64,10 +65,11 @@ describe('Character runtime repositories', () => {
     await initializeCharacterRuntimePersistenceTables(store);
     const authoringRepository = createCharacterAuthoringFileRepository({
       workspaceRoot: libraryRoot,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-runtime' },
     });
     const authoring = new CharacterAuthoringService({
       repository: authoringRepository,
+      lineage: authoringRepository,
       now: () => '2026-08-11T00:00:00.000Z',
     });
     await authoring.createProject({
@@ -88,7 +90,7 @@ describe('Character runtime repositories', () => {
     const launch = new CharacterConversationLaunchService({
       repository: repositories.conversationLaunch,
       publications: authoringRepository,
-      agentSessions: {
+      agentConversations: {
         createPrimarySession: vi.fn(async ({ characterRunId }) => ({
           primaryAgentSessionId: `conversation:character:${characterRunId}`,
         })),
@@ -102,7 +104,7 @@ describe('Character runtime repositories', () => {
       userId: 'user:local',
       userDisplayName: 'User',
       selection: {
-        runtimeKind: 'companion',
+        mode: 'companion',
         characters: [{ characterVersionId: publication.characterVersionId }],
       },
     });
@@ -115,17 +117,17 @@ describe('Character runtime repositories', () => {
       repositories.conversationLaunch.readCharacterRun('character-run:launch:runtime-unload:1'),
     ).resolves.toMatchObject({ characterVersionId: publication.characterVersionId });
     await expect(
-      repositories.conversationLaunch.readMemoryScope(
-        'character-memory-scope:launch:runtime-unload:1',
+      repositories.conversationLaunch.readCompanionContinuity(
+        'companion-continuity:user%3Alocal:character-project-runtime',
       ),
     ).resolves.toMatchObject({
-      characterRunId: 'character-run:launch:runtime-unload:1',
+      characterProjectId: 'character-project-runtime',
     });
     await expect(
       repositories.conversationLaunch.readRelationship(
-        'relationship:user%3Alocal:character-version-runtime',
+        'relationship:user%3Alocal:character-project-runtime',
       ),
-    ).resolves.toMatchObject({ characterVersionId: publication.characterVersionId });
+    ).resolves.toMatchObject({ characterProjectId: publication.characterProjectId });
     await store.dispose();
   });
 });

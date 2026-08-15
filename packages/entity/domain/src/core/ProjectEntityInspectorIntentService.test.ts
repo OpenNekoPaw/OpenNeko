@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   ProjectEntityInspectorIntentService,
-  type ProjectEntityInspectorAssetPort,
   type ProjectEntityInspectorInteractionPort,
   type ProjectEntityInspectorLifecyclePort,
 } from './ProjectEntityInspectorIntentService';
@@ -17,7 +16,6 @@ describe('ProjectEntityInspectorIntentService', () => {
       accepted: {
         kind: 'character',
         names: { canonical: 'Rin', aliases: [] },
-        facts: { role: 'lead' },
       },
     });
     await service.execute({
@@ -51,24 +49,15 @@ describe('ProjectEntityInspectorIntentService', () => {
     );
   });
 
-  it('routes lifecycle, Asset, and interaction intents only to their exact owners', async () => {
+  it('routes lifecycle and interaction intents only to their exact owners', async () => {
     const lifecycle: ProjectEntityInspectorLifecyclePort = {
       merge: vi.fn(async () => undefined),
       deprecate: vi.fn(async () => undefined),
     };
-    const assets: ProjectEntityInspectorAssetPort = {
-      instantiate: vi.fn(async () => undefined),
-      publish: vi.fn(async () => undefined),
-      diff: vi.fn(async () => undefined),
-      applyUpdate: vi.fn(async () => undefined),
-    };
     const interactions: ProjectEntityInspectorInteractionPort = {
       reference: vi.fn(async () => undefined),
-      startCharacterDialogue: vi.fn(async () => undefined),
-      openRoom: vi.fn(async () => undefined),
-      embodyCharacter: vi.fn(async () => undefined),
     };
-    const service = createService({ lifecycle, assets, interactions });
+    const service = createService({ lifecycle, interactions });
 
     await service.execute({
       type: 'merge',
@@ -76,27 +65,22 @@ describe('ProjectEntityInspectorIntentService', () => {
       targetEntityId: 'entity-rin',
     });
     await service.execute({
-      type: 'publish',
+      type: 'reference',
       entityId: 'entity-rin',
-    });
-    await service.execute({
-      type: 'character-dialogue',
-      entityId: 'entity-rin',
-      characterId: 'character-rin',
+      conversationId: 'conversation-rin',
     });
 
     expect(lifecycle.merge).toHaveBeenCalledOnce();
-    expect(assets.publish).toHaveBeenCalledOnce();
-    expect(interactions.startCharacterDialogue).toHaveBeenCalledOnce();
+    expect(interactions.reference).toHaveBeenCalledOnce();
   });
 
   it('fails visibly when an owner is not configured', async () => {
     const service = createService();
     await expect(
       service.execute({
-        type: 'room-open',
-        entityId: 'entity-rin',
-        roomId: 'room-story',
+        type: 'merge',
+        sourceEntityId: 'entity-rin',
+        targetEntityId: 'entity-mio',
       }),
     ).rejects.toMatchObject({
       diagnostics: [{ code: 'project-entity-operation-invalid' }],

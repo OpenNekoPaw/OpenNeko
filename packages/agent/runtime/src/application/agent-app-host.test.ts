@@ -22,11 +22,13 @@ import {
 } from '@neko/agent-runtime/pi';
 import {
   EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
+  AGENT_AUTHORING_BINDING_METADATA_KEY,
   TOOL_NAMES_CANVAS,
   TOOL_NAMES_CUT,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_SYSTEM,
   type Tool,
+  type ToolExecuteOptions,
   type ToolResult,
   type EffectiveAgentConfigurationProjection,
   type AgentAuthoringTargetRef,
@@ -275,8 +277,8 @@ describe('AgentAppHost', () => {
     const authorize = vi.fn(async ({ receipt }) => {
       if (receipt.binding.kind !== 'authoring') throw new Error('Expected Authoring binding.');
       if (
-        receipt.binding.target.kind === 'content-project' &&
-        receipt.binding.target.contentProjectId === 'content-denied'
+        receipt.binding.target.kind === 'content-document' &&
+        receipt.binding.target.documentId === 'documents/denied.md'
       ) {
         throw new Error('Content owner denied the exact target.');
       }
@@ -298,13 +300,21 @@ describe('AgentAppHost', () => {
       displayName: 'Authoring',
       locator: { kind: 'variable', value: '${HOME}/workspace' },
     });
-    const executeMutation = vi.fn(async () => ({ success: true, data: { updated: true } }));
+    const executeMutation = vi.fn(
+      async (_args: Record<string, unknown>, options?: ToolExecuteOptions) => ({
+        success: true,
+        data: {
+          updated: true,
+          binding: options?.metadata?.[AGENT_AUTHORING_BINDING_METADATA_KEY],
+        },
+      }),
+    );
     workspace.tools.register({
       name: 'ContentMutationFixture',
       description: 'Exercises exact per-Turn authoring mutation authority.',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
       category: 'project',
-      requirements: { writableProject: true, authoringTargetKind: 'content-project' },
+      requirements: { writableProject: true, authoringTargetKind: 'content-document' },
       execute: executeMutation,
     });
     const mutationNames = workspace.tools
@@ -343,7 +353,10 @@ describe('AgentAppHost', () => {
     const contentResult = await workspace.executeTurn({
       conversationId: 'conversation-content-target',
       prompt: 'write content',
-      entryTargetReceipt: authoringTargetReceipt('content-project', 'content-1'),
+      entryTargetReceipt: {
+        ...authoringTargetReceipt('content-document', 'documents/story.md'),
+        mode: 'assistant',
+      },
       modelPolicy: policy,
       configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
@@ -353,8 +366,18 @@ describe('AgentAppHost', () => {
     expect(seenTools.get('write content')).toEqual(expect.arrayContaining(mutationNames));
     expect(JSON.stringify(contentResult.projection)).not.toContain('"success":false');
     expect(executeMutation).toHaveBeenCalledOnce();
+    expect(executeMutation).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          [AGENT_AUTHORING_BINDING_METADATA_KEY]: expect.objectContaining({
+            target: { kind: 'content-document', documentId: 'documents/story.md' },
+          }),
+        }),
+      }),
+    );
     expect(authorize).toHaveBeenCalledWith(
-      expect.objectContaining({ expectedTargetKind: 'content-project' }),
+      expect.objectContaining({ expectedTargetKind: 'content-document' }),
     );
 
     await workspace.executeTurn({
@@ -402,7 +425,7 @@ describe('AgentAppHost', () => {
     const denied = await workspace.executeTurn({
       conversationId: 'conversation-content-denied',
       prompt: 'write denied content',
-      entryTargetReceipt: authoringTargetReceipt('content-project', 'content-denied'),
+      entryTargetReceipt: authoringTargetReceipt('content-document', 'documents/denied.md'),
       modelPolicy: policy,
       configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
@@ -416,7 +439,7 @@ describe('AgentAppHost', () => {
     expect(authorize).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps structured project authoring providers out of Assistant Space runtimes', async () => {
+  it('keeps generic project editors out of Assistant Space while retaining target-bound providers', async () => {
     const fixture = await createFixture();
     const assistantSpaceId = 'assistant-space:local-user';
     const assistantSpacePath = join(fixture.root, 'assistant-space');
@@ -433,6 +456,24 @@ describe('AgentAppHost', () => {
         userDataRoot: assistantDataRoot,
       }),
       assistantSpaceIds: [assistantSpaceId],
+      resolveWorkspaceCapabilityProviders: () => [
+        {
+          id: 'character-draft-fixture',
+          getTools: () => [
+            {
+              name: 'CharacterDraftFixture',
+              description: 'Fill an explicitly authorized Character draft.',
+              category: 'project',
+              parameters: { type: 'object', properties: {}, additionalProperties: false },
+              requirements: {
+                writableProject: true,
+                authoringTargetKind: 'character-project',
+              },
+              execute: async () => ({ success: true }),
+            },
+          ],
+        },
+      ],
     });
     compositions.push(composition);
     const workspace = await composition.attachWorkspace({
@@ -444,6 +485,7 @@ describe('AgentAppHost', () => {
     const toolNames = workspace.tools.list().map((tool) => tool.name);
 
     expect(toolNames).toEqual(expect.arrayContaining(['Read', 'Write', 'ListDirectory', 'Grep']));
+    expect(toolNames).toContain('CharacterDraftFixture');
     expect(toolNames).not.toEqual(
       expect.arrayContaining([
         TOOL_NAMES_CANVAS.CANVAS_LIST_NODES,
@@ -631,7 +673,7 @@ describe('AgentAppHost', () => {
       },
     });
     const skillRecord = (await workspace.readSkillCatalog(true)).records.find(
-      (record) => record.name === 'desktop-fixture' && record.entryPoint.kind === 'skill',
+      (record) => record.name === 'desktop-fixture',
     );
     if (!skillRecord) throw new Error('Desktop fixture Skill is unavailable.');
     const skill = await workspace.executeTurn({
@@ -1590,6 +1632,42 @@ describe('AgentAppHost', () => {
     expect(fixture.composition.findConversation('conversation-background')).toBeDefined();
   });
 
+  it('omits every Skill and Tool from a turn constrained to empty capabilities', async () => {
+    const fixture = await createFixture();
+    const contexts: Context[] = [];
+    const models = createFixtureModels((_model, context) => {
+      contexts.push(context);
+      return completedStream(assistant('narrative response'));
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-narrative-capabilities',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Narrative fixture',
+    });
+
+    await workspace.startTurn({
+      conversationId: 'conversation-narrative-capabilities',
+      prompt: 'Remain in character',
+      modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+      capabilityConstraint: {
+        owner: { kind: 'character', id: 'character-run:narrative' },
+        skills: 'none',
+        tools: 'none',
+        references: 'none',
+      },
+    }).completion;
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.tools).toEqual([]);
+    expect(contexts[0]!.systemPrompt).toBe('Narrative fixture');
+  });
+
   it('releases only after queued and approval protection leases leave the invisible Conversation', async () => {
     const fixture = await createFixture();
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
@@ -2445,8 +2523,25 @@ describe('AgentAppHost', () => {
         updatedAt: '2026-08-05T00:01:00.000Z',
         context: {
           kind: 'room' as const,
+          scope: 'interaction' as const,
           roomId: 'room:studio',
           roomRunId: 'room-run:studio:1',
+        },
+      },
+      {
+        workspaceId: fixture.workspace.workspaceId,
+        conversationId: 'conversation-room-participant',
+        title: 'Room participant conversation',
+        activeBranchId: 'main',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:03:00.000Z',
+        context: {
+          kind: 'room' as const,
+          scope: 'participant' as const,
+          roomId: 'room:studio',
+          roomRunId: 'room-run:studio:1',
+          participantId: 'participant:neko',
+          characterRunId: 'character-run:neko:1',
         },
       },
     ];
@@ -2482,6 +2577,7 @@ describe('AgentAppHost', () => {
         },
       },
     ]);
+    expect(composition.readHomeProjection().conversations).toHaveLength(2);
   });
 
   it('retains a missing-context Conversation as unavailable without opening a runtime', async () => {
@@ -3100,7 +3196,7 @@ describe('AgentAppHost', () => {
       { mode: 0o755 },
     );
     await writeFile(
-      join(pluginRoot, '.mcp.json'),
+      join(pluginRoot, 'mcp.json'),
       JSON.stringify({
         mcpServers: {
           fixture: {
@@ -3117,9 +3213,9 @@ describe('AgentAppHost', () => {
         records: [],
         runtimeDescriptors: [
           {
-            pluginId: 'fixture@openneko',
+            pluginId: 'fixture',
             pluginRoot,
-            mcpDocumentPath: join(pluginRoot, '.mcp.json'),
+            mcpDocumentPath: join(pluginRoot, 'mcp.json'),
             mcpServerIds: ['fixture'],
             appIds: [],
           },
@@ -3156,7 +3252,7 @@ describe('AgentAppHost', () => {
       records: [],
       runtimeDescriptors: [
         {
-          pluginId: 'fixture@openneko',
+          pluginId: 'fixture',
           pluginRoot,
           skillRoot,
           mcpServerIds: [],
@@ -3166,25 +3262,16 @@ describe('AgentAppHost', () => {
       diagnostics: [],
     };
 
-    await expect(fixture.composition.reconcilePluginRuntime(installed)).resolves.toEqual(
-      new Map([
-        [
-          'fixture@openneko',
-          {
-            status: 'ready',
-            diagnosticCode: '',
-            dependencyStatus: 'ready',
-            hostPermissionStatus: 'not-applicable',
-            qualificationStatus: 'qualified',
-          },
-        ],
-      ]),
-    );
+    const readiness = await fixture.composition.reconcilePluginRuntime(installed);
+    expect(readiness.get('fixture')).toMatchObject({
+      status: 'ready',
+      diagnosticCode: '',
+    });
     expect(await fixture.composition.readGlobalSkillCatalog()).toMatchObject({
       records: [
         expect.objectContaining({
           name: 'plugin-fixture',
-          source: { kind: 'plugin', pluginId: 'fixture@openneko' },
+          source: { kind: 'plugin', pluginId: 'fixture' },
         }),
       ],
     });
@@ -3193,7 +3280,7 @@ describe('AgentAppHost', () => {
       records: expect.arrayContaining([
         expect.objectContaining({
           name: 'plugin-fixture',
-          source: { kind: 'plugin', pluginId: 'fixture@openneko' },
+          source: { kind: 'plugin', pluginId: 'fixture' },
         }),
       ]),
     });
@@ -3219,14 +3306,14 @@ describe('AgentAppHost', () => {
     await writePluginSkill(targetSkillRoot, 'target-skill');
     await writePluginSkill(siblingSkillRoot, 'sibling-skill');
     const targetDescriptor = {
-      pluginId: 'target@openneko',
+      pluginId: 'target',
       pluginRoot: targetRoot,
       skillRoot: targetSkillRoot,
       mcpServerIds: [],
       appIds: [],
     };
     const siblingDescriptor = {
-      pluginId: 'sibling@openneko',
+      pluginId: 'sibling',
       pluginRoot: siblingRoot,
       skillRoot: siblingSkillRoot,
       mcpServerIds: [],
@@ -3256,9 +3343,9 @@ describe('AgentAppHost', () => {
       locale: 'en',
     });
     await vi.waitFor(() =>
-      expect(fixture.composition.listActivePluginTurns('target@openneko')).toHaveLength(1),
+      expect(fixture.composition.listActivePluginTurns('target')).toHaveLength(1),
     );
-    expect(fixture.composition.listActivePluginTurns('sibling@openneko')).toEqual([]);
+    expect(fixture.composition.listActivePluginTurns('sibling')).toEqual([]);
 
     await expect(
       fixture.composition.reconcilePluginRuntime({
@@ -3273,7 +3360,7 @@ describe('AgentAppHost', () => {
         runtimeDescriptors: [siblingDescriptor],
         diagnostics: [],
       }),
-    ).rejects.toThrow("plugin 'target@openneko' runtime cannot change");
+    ).rejects.toThrow("plugin 'target' runtime cannot change");
 
     const message = assistant('plugin owner complete');
     stream.push({ type: 'start', partial: message });
@@ -3648,8 +3735,8 @@ function authoringTargetReceipt(
   targetId: string,
 ): AgentEntryTargetReceipt {
   const target: AgentAuthoringTargetRef =
-    kind === 'content-project'
-      ? { kind, contentProjectId: targetId }
+    kind === 'content-document'
+      ? { kind, documentId: targetId }
       : kind === 'character-project'
         ? { kind, characterProjectId: targetId }
         : { kind, worldProjectId: targetId };
@@ -3662,6 +3749,7 @@ function authoringTargetReceipt(
       kind: 'authoring',
       workspaceId: 'workspace-authoring',
       workspaceGrantId: 'workspace-grant-authoring',
+      authority: { kind: 'project', projectId: 'project-authoring' },
       target,
     },
   };

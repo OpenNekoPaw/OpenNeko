@@ -8,7 +8,6 @@ describe('DesktopExtensionManagementRuntime', () => {
       route: request.route,
       projection: {
         identity: request.identity,
-        operations: [],
         skills: [],
         skillDiscovery: { diagnostics: [], duplicateCount: 0 },
         extensions: [],
@@ -24,29 +23,36 @@ describe('DesktopExtensionManagementRuntime', () => {
     await expect(runtime.getSnapshot()).resolves.toMatchObject({
       identity: { windowId: 'window-1' },
     });
-    await runtime.enablePlugin('computer-use@openneko');
+    await runtime.installLocalPlugin();
+    expect(execute).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        route: 'plugin.install',
+        identity: { windowId: 'window-1' },
+      }),
+    );
+    await runtime.enablePlugin('computer-use');
     expect(execute).toHaveBeenLastCalledWith(
       expect.objectContaining({
         route: 'plugin.enable',
-        pluginId: 'computer-use@openneko',
+        pluginId: 'computer-use',
         identity: { windowId: 'window-1' },
       }),
     );
-    await runtime.updatePlugin('computer-use@openneko');
+    await runtime.rescanSources();
     expect(execute).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        route: 'plugin.update',
-        pluginId: 'computer-use@openneko',
+        route: 'sources.rescan',
         identity: { windowId: 'window-1' },
       }),
     );
-    await runtime.cancelPluginOperation('artifact-operation-1');
+    const managementId = `skill:${'a'.repeat(64)}`;
+    await runtime.openPersonalSkill(managementId);
     expect(execute).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        route: 'plugin.operation.cancel',
-        operationId: 'artifact-operation-1',
-        identity: { windowId: 'window-1' },
-      }),
+      expect.objectContaining({ route: 'skill.open', managementId }),
+    );
+    await runtime.showPersonalSkillInFolder(managementId);
+    expect(execute).toHaveBeenLastCalledWith(
+      expect.objectContaining({ route: 'skill.reveal', managementId }),
     );
     runtime.dispose();
     await expect(runtime.getSnapshot()).rejects.toThrow('disposed');

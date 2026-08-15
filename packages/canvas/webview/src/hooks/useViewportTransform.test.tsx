@@ -10,18 +10,21 @@ interface ViewportHarnessProps {
   readonly viewport: CanvasViewport;
   readonly onViewportChange: (viewport: Partial<CanvasViewport>) => void;
   readonly onParentContextMenu: () => void;
+  readonly disabled?: boolean;
 }
 
 function ViewportHarness({
   viewport,
   onViewportChange,
   onParentContextMenu,
+  disabled = false,
 }: ViewportHarnessProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { state, handlers } = useViewportTransform({
     viewport,
     onViewportChange,
     containerRef,
+    disabled,
   });
 
   return (
@@ -59,6 +62,7 @@ describe('useViewportTransform', () => {
     onViewportChange = vi.fn(),
     onParentContextMenu = vi.fn(),
     viewport: CanvasViewport = { pan: { x: 20, y: 30 }, zoom: 2 },
+    disabled = false,
   ) {
     act(() => {
       root.render(
@@ -66,6 +70,7 @@ describe('useViewportTransform', () => {
           viewport={viewport}
           onViewportChange={onViewportChange}
           onParentContextMenu={onParentContextMenu}
+          disabled={disabled}
         />,
       );
     });
@@ -123,6 +128,36 @@ describe('useViewportTransform', () => {
     expect(update.zoom).toBeCloseTo(2.2);
     expect(update.pan?.x).toBeCloseTo(12);
     expect(update.pan?.y).toBeCloseTo(25);
+  });
+
+  it('does not pan or zoom while a modal preview owns Canvas input', () => {
+    const onViewportChange = vi.fn();
+    const element = renderHarness(
+      onViewportChange,
+      vi.fn(),
+      { pan: { x: 20, y: 30 }, zoom: 2 },
+      true,
+    );
+
+    act(() => {
+      element.dispatchEvent(
+        new WheelEvent('wheel', {
+          bubbles: true,
+          cancelable: true,
+          ctrlKey: true,
+          deltaY: -100,
+        }),
+      );
+      element.dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, button: 2, clientX: 10, clientY: 20 }),
+      );
+      element.dispatchEvent(
+        new MouseEvent('mousemove', { bubbles: true, buttons: 2, clientX: 40, clientY: 50 }),
+      );
+    });
+
+    expect(onViewportChange).not.toHaveBeenCalled();
+    expect(element.dataset.panning).toBe('false');
   });
 
   it('pans with a right-button drag and consumes its following context menu', () => {

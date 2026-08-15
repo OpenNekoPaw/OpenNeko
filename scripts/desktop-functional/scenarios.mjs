@@ -3,20 +3,19 @@ import { canvasTextFilePreviewScenario } from '../../packages/canvas/webview/fun
 import { cutOpenNekoConsumerScenario } from '../../packages/cut/webview/functional/desktop-openneko-consumer.mjs';
 import { previewOpenNekoConsumerScenario } from '../../packages/preview/webview/functional/desktop-openneko-consumer.mjs';
 import {
-  resourceBrowserEntityManagementScenario,
   workspaceFileCreationScenario,
-} from '../../packages/assets/webview/functional/desktop-entity-management.mjs';
-import { resourceBrowserInvalidEntityDocumentScenario } from '../../packages/assets/webview/functional/desktop-invalid-entity-document.mjs';
+  workspaceRetiredStorageIsolationScenario,
+} from '../../packages/assets/webview/functional/desktop-workspace-file-creation.mjs';
 import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview/functional/desktop-asset-record-removal.mjs';
 import { desktopMarkdownMediaScenario } from '../../packages/text-editor/webview/functional/desktop-markdown-media.mjs';
 import { desktopTextEditorScenario } from '../../packages/text-editor/webview/functional/desktop-text-editor.mjs';
-import { desktopWorldTransformationScenario } from '../../packages/world-webview/functional/desktop-world-transformation.mjs';
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
 import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
 import { desktopExtensionLocalizationScenario } from './desktop-extension-localization.mjs';
 import { domainManagementWorkbenchScenario } from './domain-management-workbench.mjs';
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
+import { projectContentScenario } from './project-content.mjs';
 import {
   desktopAgentEntryWorkspaceSkillScenario,
   desktopAgentLinkedMediaMentionScenario,
@@ -50,12 +49,11 @@ const scenarios = new Map(
     desktopWorkbenchScenesScenario,
     desktopWorkspaceResizeScenario,
     workspaceFileCreationScenario,
-    resourceBrowserEntityManagementScenario,
-    resourceBrowserInvalidEntityDocumentScenario,
+    workspaceRetiredStorageIsolationScenario,
+    projectContentScenario,
     assetLibraryRecordRemovalScenario,
     desktopMarkdownMediaScenario,
     desktopTextEditorScenario,
-    desktopWorldTransformationScenario,
     noActiveProjectCatalogsScenario,
   ].map((scenario) => [scenario.id, scenario]),
 );

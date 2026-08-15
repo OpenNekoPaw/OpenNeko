@@ -8,6 +8,7 @@
     "./asset-management/main-root": "./src/global-library/main-root.tsx",
     "./project-portability/control": "./src/project-portability/ProjectPortabilityControl.tsx",
     "./resource-browser/presentation-snapshot": "./src/resource-browser/presentation-snapshot-context.tsx",
+    "./resource-browser/runtime-bootstrap": "./src/resource-browser/runtime-bootstrap.ts",
     "./resource-browser/root": "./src/resource-browser/root.tsx"
   },
   "scripts": {
@@ -17,7 +18,7 @@
   },
   "dependencies": {
     "@neko/assets-domain": "workspace:*",
-    "@neko/entity-webview": "workspace:*",
+    "@neko/preview-webview": "workspace:*",
     "@neko/ui": "workspace:*",
     "react": "18.3.1",
     "react-dom": "18.3.1",

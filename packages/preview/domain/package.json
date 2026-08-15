@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./authorized-session": "./src/authorized-session.ts"
+    "./authorized-session": "./src/authorized-session.ts",
+    "./resource-projection": "./src/resource-projection.ts"
   },
   "scripts": {
     "test": "vitest run",

@@ -1,11 +1,15 @@
 import {
   classifyAgentHostRoute,
   createAgentHostWorkspaceScopeRequiredDiagnostic,
+  parseAgentCharacterDialogueTargetOptions,
+  parseAgentWorldExperienceTargetOptions,
   type AgentDraftHostRuntimeAdapter,
   type AgentHostToWebviewMessage,
   type AgentLaunchCatalogProjection,
 } from '@neko/agent-contracts';
 import type { OpenNekoAgentLaunchBridge } from '@neko/agent-contracts/agent-launch-host';
+import type { OpenNekoDesktopCharacterBridge } from '@neko/chara/contracts';
+import type { OpenNekoDesktopWorldManagementBridge } from '@neko/world/contracts';
 import {
   createDesktopAgentPresentationStateKey,
   readDesktopAgentPresentationState,
@@ -18,7 +22,9 @@ export interface ElectronAgentLaunchHostRuntimeAdapter extends AgentDraftHostRun
 }
 
 export function createElectronAgentLaunchHostRuntimeAdapter(input: {
-  readonly bridge: OpenNekoAgentLaunchBridge;
+  readonly bridge: OpenNekoAgentLaunchBridge &
+    OpenNekoDesktopCharacterBridge &
+    Partial<OpenNekoDesktopWorldManagementBridge>;
   readonly catalog: AgentLaunchCatalogProjection;
   readonly draftId: string;
   readonly storage?: DesktopAgentPresentationStorage;
@@ -50,6 +56,48 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
     readEntryIntent() {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
       return entryIntent;
+    },
+    async loadCharacterDialogueTargets() {
+      if (disposed) throw new Error('Agent launch adapter is disposed.');
+      const catalog = await input.bridge.characterFoundation.getConversationLaunchCatalog();
+      return parseAgentCharacterDialogueTargetOptions(
+        catalog.targets.map((target) => ({
+          globalCharacterId: target.globalCharacterId,
+          characterVersionId: target.characterVersionId,
+          displayName: target.displayName,
+          versionLabel: target.versionLabel,
+          lineage: target.lineage,
+          storylines: target.storylines.map((storyline) => ({
+            storylineVersionId: storyline.characterStorylineVersionId,
+            label: storyline.label,
+          })),
+        })),
+      );
+    },
+    async loadWorldExperienceTargets() {
+      if (disposed) throw new Error('Agent launch adapter is disposed.');
+      const worldManagement = input.bridge.worldManagement;
+      if (!worldManagement) throw new Error('World Experience target catalog is unavailable.');
+      const catalog = await worldManagement.getCatalog({
+        search: '',
+        sort: 'recently-updated',
+      });
+      const eligible = catalog.items.filter(
+        (item) => item.status === 'available' && item.runtimeEligible,
+      );
+      const details = await Promise.all(
+        eligible.map((item) => worldManagement.getDetail(item.globalWorldId)),
+      );
+      return parseAgentWorldExperienceTargetOptions(
+        details.flatMap((detail) =>
+          detail.versions.map((version) => ({
+            globalWorldId: detail.globalWorldId,
+            worldVersionId: version.worldVersionId,
+            displayName: detail.title,
+            versionLabel: version.label,
+          })),
+        ),
+      );
     },
     async configureEntryTarget(mode, binding) {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
@@ -83,7 +131,7 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
           emit({
             type: 'globalError',
             message:
-              'Character and Room capabilities remain experimental and are not available in the production Desktop.',
+              'Workspace roleplay search is unavailable. Choose published Characters in Character Dialogue.',
           });
           return;
         }

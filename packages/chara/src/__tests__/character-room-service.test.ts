@@ -42,7 +42,7 @@ function roomRun(schedulingPolicy: RoomRun['schedulingPolicy'] = { kind: 'mentio
     ],
     schedulingPolicy,
     events: [],
-    runtimeKind: 'companion',
+    mode: 'companion',
     relationshipIds: ['relationship-a', 'relationship-b'],
     createdAt: now,
   };

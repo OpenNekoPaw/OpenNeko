@@ -112,7 +112,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
           canvasDocument(
             'Video View',
             'video-node',
-            media.video,
+            media.webm,
             'video',
             [cutDocumentNode('cut-document-node', 'story.otio'), epubImageNode('epub-image-node')],
             denseConnectionFixture(),
@@ -341,7 +341,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     );
     if (
       quietConnections.connectionCount !== 6 ||
-      quietConnections.maximumLineOpacity > 0.26 ||
+      quietConnections.maximumLineOpacity > 0.38 ||
       quietConnections.flowDotCount !== 0
     ) {
       throw new Error(
@@ -367,7 +367,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     if (
       selectedConnectionVisual.selectedCount !== 1 ||
       selectedConnectionVisual.selectedLineOpacity !== 0.88 ||
-      selectedConnectionVisual.flowDotCount !== 1
+      selectedConnectionVisual.flowDotCount !== 0
     ) {
       throw new Error(
         `Canvas selected connection feedback is invalid: ${JSON.stringify(selectedConnectionVisual)}`,
@@ -439,24 +439,10 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     if (
       videoActions.actionIds.join('|') !==
         'cut:add-resource|video:separate-audio|node:duplicate|preview:open' ||
-      videoActions.overflowActionIds.join('|') !== 'desktop:reveal'
+      videoActions.overflowActionIds.length !== 0
     ) {
       throw new Error(`Canvas video primary actions are invalid: ${JSON.stringify(videoActions)}`);
     }
-    await click('[data-owner-view-id="canvas:functional:video"] [data-selection-overflow="true"]');
-    await waitForSelector('[data-selection-overflow-group="file"]');
-    const videoOverflow = await inspectCanvasOverflow(evaluate);
-    if (
-      videoOverflow.groups.join('|') !== 'file' ||
-      videoOverflow.actionIds.join('|') !== 'desktop:reveal' ||
-      videoOverflow.text.some((text) => ['删除', 'Delete'].includes(text))
-    ) {
-      throw new Error(
-        `Canvas video overflow grouping is invalid: ${JSON.stringify(videoOverflow)}`,
-      );
-    }
-    const videoOverflowScreenshot = await screenshot('canvas-video-actions-overflow');
-    await pressKey('Escape');
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"]',
     );
@@ -465,7 +451,9 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     );
     const imageActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:video');
     if (
-      imageActions.actionIds.join('|') !== 'node:duplicate|preview:open' ||
+      imageActions.actionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw|node:duplicate|preview:open' ||
+      imageActions.disabledActionIds.join('|') !== 'image:crop|image:upscale|image:redraw' ||
       imageActions.overflowActionIds.length !== 0 ||
       imageActions.actionIds.some((actionId) =>
         ['cut:add-resource', 'video:separate-audio', 'audio:voice-denoise'].includes(actionId),
@@ -475,6 +463,82 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
     checkpoint('canvas-image-owner-actions', imageActions);
     const imageActionsScreenshot = await screenshot('canvas-image-owner-actions');
+    const imageNodeCountBeforeDuplicate = await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      return view?.querySelectorAll('[data-node-presentation]').length ?? 0;
+    })()`);
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="node:duplicate"]',
+    );
+    await evaluate(`new Promise((resolve, reject) => {
+      const deadline = Date.now() + 3000;
+      const inspect = () => {
+        const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+        const toolbar = view?.querySelector('[data-selection-context-toolbar="true"]');
+        const error = toolbar?.querySelector('[data-material-actions-status="error"]');
+        if (error) {
+          reject(new Error('Duplicated Canvas image actions failed: ' + (error.textContent ?? '')));
+          return;
+        }
+        const nodeCount = view?.querySelectorAll('[data-node-presentation]').length ?? 0;
+        const loading = toolbar?.querySelector('[data-material-actions-status="loading"]');
+        if (nodeCount === ${String(imageNodeCountBeforeDuplicate + 1)} && !loading) {
+          resolve(undefined);
+          return;
+        }
+        if (Date.now() >= deadline) {
+          reject(new Error('Duplicated Canvas image actions did not converge.'));
+          return;
+        }
+        window.setTimeout(inspect, 25);
+      };
+      inspect();
+    })`);
+    const duplicatedImageActions = await inspectCanvasSelectionActions(
+      evaluate,
+      'canvas:functional:video',
+    );
+    if (
+      duplicatedImageActions.actionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw|node:duplicate|preview:open' ||
+      duplicatedImageActions.disabledActionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw' ||
+      duplicatedImageActions.overflowActionIds.length !== 0 ||
+      duplicatedImageActions.hasError
+    ) {
+      throw new Error(
+        `Duplicated Canvas image actions are invalid: ${JSON.stringify(duplicatedImageActions)}`,
+      );
+    }
+    checkpoint('canvas-duplicated-image-actions', duplicatedImageActions);
+    const duplicatedImageActionsScreenshot = await screenshot('canvas-duplicated-image-actions');
+    const imagePreviewContextBefore = await inspectCanvasSelectionAndViewport(
+      evaluate,
+      'canvas:functional:video',
+    );
+    await evaluate(`(() => {
+      const node = document.querySelector(
+        '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"]',
+      );
+      if (!(node instanceof HTMLElement)) throw new Error('Canvas Image node is unavailable.');
+      node.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+    })()`);
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-canvas-image-preview="true"] [data-preview-surface="visual"]',
+    );
+    const imagePreviewScreenshot = await screenshot('canvas-image-fullscreen-preview');
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-canvas-image-preview="true"] button',
+    );
+    const imagePreviewContextAfter = await inspectCanvasSelectionAndViewport(
+      evaluate,
+      'canvas:functional:video',
+    );
+    if (JSON.stringify(imagePreviewContextAfter) !== JSON.stringify(imagePreviewContextBefore)) {
+      throw new Error(
+        `Canvas image preview changed selection or viewport: ${JSON.stringify({ imagePreviewContextBefore, imagePreviewContextAfter })}`,
+      );
+    }
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="video-node"]',
       0,
@@ -588,59 +652,46 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await hover(
       '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-media-node"][data-media-type="video"]',
     );
-    await waitForCanvasPackagePlaybackState(evaluate, 'canvas:functional:video', 'video');
-    await waitForSelector(
-      '[data-owner-view-id="canvas:functional:video"] [data-preview-surface="video"] [data-testid="canvas-video-toggle-playback"]',
-    );
+    await waitForCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', true);
+    checkpoint('canvas-video-hover-remains-paused');
+    await setCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', false);
     const videoPlayback = await waitForCanvasMediaPlayback(
       evaluate,
       'canvas:functional:video',
       'video',
     );
-    const videoPlaybackSelector =
-      '[data-owner-view-id="canvas:functional:video"] [data-preview-surface="video"] [data-testid="canvas-video-toggle-playback"]';
-    await click(videoPlaybackSelector);
-    await waitForCanvasPlaybackOwner(evaluate, 'canvas:functional:video', 'video', 'manual-paused');
-    await waitForCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', true);
-    await click(videoPlaybackSelector);
-    await waitForCanvasPlaybackOwner(
-      evaluate,
-      'canvas:functional:video',
-      'video',
-      'manual-playing',
-    );
-    await waitForCanvasMediaPaused(evaluate, 'canvas:functional:video', 'video', false);
     checkpoint('canvas-video-manual-playing', { currentTime: videoPlayback.currentTime });
     await hover(
-      '[data-owner-view-id="canvas:functional:audio"] [data-testid="canvas-audio-node-title"]',
+      '[data-owner-view-id="canvas:functional:audio"] [data-testid="canvas-media-node"][data-media-type="audio"]',
     );
+    await waitForCanvasMediaPaused(evaluate, 'canvas:functional:audio', 'audio', true, false);
     const videoAfterPointerLeave = await waitForCanvasMediaPlayback(
       evaluate,
       'canvas:functional:video',
       'video',
       videoPlayback.currentTime,
     );
-    await waitForCanvasPackagePlaybackState(evaluate, 'canvas:functional:audio', 'audio');
+    checkpoint('canvas-audio-hover-remains-paused');
     await click(
-      '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="audio-node"]',
+      '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="audio-node"] [data-canvas-node-label]',
     );
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:audio"] [data-selection-action="cut:add-resource"]',
     );
     const audioActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:audio');
     if (
-      audioActions.actionIds.join('|') !== 'cut:add-resource|node:duplicate|preview:open' ||
-      audioActions.overflowActionIds.join('|') !== 'desktop:reveal' ||
-      audioActions.actionIds.some((actionId) =>
-        ['video:separate-audio', 'audio:voice-denoise'].includes(actionId),
-      )
+      audioActions.actionIds.join('|') !==
+        'cut:add-resource|audio:voice-denoise|node:duplicate|preview:open' ||
+      audioActions.disabledActionIds.join('|') !== 'audio:voice-denoise' ||
+      audioActions.overflowActionIds.length !== 0 ||
+      audioActions.actionIds.includes('video:separate-audio')
     ) {
       throw new Error(`Canvas audio actions are invalid: ${JSON.stringify(audioActions)}`);
     }
     checkpoint('canvas-audio-owner-actions', audioActions);
     const audioActionsScreenshot = await screenshot('canvas-audio-owner-actions');
-    await waitForSelector(
-      '[data-owner-view-id="canvas:functional:audio"] [data-preview-surface="audio"] [data-testid="canvas-audio-toggle-playback"]',
+    await click(
+      '[data-owner-view-id="canvas:functional:audio"] [data-testid="preview-lightweight-audio-toggle-playback"]',
     );
     const audioPlayback = await waitForCanvasMediaPlayback(
       evaluate,
@@ -819,10 +870,11 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       selectedNodePresentation,
       selectedNodeScreenshot,
       videoActions,
-      videoOverflow,
-      videoOverflowScreenshot,
       imageActions,
       imageActionsScreenshot,
+      duplicatedImageActions,
+      duplicatedImageActionsScreenshot,
+      imagePreviewScreenshot,
       audioActions,
       audioActionsScreenshot,
       newDraftHandoff,
@@ -886,11 +938,11 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
     if (
       evidence.quietConnections.connectionCount !== 6 ||
-      evidence.quietConnections.maximumLineOpacity > 0.26 ||
+      evidence.quietConnections.maximumLineOpacity > 0.38 ||
       evidence.quietConnections.flowDotCount !== 0 ||
       evidence.selectedConnectionVisual.selectedCount !== 1 ||
       evidence.selectedConnectionVisual.selectedLineOpacity !== 0.88 ||
-      evidence.selectedConnectionVisual.flowDotCount !== 1
+      evidence.selectedConnectionVisual.flowDotCount !== 0
     ) {
       throw new Error('Canvas connection visual hierarchy was not proven.');
     }
@@ -916,11 +968,21 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evidence.otioActions.actionIds.includes('cut:add-resource') ||
       evidence.videoActions.actionIds.join('|') !==
         'cut:add-resource|video:separate-audio|node:duplicate|preview:open' ||
-      evidence.imageActions.actionIds.join('|') !== 'node:duplicate|preview:open' ||
+      evidence.imageActions.actionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw|node:duplicate|preview:open' ||
+      evidence.imageActions.disabledActionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw' ||
       evidence.imageActions.overflowActionIds.length !== 0 ||
+      evidence.duplicatedImageActions.actionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw|node:duplicate|preview:open' ||
+      evidence.duplicatedImageActions.disabledActionIds.join('|') !==
+        'image:crop|image:upscale|image:redraw' ||
+      evidence.duplicatedImageActions.overflowActionIds.length !== 0 ||
+      evidence.duplicatedImageActions.hasError ||
       evidence.audioActions.actionIds.join('|') !==
-        'cut:add-resource|node:duplicate|preview:open' ||
-      evidence.audioActions.overflowActionIds.join('|') !== 'desktop:reveal' ||
+        'cut:add-resource|audio:voice-denoise|node:duplicate|preview:open' ||
+      evidence.audioActions.disabledActionIds.join('|') !== 'audio:voice-denoise' ||
+      evidence.audioActions.overflowActionIds.length !== 0 ||
       evidence.storylineAdvancedTo <= 0 ||
       evidence.videoAdvancedTo <= evidence.videoManualStartTime + 0.15 ||
       evidence.audioAdvancedTo <= 0
@@ -1844,11 +1906,10 @@ async function waitForCanvasRoots(evaluate) {
   while (Date.now() < deadline) {
     const ready = await evaluate(`(() => {
       const roots = [...document.querySelectorAll('[data-owner-root="canvas"]')];
-      return roots.length === 2 && roots.every((root) =>
-        [...root.querySelectorAll('button')].some((button) =>
-          button.getAttribute('aria-label') === '播放' || button.getAttribute('aria-label') === 'Play',
-        ),
-      );
+      return roots.length === 2 &&
+        document.querySelector('[data-owner-view-id="canvas:functional:video"] video[controls]') !== null &&
+        document.querySelector('[data-owner-view-id="canvas:functional:audio"] audio:not([controls])') !== null &&
+        document.querySelector('[data-owner-view-id="canvas:functional:audio"] [data-testid="preview-lightweight-audio-waveform"]') !== null;
     })()`);
     if (ready) return;
     await delay(100);
@@ -1863,20 +1924,12 @@ async function waitForCanvasMediaPlayback(evaluate, viewId, mediaType, minimumTi
     const sample = await evaluate(`(() => {
       const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
       const media = root?.querySelector(${JSON.stringify(mediaType)});
-      const preview = root?.querySelector('[data-preview-surface=${JSON.stringify(mediaType)}]');
-      const node = root?.querySelector(
-        '[data-testid="canvas-media-node"][data-media-type=${JSON.stringify(mediaType)}]',
-      );
       return {
         url: media instanceof HTMLMediaElement ? media.src : undefined,
         currentTime: media instanceof HTMLMediaElement ? media.currentTime : undefined,
         paused: media instanceof HTMLMediaElement ? media.paused : undefined,
         readyState: media instanceof HTMLMediaElement ? media.readyState : undefined,
         errorCode: media instanceof HTMLMediaElement ? media.error?.code : undefined,
-        previewDuration: preview?.getAttribute('data-media-duration'),
-        controlledIdle: preview?.getAttribute('data-preview-controlled-idle'),
-        playbackState: node?.getAttribute('data-playback-state'),
-        playbackOwner: node?.getAttribute('data-playback-owner'),
       };
     })()`);
     last = sample;
@@ -1893,62 +1946,24 @@ async function waitForCanvasMediaPlayback(evaluate, viewId, mediaType, minimumTi
   );
 }
 
-async function waitForCanvasPackagePlaybackState(
+async function waitForCanvasMediaPaused(
   evaluate,
   viewId,
   mediaType,
-  expectedState = 'playing',
+  expectedPaused,
+  expectedControls = true,
 ) {
-  const deadline = Date.now() + 5_000;
-  while (Date.now() < deadline) {
-    const state = await readCanvasPackagePlaybackState(evaluate, viewId, mediaType);
-    if (state === expectedState) return;
-    await delay(100);
-  }
-  throw new Error(
-    `Canvas ${mediaType} package-owned playback state did not reach ${expectedState}.`,
-  );
-}
-
-async function waitForCanvasPlaybackOwner(evaluate, viewId, mediaType, expectedOwner) {
-  const deadline = Date.now() + 5_000;
-  let last;
-  while (Date.now() < deadline) {
-    const selector = `[data-owner-view-id=${JSON.stringify(viewId)}] [data-testid="canvas-media-node"][data-media-type=${JSON.stringify(mediaType)}]`;
-    const sample = await evaluate(`(() => {
-      const node = document.querySelector(${JSON.stringify(selector)});
-      const media = node?.querySelector(${JSON.stringify(mediaType)});
-      const button = node?.querySelector('[data-testid="canvas-${mediaType}-toggle-playback"]');
-      return {
-        owner: node?.getAttribute('data-playback-owner'),
-        state: node?.getAttribute('data-playback-state'),
-        paused: media instanceof HTMLMediaElement ? media.paused : undefined,
-        buttonTitle: button?.getAttribute('title'),
-      };
-    })()`);
-    last = sample;
-    if (sample?.owner === expectedOwner) return;
-    await delay(100);
-  }
-  throw new Error(
-    `Canvas ${mediaType} playback owner did not reach ${expectedOwner} before timeout: ${JSON.stringify(last)}.`,
-  );
-}
-
-async function waitForCanvasMediaPaused(evaluate, viewId, mediaType, expectedPaused) {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     const sample = await evaluate(`(() => {
       const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
       const media = root?.querySelector(${JSON.stringify(mediaType)});
-      const button = root?.querySelector('[data-testid="canvas-${mediaType}-toggle-playback"]');
       return {
         paused: media instanceof HTMLMediaElement ? media.paused : undefined,
-        buttonLabel: button?.getAttribute('aria-label'),
+        controls: media instanceof HTMLMediaElement ? media.controls : undefined,
       };
     })()`);
-    const labels = expectedPaused ? ['播放', 'Play'] : ['暂停', 'Pause'];
-    if (sample?.paused === expectedPaused && labels.includes(sample.buttonLabel)) return;
+    if (sample?.paused === expectedPaused && sample.controls === expectedControls) return;
     await delay(100);
   }
   throw new Error(
@@ -1956,11 +1971,16 @@ async function waitForCanvasMediaPaused(evaluate, viewId, mediaType, expectedPau
   );
 }
 
-function readCanvasPackagePlaybackState(evaluate, viewId, mediaType) {
-  const selector = `[data-owner-view-id=${JSON.stringify(viewId)}] [data-testid="canvas-media-node"][data-media-type=${JSON.stringify(mediaType)}]`;
-  return evaluate(
-    `document.querySelector(${JSON.stringify(selector)})?.getAttribute('data-playback-state')`,
-  );
+async function setCanvasMediaPaused(evaluate, viewId, mediaType, paused) {
+  await evaluate(`(() => {
+    const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
+    const media = root?.querySelector(${JSON.stringify(mediaType)});
+    if (!(media instanceof HTMLMediaElement) || !media.controls) {
+      throw new Error('Canvas native ${mediaType} controls are unavailable.');
+    }
+    if (${JSON.stringify(paused)}) media.pause();
+    else void media.play();
+  })()`);
 }
 
 async function waitForCanvasRootsRemoved(evaluate) {
@@ -2181,6 +2201,9 @@ function inspectCanvasSelectionActions(evaluate, viewId) {
     const overflow = root?.querySelector('[data-selection-overflow="true"]');
     return {
       actionIds: actions.map((action) => action.getAttribute('data-selection-action')),
+      disabledActionIds: actions
+        .filter((action) => action instanceof HTMLButtonElement && action.disabled)
+        .map((action) => action.getAttribute('data-selection-action')),
       visible: actions
         .filter((action) => action.getAttribute('data-selection-action-location') === 'primary')
         .map((action) =>
@@ -2192,21 +2215,21 @@ function inspectCanvasSelectionActions(evaluate, viewId) {
       overflowActionIds: (overflow?.getAttribute('data-selection-overflow-actions') ?? '')
         .split(' ')
         .filter(Boolean),
+      hasError: root?.querySelector('[data-material-actions-status="error"]') !== null,
     };
   })()`);
 }
 
-function inspectCanvasOverflow(evaluate) {
-  return evaluate(`(() => ({
-    groups: [...document.querySelectorAll('[data-selection-overflow-group]')]
-      .map((group) => group.getAttribute('data-selection-overflow-group')),
-    actionIds: [...document.querySelectorAll(
-      '[data-selection-overflow-group] [data-selection-action]'
-    )].map((action) => action.getAttribute('data-selection-action')),
-    text: [...document.querySelectorAll(
-      '[data-selection-overflow-group] [data-selection-action]'
-    )].map((action) => action.textContent?.trim() ?? ''),
-  }))()`);
+function inspectCanvasSelectionAndViewport(evaluate, viewId) {
+  return evaluate(`(() => {
+    const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
+    return {
+      selectedNodeIds: [...(root?.querySelectorAll('[data-node-selected="true"]') ?? [])]
+        .map((node) => node.getAttribute('data-node-id')),
+      viewportTransform:
+        root?.querySelector('[data-canvas-viewport-layer]')?.getAttribute('style') ?? '',
+    };
+  })()`);
 }
 
 function inspectCanvasCutHandoff(evaluate) {

@@ -83,6 +83,7 @@ export const canvasTextFilePreviewScenario = Object.freeze({
     await fitCanvasContent(evaluate);
     await click(`${view} [data-node-id="file-json"]`);
     await waitForSelector(`${view} [data-selection-action="text:edit"]`);
+    await waitForSelector(`${view} [data-selection-action="canvas:preview"]`);
     await waitForSelector(`${view} [data-selection-action="preview:open"]`);
     const desktop = await inspectTextFilePreviews(evaluate);
     assertTextFilePreviews(desktop);
@@ -91,11 +92,35 @@ export const canvasTextFilePreviewScenario = Object.freeze({
     checkpoint('canvas-text-file-actions-desktop', desktopActions);
     checkpoint('canvas-text-file-preview-desktop', desktop);
     const desktopScreenshot = await screenshot('canvas-text-file-preview-desktop-selected');
-    await click(`${view} [data-selection-overflow="true"]`);
-    await waitForSelector('[data-selection-overflow-group="file"]');
-    const desktopOverflowScreenshot = await screenshot('canvas-text-file-actions-desktop-overflow');
-
+    const viewportBeforeFullscreenPreview = await inspectCanvasViewport(evaluate);
+    await click(`${view} [data-selection-action="canvas:preview"]`);
+    await waitForSelector(`${view} [data-canvas-image-preview="true"]`);
+    await waitForSelector(`${view} [data-preview-ui="lightweight"]`);
+    const fullscreenPreview = await inspectFullscreenTextPreview(evaluate);
+    if (
+      fullscreenPreview.canvasInteractionSuspended !== true ||
+      fullscreenPreview.modalScope !== 'modal' ||
+      fullscreenPreview.readerBackground !== 'rgb(236, 239, 237)' ||
+      fullscreenPreview.pageBackground !== 'rgb(255, 255, 255)' ||
+      fullscreenPreview.userSelect !== 'text' ||
+      fullscreenPreview.hasGalleryFooter ||
+      !fullscreenPreview.text.includes('OpenNeko')
+    ) {
+      throw new Error(
+        `Canvas fullscreen text Preview is invalid: ${JSON.stringify(fullscreenPreview)}`,
+      );
+    }
+    checkpoint('canvas-text-file-fullscreen-preview', fullscreenPreview);
+    const fullscreenPreviewScreenshot = await screenshot('canvas-text-file-fullscreen-preview');
     await pressKey('Escape');
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 150))');
+    const viewportAfterFullscreenPreview = await inspectCanvasViewport(evaluate);
+    if (
+      JSON.stringify(viewportAfterFullscreenPreview) !==
+      JSON.stringify(viewportBeforeFullscreenPreview)
+    ) {
+      throw new Error('Canvas viewport changed while the fullscreen Preview owned input.');
+    }
     await click(`${view} [data-canvas-viewport-root="true"]`, 0, {
       xRatio: 0.96,
       yRatio: 0.16,
@@ -142,7 +167,8 @@ export const canvasTextFilePreviewScenario = Object.freeze({
       desktop,
       desktopActions,
       desktopScreenshot,
-      desktopOverflowScreenshot,
+      fullscreenPreview,
+      fullscreenPreviewScreenshot,
       narrow,
       narrowActions,
       narrowScreenshot,
@@ -330,14 +356,49 @@ function inspectTextFileActions(evaluate) {
 
 function assertTextFileActions(evidence) {
   if (
-    evidence.actionIds.join('|') !==
-      'text:edit|media-library:copy-to-project|node:duplicate|preview:open' ||
-    evidence.overflowActionIds.join('|') !== 'desktop:reveal|media-library:copy-to-global' ||
+    evidence.actionIds.join('|') !== 'text:edit|node:duplicate|preview:open|canvas:preview' ||
+    evidence.overflowActionIds.length !== 0 ||
     !['File', '文件'].includes(evidence.label) ||
     evidence.hasError
   ) {
     throw new Error(`Canvas text File actions are invalid: ${JSON.stringify(evidence)}`);
   }
+}
+
+function inspectFullscreenTextPreview(evaluate) {
+  return evaluate(`(() => {
+    const overlay = document.querySelector('[data-canvas-image-preview="true"]');
+    const viewport = document.querySelector('[data-canvas-viewport-root="true"]');
+    if (!(overlay instanceof HTMLElement) || !(viewport instanceof HTMLElement)) {
+      throw new Error('Canvas fullscreen text Preview is unavailable.');
+    }
+    const reader = overlay.querySelector('[data-preview-text-reader="full"]');
+    const page = reader?.querySelector('.neko-preview-text-reader__page');
+    if (!(reader instanceof HTMLElement) || !(page instanceof HTMLElement)) {
+      throw new Error('Canvas fullscreen text reader is unavailable.');
+    }
+    const readerStyle = getComputedStyle(reader);
+    return {
+      modalScope: overlay.getAttribute('data-neko-keyboard-scope'),
+      canvasInteractionSuspended:
+        viewport.getAttribute('data-canvas-interaction-suspended') === 'true',
+      readerBackground: readerStyle.backgroundColor,
+      pageBackground: getComputedStyle(page).backgroundColor,
+      userSelect: readerStyle.userSelect,
+      hasGalleryFooter: overlay.querySelector('.canvas-image-preview-overlay__footer') !== null,
+      text: overlay.textContent ?? '',
+      hasMainPreviewRoot: document.querySelector('[data-owner-root="preview"]') !== null,
+    };
+  })()`);
+}
+
+function inspectCanvasViewport(evaluate) {
+  return evaluate(`(() => {
+    const viewport = document.querySelector('[data-canvas-viewport-root="true"]');
+    const transform = viewport?.querySelector('[data-canvas-viewport-layer]');
+    if (!(transform instanceof HTMLElement)) throw new Error('Canvas viewport transform is unavailable.');
+    return { transform: transform.style.transform };
+  })()`);
 }
 
 async function fitCanvasContent(evaluate) {

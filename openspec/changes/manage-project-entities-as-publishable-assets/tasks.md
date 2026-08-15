@@ -33,6 +33,7 @@
 - [x] 5.2 Implement Entity Inspector and typed confirm, edit, bind, merge, deprecate, instantiate, publish, diff, apply, reference, Character dialogue, Room open, and Character embody intents with visible provenance, capability gating, and blockers.
 - [ ] 5.3 Wire Entity domain/node/search/webview and generic Asset ports through sender-bound Desktop IPC without retaining Entity semantics or file IO in the Renderer/application root.
   - Basic Entity operations use the package-owned `entity.manage` path through the existing sender-bound Resource Browser bridge. Generic Asset production wiring is blocked by `establish-manifest-backed-asset-library` (0/25); unsupported capabilities remain hidden.
+  - Entity Asset and Entity-owned Character interaction wiring is superseded by `simplify-resource-entity-character-world-boundaries`; only retained basic Entity operations remain relevant.
 - [ ] 5.4 Add producer, Webview consumer, Desktop delegation, stale-request, conflict, and canonical-handler path tests for every ownership replacement.
   - Canonical/basic Entity ownership paths have producer, Webview, Desktop delegation, stale request, conflict and handler-path coverage. Asset and complete reference owners do not yet have production implementations to exercise.
 - [x] 5.5 Add an owner-preserving Resource Browser context menu, implement exact-request/locator Workspace File create/import/Trash operations through Assets Node and Desktop native adapters, and keep linked Media, Assets, and Entity deletion capability-gated.
@@ -49,6 +50,7 @@
 - [ ] 6.3 Run a real Electron fixture scenario covering candidate confirmation, binding attention, merge blockers, Entity Asset instantiate/publish/update conflict, and remote Asset tombstone.
   - `pnpm test:local:ui --scenario resource-browser-entity-management` passed against real Electron on 2026-08-05. Its report records candidate confirmation to canonical revision 2, binding needs-attention, two reference blockers, hidden unsupported Asset actions, and no console errors, warnings, or exceptions.
   - Asset instantiate/publish/update/tombstone runtime coverage depends on the manifest-backed Asset production owner and must not be replaced by an in-memory or flat-file success path.
+  - Entity Asset runtime acceptance is superseded and must not be implemented; ordinary Asset lifecycle verification remains owned by `establish-manifest-backed-asset-library`.
 - [x] 6.4 Complete `pnpm ci:local`, record untouched retired-data and residual reference, publication, provider, and user-data risks, and verify no fragmented authority returned success.
   - `pnpm ci:local` passed on 2026-08-05, including formatting, lint, all workspace typechecks/builds, Desktop arm64 packaging, all tests, unused/dependency checks, architecture gates, and strict OpenSpec validation.
   - Unknown retired fields remain untouched; normal fragmented readers are absent and canonical resource tests prove they cannot return success.

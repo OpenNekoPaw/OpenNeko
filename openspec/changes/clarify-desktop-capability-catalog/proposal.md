@@ -1,34 +1,33 @@
 ## Why
 
-Desktop Home 已经移除了 Canvas、Cut、Preview 等伪“扩展”，但当前实现错误地读取
-Codex/OpenAI marketplace 和 `.codex-plugin` package。OpenNeko 是基于 Pi Agent 的独立
-应用，不能把其他应用的本地 marketplace、安装状态或缓存当成自己的插件目录。仅显示
-Computer Use 或 MCP 名称也会让用户误以为 Agent 已经可以调用，仍然属于伪能力声明。
+OpenNeko 已有 Skill/Plugin 管理和 Agent runtime 主链路，但当前仍以 bundled
+`marketplace.json`、`.openneko-plugin/plugin.json` 和独立 JSON enable grant 作为核心输入。
+在官方插件仓库尚不存在时，这些私有分发约定增加了不必要的定制化，并让独立 Skill、Plugin
+package、用户状态和 MCP runtime 相互侵入。
 
 ## What Changes
 
-- **BREAKING**：删除 Codex CLI、`~/.codex`、Codex marketplace 和 `.codex-plugin`
-  依赖，改由 `@neko/agent-runtime` 的 extension application entry 管理 OpenNeko 自有 catalog、
-  package lifecycle 与 Agent contribution；Desktop Main 只注入 bundled snapshot、安装根和原生 adapter。
-- OpenNeko marketplace 首阶段由公开 `OpenNekoPaw/OpenNeko` 仓库维护并随 Desktop
-  打包；没有真实 OpenNeko 插件时返回空目录，不借用其他应用条目或伪造数据。
-- Extensions Surface 只投影 OpenNeko marketplace 或 OpenNeko 安装根中的插件；available
-  目录还必须通过 Pi SkillHost 或 OpenNeko MCP runtime 支持判定。
-- 可安装插件默认按内容创作相关性、通用生产力和其他类别排序，提供安装、卸载和
-  marketplace 刷新，并通过 request identity 与 snapshot fingerprint 防止陈旧操作。
-- personal Skill 支持从本地目录安装和移除；plugin Skill 随插件生命周期管理；builtin
-  Skill 继续服务 Pi Agent，但不进入扩展管理目录。
-- 已安装插件的 Skill contribution 进入 Pi SkillHost，并携带明确 `pluginId` provenance。
-- 已安装且兼容的 MCP contribution 进入现有 `MCPManager -> ToolRegistry -> Pi`
-  canonical path；卸载时在无 active turn 后原子替换 runtime generation。
-- App-only、OAuth 或其他当前没有 OpenNeko runtime owner 的 contribution 明确显示为
-  unsupported，不注册 Tool，也不伪装成可执行。
-- Desktop shell、状态、操作、确认、空态与 diagnostics 完整支持 `en` / `zh-cn`；
-  manifest 和 personal Skill 作者元数据保持原文。
-- Extensions Surface 删除低价值的来源、状态、分类和排序控件，只保留搜索与
-  Skill/扩展页签；目录继续使用固定、确定性的产品排序。
-- Renderer 只发送 typed management intent；物理路径、命令、环境变量、凭据和 raw
-  repository diagnostic 不跨 preload 边界。
+- **BREAKING**：P0 删除 bundled/foreign marketplace inventory、`marketplace.json` reader、
+  marketplace refresh 和公共 contract 中的 marketplace identity；官方仓库与远程分发延后到独立变更。
+- **BREAKING**：将 `.openneko-plugin/plugin.json` 原子替换为 package 根目录的 canonical
+  `plugin.json`；使用最小 portable metadata、固定 `skills/` 与 `mcp.json` component location，
+  OpenNeko-specific metadata 只能进入 reverse-domain `extensions` namespace。
+- Skill 保持独立一等能力：personal/project/builtin Skill 只依赖 `SKILL.md` 和 Pi SkillHost，
+  不要求 Plugin、MCP 或 marketplace。
+- Plugin 只负责聚合和声明 package content；Skill、MCP 和未来 App contribution 独立验证、
+  独立进入 owning runtime，并在最小 contribution scope fail-local。
+- Extensions Surface 只展示明确的 bundled plugin roots 与本地已安装 Plugin；用户可以从本地目录
+  安装、启用、禁用、移除和重新扫描，不展示虚构的 available marketplace catalog。
+- Skill/Plugin 详情采用类 VS Code 的概览信息层级：展示作者 metadata、来源、组件贡献、
+  runtime readiness 与真实管理操作，不展示 Plugin 文件树、manifest/MCP 原文或物理路径。
+  Personal Skill 可通过 opaque management identity 打开 `SKILL.md` 的系统默认编辑器并在文件管理器中显示；
+  Plugin Skill 只导航至所属 Plugin，不暴露单独编辑或移除。
+- Plugin package bytes 保存在 OpenNeko install root；安装 lifecycle、启用状态和用户配置引用进入
+  `~/.neko/neko.db#state`。旧 JSON grant 不导入、不兼容读取，也不作为 fallback。
+- 已验证 Plugin Skill 继续进入 Pi SkillHost；兼容 MCP contribution 继续复用唯一
+  `MCPManager -> ToolRegistry -> Pi` 路径。Plugin 是否有效不以 MCP 是否存在或连接成功判定。
+- 继续要求 sender-bound typed IPC、安全路径授权、idle-only runtime replacement、明确 readiness、
+  `en`/`zh-cn` 管理 UI 和 fail-visible diagnostics。
 
 ## Capabilities
 
@@ -38,19 +37,24 @@ Computer Use 或 MCP 名称也会让用户误以为 Agent 已经可以调用，�
 
 ### Modified Capabilities
 
-- `desktop-home-management-surfaces`: 将原“能力”目录收敛为真实全局扩展与 Skill 目录，移除 Desktop 内置模块投影，并支持中英文界面。
+- `desktop-home-management-surfaces`: 将 Extensions 从 marketplace-backed available/installed catalog
+  收敛为独立 Skill 管理、bundled/local Plugin 安装管理、SQLite 用户状态和真实 runtime readiness。
 
 ## Impact
 
-- `packages/agent/runtime`：OpenNeko extension catalog、manifest/support policy、install/remove transaction、
-  personal Skill lifecycle、Plugin Skill/MCP contribution 与 runtime generation application service。
-- `apps/neko-desktop/src/main/`：bundled snapshot/install-root、native picker/trash、process/env/credential
-  concrete adapter、composition、disposal 与 Desktop typed IPC；不得保留 catalog/install/runtime policy。
-- `apps/neko-desktop/resources/extension-marketplace/`：公开仓库维护、随包发布的
-  OpenNeko marketplace snapshot；只包含真实第一方维护 package。
-- `packages/agent/runtime/src/pi/`：plugin Skill source/provenance 与确定性优先级。
-- `packages/agent/runtime/src/mcp/`、package-owned Agent contracts：Plugin MCP
-  process/auth configuration 的最小 runtime contract。
-- `packages/agent/webview` 与 Desktop renderer placement：双语安装/卸载、Skill 管理、兼容性和
-  operation 状态；Renderer 不拥有 mutation 或 runtime state。
-- Desktop producer/consumer、Pi Skill/MCP path、Evaluation harness 与真实 Electron 验收。
+- `packages/agent/runtime/src/extensions/`：拥有 canonical Plugin manifest codec、local install planning、
+  contribution support policy、catalog、mutation 和 runtime generation application contract；不得依赖 Electron。
+- `packages/agent/runtime/src/pi/`：继续拥有四类 Skill discovery、selection、fingerprint、receipt 和
+  personal Skill lifecycle，确保独立 Skill 不经过 Plugin/MCP manager。
+- `packages/agent/contracts`：删除 marketplace identity/available inventory，增加本地安装 intent、
+  durable state projection 和 contribution-local readiness contract。
+- `packages/local-metadata`：拥有 Plugin install/enable state 的 SQLite repository 与稳定表；
+  package bytes、credential 和 runtime handle 不进入 SQLite。
+- `apps/neko-desktop/src/main/`：只保留 bundled root、install root、SQLite/file/picker/trash、
+  process/env/credential concrete adapter、typed IPC composition 和 disposal；不决定 Plugin 业务策略。
+- `apps/neko-desktop/resources/extension-marketplace/`：删除 marketplace index；现有第一方 package
+  转为明确 bundled plugin roots 或迁入更准确的资源目录。
+- `packages/agent/webview` 与 Desktop renderer placement：展示 Skills 与已安装 Plugins，提供本地安装、
+  启停、移除、搜索和 diagnostics；Renderer 不接触物理路径、数据库或进程配置。
+- Agent/SQLite producer tests、Desktop consumer/delegation tests、真实 Electron UI 与 provider-backed
+  Agent Evaluation 需要按新 canonical path 更新。

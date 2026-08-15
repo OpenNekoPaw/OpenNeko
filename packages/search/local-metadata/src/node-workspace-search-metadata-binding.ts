@@ -2,7 +2,11 @@ import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import type { LocalMetadataPartition } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
-import type { SearchDocumentRepository, SemanticProjectionRepository } from '@neko/local-metadata';
+import type {
+  ResourceUsageProjectionRepository,
+  SearchDocumentRepository,
+  SemanticProjectionRepository,
+} from '@neko/local-metadata';
 import {
   initializeCoreLocalMetadataTables,
   initializeSearchProjectionTables,
@@ -12,8 +16,10 @@ export interface NodeWorkspaceSearchMetadataBinding {
   readonly workspaceId: string;
   readonly searchPartition: LocalMetadataPartition;
   readonly semanticPartition: LocalMetadataPartition;
+  readonly resourceUsagePartition: LocalMetadataPartition;
   readonly searchDocuments: SearchDocumentRepository;
   readonly semanticProjections: SemanticProjectionRepository;
+  readonly resourceUsageProjections: ResourceUsageProjectionRepository;
   dispose(): Promise<void>;
 }
 
@@ -49,12 +55,19 @@ export async function createNodeWorkspaceSearchMetadataBinding(options: {
       workspaceId: identity.workspaceId,
       domain: 'semantic-projection',
     };
+    const resourceUsagePartition = {
+      scope: 'workspace' as const,
+      workspaceId: identity.workspaceId,
+      domain: 'resource-usage-projection' as const,
+    };
     return {
       workspaceId: identity.workspaceId,
       searchPartition,
       semanticPartition,
+      resourceUsagePartition,
       searchDocuments: metadataStore.repositories.searchDocuments,
       semanticProjections: metadataStore.repositories.semanticProjections,
+      resourceUsageProjections: metadataStore.repositories.resourceUsageProjections,
       dispose: () => metadataStore.dispose(),
     };
   } catch (error) {

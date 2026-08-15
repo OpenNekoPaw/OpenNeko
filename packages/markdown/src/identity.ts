@@ -45,10 +45,9 @@ export function deriveMarkdownNodeId(
   startOffset: number,
   endOffset: number,
   sourceSlice: string,
-  ordinal: number,
 ): MarkdownNodeId {
   return createMarkdownNodeId(
-    `md-node:${hashIdentity(`${sessionId}\u0000${kind}\u0000${startOffset}\u0000${endOffset}\u0000${ordinal}\u0000${sourceSlice}`)}`,
+    `md-node:${hashIdentity(`${sessionId}\u0000${kind}\u0000${startOffset}\u0000${endOffset}\u0000${sourceSlice}`)}`,
   );
 }
 

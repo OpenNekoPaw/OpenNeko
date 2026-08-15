@@ -41,6 +41,8 @@ export interface UseViewportTransformOptions {
   isPanMode?: boolean;
   /** When true, left-button drag temporarily pans the canvas while Space is held. */
   isSpacePanActive?: boolean;
+  /** Suspends all Canvas viewport input while a modal surface owns interaction. */
+  disabled?: boolean;
 }
 
 export interface UseViewportTransformReturn {
@@ -76,6 +78,7 @@ export function useViewportTransform(
     maxZoom = MAX_ZOOM,
     isPanMode = false,
     isSpacePanActive = false,
+    disabled = false,
   } = options;
 
   // State
@@ -90,6 +93,7 @@ export function useViewportTransform(
   // Mouse down - start panning
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      if (disabled) return;
       // Pan with: right/middle mouse button, space + left click, or hand tool mode.
       const shouldPan =
         e.button === RIGHT_BUTTON ||
@@ -113,12 +117,13 @@ export function useViewportTransform(
         startViewport: { ...viewport },
       });
     },
-    [viewport, isPanMode, isSpacePanActive],
+    [disabled, viewport, isPanMode, isSpacePanActive],
   );
 
   // Mouse move - update pan
   const onMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      if (disabled) return;
       if (!state.isPanning) return;
 
       const deltaX = e.clientX - state.startPan.x;
@@ -140,7 +145,7 @@ export function useViewportTransform(
         },
       });
     },
-    [state.isPanning, state.startPan, state.startViewport, onViewportChange],
+    [disabled, state.isPanning, state.startPan, state.startViewport, onViewportChange],
   );
 
   // Mouse up - end panning
@@ -157,13 +162,24 @@ export function useViewportTransform(
     }
   }, [state.isPanning]);
 
-  const onContextMenu = useCallback((e: React.MouseEvent) => {
-    if (!suppressContextMenuRef.current) return;
+  const onContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (disabled) return;
+      if (!suppressContextMenuRef.current) return;
 
-    e.preventDefault();
-    e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
+      suppressContextMenuRef.current = false;
+    },
+    [disabled],
+  );
+
+  useEffect(() => {
+    if (!disabled || !state.isPanning) return;
+    rightPanStartRef.current = null;
     suppressContextMenuRef.current = false;
-  }, []);
+    setState((current) => ({ ...current, isPanning: false }));
+  }, [disabled, state.isPanning]);
 
   // Wheel - pan by default, zoom only for explicit modifier/pinch gestures.
   const viewportRef = useRef(viewport);
@@ -174,7 +190,7 @@ export function useViewportTransform(
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || disabled) return;
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -215,7 +231,7 @@ export function useViewportTransform(
 
     container.addEventListener('wheel', handleWheel, { passive: false });
     return () => container.removeEventListener('wheel', handleWheel);
-  }, [containerRef, minZoom, maxZoom]);
+  }, [containerRef, disabled, minZoom, maxZoom]);
 
   // Programmatic pan
   const panTo = useCallback(

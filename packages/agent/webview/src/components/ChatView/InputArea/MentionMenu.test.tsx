@@ -143,7 +143,10 @@ describe('MentionMenu icon projection', () => {
             id: 'media',
             kind: 'media',
             label: 'Hero portrait',
-            filePath: 'neko/assets/Characters/hero.png',
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/hero.png',
+            },
             mediaType: 'image',
             source: 'media-library',
             contextPayload: {
@@ -237,7 +240,10 @@ describe('MentionMenu icon projection', () => {
       id: 'media',
       kind: 'media',
       label: 'Hero portrait',
-      filePath: 'neko/assets/Characters/hero.png',
+      contentLocator: {
+        kind: 'workspace-file',
+        path: 'neko/assets/Characters/hero.png',
+      },
       mediaType: 'image',
       source: 'media-library',
       contextPayload: {

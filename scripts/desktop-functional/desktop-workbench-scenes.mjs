@@ -1,6 +1,7 @@
-import { access, copyFile, mkdir, rename, symlink, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
+import { openFixtureWorkspace } from './desktop-operations.mjs';
 
 const ACTIVE_AGENT_SURFACE_SELECTOR = '[data-primary-surface="agent"]';
 const ACTIVE_AGENT_TEXTAREA_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-textarea`;
@@ -22,11 +23,13 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     const providerPort = await reserveFunctionalProviderPort();
     const workspacePath = join(fixtureHome, 'workspace');
     const secondaryWorkspacePath = join(fixtureHome, 'workspace-b');
+    const mediaLibraryPath = join(fixtureHome, 'global-media', 'workspace');
     const configRoot = join(fixtureHome, '.neko');
     const assetRoot = join(configRoot, 'assets');
     await Promise.all([
       mkdir(workspacePath, { recursive: true }),
       mkdir(secondaryWorkspacePath, { recursive: true }),
+      mkdir(mediaLibraryPath, { recursive: true }),
       mkdir(configRoot, { recursive: true }),
       mkdir(assetRoot, { recursive: true }),
     ]);
@@ -38,6 +41,10 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       copyFile(
         join(repositoryRoot, 'docs/assets/openneko-desktop.png'),
         join(workspacePath, 'test.png'),
+      ),
+      copyFile(
+        join(repositoryRoot, 'docs/assets/openneko-desktop.png'),
+        join(mediaLibraryPath, 'preview.png'),
       ),
       copyFile(
         join(repositoryRoot, 'docs/assets/openneko-desktop.png'),
@@ -103,7 +110,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       ].join('\n'),
       { encoding: 'utf8', mode: 0o600 },
     );
-    return { workspacePath, secondaryWorkspacePath, providerPort };
+    return { workspacePath, secondaryWorkspacePath, mediaLibraryPath, providerPort };
   },
   async run({
     checkpoint,
@@ -167,7 +174,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       await resizeWindow(evaluate, 1440, 960);
 
       const assetsProjectionStart = await readShellProjectionProbe(evaluate);
-      await clickApplicationNavigation(evaluate, click, 1);
+      await clickApplicationNavigation(evaluate, click, 3);
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('[data-owner-root="asset-management"][data-catalog-status="ready"]');
       const assetsProjection = await assertSingleShellProjection(
@@ -254,7 +261,9 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       checkpoint('extension-management-skills-list-large', extensionsList);
 
       await click('[data-extension-catalog-tab="extensions"]');
-      await click('.agent-extension-management-root [role="option"]');
+      await click(
+        '.agent-extension-management-root .agent-extension-catalog-row .management-surface-row__select',
+      );
       await waitForSelector('[data-workbench-main-panel="extension-detail"]');
       await waitForSelector('[data-automation-endpoint-management="true"]');
       await waitForSelector('[data-automation-permission-management="true"]');
@@ -680,6 +689,48 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
       const entryRoot = await markEntryAgentRoot(evaluate, entryDraft.draftId);
       const entryTriggerControls = await inspectEntryTriggerControls(evaluate);
       checkpoint('agent-entry-typed-trigger-controls', entryTriggerControls);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+      const entryWideLayout = await inspectEntryQuickActionLayout(evaluate);
+      const entryWideScreenshot = await screenshot('agent-entry-global-quick-actions');
+      await resizeWindow(evaluate, 760, 640);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+      const entryNarrowLayout = await inspectEntryQuickActionLayout(evaluate);
+      const entryNarrowScreenshot = await screenshot('agent-entry-global-quick-actions-narrow');
+      checkpoint('agent-entry-global-quick-action-layout', {
+        wide: entryWideLayout,
+        narrow: entryNarrowLayout,
+      });
+      await resizeWindow(evaluate, 1440, 960);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+      const composerBeforeGlobalActions = await inspectEntryComposerGeometry(evaluate);
+      await waitForSelector(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-detail .agent-entry-resource-card`,
+      );
+      await assertEntryComposerGeometry(evaluate, composerBeforeGlobalActions);
+      const entryExpandedScreenshot = await screenshot('agent-entry-global-actions-expanded');
+      await click(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-toggle[data-entry-panel-mode="assistant"]`,
+      );
+      await waitForCondition(
+        evaluate,
+        `document.querySelector(
+          '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-toggle[data-entry-panel-mode="assistant"]',
+        )?.getAttribute('aria-expanded') === 'false'`,
+        'Entry Assistant actions did not collapse.',
+      );
+      await assertEntryComposerGeometry(evaluate, composerBeforeGlobalActions);
+      await click(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-toggle[data-entry-panel-mode="assistant"]`,
+      );
+      await waitForSelector(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-detail .agent-entry-resource-card`,
+      );
 
       const slashMenu = await openEntrySlashMenu({ evaluate, screenshot, type });
       checkpoint('agent-entry-unbound-slash-menu', slashMenu.selection);
@@ -710,35 +761,48 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
       const preservedDraftText = 'Keep this Draft text while selecting a Workspace.';
       await replaceActiveAgentComposerText({ evaluate, pressKey, type }, preservedDraftText);
 
-      await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-button`, 0);
-      await waitForSelector(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-menu`);
-      const targetMenu = await inspectEntryWorkspaceTargetMenu(
+      await click(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-experience-selector [role="tab"]`,
+        1,
+      );
+      await waitForSelector(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-toggle[data-entry-panel-mode="authoring"]`,
+      );
+      const composerBeforeTargetDetail = await inspectEntryComposerGeometry(evaluate);
+      await waitForSelector(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-detail .agent-entry-authoring-selector`,
+      );
+      await assertEntryComposerGeometry(evaluate, composerBeforeTargetDetail);
+      await click(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-authoring-selector [data-entry-action="choose-project"]`,
+      );
+      const targetSelector = await inspectEntryAuthoringTargetSelector(
         evaluate,
         workspaceActivation.projectId,
       );
-      const targetMenuScreenshot = await screenshot('agent-entry-workspace-target-menu');
-      checkpoint('agent-entry-workspace-target-menu', {
+      const targetSelectorScreenshot = await screenshot('agent-entry-authoring-target-selector');
+      checkpoint('agent-entry-authoring-target-selector', {
         entryDraft,
         entryRoot,
         workspaceActivation,
-        targetMenu,
+        targetSelector,
       });
 
       await click(
-        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-menu [role="menuitem"]`,
-        targetMenu.projectMenuIndex,
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-authoring-selector [data-entry-resource-kind="project"]`,
+        targetSelector.projectButtonIndex,
       );
       await waitForCondition(
         evaluate,
         `(() => [...document.querySelectorAll(
-          '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-button',
-        )].some((button) => button.textContent?.trim() === ${JSON.stringify(targetMenu.projectLabel)}))()`,
-        'Entry composer did not retain the selected exact Workspace target.',
+          '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-quick-toggle[data-entry-panel-mode="authoring"]',
+        )].some((button) => button.textContent?.includes(${JSON.stringify(targetSelector.projectLabel)})))()`,
+        'Entry Authoring action did not retain the selected exact Workspace target.',
       );
       const boundDraft = await inspectBoundEntryDraft(evaluate, {
         draftId: entryDraft.draftId,
         inputValue: preservedDraftText,
-        projectLabel: targetMenu.projectLabel,
+        projectLabel: targetSelector.projectLabel,
         workspaceId: workspaceActivation.workspaceId,
       });
       checkpoint('agent-entry-workspace-bound-draft', boundDraft);
@@ -834,16 +898,19 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
         slashSelection: slashMenu.selection,
         unboundMentionSelection: unboundMention.selection,
         workspaceActivation,
-        targetMenu,
+        targetSelector,
         boundDraft,
         mentionSelection: workspaceMention.selection,
         skillSelection: skillMenu.selection,
         workspaceSession,
         provider: providerEvidence,
         screenshots: [
+          entryWideScreenshot,
+          entryNarrowScreenshot,
+          entryExpandedScreenshot,
           slashMenu.screenshot,
           unboundMention.screenshot,
-          targetMenuScreenshot,
+          targetSelectorScreenshot,
           workspaceMention.screenshot,
           skillMenu.screenshot,
           completedScreenshot,
@@ -1107,27 +1174,116 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
   owner: '@neko/agent-runtime',
   async prepare(context) {
     const prepared = await desktopWorkbenchScenesScenario.prepare(context);
-    const linkedMediaTarget = join(context.fixtureHome, 'linked-media-reference');
-    const linkedMediaDirectory = join(prepared.workspacePath, 'neko', 'assets');
+    const boardDirectory = join(prepared.workspacePath, 'neko', 'boards');
+    const worldDirectory = join(prepared.workspacePath, 'neko', 'worlds', 'world-valid');
     await Promise.all([
-      mkdir(linkedMediaTarget, { recursive: true }),
-      mkdir(linkedMediaDirectory, { recursive: true }),
+      mkdir(boardDirectory, { recursive: true }),
+      mkdir(worldDirectory, { recursive: true }),
     ]);
     await copyFile(
       join(context.repositoryRoot, 'docs/assets/openneko-desktop.png'),
-      join(linkedMediaTarget, 'library-image.png'),
+      join(prepared.mediaLibraryPath, 'library-image.png'),
     );
-    await symlink(
-      linkedMediaTarget,
-      join(linkedMediaDirectory, 'Reference'),
-      process.platform === 'win32' ? 'junction' : 'dir',
+    await writeFile(
+      join(boardDirectory, 'media-reference.nkc'),
+      `${JSON.stringify(
+        {
+          name: 'Media Reference',
+          viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+          nodes: [
+            {
+              id: 'media-reference-1',
+              type: 'media',
+              position: { x: 40, y: 40 },
+              size: { width: 320, height: 180 },
+              zIndex: 1,
+              data: {
+                assetPath: 'library-image.png',
+                contentLocator: {
+                  kind: 'media-library',
+                  libraryName: 'workspace',
+                  relativePath: 'library-image.png',
+                },
+                mediaType: 'image',
+              },
+            },
+            {
+              id: 'media-reference-invalid-sibling',
+              type: 'media',
+              position: { x: 400, y: 40 },
+              size: { width: 320, height: 180 },
+              zIndex: 1,
+              data: {
+                assetPath: 'Broken/missing-image.png',
+                contentLocator: {
+                  kind: 'media-library',
+                  libraryName: 'Broken',
+                  relativePath: 'missing-image.png',
+                },
+                mediaType: 'image',
+              },
+            },
+          ],
+          connections: [],
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
+    await writeFile(
+      join(worldDirectory, 'project.json'),
+      `${JSON.stringify(
+        {
+          worldProjectId: 'world-valid',
+          title: 'Valid World',
+          draft: {
+            background: '',
+            worldBook: [],
+            locations: [],
+            organizations: [],
+            rules: [],
+            initialFacts: [],
+          },
+          sourceRefs: [],
+          reviewStatus: 'draft',
+          createdAt: '2026-08-13T00:00:00.000Z',
+          updatedAt: '2026-08-13T00:00:00.000Z',
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
     );
     return prepared;
   },
-  async run({ checkpoint, evaluate, prepared, pressKey, screenshot, type, waitForSelector }) {
+  async run({
+    checkpoint,
+    click,
+    evaluate,
+    prepared,
+    pressKey,
+    restartApplication,
+    screenshot,
+    type,
+    waitForDesktopBridge,
+    waitForSelector,
+  }) {
     const providerServer = await startFunctionalProviderServer(prepared.providerPort, 750);
     try {
       await resizeWindow(evaluate, 1440, 960);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+
+      await registerFixtureGlobalMediaLibrary({
+        evaluate,
+        click,
+        waitForSelector,
+        libraryName: 'workspace',
+      });
+
+      await clickApplicationNavigation(evaluate, click, 0);
       await waitForSelector(
         `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
       );
@@ -1138,14 +1294,20 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
       await waitForSelector('.desktop-scene-workbench--workspace');
       const workspaceAgent = await inspectActivatedWorkspaceAgent(evaluate);
 
+      const recoveryRequired = await recoverFixtureProjectMediaLibrary({
+        evaluate,
+        screenshot,
+        waitForSelector,
+      });
+
       const mention = await exerciseWorkspaceDraftMention({
         evaluate,
         pressKey,
         referenceLabel: 'library-image.png',
         referenceQuery: 'library-image',
-        expectedPortablePath: 'neko/assets/Reference/library-image.png',
+        expectedPortablePath: 'neko/assets/workspace/library-image.png',
         expectedSourceLabels: ['Media', '媒体'],
-        forbiddenText: 'linked-media-reference',
+        forbiddenText: prepared.workspacePath,
         screenshot,
         type,
         screenshotLabel: 'workspace-linked-media-mention-selected',
@@ -1155,6 +1317,8 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         entryRoot,
         workspaceActivation,
         workspaceAgent,
+        recoveryRequired: recoveryRequired.required,
+        recoveryApplied: recoveryRequired.applied,
         mention: mention.selection,
       });
 
@@ -1170,13 +1334,18 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
       );
       await evaluate(`(() => {
         const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+        const forbidden = [
+          ${JSON.stringify(prepared.workspacePath)},
+          '.neko',
+          'connectionId',
+        ];
         const exposed = [
           activeSurface?.textContent ?? '',
           ...[...(activeSurface?.querySelectorAll('[title]') ?? [])]
             .map((element) => element.getAttribute('title') ?? ''),
-        ].some((value) => value.includes('linked-media-reference'));
+        ].some((value) => forbidden.some((marker) => value.includes(marker)));
         if (exposed) {
-          throw new Error('Workspace mention UI exposed the linked Media Library target path.');
+          throw new Error('Workspace mention UI exposed project-local or Host binding details.');
         }
         return true;
       })()`);
@@ -1203,7 +1372,7 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         providerEvidence.requests[0]?.nativeImageCount !== 1
       ) {
         throw new Error(
-          `Linked Media Library first submit did not produce one exact native image request: ${JSON.stringify(providerEvidence)}`,
+          `Linked Media Library submit did not produce one exact native image request: ${JSON.stringify(providerEvidence)}`,
         );
       }
       const completedScreenshot = await captureSettledScreenshot(
@@ -1214,15 +1383,119 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         workspaceSession,
         provider: providerEvidence,
       });
+
+      const associationDirectory = join(
+        prepared.workspacePath,
+        'neko',
+        'project-bindings',
+        'entity-character',
+      );
+      const brokenLinkPath = join(prepared.workspacePath, 'neko', 'assets', 'Broken');
+      await mkdir(join(prepared.workspacePath, 'neko', 'assets'), { recursive: true });
+      await mkdir(associationDirectory, { recursive: true });
+      await symlink(
+        join(prepared.workspacePath, 'missing-media-library-target'),
+        brokenLinkPath,
+        'dir',
+      );
+      await writeFile(join(associationDirectory, 'invalid-row.json'), '{not-json', 'utf8');
+      await restartFixtureWorkspaceApplication({
+        evaluate,
+        restartApplication,
+        waitForDesktopBridge,
+        waitForSelector,
+      });
+      await waitForProjectMediaLibraryStates(evaluate, {
+        workspace: 'available',
+        Broken: 'entry-conflict',
+      });
+      const projectFactIsolation = await inspectInvalidProjectAssociationIsolation(evaluate);
+      const unavailableLink = {
+        valid: await inspectFixtureProjectMediaLibrary(evaluate, 'available', 'workspace'),
+        invalid: await inspectFixtureProjectMediaLibrary(evaluate, 'entry-conflict', 'Broken'),
+        projectFactIsolation,
+      };
+      const unavailableLinkScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-media-library-unavailable-link-isolated',
+      );
+      checkpoint('workspace-media-library-unavailable-link-isolated', unavailableLink);
+
+      await rm(join(prepared.workspacePath, '.neko'), { recursive: true, force: true });
+      await restartFixtureWorkspaceApplication({
+        evaluate,
+        restartApplication,
+        waitForDesktopBridge,
+        waitForSelector,
+      });
+      await waitForProjectMediaLibraryStates(evaluate, {
+        workspace: 'available',
+        Broken: 'entry-conflict',
+      });
+      const afterLocalStateDeletion = {
+        workspace: await inspectFixtureProjectMediaLibrary(evaluate, 'available', 'workspace'),
+        broken: await inspectFixtureProjectMediaLibrary(evaluate, 'entry-conflict', 'Broken'),
+      };
+      const deletedLocalStateScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-media-library-after-local-state-deletion',
+      );
+
+      await rm(join(prepared.workspacePath, 'neko', 'assets', 'workspace'));
+      await restartFixtureWorkspaceApplication({
+        evaluate,
+        restartApplication,
+        waitForDesktopBridge,
+        waitForSelector,
+      });
+      await waitForProjectMediaLibraryStates(evaluate, {
+        workspace: 'required-unlinked',
+        Broken: 'entry-conflict',
+      });
+      const recoveryAfterUnlink = await recoverFixtureProjectMediaLibrary({
+        evaluate,
+        screenshot,
+        waitForSelector,
+      });
+      const reservedMutation = await exerciseReservedProjectFactMutationRejection({
+        checkpoint,
+        evaluate,
+        pressKey,
+        screenshot,
+        workspacePath: prepared.workspacePath,
+      });
+      checkpoint(
+        'workspace-media-library-independent-from-local-state-and-recovered-after-unlink',
+        {
+          afterLocalStateDeletion,
+          recoveryAfterUnlink: recoveryAfterUnlink.applied,
+          reservedMutation: reservedMutation.evidence,
+        },
+      );
       return {
         entryDraft,
         entryRoot,
         workspaceActivation,
         workspaceAgent,
+        recoveryRequired,
         mentionSelection: mention.selection,
         workspaceSession,
         provider: providerEvidence,
-        screenshots: [mention.screenshot, completedScreenshot],
+        unavailableLink,
+        afterLocalStateDeletion,
+        recoveryAfterUnlink,
+        reservedMutation: reservedMutation.evidence,
+        screenshots: [
+          recoveryRequired.requiredScreenshot,
+          recoveryRequired.appliedScreenshot,
+          mention.screenshot,
+          completedScreenshot,
+          unavailableLinkScreenshot,
+          deletedLocalStateScreenshot,
+          recoveryAfterUnlink.requiredScreenshot,
+          recoveryAfterUnlink.appliedScreenshot,
+          reservedMutation.screenshot,
+        ],
       };
     } finally {
       await providerServer.close();
@@ -2728,13 +3001,29 @@ async function exerciseWorkspaceDraftMention({
   screenshotLabel,
 }) {
   await replaceActiveAgentComposerText({ evaluate, pressKey, type }, `@${referenceQuery}`);
-  await waitForCondition(
-    evaluate,
-    `(() => [...document.querySelectorAll(
-      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu [role="menuitem"]',
-    )].some((item) => item.textContent?.includes(${JSON.stringify(referenceLabel)})))()`,
-    'Workspace Draft @ search did not return its exact authorized Workspace file.',
-  );
+  try {
+    await waitForCondition(
+      evaluate,
+      `(() => [...document.querySelectorAll(
+        '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu [role="menuitem"]',
+      )].some((item) => item.textContent?.includes(${JSON.stringify(referenceLabel)})))()`,
+      'Workspace Draft @ search did not return its exact authorized Workspace file.',
+    );
+  } catch (error) {
+    const mentionProjection = await evaluate(`(() => ({
+      items: [...document.querySelectorAll(
+        '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu [role="menuitem"]',
+      )].map((item) => ({ text: item.textContent?.trim() ?? '', title: item.getAttribute('title') ?? '' })),
+      empty: document.querySelector(
+        '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu .agent-composer-popover-empty',
+      )?.textContent?.trim() ?? '',
+      alerts: [...document.querySelectorAll('[role="alert"]')]
+        .map((element) => element.textContent?.trim() ?? '').filter(Boolean),
+    }))()`);
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)} Projection: ${JSON.stringify(mentionProjection)}`,
+    );
+  }
   const selection = await evaluate(`(() => {
     const menu = document.querySelector(
       '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu',
@@ -2852,13 +3141,17 @@ async function inspectEntryTriggerControls(evaluate) {
         '.agent-composer-tool-button-text',
       ).length,
       hasWorkspaceChoice: Boolean(activeSurface.querySelector('.agent-composer-workspace-button')),
+      entryModeTabs: [...activeSurface.querySelectorAll(
+        '.agent-entry-experience-selector [role="tab"]',
+      )].map((tab) => tab.textContent?.trim() ?? ''),
       hasModelConfiguration: Boolean(activeSurface.querySelector('.agent-model-config-trigger')),
       globalAlertCount: document.querySelectorAll('.shell-diagnostic[role="alert"]').length,
     };
     if (
       result.duplicateLabels.length > 0 ||
       result.typedTriggerButtonCount !== 0 ||
-      !result.hasWorkspaceChoice ||
+      result.hasWorkspaceChoice ||
+      result.entryModeTabs.length !== 4 ||
       !result.hasModelConfiguration ||
       result.globalAlertCount !== 0
     ) {
@@ -2866,6 +3159,112 @@ async function inspectEntryTriggerControls(evaluate) {
     }
     return result;
   })()`);
+}
+
+async function inspectEntryQuickActionLayout(evaluate) {
+  return evaluate(`(() => {
+    const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+    const composition = activeSurface?.querySelector('.agent-entry-composition');
+    const composer = activeSurface?.querySelector('.agent-composer-shell');
+    const quickActions = activeSurface?.querySelector('.agent-entry-quick-actions');
+    const buttons = [...(quickActions?.querySelectorAll('button') ?? [])];
+    if (
+      !(composition instanceof HTMLElement) ||
+      !(composer instanceof HTMLElement) ||
+      !(quickActions instanceof HTMLElement)
+    ) {
+      throw new Error(
+        'Entry quick-action layout is unavailable: ' +
+          JSON.stringify({
+            hasActiveSurface: activeSurface instanceof HTMLElement,
+            hasComposition: composition instanceof HTMLElement,
+            hasComposer: composer instanceof HTMLElement,
+            hasQuickActions: quickActions instanceof HTMLElement,
+          }),
+      );
+    }
+    const compositionBounds = composition.getBoundingClientRect();
+    const composerBounds = composer.getBoundingClientRect();
+    const quickActionBounds = quickActions.getBoundingClientRect();
+    const buttonRows = [...new Set(
+      buttons.map((button) => Math.round(button.getBoundingClientRect().top)),
+    )].length;
+    const result = {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      composer: rectProjection(composerBounds),
+      quickActions: rectProjection(quickActionBounds),
+      buttonCount: buttons.length,
+      buttonRows,
+      expanded: quickActions.querySelector('.agent-entry-quick-toggle')?.getAttribute(
+        'aria-expanded',
+      ) === 'true',
+      hasIntroCard: Boolean(activeSurface?.querySelector('.agent-entry-intro.agent-empty-panel')),
+      introParagraphCount: activeSurface?.querySelectorAll('.agent-entry-intro p').length ?? 0,
+      composerValidationCount:
+        activeSurface?.querySelectorAll('.agent-composer-validation').length ?? 0,
+      hasOverlay: Boolean(
+        activeSurface?.querySelector('.agent-entry-context-overlay, .agent-entry-context-backdrop'),
+      ),
+      horizontallyContained:
+        composition.scrollWidth <= composition.clientWidth &&
+        buttons.every((button) => {
+          const bounds = button.getBoundingClientRect();
+          return bounds.left >= compositionBounds.left && bounds.right <= compositionBounds.right;
+        }),
+      actionsBelowComposer: quickActionBounds.top >= composerBounds.bottom,
+    };
+    if (
+      result.buttonCount < 1 ||
+      !result.expanded ||
+      result.hasIntroCard ||
+      result.introParagraphCount !== 0 ||
+      result.composerValidationCount !== 0 ||
+      result.hasOverlay ||
+      !result.horizontallyContained ||
+      !result.actionsBelowComposer
+    ) {
+      throw new Error('Entry quick-action layout is invalid: ' + JSON.stringify(result));
+    }
+    return result;
+
+    function rectProjection(bounds) {
+      return {
+        x: Math.round(bounds.x * 100) / 100,
+        y: Math.round(bounds.y * 100) / 100,
+        width: Math.round(bounds.width * 100) / 100,
+        height: Math.round(bounds.height * 100) / 100,
+      };
+    }
+  })()`);
+}
+
+async function inspectEntryComposerGeometry(evaluate) {
+  return evaluate(`(() => {
+    const composer = document.querySelector(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-shell',
+    );
+    if (!(composer instanceof HTMLElement)) {
+      throw new Error('Entry composer is unavailable for geometry inspection.');
+    }
+    const bounds = composer.getBoundingClientRect();
+    return {
+      x: Math.round(bounds.x * 100) / 100,
+      y: Math.round(bounds.y * 100) / 100,
+      width: Math.round(bounds.width * 100) / 100,
+      height: Math.round(bounds.height * 100) / 100,
+    };
+  })()`);
+}
+
+async function assertEntryComposerGeometry(evaluate, expected) {
+  const actual = await inspectEntryComposerGeometry(evaluate);
+  const keys = ['x', 'y', 'width', 'height'];
+  if (keys.some((key) => Math.abs(actual[key] - expected[key]) > 0.5)) {
+    throw new Error(
+      `Entry composer moved while quick-action presentation changed: ${JSON.stringify({ expected, actual })}`,
+    );
+  }
+  return actual;
 }
 
 async function openEntrySlashMenu({ evaluate, screenshot, type }) {
@@ -2993,24 +3392,26 @@ async function markEntryAgentRoot(evaluate, expectedDraftId) {
   })()`);
 }
 
-async function inspectEntryWorkspaceTargetMenu(evaluate, expectedProjectId) {
+async function inspectEntryAuthoringTargetSelector(evaluate, expectedProjectId) {
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     const project = projection.catalog.projects.find(
       (candidate) => candidate.projectId === ${JSON.stringify(expectedProjectId)},
     );
-    if (!project) throw new Error('Entry Workspace menu has no exact fixture Project.');
-    const menu = document.querySelector(
-      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-menu',
+    if (!project) throw new Error('Entry Authoring selector has no exact fixture Project.');
+    const selector = document.querySelector(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-entry-authoring-selector',
     );
-    const items = [...(menu?.querySelectorAll('[role="menuitem"]') ?? [])];
-    const projectMenuIndex = items.findIndex(
-      (item) => item.textContent?.trim() === project.displayName,
+    const items = [...(selector?.querySelectorAll(
+      '[data-entry-resource-kind="project"]',
+    ) ?? [])];
+    const projectButtonIndex = items.findIndex(
+      (item) => item.querySelector('strong')?.textContent?.trim() === project.displayName,
     );
-    if (!(menu instanceof HTMLElement) || projectMenuIndex < 0) {
-      throw new Error('Entry Workspace menu did not expose the exact Project target.');
+    if (!(selector instanceof HTMLElement) || projectButtonIndex < 0) {
+      throw new Error('Entry Authoring selector did not expose the exact Project target.');
     }
-    const bounds = menu.getBoundingClientRect();
+    const bounds = selector.getBoundingClientRect();
     if (
       bounds.width <= 0 ||
       bounds.height <= 0 ||
@@ -3019,12 +3420,12 @@ async function inspectEntryWorkspaceTargetMenu(evaluate, expectedProjectId) {
       bounds.right > window.innerWidth ||
       bounds.bottom > window.innerHeight
     ) {
-      throw new Error('Entry Workspace target menu is clipped outside the visible viewport.');
+      throw new Error('Entry Authoring target selector is clipped outside the visible viewport.');
     }
     return {
       projectId: project.projectId,
       projectLabel: project.displayName,
-      projectMenuIndex,
+      projectButtonIndex,
       itemLabels: items.map((item) => item.textContent?.trim() ?? ''),
       withinViewport: true,
     };
@@ -3039,8 +3440,8 @@ async function inspectBoundEntryDraft(evaluate, expected) {
     const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
     const root = activeSurface?.querySelector('.desktop-agent-root[data-owner-root="agent"]');
     const inputValue = activeSurface?.querySelector('.agent-composer-textarea')?.value ?? '';
-    const workspaceLabels = [...(activeSurface?.querySelectorAll(
-      '.agent-composer-workspace-button',
+    const authoringActionLabels = [...(activeSurface?.querySelectorAll(
+      '.agent-entry-quick-toggle[data-entry-panel-mode="authoring"]',
     ) ?? [])].map((button) => button.textContent?.trim() ?? '');
     const presentationStates = Object.keys(sessionStorage).flatMap((key) => {
       if (!key.startsWith('openneko:agent:presentation:')) return [];
@@ -3061,7 +3462,7 @@ async function inspectBoundEntryDraft(evaluate, expected) {
       draftId: context.scope.kind === 'unbound' ? context.scope.draftId : undefined,
       conversationCount: projection.agentHome.conversations.length,
       inputValue,
-      workspaceLabels,
+      authoringActionLabels,
       workspaceTarget,
       rootPresent: root instanceof HTMLElement && !root.hidden,
       agentRootCount:
@@ -3074,7 +3475,9 @@ async function inspectBoundEntryDraft(evaluate, expected) {
       context.scope.draftId !== ${JSON.stringify(expected.draftId)} ||
       projection.agentHome.conversations.length !== 0 ||
       inputValue !== ${JSON.stringify(expected.inputValue)} ||
-      !workspaceLabels.includes(${JSON.stringify(expected.projectLabel)}) ||
+      !authoringActionLabels.some((label) =>
+        label.includes(${JSON.stringify(expected.projectLabel)}),
+      ) ||
       workspaceTarget?.context?.kind !== 'workspace' ||
       workspaceTarget.context.workspaceId !== ${JSON.stringify(expected.workspaceId)} ||
       typeof workspaceTarget.context.workspaceGrantId !== 'string' ||
@@ -3231,6 +3634,9 @@ async function waitForWorkspaceSession(evaluate, expected) {
       .map((element) => element.textContent?.trim() ?? '')
       .filter(Boolean);
     const rootRetained = root === window.__openNekoFunctionalEntryAgentRoot;
+    const entryQuickActionSurfaceCount = activeSurface?.querySelectorAll(
+      '.agent-entry-quick-actions',
+    ).length ?? 0;
     if (
       context.kind !== 'agent' ||
       context.scope.kind !== 'workspace' ||
@@ -3249,6 +3655,7 @@ async function waitForWorkspaceSession(evaluate, expected) {
       (activeSurface?.textContent ?? '').includes('ContentLocator') ||
       visibleRoots.length !== 1 ||
       !rootRetained ||
+      entryQuickActionSurfaceCount !== 0 ||
       Boolean(activeSurface?.querySelector('.agent-execution-activity')) ||
       alerts.length > 0
     ) {
@@ -3269,6 +3676,7 @@ async function waitForWorkspaceSession(evaluate, expected) {
       sceneScope: context.scope.kind,
       agentRootCount: visibleRoots.length,
       agentRootRetained: rootRetained,
+      entryQuickActionSurfaceCount,
       transcriptContainsSkill: activeSurface?.textContent?.includes(
         ${JSON.stringify(expected.submittedInput)},
       ) === true,
@@ -3428,7 +3836,7 @@ async function inspectActivatedWorkspaceAgent(evaluate) {
         return activeSurface instanceof HTMLElement &&
           activeSurfaces.length === 1 &&
           ownerActions === 0 &&
-          (title === '工作区已就绪' || title === 'Workspace is ready');
+          (title === '开始创作' || title === 'Start creating');
       })()`,
       'Workspace-bound Agent did not finish attaching its activated draft state.',
     );
@@ -3489,62 +3897,63 @@ async function inspectWorkspaceResourceChrome(evaluate) {
       '.project-resource-dock__header button[aria-label="Close resource management"], ' +
       '.project-resource-dock__header button[aria-label="关闭资源管理"]',
     ).length;
-    const facets = [...browser.querySelectorAll('.neko-resource-browser__facets [role="tab"]')];
-    const facetLabels = facets.map((item) => item.textContent?.trim() ?? '');
+    const sources = [...browser.querySelectorAll('.neko-resource-browser__sources [role="tab"]')];
+    const sourceLabels = sources.map((item) => item.textContent?.trim() ?? '');
     if (
       refreshCount !== 0 ||
       initialLibraryControlCount !== 0 ||
       panelCloseCount !== 0 ||
-      facets.length !== 4
+      sources.length !== 3
     ) {
       throw new Error(
         'Workspace Resource Browser chrome does not match its embedded contract: ' +
-          JSON.stringify({ refreshCount, initialLibraryControlCount, panelCloseCount, facetLabels }),
+          JSON.stringify({ refreshCount, initialLibraryControlCount, panelCloseCount, sourceLabels }),
       );
     }
-    const mediaFacet = facets.find((item) =>
-      ['媒体库', 'Media library'].includes(item.textContent?.trim() ?? ''),
+    const mediaSource = sources.find((item) =>
+      ['外部媒体', 'External media'].includes(item.textContent?.trim() ?? ''),
     );
-    if (!(mediaFacet instanceof HTMLButtonElement)) {
-      throw new Error('Workspace Resource Browser Media facet is unavailable.');
+    if (!(mediaSource instanceof HTMLButtonElement)) {
+      throw new Error('Workspace Resource Browser External Media source is unavailable.');
     }
-    mediaFacet.click();
-    return { refreshCount, initialLibraryControlCount, panelCloseCount, facetLabels };
+    mediaSource.click();
+    return { refreshCount, initialLibraryControlCount, panelCloseCount, sourceLabels };
   })()`);
   await waitForCondition(
     evaluate,
     `(() => {
       const browser = document.querySelector('.desktop-resource-browser-root');
-      const selected = browser?.querySelector('.neko-resource-browser__facets [aria-selected="true"]');
-      return ['媒体库', 'Media library'].includes(selected?.textContent?.trim() ?? '') &&
+      const selected = browser?.querySelector('.neko-resource-browser__sources [aria-selected="true"]');
+      return ['外部媒体', 'External media'].includes(selected?.textContent?.trim() ?? '') &&
         browser?.querySelectorAll('.neko-resource-browser__library-menu button').length === 1;
     })()`,
-    'Workspace Resource Browser did not activate the Media facet and its management action.',
+    'Workspace Resource Browser did not activate the External Media source and its management action.',
   );
   const switched = await evaluate(`(() => {
     const browser = document.querySelector('.desktop-resource-browser-root');
     if (!(browser instanceof HTMLElement)) {
       throw new Error('Workspace Resource Browser is unavailable after Media activation.');
     }
-    const facets = [...browser.querySelectorAll('.neko-resource-browser__facets [role="tab"]')];
-    const assetFacet = facets.find((item) =>
-      ['素材库', 'Asset library'].includes(item.textContent?.trim() ?? ''),
+    const sources = [...browser.querySelectorAll('.neko-resource-browser__sources [role="tab"]')];
+    const assetSource = sources.find((item) =>
+      ['素材', 'Assets'].includes(item.textContent?.trim() ?? ''),
     );
-    if (!(assetFacet instanceof HTMLButtonElement)) {
-      throw new Error('Workspace Resource Browser Asset facet is unavailable.');
+    if (!(assetSource instanceof HTMLButtonElement)) {
+      throw new Error('Workspace Resource Browser Assets source is unavailable.');
     }
-    assetFacet.click();
+    assetSource.click();
     return true;
   })()`);
-  if (!switched) throw new Error('Workspace Resource Browser Asset facet click failed.');
+  if (!switched)
+    throw new Error('Workspace Resource Browser Installed Assets source click failed.');
   await waitForCondition(
     evaluate,
     `(() => {
       const browser = document.querySelector('.desktop-resource-browser-root');
-      const selected = browser?.querySelector('.neko-resource-browser__facets [aria-selected="true"]');
+      const selected = browser?.querySelector('.neko-resource-browser__sources [aria-selected="true"]');
       const hasAsset = [...(browser?.querySelectorAll('.neko-resource-browser__item strong') ?? [])]
         .some((item) => item.textContent?.trim() === 'workspace-lighting.png');
-      return ['素材库', 'Asset library'].includes(selected?.textContent?.trim() ?? '') &&
+      return ['素材', 'Assets'].includes(selected?.textContent?.trim() ?? '') &&
         browser?.querySelectorAll('.neko-resource-browser__library-menu button').length === 0 &&
         hasAsset;
     })()`,
@@ -3552,17 +3961,17 @@ async function inspectWorkspaceResourceChrome(evaluate) {
   );
   const switchedBack = await evaluate(`(() => {
     const browser = document.querySelector('.desktop-resource-browser-root');
-    const facets = [...(browser?.querySelectorAll('.neko-resource-browser__facets [role="tab"]') ?? [])];
-    const filesFacet = facets.find((item) =>
-      ['目录', 'Files'].includes(item.textContent?.trim() ?? ''),
+    const sources = [...(browser?.querySelectorAll('.neko-resource-browser__sources [role="tab"]') ?? [])];
+    const filesSource = sources.find((item) =>
+      ['项目文件', 'Project files'].includes(item.textContent?.trim() ?? ''),
     );
-    if (!(filesFacet instanceof HTMLButtonElement)) {
-      throw new Error('Workspace Resource Browser Files facet is unavailable.');
+    if (!(filesSource instanceof HTMLButtonElement)) {
+      throw new Error('Workspace Resource Browser Project Files source is unavailable.');
     }
-    filesFacet.click();
+    filesSource.click();
     return {
       assetLabel: 'workspace-lighting.png',
-      facetLabels: facets.map((item) => item.textContent?.trim() ?? ''),
+      sourceLabels: sources.map((item) => item.textContent?.trim() ?? ''),
       libraryControlCountInMedia: 1,
     };
   })()`);
@@ -4834,6 +5243,362 @@ async function selectGlobalLibraryCatalog(evaluate, labelPattern) {
   );
 }
 
+async function registerFixtureGlobalMediaLibrary({
+  evaluate,
+  click,
+  waitForSelector,
+  libraryName,
+}) {
+  await clickApplicationNavigation(evaluate, click, 3);
+  await waitForSelector('[data-owner-root="asset-management"][data-catalog-status="ready"]');
+  await selectGlobalLibraryCatalog(evaluate, /^(Media Library|媒体库)$/u);
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll(
+      '${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__commands button',
+    )].some((button) => /^(Connect directory|连接目录)$/u.test(button.textContent?.trim() ?? '') &&
+      !button.disabled))()`,
+    'The global Media Library registration action did not become interactive.',
+  );
+  await evaluate(`(() => {
+    const button = [...document.querySelectorAll(
+      '${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__commands button',
+    )].find((candidate) => /^(Connect directory|连接目录)$/u.test(
+      candidate.textContent?.trim() ?? '',
+    ));
+    if (!(button instanceof HTMLButtonElement) || button.disabled) {
+      throw new Error('The global Media Library registration action is unavailable.');
+    }
+    button.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__entry strong')]
+      .some((element) => element.textContent?.trim() === ${JSON.stringify(libraryName)}) ||
+      Boolean(document.querySelector('${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__diagnostic[role="alert"]')))()`,
+    'The fixture global Media Library registration did not settle.',
+  );
+  const projection = await evaluate(`(() => ({
+    labels: [...document.querySelectorAll(
+      '${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__entry strong',
+    )].map((element) => element.textContent?.trim() ?? ''),
+    alert: document.querySelector(
+      '${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__diagnostic[role="alert"]',
+    )?.textContent?.trim() ?? '',
+  }))()`);
+  if (!projection.labels.includes(libraryName)) {
+    throw new Error(
+      `The fixture global Media Library was not registered: ${JSON.stringify(projection)}`,
+    );
+  }
+  return projection;
+}
+
+async function recoverFixtureProjectMediaLibrary({
+  evaluate,
+  screenshot,
+  waitForSelector,
+  libraryName = 'workspace',
+  expectedContentLabel = 'library-image.png',
+}) {
+  await waitForSelector('.neko-resource-browser__sources[role="tablist"]');
+  await activateWorkspaceResourceSource(evaluate, /^(External media|外部媒体)$/u);
+  await waitForCondition(
+    evaluate,
+    `(() => document.querySelectorAll('.neko-resource-browser__item-row').length > 0 ||
+      Boolean(document.querySelector('.neko-resource-browser__empty')) ||
+      Boolean(document.querySelector('.neko-resource-browser__diagnostics')))()`,
+    'The project Media Library projection did not settle.',
+  );
+  const unlinkedProjection = await evaluate(`(() => ({
+    rows: [...document.querySelectorAll('.neko-resource-browser__item-row')].map((row) => ({
+      label: row.querySelector('strong')?.textContent?.trim() ?? '',
+      status: row.querySelector('.neko-resource-browser__library-status')?.getAttribute('data-state') ?? '',
+    })),
+    diagnostics: [...document.querySelectorAll('.neko-resource-browser__diagnostics')]
+      .map((element) => element.textContent?.trim() ?? ''),
+    empty: document.querySelector('.neko-resource-browser__empty')?.textContent?.trim() ?? '',
+  }))()`);
+  if (
+    !unlinkedProjection.rows.some(
+      (row) => row.label === libraryName && row.status === 'required-unlinked',
+    )
+  ) {
+    throw new Error(
+      `The project Media Library requirement did not remain visibly unlinked: ${JSON.stringify(unlinkedProjection)}`,
+    );
+  }
+  const required = await inspectFixtureProjectMediaLibrary(
+    evaluate,
+    'required-unlinked',
+    libraryName,
+  );
+  const requiredScreenshot = screenshot
+    ? await captureSettledScreenshot(
+        screenshot,
+        'workspace-media-library-recovery-required-unlinked',
+      )
+    : undefined;
+
+  await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.neko-resource-browser__item-row')].find(
+      (candidate) => candidate.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(libraryName)},
+    );
+    const recover = row?.querySelector(
+      'button[aria-label="Recover media library"], button[aria-label="恢复媒体库"]',
+    );
+    if (!(recover instanceof HTMLButtonElement)) {
+      throw new Error('Project Media Library recovery action is unavailable.');
+    }
+    recover.click();
+    return true;
+  })()`);
+  await waitForSelector('.neko-resource-browser__dialog[role="dialog"]');
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('.neko-resource-browser__dialog[role="dialog"] button')]
+      .some((button) => /^(Confirm recovery|确认恢复)$/u.test(button.textContent?.trim() ?? '') &&
+        !button.disabled))()`,
+    'The exact global Media Library recovery candidate was not available.',
+  );
+  await evaluate(`(() => {
+    const confirm = [...document.querySelectorAll(
+      '.neko-resource-browser__dialog[role="dialog"] button',
+    )].find((button) => /^(Confirm recovery|确认恢复)$/u.test(button.textContent?.trim() ?? ''));
+    if (!(confirm instanceof HTMLButtonElement) || confirm.disabled) {
+      throw new Error('Project Media Library recovery confirmation is unavailable.');
+    }
+    confirm.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('.neko-resource-browser__item-row')]
+      .some((row) => row.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(libraryName)} &&
+        row.querySelector('.neko-resource-browser__library-status')?.getAttribute('data-state') ===
+          'available'))()`,
+    'The project Media Library binding did not become available.',
+  );
+  const applied = await inspectFixtureProjectMediaLibrary(evaluate, 'available', libraryName);
+  await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.neko-resource-browser__item-row')].find(
+      (candidate) => candidate.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(libraryName)},
+    );
+    const disclosure = row?.querySelector('.neko-resource-browser__disclosure');
+    if (!(disclosure instanceof HTMLElement)) {
+      throw new Error('Recovered Media Library disclosure is unavailable.');
+    }
+    disclosure.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('.neko-resource-browser__item-row strong')]
+      .some((element) => element.textContent?.trim() === ${JSON.stringify(expectedContentLabel)}))()`,
+    'The recovered Media Library did not expose its referenced image.',
+  );
+  const appliedScreenshot = screenshot
+    ? await captureSettledScreenshot(screenshot, 'workspace-media-library-recovered')
+    : undefined;
+  return {
+    required,
+    applied: { ...applied, contentVisible: true },
+    requiredScreenshot,
+    appliedScreenshot,
+  };
+}
+
+async function inspectFixtureProjectMediaLibrary(evaluate, expectedState, libraryName) {
+  return evaluate(`(() => {
+    const row = [...document.querySelectorAll('.neko-resource-browser__item-row')].find(
+      (candidate) => candidate.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(libraryName)},
+    );
+    if (!(row instanceof HTMLElement)) {
+      throw new Error('Fixture project Media Library row is unavailable.');
+    }
+    const status = row.querySelector('.neko-resource-browser__library-status');
+    const state = status?.getAttribute('data-state') ?? '';
+    const statusLabel = status?.getAttribute('title') ?? '';
+    if (state !== ${JSON.stringify(expectedState)}) {
+      throw new Error('Fixture project Media Library has an unexpected state: ' + state);
+    }
+    const exposedText = [
+      row.textContent ?? '',
+      ...[...row.querySelectorAll('[title]')].map((element) => element.getAttribute('title') ?? ''),
+    ];
+    if (exposedText.some((value) => value.includes('.neko') || value.includes('connectionId'))) {
+      throw new Error('Project Media Library row exposed local binding details.');
+    }
+    return {
+      label: row.querySelector('strong')?.textContent?.trim() ?? '',
+      state,
+      statusLabel,
+      recoverActionVisible: Boolean(row.querySelector(
+        'button[aria-label="Recover media library"], button[aria-label="恢复媒体库"]',
+      )),
+    };
+  })()`);
+}
+
+async function inspectInvalidProjectAssociationIsolation(evaluate) {
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const diagnostic = document.querySelector(
+        '.project-content-group[data-project-content-group="characters"] .project-content-diagnostic',
+      );
+      const world = document.querySelector(
+        '[data-owner-identity="world:world-valid"][data-availability="available"]',
+      );
+      return diagnostic instanceof HTMLElement &&
+        (diagnostic.textContent?.trim().length ?? 0) > 0 &&
+        world?.querySelector('strong')?.textContent?.trim() === 'Valid World';
+    })()`,
+    'Invalid Project association did not remain local beside the valid World sibling.',
+  );
+  return evaluate(`(() => {
+    const diagnostic = document.querySelector(
+      '.project-content-group[data-project-content-group="characters"] .project-content-diagnostic',
+    );
+    const world = document.querySelector(
+      '[data-owner-identity="world:world-valid"][data-availability="available"]',
+    );
+    return {
+      diagnosticVisible: diagnostic instanceof HTMLElement,
+      diagnostic: diagnostic?.textContent?.trim() ?? '',
+      validWorldVisible: world?.querySelector('strong')?.textContent?.trim() === 'Valid World',
+      validWorldAvailability: world?.getAttribute('data-availability') ?? '',
+    };
+  })()`);
+}
+
+async function exerciseReservedProjectFactMutationRejection({
+  checkpoint,
+  evaluate,
+  pressKey,
+  screenshot,
+  workspacePath,
+}) {
+  await activateWorkspaceResourceSource(evaluate, /^(Project files|项目文件)$/u);
+  checkpoint('workspace-project-fact-mutation-source-active', {});
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('.neko-resource-browser__item-row')]
+      .some((row) => row.querySelector('strong')?.textContent?.trim() === 'neko'))()`,
+    'Project files did not expose the synchronized neko root for mutation validation.',
+  );
+  await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.neko-resource-browser__item-row')].find(
+      (candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'neko',
+    );
+    if (!(row instanceof HTMLElement)) {
+      throw new Error('Synchronized neko root is unavailable for mutation validation.');
+    }
+    row.dataset.functionalReservedProjectRoot = 'true';
+    return true;
+  })()`);
+  checkpoint('workspace-project-fact-mutation-root-visible', {});
+  await evaluate(`(() => {
+    const trigger = document.querySelector(
+      '[data-functional-reserved-project-root="true"] .neko-resource-browser__item',
+    );
+    if (!(trigger instanceof HTMLButtonElement)) {
+      throw new Error('Synchronized neko root context trigger is unavailable.');
+    }
+    trigger.focus();
+    return true;
+  })()`);
+  await pressKey('F10', ['Shift']);
+  checkpoint('workspace-project-fact-mutation-context-requested', {});
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const visibleActions = await evaluate(`(() =>
+    [...document.querySelectorAll('[role="menuitem"]')]
+      .map((item) => item.textContent?.trim() ?? '')
+  )()`);
+  const forbiddenActions = visibleActions.filter((text) =>
+    /Move to Trash|移到废纸篓|New file|新建文件|New folder|新建文件夹|New Canvas|新建画布|New Cut|新建剪辑/u.test(
+      text,
+    ),
+  );
+  if (forbiddenActions.length > 0) {
+    throw new Error(
+      `Reserved Project root exposed generic mutation actions: ${JSON.stringify(visibleActions)}`,
+    );
+  }
+  const evidence = await evaluate(`(() => {
+    const preserved = [...document.querySelectorAll('.neko-resource-browser__item-row')]
+      .some((row) => row.querySelector('strong')?.textContent?.trim() === 'neko');
+    return {
+      projectRootVisible: preserved,
+    };
+  })()`);
+  await access(join(workspacePath, 'neko'));
+  return {
+    evidence: {
+      ...evidence,
+      projectRootExists: true,
+      genericMutationActionCount: forbiddenActions.length,
+      visibleActions,
+    },
+    screenshot: await captureSettledScreenshot(
+      screenshot,
+      'workspace-project-fact-generic-mutation-rejected',
+    ),
+  };
+}
+
+async function restartFixtureWorkspaceApplication({
+  evaluate,
+  restartApplication,
+  waitForDesktopBridge,
+  waitForSelector,
+}) {
+  await restartApplication();
+  await waitForDesktopBridge(60_000);
+  await openFixtureWorkspace(evaluate);
+  await waitForSelector('.desktop-scene-workbench--workspace');
+  await waitForSelector('.neko-resource-browser__sources[role="tablist"]');
+  await activateWorkspaceResourceSource(evaluate, /^(External media|外部媒体)$/u);
+}
+
+async function activateWorkspaceResourceSource(evaluate, labelPattern) {
+  await evaluate(`(() => {
+    const tab = [...document.querySelectorAll(
+      '.neko-resource-browser__sources [role="tab"]',
+    )].find((candidate) => ${String(labelPattern)}.test(candidate.textContent?.trim() ?? ''));
+    if (!(tab instanceof HTMLButtonElement)) {
+      throw new Error('Requested Workspace resource source is unavailable.');
+    }
+    if (tab.getAttribute('aria-selected') !== 'true') tab.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll('.neko-resource-browser__sources [role="tab"]')]
+      .some((candidate) => ${String(labelPattern)}.test(candidate.textContent?.trim() ?? '') &&
+        candidate.getAttribute('aria-selected') === 'true'))()`,
+    'Requested Workspace resource source did not become active.',
+  );
+}
+
+async function waitForProjectMediaLibraryStates(evaluate, expectedStates) {
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const states = Object.fromEntries(
+        [...document.querySelectorAll('.neko-resource-browser__item-row')].map((row) => [
+          row.querySelector('strong')?.textContent?.trim() ?? '',
+          row.querySelector('.neko-resource-browser__library-status')?.getAttribute('data-state') ?? '',
+        ]),
+      );
+      return Object.entries(${JSON.stringify(expectedStates)})
+        .every(([libraryName, state]) => states[libraryName] === state);
+    })()`,
+    `Project Media Library states did not settle: ${JSON.stringify(expectedStates)}`,
+  );
+}
+
 async function openPersistedFixtureAssetPreview(evaluate) {
   await waitForCondition(
     evaluate,
@@ -5201,7 +5966,8 @@ async function inspectExtensionsManagement(evaluate) {
       activeTab: root
         ?.querySelector('[data-extension-catalog-tab][aria-pressed="true"]')
         ?.getAttribute('data-extension-catalog-tab'),
-      selectedCount: root?.querySelectorAll('[role="option"][aria-selected="true"]').length ?? 0,
+      selectedCount:
+        root?.querySelectorAll('.agent-extension-catalog-row[data-selected="true"]').length ?? 0,
       configurationKind: secondary
         ?.querySelector('[data-extension-configuration-kind]')
         ?.getAttribute('data-extension-configuration-kind'),

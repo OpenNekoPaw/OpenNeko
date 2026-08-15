@@ -22,8 +22,11 @@ import {
   parseAuthorizedPreviewSessionProjection,
   type AuthorizedPreviewSessionProjection,
 } from '@neko/preview-domain/authorized-session';
-import type { PreviewMediaDescriptor } from '@neko/preview-domain';
-import { detectPreviewContentKind, getPreviewMediaType } from '@neko/preview-domain';
+import { getPreviewMediaType } from '@neko/preview-domain';
+import {
+  createPreviewResourceProjectionService,
+  type PreviewResourceProjectionService,
+} from '@neko/preview-domain/resource-projection';
 import type { ResourceBrowserNodeRuntime } from './resource-browser-node-runtime';
 
 type AssetCenterResourceBrowserPort = Pick<
@@ -90,6 +93,12 @@ interface PendingPreview {
   readonly descriptorId: string;
 }
 
+interface AssetCenterPreviewResourceOwner {
+  readonly previewSessionId: string;
+  readonly identity: AssetCenterSessionIdentity;
+  readonly resolved: ResolvedSelection;
+}
+
 export class AssetCenterNodeRuntime {
   private readonly sessions = new Map<string, SessionEntry>();
   private readonly presentations = new Map<string, PresentationEntry>();
@@ -101,10 +110,58 @@ export class AssetCenterNodeRuntime {
   private readonly pendingPreviews = new Map<string, PendingPreview>();
   private readonly previews = new Map<string, AuthorizedPreviewSessionProjection>();
   private readonly createIdentity: () => string;
+  private readonly previewResources: PreviewResourceProjectionService<AssetCenterPreviewResourceOwner>;
   private disposed = false;
 
   constructor(private readonly options: AssetCenterNodeRuntimeOptions) {
     this.createIdentity = options.createIdentity ?? randomUUID;
+    this.previewResources = createPreviewResourceProjectionService({
+      resolveSource: async ({ owner, displayName, requestedMediaType }) => {
+        const mediaType = requestedMediaType ?? getPreviewMediaType(displayName);
+        if (!mediaType) {
+          return {
+            status: 'unavailable',
+            diagnostic: {
+              code: 'preview-unsupported-kind',
+              message: `Preview does not support '${displayName}'.`,
+            },
+          };
+        }
+        const file = await stat(owner.resolved.absolutePath);
+        if (!file.isFile()) throw new Error('Asset Center Preview source is not a file.');
+        return {
+          status: 'ready',
+          source: {
+            kind: 'file',
+            absolutePath: owner.resolved.absolutePath,
+            mediaType,
+            sourceFingerprint: `${file.mtimeMs}:${file.size}`,
+            byteLength: file.size,
+          },
+        };
+      },
+      registerSource: async ({ owner, source }) => {
+        if (source.kind !== 'file') {
+          throw new Error('Asset Center Preview requires a file source.');
+        }
+        const lease = await this.options.resources.registerFile(
+          {
+            windowId: owner.identity.windowId,
+            viewId: owner.identity.assetCenterSessionId,
+            sessionId: owner.previewSessionId,
+            sourceFingerprint: source.sourceFingerprint,
+          },
+          source,
+        );
+        return {
+          status: 'ready',
+          lease: {
+            ...lease,
+            release: () => this.options.resources.releaseSession(owner.previewSessionId),
+          },
+        };
+      },
+    });
   }
 
   attach(input: {
@@ -161,9 +218,8 @@ export class AssetCenterNodeRuntime {
               };
             }
             const previewSessionId = `preview:asset-center:${this.createIdentity()}`;
-            const contentKind = detectPreviewContentKind(resolved.item.label);
             const mediaType = getPreviewMediaType(resolved.item.label);
-            if (!contentKind || !mediaType) {
+            if (!mediaType) {
               return {
                 status: 'unavailable',
                 diagnostic: {
@@ -173,40 +229,33 @@ export class AssetCenterNodeRuntime {
               };
             }
             try {
-              const file = await stat(resolved.absolutePath);
-              if (!file.isFile()) throw new Error('Asset Center Preview source is not a file.');
-              const sourceFingerprint = `${file.mtimeMs}:${file.size}`;
-              const lease = await this.options.resources.registerFile(
-                {
-                  windowId: identity.windowId,
-                  viewId: identity.assetCenterSessionId,
-                  sessionId: previewSessionId,
-                  sourceFingerprint,
-                },
-                {
-                  absolutePath: resolved.absolutePath,
-                  mediaType,
-                  sourceFingerprint,
-                },
-              );
-              const descriptor: PreviewMediaDescriptor = {
-                descriptorId: `descriptor:${previewSessionId}`,
-                sourceFingerprint,
-                contentLocator,
-                url: lease.url,
-                ...(lease.resourceUris ? { resourceUris: lease.resourceUris } : {}),
-                contentKind,
-                mediaType,
+              const descriptorId = `descriptor:${previewSessionId}`;
+              const projection = await this.previewResources.project({
+                descriptorId,
+                locator: contentLocator,
                 displayName: resolved.item.label,
-                byteLength: file.size,
-              };
-              this.pendingPreviews.set(descriptor.descriptorId, {
+                requestedMediaType: mediaType,
+                owner: { previewSessionId, identity, resolved },
+              });
+              if (projection.status === 'unavailable') {
+                return {
+                  status: 'unavailable',
+                  diagnostic: {
+                    code:
+                      projection.diagnostic.code === 'preview-unsupported-kind'
+                        ? 'preview-unsupported-kind'
+                        : 'preview-source-unavailable',
+                    message: projection.diagnostic.message,
+                  },
+                };
+              }
+              this.pendingPreviews.set(descriptorId, {
                 previewSessionId,
                 identity,
                 itemId,
-                descriptorId: descriptor.descriptorId,
+                descriptorId,
               });
-              return { status: 'ready', descriptor };
+              return { status: 'ready', descriptor: projection.descriptor };
             } catch (error: unknown) {
               return {
                 status: 'unavailable',
@@ -258,7 +307,7 @@ export class AssetCenterNodeRuntime {
               throw new Error(`Asset Center Preview session '${previewSessionId}' is unavailable.`);
             }
             this.previews.delete(previewSessionId);
-            this.options.resources.releaseSession(previewSessionId);
+            this.previewResources.release(requirePreviewDescriptorId(projection));
           },
         },
       },
@@ -441,6 +490,7 @@ export class AssetCenterNodeRuntime {
       entry.controller.dispose();
       this.sessions.delete(identity.assetCenterSessionId);
       this.pendingSelectionRestores.delete(identity.assetCenterSessionId);
+      this.releasePendingPreviews(identity.assetCenterSessionId);
       this.clearResolvedSelections(identity.assetCenterSessionId);
       return projection;
     });
@@ -452,8 +502,9 @@ export class AssetCenterNodeRuntime {
       for (const [previewSessionId, preview] of this.previews) {
         if (preview.identity.windowId !== windowId) continue;
         this.previews.delete(previewSessionId);
-        this.options.resources.releaseSession(previewSessionId);
+        this.previewResources.release(requirePreviewDescriptorId(preview));
       }
+      this.releasePendingPreviews(sessionId);
       entry.controller.dispose();
       this.sessions.delete(sessionId);
       this.presentations.delete(sessionId);
@@ -468,8 +519,8 @@ export class AssetCenterNodeRuntime {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    for (const previewSessionId of this.previews.keys()) {
-      this.options.resources.releaseSession(previewSessionId);
+    for (const preview of this.previews.values()) {
+      this.previewResources.release(requirePreviewDescriptorId(preview));
     }
     this.previews.clear();
     for (const entry of this.sessions.values()) entry.controller.dispose();
@@ -478,6 +529,7 @@ export class AssetCenterNodeRuntime {
     this.pendingSelectionRestores.clear();
     this.pendingPreviews.clear();
     this.resolvedSelections.clear();
+    this.previewResources.dispose();
   }
 
   private createBrowserRuntime(identity: AssetCenterSessionIdentity): GlobalLibraryBrowserRuntime {
@@ -577,6 +629,14 @@ export class AssetCenterNodeRuntime {
     }
   }
 
+  private releasePendingPreviews(assetCenterSessionId: string): void {
+    for (const [descriptorId, pending] of this.pendingPreviews) {
+      if (pending.identity.assetCenterSessionId !== assetCenterSessionId) continue;
+      this.previewResources.release(descriptorId);
+      this.pendingPreviews.delete(descriptorId);
+    }
+  }
+
   private requireSession(identity: AssetCenterSessionIdentity): SessionEntry {
     this.requireActive();
     const entry = this.sessions.get(identity.assetCenterSessionId);
@@ -637,6 +697,15 @@ function assertIdentity(
 
 function selectionKey(assetCenterSessionId: string, itemId: string): string {
   return `${assetCenterSessionId}\u0000${itemId}`;
+}
+
+function requirePreviewDescriptorId(projection: AuthorizedPreviewSessionProjection): string {
+  if (projection.status !== 'ready') {
+    throw new Error(
+      `Asset Center Preview session '${projection.identity.previewSessionId}' is not ready.`,
+    );
+  }
+  return projection.descriptor.descriptorId;
 }
 
 function isSelectionAvailable(

@@ -141,6 +141,21 @@ The Desktop Host SHALL open or focus `neko/boards/workspace.nkc` as the default 
 - **THEN** Desktop displays a fail-visible Canvas diagnostic for that View
 - **AND** it MUST NOT report an empty placeholder or simulated Canvas as success
 
+#### Scenario: A special authoring target opens in a Project Workspace
+
+- **WHEN** the user opens an exact CharacterProject or WorldProject authoring target from a Content Project Workspace
+- **THEN** the canonical Workspace Canvas remains in the primary Main group
+- **AND** the special authoring target opens or focuses in Secondary Main without replacing the Canvas
+- **AND** closing the special target collapses Secondary Main and reveals the unchanged Canvas
+
+#### Scenario: Startup finds a cross-Workspace Scene and Project presentation
+
+- **WHEN** a stored Window selects one Project presentation but its persisted Workspace Scene belongs to another Workspace
+- **THEN** Desktop locally resets the mismatched Scene before projecting the startup Window
+- **AND** the selected Project Tab, its canonical Board and valid sibling Project presentations remain available
+- **AND** Desktop exposes one owner-qualified Workspace presentation-reset warning
+- **AND** the presentation mismatch does not fail application startup or weaken live Scene/Layout validation
+
 ### Requirement: Project Resource Browser is a Main View
 
 The Desktop Workbench SHALL open the project Resource Browser as an independent `resource-browser` Main View with stable project/workspace/View identity. The application sidebar SHALL only issue an open-or-focus intent and SHALL NOT mount the Resource Browser as a project dock.
@@ -516,3 +531,55 @@ Cleanup SHALL NOT require the conversation's Project to remain registered or its
 - **THEN** Desktop deletes the exact persisted conversation through Agent conversation authority
 - **AND** it does not resolve a Project path, restore a Workspace grant, attach a Workspace runtime or execute a domain tool
 - **AND** valid sibling conversations remain unchanged
+
+### Requirement: Composer consumes only accepted input
+
+The Agent composer SHALL clear its draft resources only after the canonical conversation, queue or exact input
+catalog path synchronously accepts the submit intent. A submit that cannot be accepted SHALL preserve the exact
+text, attachments, references and context in the owning composer and SHALL remain fail-visible.
+
+#### Scenario: A running conversation receives another message
+
+- **WHEN** the user submits text while the exact Conversation turn is active
+- **THEN** Host accepts the message through the existing conversation queue path
+- **AND** the composer clears only after that acceptance receipt
+- **AND** the queued text remains observable until runtime releases or cancels that exact queue item
+
+#### Scenario: Submit is not accepted
+
+- **WHEN** submission is rejected because the Conversation is switching, the click is a duplicate, the exact
+  Conversation creator is missing, or command/Skill input cannot resolve against its exact catalog
+- **THEN** the composer preserves all draft resources
+- **AND** no optimistic transcript item, queue item or Host send is fabricated
+- **AND** an owning diagnostic remains visible where the rejection requires user action
+
+#### Scenario: Pending first submit reaches its new Conversation
+
+- **WHEN** a tabless submit creates a Conversation and the owning Tab attempts the pending send
+- **THEN** the pending request is consumed only when the same canonical send contract returns accepted
+- **AND** a rejected attempt remains available for the owning Tab instead of disappearing
+
+### Requirement: Pending Tool approvals are actionable above the composer
+
+Agent Webview SHALL project every pending Tool approval in the active Conversation into one bounded approval
+surface immediately above the composer. The historical Tool Call SHALL retain its factual waiting state but SHALL
+NOT expose a second approval action path.
+
+#### Scenario: One Tool waits for approval
+
+- **WHEN** the active Conversation projection contains a Tool Call with `pendingConfirmation=true`
+- **THEN** its action, description, summary and allow/deny controls are visible above the composer
+- **AND** either decision submits the exact Conversation and Tool Call identity through the canonical Host contract
+- **AND** the transcript Tool Call shows waiting state without actionable allow/deny controls
+
+#### Scenario: Multiple Tool Calls wait for approval
+
+- **WHEN** the active Conversation contains multiple pending Tool Calls
+- **THEN** the approval surface retains every request in transcript order within a bounded scroll region
+- **AND** no request is selected through latest, active or first-compatible fallback
+
+#### Scenario: Conversation changes or approval resolves
+
+- **WHEN** the user switches Conversation or a pending Tool Call receives a decision/result projection
+- **THEN** the composer-adjacent surface contains only pending approvals owned by the newly active Conversation
+- **AND** stale or hidden Conversation controls cannot submit a decision

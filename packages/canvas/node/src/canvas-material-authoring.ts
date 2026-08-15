@@ -22,13 +22,12 @@ import {
   type CanvasMaterialAuthoringRequest,
   type CanvasMaterialMediaKind,
 } from '@neko/canvas-domain';
-import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
-import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import {
-  parseDesktopGlobalMediaLibraryId,
-  resolveGlobalMediaLibraryTarget,
+  resolveProjectMediaLibraryContentPath,
+  resolveWorkspaceContentLocator,
 } from '@neko/assets-node';
+import { resolveGlobalMediaLibraryTarget } from '@neko/assets-node';
 
 const DEFAULT_MAX_IMPORT_BYTES = 512 * 1024 * 1024;
 
@@ -100,7 +99,11 @@ export class CanvasMaterialAuthoringService {
       });
     }
     if (input.request.kind === 'entity-representation-replace') {
-      await this.authorizeReferencedLocator(input.workspace, input.request.locator);
+      await this.authorizeReferencedLocator(
+        input.workspace,
+        input.identity.projectId,
+        input.request.locator,
+      );
       return replaceCanvasEntityRepresentationOnCanvas({
         canvas: input.canvas,
         nodeId: input.request.nodeId,
@@ -113,7 +116,11 @@ export class CanvasMaterialAuthoringService {
         },
       });
     }
-    const material = await this.resolveRequest(input.workspace, input.request);
+    const material = await this.resolveRequest(
+      input.workspace,
+      input.identity.projectId,
+      input.request,
+    );
     if (!material) return input.canvas;
     return projectResolvedCanvasMaterialToCanvas({ canvas: input.canvas, material });
   }
@@ -126,11 +133,12 @@ export class CanvasMaterialAuthoringService {
 
   private async resolveRequest(
     workspace: AssetWorkspaceResolution,
+    projectId: string,
     request: CanvasMaterialAuthoringRequest,
   ): Promise<ResolvedCanvasMaterialDescriptor | undefined> {
     switch (request.kind) {
       case 'direct-reference':
-        await this.authorizeReferencedLocator(workspace, request.locator);
+        await this.authorizeReferencedLocator(workspace, projectId, request.locator);
         return {
           locator: request.locator,
           title: request.title ?? titleForLocator(request.locator),
@@ -162,16 +170,7 @@ export class CanvasMaterialAuthoringService {
         };
       }
       case 'global-library-link': {
-        const targetDirectory = await resolveGlobalMediaLibraryTarget({
-          mediaLibraryRoot: this.options.globalMediaLibraryRoot,
-          libraryId: request.globalLibraryId,
-        });
-        await createWorkspaceLinkedMediaLibrary({
-          workspaceRoot: workspace.workspacePath,
-          name: parseDesktopGlobalMediaLibraryId(request.globalLibraryId).name,
-          targetDirectory,
-        });
-        return undefined;
+        throw visible('Bind Media Libraries through the project Media owner before Canvas use.');
       }
       case 'global-library-copy': {
         const libraryRoot = await resolveGlobalMediaLibraryTarget({
@@ -228,7 +227,7 @@ export class CanvasMaterialAuthoringService {
         path: request.locator.path,
       });
     } else {
-      await this.authorizeReferencedLocator(workspace, request.locator);
+      await this.authorizeReferencedLocator(workspace, request.identity.projectId, request.locator);
     }
     return {
       locator: request.locator,
@@ -241,6 +240,7 @@ export class CanvasMaterialAuthoringService {
 
   private async authorizeReferencedLocator(
     workspace: AssetWorkspaceResolution,
+    projectId: string,
     locator: ContentLocator,
   ): Promise<void> {
     const result = validateContentLocator(locator);
@@ -251,8 +251,29 @@ export class CanvasMaterialAuthoringService {
       case 'workspace-file':
         await resolveWorkspaceContentLocator(workspace, result.locator);
         return;
+      case 'media-library':
+        await resolveProjectMediaLibraryContentPath(
+          {
+            projectId,
+            workspaceRoot: workspace.workspacePath,
+            globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+          },
+          result.locator,
+        );
+        return;
       case 'document-entry':
-        await resolveWorkspaceContentLocator(workspace, result.locator.source);
+        if (result.locator.source.kind === 'workspace-file') {
+          await resolveWorkspaceContentLocator(workspace, result.locator.source);
+        } else {
+          await resolveProjectMediaLibraryContentPath(
+            {
+              projectId,
+              workspaceRoot: workspace.workspacePath,
+              globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+            },
+            result.locator.source,
+          );
+        }
         return;
       case 'package-resource': {
         const authorize = this.options.authorizePackageResource;
@@ -395,9 +416,11 @@ function titleForLocator(locator: ContentLocator): string {
       ? locator.path
       : locator.kind === 'document-entry'
         ? locator.entryPath
-        : locator.kind === 'package-resource'
-          ? locator.resourcePath
-          : locator.path;
+        : locator.kind === 'media-library'
+          ? locator.relativePath
+          : locator.kind === 'package-resource'
+            ? locator.resourcePath
+            : locator.path;
   return path.posix.basename(portablePath);
 }
 

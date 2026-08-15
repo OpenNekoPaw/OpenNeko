@@ -144,13 +144,16 @@ describe('document reading contracts', () => {
     };
 
     expect(imageInfo.path).toBeUndefined();
-    expect(imageInfo.contentLocator?.source.path).toBe('books/comic.epub');
+    expect(imageInfo.contentLocator?.source).toEqual({
+      kind: 'workspace-file',
+      path: 'books/comic.epub',
+    });
     expect(imageInfo.contentLocator?.entryPath).toBe('image/page-1.jpg');
     expect(imageInfo.locator?.kind).toBe('chapter');
     expect(JSON.stringify(imageInfo)).not.toMatch(/cachePath|resourceRef/u);
   });
 
-  it('builds only validated document-entry locators from workspace-owned sources', () => {
+  it('builds only validated document-entry locators from exact container owners', () => {
     const locator = createDocumentEntryContentLocator({
       source: {
         filePath: '${BOOKS}/comic.cbz',
@@ -166,6 +169,28 @@ describe('document reading contracts', () => {
       entryPath: 'page-1.png',
     });
     expect(isContentLocator(locator)).toBe(true);
+    expect(
+      createDocumentEntryContentLocator({
+        source: {
+          filePath: '${BOOKS}/comic.cbz',
+          format: 'cbz',
+          contentLocator: {
+            kind: 'media-library',
+            libraryName: 'Books',
+            relativePath: 'comics/comic.cbz',
+          },
+        },
+        entryPath: 'page-1.png',
+      }),
+    ).toEqual({
+      kind: 'document-entry',
+      source: {
+        kind: 'media-library',
+        libraryName: 'Books',
+        relativePath: 'comics/comic.cbz',
+      },
+      entryPath: 'page-1.png',
+    });
     expect(
       createDocumentEntryContentLocator({
         source: {

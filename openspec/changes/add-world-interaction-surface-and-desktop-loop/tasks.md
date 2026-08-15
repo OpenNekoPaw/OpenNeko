@@ -1,5 +1,9 @@
 ## 1. Package UI
 
+> The Foundation Library/Studio/Runtime tasks below are superseded by
+> `refine-world-management-authoring-and-runtime`. Before applying this change, rewrite its scope for a
+> fully qualified WorldExperience surface; do not implement the current tasks as a parallel path.
+
 - [ ] 1.1 定义 snapshot-first Webview host contract 和 Library/Studio/Runtime projection。
 - [ ] 1.2 实现启动、交互、Save/branch/replay 控件及 loading/empty/error/denied states。
 

@@ -8,6 +8,8 @@ import type {
 
 export interface PreviewSourceDescriptor {
   id: string;
+  nodeId?: string;
+  outputId?: string;
   contentLocator?: ContentLocator;
   asset?: AssetIdentityCapability;
   role: CanvasPreviewRole;
@@ -27,19 +29,12 @@ export interface PreviewPlaybackEndedEvent extends PreviewPlaybackProgressEvent 
 }
 
 export interface PreviewPlaybackControl {
-  requestId?: string;
-  state?: 'playing' | 'paused' | 'stopped';
-  persistence?: 'surface' | 'transient';
+  requestId: string;
+  state: 'playing' | 'paused' | 'stopped';
   startTimeSeconds?: number;
   onTimeUpdate?: (event: PreviewPlaybackProgressEvent) => void;
   onEnded?: (event: PreviewPlaybackEndedEvent) => void;
 }
-
-export type PreviewPlaybackInteractionState = 'playing' | 'paused' | 'ended';
-export type PreviewPlaybackInteractionHandler = (
-  state: PreviewPlaybackInteractionState,
-  currentTimeSeconds: number,
-) => void;
 
 export interface RuntimePreviewVariant extends CanvasPreviewVariant {
   runtimeUrl?: string;

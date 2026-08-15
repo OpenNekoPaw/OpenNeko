@@ -11,11 +11,11 @@ const IMAGE_PREVIEW_SOURCE_RE = /\.(?:png|jpe?g|webp|gif|avif|bmp|svg)(?:[?#]|$)
 const NON_IMAGE_MEDIA_URL_RE =
   /\.(?:mp4|m4v|mov|webm|mkv|avi|wmv|mp3|m4a|wav|flac|aac|ogg|opus)(?:[?#]|$)/i;
 
-export function isSafeWebviewUrl(url: string): boolean {
+function isSafeWebviewUrl(url: string): boolean {
   return SAFE_URL_RE.test(url);
 }
 
-export function isImagePreviewUrl(url: string): boolean {
+function isImagePreviewUrl(url: string): boolean {
   if (!isSafeWebviewUrl(url)) {
     return false;
   }

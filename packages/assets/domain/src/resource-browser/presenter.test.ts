@@ -1,10 +1,5 @@
-import type { ProjectEntityRecord } from '@neko/entity-domain';
 import { describe, expect, it } from 'vitest';
-import {
-  presentResourceBrowserAssetItem,
-  presentResourceBrowserContentItem,
-  presentResourceBrowserEntityItem,
-} from './presenter';
+import { presentResourceBrowserAssetItem, presentResourceBrowserContentItem } from './presenter';
 import type { ResourceBrowserContentEntry } from './ports';
 
 describe('Resource Browser presenter', () => {
@@ -24,92 +19,13 @@ describe('Resource Browser presenter', () => {
     });
 
     expect(item).toMatchObject({
-      facet: 'media',
+      source: 'media',
       kind: 'image',
       locator: entry.locator,
       capabilities: ['preview', 'reveal', 'add-to-canvas'],
     });
     expect(item.resourceId).toMatch(/^content:[a-f0-9]+$/);
     expect(JSON.stringify(item)).not.toContain('/Users/');
-  });
-
-  it('projects a Character from its canonical default representation', () => {
-    const entity: ProjectEntityRecord = {
-      entityId: 'character-neko',
-      kind: 'character',
-      names: { canonical: 'Neko', display: 'Neko', aliases: ['猫'] },
-      facts: {},
-      representations: [
-        {
-          bindingId: 'binding-neko',
-          role: 'portrait',
-          target: { kind: 'workspace-file', path: 'characters/neko.png' },
-          source: 'user',
-          isDefault: true,
-          acceptedAt: '2026-07-28T00:00:00.000Z',
-        },
-      ],
-      lifecycle: { state: 'active' },
-      createdAt: '2026-07-28T00:00:00.000Z',
-      updatedAt: '2026-07-28T00:00:00.000Z',
-    };
-
-    const item = presentResourceBrowserEntityItem(
-      {
-        projectionId: 'entity:character-neko',
-        status: 'confirmed',
-        entity,
-        bindingAvailability: [],
-        sourceOwners: ['project-entity'],
-      },
-      { canvasAvailable: true },
-    );
-
-    expect(item).toMatchObject({
-      facet: 'entities',
-      kind: 'character',
-      entityStatus: 'confirmed',
-      sourceOwners: ['project-entity'],
-      attentionBindingIds: [],
-      representationAvailability: 'active',
-      entityRef: { entityId: 'character-neko', entityKind: 'character' },
-      representationLocator: {
-        kind: 'workspace-file',
-        path: 'characters/neko.png',
-      },
-      representationBindingId: 'binding-neko',
-      representationRole: 'portrait',
-      capabilities: ['preview', 'add-to-canvas'],
-    });
-  });
-
-  it('projects candidates with evidence ownership but without a stable Entity identity', () => {
-    const item = presentResourceBrowserEntityItem(
-      {
-        projectionId: 'candidate:candidate-neko',
-        status: 'candidate',
-        candidate: {
-          candidateId: 'candidate-neko',
-          kind: 'character',
-          proposedNames: { canonical: 'Neko?', aliases: [] },
-          freshness: 'fresh',
-          evidence: [
-            { evidenceId: 'evidence-workspace', owner: 'workspace', sourceId: 'story.fountain' },
-          ],
-        },
-        sourceOwners: ['workspace'],
-      },
-      {},
-    );
-
-    expect(item).toMatchObject({
-      entityStatus: 'candidate',
-      candidateRef: { candidateId: 'candidate-neko', entityKind: 'character' },
-      sourceOwners: ['workspace'],
-      evidenceCount: 1,
-      capabilities: [],
-    });
-    expect(item).not.toHaveProperty('entityRef');
   });
 
   it('projects reusable Assets without exposing a global filesystem path', () => {
@@ -122,7 +38,7 @@ describe('Resource Browser presenter', () => {
     });
 
     expect(item).toMatchObject({
-      facet: 'assets',
+      source: 'assets',
       kind: 'asset',
       role: 'asset',
       assetRef: { assetId: 'global-asset-library:lighting' },

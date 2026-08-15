@@ -1,0 +1,89 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "direct-media-library-locator-rejected",
+  "suiteId": "agent-runtime.media-library-content",
+  "caseGroup": "boundary",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Attempt to pass a direct Media Library locator to the Workspace-only Agent document reader.",
+    "canonicalPath": [
+      "Agent ReadDocument schema",
+      "workspace-file-only content policy",
+      "request-local locator rejection",
+      "Conversation terminal idle"
+    ],
+    "observables": [
+      {
+        "ref": "direct-locator-rejection-facts",
+        "kind": "runtime-fact",
+        "description": "A direct media-library locator is rejected while the exact Conversation remains usable and reaches idle.",
+        "required": true
+      }
+    ],
+    "expectedResult": "ReadDocument rejects the direct media-library source, performs no Workspace or raw-path fallback, and the Agent reports the explicit rejection marker.",
+    "expectedFailure": "A successful direct Media Library read, fallback Tool call, global runtime error, or missing terminal marker fails visibly."
+  },
+  "fixtureRefs": ["media-library-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "调用 ReadDocument 一次，source 必须是 {\"kind\":\"media-library\",\"libraryName\":\"workspace\",\"relativePath\":\"linked-story.md\"}，mode=content。该直接媒体库 locator 应失败；失败后不要尝试工作区路径、不要搜索、不要调用 Read、ReadImage、Asset 或 shell 工具，只回复 DIRECT_MEDIA_LIBRARY_LOCATOR_REJECTED。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "idle",
+      "kind": "fully-idle",
+      "evidenceRef": "direct-locator-rejection-facts"
+    },
+    {
+      "id": "direct-locator-rejected",
+      "kind": "tool-call",
+      "name": "ReadDocument",
+      "status": "error",
+      "expectedArguments": {
+        "source": {
+          "kind": "media-library",
+          "libraryName": "workspace",
+          "relativePath": "linked-story.md"
+        },
+        "mode": "content"
+      },
+      "evidenceRef": "direct-locator-rejection-facts"
+    },
+    {
+      "id": "no-read-image-fallback",
+      "kind": "tool-call",
+      "name": "ReadImage",
+      "status": "absent",
+      "evidenceRef": "direct-locator-rejection-facts"
+    },
+    {
+      "id": "no-project-search-fallback",
+      "kind": "tool-call",
+      "name": "QueryProjectSearch",
+      "status": "absent",
+      "evidenceRef": "direct-locator-rejection-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["DIRECT_MEDIA_LIBRARY_LOCATOR_REJECTED"],
+      "evidenceRef": "direct-locator-rejection-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
+}

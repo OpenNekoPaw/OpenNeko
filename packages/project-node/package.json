@@ -1,6 +1,6 @@
 {
   "name": "@neko/project-node",
-  "description": "Atomic workspace-relative persistence for Content Project composition",
+  "description": "Atomic workspace-relative persistence for mixed-domain Project facts",
   "private": true,
   "type": "module",
   "exports": {
@@ -11,7 +11,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neko/project": "workspace:*"
+    "@neko/chara": "workspace:*",
+    "@neko/chara-node": "workspace:*",
+    "@neko/entity-domain": "workspace:*",
+    "@neko/local-metadata": "workspace:*",
+    "@neko/project": "workspace:*",
+    "@neko/world": "workspace:*",
+    "@neko/world-node": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

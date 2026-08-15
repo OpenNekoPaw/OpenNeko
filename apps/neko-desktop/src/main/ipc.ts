@@ -12,7 +12,7 @@ import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '@neko/host/application-se
 import { DESKTOP_PROJECT_PORTABILITY_CHANNELS } from '@neko/assets-domain/contracts';
 import { ASSET_CENTER_HOST_CHANNEL } from '@neko/assets-domain/asset-center/host-contract';
 import { AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL } from '@neko/agent-contracts/extension-management-host';
-import { AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL } from '@neko/automation-contracts/endpoint-management';
+import { AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL } from '@neko/automation-contracts/local-runtime-management';
 import { AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL } from '@neko/automation-contracts/permission-management';
 import { DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS } from '../shared/automation-target-selection-contract';
 import { DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS } from '../shared/automation-session-control-contract';
@@ -22,10 +22,18 @@ import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-gr
 import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
   CHARACTER_AUTHORING_HOST_CHANNEL,
+  CHARACTER_PORTABLE_HOST_CHANNELS,
+  parseCharacterPortableHostRequest,
   CHARACTER_AVATAR_HOST_CHANNEL,
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
 } from '@neko/chara/contracts';
-import { WORLD_AUTHORING_HOST_CHANNEL, WORLD_FOUNDATION_HOST_CHANNEL } from '@neko/world/contracts';
+import {
+  WORLD_AUTHORING_HOST_CHANNEL,
+  WORLD_MANAGEMENT_HOST_CHANNEL,
+  WORLD_PORTABLE_HOST_CHANNELS,
+  WORLD_RUNTIME_HOST_CHANNEL,
+  parseWorldPortableHostRequest,
+} from '@neko/world/contracts';
 import {
   PROJECT_AUTHORING_HOST_CHANNEL,
   PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
@@ -39,6 +47,16 @@ export function registerDesktopIpc(
     readonly selectWorkspaceGrant: (
       event: IpcMainInvokeEvent,
     ) => Promise<{ readonly label: string; readonly hostResource: string } | undefined>;
+    readonly saveCharacterPackage: (
+      event: IpcMainInvokeEvent,
+      produce: () => Promise<Uint8Array>,
+    ) => Promise<boolean>;
+    readonly readCharacterPackage: (event: IpcMainInvokeEvent) => Promise<Uint8Array | undefined>;
+    readonly saveWorldPackage: (
+      event: IpcMainInvokeEvent,
+      produce: () => Promise<Uint8Array>,
+    ) => Promise<boolean>;
+    readonly readWorldPackage: (event: IpcMainInvokeEvent) => Promise<Uint8Array | undefined>;
   },
 ): () => void {
   ipcMain.handle(CHARACTER_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
@@ -47,11 +65,79 @@ export function registerDesktopIpc(
   ipcMain.handle(CHARACTER_AUTHORING_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeCharacterAuthoringRequest(requireSender(event), payload),
   );
-  ipcMain.handle(WORLD_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
-    appHost.executeWorldFoundationRequest(requireSender(event), payload),
+  ipcMain.handle(
+    CHARACTER_PORTABLE_HOST_CHANNELS.exportScope,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.getCharacterPortableExportScope(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    CHARACTER_PORTABLE_HOST_CHANNELS.exportPackage,
+    async (event: IpcMainInvokeEvent, payload: unknown) => {
+      const request = parseCharacterPortableHostRequest(payload);
+      if (request.operation !== 'export') {
+        throw new Error('Character portable export channel requires an export request.');
+      }
+      let result: Awaited<ReturnType<typeof appHost.createCharacterPortableExport>> | undefined;
+      const saved = await options.saveCharacterPackage(event, async () => {
+        result = await appHost.createCharacterPortableExport(requireSender(event), request);
+        return result.archiveBytes;
+      });
+      return saved
+        ? requireCharacterPortableExportResult(result).result
+        : { requestId: request.requestId, status: 'cancelled' as const };
+    },
+  );
+  ipcMain.handle(
+    CHARACTER_PORTABLE_HOST_CHANNELS.importPackage,
+    async (event: IpcMainInvokeEvent, payload: unknown) => {
+      const request = parseCharacterPortableHostRequest(payload);
+      if (request.operation !== 'import') {
+        throw new Error('Character portable import channel requires an import request.');
+      }
+      const archiveBytes = await options.readCharacterPackage(event);
+      return archiveBytes
+        ? appHost.importCharacterPortablePackage(requireSender(event), request, archiveBytes)
+        : { requestId: request.requestId, status: 'cancelled' as const };
+    },
+  );
+  ipcMain.handle(WORLD_MANAGEMENT_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeWorldManagementRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    WORLD_PORTABLE_HOST_CHANNELS.exportPackage,
+    async (event: IpcMainInvokeEvent, payload: unknown) => {
+      const request = parseWorldPortableHostRequest(payload);
+      if (request.operation !== 'export') {
+        throw new Error('World portable export channel requires an export request.');
+      }
+      let result: Awaited<ReturnType<typeof appHost.createWorldPortableExport>> | undefined;
+      const saved = await options.saveWorldPackage(event, async () => {
+        result = await appHost.createWorldPortableExport(requireSender(event), request);
+        return result.archiveBytes;
+      });
+      return saved
+        ? requireWorldPortableExportResult(result).result
+        : { requestId: request.requestId, status: 'cancelled' as const };
+    },
+  );
+  ipcMain.handle(
+    WORLD_PORTABLE_HOST_CHANNELS.importPackage,
+    async (event: IpcMainInvokeEvent, payload: unknown) => {
+      const request = parseWorldPortableHostRequest(payload);
+      if (request.operation !== 'import') {
+        throw new Error('World portable import channel requires an import request.');
+      }
+      const archiveBytes = await options.readWorldPackage(event);
+      return archiveBytes
+        ? appHost.importWorldPortablePackage(requireSender(event), request, archiveBytes)
+        : { requestId: request.requestId, status: 'cancelled' as const };
+    },
   );
   ipcMain.handle(WORLD_AUTHORING_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeWorldAuthoringRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(WORLD_RUNTIME_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeWorldRuntimeRequest(requireSender(event), payload),
   );
   ipcMain.handle(PROJECT_AUTHORING_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.getProjectAuthoringNavigation(requireSender(event), payload),
@@ -59,7 +145,7 @@ export function registerDesktopIpc(
   ipcMain.handle(
     PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.createProjectLocalAuthoringTarget(requireSender(event), payload),
+      appHost.executeProjectLocalAuthoringRequest(requireSender(event), payload),
   );
   ipcMain.handle(CHARACTER_AVATAR_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeCharacterAvatarRequest(requireSender(event), payload),
@@ -261,9 +347,14 @@ export function registerDesktopIpc(
       appHost.resolveCanvasPreviewVariant(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
+    DESKTOP_CANVAS_CHANNELS.previewResourceResolve,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeCanvasMediaRequest(requireSender(event), payload),
+      appHost.resolveCanvasPreviewResource(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_CANVAS_CHANNELS.previewResourceRelease,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.releaseCanvasPreviewResource(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_AGENT_CHANNELS.messageSend,
@@ -303,9 +394,9 @@ export function registerDesktopIpc(
       appHost.executeExtensionManagement(requireSender(event), payload),
   );
   ipcMain.handle(
-    AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
+    AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeAutomationEndpointManagement(requireSender(event), payload),
+      appHost.executeAutomationLocalRuntimeManagement(requireSender(event), payload),
   );
   ipcMain.handle(
     AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
@@ -386,8 +477,11 @@ export function registerDesktopIpc(
     for (const channel of [
       CHARACTER_FOUNDATION_HOST_CHANNEL,
       CHARACTER_AUTHORING_HOST_CHANNEL,
-      WORLD_FOUNDATION_HOST_CHANNEL,
+      ...Object.values(CHARACTER_PORTABLE_HOST_CHANNELS),
+      WORLD_MANAGEMENT_HOST_CHANNEL,
+      ...Object.values(WORLD_PORTABLE_HOST_CHANNELS),
       WORLD_AUTHORING_HOST_CHANNEL,
+      WORLD_RUNTIME_HOST_CHANNEL,
       PROJECT_AUTHORING_HOST_CHANNEL,
       PROJECT_LOCAL_AUTHORING_HOST_CHANNEL,
       CHARACTER_AVATAR_HOST_CHANNEL,
@@ -424,7 +518,8 @@ export function registerDesktopIpc(
       DESKTOP_CANVAS_CHANNELS.textFilePreviewRead,
       DESKTOP_CANVAS_CHANNELS.intentExecute,
       DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
-      DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
+      DESKTOP_CANVAS_CHANNELS.previewResourceResolve,
+      DESKTOP_CANVAS_CHANNELS.previewResourceRelease,
       DESKTOP_CUT_CHANNELS.snapshotGet,
       DESKTOP_CUT_CHANNELS.requestExecute,
       DESKTOP_CUT_CHANNELS.draftCreate,
@@ -433,7 +528,7 @@ export function registerDesktopIpc(
       DESKTOP_SHELL_CHANNELS.snapshotGet,
       ASSET_CENTER_HOST_CHANNEL,
       AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
-      AUTOMATION_ENDPOINT_MANAGEMENT_HOST_CHANNEL,
+      AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
       AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
       DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.execute,
       DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.execute,
@@ -465,4 +560,18 @@ function requireSender(event: IpcMainInvokeEvent): {
     webContentsId: event.sender.id,
     frameUrl,
   };
+}
+
+function requireCharacterPortableExportResult<T>(value: T | undefined): T {
+  if (value === undefined) {
+    throw new Error('Character portable destination completed without export bytes.');
+  }
+  return value;
+}
+
+function requireWorldPortableExportResult<T>(value: T | undefined): T {
+  if (value === undefined) {
+    throw new Error('World portable destination completed without export bytes.');
+  }
+  return value;
 }

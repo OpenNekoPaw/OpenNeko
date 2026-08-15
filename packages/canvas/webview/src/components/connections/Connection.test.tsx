@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { Connection } from './Connection';
 
 describe('Connection', () => {
-  it('keeps ordinary connections subdued and reserves motion for selection', () => {
+  it('uses one neutral relation line without type color, labels or motion', () => {
     const ordinary = renderToStaticMarkup(
       <Connection connection={connection} sourceNode={sourceNode} targetNode={targetNode} />,
     );
@@ -23,13 +23,27 @@ describe('Connection', () => {
     expect(ordinary).toContain('data-selected="false"');
     expect(ordinary).toContain('class="connection-line"');
     expect(ordinary).toContain('stroke-width="1.25"');
-    expect(ordinary).toContain('stroke-opacity="0.26"');
+    expect(ordinary).toContain('stroke-opacity="0.38"');
     expect(ordinary).not.toContain('connection-flow-dot');
+    expect(ordinary).not.toContain('connection-arrow');
+    expect(ordinary).not.toContain('reference-edge</text>');
 
     expect(selected).toContain('data-selected="true"');
     expect(selected).toContain('stroke-width="2"');
     expect(selected).toContain('stroke-opacity="0.88"');
-    expect(selected).toContain('connection-flow-dot');
+    expect(selected).not.toContain('connection-flow-dot');
+  });
+
+  it('adds a direction marker only for sequence order', () => {
+    const sequence = renderToStaticMarkup(
+      <Connection
+        connection={{ ...connection, id: 'sequence-edge', type: 'sequence' }}
+        sourceNode={sourceNode}
+        targetNode={targetNode}
+      />,
+    );
+    expect(sequence).toContain('class="connection-arrow"');
+    expect(sequence).toContain('marker-end="url(#arrow-sequence-edge)"');
   });
 });
 

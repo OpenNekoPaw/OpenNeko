@@ -8,6 +8,7 @@ import {
   createAgentResourceDisplayProjector,
   type AgentResourceDisplayRegistrationPort,
 } from '@neko/agent-runtime/runtime';
+import { parsePreviewMediaDescriptor } from '@neko/preview-domain';
 import type { DesktopResourceLease } from './desktop-resource-registry';
 
 const temporaryRoots: string[] = [];
@@ -49,12 +50,21 @@ describe('Desktop Agent resource display projector', () => {
       throw new Error('Expected projected snapshot frame.');
     }
     const data = readToolResultData(projected.projection.turns[0]?.items[0]);
-    expect(data).toEqual({
+    expect(data).toMatchObject({
       contentLocator: fixture.locator,
       path: 'media/clip.mp4',
       mimeType: 'video/mp4',
-      renderUri: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      previewDescriptor: {
+        contentLocator: fixture.locator,
+        url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        displayName: 'clip.mp4',
+        mediaType: 'video/mp4',
+        contentKind: 'video',
+        byteLength: 7,
+        sourceFingerprint: expect.any(String),
+      },
     });
+    expect(data).not.toHaveProperty('renderUri');
     expect(JSON.stringify(projected)).not.toContain('/private/tmp/clip.mp4');
     expect(registerFile).toHaveBeenCalledOnce();
     const [owner, source] = registerFile.mock.calls[0] ?? [];
@@ -119,7 +129,7 @@ describe('Desktop Agent resource display projector', () => {
       },
       resourceProjectionDiagnostics: expect.arrayContaining([
         expect.objectContaining({
-          code: 'resource-projection-denied',
+          code: 'agent-preview-content-unavailable',
           severity: 'error',
           sourceKind: 'authorization-denied',
         }),
@@ -131,7 +141,7 @@ describe('Desktop Agent resource display projector', () => {
         toolCallId: 'tool-call-1',
         status: 'denied',
         transport: 'none',
-        diagnosticCodes: ['resource-projection-denied'],
+        diagnosticCodes: ['agent-preview-content-unavailable'],
       }),
     );
   });
@@ -190,11 +200,28 @@ describe('Desktop Agent resource display projector', () => {
     if (projected.type !== 'projectionSnapshot') {
       throw new Error('Expected projected snapshot frame.');
     }
-    expect(readToolResultData(projected.projection.turns[0]?.items[0])).toEqual({
+    const data = readToolResultData(projected.projection.turns[0]?.items[0]);
+    expect(data).toMatchObject({
       contentLocator: locator,
       mimeType: 'image/png',
-      renderUri: 'openneko://resource/cccccccccccccccccccccccccccccccc/content',
+      previewDescriptor: {
+        contentLocator: locator,
+        url: 'openneko://resource/cccccccccccccccccccccccccccccccc/content',
+        displayName: 'cover.png',
+        mediaType: 'image/png',
+        contentKind: 'image',
+        byteLength: bytes.byteLength,
+        sourceFingerprint: expect.any(String),
+      },
     });
+    expect(parsePreviewMediaDescriptor(data.previewDescriptor)).toMatchObject({
+      contentLocator: locator,
+      contentKind: 'image',
+      mediaType: 'image/png',
+    });
+    expect(String((data.previewDescriptor as { descriptorId: string }).descriptorId)).not.toContain(
+      'story.epub',
+    );
     expect(loadDisplayAsset).toHaveBeenCalledWith({ locator, maxBytes: 64 * 1024 * 1024 });
     expect(registerBytes).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'connection-1' }),
@@ -262,7 +289,14 @@ describe('Desktop Agent resource display projector', () => {
       images: [
         {
           representationLocator,
-          renderUri: 'openneko://resource/dddddddddddddddddddddddddddddddd/content',
+          previewDescriptor: {
+            contentLocator: representationLocator.source,
+            url: 'openneko://resource/dddddddddddddddddddddddddddddddd/content',
+            displayName: 'story.pdf',
+            mediaType: 'image/png',
+            contentKind: 'image',
+            sourceFingerprint: expect.any(String),
+          },
         },
         {
           contentLocator: missingLocator,

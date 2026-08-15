@@ -139,17 +139,19 @@ Main10 decode/texture 成功不等于 10-bit surface、zero-copy 或 HDR display
 
 Desktop 原生 package/make/release 只接受 `darwin-arm64`。Windows x64 与 Linux 运行
 typecheck、orchestration、SQLite 和 host-neutral 仓库测试，但在 Forge 前被拒绝且不上传
-Desktop artifact。macOS 固定 Electron `43.2.0` 归档 checksum，并在真实匹配 Host 的 CI
-job 中 typecheck、验证 Sharp closure、package 和上传 artifact。
+Desktop artifact。GitHub Actions 不运行 Desktop package/make，也不上传原生 artifact；
+macOS 固定 Electron `43.2.0` 归档 checksum，原生 package 与 Sharp closure 验证只在本地
+Apple Silicon Host 显式执行。
 
 `darwin-arm64` 开发包使用 ad-hoc 签名，并保持 sandbox、CSP、ASAR integrity、安全 fuses，
 同时关闭 `file://` extra privileges。Electron V1 fuse 使用严格完整配置：
 `LoadBrowserProcessSpecificV8Snapshot` 保持关闭，因为 Electron `43.2.0` macOS 分发包不包含
 browser-specific snapshot；其余安全取值均显式固定，包括启用 `WasmTrapHandlers`。
 Electron `43.2.0` 的 macOS 归档 checksum 已固定，package 可直接校验本地缓存而不重复
-下载 `SHASUMS256.txt`。`main` 历史上的稳定 `v<semver>` tag 是 Preview Release 的版本权威，
-无需与本地 manifest 版本一致；workflow 只在临时 checkout 中投影 tag 版本。Forge 生成一个
-ad-hoc 签名的 `OpenNeko-<version>-arm64.dmg`，完成 strict codesign、DMG 完整性与
-`SHASUMS256.txt` 验证后，将它发布为 GitHub prerelease。该流程不读取 Apple repository
-secrets，也不声明 Developer ID 签名或 Apple 公证；首次启动可能需要在“系统设置 → 隐私与
-安全性”中选择“仍要打开”。正式签名、公证和正常 Gatekeeper 接受属于后续独立发布通道。
+下载 `SHASUMS256.txt`。`main` 历史上的稳定 `v<semver>` tag 是公开 Release 的版本权威，
+无需与本地 manifest 版本一致；发布者只在隔离的本地 checkout 中投影 tag 版本。Forge 生成
+一个 ad-hoc 签名的 `OpenNeko-<version>-arm64.dmg`，完成 strict codesign、DMG 完整性与
+`SHASUMS256.txt` 验证后，手动发布为不带 prerelease 标记的普通 GitHub Release。该流程不
+读取 Apple repository secrets，也不声明 Developer ID 签名或 Apple 公证；首次启动可能需要
+在“系统设置 → 隐私与安全性”中选择“仍要打开”。正式签名、公证和正常 Gatekeeper 接受属于
+后续独立发布通道。

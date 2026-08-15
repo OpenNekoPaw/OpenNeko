@@ -1,7 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { constants } from 'node:fs';
-import type { Dirent } from 'node:fs';
-import { access, lstat, mkdir, readdir, rename, rm, stat, symlink } from 'node:fs/promises';
+import { constants, type Dirent } from 'node:fs';
+import {
+  access,
+  lstat,
+  mkdir,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  symlink,
+} from 'node:fs/promises';
 import * as path from 'node:path';
 import {
   WORKSPACE_MEDIA_LIBRARY_DIRECTORY,
@@ -21,6 +30,110 @@ export class WorkspaceLinkedMediaLibraryError extends Error {
     super(diagnostic.message);
     this.name = 'WorkspaceLinkedMediaLibraryError';
   }
+}
+
+export type WorkspaceLinkedMediaLibraryPreviousState =
+  { readonly kind: 'absent' } | { readonly kind: 'link'; readonly targetDirectory: string };
+
+/**
+ * Materializes the rebuildable Workspace projection for one authorized binding.
+ * Existing regular files/directories are never replaced.
+ */
+export async function materializeWorkspaceLinkedMediaLibrary(input: {
+  readonly workspaceRoot: string;
+  readonly name: string;
+  readonly targetDirectory: string;
+}): Promise<WorkspaceLinkedMediaLibraryPreviousState> {
+  assertWorkspaceLinkedMediaLibraryName(input.name);
+  const linkPath = absoluteLibraryLinkPath(input.workspaceRoot, input.name);
+  const existing = await optionalLstat(linkPath);
+  if (!existing) {
+    await createWorkspaceLinkedMediaLibrary(input);
+    return { kind: 'absent' };
+  }
+  if (!existing.isSymbolicLink()) {
+    throw libraryError(
+      'library-entry-not-link',
+      input.name,
+      'Media library projection conflicts with a Workspace file or directory.',
+    );
+  }
+  const [currentTarget, requestedTarget] = await Promise.all([
+    realpathLink(linkPath, input.name),
+    resolveTarget(input.targetDirectory, input.name),
+  ]);
+  if (currentTarget === requestedTarget) return { kind: 'link', targetDirectory: currentTarget };
+  await replaceWorkspaceLinkedMediaLibrary({ ...input, targetDirectory: requestedTarget });
+  return { kind: 'link', targetDirectory: currentTarget };
+}
+
+export async function restoreWorkspaceLinkedMediaLibrary(input: {
+  readonly workspaceRoot: string;
+  readonly name: string;
+  readonly previous: WorkspaceLinkedMediaLibraryPreviousState;
+}): Promise<void> {
+  if (input.previous.kind === 'absent') {
+    await removeWorkspaceLinkedMediaLibrary(input);
+    return;
+  }
+  await replaceWorkspaceLinkedMediaLibrary({
+    workspaceRoot: input.workspaceRoot,
+    name: input.name,
+    targetDirectory: input.previous.targetDirectory,
+  });
+}
+
+export async function removeExactWorkspaceLinkedMediaLibrary(input: {
+  readonly workspaceRoot: string;
+  readonly name: string;
+  readonly targetDirectory: string;
+}): Promise<WorkspaceLinkedMediaLibraryPreviousState> {
+  assertWorkspaceLinkedMediaLibraryName(input.name);
+  const linkPath = absoluteLibraryLinkPath(input.workspaceRoot, input.name);
+  const entry = await readLinkStat(linkPath, input.name);
+  if (!entry.isSymbolicLink()) {
+    throw libraryError(
+      'library-entry-not-link',
+      input.name,
+      'Media library removal refused because the workspace entry is not a link.',
+    );
+  }
+  const [currentTarget, expectedTarget] = await Promise.all([
+    realpathLink(linkPath, input.name),
+    resolveTarget(input.targetDirectory, input.name),
+  ]);
+  if (currentTarget !== expectedTarget) {
+    throw libraryError(
+      'library-name-conflict',
+      input.name,
+      'Media library link does not match the project binding.',
+    );
+  }
+  await removeWorkspaceLinkedMediaLibrary(input);
+  return { kind: 'link', targetDirectory: currentTarget };
+}
+
+/**
+ * Removes the project-owned link when its global connection record is already gone.
+ * The operation still refuses regular files/directories and never removes the target.
+ */
+export async function removeWorkspaceLinkedMediaLibraryProjection(input: {
+  readonly workspaceRoot: string;
+  readonly name: string;
+}): Promise<WorkspaceLinkedMediaLibraryPreviousState> {
+  assertWorkspaceLinkedMediaLibraryName(input.name);
+  const linkPath = absoluteLibraryLinkPath(input.workspaceRoot, input.name);
+  const entry = await readLinkStat(linkPath, input.name);
+  if (!entry.isSymbolicLink()) {
+    throw libraryError(
+      'library-entry-not-link',
+      input.name,
+      'Media library removal refused because the workspace entry is not a link.',
+    );
+  }
+  const currentTarget = await realpathLink(linkPath, input.name);
+  await removeWorkspaceLinkedMediaLibrary(input);
+  return { kind: 'link', targetDirectory: currentTarget };
 }
 
 export async function createWorkspaceLinkedMediaLibrary(
@@ -77,7 +190,6 @@ export async function listWorkspaceLinkedMediaLibraries(
       workspacePath: WORKSPACE_MEDIA_LIBRARY_DIRECTORY,
     });
   }
-
   const libraries: WorkspaceLinkedMediaLibrary[] = [];
   for (const entry of entries) {
     if (!entry.isSymbolicLink()) continue;
@@ -95,7 +207,6 @@ async function inspectWorkspaceLinkedMediaLibrary(
   workspaceRoot: string,
   name: string,
 ): Promise<WorkspaceLinkedMediaLibrary> {
-  assertWorkspaceLinkedMediaLibraryName(name);
   const workspacePath = workspaceLinkedMediaLibraryPath(name);
   const linkPath = absoluteLibraryLinkPath(workspaceRoot, name);
   try {
@@ -120,8 +231,12 @@ async function inspectWorkspaceLinkedMediaLibrary(
     await access(linkPath, constants.R_OK);
     return { name, workspacePath, availability: 'available' };
   } catch (error) {
-    const diagnostic = unavailableDiagnosticForError(error, name, workspacePath);
-    return { name, workspacePath, availability: 'unavailable', diagnostic };
+    return {
+      name,
+      workspacePath,
+      availability: 'unavailable',
+      diagnostic: unavailableDiagnosticForError(error, name, workspacePath),
+    };
   }
 }
 
@@ -135,19 +250,16 @@ async function mutateWorkspaceLinkedMediaLibrary(
     workDir: input.workspaceRoot,
     libraryName: input.name,
   });
-
   const assetsDirectory = path.join(
     input.workspaceRoot,
     ...WORKSPACE_MEDIA_LIBRARY_DIRECTORY.split('/'),
   );
   await mkdir(assetsDirectory, { recursive: true });
   await assertNoCaseConflict(assetsDirectory, input.name, mode === 'replace');
-
   const linkPath = absoluteLibraryLinkPath(input.workspaceRoot, input.name);
   const temporaryPath = path.join(assetsDirectory, `.neko-link-${randomUUID()}`);
   const backupPath = path.join(assetsDirectory, `.neko-link-backup-${randomUUID()}`);
   let backupCreated = false;
-
   try {
     const existing = await optionalLstat(linkPath);
     if (mode === 'create' && existing) {
@@ -166,13 +278,12 @@ async function mutateWorkspaceLinkedMediaLibrary(
           : 'Media library relink requires an existing direct link.',
       );
     }
-
     await symlink(
       input.targetDirectory,
       temporaryPath,
       process.platform === 'win32' ? 'junction' : 'dir',
     );
-    if (mode === 'replace' && process.platform === 'win32') {
+    if (mode === 'replace') {
       await rename(linkPath, backupPath);
       backupCreated = true;
     }
@@ -183,9 +294,7 @@ async function mutateWorkspaceLinkedMediaLibrary(
     }
   } catch (error) {
     await rm(temporaryPath, { force: true }).catch(() => undefined);
-    if (backupCreated) {
-      await rename(backupPath, linkPath).catch(() => undefined);
-    }
+    if (backupCreated) await rename(backupPath, linkPath).catch(() => undefined);
     if (error instanceof WorkspaceLinkedMediaLibraryError) throw error;
     throw libraryError(
       'library-link-operation-failed',
@@ -195,7 +304,6 @@ async function mutateWorkspaceLinkedMediaLibrary(
         : 'Media library link could not be replaced.',
     );
   }
-
   return { library: await inspectWorkspaceLinkedMediaLibrary(input.workspaceRoot, input.name) };
 }
 
@@ -209,13 +317,12 @@ async function assertReadableTargetDirectory(targetDirectory: string, name: stri
   }
   try {
     const result = await stat(targetDirectory);
-    if (!result.isDirectory()) {
+    if (!result.isDirectory())
       throw libraryError(
         'library-target-not-directory',
         name,
         'Media library target is not a directory.',
       );
-    }
     await access(targetDirectory, constants.R_OK);
   } catch (error) {
     if (error instanceof WorkspaceLinkedMediaLibraryError) throw error;
@@ -234,19 +341,17 @@ async function assertNoCaseConflict(
   name: string,
   allowExact: boolean,
 ): Promise<void> {
-  const names = await readdir(assetsDirectory);
   const lower = name.toLocaleLowerCase('en-US');
-  const conflict = names.find(
+  const conflict = (await readdir(assetsDirectory)).find(
     (candidate) =>
       candidate.toLocaleLowerCase('en-US') === lower && (!allowExact || candidate !== name),
   );
-  if (conflict) {
+  if (conflict)
     throw libraryError(
       'library-name-conflict',
       name,
       'A workspace entry already uses this media library name.',
     );
-  }
 }
 
 function absoluteLibraryLinkPath(workspaceRoot: string, name: string): string {
@@ -270,6 +375,19 @@ async function optionalLstat(filePath: string) {
   }
 }
 
+async function realpathLink(linkPath: string, name: string): Promise<string> {
+  try {
+    return await realpath(linkPath);
+  } catch {
+    throw libraryError('library-link-broken', name, 'Media library link target is unavailable.');
+  }
+}
+
+async function resolveTarget(targetDirectory: string, name: string): Promise<string> {
+  await assertReadableTargetDirectory(targetDirectory, name);
+  return realpath(targetDirectory);
+}
+
 function unavailableLibrary(
   name: string,
   workspacePath: string,
@@ -286,21 +404,26 @@ function unavailableLibrary(
 
 function unavailableDiagnosticForError(
   error: unknown,
-  libraryName: string,
+  name: string,
   workspacePath: string,
 ): WorkspaceLinkedMediaLibraryDiagnostic {
-  const code = isErrorCode(error, 'EACCES')
-    ? 'library-permission-denied'
-    : isErrorCode(error, 'ELOOP')
-      ? 'library-link-loop'
+  const code = isErrorCode(error, 'ELOOP')
+    ? 'library-link-loop'
+    : isErrorCode(error, 'EACCES')
+      ? 'library-permission-denied'
       : 'library-link-broken';
-  const message =
-    code === 'library-permission-denied'
-      ? 'Media library link cannot be read.'
-      : code === 'library-link-loop'
+  return {
+    code,
+    severity: 'error',
+    message:
+      code === 'library-link-loop'
         ? 'Media library link contains a loop.'
-        : 'Media library link target is unavailable.';
-  return { code, severity: 'error', message, libraryName, workspacePath };
+        : code === 'library-permission-denied'
+          ? 'Media library target cannot be read.'
+          : 'Media library link target is unavailable.',
+    libraryName: name,
+    workspacePath,
+  };
 }
 
 function libraryError(
@@ -319,9 +442,6 @@ function libraryError(
 
 function isErrorCode(error: unknown, code: string): boolean {
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { readonly code?: unknown }).code === code
+    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === code
   );
 }

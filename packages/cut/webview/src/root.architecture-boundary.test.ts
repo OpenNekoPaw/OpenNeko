@@ -31,6 +31,34 @@ describe('Cut Root architecture boundary', () => {
       expectProductionRootSource(fileName, source);
     }
   });
+
+  it('keeps the timeline monitor on its dual-slot PCM-clock path and poisons Preview Surfaces', async () => {
+    const manifest = await readFile(path.join(import.meta.dirname, '../package.json'), 'utf8');
+    const app = await readFile(path.join(import.meta.dirname, 'App.tsx'), 'utf8');
+    const panel = await readFile(
+      path.join(import.meta.dirname, 'components/PreviewPanel/PreviewPanel.tsx'),
+      'utf8',
+    );
+    const clock = await readFile(
+      path.join(import.meta.dirname, 'media/CutPreviewClock.ts'),
+      'utf8',
+    );
+    const sources = [manifest, app, panel, clock];
+
+    for (const source of sources) {
+      expect(source).not.toContain('@neko/preview-webview');
+      expect(source).not.toContain('QuickPreviewSurface');
+      expect(source).not.toContain('EmbeddedPreviewSurface');
+      expect(source).not.toContain('PreviewRoot');
+    }
+    expect(panel.match(/<video\b/gu)).toHaveLength(2);
+    expect(panel).toContain('<canvas');
+    expect(app).toContain('new CutPreviewClock');
+    expect(app).toContain('secondaryPreviewVideoRef');
+    expect(clock).toContain('primaryAudio?.isClockReady');
+    expect(clock).toContain('secondaryAudioDrift');
+    expect(app).toContain('presentationActions.seek');
+  });
 });
 
 function expectProductionRootSource(fileName: string, source: string): void {

@@ -137,6 +137,7 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
       case 'turn.completed':
         return this.projectTerminal(state, event, 'completed');
       case 'usage':
+      case 'skill.activated':
       case 'turn.persistence':
         return null;
     }

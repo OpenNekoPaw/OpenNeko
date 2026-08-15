@@ -1,5 +1,7 @@
 ## Why
 
+> Successor boundary: `separate-companion-and-narrative-character-conversations` replaces the Character `Daily | Narrative` binding semantics introduced by this change. Narrative no longer depends on an external Composition owner; the successor owns exact Character/Storyline selection, mode validation and the still-closed Character product promotion gate. This change continues to own only Agent Entry Draft presentation and binding-context composition.
+
 Desktop Home 需要在同一个对话入口中区分 `助手 | 工作区 | 角色 | 世界` 的运行语义。模式选择决定
 Agent Entry Draft 将绑定到哪一种领域 authority、需要哪些前置配置以及首次提交如何校验；它不是项目或角色
 管理页的 Window 导航。

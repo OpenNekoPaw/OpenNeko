@@ -91,7 +91,7 @@ describe('SlashCommandMenu', () => {
         name: '/commit',
         descriptionKey: 'Create a commit message',
         descriptionKind: 'literal',
-        source: 'command-artifact',
+        source: 'command',
       }),
       command({
         id: 'plugin:neko.canvas:storyboard',

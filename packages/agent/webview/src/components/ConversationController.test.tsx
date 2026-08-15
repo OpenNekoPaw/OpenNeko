@@ -27,7 +27,7 @@ import type { TabRenderStore } from '../render-runtime/tab-render-runtime';
 import { useTabRenderStore } from '../render-runtime/useTabRenderStore';
 import { ConversationController } from './ConversationController';
 import conversationControllerSource from './ConversationController.tsx?raw';
-import inputAreaSource from './ChatView/InputArea/InputArea.tsx?raw';
+import authoringTargetSelectorSource from './ChatView/AuthoringTargetSelector.tsx?raw';
 import { ComposerWorkspaceProvider } from './ComposerWorkspaceContext';
 
 const hostMocks = vi.hoisted(() => ({
@@ -49,6 +49,8 @@ const hostMocks = vi.hoisted(() => ({
   getMessageQueue: vi.fn(),
   readLaunchCatalog: vi.fn(),
   readEntryIntent: vi.fn(),
+  loadCharacterDialogueTargets: vi.fn(),
+  loadWorldExperienceTargets: vi.fn(),
   configureEntryTarget: vi.fn(),
   bindTarget: vi.fn(),
   updateDraftConfiguration: vi.fn(),
@@ -74,6 +76,8 @@ vi.mock('../host-runtime-context', () => ({
     setState: hostRuntimeMocks.setState,
     readLaunchCatalog: hostMocks.readLaunchCatalog,
     readEntryIntent: hostMocks.readEntryIntent,
+    loadCharacterDialogueTargets: hostMocks.loadCharacterDialogueTargets,
+    loadWorldExperienceTargets: hostMocks.loadWorldExperienceTargets,
     configureEntryTarget: hostMocks.configureEntryTarget,
     bindTarget: hostMocks.bindTarget,
     updateDraftConfiguration: hostMocks.updateDraftConfiguration,
@@ -94,6 +98,8 @@ beforeEach(() => {
   hostRuntimeMocks.getState.mockReturnValue(undefined);
   hostMocks.readLaunchCatalog.mockReturnValue(createBoundAssistantLaunchCatalog('draft-default'));
   hostMocks.readEntryIntent.mockReturnValue({ mode: 'assistant', targetReceipt: null });
+  hostMocks.loadCharacterDialogueTargets.mockResolvedValue([]);
+  hostMocks.loadWorldExperienceTargets.mockResolvedValue([]);
   hostMocks.configureEntryTarget.mockImplementation(async (mode, binding) => ({
     mode,
     targetReceipt:
@@ -143,11 +149,11 @@ vi.mock('../i18n/I18nContext', () => ({
         'chat.emptyState.scope.characterRoom': 'Character / Room',
         'chat.emptyState.scope.characterRoomHelper': 'Character helper',
         'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
-        'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
+        'chat.emptyState.scope.workspaceActiveTitle': 'Start creating',
         'chat.emptyState.scope.activeDescription': 'Start a conversation.',
         'chat.entryExperience.label': 'Choose an experience',
-        'chat.entryExperience.mode.assistant': 'Assistant',
-        'chat.entryExperience.mode.authoring': 'Authoring',
+        'chat.entryExperience.mode.assistant': 'Conversation',
+        'chat.entryExperience.mode.authoring': 'Creation',
         'chat.entryExperience.mode.characterDialogue': 'Character Dialogue',
         'chat.entryExperience.mode.worldExperience': 'World Experience',
         'chat.entryExperience.assistant.title': 'What would you like to explore?',
@@ -156,6 +162,39 @@ vi.mock('../i18n/I18nContext', () => ({
         'chat.entryExperience.authoring.description': 'Choose a target.',
         'chat.entryExperience.characterDialogue.title': 'Enter a character dialogue',
         'chat.entryExperience.characterDialogue.description': 'Character owner required.',
+        'chat.entryExperience.characterDialogue.selectorLabel': 'Choose participants',
+        'chat.entryExperience.characterDialogue.loading': 'Loading published Characters',
+        'chat.entryExperience.characterDialogue.empty': 'No published Characters',
+        'chat.entryPanel.assistantTitle': 'Skills',
+        'skillDescriptions.character-creator': 'Create a localized character draft.',
+        'chat.entryPanel.authoringTitle': 'Projects, Characters, and Worlds',
+        'chat.entryPanel.characterTitle': 'Choose Characters',
+        'chat.entryContext.authoringTitle': 'Authoring target',
+        'chat.entryContext.authoringDescription': 'Choose a target for this draft.',
+        'chat.entryContext.characterTitle': 'Choose Characters',
+        'chat.entryContext.characterDescription': 'Choose published Characters.',
+        'chat.entryContext.chooseAuthoringTarget': 'Choose authoring target',
+        'chat.entryContext.chooseCharacters': 'Choose Characters',
+        'chat.entryContext.characterSummary': 'Characters selected',
+        'chat.entryExperience.characterDialogue.modeLabel': 'Conversation mode',
+        'chat.entryExperience.characterDialogue.modeDaily': 'Daily',
+        'chat.entryExperience.characterDialogue.modeDailyDescription': 'Use daily memory.',
+        'chat.entryExperience.characterDialogue.modeNarrative': 'Narrative',
+        'chat.entryExperience.characterDialogue.modeNarrativeDescription':
+          'Use authored narrative context.',
+        'chat.entryContext.close': 'Close target selector',
+        'chat.entryAuthoring.nameLabel': 'Draft name',
+        'chat.entryAuthoring.namePlaceholder': 'Name this Character draft',
+        'chat.entryAuthoring.nameRequired': 'Enter a draft name.',
+        'chat.entryAuthoring.creationUnavailable': 'Character draft creation is unavailable.',
+        'chat.entryAuthoring.destinationLabel': 'Choose where to create the draft',
+        'chat.entryAuthoring.destinationTitle': 'Character draft destination',
+        'chat.entryAuthoring.createDescription': 'Create a new draft here',
+        'chat.entryAuthoring.cancel': 'Cancel',
+        'chat.entryAction.chooseProject': 'Choose Project',
+        'chat.entryAction.chooseProjectDescription': 'Add this project to the creation context',
+        'chat.entryAction.chooseWorld': 'Choose World',
+        'chat.entryAction.openDirectory': 'Open directory',
         'chat.entryExperience.worldExperience.title': 'Enter a world experience',
         'chat.entryExperience.worldExperience.description': 'World owner required.',
         'chat.entryExperience.validation.bindingPending': 'Updating the selected experience…',
@@ -454,8 +493,17 @@ vi.mock('./ChatView/InputArea', async () => {
       onInputChange: (value: string) => void;
       onSend: () => void;
       disabled?: boolean;
+      submissionBlocked?: boolean;
       submissionBlockedReason?: string;
-      showDraftWorkspaceControl?: boolean;
+      entryContextActions?: readonly {
+        readonly kind: 'project' | 'character' | 'world';
+        readonly label: string;
+        readonly onInvoke?: () => void | Promise<void>;
+        readonly disabled?: boolean;
+        readonly disabledReason?: string;
+      }[];
+      entryWorkspaceTarget?: import('./ComposerWorkspaceContext').AgentComposerWorkspaceTarget;
+      onClearEntryWorkspaceTarget?: () => Promise<void>;
       entryPromptMenu?: 'roleplay' | null;
       onEntryPromptMenuChange?: (menu: 'roleplay' | null) => void;
       selectedCharacterLaunches?: readonly import('./ChatView/InputArea/types').SelectedCharacterLaunch[];
@@ -463,18 +511,11 @@ vi.mock('./ChatView/InputArea', async () => {
         selection: import('./ChatView/InputArea/types').SelectedCharacterLaunch,
       ) => void;
       onRemoveCharacterLaunch?: (characterVersionId: string) => void;
-      onDraftWorkspaceTargetChange?: (
-        target:
-          | {
-              label: string;
-              context: {
-                kind: 'workspace';
-                workspaceId: string;
-                workspaceGrantId: string;
-              };
-            }
-          | undefined,
+      entryCharacterConversationMode?: import('./ChatView/InputArea/types').CharacterConversationMode;
+      onEntryCharacterConversationModeChange?: (
+        mode: import('./ChatView/InputArea/types').CharacterConversationMode,
       ) => void;
+      entryCharacterConversationModeDisabled?: boolean;
     }) => {
       const {
         isBusy,
@@ -512,30 +553,37 @@ vi.mock('./ChatView/InputArea', async () => {
           />
           <button
             type="button"
-            disabled={props.disabled || props.submissionBlockedReason !== undefined}
+            disabled={
+              props.disabled ||
+              props.submissionBlocked ||
+              props.submissionBlockedReason !== undefined
+            }
             onClick={() => props.onSend()}
           >
             Send
           </button>
+          {props.entryContextActions?.map((action) => (
+            <button
+              key={action.kind}
+              type="button"
+              disabled={action.disabled || !action.onInvoke}
+              title={action.disabledReason}
+              data-entry-context-action={action.kind}
+              onClick={() => void action.onInvoke?.()}
+            >
+              {action.label}
+            </button>
+          ))}
+          <span data-testid="entry-workspace-target">
+            {props.entryWorkspaceTarget?.label ?? 'none'}
+          </span>
+          {props.onClearEntryWorkspaceTarget ? (
+            <button type="button" onClick={() => void props.onClearEntryWorkspaceTarget?.()}>
+              Clear workspace target
+            </button>
+          ) : null}
           {props.submissionBlockedReason ? (
             <span data-testid="entry-submission-blocked">{props.submissionBlockedReason}</span>
-          ) : null}
-          {props.showDraftWorkspaceControl !== false ? (
-            <button
-              type="button"
-              onClick={() =>
-                props.onDraftWorkspaceTargetChange?.({
-                  label: 'Workspace B',
-                  context: {
-                    kind: 'workspace',
-                    workspaceId: 'workspace-b',
-                    workspaceGrantId: 'workspace-grant-b',
-                  },
-                })
-              }
-            >
-              Select Workspace B
-            </button>
           ) : null}
           <button
             type="button"
@@ -583,6 +631,16 @@ vi.mock('./ChatView/InputArea', async () => {
           <span data-testid="entry-character-launches">
             {props.selectedCharacterLaunches?.map((selection) => selection.label).join('|') ?? ''}
           </span>
+          {props.entryCharacterConversationMode ? (
+            <button
+              type="button"
+              disabled={props.entryCharacterConversationModeDisabled}
+              onClick={() => props.onEntryCharacterConversationModeChange?.('narrative')}
+            >
+              Conversation mode:{' '}
+              {props.entryCharacterConversationMode === 'companion' ? 'Daily' : 'Narrative'}
+            </button>
+          ) : null}
           {props.selectedCharacterLaunches?.map((selection) => (
             <button
               key={selection.characterVersionId}
@@ -604,14 +662,18 @@ vi.mock('./ChatView/InputArea', async () => {
 
 describe('ConversationController entry state', () => {
   it('keeps Home modes in Draft configuration and out of management Scene navigation', () => {
-    expect(conversationControllerSource).toContain('HomeExperienceModeSelector');
+    expect(conversationControllerSource).toContain('HomeExperienceQuickActions');
     expect(conversationControllerSource).toContain('entryMode');
     expect(conversationControllerSource).not.toContain('start-chat');
     expect(conversationControllerSource).toContain('.configureEntryTarget(');
     expect(conversationControllerSource).not.toContain('.bindTarget(');
     expect(conversationControllerSource).not.toContain('open-project-management');
     expect(conversationControllerSource).not.toContain('open-character-management');
-    expect(inputAreaSource).toContain('onChooseDirectory');
+    expect(conversationControllerSource).not.toContain('EntryContextOverlay');
+    expect(conversationControllerSource).toContain('handleEntryChooseProject');
+    expect(authoringTargetSelectorSource).not.toContain('onChooseDirectory');
+    expect(authoringTargetSelectorSource).not.toContain('agent-entry-context-current');
+    expect(authoringTargetSelectorSource).not.toContain('chat.entryContext.currentTarget');
   });
 
   it('projects a global Host error through the renderer body portal', () => {
@@ -642,15 +704,17 @@ describe('ConversationController entry state', () => {
     };
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
     render(
-      <ConversationController
-        {...createProps()}
-        agentPresentation={launchCatalog.interaction}
-        emptyStatePresentation="desktop-dock"
-      />,
+      <ComposerWorkspaceProvider value={{ kind: 'workspace', label: 'OpenNeko' }}>
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
     );
 
     expect(screen.queryByTestId('header')).toBeNull();
-    expect(screen.getByText('Workspace is ready')).toBeTruthy();
+    expect(screen.getByText('Start creating')).toBeTruthy();
     expect(screen.getByRole('textbox')).toBeTruthy();
     expect(screen.getByTestId('entry-config-state').textContent).toBe('ready:false');
     expect(hostMocks.getConversations).not.toHaveBeenCalled();
@@ -658,8 +722,9 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.getTabState).not.toHaveBeenCalled();
     expect(hostMocks.refreshConfigSnapshot).toHaveBeenCalledTimes(1);
     expect(hostMocks.getAgentStates).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: 'storyboard' }));
-    expect(screen.getByRole('textbox')).toHaveProperty('value', '$storyboard ');
+    expect(screen.queryByRole('button', { name: 'storyboard' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Choose Project' })).toBeNull();
+    expect(screen.getByTestId('entry-workspace-target').textContent).toBe('none');
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '@hero' } });
     expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('hero', undefined, {
@@ -729,9 +794,18 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
-  it('switches to Authoring as Draft configuration without leaving the entry or clearing text', async () => {
+  it('adds one exact Workspace Project to Creation context and preserves the draft text', async () => {
     vi.clearAllMocks();
     const launchCatalog = createDraftLaunchCatalog('draft-mode-config', { kind: 'unbound' });
+    const onSelectProject = vi.fn(async () => ({
+      label: 'OpenNeko',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      },
+      authority: { kind: 'project' as const, projectId: 'project-1' },
+    }));
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
     hostMocks.bindTarget.mockResolvedValue(launchCatalog);
 
@@ -741,7 +815,7 @@ describe('ConversationController entry state', () => {
           kind: 'entry',
           projects: [{ projectId: 'project-1', label: 'OpenNeko' }],
           onChooseDirectory: vi.fn(async () => undefined),
-          onSelectProject: vi.fn(async () => undefined),
+          onSelectProject,
         }}
       >
         <ConversationController {...createProps()} agentPresentation={launchCatalog.interaction} />
@@ -750,18 +824,29 @@ describe('ConversationController entry state', () => {
 
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'preserve this request' } });
-    fireEvent.click(screen.getByRole('tab', { name: 'Authoring' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Creation' }));
 
     await waitFor(() =>
       expect(hostMocks.configureEntryTarget).toHaveBeenCalledWith('authoring', undefined),
     );
     expect(input).toHaveProperty('value', 'preserve this request');
-    expect(screen.getByRole('tab', { name: 'Authoring' }).getAttribute('aria-selected')).toBe(
+    expect(screen.getByRole('tab', { name: 'Creation' }).getAttribute('aria-selected')).toBe(
       'true',
     );
-    expect(screen.getByTestId('entry-submission-blocked').textContent).toBe(
-      'Choose a project or directory.',
-    );
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Choose Project' })).toBeTruthy();
+    expect(screen.queryByTestId('entry-character-launches')?.textContent).toBe('');
+    expect(screen.queryByRole('button', { name: 'Choose World' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /OpenNeko/u }));
+    await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith('project-1'));
+    expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith('authoring', {
+      kind: 'authoring',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+      authority: { kind: 'project', projectId: 'project-1' },
+      target: null,
+    });
+    expect(screen.getByTestId('entry-workspace-target').textContent).toBe('OpenNeko');
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
@@ -781,53 +866,172 @@ describe('ConversationController entry state', () => {
     fireEvent.change(input, { target: { value: 'Keep editing' } });
     expect(input).toHaveProperty('value', 'Keep editing');
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
-    expect(screen.getByTestId('entry-submission-blocked').textContent).toBe(
-      'Choose a configured model.',
-    );
+    expect(screen.queryByTestId('entry-submission-blocked')).toBeNull();
     expect(hostMocks.submitDraft).not.toHaveBeenCalled();
   });
 
-  it('rejects restored Character selections before the Character launch port', () => {
+  it('binds multiple Characters and one World into one exact World Experience receipt', async () => {
     vi.clearAllMocks();
     const launchCatalog = createDraftLaunchCatalog('draft-character-launch', { kind: 'unbound' });
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.loadCharacterDialogueTargets.mockResolvedValue([
+      {
+        globalCharacterId: 'character-project-a',
+        characterVersionId: 'character-version-a',
+        displayName: 'A',
+        versionLabel: 'Published A',
+        lineage: {
+          coverage: 'complete',
+          state: 'declared-root',
+          isHead: true,
+          path: [{ characterVersionId: 'character-version-a', label: 'Published A' }],
+        },
+        storylines: [],
+      },
+      {
+        globalCharacterId: 'character-project-b',
+        characterVersionId: 'character-version-b',
+        displayName: 'B',
+        versionLabel: 'Published B',
+        lineage: {
+          coverage: 'complete',
+          state: 'declared-root',
+          isHead: true,
+          path: [{ characterVersionId: 'character-version-b', label: 'Published B' }],
+        },
+        storylines: [],
+      },
+    ]);
+    hostMocks.loadWorldExperienceTargets.mockResolvedValue([
+      {
+        globalWorldId: 'global-world-a',
+        worldVersionId: 'world-version-a',
+        displayName: 'World A',
+        versionLabel: 'Published World A',
+      },
+    ]);
+    hostMocks.submitDraft.mockResolvedValue({
+      conversationId: 'conversation:character-a',
+      turnStatus: 'accepted',
+      projectionStatus: 'ready',
+    });
     render(
-      <ConversationController
-        {...createProps({
-          mentionItems: [
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+        }}
+      >
+        <ConversationController {...createProps()} agentPresentation={launchCatalog.interaction} />
+      </ComposerWorkspaceProvider>,
+    );
+
+    const chooseCharacters = screen.getByRole('button', { name: 'Choose Characters' });
+    const chooseWorld = screen.getByRole('button', { name: 'Choose World' });
+    expect(chooseCharacters.getAttribute('title')).toBeNull();
+    expect(chooseWorld.getAttribute('title')).toBeNull();
+    expect(chooseWorld).toHaveProperty('disabled', false);
+    fireEvent.click(chooseCharacters);
+
+    await waitFor(() => {
+      const quickToggle = screen
+        .getAllByRole('button', { name: 'Choose Characters' })
+        .find((element) => element.classList.contains('agent-entry-quick-toggle'));
+      expect(quickToggle?.getAttribute('aria-expanded')).toBe('true');
+    });
+
+    const characterA = await waitFor(() => screen.getByText('Published A').closest('button'));
+    expect(characterA).not.toBeNull();
+    if (!characterA) throw new Error('Character target button is unavailable.');
+    fireEvent.click(characterA);
+    await waitFor(() =>
+      expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith('character-dialogue', {
+        kind: 'character-dialogue',
+        mode: 'companion',
+        participants: [
+          {
+            globalCharacterId: 'character-project-a',
+            characterVersionId: 'character-version-a',
+          },
+        ],
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Conversation mode: Daily' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Conversation mode: Narrative' })).toBeTruthy(),
+    );
+
+    fireEvent.click(chooseWorld);
+    const worldA = await waitFor(() => screen.getByText('World A').closest('button'));
+    expect(worldA).not.toBeNull();
+    if (!worldA) throw new Error('World target button is unavailable.');
+    fireEvent.click(worldA);
+    await waitFor(() =>
+      expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith('world-experience', {
+        kind: 'world-experience',
+        globalWorldId: 'global-world-a',
+        worldVersionId: 'world-version-a',
+        participants: [
+          {
+            globalCharacterId: 'character-project-a',
+            characterVersionId: 'character-version-a',
+          },
+        ],
+        launch: { kind: 'new' },
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Characters' }));
+    const characterB = await waitFor(() => screen.getByText('Published B').closest('button'));
+    expect(characterB).not.toBeNull();
+    if (!characterB) throw new Error('Second Character target button is unavailable.');
+    fireEvent.click(characterB);
+    await waitFor(() =>
+      expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith('world-experience', {
+        kind: 'world-experience',
+        globalWorldId: 'global-world-a',
+        worldVersionId: 'world-version-a',
+        participants: [
+          {
+            globalCharacterId: 'character-project-a',
+            characterVersionId: 'character-version-a',
+          },
+          {
+            globalCharacterId: 'character-project-b',
+            characterVersionId: 'character-version-b',
+          },
+        ],
+        launch: { kind: 'new' },
+      }),
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Speak together' } });
+    const sendButton = screen.getByRole('button', { name: 'Send' });
+    await waitFor(() => expect(sendButton).toHaveProperty('disabled', false));
+    fireEvent.click(sendButton);
+
+    await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
+    expect(hostMocks.submitDraft.mock.calls[0]?.[0]).toMatchObject({
+      entryTargetReceipt: {
+        mode: 'world-experience',
+        binding: {
+          kind: 'world-experience',
+          globalWorldId: 'global-world-a',
+          worldVersionId: 'world-version-a',
+          participants: [
             {
-              id: 'character-version-a',
-              kind: 'entity',
-              label: 'A',
-              characterLaunchSelection: {
-                characterProjectId: 'character-project-a',
-                characterVersionId: 'character-version-a',
-              },
+              globalCharacterId: 'character-project-a',
+              characterVersionId: 'character-version-a',
             },
             {
-              id: 'character-version-b',
-              kind: 'entity',
-              label: 'B',
-              characterLaunchSelection: {
-                characterProjectId: 'character-project-b',
-                characterVersionId: 'character-version-b',
-              },
+              globalCharacterId: 'character-project-b',
+              characterVersionId: 'character-version-b',
             },
           ],
-        })}
-        agentPresentation={launchCatalog.interaction}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Select Character A' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Select Character B' }));
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Speak together' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    expect(screen.getByRole('alert').textContent).toContain(
-      'Character and Room capabilities remain experimental',
-    );
-    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+          launch: { kind: 'new' },
+        },
+      },
+    });
     expect(hostMocks.bindTarget).not.toHaveBeenCalled();
   });
 
@@ -860,7 +1064,23 @@ describe('ConversationController entry state', () => {
             data: { resourceGrantId: 'grant-restored', resourceKind: 'file' },
           },
         ],
-        characterLaunches: [],
+        characterLaunches: [
+          {
+            globalCharacterId: 'stale-character-project',
+            characterVersionId: 'stale-character-version',
+            label: 'Stale Character',
+          },
+        ],
+        workspaceTarget: {
+          label: 'Stale Workspace',
+          context: {
+            kind: 'workspace',
+            workspaceId: 'stale-workspace',
+            workspaceGrantId: 'stale-grant',
+          },
+          target: { kind: 'content-document', documentId: 'documents/stale.md' },
+          authority: { kind: 'project', projectId: 'stale-project' },
+        },
         selectedModel: 'test-model',
         mediaModelSelection: {
           image: 'nekoapi-media:gpt-image-2',
@@ -904,6 +1124,8 @@ describe('ConversationController entry state', () => {
 
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'restored entry text');
     expect(screen.getByTestId('entry-context-chips').textContent).toContain('brief.txt');
+    expect(screen.getByTestId('entry-workspace-target').textContent).toBe('none');
+    expect(screen.getByTestId('entry-character-launches').textContent).toBe('');
     expect(screen.getByTestId('entry-selected-model').textContent).toBe('test-model');
     expect(screen.getByTestId('entry-media-models').textContent).toBe(
       'nekoapi-media:gpt-image-2|none|nekoapi-media:audio-1',
@@ -1037,11 +1259,18 @@ describe('ConversationController entry state', () => {
 
   it('submits the exact configured Authoring target receipt', async () => {
     vi.clearAllMocks();
-    const launchCatalog = createDraftLaunchCatalog('draft-authoring-submit', {
-      kind: 'workspace',
-      workspaceId: 'workspace-1',
-      workspaceGrantId: 'workspace-grant-1',
-    });
+    const launchCatalog = {
+      ...createDraftLaunchCatalog('draft-authoring-submit', {
+        kind: 'workspace' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      }),
+      inputs: [
+        {
+          ...createDraftSkillCatalogEntry('character-creator', 'workspace'),
+        },
+      ],
+    };
     const targetReceipt = {
       targetReceiptId: 'target-receipt:authoring-1',
       draftId: launchCatalog.interaction.draftId,
@@ -1051,6 +1280,7 @@ describe('ConversationController entry state', () => {
         kind: 'authoring' as const,
         workspaceId: 'workspace-1',
         workspaceGrantId: 'workspace-grant-1',
+        authority: { kind: 'project' as const, projectId: 'project-1' },
         target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
       },
     };
@@ -1073,7 +1303,9 @@ describe('ConversationController entry state', () => {
       />,
     );
 
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Refine this character' } });
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: '$character-creator Refine this character' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
@@ -1081,7 +1313,11 @@ describe('ConversationController entry state', () => {
       expect.objectContaining({
         draft: launchCatalog.interaction,
         entryTargetReceipt: targetReceipt,
-        input: { kind: 'message', text: 'Refine this character' },
+        input: expect.objectContaining({
+          kind: 'skill',
+          skillName: 'character-creator',
+          args: 'Refine this character',
+        }),
       }),
     );
   });
@@ -1176,11 +1412,20 @@ describe('ConversationController entry state', () => {
     };
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
     render(
-      <ConversationController
-        {...createProps()}
-        agentPresentation={launchCatalog.interaction}
-        emptyStatePresentation="desktop-dock"
-      />,
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
     );
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '/compact' } });
@@ -1248,11 +1493,10 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
-  it('keeps Character roleplay unavailable from an unbound Entry Draft', async () => {
+  it('keeps Character Dialogue out of the visible Entry choices', () => {
     vi.clearAllMocks();
     const launchCatalog = createDraftLaunchCatalog('draft-entry-roleplay', { kind: 'unbound' });
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
-    hostMocks.bindTarget.mockResolvedValue(launchCatalog);
     render(
       <ComposerWorkspaceProvider
         value={{
@@ -1270,14 +1514,13 @@ describe('ConversationController entry state', () => {
       </ComposerWorkspaceProvider>,
     );
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Character Dialogue' }));
-
-    await waitFor(() =>
-      expect(screen.getByTestId('entry-submission-blocked').textContent).toBe(
-        'Character is unavailable.',
-      ),
-    );
-    expect(hostMocks.configureEntryTarget).toHaveBeenCalledWith('character-dialogue', undefined);
+    expect(screen.queryByRole('tab', { name: 'Character Dialogue' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'World Experience' })).toBeNull();
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Conversation',
+      'Creation',
+    ]);
+    expect(hostMocks.configureEntryTarget).not.toHaveBeenCalled();
     expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
@@ -1296,9 +1539,9 @@ describe('ConversationController entry state', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'Workspace is ready' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Assistant' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Authoring' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Start creating' })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: 'Conversation' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Creation' })).toBeNull();
   });
 
   it('resets prior presentation state when the same controller receives a fresh draft identity', () => {
@@ -1376,23 +1619,389 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
-  it('prefills an explicit Desktop Skill invocation without sending it', () => {
+  it('keeps explicit Desktop Skill invocation in the Composer instead of rendering Skill cards', () => {
     const launchCatalog = {
       ...createBoundAssistantLaunchCatalog('draft-skill-prefill'),
       inputs: [createDraftSkillCatalogEntry('storyboard', 'any')],
     };
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
     render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Skills' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^storyboard/u })).toBeNull();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '$storyboard ' } });
+
+    expect(screen.getByRole('textbox')).toHaveProperty('value', '$storyboard ');
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('does not render builtin Skill descriptions as entry cards', () => {
+    const builtinCharacterCreator = {
+      ...createDraftSkillCatalogEntry('character-creator', 'workspace'),
+      id: 'skill:builtin:character-creator',
+      description: 'Canonical portable description',
+      source: { kind: 'builtin' as const, sourceId: 'character-creator' },
+      executable: {
+        kind: 'skill' as const,
+        skillName: 'character-creator',
+        activationId: 'skill:builtin:character-creator',
+      },
+    };
+    const launchCatalog = {
+      ...createDraftLaunchCatalog('draft-localized-skill', {
+        kind: 'workspace',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      }),
+      inputs: [builtinCharacterCreator],
+    };
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    expect(screen.queryByText('Create a localized character draft.')).toBeNull();
+    expect(screen.queryByText('Canonical portable description')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^character-creator/u })).toBeNull();
+  });
+
+  it('submits builtin creator Skills from Assistant Entry without creating a Project target', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = {
+      ...createDraftLaunchCatalog('draft-character-creator', { kind: 'unbound' }),
+      inputs: [
+        {
+          ...createDraftSkillCatalogEntry('character-creator', 'any'),
+          id: 'skill:builtin:character-creator',
+          source: { kind: 'builtin' as const, sourceId: 'character-creator' },
+        },
+      ],
+    };
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.submitDraft.mockResolvedValueOnce({
+      session: {
+        phase: 'session',
+        conversationId: 'conversation-global-character-creator',
+        binding: {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant:default',
+          baseGrantIds: [],
+        },
+      },
+      turnId: 'turn-global-character-creator',
+      turnStatus: 'running',
+    });
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+          loadAuthoringCatalog: vi.fn(async () => ({
+            targets: [],
+            creationContexts: [],
+            diagnostics: [],
+          })),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, {
+      target: { value: '$character-creator 保留这段完整角色提示词' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
+    expect(hostMocks.configureEntryTarget).not.toHaveBeenCalled();
+    expect(hostMocks.submitDraft.mock.calls[0]?.[0]).toMatchObject({
+      entryTargetReceipt: null,
+      input: {
+        kind: 'skill',
+        skillName: 'character-creator',
+        args: '保留这段完整角色提示词',
+      },
+    });
+  });
+
+  it('creates one exact Project target before submitting builtin creator Skills', async () => {
+    vi.clearAllMocks();
+    const builtinWorldCreator = {
+      ...createDraftSkillCatalogEntry('world-creator', 'any'),
+      id: 'skill:builtin:world-creator',
+      source: { kind: 'builtin' as const, sourceId: 'world-creator' },
+      executable: {
+        kind: 'skill' as const,
+        skillName: 'world-creator',
+        activationId: 'skill:builtin:world-creator',
+      },
+    };
+    let currentCatalog = {
+      ...createDraftLaunchCatalog('draft-world-creator', { kind: 'unbound' as const }),
+      inputs: [builtinWorldCreator],
+    };
+    let currentIntent: import('@neko/agent-contracts').AgentEntryIntentProjection = {
+      mode: 'assistant',
+      targetReceipt: null,
+    };
+    hostMocks.readLaunchCatalog.mockImplementation(() => currentCatalog);
+    hostMocks.readEntryIntent.mockImplementation(() => currentIntent);
+    hostMocks.configureEntryTarget.mockImplementation(async (mode, binding) => {
+      const domainBinding =
+        binding?.kind === 'authoring'
+          ? {
+              kind: 'workspace' as const,
+              workspaceId: binding.workspaceId,
+              workspaceGrantId: binding.workspaceGrantId,
+            }
+          : { kind: 'unbound' as const };
+      currentCatalog = {
+        ...currentCatalog,
+        interaction: {
+          ...currentCatalog.interaction,
+          binding: domainBinding,
+          bindingReceipt:
+            domainBinding.kind === 'unbound'
+              ? null
+              : {
+                  bindingReceiptId: 'binding:world-creator',
+                  draftId: currentCatalog.interaction.draftId,
+                  connectionId: currentCatalog.connection.connectionId,
+                  binding: domainBinding,
+                },
+        },
+      };
+      currentIntent = {
+        mode,
+        targetReceipt:
+          binding === undefined
+            ? null
+            : {
+                targetReceiptId: `entry-target:${binding.target?.kind ?? 'project'}`,
+                draftId: currentCatalog.interaction.draftId,
+                connectionId: currentCatalog.connection.connectionId,
+                mode,
+                binding,
+              },
+      };
+      return currentIntent;
+    });
+    const projectTarget = {
+      label: 'Project One',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      },
+      authority: { kind: 'project' as const, projectId: 'project-1' },
+    };
+    const createdTarget = {
+      ...projectTarget,
+      label: 'Project One / Untitled World',
+      target: { kind: 'world-project' as const, worldProjectId: 'world-project:new' },
+    };
+    const onCreateAuthoringTarget = vi.fn(async () => ({
+      status: 'created' as const,
+      target: createdTarget,
+    }));
+    hostMocks.submitDraft.mockResolvedValueOnce({
+      session: {
+        phase: 'session',
+        conversationId: 'conversation-world-creator',
+        binding: currentCatalog.interaction.binding,
+      },
+      turnId: 'turn-world-creator',
+      turnStatus: 'running',
+    });
+
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [{ projectId: 'project-1', label: 'Project One' }],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => projectTarget),
+          onCreateAuthoringTarget,
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={currentCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Creation' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Project One/u }));
+    await waitFor(() =>
+      expect(hostMocks.configureEntryTarget).toHaveBeenLastCalledWith(
+        'authoring',
+        expect.objectContaining({
+          authority: { kind: 'project', projectId: 'project-1' },
+          target: null,
+        }),
+      ),
+    );
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: '$world-creator 创建测试世界' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
+    expect(onCreateAuthoringTarget).toHaveBeenCalledOnce();
+    expect(onCreateAuthoringTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetKind: 'world-project',
+        placement: { kind: 'project', projectId: 'project-1' },
+      }),
+      'chat.entryAuthoring.untitledWorld',
+    );
+    expect(hostMocks.submitDraft.mock.calls[0]?.[0]).toMatchObject({
+      entryTargetReceipt: {
+        binding: {
+          authority: { kind: 'project', projectId: 'project-1' },
+          target: { kind: 'world-project', worldProjectId: 'world-project:new' },
+        },
+      },
+      input: { kind: 'skill', skillName: 'world-creator', args: '创建测试世界' },
+    });
+  });
+
+  it('consumes an exact finalized CharacterVersion handoff into Character Dialogue Entry', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = createDraftLaunchCatalog('draft-finalized-character', {
+      kind: 'unbound',
+    });
+    const onConsumed = vi.fn();
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+
+    render(
       <ConversationController
         {...createProps()}
         agentPresentation={launchCatalog.interaction}
+        characterDialogueHandoff={{
+          kind: 'character-dialogue',
+          intentId: 'character-dialogue:finalized-character',
+          label: 'Rin',
+          binding: {
+            kind: 'character-dialogue',
+            mode: 'companion',
+            participants: [
+              {
+                globalCharacterId: 'character-project:rin',
+                characterVersionId: 'character-version:rin-2',
+              },
+            ],
+          },
+        }}
+        onCharacterDialogueHandoffConsumed={onConsumed}
         emptyStatePresentation="desktop-dock"
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'storyboard' }));
+    await waitFor(() =>
+      expect(hostMocks.configureEntryTarget).toHaveBeenCalledWith('character-dialogue', {
+        kind: 'character-dialogue',
+        mode: 'companion',
+        participants: [
+          {
+            globalCharacterId: 'character-project:rin',
+            characterVersionId: 'character-version:rin-2',
+          },
+        ],
+      }),
+    );
+    expect(screen.getByTestId('entry-character-launches').textContent).toBe('Rin');
+    expect(onConsumed).toHaveBeenCalledWith('character-dialogue:finalized-character');
+  });
 
-    expect(screen.getByRole('textbox')).toHaveProperty('value', '$storyboard ');
+  it('submits skill-creator through the ordinary Skill path without configuring a target', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = {
+      ...createDraftLaunchCatalog('draft-skill-creator-personal', { kind: 'unbound' }),
+      inputs: [createDraftSkillCatalogEntry('skill-creator', 'any')],
+    };
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.submitDraft.mockResolvedValueOnce({
+      session: {
+        phase: 'session',
+        conversationId: 'conversation-skill-creator-personal',
+        binding: {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant-space:local-user',
+          baseGrantIds: [],
+        },
+      },
+      turnId: 'turn-skill-creator-personal',
+      turnStatus: 'running',
+    });
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'entry',
+          projects: [{ projectId: 'project-1', label: 'Project One' }],
+          onChooseDirectory: vi.fn(async () => undefined),
+          onSelectProject: vi.fn(async () => undefined),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: '$skill-creator 保留完整 Skill 需求' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
+    expect(hostMocks.submitDraft.mock.calls[0]?.[0]).toMatchObject({
+      entryTargetReceipt: null,
+      input: {
+        kind: 'skill',
+        skillName: 'skill-creator',
+        args: '保留完整 Skill 需求',
+      },
+    });
+    expect(hostMocks.configureEntryTarget).not.toHaveBeenCalled();
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 

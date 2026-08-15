@@ -6,6 +6,10 @@ import type { ILogger } from '@neko/shared/logger';
 import sharp from 'sharp';
 
 import { classifyAgentContentPath } from '../input/content-path-classification';
+import {
+  resolvePersonalAgentSkillsDir,
+  resolveProjectAgentSkillsDir,
+} from '../workspace/agent-skill-layout';
 
 import {
   NodePiConversationAuthority,
@@ -31,6 +35,12 @@ import {
   type SkillSourceRoot,
   type SkillSourceKind,
 } from '@neko/agent-runtime/pi';
+import {
+  createNodeCommandHost,
+  type CommandHostRecord,
+  type CommandHostSnapshot,
+  type CommandSourceRoot,
+} from '@neko/agent-runtime/command';
 import {
   createConversationProjectionStore,
   type ConversationProjectionListener,
@@ -61,13 +71,17 @@ import {
   createNodeDocumentLowLevelAccess,
 } from '@neko/content/document/node';
 import {
+  CONFIGURED_AGENT_TURN_CAPABILITIES,
+  AGENT_AUTHORING_BINDING_METADATA_KEY,
   isAgentAuthorizedContentReferenceContextData,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
   TOOL_NAMES_SYSTEM,
   TOOL_NAMES_TRANSCRIBE,
   type AgentContextPayload,
+  type AgentCapabilityProvider,
   type AgentEntryTargetReceipt,
+  type AgentTurnCapabilityConstraint,
   type IToolRegistry,
   type PromptFragment,
   type Tool,
@@ -79,7 +93,11 @@ import {
 } from '@neko/content/node';
 import { CanvasProjectAuthoringService } from '@neko/canvas-domain';
 import { CutProjectAuthoringService } from '@neko/cut-domain';
-import type { ContentLocator, ContentRepresentationLocator } from '@neko/content';
+import type {
+  ContentLocator,
+  ContentReadService,
+  ContentRepresentationLocator,
+} from '@neko/content';
 import type { EffectiveAgentConfigurationProjection } from '@neko/agent-contracts';
 import type {
   AgentHomeActivitySummary,
@@ -100,11 +118,11 @@ import type {
   AgentExtensionRuntimeReadiness,
 } from '@neko/agent-contracts';
 import {
-  createPluginRuntimeSourceFingerprint,
   disposeAgentPluginRuntimeChanges,
   listChangedAgentPluginRuntimeIds,
   listChangedPluginRuntimeSourceIds,
   reconcileAgentPluginRuntime,
+  type AgentPluginToolAdapterPort,
   type AgentPluginRuntime,
 } from '@neko/agent-runtime/extensions';
 import {
@@ -145,6 +163,7 @@ export interface AgentTurnInput {
   readonly additionalInstructions?: string;
   readonly queueDraft?: AgentQueuedMessageDraft;
   readonly events?: PiProductEventSink;
+  readonly capabilityConstraint?: AgentTurnCapabilityConstraint;
 }
 
 const MAX_AGENT_TURN_IMAGES = 4;
@@ -286,6 +305,7 @@ export interface AgentWorkspaceRuntime {
     contextWindow: number,
   ): Promise<Awaited<ReturnType<PiConversationRuntime['compactContext']>>>;
   readSkillCatalog(workspaceTrusted: boolean): Promise<AgentSkillCatalog>;
+  invokeCommand(name: string, activationId: string, args?: string): Promise<string>;
   readCapabilityPromptFragments(locale: 'en' | 'zh'): readonly PromptFragment[];
   listConversations(): ReturnType<NodePiConversationAuthority['listConversations']>;
   readConversationEvidence(conversationId: string): AgentConversationEvidence;
@@ -309,6 +329,14 @@ export interface AgentWorkspaceRuntime {
   dispose(): Promise<void>;
 }
 
+export interface AgentCommandCatalog {
+  readonly records: readonly CommandHostRecord[];
+  readonly diagnostics: readonly {
+    readonly code: CommandHostSnapshot['diagnostics'][number]['code'];
+    readonly source: CommandHostRecord['source']['kind'];
+  }[];
+}
+
 export interface AgentSkillCatalog {
   readonly records: readonly SkillHostRecord[];
   readonly diagnostics: readonly {
@@ -321,6 +349,7 @@ export interface AgentSkillCatalog {
     readonly selectedSource: SkillSourceKind;
     readonly shadowedSource: SkillSourceKind;
   }[];
+  readonly commands: AgentCommandCatalog;
 }
 
 export interface AgentAppHost {
@@ -354,6 +383,22 @@ export interface CreateAgentAppHostOptions {
   readonly resolveGenerationJobs: (binding: GenerationBinding) => Promise<GenerationJobPort>;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
   readonly authoringMutationAuthority?: AgentAuthoringMutationAuthority;
+  readonly resolveWorkspaceCapabilityProviders?: (
+    workspace: AssetWorkspaceResolution,
+  ) => readonly AgentCapabilityProvider[];
+  readonly resolveContentReadService?: (
+    workspace: AssetWorkspaceResolution,
+  ) => ContentReadService | undefined;
+  readonly resolveDocumentHostFilePath?: (
+    workspace: AssetWorkspaceResolution,
+    source: import('@neko/content').WorkspaceFileContentLocator,
+  ) => Promise<string>;
+  readonly pluginToolAdapters?: AgentPluginToolAdapterPort;
+  readonly loadTransientToolResultImage?: (input: {
+    readonly receiptId: string;
+    readonly sessionId: string;
+    readonly actionId: string;
+  }) => Promise<{ readonly bytes: Uint8Array; readonly mimeType: string }>;
 }
 
 export function createAgentAppHost(options: CreateAgentAppHostOptions): AgentAppHost {
@@ -452,14 +497,19 @@ class DefaultAgentAppHost implements AgentAppHost {
         ? {}
         : { builtinSkillRoot: this.options.builtinSkillRoot }),
     });
-    const snapshot = await createNodePiSkillHost({
-      cwd: this.options.userHome,
-      policy: {
-        isTrusted: () => true,
-        isEnabled: () => true,
-      },
-    }).discover([...roots, ...(this.pluginRuntime?.skillRoots ?? [])]);
-    return projectAgentSkillCatalog(snapshot);
+    const [snapshot, commandSnapshot] = await Promise.all([
+      createNodePiSkillHost({
+        cwd: this.options.userHome,
+        policy: {
+          isTrusted: () => true,
+          isEnabled: () => true,
+        },
+      }).discover([...roots, ...(this.pluginRuntime?.skillRoots ?? [])]),
+      createNodeCommandHost(this.options.userHome).discover(
+        await existingGlobalCommandRoots({ userHome: this.options.userHome }),
+      ),
+    ]);
+    return projectAgentSkillCatalog(snapshot, commandSnapshot);
   }
 
   hasActiveTurns(): boolean {
@@ -481,10 +531,6 @@ class DefaultAgentAppHost implements AgentAppHost {
     snapshot: AgentExtensionCatalogSnapshot,
   ): Promise<ReadonlyMap<string, AgentExtensionRuntimeReadiness>> {
     this.requireActive();
-    const sourceFingerprint = createPluginRuntimeSourceFingerprint(snapshot);
-    if (this.pluginRuntime?.sourceFingerprint === sourceFingerprint) {
-      return this.pluginRuntime.readiness;
-    }
     if (this.pluginRuntimeChanging) {
       throw new Error('Agent plugin runtime is already changing.');
     }
@@ -495,7 +541,11 @@ class DefaultAgentAppHost implements AgentAppHost {
         snapshot,
       );
       this.assertPluginRuntimeChangesIdle(expectedChangedPluginIds);
-      const next = await reconcileAgentPluginRuntime(this.pluginRuntime, snapshot);
+      const next = await reconcileAgentPluginRuntime(this.pluginRuntime, snapshot, {
+        ...(this.options.pluginToolAdapters === undefined
+          ? {}
+          : { toolAdapters: this.options.pluginToolAdapters }),
+      });
       const changedPluginIds = listChangedAgentPluginRuntimeIds(this.pluginRuntime, next);
       try {
         this.assertPluginRuntimeChangesIdle(changedPluginIds);
@@ -539,6 +589,13 @@ class DefaultAgentAppHost implements AgentAppHost {
       const catalogDiagnostic = catalog.diagnostics.find(
         (diagnostic) => diagnostic.conversationId === record.conversationId,
       );
+      if (
+        catalogDiagnostic === undefined &&
+        record.context?.kind === 'room' &&
+        record.context.scope === 'participant'
+      ) {
+        continue;
+      }
       const ownerProjection = projectAgentConversationOwner(
         record,
         this.assistantSpaceIds,
@@ -682,6 +739,7 @@ class DefaultAgentAppHost implements AgentAppHost {
       await authority.dispose();
       throw new Error('Agent AppHost composition was disposed during workspace attach.');
     }
+    const contentReadService = this.options.resolveContentReadService?.(workspace);
     const runtime = new DefaultAgentWorkspaceRuntime({
       workspace,
       authority,
@@ -701,9 +759,22 @@ class DefaultAgentAppHost implements AgentAppHost {
       onReleaseEligible: (candidate) => this.releaseWorkspaceIfEligible(candidate),
       providerTurnAdmission: this.providerTurns,
       structuredProjectAuthoring: !isAssistantSpace,
+      ...(contentReadService ? { contentReadService } : {}),
+      ...(this.options.resolveDocumentHostFilePath
+        ? {
+            resolveDocumentHostFilePath: (source) =>
+              this.options.resolveDocumentHostFilePath?.(workspace, source) ??
+              Promise.reject(new Error('Agent document resolver is unavailable.')),
+          }
+        : {}),
+      ...(this.options.loadTransientToolResultImage === undefined
+        ? {}
+        : { loadTransientToolResultImage: this.options.loadTransientToolResultImage }),
       ...(this.options.authoringMutationAuthority === undefined
         ? {}
         : { authoringMutationAuthority: this.options.authoringMutationAuthority }),
+      workspaceCapabilityProviders:
+        this.options.resolveWorkspaceCapabilityProviders?.(workspace) ?? [],
       ...(owner.kind === 'workspace' && this.options.creatorVisibleArtifactDelivery
         ? { creatorVisibleArtifactDelivery: this.options.creatorVisibleArtifactDelivery }
         : {}),
@@ -782,8 +853,18 @@ interface DefaultAgentWorkspaceRuntimeOptions {
   readonly onReleaseEligible: (workspace: DefaultAgentWorkspaceRuntime) => Promise<void>;
   readonly providerTurnAdmission: AgentProviderTurnScheduler;
   readonly structuredProjectAuthoring: boolean;
+  readonly contentReadService?: ContentReadService;
+  readonly resolveDocumentHostFilePath?: (
+    source: import('@neko/content').WorkspaceFileContentLocator,
+  ) => Promise<string>;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
   readonly authoringMutationAuthority?: AgentAuthoringMutationAuthority;
+  readonly workspaceCapabilityProviders: readonly AgentCapabilityProvider[];
+  readonly loadTransientToolResultImage?: (input: {
+    readonly receiptId: string;
+    readonly sessionId: string;
+    readonly actionId: string;
+  }) => Promise<{ readonly bytes: Uint8Array; readonly mimeType: string }>;
 }
 
 interface PendingAgentTurnOperation {
@@ -836,8 +917,15 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   constructor(private readonly options: DefaultAgentWorkspaceRuntimeOptions) {
     this.models = createOpenNekoPiModels(options.credentialRuntime.credentials);
-    this.contentAccessRuntime = createAgentContentAccessRuntime(options.workspace);
-    this.toolResultAssetLoader = createPiToolResultAssetLoader(this.contentAccessRuntime);
+    this.contentAccessRuntime = createAgentContentAccessRuntime(
+      options.workspace,
+      options.contentReadService,
+      options.resolveDocumentHostFilePath,
+    );
+    this.toolResultAssetLoader = createPiToolResultAssetLoader(
+      this.contentAccessRuntime,
+      options.loadTransientToolResultImage,
+    );
     this.capabilities = new CapabilityRegistryRuntime(
       { toolRegistry: this.tools },
       options.logger ? { logger: options.logger } : {},
@@ -857,9 +945,11 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       context,
     );
     if (options.structuredProjectAuthoring) {
-      const contentRead = createNodeHostContentReadService({
-        workspaceRoot: options.workspace.workspacePath,
-      });
+      const contentRead =
+        options.contentReadService ??
+        createNodeHostContentReadService({
+          workspaceRoot: options.workspace.workspacePath,
+        });
       const workspaceWriter = new NodeAuthorizedWorkspaceWriter({
         workspaceRoot: options.workspace.workspacePath,
       });
@@ -875,6 +965,9 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         ),
         context,
       );
+    }
+    for (const provider of options.workspaceCapabilityProviders) {
+      this.capabilities.registerProvider(provider, context);
     }
     registerMediaAgentTools(this.tools, options.generationJobs);
   }
@@ -1348,16 +1441,29 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     this.requireActive();
     const owner = this.requireConversation(input.conversationId);
     const messageId = this.options.createIdentity();
+    const capabilityConstraint = input.capabilityConstraint ?? CONFIGURED_AGENT_TURN_CAPABILITIES;
+    if (
+      capabilityConstraint.skills === 'none' &&
+      (input.skillName !== undefined || input.skillActivationId !== undefined)
+    ) {
+      throw new Error(
+        `Agent turn capability constraint '${capabilityConstraint.owner.kind}/${capabilityConstraint.owner.id}' forbids Skill activation.`,
+      );
+    }
     const skills = await this.discoverSkills(
       input.workspaceTrusted,
-      runtimeSnapshot.pluginSkillRoots,
+      capabilityConstraint.skills === 'none' ? [] : runtimeSnapshot.pluginSkillRoots,
+      capabilityConstraint.skills === 'none',
     );
     const imageRoute = resolveAgentTurnImageRoute(input.modelPolicy, runtimeSnapshot.tools);
-    const turnTools = bindAgentAuthoringMutationAuthority(
-      filterAgentTurnImageTools(runtimeSnapshot.tools, imageRoute),
-      input.entryTargetReceipt ?? null,
-      this.options.authoringMutationAuthority,
-    );
+    const turnTools =
+      capabilityConstraint.tools === 'none'
+        ? []
+        : bindAgentAuthoringMutationAuthority(
+            filterAgentTurnImageTools(runtimeSnapshot.tools, imageRoute),
+            input.entryTargetReceipt ?? null,
+            this.options.authoringMutationAuthority,
+          );
     const contextPayloads = await materializeAgentTurnContextPayloads({
       contextPayloads: input.contextPayloads,
       contentAccessRuntime: this.contentAccessRuntime,
@@ -1562,7 +1668,16 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   }
 
   async readSkillCatalog(workspaceTrusted: boolean): Promise<AgentSkillCatalog> {
-    return projectAgentSkillCatalog(await this.discoverSkills(workspaceTrusted));
+    const [skills, commands] = await Promise.all([
+      this.discoverSkills(workspaceTrusted),
+      this.discoverCommands(),
+    ]);
+    return projectAgentSkillCatalog(skills, commands);
+  }
+
+  async invokeCommand(name: string, activationId: string, args?: string): Promise<string> {
+    this.requireActive();
+    return (await this.discoverCommands()).invokeExact(name, activationId, args);
   }
 
   readCapabilityPromptFragments(locale: 'en' | 'zh'): readonly PromptFragment[] {
@@ -1906,6 +2021,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   private async discoverSkills(
     workspaceTrusted: boolean,
     pluginSkillRoots: readonly SkillSourceRoot[] = this.pluginSkillRoots,
+    forceEmpty = false,
   ) {
     const roots = await existingSkillRoots({
       workspacePath: this.options.workspace.workspacePath,
@@ -1920,7 +2036,15 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         isTrusted: ({ source }) => source.kind !== 'project' || workspaceTrusted,
         isEnabled: () => true,
       },
-    }).discover([...roots, ...pluginSkillRoots]);
+    }).discover(forceEmpty ? [] : [...roots, ...pluginSkillRoots]);
+  }
+
+  private async discoverCommands(): Promise<CommandHostSnapshot> {
+    const roots = await existingCommandRoots({
+      workspacePath: this.options.workspace.workspacePath,
+      userHome: this.options.userHome,
+    });
+    return createNodeCommandHost(this.options.workspace.workspacePath).discover(roots);
   }
 
   private reconcileRuntimeResidency(): Promise<void> {
@@ -2071,18 +2195,26 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
 function createAgentContentAccessRuntime(
   workspace: AssetWorkspaceResolution,
+  contentRead?: ContentReadService,
+  resolveDocumentHostFilePath?: (
+    source: import('@neko/content').WorkspaceFileContentLocator,
+  ) => Promise<string>,
 ): AgentContentAccessRuntime {
   const documentLowLevelAccess = createNodeDocumentLowLevelAccess();
   return createHostAgentContentAccessRuntime({
-    contentRead: createNodeHostContentReadService({
-      workspaceRoot: workspace.workspacePath,
-      documentEntryReader: {
-        readEntry: (sourcePath, entryPath) =>
-          documentLowLevelAccess.readEntry(sourcePath, entryPath),
-      },
-    }),
+    contentRead:
+      contentRead ??
+      createNodeHostContentReadService({
+        workspaceRoot: workspace.workspacePath,
+        documentEntryReader: {
+          readEntry: (sourcePath, entryPath) =>
+            documentLowLevelAccess.readEntry(sourcePath, entryPath),
+        },
+      }),
     documentAccess: createNodeDocumentAccessService(),
-    resolveDocumentHostFilePath: (source) => resolveWorkspaceContentLocator(workspace, source),
+    resolveDocumentHostFilePath:
+      resolveDocumentHostFilePath ??
+      ((source) => resolveWorkspaceContentLocator(workspace, source)),
   });
 }
 
@@ -2121,9 +2253,9 @@ function bindAgentAuthoringMutationAuthority(
     if (expectedTargetKind === undefined) return [tool];
     if (
       authority === undefined ||
-      receipt?.mode !== 'authoring' ||
+      receipt === null ||
       receipt.binding.kind !== 'authoring' ||
-      receipt.binding.target.kind !== expectedTargetKind
+      receipt.binding.target?.kind !== expectedTargetKind
     ) {
       return [];
     }
@@ -2135,8 +2267,9 @@ function bindAgentAuthoringMutationAuthority(
             args: Record<string, unknown>,
             options?: Parameters<Tool['execute']>[1],
           ) => {
+            let binding;
             try {
-              await authority.authorize({
+              binding = await authority.authorize({
                 receipt,
                 expectedTargetKind,
                 ...(options?.signal ? { signal: options.signal } : {}),
@@ -2147,7 +2280,11 @@ function bindAgentAuthoringMutationAuthority(
                 error: `Agent authoring authority rejected ${tool.name}: ${error instanceof Error ? error.message : String(error)}`,
               };
             }
-            return target.execute(args, options);
+            const metadata = {
+              ...options?.metadata,
+              [AGENT_AUTHORING_BINDING_METADATA_KEY]: binding,
+            };
+            return target.execute(args, { ...options, metadata });
           };
         },
       }),
@@ -2238,6 +2375,8 @@ function contentLocatorPortablePath(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return locator.path;
+    case 'media-library':
+      return locator.relativePath;
     case 'document-entry':
       return locator.entryPath;
     case 'package-resource':
@@ -2923,26 +3062,16 @@ async function existingSkillRoots(input: {
   readonly userHome: string;
   readonly builtinSkillRoot?: string;
 }): Promise<readonly SkillSourceRoot[]> {
+  const projectRoot = resolveProjectAgentSkillsDir(input.workspacePath);
+  if (!projectRoot) throw new Error('Workspace Skill root requires an exact Workspace path.');
   const candidates: readonly SkillSourceRoot[] = [
     {
-      path: join(input.workspacePath, '.agents', 'skills'),
+      path: projectRoot,
       source: { kind: 'project' },
-      entryPointKind: 'skill',
     },
     {
-      path: join(input.workspacePath, 'neko', 'commands'),
-      source: { kind: 'project' },
-      entryPointKind: 'command-artifact',
-    },
-    {
-      path: join(input.userHome, '.agents', 'skills'),
+      path: resolvePersonalAgentSkillsDir(input.userHome),
       source: { kind: 'personal' },
-      entryPointKind: 'skill',
-    },
-    {
-      path: join(input.userHome, '.neko', 'commands'),
-      source: { kind: 'personal' },
-      entryPointKind: 'command-artifact',
     },
     ...(input.builtinSkillRoot === undefined
       ? []
@@ -2950,7 +3079,6 @@ async function existingSkillRoots(input: {
           {
             path: input.builtinSkillRoot,
             source: { kind: 'builtin' as const },
-            entryPointKind: 'skill' as const,
           },
         ]),
   ];
@@ -2963,14 +3091,8 @@ async function existingGlobalSkillRoots(input: {
 }): Promise<readonly SkillSourceRoot[]> {
   const candidates: readonly SkillSourceRoot[] = [
     {
-      path: join(input.userHome, '.agents', 'skills'),
+      path: resolvePersonalAgentSkillsDir(input.userHome),
       source: { kind: 'personal' },
-      entryPointKind: 'skill',
-    },
-    {
-      path: join(input.userHome, '.neko', 'commands'),
-      source: { kind: 'personal' },
-      entryPointKind: 'command-artifact',
     },
     ...(input.builtinSkillRoot === undefined
       ? []
@@ -2978,7 +3100,6 @@ async function existingGlobalSkillRoots(input: {
           {
             path: input.builtinSkillRoot,
             source: { kind: 'builtin' as const },
-            entryPointKind: 'skill' as const,
           },
         ]),
   ];
@@ -3003,7 +3124,43 @@ async function existingSkillSourceRoots(
   return Object.freeze(roots);
 }
 
-function projectAgentSkillCatalog(snapshot: PiSkillHostSnapshot): AgentSkillCatalog {
+async function existingCommandRoots(input: {
+  readonly workspacePath: string;
+  readonly userHome: string;
+}): Promise<readonly CommandSourceRoot[]> {
+  return existingCommandSourceRoots([
+    { path: join(input.workspacePath, 'neko', 'commands'), source: { kind: 'project' } },
+    { path: join(input.userHome, '.neko', 'commands'), source: { kind: 'personal' } },
+  ]);
+}
+
+async function existingGlobalCommandRoots(input: {
+  readonly userHome: string;
+}): Promise<readonly CommandSourceRoot[]> {
+  return existingCommandSourceRoots([
+    { path: join(input.userHome, '.neko', 'commands'), source: { kind: 'personal' } },
+  ]);
+}
+
+async function existingCommandSourceRoots(
+  candidates: readonly CommandSourceRoot[],
+): Promise<readonly CommandSourceRoot[]> {
+  const roots: CommandSourceRoot[] = [];
+  for (const candidate of candidates) {
+    try {
+      await access(candidate.path);
+      roots.push(candidate);
+    } catch (error) {
+      if (!isMissingPath(error)) throw error;
+    }
+  }
+  return Object.freeze(roots);
+}
+
+function projectAgentSkillCatalog(
+  snapshot: PiSkillHostSnapshot,
+  commands: CommandHostSnapshot,
+): AgentSkillCatalog {
   return Object.freeze({
     records: snapshot.records,
     diagnostics: Object.freeze(
@@ -3024,6 +3181,14 @@ function projectAgentSkillCatalog(snapshot: PiSkillHostSnapshot): AgentSkillCata
         }),
       ),
     ),
+    commands: Object.freeze({
+      records: commands.records,
+      diagnostics: Object.freeze(
+        commands.diagnostics.map((diagnostic) =>
+          Object.freeze({ code: diagnostic.code, source: diagnostic.source.kind }),
+        ),
+      ),
+    }),
   });
 }
 

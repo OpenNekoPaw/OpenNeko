@@ -111,6 +111,7 @@ describe('PiConversationRuntime', () => {
         timeoutMs: DEFAULT_PI_MODEL_REQUEST_TIMEOUT_MS,
       },
     });
+    expect(captured[0]!.context.tools).toEqual([]);
     await expect(
       captured[0]?.options?.onPayload?.({ model: 'main', messages: [] }, captured[0].model),
     ).resolves.toEqual({ model: 'main', messages: [], top_p: 0.95 });
@@ -749,6 +750,99 @@ describe('PiConversationRuntime', () => {
     }
   });
 
+  it('keeps the writer lease alive throughout one long provider turn', async () => {
+    await authority.dispose();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    authority = await NodePiConversationAuthority.create({
+      userDataRoot: root,
+      workspaceId: 'workspace-1',
+      hostId: 'desktop-main',
+      leaseTtlMs: 1_000,
+    });
+    const lease = authority.acquireLease('conversation-long-turn');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-long-turn',
+      branchId: 'branch-main',
+    });
+    let finishProvider: (() => void) | undefined;
+    const models = createFixtureModels(() => {
+      const stream = createAssistantMessageEventStream();
+      const message = assistant('stop', 'completed after lease renewals');
+      stream.push({ type: 'start', partial: message });
+      finishProvider = () => {
+        stream.push({ type: 'done', reason: 'stop', message });
+        stream.end();
+      };
+      return stream;
+    });
+    const modelPolicy = policy();
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-long-turn',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'base',
+    });
+
+    try {
+      const execution = runtime.execute({
+        turnId: 'turn-long',
+        runId: 'run-long',
+        prompt: 'wait across several lease renewals',
+        modelPolicy,
+        skillSnapshot: await emptySkills(),
+        capabilityTools: [],
+        permissionPolicy: { preflight: () => ({ allowed: true }) },
+        workspaceTrusted: true,
+        events: { emit: () => undefined },
+      });
+      await vi.waitFor(() => expect(finishProvider).toBeTypeOf('function'));
+      await vi.advanceTimersByTimeAsync(2_500);
+      finishProvider?.();
+
+      await expect(execution).resolves.toBeUndefined();
+      expect(authority.readCheckpoint('conversation-long-turn', 'turn-long')).toMatchObject({
+        terminalState: 'completed',
+        writerLeaseId: lease.leaseId,
+      });
+    } finally {
+      runtime.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the lease renewal timer referenced until runtime disposal', async () => {
+    const lease = authority.acquireLease('conversation-lease-timer');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-lease-timer',
+      branchId: 'main',
+    });
+    const probeTimer = setTimeout(() => undefined, 0);
+    const unref = vi.spyOn(Object.getPrototypeOf(probeTimer), 'unref');
+    clearTimeout(probeTimer);
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-lease-timer',
+      branchId: 'main',
+      models: createFixtureModels(),
+      initialModelPolicy: policy(),
+      baseSystemPrompt: 'base',
+    });
+
+    try {
+      expect(unref).not.toHaveBeenCalled();
+    } finally {
+      runtime.dispose();
+      unref.mockRestore();
+    }
+  });
+
   it('fences an idle runtime after another Host explicitly takes over', async () => {
     await authority.dispose();
     vi.useFakeTimers();
@@ -901,7 +995,6 @@ describe('PiConversationRuntime', () => {
       {
         path: join(root, 'project-skills'),
         source: { kind: 'project' },
-        entryPointKind: 'skill',
       },
     ]);
     let capturedContext: Context | undefined;
@@ -921,6 +1014,7 @@ describe('PiConversationRuntime', () => {
     });
     const skill = skills.records[0];
     if (!skill) throw new Error('Expected the fixture Skill record.');
+    const skillEvents: PiProductAgentEvent[] = [];
 
     await expect(
       runtime.executeSkill({
@@ -933,9 +1027,10 @@ describe('PiConversationRuntime', () => {
         capabilityTools: [],
         permissionPolicy: { preflight: () => ({ allowed: true }) },
         workspaceTrusted: true,
-        events: { emit: () => undefined },
+        events: { emit: (event) => skillEvents.push(event) },
       }),
     ).rejects.toThrow('is not available in this turn snapshot');
+    expect(skillEvents).toEqual([]);
 
     await runtime.executeSkill({
       turnId: 'turn-skill',
@@ -948,8 +1043,18 @@ describe('PiConversationRuntime', () => {
       capabilityTools: [],
       permissionPolicy: { preflight: () => ({ allowed: true }) },
       workspaceTrusted: true,
-      events: { emit: () => undefined },
+      events: { emit: (event) => skillEvents.push(event) },
     });
+
+    expect(skillEvents.map((event) => event.type)).toContain('skill.activated');
+    expect(skillEvents.find((event) => event.type === 'skill.activated')).toMatchObject({
+      skillName: 'fixture-skill',
+      source: 'project',
+      fingerprint: skill.fingerprint,
+    });
+    expect(skillEvents.findIndex((event) => event.type === 'turn.started')).toBeLessThan(
+      skillEvents.findIndex((event) => event.type === 'skill.activated'),
+    );
 
     expect(capturedContext?.systemPrompt).toContain('/__neko_skills/');
     expect(capturedContext?.systemPrompt).not.toContain(root);
@@ -988,7 +1093,6 @@ describe('PiConversationRuntime', () => {
       {
         path: join(root, 'project-skills'),
         source: { kind: 'project' },
-        entryPointKind: 'skill',
       },
     ]);
     const locator = skills.records[0]!.locator.value;
@@ -1108,12 +1212,13 @@ describe('PiConversationRuntime', () => {
     const result = await runtime.compactContext({
       reserveTokens: 1_024,
       keepRecentTokens: 20,
-      retainedProductReferences: ['resource:asset-1'],
+      retainedProductReferences: ['resource:asset-1', 'character-version:original'],
     });
 
     expect(result).toMatchObject({ performed: true, originalTokens: expect.any(Number) });
     expect(summarizationPrompts).toHaveLength(1);
     expect(summarizationPrompts[0]).toContain('resource:asset-1');
+    expect(summarizationPrompts[0]).toContain('character-version:original');
     const compactedSession = await authority.openBranch('conversation-1', 'branch-main');
     expect((await compactedSession.getBranch()).at(-1)).toMatchObject({
       type: 'compaction',

@@ -1,7 +1,8 @@
 # Upstream Lock
 
-审计日期：2026-08-09。本文只记录第三方发布与供应链事实，不作为 OpenNeko 内部 contract 代际。
-任何 release、commit、artifact、Tool schema 或依赖集合变化都必须重新审查并原子替换当前记录。
+审计日期：2026-08-09。状态：历史研究证据，已被本 change 当前 proposal/design 的开放接入决策取代。
+本文只记录当时的第三方发布与供应链事实，不是当前安装、资格、版本或 Schema 准入要求；下文的
+normative wording 仅描述旧 managed-artifact 方案，不约束用户管理的公开 Plugin/Skill/MCP/runtime 路径。
 
 ## Browser Use
 
@@ -15,8 +16,8 @@
 - Wheel size：`718627` bytes
 - Wheel SHA-256：`2264439e45cc7dd7fe480ca37e9eabd040c31a4e4d5e20c069ad2f60c07e3ba8`
 - Wheel URL host：`files.pythonhosted.org`
-- GitHub release 没有平台 runtime artifact。OpenNeko 不得在用户机器调用 `pip`、`uv` 或浏览器下载器；
-  发布流程必须从固定 source、Python 依赖和 Chromium 构建自包含平台 artifact。
+- GitHub release 没有平台 runtime artifact。旧 managed-artifact 研究因此评估过固定 source、Python 依赖和
+  Chromium 的自包含平台 artifact；当前实现改为向用户展示上游 `uvx` 命令并由用户自行执行和维护。
 
 `browser_use/mcp/server.py` 的初始 observe Tool 审查结果如下。Digest 使用递归排序对象 key、保持数组顺序的
 canonical JSON，再计算 SHA-256。该发布没有为这些 Tool 声明 MCP annotations。
@@ -70,6 +71,13 @@ navigation Tool 的 exact page/session binding，并通过 packaged local fixtur
 - Windows x64 SHA-256：`9868b60999e64ed1028a0f65082624dab7523b06f33b68d582fa0a187d1bf618`
 - Artifact host：`github.com` release assets；上游 `checksums.txt` SHA-256 为
   `2aa497943793980bba915ebd6ebfab3aae9b7837064464055804862fd03068b4`
+- 2026-08-12 对官方 `darwin-universal` release asset 的独立检查确认：`CuaDriver.app` 的
+  `CFBundleIdentifier=com.trycua.driver`、`CFBundleShortVersionString=0.19.2`、Developer ID Team ID
+  `YCK386LBJ7`，签名 authority 为 `Developer ID Application: Cua AI, Inc. (YCK386LBJ7)`，包含 stapled
+  notarization ticket，并通过 `codesign --verify --deep --strict` 与 Gatekeeper `Notarized Developer ID` assessment。
+  bundle 内 authoritative executable 为 `Contents/MacOS/cua-driver`；上游安装器将可见 CLI symlink 精确解析到
+  该文件，普通 `cua-driver mcp` 通过 `/Applications/CuaDriver.app` daemon 保持 `com.trycua.driver` TCC
+  responsibility。OpenNeko 固定校验这些身份并只运行 `mcp`，不得运行 `mcp --direct` 或 raw `serve` helper。
 
 上游生成的 `libs/cua-driver/contract/manifest.json` 在固定 commit 中包含 23 个 MCP Tool，是本次审计来源。其第三方
 `contract_version`、`tools_list_schema_version`、`capability_version` 必须保留为 upstream provenance，

@@ -20,5 +20,9 @@ export type {
   CanvasHostSnapshot,
 } from '@neko/canvas-domain';
 export { createCanvasWebviewHost } from './canvas-webview-host';
-export type { CanvasWebviewDelegate, CanvasWebviewHostPort } from './canvas-webview-host';
+export type {
+  CanvasWebviewDelegate,
+  CanvasWebviewHostPort,
+  PreparedCanvasWebviewHostPort,
+} from './canvas-webview-host';
 export { CanvasHostProvider, useCanvasHost, useOptionalCanvasHost } from './canvas-host-context';

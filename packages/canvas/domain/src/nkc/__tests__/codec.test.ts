@@ -130,6 +130,57 @@ describe('loadNkc', () => {
     expect(result.data.connections).toHaveLength(1);
   });
 
+  it('opens with a safe invalid material locator isolated to its node and preserves it unchanged', () => {
+    const unavailableLocator = {
+      kind: 'document-entry',
+      source: {
+        kind: 'workspace-file',
+        path: 'neko/assets/Books/story.epub',
+      },
+      entryPath: 'image/cover.jpg',
+    } as const;
+    const result = loadNkc(
+      JSON.stringify({
+        ...VALID_CANVAS,
+        nodes: [
+          {
+            ...VALID_CANVAS.nodes[0],
+            data: {
+              assetPath: 'Books/story.epub/image/cover.jpg',
+              mediaType: 'image',
+              contentLocator: unavailableLocator,
+            },
+          },
+          {
+            id: 'sibling-note',
+            type: 'markdown',
+            position: { x: 300, y: 40 },
+            size: { width: 240, height: 160 },
+            zIndex: 2,
+            data: { content: 'Sibling remains editable' },
+          },
+        ],
+      }),
+    );
+
+    expect(result.validation.valid).toBe(true);
+    expect(result.validation.errors).toEqual([]);
+    expect(result.validation.warnings).toContainEqual(
+      expect.objectContaining({
+        field: 'nodes[0].data.contentLocator',
+        message: expect.stringContaining('canvas-material-content-locator-invalid'),
+      }),
+    );
+    expect(result.data.nodes[0]?.data).toMatchObject({ contentLocator: unavailableLocator });
+    expect(result.data.nodes[1]).toMatchObject({
+      id: 'sibling-note',
+      data: { content: 'Sibling remains editable' },
+    });
+    expect(JSON.parse(saveNkc(result.data))).toMatchObject({
+      nodes: [{ data: { contentLocator: unavailableLocator } }, { id: 'sibling-note' }],
+    });
+  });
+
   it('keeps non-portable material paths invalid', () => {
     const result = loadNkc(
       JSON.stringify({

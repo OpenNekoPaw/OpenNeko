@@ -341,8 +341,7 @@
   height: 76px;
 }
 
-.global-library-browser__thumbnail img,
-.global-library-browser__hover-preview img {
+.global-library-browser__thumbnail img {
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -427,21 +426,6 @@
   background: transparent;
   color: inherit;
   text-align: left;
-}
-
-.global-library-browser__hover-preview {
-  position: absolute;
-  z-index: 15;
-  top: calc(100% + 5px);
-  left: 12px;
-  width: min(320px, 70vw);
-  aspect-ratio: 8 / 5;
-  overflow: hidden;
-  border: 1px solid var(--neko-border, #aeb4bc);
-  border-radius: 6px;
-  background: #111;
-  box-shadow: 0 10px 30px rgb(0 0 0 / 24%);
-  pointer-events: none;
 }
 
 .global-library-browser__diagnostic,

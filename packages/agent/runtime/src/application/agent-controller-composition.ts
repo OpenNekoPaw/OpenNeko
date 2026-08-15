@@ -22,7 +22,7 @@ import {
   type AgentHostRouteEffectContext,
   type AgentConversationControllerTurnRequest,
   createAgentContentEffects,
-  type AgentLinkedMediaLibraryFileSearchInput,
+  type AgentWorkspaceLinkedMediaFileSearchInput,
   type AgentContentInteractionPort,
 } from '@neko/agent-runtime/runtime/host-controller';
 import {
@@ -53,6 +53,7 @@ import {
   type AgentEntryTargetReceipt,
   type AgentInputInvocationIntent,
   type AgentMessageQueueSnapshot,
+  type AgentTurnCapabilityConstraint,
   type OpenTab,
   type Message,
   type ProjectionAttachmentKey,
@@ -78,22 +79,25 @@ import {
 import type { ModelConfig as Model, ProviderConfig as Provider } from '@neko/ai-contracts';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
-import type { WorkspaceFileContentLocator } from '@neko/content';
 import {
   AgentQueuedTurnCancellationError,
+  type AgentTurnResult,
   type AgentTurnConfigurationSnapshot,
   type AgentTurnInput,
   type AgentVisiblePresentationBinding,
   type AgentWorkspaceRuntime,
 } from './agent-app-host';
+import type { AgentProviderExecutionResult } from './agent-conversation-lifecycle-service';
 import type { AgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import type { DesktopAgentConnectionIdentity } from '@neko/agent-contracts';
 import {
   createAgentStateRuntime,
   createDesktopAgentFactsProjector,
+  createDesktopAgentFactsStore,
   createAgentResourceDisplayProjector,
   type AgentStateRuntime,
   type DesktopAgentFactsProjector,
+  type DesktopAgentFactsStore,
   type AgentResourceDisplayRegistrationPort,
   type AgentResourceDisplayProjector,
 } from '@neko/agent-runtime/runtime';
@@ -154,17 +158,6 @@ export interface AgentControllerEffects extends AgentHostControllerEffectPorts {
   dispose(): void;
 }
 
-export interface AgentExternalOwnerTurnRuntimeSnapshot {
-  readonly modelPolicy: AgentModelPolicy;
-  readonly configuration: AgentTurnConfigurationSnapshot;
-  readonly permissionPolicy:
-    PiToolPermissionPolicy | ((events: PiProductEventSink) => PiToolPermissionPolicy);
-  readonly workspaceTrusted: boolean;
-  readonly locale: 'en' | 'zh';
-  readonly systemPrompt?: string;
-  readonly events?: PiProductEventSink;
-}
-
 export interface AgentControllerComposition {
   readonly requirements: Readonly<
     Partial<
@@ -185,6 +178,10 @@ export interface AgentControllerComposition {
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationCapabilityConstraint?: (
+      conversationId: string,
+    ) => Promise<AgentTurnCapabilityConstraint>;
+    readonly resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort;
     readonly readConversationEntryTargetReceipt?: (
       conversationId: string,
     ) => Promise<AgentEntryTargetReceipt | null>;
@@ -214,12 +211,25 @@ export interface AgentControllerComposition {
     readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
     readonly purposeModels?: AgentFlatPurposeModelRefs;
-  }) => Promise<void>;
-  resolveExternalOwnerTurnRuntime(input: {
+    readonly capabilityConstraint: AgentTurnCapabilityConstraint;
+  }) => Promise<AgentProviderExecutionResult>;
+  readonly startConversationTurn?: (input: {
     readonly workspace: AgentWorkspaceRuntime;
     readonly conversationId: string;
+    readonly messageText: string;
+    readonly configuration: AgentConversationConfiguration;
+    readonly context: AgentBoundDomainBinding;
     readonly locale: 'en' | 'zh';
-  }): Promise<AgentExternalOwnerTurnRuntimeSnapshot>;
+    readonly entryTargetReceipt?: AgentEntryTargetReceipt | null;
+    readonly capabilityConstraint: AgentTurnCapabilityConstraint;
+    readonly resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort;
+  }) => Promise<AgentProviderExecutionResult>;
+  createInitialConversationConfiguration(input: {
+    readonly workspace: AgentWorkspaceRuntime;
+  }): Promise<{
+    readonly request: AgentConfigurationRequest;
+    readonly projection: AgentConfigurationPolicyProjection;
+  }>;
   dispose?(): Promise<void>;
 }
 
@@ -236,6 +246,16 @@ export interface AgentConversationReferenceResolutionPort {
     readonly context: AgentBoundDomainBinding;
     readonly references: readonly AgentFileReference[];
   }): Promise<readonly AgentContextPayload[]>;
+}
+
+export interface AgentConversationDomainTurnResolutionPort {
+  resolve(input: {
+    readonly conversationId: string;
+    readonly context: AgentBoundDomainBinding;
+  }): Promise<{
+    readonly contextPayloads: readonly AgentContextPayload[];
+    readonly onTurnStarted?: (turnId: string) => Promise<void>;
+  }>;
 }
 
 export async function resolveAgentConversationTurnContext(input: {
@@ -264,10 +284,16 @@ export interface CreateAgentControllerCompositionOptions {
     readonly workspacePath: string;
   }) => ConfigManager;
   readonly contentInteraction: AgentContentInteractionPort;
-  readonly searchLinkedMediaLibraryFiles?: (
+  readonly searchWorkspaceLinkedMediaFiles?: (
+    projectId: string,
     workspace: AssetWorkspaceResolution,
-    input: AgentLinkedMediaLibraryFileSearchInput,
-  ) => Promise<readonly WorkspaceFileContentLocator[]>;
+    input: AgentWorkspaceLinkedMediaFileSearchInput,
+  ) => Promise<readonly import('@neko/content').WorkspaceFileContentLocator[]>;
+  readonly resolveProjectWorkspaceReadPath?: (
+    projectId: string,
+    workspace: AssetWorkspaceResolution,
+    locator: import('@neko/content').WorkspaceFileContentLocator,
+  ) => Promise<string>;
   readonly configInteraction: AgentConfigInteractionPort;
   readonly conversationReferences?: AgentConversationReferenceResolutionPort;
   readonly resources: AgentResourceDisplayRegistrationPort;
@@ -291,7 +317,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
 
   private readonly confirmations = new Map<string, PiToolConfirmationRegistry>();
   private readonly agentStates = new Map<string, AgentStateRuntime>();
-  private readonly pendingDisposals = new Set<Promise<void>>();
+  private readonly initialTurnFacts = new Map<string, DesktopAgentFactsStore>();
+  private readonly pendingDisposals = new Set<Promise<unknown>>();
 
   constructor(private readonly options: CreateAgentControllerCompositionOptions) {}
 
@@ -301,6 +328,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationCapabilityConstraint?: (
+      conversationId: string,
+    ) => Promise<AgentTurnCapabilityConstraint>;
+    readonly resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort;
     readonly readConversationEntryTargetReceipt?: (
       conversationId: string,
     ) => Promise<AgentEntryTargetReceipt | null>;
@@ -366,7 +397,16 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           .then(() => undefined),
       );
     });
-    const facts = createDesktopAgentFactsProjector({ connection: input.identity });
+    const initialFactsKey =
+      input.initialConversationId === undefined
+        ? undefined
+        : ownerKey(input.workspace.workspaceId, input.initialConversationId);
+    const initialFactsStore =
+      initialFactsKey === undefined ? undefined : this.getInitialTurnFactsStore(initialFactsKey);
+    const facts = createDesktopAgentFactsProjector({
+      connection: input.identity,
+      ...(initialFactsStore === undefined ? {} : { store: initialFactsStore }),
+    });
     const resourceDisplay = createAgentResourceDisplayProjector({
       identity: input.identity,
       workspace: input.workspace.workspace,
@@ -436,7 +476,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       });
       return disposal;
     };
-    const searchLinkedMediaLibraryFiles = this.options.searchLinkedMediaLibraryFiles;
+    const searchWorkspaceLinkedMediaFiles = this.options.searchWorkspaceLinkedMediaFiles;
+    const projectId = 'projectId' in input.identity ? input.identity.projectId : undefined;
     const effects: AgentControllerEffects = {
       conversation: this.createConversationEffects(
         input.workspace,
@@ -454,6 +495,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         input.readConversationConfiguration ?? missingConversationConfigurationDependency,
         input.readConversationContext ?? missingConversationContextDependency,
         input.readConversationEntryTargetReceipt ?? readNoConversationEntryTargetReceipt,
+        input.readConversationCapabilityConstraint ??
+          missingConversationCapabilityConstraintDependency,
+        input.resolveConversationDomainTurnContext,
       ),
       config: this.createConfigEffects(
         input.workspace,
@@ -473,15 +517,28 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         input.readGlobalSkillCatalog ?? missingGlobalSkillCatalogDependency,
         input.personalSkillOwnerId ?? '',
         input.readConversationConfiguration ?? missingConversationConfigurationDependency,
+        input.readConversationCapabilityConstraint ??
+          missingConversationCapabilityConstraintDependency,
+        input.resolveConversationDomainTurnContext,
       ),
       content: createAgentContentEffects({
         workspace: input.workspace.workspace,
         host: this.options.host,
         interaction: this.options.contentInteraction,
-        ...(searchLinkedMediaLibraryFiles
+        ...(this.options.resolveProjectWorkspaceReadPath && projectId
           ? {
-              searchLinkedMediaLibraryFiles: (searchInput) =>
-                searchLinkedMediaLibraryFiles(input.workspace.workspace, searchInput),
+              resolveWorkspaceReadPath: (locator) =>
+                this.options.resolveProjectWorkspaceReadPath?.(
+                  projectId,
+                  input.workspace.workspace,
+                  locator,
+                ) ?? Promise.reject(new Error('Agent Workspace resolver is unavailable.')),
+            }
+          : {}),
+        ...(searchWorkspaceLinkedMediaFiles && projectId
+          ? {
+              searchWorkspaceLinkedMediaFiles: (searchInput) =>
+                searchWorkspaceLinkedMediaFiles(projectId, input.workspace.workspace, searchInput),
             }
           : {}),
         reportMentionContributorError: this.options.reportError,
@@ -543,7 +600,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
     readonly purposeModels?: AgentFlatPurposeModelRefs;
-  }): Promise<void> => {
+    readonly capabilityConstraint: AgentTurnCapabilityConstraint;
+  }): Promise<AgentProviderExecutionResult> => {
+    const factsKey = ownerKey(input.workspace.workspaceId, input.conversationId);
+    const factsStore = this.getInitialTurnFactsStore(factsKey);
     const facts = createDesktopAgentFactsProjector({
       connection: {
         applicationInstanceId: 'agent-conversation-authority',
@@ -555,65 +615,133 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         viewId: `conversation:${input.conversationId}`,
         connectionId: `initial-turn:${input.turnId}`,
       },
+      store: factsStore,
     });
     try {
-      try {
-        await this.executeTurn({
-          workspace: input.workspace,
-          config: this.getConfig(input.workspace),
-          request: {
-            source: 'user-message',
-            conversationId: input.conversationId,
-            messageText: input.messageText,
-            sessionMode: 'agent',
-            locale: input.locale,
-            turnId: input.turnId,
-            ...(input.purposeModels === undefined ? {} : { purposeModels: input.purposeModels }),
-            ...(input.contextPayloads?.length ? { contextPayloads: input.contextPayloads } : {}),
-          },
-          context: {
-            identity: {
-              hostKind: 'electron',
-              applicationId: 'agent-conversation-authority',
-              windowId: `conversation:${input.conversationId}`,
-              viewId: `conversation:${input.conversationId}`,
-              workspaceId: input.workspace.workspaceId,
-              connectionId: `initial-turn:${input.turnId}`,
-            },
-            post: () => undefined,
-          },
-          facts,
-          configuration: input.configuration,
-          conversationContext: input.context,
-          entryTargetReceipt: input.entryTargetReceipt ?? null,
-          ...(input.presentationText === undefined
-            ? {}
-            : { presentationText: input.presentationText }),
-          ...(input.skillName ? { skillName: input.skillName } : {}),
-          ...(input.skillActivationId ? { skillActivationId: input.skillActivationId } : {}),
-          ...(input.additionalInstructions
-            ? { additionalInstructions: input.additionalInstructions }
-            : {}),
-        });
-      } catch (error) {
-        await input.workspace.checkpointFailedInitialTurn({
+      const result = await this.executeTurn({
+        workspace: input.workspace,
+        config: this.getConfig(input.workspace),
+        request: {
+          source: 'user-message',
           conversationId: input.conversationId,
+          messageText: input.messageText,
+          sessionMode: 'agent',
+          locale: input.locale,
           turnId: input.turnId,
-          messageText: input.presentationText ?? input.messageText,
-          contextPayloads: input.contextPayloads,
-        });
-        throw error;
+          ...(input.purposeModels === undefined ? {} : { purposeModels: input.purposeModels }),
+          ...(input.contextPayloads?.length ? { contextPayloads: input.contextPayloads } : {}),
+        },
+        context: {
+          identity: {
+            hostKind: 'electron',
+            applicationId: 'agent-conversation-authority',
+            windowId: `conversation:${input.conversationId}`,
+            viewId: `conversation:${input.conversationId}`,
+            workspaceId: input.workspace.workspaceId,
+            connectionId: `initial-turn:${input.turnId}`,
+          },
+          post: () => undefined,
+        },
+        facts,
+        configuration: input.configuration,
+        conversationContext: input.context,
+        entryTargetReceipt: input.entryTargetReceipt ?? null,
+        ...(input.presentationText === undefined
+          ? {}
+          : { presentationText: input.presentationText }),
+        ...(input.skillName ? { skillName: input.skillName } : {}),
+        ...(input.skillActivationId ? { skillActivationId: input.skillActivationId } : {}),
+        ...(input.additionalInstructions
+          ? { additionalInstructions: input.additionalInstructions }
+          : {}),
+        capabilityConstraint: input.capabilityConstraint,
+      });
+      if (!result) {
+        throw new Error(`Agent initial Turn '${input.turnId}' was cancelled.`);
       }
+      return projectAgentProviderExecutionResult(result);
+    } catch (error) {
+      await input.workspace.checkpointFailedInitialTurn({
+        conversationId: input.conversationId,
+        turnId: input.turnId,
+        messageText: input.presentationText ?? input.messageText,
+        contextPayloads: input.contextPayloads,
+      });
+      throw error;
+    }
+  };
+
+  readonly startConversationTurn = async (input: {
+    readonly workspace: AgentWorkspaceRuntime;
+    readonly conversationId: string;
+    readonly messageText: string;
+    readonly configuration: AgentConversationConfiguration;
+    readonly context: AgentBoundDomainBinding;
+    readonly locale: 'en' | 'zh';
+    readonly entryTargetReceipt?: AgentEntryTargetReceipt | null;
+    readonly capabilityConstraint: AgentTurnCapabilityConstraint;
+    readonly resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort;
+  }): Promise<AgentProviderExecutionResult> => {
+    const facts = createDesktopAgentFactsProjector({
+      connection: {
+        applicationInstanceId: 'agent-conversation-authority',
+        windowId: `conversation:${input.conversationId}`,
+        workbenchInstanceId: `conversation:${input.conversationId}`,
+        agentSurfaceId: `domain-turn:${input.conversationId}`,
+        projectId: `conversation:${input.conversationId}`,
+        workspaceId: input.workspace.workspaceId,
+        viewId: `conversation:${input.conversationId}`,
+        connectionId: `domain-turn:${input.conversationId}`,
+      },
+    });
+    try {
+      const result = await this.executeTurn({
+        workspace: input.workspace,
+        config: this.getConfig(input.workspace),
+        request: {
+          source: 'user-message',
+          conversationId: input.conversationId,
+          messageText: input.messageText,
+          sessionMode: 'agent',
+          locale: input.locale,
+        },
+        context: {
+          identity: {
+            hostKind: 'electron',
+            applicationId: 'agent-conversation-authority',
+            windowId: `conversation:${input.conversationId}`,
+            viewId: `conversation:${input.conversationId}`,
+            workspaceId: input.workspace.workspaceId,
+            connectionId: `domain-turn:${input.conversationId}`,
+          },
+          post: () => undefined,
+        },
+        facts,
+        configuration: input.configuration,
+        conversationContext: input.context,
+        entryTargetReceipt: input.entryTargetReceipt ?? null,
+        capabilityConstraint: input.capabilityConstraint,
+        ...(input.resolveConversationDomainTurnContext === undefined
+          ? {}
+          : {
+              resolveConversationDomainTurnContext: input.resolveConversationDomainTurnContext,
+            }),
+      });
+      if (!result) {
+        throw new Error(`Agent Conversation '${input.conversationId}' Turn was cancelled.`);
+      }
+      return projectAgentProviderExecutionResult(result);
     } finally {
       facts.dispose();
     }
   };
 
-  async resolveExternalOwnerTurnRuntime(input: {
+  async createInitialConversationConfiguration(input: {
     readonly workspace: AgentWorkspaceRuntime;
-    readonly conversationId: string;
-    readonly locale: 'en' | 'zh';
-  }): Promise<AgentExternalOwnerTurnRuntimeSnapshot> {
+  }): Promise<{
+    readonly request: AgentConfigurationRequest;
+    readonly projection: AgentConfigurationPolicyProjection;
+  }> {
     const config = this.getConfig(input.workspace);
     const settings = config.getAssistantRuntimeSettingsSnapshot();
     if (!settings.selectedProviderId || !settings.selectedModelId) {
@@ -646,43 +774,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         thinkingBudget: settings.thinkingBudget,
       },
     });
-    const resolved = await this.resolveModelPolicy(input.workspace, config, {
-      conversationId: input.conversationId,
-      request,
-      projection,
-    });
-    const promptBuilder = createSystemPromptBuilder({
-      locale: input.locale,
-      executionMode: settings.executionMode,
-    });
-    await promptBuilder.loadAgentsFile(
-      input.workspace.workspace.workspacePath,
-      join(this.options.userHome, '.neko'),
-    );
-    const systemPrompt = [
-      promptBuilder.buildForExecutionMode(settings.executionMode),
-      ...input.workspace
-        .readCapabilityPromptFragments(input.locale)
-        .map((fragment) => fragment.content.trim())
-        .filter(Boolean),
-      settings.customSystemPrompt.trim(),
-    ]
-      .filter(Boolean)
-      .join('\n\n# User Instructions\n\n');
-    return {
-      modelPolicy: resolved.policy,
-      configuration: resolved.configuration,
-      permissionPolicy: (events) =>
-        this.createPermissionPolicy(
-          input.workspace,
-          input.conversationId,
-          settings.executionMode,
-          events,
-        ),
-      workspaceTrusted: true,
-      locale: input.locale,
-      systemPrompt,
-    };
+    return { request, projection };
   }
 
   async dispose(): Promise<void> {
@@ -697,6 +789,15 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       throw new AggregateError(errors, 'Failed to dispose Agent controller effects.');
     }
     this.agentStates.clear();
+    this.initialTurnFacts.clear();
+  }
+
+  private getInitialTurnFactsStore(key: string): DesktopAgentFactsStore {
+    const existing = this.initialTurnFacts.get(key);
+    if (existing) return existing;
+    const store = createDesktopAgentFactsStore();
+    this.initialTurnFacts.set(key, store);
+    return store;
   }
 
   private createConversationEffects(
@@ -719,6 +820,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readConversationEntryTargetReceipt: (
       conversationId: string,
     ) => Promise<AgentEntryTargetReceipt | null> = readNoConversationEntryTargetReceipt,
+    readConversationCapabilityConstraint: (
+      conversationId: string,
+    ) => Promise<AgentTurnCapabilityConstraint> = missingConversationCapabilityConstraintDependency,
+    resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort,
   ): AgentControllerEffects['conversation'] {
     const postConversationList = async (context: AgentHostRouteEffectContext): Promise<void> => {
       bind(context);
@@ -782,7 +887,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         readConversationConfiguration(request.conversationId),
         readConversationContext(request.conversationId),
         readConversationEntryTargetReceipt(request.conversationId),
-      ]).then(([configuration, conversationContext, entryTargetReceipt]) =>
+        readConversationCapabilityConstraint(request.conversationId),
+      ]).then(([configuration, conversationContext, entryTargetReceipt, capabilityConstraint]) =>
         this.executeTurn({
           workspace,
           config,
@@ -792,6 +898,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           configuration,
           conversationContext,
           entryTargetReceipt,
+          capabilityConstraint,
+          ...(resolveConversationDomainTurnContext === undefined
+            ? {}
+            : { resolveConversationDomainTurnContext }),
           ...(skillName ? { skillName } : {}),
           ...(additionalInstructions ? { additionalInstructions } : {}),
         }),
@@ -1099,12 +1209,20 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readConversationConfiguration: (
       conversationId: string,
     ) => Promise<AgentConversationConfiguration>,
+    readConversationCapabilityConstraint: (
+      conversationId: string,
+    ) => Promise<AgentTurnCapabilityConstraint>,
+    resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort,
   ): AgentControllerEffects['skill'] {
     const readCatalog = async (conversationId: string) => {
       if (!personalSkillOwnerId.trim()) {
         throw new Error('Agent Session input catalog has no personal Skill owner identity.');
       }
-      const binding = await readConversationContext(conversationId);
+      const [binding, capabilityConstraint, entryTargetReceipt] = await Promise.all([
+        readConversationContext(conversationId),
+        readConversationCapabilityConstraint(conversationId),
+        readConversationEntryTargetReceipt(conversationId),
+      ]);
       if (
         (binding.kind === 'workspace' && binding.workspaceId !== workspace.workspaceId) ||
         (binding.kind === 'assistant' && binding.assistantSpaceId !== workspace.workspaceId)
@@ -1114,11 +1232,19 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         );
       }
       const skills =
-        binding.kind === 'assistant'
-          ? await readGlobalSkillCatalog()
-          : await workspace.readSkillCatalog(true);
+        capabilityConstraint.skills === 'none'
+          ? {
+              records: [],
+              diagnostics: [],
+              warnings: [],
+              commands: { records: [], diagnostics: [] },
+            }
+          : binding.kind === 'assistant'
+            ? await readGlobalSkillCatalog()
+            : await workspace.readSkillCatalog(true);
       return {
         binding,
+        entryTargetReceipt,
         entries: projectAgentInputCatalog({
           skills,
           phase: 'session',
@@ -1133,11 +1259,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       input: AgentInputInvocationIntent,
       context: AgentHostRouteEffectContext,
     ): void => {
-      const skillName = input.kind === 'skill' ? input.skillName : input.commandId;
-      const skillActivationId =
-        input.kind === 'skill'
-          ? input.activationId
-          : parseCommandArtifactActivationId(input.handlerId);
+      const skillName = input.kind === 'skill' ? input.skillName : undefined;
+      const skillActivationId = input.kind === 'skill' ? input.activationId : undefined;
       const prefix = input.kind === 'skill' ? '$' : '/';
       const request: AgentConversationControllerTurnRequest = {
         source: 'user-message',
@@ -1150,22 +1273,42 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         readConversationConfiguration(conversationId),
         readConversationContext(conversationId),
         readConversationEntryTargetReceipt(conversationId),
-      ]).then(([configuration, conversationContext, entryTargetReceipt]) =>
-        this.executeTurn({
-          workspace,
-          config,
-          request,
-          context,
-          facts,
-          entryTargetReceipt,
+        readConversationCapabilityConstraint(conversationId),
+        input.kind === 'command'
+          ? workspace.invokeCommand(
+              input.commandId,
+              parseCommandActivationId(input.handlerId),
+              input.args,
+            )
+          : Promise.resolve(undefined),
+      ]).then(
+        ([
           configuration,
           conversationContext,
-          presentationText: `${prefix}${skillName}${input.args ? ` ${input.args}` : ''}`,
-          queueInput: input,
-          skillName,
-          skillActivationId,
-          ...(input.args ? { additionalInstructions: input.args } : {}),
-        }),
+          entryTargetReceipt,
+          capabilityConstraint,
+          commandPrompt,
+        ]) =>
+          this.executeTurn({
+            workspace,
+            config,
+            request:
+              commandPrompt === undefined ? request : { ...request, messageText: commandPrompt },
+            context,
+            facts,
+            entryTargetReceipt,
+            configuration,
+            conversationContext,
+            capabilityConstraint,
+            ...(resolveConversationDomainTurnContext === undefined
+              ? {}
+              : { resolveConversationDomainTurnContext }),
+            presentationText: `${prefix}${input.kind === 'skill' ? input.skillName : input.commandId}${input.args ? ` ${input.args}` : ''}`,
+            queueInput: input,
+            ...(skillName === undefined ? {} : { skillName }),
+            ...(skillActivationId === undefined ? {} : { skillActivationId }),
+            ...(input.kind === 'skill' && input.args ? { additionalInstructions: input.args } : {}),
+          }),
       );
       this.track(operation);
     };
@@ -1323,7 +1466,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly skillName?: string;
     readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
-  }): Promise<void> {
+    readonly capabilityConstraint?: AgentTurnCapabilityConstraint;
+    readonly resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort;
+  }): Promise<AgentTurnResult | undefined> {
     if (input.request.sessionMode !== 'agent') {
       throw new Error(
         `Desktop Agent does not support session mode '${input.request.sessionMode}'.`,
@@ -1332,6 +1477,14 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     if (input.request.attachments?.length) {
       throw new Error(
         'Desktop Agent binary attachment preprocessing is not connected to the Pi turn yet.',
+      );
+    }
+    if (
+      input.capabilityConstraint?.references === 'none' &&
+      (input.request.fileReferences?.length ?? 0) > 0
+    ) {
+      throw new Error(
+        `Agent turn capability constraint '${input.capabilityConstraint.owner.kind}/${input.capabilityConstraint.owner.id}' forbids external references.`,
       );
     }
     const record = input.workspace
@@ -1365,10 +1518,12 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     );
     const systemPrompt = [
       promptBuilder.buildForExecutionMode(executionMode),
-      ...input.workspace
-        .readCapabilityPromptFragments(locale)
-        .map((fragment) => fragment.content.trim())
-        .filter(Boolean),
+      ...(input.capabilityConstraint?.tools === 'none'
+        ? []
+        : input.workspace
+            .readCapabilityPromptFragments(locale)
+            .map((fragment) => fragment.content.trim())
+            .filter(Boolean)),
       settings.customSystemPrompt.trim(),
     ]
       .filter(Boolean)
@@ -1379,11 +1534,18 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       initialModelPolicy: resolved.policy,
       baseSystemPrompt: systemPrompt,
     });
+    const domainTurn =
+      input.resolveConversationDomainTurnContext === undefined
+        ? { contextPayloads: [] }
+        : await input.resolveConversationDomainTurnContext.resolve({
+            conversationId: input.request.conversationId,
+            context: input.conversationContext,
+          });
     const contextPayloads = await resolveAgentConversationTurnContext({
       resolver: this.options.conversationReferences ?? missingConversationReferenceDependency,
       conversationId: input.request.conversationId,
       context: input.conversationContext,
-      contextPayloads: input.request.contextPayloads,
+      contextPayloads: [...domainTurn.contextPayloads, ...(input.request.contextPayloads ?? [])],
       fileReferences: input.request.fileReferences,
     });
     const turnInput: AgentTurnInput = {
@@ -1437,6 +1599,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       ...(input.additionalInstructions
         ? { additionalInstructions: input.additionalInstructions }
         : {}),
+      ...(input.capabilityConstraint === undefined
+        ? {}
+        : { capabilityConstraint: input.capabilityConstraint }),
     };
     const factsEvents = createDeferredDesktopAgentFactsEvents();
     const observedTurnInput: AgentTurnInput = {
@@ -1444,6 +1609,13 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       events: factsEvents.events,
     };
     const operation = input.workspace.startTurn(observedTurnInput);
+    try {
+      await domainTurn.onTurnStarted?.(operation.identity.turnId);
+    } catch (error) {
+      input.workspace.cancelTurn(input.request.conversationId, operation.identity);
+      await operation.completion.catch(() => undefined);
+      throw error;
+    }
     factsEvents.bind(input.facts.beginTurn({ identity: operation.identity, systemPrompt }));
     this.postMessageQueueSnapshot(
       input.context,
@@ -1470,8 +1642,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           }),
         );
       }
+      return turn;
     } catch (error) {
       if (!(error instanceof AgentQueuedTurnCancellationError)) throw error;
+      return undefined;
     } finally {
       const queue = input.workspace.readMessageQueue(input.request.conversationId);
       this.postMessageQueueSnapshot(input.context, queue);
@@ -1754,7 +1928,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     return created;
   }
 
-  private track(operation: Promise<void>): void {
+  private track(operation: Promise<unknown>): void {
     this.pendingDisposals.add(operation);
     void operation.then(
       () => this.pendingDisposals.delete(operation),
@@ -1764,6 +1938,24 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       },
     );
   }
+}
+
+function projectAgentProviderExecutionResult(
+  result: AgentTurnResult,
+): AgentProviderExecutionResult {
+  const turn = result.projection.turns.find(
+    (candidate) => candidate.turnId === result.identity.turnId,
+  );
+  if (!turn || turn.completion?.status !== 'completed') {
+    throw new Error(`Agent Turn '${result.identity.turnId}' did not complete successfully.`);
+  }
+  return {
+    turnId: result.identity.turnId,
+    content: turn.items
+      .filter((item) => item.kind === 'assistant_text')
+      .map((item) => item.payload.content)
+      .join(''),
+  };
 }
 
 export function buildAgentConversationTurnFailureMessage(
@@ -2308,12 +2500,12 @@ function assertConversationControlOperationIdle(
   }
 }
 
-function parseCommandArtifactActivationId(handlerId: string): string {
-  const prefix = 'command-artifact:';
+function parseCommandActivationId(handlerId: string): string {
+  const prefix = 'command:';
   if (!handlerId.startsWith(prefix) || handlerId.length === prefix.length) {
     throw new Error(`Agent Session command has no registered handler '${handlerId}'.`);
   }
-  return handlerId.slice(prefix.length);
+  return handlerId;
 }
 
 async function missingConversationContextDependency(): Promise<AgentBoundDomainBinding> {
@@ -2332,6 +2524,10 @@ const missingConversationReferenceDependency: AgentConversationReferenceResoluti
 
 async function missingConversationConfigurationDependency(): Promise<AgentConversationConfiguration> {
   throw new Error('Agent Session has no exact Conversation configuration dependency.');
+}
+
+async function missingConversationCapabilityConstraintDependency(): Promise<AgentTurnCapabilityConstraint> {
+  throw new Error('Agent Session has no exact Conversation capability constraint dependency.');
 }
 
 async function missingConversationConfigurationUpdateDependency(): Promise<AgentConversationConfiguration> {

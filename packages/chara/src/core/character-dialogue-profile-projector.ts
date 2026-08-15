@@ -1,5 +1,5 @@
 /** Character-domain system prompt projection. */
-import type { EntityRepresentationTarget } from '@neko/entity-domain';
+import { serializeContentReferenceTarget, type ContentLocator } from '@neko/content';
 import type { NpcProfileFact, NpcProfileSource, NpcTestMode } from '@neko/chara/contracts';
 
 export interface CharacterDialogueProfilePromptOptions {
@@ -192,12 +192,14 @@ function renderRepresentationBindings(
   ].join('\n');
 }
 
-function representationLabel(representation: EntityRepresentationTarget): string {
+function representationLabel(representation: ContentLocator): string {
   switch (representation.kind) {
     case 'workspace-file':
       return representation.path;
+    case 'media-library':
+      return `${representation.libraryName}/${representation.relativePath}`;
     case 'document-entry':
-      return `${representation.source.path}#${representation.entryPath}`;
+      return `${serializeContentReferenceTarget(representation.source)}#${representation.entryPath}`;
     case 'generated-output':
       return representation.path;
     case 'package-resource':

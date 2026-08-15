@@ -4,6 +4,7 @@
   "entries": [
     { "suiteId": "skill.audio-mixing", "path": "audio-mixing/suite.json", "ownerId": "audio-mixing", "targetKind": "skill" },
     { "suiteId": "skill.color-grading", "path": "color-grading/suite.json", "ownerId": "color-grading", "targetKind": "skill" },
+    { "suiteId": "skill.character-creator", "path": "character-creator/suite.json", "ownerId": "character-creator", "targetKind": "skill" },
     { "suiteId": "skill.evaluation-artifact-author", "path": "evaluation-artifact-author/suite.json", "ownerId": "evaluation-artifact-author", "targetKind": "skill" },
     { "suiteId": "skill.image", "path": "image/suite.json", "ownerId": "image", "targetKind": "skill" },
     { "suiteId": "skill.media-production", "path": "media-production/suite.json", "ownerId": "media-production", "targetKind": "skill" },
@@ -15,6 +16,7 @@
     { "suiteId": "skill.storyboard", "path": "storyboard/suite.json", "ownerId": "storyboard", "targetKind": "skill" },
     { "suiteId": "skill.subtitle-assistant", "path": "subtitle-assistant/suite.json", "ownerId": "subtitle-assistant", "targetKind": "skill" },
     { "suiteId": "skill.video-editing", "path": "video-editing/suite.json", "ownerId": "video-editing", "targetKind": "skill" },
-    { "suiteId": "skill.video", "path": "video/suite.json", "ownerId": "video", "targetKind": "skill" }
+    { "suiteId": "skill.video", "path": "video/suite.json", "ownerId": "video", "targetKind": "skill" },
+    { "suiteId": "skill.world-creator", "path": "world-creator/suite.json", "ownerId": "world-creator", "targetKind": "skill" }
   ]
 }

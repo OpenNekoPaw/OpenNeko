@@ -510,6 +510,8 @@ function createContentFingerprint(locator: ContentLocator): string {
       return locator.revision;
     case 'workspace-file':
       return locator.fingerprint?.value ?? `locator:${hashStableValue(contentLocatorKey(locator))}`;
+    case 'media-library':
+      return locator.fingerprint?.value ?? `locator:${hashStableValue(contentLocatorKey(locator))}`;
     case 'document-entry':
       return (
         locator.fingerprint?.value ??
@@ -524,6 +526,8 @@ function createContentTitle(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return locator.path;
+    case 'media-library':
+      return locator.relativePath;
     case 'document-entry':
       return locator.entryPath;
     case 'package-resource':

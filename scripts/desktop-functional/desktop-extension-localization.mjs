@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const EXTENSIONS_NAVIGATION =
@@ -7,10 +7,10 @@ const EXTENSIONS_NAVIGATION =
 const SETTINGS_BUTTON = '.home-navigation-footer__actions button:last-child';
 const SETTINGS_NAVIGATION = '.desktop-settings__navigation .home-nav-button';
 const EXTENSION_ROOT = '.agent-extension-management-root';
-const EXTENSION_OPTION = `${EXTENSION_ROOT} [role="option"]`;
+const EXTENSION_OPTION = `${EXTENSION_ROOT} .agent-extension-catalog-row .management-surface-row__select`;
 const SEARCH_INPUT = `${EXTENSION_ROOT} .management-search-field input`;
 
-const ENGLISH_DESCRIPTION = 'Reviewed browser observation for approved domains';
+const ENGLISH_DESCRIPTION = 'Browser observation for approved domains';
 const CHINESE_DESCRIPTION = '在已授权域名中提供经过审核的浏览器观察能力';
 
 export const desktopExtensionLocalizationScenario = Object.freeze({
@@ -18,13 +18,20 @@ export const desktopExtensionLocalizationScenario = Object.freeze({
   owner: '@neko/agent-webview',
   async prepare({ fixtureHome }) {
     const workspacePath = join(fixtureHome, 'workspace');
+    const personalSkillRoot = join(fixtureHome, '.agents', 'skills', 'detail-test');
     await Promise.all([
       mkdir(workspacePath, { recursive: true }),
       mkdir(join(fixtureHome, '.neko'), { recursive: true }),
+      mkdir(personalSkillRoot, { recursive: true }),
     ]);
+    await writeFile(
+      join(personalSkillRoot, 'SKILL.md'),
+      '---\nname: detail-test\ndescription: Personal Skill detail fixture\n---\nUse the fixture method.\n',
+      'utf8',
+    );
     return { workspacePath };
   },
-  async run({ checkpoint, click, evaluate, screenshot, type, waitForSelector }) {
+  async run({ checkpoint, click, evaluate, screenshot, waitForSelector }) {
     await waitForSelector('[data-neko-controlled-workbench="true"]');
     const initialLocale = await evaluate('document.documentElement.dataset.nekoLocale');
     const initialViewport = await evaluate(
@@ -35,16 +42,36 @@ export const desktopExtensionLocalizationScenario = Object.freeze({
     await selectDesktopLocale(evaluate, 'en');
     await click(EXTENSIONS_NAVIGATION);
     await waitForSelector(EXTENSION_ROOT);
+    const personalSkill = await inspectPersonalSkillOverview({
+      click,
+      evaluate,
+      waitForSelector,
+    });
+    checkpoint('personal-skill-overview-en', personalSkill);
+    const personalSkillScreenshot = await screenshot('personal-skill-overview-en');
     const english = await inspectIntroduction({
       click,
       evaluate,
       expected: ENGLISH_DESCRIPTION,
       query: 'approved domains',
-      type,
       waitForSelector,
     });
     checkpoint('extension-introduction-en', english);
+    const browserControls = await inspectAutomationControls({
+      evaluate,
+      expectedSourceId: 'browser-use.observe.local',
+      expectPermissions: false,
+      waitForSelector,
+    });
+    checkpoint('browser-local-runtime-controls', browserControls);
     const englishScreenshot = await screenshot('extension-introduction-en');
+    await scrollAutomationControlsIntoView(evaluate);
+    const browserControlsScreenshot = await screenshot('browser-local-runtime-controls');
+
+    const computerControls = await inspectComputerControls({ evaluate, waitForSelector });
+    checkpoint('computer-local-runtime-controls', computerControls);
+    await scrollAutomationControlsIntoView(evaluate);
+    const computerScreenshot = await screenshot('computer-local-runtime-controls');
 
     await openAppearanceSettings({ click, waitForSelector });
     await selectDesktopLocale(evaluate, 'zh-cn');
@@ -61,7 +88,6 @@ export const desktopExtensionLocalizationScenario = Object.freeze({
       evaluate,
       expected: CHINESE_DESCRIPTION,
       query: '已授权域名',
-      type,
       waitForSelector,
     });
     checkpoint('extension-introduction-zh-cn', chinese);
@@ -83,12 +109,24 @@ export const desktopExtensionLocalizationScenario = Object.freeze({
       initialViewport,
       english,
       chinese,
-      screenshots: [englishScreenshot, chineseScreenshot],
+      personalSkill,
+      browserControls,
+      computerControls,
+      screenshots: [
+        personalSkillScreenshot,
+        englishScreenshot,
+        browserControlsScreenshot,
+        computerScreenshot,
+        chineseScreenshot,
+      ],
     };
   },
   assertObservation(_observation, evidence) {
+    assertPersonalSkillOverview(evidence.personalSkill);
     assertIntroduction(evidence.english, 'en', ENGLISH_DESCRIPTION);
     assertIntroduction(evidence.chinese, 'zh-cn', CHINESE_DESCRIPTION);
+    assertAutomationControls(evidence.browserControls, 'browser-use.observe.local', false);
+    assertAutomationControls(evidence.computerControls, 'computer-use.observe.local', true);
   },
 });
 
@@ -99,6 +137,102 @@ async function openAppearanceSettings({ click, waitForSelector }) {
   await waitForSelector(
     '[data-settings-surface="main"] .desktop-settings__card .desktop-settings__row:nth-child(2) select',
   );
+}
+
+async function inspectComputerControls({ evaluate, waitForSelector }) {
+  await replaceSearch(evaluate, 'Computer Use');
+  await waitForCondition(
+    evaluate,
+    `document.querySelectorAll(${JSON.stringify(EXTENSION_OPTION)}).length === 1 &&
+      document.querySelector(${JSON.stringify(`${EXTENSION_OPTION} strong`)})?.textContent === 'Computer Use'`,
+    'Computer Use search did not resolve one extension.',
+  );
+  await evaluate(`(() => {
+    const option = document.querySelector(${JSON.stringify(EXTENSION_OPTION)});
+    if (!(option instanceof HTMLButtonElement)) throw new Error('Computer Use option is unavailable.');
+    option.click();
+  })()`);
+  await waitForSelector('[data-workbench-main-panel="extension-detail"]');
+  await waitForCondition(
+    evaluate,
+    `document.querySelectorAll('.automation-local-runtime-management').length === 1 &&
+      document.querySelector('.automation-local-runtime-row strong')?.textContent === 'Cua Driver' &&
+      document.querySelectorAll('.automation-permission-management').length === 1`,
+    'Computer Use automation controls did not finish updating.',
+  );
+  return readAutomationControls(evaluate);
+}
+
+async function replaceSearch(evaluate, value) {
+  await evaluate(`(() => {
+    const input = document.querySelector(${JSON.stringify(SEARCH_INPUT)});
+    if (!(input instanceof HTMLInputElement)) throw new Error('Extension search is unavailable.');
+    const previous = input.value;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    if (!setter) throw new Error('Extension search setter is unavailable.');
+    setter.call(input, ${JSON.stringify(value)});
+    input._valueTracker?.setValue(previous);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+}
+
+async function inspectAutomationControls({
+  evaluate,
+  expectedSourceId,
+  expectPermissions,
+  waitForSelector,
+}) {
+  await waitForSelector('.automation-local-runtime-management [data-local-runtime-state]');
+  const result = await readAutomationControls(evaluate);
+  assertAutomationControls(result, expectedSourceId, expectPermissions);
+  return result;
+}
+
+async function readAutomationControls(evaluate) {
+  return evaluate(`(() => ({
+    localRuntimeCount: document.querySelectorAll('.automation-local-runtime-management').length,
+    sourceNames: Array.from(document.querySelectorAll('.automation-local-runtime-row strong')).map(
+      (item) => item.textContent ?? '',
+    ),
+    sourceCommands: Array.from(document.querySelectorAll('.automation-local-runtime-row code')).map(
+      (item) => item.textContent ?? '',
+    ),
+    permissionCount: document.querySelectorAll('.automation-permission-management').length,
+  }))()`);
+}
+
+async function scrollAutomationControlsIntoView(evaluate) {
+  await evaluate(`(() => {
+    const surface = document.querySelector('.desktop-extension-configuration-composition');
+    if (!(surface instanceof HTMLElement)) throw new Error('Extension detail scroll surface is unavailable.');
+    surface.scrollTo({ top: surface.scrollHeight, behavior: 'instant' });
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('.desktop-extension-configuration-composition')?.scrollTop > 0`,
+    'Extension automation controls did not scroll into view.',
+  );
+}
+
+function assertAutomationControls(result, expectedSourceId, expectPermissions) {
+  const expectedName =
+    expectedSourceId === 'browser-use.observe.local' ? 'Browser Use' : 'Cua Driver';
+  const expectedCommand =
+    expectedSourceId === 'browser-use.observe.local'
+      ? "uv tool install 'browser-use[cli]'"
+      : '/bin/bash -c "$(curl -fsSL https://cua.ai/driver/install.sh)"';
+  if (
+    result.localRuntimeCount !== 1 ||
+    result.sourceNames.length !== 1 ||
+    result.sourceNames[0] !== expectedName ||
+    result.sourceCommands.length !== 1 ||
+    result.sourceCommands[0] !== expectedCommand ||
+    result.permissionCount !== (expectPermissions ? 1 : 0)
+  ) {
+    throw new Error(
+      `Extension automation controls are not scoped to ${expectedSourceId}: ${JSON.stringify(result)}`,
+    );
+  }
 }
 
 async function selectDesktopLocale(evaluate, locale) {
@@ -120,10 +254,10 @@ async function selectDesktopLocale(evaluate, locale) {
   );
 }
 
-async function inspectIntroduction({ click, evaluate, expected, query, type, waitForSelector }) {
+async function inspectIntroduction({ click, evaluate, expected, query, waitForSelector }) {
   await click('[data-extension-catalog-tab="extensions"]');
   await waitForSelector(EXTENSION_OPTION);
-  await type(SEARCH_INPUT, query);
+  await replaceSearch(evaluate, query);
   await waitForCondition(
     evaluate,
     `document.querySelectorAll(${JSON.stringify(EXTENSION_OPTION)}).length === 1`,
@@ -131,9 +265,12 @@ async function inspectIntroduction({ click, evaluate, expected, query, type, wai
   );
   const catalog = await evaluate(`(() => {
     const option = document.querySelector(${JSON.stringify(EXTENSION_OPTION)});
+    const card = option?.closest('.agent-extension-catalog-row');
     return {
       name: option?.querySelector('strong')?.textContent ?? '',
       description: option?.querySelector('.management-surface-copy small')?.textContent ?? '',
+      enablementCount: card?.querySelectorAll('[role="switch"]').length ?? 0,
+      localInstallCount: document.querySelectorAll('[data-local-plugin-install="true"]').length,
     };
   })()`);
   await click(EXTENSION_OPTION);
@@ -141,12 +278,20 @@ async function inspectIntroduction({ click, evaluate, expected, query, type, wai
   const detailDescription = await evaluate(`(() =>
     document.querySelector('.extension-configuration-header > div > p:last-child')?.textContent ?? ''
   )()`);
+  const detailEnablementCount = await evaluate(
+    `document.querySelectorAll('.agent-extension-configuration-root [role="switch"]').length`,
+  );
+  const overview = await readOverview(evaluate);
   const locale = await evaluate('document.documentElement.dataset.nekoLocale');
   const result = {
     locale,
     name: catalog.name,
     catalogDescription: catalog.description,
+    catalogEnablementCount: catalog.enablementCount,
+    localInstallCount: catalog.localInstallCount,
     detailDescription,
+    detailEnablementCount,
+    overview,
     query,
   };
   assertIntroduction(result, locale, expected);
@@ -154,11 +299,18 @@ async function inspectIntroduction({ click, evaluate, expected, query, type, wai
 }
 
 function assertIntroduction(result, locale, expected) {
+  const expectedOverview = locale === 'zh-cn' ? '概览' : 'Overview';
   if (
     result.locale !== locale ||
     result.name !== 'Browser Use' ||
     result.catalogDescription !== expected ||
-    result.detailDescription !== expected
+    result.catalogEnablementCount !== 1 ||
+    result.localInstallCount !== 1 ||
+    result.detailDescription !== expected ||
+    result.detailEnablementCount !== 0 ||
+    result.overview.label !== expectedOverview ||
+    !result.overview.factLabels.includes(locale === 'zh-cn' ? '来源' : 'Source') ||
+    result.overview.rawPackageContentVisible
   ) {
     throw new Error(
       `Extension introduction localization is inconsistent: ${JSON.stringify({
@@ -167,6 +319,61 @@ function assertIntroduction(result, locale, expected) {
         result,
       })}`,
     );
+  }
+}
+
+async function inspectPersonalSkillOverview({ click, evaluate, waitForSelector }) {
+  await click('[data-extension-catalog-tab="skills"]');
+  await waitForSelector(EXTENSION_OPTION);
+  await replaceSearch(evaluate, 'detail-test');
+  await waitForCondition(
+    evaluate,
+    `document.querySelectorAll(${JSON.stringify(EXTENSION_OPTION)}).length === 1`,
+    'Personal Skill search did not resolve the fixture.',
+  );
+  await click(EXTENSION_OPTION);
+  await waitForSelector('[data-workbench-main-panel="extension-detail"]');
+  const result = await evaluate(`(() => ({
+    ...${readOverviewExpression()},
+    actionLabels: Array.from(document.querySelectorAll('.extension-configuration-actions button')).map(
+      (item) => item.textContent?.trim() ?? '',
+    ),
+  }))()`);
+  assertPersonalSkillOverview(result);
+  return result;
+}
+
+async function readOverview(evaluate) {
+  return evaluate(`(() => ${readOverviewExpression()})()`);
+}
+
+function readOverviewExpression() {
+  return `({
+    label: document.querySelector('.agent-extension-configuration-root .section-label')?.textContent ?? '',
+    factLabels: Array.from(document.querySelectorAll('.extension-configuration-fact dt')).map(
+      (item) => item.textContent ?? '',
+    ),
+    rawPackageContentVisible: ['plugin.json', 'mcp.json', 'SKILL.md body'].some((value) =>
+      document.querySelector('.agent-extension-configuration-root')?.textContent?.includes(value),
+    ),
+  })`;
+}
+
+function assertPersonalSkillOverview(result) {
+  for (const expected of ['Open SKILL.md', 'Show in Folder', 'Remove']) {
+    if (!result.actionLabels.includes(expected)) {
+      throw new Error(
+        `Personal Skill overview is missing '${expected}': ${JSON.stringify(result)}`,
+      );
+    }
+  }
+  if (
+    result.label !== 'Overview' ||
+    !result.factLabels.includes('Source') ||
+    !result.factLabels.includes('Identifier') ||
+    result.rawPackageContentVisible
+  ) {
+    throw new Error(`Personal Skill overview is inconsistent: ${JSON.stringify(result)}`);
   }
 }
 

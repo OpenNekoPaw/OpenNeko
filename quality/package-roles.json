@@ -166,7 +166,7 @@
       "path": "packages/cut/domain",
       "name": "@neko/cut-domain",
       "family": "cut",
-      "roles": ["contracts", "domain"],
+      "roles": ["contracts", "domain", "application"],
       "runtimes": ["host-neutral"],
       "productStatus": "active-product",
       "architectureState": "converged"
@@ -213,7 +213,7 @@
       "family": "entity",
       "roles": ["webview"],
       "runtimes": ["browser"],
-      "productStatus": "active-product",
+      "productStatus": "retained-kernel",
       "architectureState": "converged"
     },
     {

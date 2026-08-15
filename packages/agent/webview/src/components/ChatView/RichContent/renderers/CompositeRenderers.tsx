@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import type { RichContentProps, RichContentRendererEntry } from '../types';
+import { LightweightPreview } from '@neko/preview-webview/root';
 import type {
   AssetGalleryRichData,
   ComparisonGridRichData,
@@ -14,6 +14,7 @@ import type { StoryboardShotPlanOverlay } from '@neko/agent-contracts';
 import { useAgentHostMessages } from '../../../../host-runtime-context';
 import { SendToMenu } from '../../SendToMenu';
 import { useTranslation } from '../../../../i18n/I18nContext';
+import { getLocale } from '../../../../i18n';
 import {
   projectStoryboardTableAssetBatch,
   projectStoryboardTableCanvasAuthoringHandoff,
@@ -794,44 +795,23 @@ function MediaPreview({
   media: ResolvedCompositeMedia;
   compact?: boolean;
 }) {
-  const agentHostMessages = useAgentHostMessages();
-  const [imageFailed, setImageFailed] = useState(false);
   const label = media.caption ?? media.label ?? media.assetId ?? 'Media';
-  const imagePreviewFrameClassName = compact
-    ? 'inline-flex max-h-[220px] max-w-[170px]'
-    : 'flex h-[220px] max-h-[220px] w-full';
-  const previewImageClassName = compact
-    ? 'h-auto max-h-[220px] w-auto max-w-full object-contain'
-    : 'h-full w-full object-contain';
   const fallbackPreviewFrameClassName = compact
     ? 'h-[160px] max-h-[160px]'
     : 'h-[220px] max-h-[220px]';
   const roleLabel = formatMediaRole(media.role);
-  const hasRenderableSource = media.src.trim().length > 0;
-  const canOpen = canOpenMedia(media);
-
-  if (media.type === 'image') {
+  if (media.descriptor) {
     return (
       <div className="min-w-0">
-        <button
-          type="button"
-          className={`min-w-0 items-center justify-center overflow-hidden rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)] disabled:cursor-default ${imagePreviewFrameClassName}`}
-          onClick={() => openMedia(agentHostMessages, media)}
-          disabled={!canOpen}
-          title={label}
+        <div
+          className={
+            compact
+              ? 'max-h-[220px] max-w-[170px] overflow-hidden'
+              : 'h-[220px] max-h-[220px] w-full overflow-hidden'
+          }
         >
-          {hasRenderableSource && !imageFailed ? (
-            <img
-              src={media.src}
-              alt={label}
-              className={previewImageClassName}
-              loading="lazy"
-              onError={() => setImageFailed(true)}
-            />
-          ) : (
-            <MediaPreviewFallback mediaType={media.type} label={label} compact={compact} />
-          )}
-        </button>
+          <LightweightPreview descriptor={media.descriptor} locale={getLocale()} />
+        </div>
         {roleLabel && (
           <div className="mt-0.5 truncate text-[9px] leading-tight text-[var(--agent-fg-secondary)]">
             {roleLabel}
@@ -841,64 +821,15 @@ function MediaPreview({
     );
   }
 
-  if (media.type === 'video') {
-    if (!hasRenderableSource) {
-      return (
-        <MediaPreviewFallbackFrame
-          media={media}
-          label={label}
-          compact={compact}
-          previewHeightClassName={fallbackPreviewFrameClassName}
-        />
-      );
-    }
-    return (
-      <video
-        src={media.src}
-        controls
-        preload="metadata"
-        className={`w-full rounded bg-black object-contain ${fallbackPreviewFrameClassName}`}
-        title={label}
-      />
-    );
-  }
-
-  if (media.type === 'audio') {
-    if (!hasRenderableSource) {
-      return (
-        <MediaPreviewFallbackFrame
-          media={media}
-          label={label}
-          compact={compact}
-          previewHeightClassName="min-h-[42px]"
-        />
-      );
-    }
-    return <audio src={media.src} controls className="w-full" title={label} />;
-  }
-
-  if (media.type === 'model') {
-    return (
-      <button
-        type="button"
-        className="flex w-full items-center justify-center rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)] px-2 py-4 text-[10px] text-[var(--agent-fg-secondary)]"
-        onClick={() => openMedia(agentHostMessages, media)}
-        title={label}
-      >
-        3D Model - {label}
-      </button>
-    );
-  }
-
   return (
-    <button
-      type="button"
-      className="flex w-full items-center justify-center rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)] px-2 py-4 text-[10px] text-[var(--agent-fg-secondary)]"
-      onClick={() => openMedia(agentHostMessages, media)}
-      title={label}
-    >
-      {label}
-    </button>
+    <MediaPreviewFallbackFrame
+      media={media}
+      label={label}
+      compact={compact}
+      previewHeightClassName={
+        media.type === 'audio' ? 'min-h-[42px]' : fallbackPreviewFrameClassName
+      }
+    />
   );
 }
 
@@ -1047,23 +978,11 @@ function openMedia(
   hostMessages: ReturnType<typeof useAgentHostMessages>,
   media: ResolvedCompositeMedia,
 ): void {
-  if (isExternalOpenUrl(media.src)) {
-    hostMessages.openUrl(media.src);
-  }
+  if (media.contentLocator) hostMessages.openFile(media.contentLocator);
 }
 
 function canOpenMedia(media: ResolvedCompositeMedia): boolean {
-  return isExternalOpenUrl(media.src);
-}
-
-function isExternalOpenUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
-    return url.hostname !== '127.0.0.1' && url.hostname !== 'localhost' && url.hostname !== '[::1]';
-  } catch {
-    return false;
-  }
+  return Boolean(media.contentLocator);
 }
 
 function dedupeDiagnostics(

@@ -6,6 +6,7 @@ import {
 import type {
   AgentControllerComposition,
   AgentControllerEffects,
+  AgentConversationDomainTurnResolutionPort,
   AgentSkillCatalog,
   AgentWorkspaceRuntime,
 } from '@neko/agent-runtime/application';
@@ -20,6 +21,7 @@ import {
   type AgentConfigurationPolicyProjection,
   type AgentConfigurationRequest,
   type AgentConversationConfiguration,
+  type AgentTurnCapabilityConstraint,
   type Message,
   type ProjectionAttachmentKey,
 } from '@neko/agent-contracts';
@@ -76,6 +78,10 @@ export interface DesktopAgentBridgeRuntime {
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationCapabilityConstraint?: (
+      conversationId: string,
+    ) => Promise<AgentTurnCapabilityConstraint>;
+    readonly resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort;
     readonly readConversationEntryTargetReceipt?: (
       conversationId: string,
     ) => Promise<AgentEntryTargetReceipt | null>;
@@ -214,6 +220,10 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationCapabilityConstraint?: (
+      conversationId: string,
+    ) => Promise<AgentTurnCapabilityConstraint>;
+    readonly resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort;
     readonly readConversationEntryTargetReceipt?: (
       conversationId: string,
     ) => Promise<AgentEntryTargetReceipt | null>;
@@ -277,6 +287,8 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
         : { initialConversationMessage: input.initialConversationMessage }),
       readConversationContext:
         input.readConversationContext ?? missingConversationContextDependency,
+      readConversationCapabilityConstraint: input.readConversationCapabilityConstraint,
+      resolveConversationDomainTurnContext: input.resolveConversationDomainTurnContext,
       readConversationEntryTargetReceipt: input.readConversationEntryTargetReceipt,
       readConversationConfiguration: input.readConversationConfiguration,
       updateConversationConfiguration: input.updateConversationConfiguration,

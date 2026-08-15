@@ -79,7 +79,12 @@ describe('Agent launch application service', () => {
         },
       },
       thinkingBudget: 128,
-      skills: { records: [], diagnostics: [] },
+      skills: {
+        records: [],
+        diagnostics: [],
+        warnings: [],
+        commands: { records: [], diagnostics: [] },
+      },
       interaction: assistantDraft(),
       personalSkillOwnerId: 'assistant:default',
       launchCommandHandlerIds: new Set(),
@@ -122,13 +127,12 @@ describe('Agent launch application service', () => {
             name: 'character-helper',
             description: 'Character helper',
             source: { kind: 'builtin' },
-            enabled: true,
-            trusted: true,
             fingerprint: 'skill-character-helper',
-            entryPoint: { kind: 'skill' },
           },
         ],
         diagnostics: [],
+        warnings: [],
+        commands: { records: [], diagnostics: [] },
       },
       interaction: {
         phase: 'draft',
@@ -175,6 +179,79 @@ describe('Agent launch application service', () => {
       policy: { status: 'locked', owner: 'character-version-lin' },
     });
     expect(projection.configuration.fields.model.policy.status).toBe('editable');
+  });
+
+  it('keeps builtin creator Skills available in Assistant and Workspace drafts', () => {
+    const projection = projectAgentLaunchBaseCatalog({
+      config: createAssistantConfigState(),
+      thinkingBudget: 128,
+      skills: {
+        records: [
+          {
+            name: 'character-creator',
+            description: 'Create a character draft',
+            source: { kind: 'builtin' },
+            fingerprint: 'skill-character-creator',
+          },
+          {
+            name: 'world-creator',
+            description: 'Create a world draft',
+            source: { kind: 'builtin' },
+            fingerprint: 'skill-world-creator',
+          },
+        ],
+        diagnostics: [],
+        warnings: [],
+        commands: { records: [], diagnostics: [] },
+      },
+      interaction: assistantDraft(),
+      personalSkillOwnerId: 'assistant:default',
+      launchCommandHandlerIds: new Set(),
+    });
+
+    expect(projection.inputs.find((entry) => entry.name === 'character-creator')).toMatchObject({
+      trigger: 'skill',
+      bindingRequirement: 'any',
+      availability: { status: 'available' },
+    });
+    expect(projection.inputs.find((entry) => entry.name === 'world-creator')).toMatchObject({
+      trigger: 'skill',
+      bindingRequirement: 'any',
+      availability: { status: 'available' },
+    });
+
+    const workspaceProjection = projectAgentLaunchBaseCatalog({
+      config: createAssistantConfigState(),
+      thinkingBudget: 128,
+      skills: {
+        records: [
+          {
+            name: 'character-creator',
+            description: 'Create a character draft',
+            source: { kind: 'builtin' },
+            fingerprint: 'skill-character-creator',
+          },
+        ],
+        diagnostics: [],
+        warnings: [],
+        commands: { records: [], diagnostics: [] },
+      },
+      interaction: {
+        phase: 'draft',
+        draftId: 'draft-workspace',
+        binding: {
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'workspace-grant-1',
+        },
+        bindingReceipt: null,
+      },
+      personalSkillOwnerId: 'assistant:default',
+      launchCommandHandlerIds: new Set(),
+    });
+    expect(
+      workspaceProjection.inputs.find((entry) => entry.name === 'character-creator'),
+    ).toMatchObject({ bindingRequirement: 'any', availability: { status: 'available' } });
   });
   it('owns exact connection, binding receipt, unified catalog and opaque grants', async () => {
     const releaseConnection = vi.fn(async () => undefined);
@@ -395,7 +472,8 @@ describe('Agent launch application service', () => {
       kind: 'authoring' as const,
       workspaceId: 'workspace-1',
       workspaceGrantId: 'grant-1',
-      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+      authority: { kind: 'project' as const, projectId: 'project-1' },
+      target: { kind: 'content-document' as const, documentId: 'documents/story.md' },
     };
 
     await expect(
@@ -411,7 +489,8 @@ describe('Agent launch application service', () => {
 
     const replacementBinding = {
       ...binding,
-      target: { kind: 'content-project' as const, contentProjectId: 'content-2' },
+      authority: { kind: 'project' as const, projectId: 'project-2' },
+      target: { kind: 'content-document' as const, documentId: 'documents/other.md' },
     };
     await service.configureEntryTarget(catalog.connection, 'authoring', replacementBinding);
     expect(
@@ -442,6 +521,34 @@ describe('Agent launch application service', () => {
       availability: { status: 'available' },
     };
     let identity = 0;
+    const characterCreatorInput = {
+      id: 'skill:builtin:character-creator',
+      name: 'character-creator',
+      description: 'Create a character draft.',
+      trigger: 'skill' as const,
+      prefix: '$' as const,
+      phaseRequirement: 'any' as const,
+      bindingRequirement: 'any' as const,
+      source: { kind: 'builtin' as const, sourceId: 'character-creator' },
+      availability: { status: 'available' as const },
+      executable: {
+        kind: 'skill' as const,
+        skillName: 'character-creator',
+        activationId: 'skill:builtin:character-creator',
+      },
+    };
+    const worldCreatorInput = {
+      ...characterCreatorInput,
+      id: 'skill:builtin:world-creator',
+      name: 'world-creator',
+      description: 'Create a world draft.',
+      source: { kind: 'builtin' as const, sourceId: 'world-creator' },
+      executable: {
+        kind: 'skill' as const,
+        skillName: 'world-creator',
+        activationId: 'skill:builtin:world-creator',
+      },
+    };
     const service = createAgentLaunchApplicationService({
       createIdentity: () => `launch-target-${++identity}`,
       catalog: {
@@ -450,7 +557,7 @@ describe('Agent launch application service', () => {
           defaultMediaModels: {},
           mediaUnderstandingModels: mediaUnderstandingModels(),
           configuration: availableConfiguration([model]),
-          inputs: [],
+          inputs: [characterCreatorInput, worldCreatorInput],
         }),
       },
       authorization: {
@@ -468,7 +575,7 @@ describe('Agent launch application service', () => {
                   targetReceiptId: 'target-receipt-1',
                   draftId,
                   connectionId: connection.connectionId,
-                  mode: 'authoring',
+                  mode,
                   binding,
                 },
         }),
@@ -487,15 +594,43 @@ describe('Agent launch application service', () => {
         bindingReceipt: null,
       },
     });
+    const assistantCatalog = service.readCatalog(attached.connection);
+    expect(() =>
+      service.validateDraftSubmit(attached.connection, {
+        draft: assistantCatalog.interaction,
+        entryTargetReceipt: null,
+        input: {
+          kind: 'skill',
+          catalogEntryId: characterCreatorInput.id,
+          skillName: 'character-creator',
+          activationId: 'skill:builtin:character-creator',
+          args: 'create one global Character',
+        },
+        references: [],
+        resourceGrantIds: [],
+        configuration: assistantCatalog.configuration.request!,
+      }),
+    ).not.toThrow();
+    await service.replaceBinding(attached.connection, {
+      kind: 'workspace',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    });
     const binding = {
       kind: 'authoring' as const,
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant-1',
-      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+      authority: { kind: 'project' as const, projectId: 'project-1' },
+      target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
     };
     const intent = await service.configureEntryTarget(attached.connection, 'authoring', binding);
     if (intent.targetReceipt === null) throw new Error('Expected an Authoring target receipt.');
     const current = service.readCatalog(attached.connection);
+    expect(current.interaction.binding).toEqual({
+      kind: 'workspace',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    });
     const input = {
       draft: current.interaction,
       entryTargetReceipt: intent.targetReceipt,
@@ -506,6 +641,18 @@ describe('Agent launch application service', () => {
     };
 
     expect(() => service.validateDraftSubmit(attached.connection, input)).not.toThrow();
+    expect(() =>
+      service.validateDraftSubmit(attached.connection, {
+        ...input,
+        input: {
+          kind: 'skill',
+          catalogEntryId: characterCreatorInput.id,
+          skillName: 'character-creator',
+          activationId: 'skill:builtin:character-creator',
+          args: 'preserve this prompt',
+        },
+      }),
+    ).not.toThrow();
     for (const entryTargetReceipt of [
       null,
       { ...intent.targetReceipt, targetReceiptId: 'target-receipt-stale' },
@@ -515,7 +662,7 @@ describe('Agent launch application service', () => {
         ...intent.targetReceipt,
         binding: {
           ...intent.targetReceipt.binding,
-          target: { kind: 'content-project' as const, contentProjectId: 'content-other' },
+          target: { kind: 'character-project' as const, characterProjectId: 'character-other' },
         },
       },
     ]) {
@@ -523,6 +670,48 @@ describe('Agent launch application service', () => {
         service.validateDraftSubmit(attached.connection, { ...input, entryTargetReceipt }),
       ).toThrow('does not match its exact Entry target receipt');
     }
+
+    const worldBinding = {
+      ...binding,
+      target: { kind: 'world-project' as const, worldProjectId: 'world-1' },
+    };
+    const worldIntent = await service.configureEntryTarget(
+      attached.connection,
+      'authoring',
+      worldBinding,
+    );
+    if (worldIntent.targetReceipt === null) throw new Error('Expected a World target receipt.');
+    const worldCatalog = service.readCatalog(attached.connection);
+    expect(() =>
+      service.validateDraftSubmit(attached.connection, {
+        ...input,
+        draft: worldCatalog.interaction,
+        entryTargetReceipt: worldIntent.targetReceipt,
+        input: {
+          kind: 'skill',
+          catalogEntryId: characterCreatorInput.id,
+          skillName: 'character-creator',
+          activationId: 'skill:builtin:character-creator',
+          args: 'must not mutate the World target',
+        },
+      }),
+    ).toThrow(
+      'Builtin Skill character-creator requires one exact character-project authoring target receipt.',
+    );
+    expect(() =>
+      service.validateDraftSubmit(attached.connection, {
+        ...input,
+        draft: worldCatalog.interaction,
+        entryTargetReceipt: worldIntent.targetReceipt,
+        input: {
+          kind: 'skill',
+          catalogEntryId: worldCreatorInput.id,
+          skillName: 'world-creator',
+          activationId: 'skill:builtin:world-creator',
+          args: 'fill only the exact World target',
+        },
+      }),
+    ).not.toThrow();
   });
 
   it('rejects a stale target result after a newer Entry configuration wins', async () => {

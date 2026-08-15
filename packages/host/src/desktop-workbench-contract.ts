@@ -17,12 +17,18 @@ export type DesktopWorkbenchDisplayMode = 'chat-main' | 'chat-only' | 'main-only
 export type DesktopWorkbenchMainSplitAxis = 'columns' | 'rows';
 export type DesktopPreviewViewPresentation = 'temporary' | 'pinned' | 'side';
 export type DesktopWorkbenchViewKind =
-  'canvas' | 'preview' | 'cut' | 'text-editor' | 'character-authoring' | 'world-authoring';
+  | 'project-content'
+  | 'canvas'
+  | 'preview'
+  | 'cut'
+  | 'text-editor'
+  | 'character-authoring'
+  | 'world-authoring';
 
 export interface DesktopWorkbenchViewRef {
   readonly viewId: string;
   readonly viewInstanceId: string;
-  readonly projectId: string;
+  readonly projectId?: string;
   readonly workspaceId: string;
   readonly kind: DesktopWorkbenchViewKind;
   readonly ownerId: string;
@@ -100,7 +106,7 @@ export function createDefaultDesktopWorkbenchLayout(
       width: 320,
     },
     display: {
-      mode: 'chat-only',
+      mode: 'chat-main',
       chatPosition: 'left',
       chatWidth: 360,
     },
@@ -231,9 +237,6 @@ export function setWorkbenchDisplayMode(
   mode: DesktopWorkbenchDisplayMode,
   chatPosition = workbench.display.chatPosition,
 ): DesktopWorkbenchLayoutProjection {
-  if (mode === 'main-only' && workbench.main.views.length === 0) {
-    throw invalidPayload(`Desktop display mode '${mode}' requires an attached Main View.`);
-  }
   if (mode === 'empty-main' && workbench.cutPanel?.presentation !== 'docked') {
     throw invalidPayload(`Desktop display mode '${mode}' requires a docked Cut Panel.`);
   }
@@ -292,6 +295,55 @@ export function openOrFocusMainView(
     throw staleIdentity(`Desktop Main View '${parsedView.viewId}' has no Group membership.`);
   }
   if (existingGroup) {
+    if (
+      options.splitAxis !== undefined &&
+      existingGroup.groupId === DESKTOP_PRIMARY_MAIN_GROUP_ID
+    ) {
+      const sourceViewIds = existingGroup.viewIds.filter(
+        (candidate) => candidate !== parsedView.viewId,
+      );
+      const source = {
+        ...existingGroup,
+        viewIds: sourceViewIds,
+        ...(sourceViewIds.length === 0
+          ? { activeViewId: undefined }
+          : {
+              activeViewId:
+                existingGroup.activeViewId === parsedView.viewId
+                  ? sourceViewIds.at(-1)
+                  : existingGroup.activeViewId,
+            }),
+      };
+      const currentSecondary = workbench.main.groups.find(
+        (group) => group.groupId === DESKTOP_SECONDARY_MAIN_GROUP_ID,
+      );
+      const secondary = {
+        ...(currentSecondary ?? {
+          groupId: DESKTOP_SECONDARY_MAIN_GROUP_ID,
+          viewIds: [],
+        }),
+        viewIds: [
+          ...(currentSecondary?.viewIds.filter((candidate) => candidate !== parsedView.viewId) ??
+            []),
+          parsedView.viewId,
+        ],
+        activeViewId: parsedView.viewId,
+      };
+      return parseDesktopWorkbenchLayout({
+        ...workbench,
+        main: {
+          views: workbench.main.views.map((candidate) =>
+            candidate.viewId === parsedView.viewId ? parsedView : candidate,
+          ),
+          groups: [source, secondary],
+          activeGroupId: DESKTOP_SECONDARY_MAIN_GROUP_ID,
+          split: {
+            axis: options.splitAxis,
+            ratio: workbench.main.split?.ratio ?? 0.5,
+          },
+        },
+      });
+    }
     const next = {
       ...workbench,
       main: {
@@ -336,9 +388,6 @@ export function openOrFocusMainView(
   let split = withoutTemporary.main.split;
   let activeGroupId = targetGroupId;
   if (options.splitAxis !== undefined) {
-    if (effectiveTarget.viewIds.length === 0) {
-      throw invalidPayload('Desktop side-open requires an existing Main View.');
-    }
     if (groups.length === 1) {
       groups = [
         effectiveTarget,
@@ -636,7 +685,7 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
     [
       'viewId',
       'viewInstanceId',
-      'projectId',
+      ...(record['projectId'] === undefined ? [] : ['projectId']),
       'workspaceId',
       'kind',
       'ownerId',
@@ -652,7 +701,15 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
   );
   const kind = requireOneOf(
     record['kind'],
-    ['canvas', 'preview', 'cut', 'text-editor', 'character-authoring', 'world-authoring'] as const,
+    [
+      'project-content',
+      'canvas',
+      'preview',
+      'cut',
+      'text-editor',
+      'character-authoring',
+      'world-authoring',
+    ] as const,
     'Desktop Workbench Main View kind is invalid.',
   );
   const documentId = readOptionalNonEmptyString(
@@ -717,11 +774,20 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
   if (kind !== 'world-authoring' && worldProjectId !== undefined) {
     throw invalidPayload('Desktop WorldProject identity belongs only to World authoring Views.');
   }
+  const projectId = readOptionalNonEmptyString(
+    record['projectId'],
+    'Desktop Workbench Main View Project identity is invalid.',
+  );
+  if (kind !== 'character-authoring' && kind !== 'world-authoring' && !projectId) {
+    throw invalidPayload('Desktop Workbench Main View requires an exact Project identity.');
+  }
   if (
-    (kind === 'character-authoring' || kind === 'world-authoring') &&
+    (kind === 'project-content' || kind === 'character-authoring' || kind === 'world-authoring') &&
     (documentId !== undefined || editorSessionId !== undefined)
   ) {
-    throw invalidPayload('Domain authoring Views cannot carry Content document identities.');
+    throw invalidPayload(
+      'Project and domain authoring Views cannot carry Content document identities.',
+    );
   }
   return {
     viewId: requireNonEmptyString(
@@ -732,10 +798,7 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
       record['viewInstanceId'],
       'Desktop Workbench Main View instance identity is required.',
     ),
-    projectId: requireNonEmptyString(
-      record['projectId'],
-      'Desktop Workbench Main View Project identity is required.',
-    ),
+    ...(projectId === undefined ? {} : { projectId }),
     workspaceId: requireNonEmptyString(
       record['workspaceId'],
       'Desktop Workbench Main View Workspace identity is required.',

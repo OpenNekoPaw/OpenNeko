@@ -9,6 +9,7 @@ Local host: `darwin-arm64`
 - `darwin-arm64` is the sole Desktop package and release target.
 - Windows and Linux remain required CI compatibility-test hosts, but do not run Forge, create a
   package, or upload a product artifact.
+- GitHub Actions no longer builds or uploads the macOS package; native evidence is explicitly local.
 - Agent Evaluation is excluded because this change does not alter prompts, Skills, tool routing,
   providers, AgentSession behavior, or Desktop Agent event projection.
 - Graphical Electron acceptance is excluded because this change does not alter renderer behavior,
@@ -40,12 +41,13 @@ modules did not exist. After implementation, the same focused suite passed all 2
   `3b5ea1d2439790bc550ccdd6e8c74d66f1f80940236d50cf67af400b8230ecc4`, matching
   `apps/neko-desktop/out/release/SHASUMS256.txt`.
 
-## Pending Remote Evidence
+## Current Publication Boundary
 
-- Re-run the GitHub Manual Gate after pushing the branch and record the macOS package job plus the
-  Windows/Linux test-only matrix result.
-- Real Developer ID signing, Apple notarization, stapling, Gatekeeper validation, and GitHub Release
-  publication belong to `establish-macos-release-pipeline` and require repository secrets plus a
-  stable `v<semver>` tag reachable from `origin/main`; the local manifest version does not gate it.
+- GitHub Manual/Merge Gate proves only deterministic source and Windows/Linux test evidence; it does
+  not build or upload a native Desktop artifact.
+- Real Developer ID signing, Apple notarization, stapling, and Gatekeeper validation remain future
+  work. Ordinary GitHub Release publication uses locally built and verified bytes under
+  `establish-macos-release-pipeline`; a stable `v<semver>` tag reachable from `origin/main` remains
+  authoritative and the local manifest version does not gate it.
 
 No Windows or Linux package, installer, startup, signing, or release qualification is claimed.

@@ -5,10 +5,11 @@ import {
   JobLifecycleError,
   type JobFailureSummary,
 } from '@neko/shared/job-lifecycle';
-import type {
-  GenerationExecutionPort,
-  GenerationExecutionResult,
-  MediaGenerationExecutionOptions,
+import {
+  GenerationExecutionOutcomeUnknownError,
+  type GenerationExecutionPort,
+  type GenerationExecutionResult,
+  type MediaGenerationExecutionOptions,
 } from '../execution';
 import type { MediaAdapterResult } from '../contracts';
 import type {
@@ -372,7 +373,8 @@ export class GenerationJobCoordinator implements GenerationJobPort {
           });
         }
         const providerOutcomeUnknown =
-          Boolean(current.providerTask) && current.progress.stage !== 'committing-result';
+          error instanceof GenerationExecutionOutcomeUnknownError ||
+          (Boolean(current.providerTask) && current.progress.stage !== 'committing-result');
         return this.commit(current, {
           phase: providerOutcomeUnknown ? 'outcome-unknown' : 'failed',
           progress: current.progress,

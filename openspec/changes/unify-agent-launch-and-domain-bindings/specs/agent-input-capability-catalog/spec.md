@@ -21,7 +21,7 @@ The Agent application SHALL compose one canonical `AgentInputCatalogEntry` proje
 
 ### Requirement: Catalog entries retain exact source provenance
 
-Command and Skill catalog entries SHALL distinguish builtin, personal, project, plugin and command-artifact origins through stable Host-owned identity and SHALL NOT resolve execution from display name alone.
+Command and Skill catalog entries SHALL distinguish builtin, personal, project and plugin origins through stable Host-owned identity. Portable Skills SHALL come only from Pi SkillHost, command documents SHALL come only from CommandHost, and neither path SHALL resolve execution from display name alone.
 
 #### Scenario: Entry composer discovers capabilities by typing
 
@@ -40,7 +40,7 @@ Command and Skill catalog entries SHALL distinguish builtin, personal, project, 
 
 #### Scenario: One catalog artifact is invalid
 
-- **WHEN** one Skill or command artifact fails strict discovery or validation
+- **WHEN** one Skill or command document fails strict discovery or validation
 - **THEN** only that item receives a diagnostic or is excluded and valid sibling commands, Skills, mentions and domains remain available
 
 ### Requirement: Draft submit preserves typed command and Skill intent

@@ -36,4 +36,17 @@ describe('Asset Management architecture boundary', () => {
     expect(registration).toContain('ASSET_CENTER_HOST_CHANNEL');
     expect(disposal).toContain('ASSET_CENTER_HOST_CHANNEL');
   });
+
+  it('keeps catalog thumbnails as decoration and delegates selected media to Main Preview', async () => {
+    const catalog = await readFile(resolve(packageRoot, 'src/global-library/root.tsx'), 'utf8');
+    const main = await readFile(resolve(packageRoot, 'src/global-library/main-root.tsx'), 'utf8');
+    const desktopMain = await readFile(
+      resolve(workspaceRoot, 'apps/neko-desktop/src/renderer/DesktopAssetCenterMainSurface.tsx'),
+      'utf8',
+    );
+    expect(catalog).not.toContain('hoverPreview');
+    expect(catalog).not.toContain("resolveThumbnail(item, 'hover')");
+    expect(main).toContain('renderPreview(preview.previewSessionId)');
+    expect(desktopMain).toContain('DesktopAuthorizedPreviewSurface');
+  });
 });

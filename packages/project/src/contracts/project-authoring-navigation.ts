@@ -6,7 +6,7 @@ import {
   type ProjectLocalTargetRef,
   type ProjectPublicationDependencyRef,
   projectAuthoringTargetKey,
-} from './project-composition';
+} from './project-target';
 
 export type ProjectSourceStudioTarget =
   | { readonly kind: 'character-studio'; readonly characterProjectId: string }
@@ -34,12 +34,6 @@ export type ProjectTargetTreeItem =
       readonly diagnostic?: string;
       readonly readOnly: true;
       readonly sourceStudioTarget?: ProjectSourceStudioTarget;
-    }
-  | {
-      readonly kind: 'unlinked-local-target';
-      readonly target: ProjectLocalTargetRef;
-      readonly identity: string;
-      readonly diagnostic: string;
     };
 
 export type ProjectAuthoringNavigationItem =
@@ -123,15 +117,6 @@ function parseNavigationItem(value: unknown): ProjectAuthoringNavigationItem {
         : { sourceStudioTarget: parseSourceStudioTarget(record['sourceStudioTarget']) }),
     };
   }
-  if (kind === 'unlinked-local-target') {
-    requireExactKeys(record, ['kind', 'target', 'identity', 'diagnostic']);
-    return {
-      kind,
-      target: parseProjectLocalTargetRef(record['target']),
-      identity: requireIdentity(record['identity'], 'Project navigation identity'),
-      diagnostic: requireIdentity(record['diagnostic'], 'Project navigation diagnostic'),
-    };
-  }
   throw new Error(`Unknown Project authoring navigation kind: ${String(kind)}`);
 }
 
@@ -147,7 +132,7 @@ function parseSnapshot(
     throw new Error(`Unknown Project authoring snapshot owner: ${String(owner)}`);
   }
   const expectedOwner =
-    target.kind === 'content-project'
+    target.kind === 'content-document'
       ? 'content'
       : target.kind === 'character-project'
         ? 'character'

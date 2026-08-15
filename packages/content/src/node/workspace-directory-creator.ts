@@ -6,16 +6,14 @@ import type {
 } from '../project-file-io/workspace-entry-creation';
 import { normalizeWorkspaceContentPath } from '../contracts';
 import {
-  authorizeWorkspaceLinkedPath,
-  type AuthorizeWorkspaceLinkedPathInput,
-  type WorkspaceLinkedPathGuardResult,
-} from './workspace-linked-path-guard';
+  authorizeWorkspaceContainedPath,
+  type AuthorizeWorkspacePathInput,
+  type WorkspacePathGuardResult,
+} from './workspace-path-guard';
 
 export interface NodeAuthorizedWorkspaceDirectoryCreatorOptions {
   readonly workspaceRoot: string;
-  readonly authorize?: (
-    input: AuthorizeWorkspaceLinkedPathInput,
-  ) => Promise<WorkspaceLinkedPathGuardResult>;
+  readonly authorize?: (input: AuthorizeWorkspacePathInput) => Promise<WorkspacePathGuardResult>;
 }
 
 export class NodeAuthorizedWorkspaceDirectoryCreator implements AuthorizedWorkspaceDirectoryCreator {
@@ -30,7 +28,7 @@ export class NodeAuthorizedWorkspaceDirectoryCreator implements AuthorizedWorksp
       return unavailable(workspacePath, 'content-unauthorized');
     }
     const targetPath = path.join(this.options.workspaceRoot, ...workspacePath.split('/'));
-    const authorization = await (this.options.authorize ?? authorizeWorkspaceLinkedPath)({
+    const authorization = await (this.options.authorize ?? authorizeWorkspaceContainedPath)({
       workspaceRoot: this.options.workspaceRoot,
       requestedPath: path.dirname(targetPath),
     });

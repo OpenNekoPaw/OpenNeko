@@ -2,7 +2,10 @@
 
 ### Requirement: Visible Surface and domain bootstrap start independently
 
-An active Cut or Preview View SHALL commit a stable, owner-qualified loading Surface without waiting for its dynamic Root module or document Snapshot to finish. After the exact View/session identity exists, module loading and the first domain Snapshot request SHALL start independently and MUST NOT wait for one another.
+An active Canvas, Cut, Preview, Text Editor or Resource Browser View SHALL commit a stable,
+owner-qualified loading Surface without waiting for its dynamic Root module or document Snapshot to
+finish. After the exact View/session identity exists, module loading and the first domain Snapshot
+request SHALL start independently and MUST NOT wait for one another.
 
 #### Scenario: Cut opens with a cold module
 
@@ -16,9 +19,21 @@ An active Cut or Preview View SHALL commit a stable, owner-qualified loading Sur
 - **THEN** the Preview slot presents its stable loading Surface while source preparation and module loading proceed
 - **AND** no unrelated Viewer module or hidden Preview Root is required for the first ready presentation
 
+#### Scenario: Canvas returns before Generation recovery
+
+- **WHEN** an exact Canvas document contains persisted Generation runs whose Job state must be restored
+- **THEN** the Canvas Surface receives its validated document Snapshot without waiting for every Job query or input preparation
+- **AND** Generation recovery updates the same exact Session through subsequent projection events
+
+#### Scenario: Editor or Resource Browser opens with a cold module
+
+- **WHEN** the user opens an exact Text Editor or Resource Browser Surface whose Webview module is unresolved
+- **THEN** the module import and first exact projection request start independently
+- **AND** mounting the Root reuses the pending or latest projection instead of issuing a second bootstrap request
+
 ### Requirement: Preparation remains exact and disposable
 
-Each Surface preparation SHALL belong to one View/session identity, SHALL be idempotent under StrictMode remount, and SHALL release subscriptions and transient resources when that Surface is replaced or unmounted. A stale completion MUST NOT update another View, active tab, recent session or sibling Surface.
+Each Surface preparation SHALL belong to one View/session identity, SHALL be idempotent under StrictMode remount, and SHALL release subscriptions and transient resources when that Surface is replaced or unmounted. A stale completion MUST NOT update another View, active tab, recent session or sibling Surface. Pending work MUST settle as ready or an owner-qualified diagnostic; a Surface MUST NOT remain indefinitely in an undifferentiated loading state after failure.
 
 #### Scenario: User switches Views during preparation
 
@@ -41,3 +56,17 @@ The renderer MAY prefetch an ESM module from explicit user intent or bounded idl
 - **WHEN** the selected Viewer module was already resolved but its previous Surface was unmounted
 - **THEN** the new exact Surface reconstructs from its domain authority and presentation snapshot without a second module cold load
 - **AND** no hidden historical Root or document-data cache supplies success
+
+### Requirement: Lightweight video SHALL fill the owning content box
+
+Canvas and other lightweight video consumers SHALL use the Preview-owned canonical video element.
+The video element SHALL occupy the full width and height of the owning preview content box while
+preserving the source picture ratio through `object-fit: contain`. Native controls SHALL therefore
+align to the same content-box boundary as the node or lightweight preview frame rather than an
+intrinsic-size media element nested inside it.
+
+#### Scenario: Video aspect ratio differs from the Canvas node
+
+- **WHEN** a Canvas video node is wider or taller than the source video's intrinsic aspect ratio
+- **THEN** the media field remains the exact size of the node content box and the picture is letterboxed without distortion
+- **AND** the native control bar aligns with the bottom of that content box instead of floating above unused node space

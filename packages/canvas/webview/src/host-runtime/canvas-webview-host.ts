@@ -98,10 +98,14 @@ export interface CanvasWebviewHostPort extends CanvasHostMessagePort {
   dispose(): void;
 }
 
+export interface PreparedCanvasWebviewHostPort extends CanvasWebviewHostPort {
+  prepare(): void;
+}
+
 export function createCanvasWebviewHost(
   runtime: CanvasHostRuntime,
   delegate?: CanvasWebviewDelegate,
-): CanvasWebviewHostPort {
+): PreparedCanvasWebviewHostPort {
   const listeners = new Set<(message: unknown) => void>();
   let snapshot: CanvasHostSnapshot | undefined;
   let state: unknown = delegate?.getState();
@@ -111,12 +115,14 @@ export function createCanvasWebviewHost(
   let materialActionRequestSequence = 0;
   let textFilePreviewRequestSequence = 0;
   let currentMaterialActionRequestId: string | undefined;
-  let snapshotRequestSequence = 0;
-  let currentSnapshotRequestId: string | undefined;
+  let initialSnapshotRequest: Promise<CanvasHostSnapshot> | undefined;
+  let initialSnapshotFailure: unknown;
+  let runtimeEventObserved = false;
   let projectionSequence = 0;
   let operationTail: Promise<void> = Promise.resolve();
   const localCommandIds = new Set<string>();
   const localCommandOrder: string[] = [];
+  const pendingRemovedNodeIds = new Set<string>();
   let unsubscribeDelegate: (() => void) | undefined;
   let unsubscribeRuntime: (() => void) | undefined;
 
@@ -138,10 +144,28 @@ export function createCanvasWebviewHost(
   };
 
   const publishSnapshot = (next: CanvasHostSnapshot): void => {
+    pendingRemovedNodeIds.clear();
     snapshot = next;
     updatePresentationState(next);
     emit({ type: 'update', data: next.canvas });
     emit({ type: 'canvas.hostPresentation', presentation: next.presentation });
+  };
+
+  const replaySnapshot = (listener: (message: unknown) => void, next: CanvasHostSnapshot): void => {
+    listener({ type: 'update', data: next.canvas });
+    listener({ type: 'canvas.hostPresentation', presentation: next.presentation });
+  };
+
+  const loadFailureMessage = (error: unknown): unknown => ({
+    type: 'canvas.loadFailed',
+    diagnostic: {
+      code: 'canvas-runtime-effect-failed',
+      message: error instanceof Error ? error.message : String(error),
+    },
+  });
+
+  const emitLoadFailure = (error: unknown): void => {
+    emit(loadFailureMessage(error));
   };
 
   const adoptLocalSnapshot = (next: CanvasHostSnapshot): void => {
@@ -160,7 +184,7 @@ export function createCanvasWebviewHost(
         }
         if (event.sequence <= projectionSequence) return;
         projectionSequence = event.sequence;
-        currentSnapshotRequestId = undefined;
+        runtimeEventObserved = true;
         if (event.originCommandId && localCommandIds.has(event.originCommandId)) {
           adoptLocalSnapshot(event.snapshot);
           return;
@@ -175,8 +199,28 @@ export function createCanvasWebviewHost(
     }
   };
 
+  const readInitialSnapshot = (): Promise<CanvasHostSnapshot> => {
+    if (disposed) return Promise.reject(new Error('Canvas Webview Host is disposed.'));
+    if (snapshot) return Promise.resolve(snapshot);
+    if (initialSnapshotRequest) return initialSnapshotRequest;
+    initialSnapshotRequest = runtime.getSnapshot().then((next) => {
+      if (!disposed && !runtimeEventObserved) publishSnapshot(next);
+      return snapshot ?? next;
+    });
+    void initialSnapshotRequest.catch((error: unknown) => {
+      if (disposed) return;
+      initialSnapshotFailure = error;
+      emitLoadFailure(error);
+    });
+    return initialSnapshotRequest;
+  };
+
   const executeSave = async (): Promise<void> => {
-    await executeIntent({ type: 'save' });
+    await executeIntent({
+      type: 'save',
+      removedNodeIds: [...pendingRemovedNodeIds],
+    });
+    pendingRemovedNodeIds.clear();
   };
 
   const executeCanvasStatus = async (value: unknown): Promise<void> => {
@@ -255,23 +299,7 @@ export function createCanvasWebviewHost(
     }
     switch (value['type']) {
       case 'ready':
-        snapshotRequestSequence += 1;
-        currentSnapshotRequestId = `canvas-webview-snapshot:${snapshotRequestSequence}`;
-        {
-          const requestId = currentSnapshotRequestId;
-          void runtime.getSnapshot().then(
-            (next) => {
-              if (currentSnapshotRequestId !== requestId) return;
-              currentSnapshotRequestId = undefined;
-              publishSnapshot(next);
-            },
-            (error: unknown) => {
-              if (currentSnapshotRequestId !== requestId) return;
-              currentSnapshotRequestId = undefined;
-              emitLoadFailure(error);
-            },
-          );
-        }
+        void readInitialSnapshot().catch(() => undefined);
         return;
       case 'canvasStatus': {
         enqueue(() => executeCanvasStatus(value['data']));
@@ -288,8 +316,11 @@ export function createCanvasWebviewHost(
       case 'webviewKeyboardEditable':
       case 'canvasChanged':
       case 'operationApplied':
-      case 'canvasContentNodeDeltaApplied':
         return;
+      case 'canvasContentNodeDeltaApplied': {
+        applyContentNodeDelta(value, pendingRemovedNodeIds);
+        return;
+      }
       case 'canvasAction':
         if (
           delegate &&
@@ -299,23 +330,17 @@ export function createCanvasWebviewHost(
           delegate.postMessage(value);
         }
         return;
-      default:
-        if (delegate && supportsMessage(value['type'])) {
-          delegate.postMessage(value);
-          return;
+      case 'preview:resolveVariant':
+      case 'preview:resolveResource':
+      case 'preview:releaseResource':
+        if (!delegate || !supportsMessage(value['type'])) {
+          throw new Error(`Canvas Host runtime does not implement message '${value['type']}'.`);
         }
+        delegate.postMessage(value);
+        return;
+      default:
         throw new Error(`Canvas Host runtime does not implement message '${value['type']}'.`);
     }
-  };
-
-  const emitLoadFailure = (error: unknown): void => {
-    emit({
-      type: 'canvas.loadFailed',
-      diagnostic: {
-        code: 'canvas-runtime-effect-failed',
-        message: error instanceof Error ? error.message : String(error),
-      },
-    });
   };
 
   const queueOperation = <T>(operation: () => Promise<T>): Promise<T> => {
@@ -340,7 +365,7 @@ export function createCanvasWebviewHost(
   };
 
   const supportsMessage = (messageType: string): boolean =>
-    delegate !== undefined && (delegate.supportsMessage?.(messageType) ?? true);
+    delegate !== undefined && (delegate.supportsMessage?.(messageType) ?? false);
 
   const rememberLocalCommand = (commandId: string): void => {
     localCommandIds.add(commandId);
@@ -352,6 +377,10 @@ export function createCanvasWebviewHost(
 
   return {
     documentId: runtime.identity.documentId,
+    prepare() {
+      start();
+      void readInitialSnapshot().catch(() => undefined);
+    },
     postMessage,
     supportsMessage,
     getState: () => delegate?.getState() ?? state,
@@ -363,6 +392,8 @@ export function createCanvasWebviewHost(
     reportStateDiagnostic,
     subscribe(listener) {
       if (disposed) throw new Error('Canvas Webview Host is disposed.');
+      const preparedSnapshot = snapshot;
+      const preparedFailure = initialSnapshotFailure;
       listeners.add(listener);
       try {
         start();
@@ -370,6 +401,8 @@ export function createCanvasWebviewHost(
         listeners.delete(listener);
         throw error;
       }
+      if (preparedSnapshot) replaySnapshot(listener, preparedSnapshot);
+      else if (preparedFailure) listener(loadFailureMessage(preparedFailure));
       return () => listeners.delete(listener);
     },
     async requestSource(sourceKind, sourceMode, position) {
@@ -546,6 +579,32 @@ export function createCanvasWebviewHost(
       listeners.clear();
     },
   };
+}
+
+function applyContentNodeDelta(
+  value: Record<string, unknown>,
+  pendingRemovedNodeIds: Set<string>,
+): void {
+  const removedNodeIds = requireNodeIdentityArray(value['removedNodeIds'], 'removed');
+  const restoredNodeIds = requireNodeIdentityArray(value['restoredNodeIds'], 'restored');
+  for (const nodeId of removedNodeIds) pendingRemovedNodeIds.add(nodeId);
+  for (const nodeId of restoredNodeIds) pendingRemovedNodeIds.delete(nodeId);
+}
+
+function requireNodeIdentityArray(value: unknown, kind: string): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`Canvas Webview ${kind} node identities must be an array.`);
+  }
+  const identities = value.map((nodeId) => {
+    if (typeof nodeId !== 'string' || nodeId.trim().length === 0) {
+      throw new Error(`Canvas Webview ${kind} node identity is invalid.`);
+    }
+    return nodeId;
+  });
+  if (new Set(identities).size !== identities.length) {
+    throw new Error(`Canvas Webview ${kind} node identities must be unique.`);
+  }
+  return identities;
 }
 
 function mergeCanvasStatus(previous: CanvasData, value: unknown): CanvasData {

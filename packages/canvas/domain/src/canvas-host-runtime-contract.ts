@@ -103,7 +103,11 @@ export type CanvasHostIntent =
       readonly canvas: CanvasData;
     }
   | {
-      readonly type: 'save' | 'undo' | 'redo';
+      readonly type: 'save';
+      readonly removedNodeIds?: readonly string[];
+    }
+  | {
+      readonly type: 'undo' | 'redo';
     }
   | {
       readonly type: 'author-material';
@@ -410,7 +414,7 @@ export function assertCanvasHostRuntimeIdentity(
   }
 }
 
-function parseCanvasHostRuntimeIdentity(value: unknown): CanvasHostRuntimeIdentity {
+export function parseCanvasHostRuntimeIdentity(value: unknown): CanvasHostRuntimeIdentity {
   const record = requireRecord(value, 'Canvas Host runtime identity is required.');
   return {
     projectId: requireOpaqueIdentity(
@@ -452,7 +456,20 @@ function parseCanvasHostIntent(value: unknown): CanvasHostIntent {
     }
     return { type, canvas };
   }
-  if (type === 'save' || type === 'undo' || type === 'redo') {
+  if (type === 'save') {
+    requireExactKeys(record, ['type', 'removedNodeIds']);
+    const removedNodeIds =
+      record['removedNodeIds'] === undefined
+        ? undefined
+        : parseNodeIdentityList(
+            record['removedNodeIds'],
+            'Canvas Host removed node identities must be an array.',
+            'Canvas Host removed node identity is invalid.',
+          );
+    return { type, ...(removedNodeIds === undefined ? {} : { removedNodeIds }) };
+  }
+  if (type === 'undo' || type === 'redo') {
+    requireExactKeys(record, ['type']);
     return { type };
   }
   if (type === 'author-material') {
@@ -608,16 +625,25 @@ export function parseCanvasHostPresentationState(value: unknown): CanvasHostPres
 }
 
 function parseSelectedNodeIds(value: unknown): readonly string[] {
-  const selectedNodeIds = requireArray(
+  return parseNodeIdentityList(
     value,
     'Canvas Host selected node identities must be an array.',
-  ).map((selectedNodeId) =>
-    requireOpaqueIdentity(selectedNodeId, 'Canvas Host selected node identity is invalid.'),
+    'Canvas Host selected node identity is invalid.',
   );
-  if (new Set(selectedNodeIds).size !== selectedNodeIds.length) {
-    throw invalidPayload('Canvas Host selected node identities must be unique.');
+}
+
+function parseNodeIdentityList(
+  value: unknown,
+  arrayMessage: string,
+  identityMessage: string,
+): readonly string[] {
+  const identities = requireArray(value, arrayMessage).map((identity) =>
+    requireOpaqueIdentity(identity, identityMessage),
+  );
+  if (new Set(identities).size !== identities.length) {
+    throw invalidPayload('Canvas Host node identities must be unique.');
   }
-  return selectedNodeIds;
+  return identities;
 }
 
 function parseCanvasHostAuthoringCapabilities(value: unknown): CanvasHostAuthoringCapabilities {
@@ -776,6 +802,8 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
     'recipeInputFingerprint',
     'jobRef',
     'phase',
+    'createdAt',
+    'updatedAt',
     'progress',
     'resultLocators',
     'text',
@@ -798,11 +826,31 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
     throw invalidPayload('Canvas Generation runtime phase is invalid.');
   }
   const jobRef = record['jobRef'];
+  const createdAt = record['createdAt'];
+  const updatedAt = record['updatedAt'];
   const progress = record['progress'];
   const resultLocators = record['resultLocators'];
   const diagnostic = record['diagnostic'];
   const text = record['text'];
   const recipeStale = record['recipeStale'];
+  if ((createdAt === undefined) !== (updatedAt === undefined)) {
+    throw invalidPayload('Canvas Generation runtime timestamps must be projected together.');
+  }
+  const parsedCreatedAt =
+    createdAt === undefined
+      ? undefined
+      : requireFiniteNumber(createdAt, 'Canvas Generation created timestamp is invalid.');
+  const parsedUpdatedAt =
+    updatedAt === undefined
+      ? undefined
+      : requireFiniteNumber(updatedAt, 'Canvas Generation updated timestamp is invalid.');
+  if (
+    parsedCreatedAt !== undefined &&
+    parsedUpdatedAt !== undefined &&
+    (parsedCreatedAt < 0 || parsedUpdatedAt < parsedCreatedAt)
+  ) {
+    throw invalidPayload('Canvas Generation runtime timestamp order is invalid.');
+  }
   return {
     nodeId: requireOpaqueIdentity(record['nodeId'], 'Canvas Generation node identity is invalid.'),
     submissionId: requireOpaqueIdentity(
@@ -815,6 +863,8 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
     ),
     ...(jobRef === undefined ? {} : { jobRef: parseGenerationJobRef(jobRef) }),
     phase,
+    ...(parsedCreatedAt === undefined ? {} : { createdAt: parsedCreatedAt }),
+    ...(parsedUpdatedAt === undefined ? {} : { updatedAt: parsedUpdatedAt }),
     ...(progress === undefined ? {} : { progress: parseGenerationProgress(progress) }),
     ...(resultLocators === undefined
       ? {}

@@ -185,7 +185,7 @@ describe('AssetManagementRoot', () => {
     await act(async () => root.unmount());
   });
 
-  it('loads icon thumbnails lazily and fences a cancelled static hover preview', async () => {
+  it('loads icon thumbnails lazily without creating a second hover preview path', async () => {
     vi.useFakeTimers();
     const item: GlobalMediaLibraryItem = {
       ...createLibrary(),
@@ -218,23 +218,12 @@ describe('AssetManagementRoot', () => {
     const entry = container.querySelector<HTMLElement>('article');
     await act(async () => {
       entry?.focus();
-      await vi.advanceTimersByTimeAsync(100);
-      entry?.blur();
-      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(190);
     });
     expect(runtime.source.resolveThumbnail).not.toHaveBeenCalledWith(
       expect.objectContaining({ variant: 'hover' }),
     );
     expect(container.querySelector('.global-library-browser__hover-preview')).toBeNull();
-
-    await act(async () => {
-      entry?.focus();
-      await vi.advanceTimersByTimeAsync(190);
-    });
-    expect(runtime.source.resolveThumbnail).toHaveBeenCalledWith(
-      expect.objectContaining({ itemId: item.id, variant: 'hover' }),
-    );
-    expect(container.querySelector('.global-library-browser__hover-preview img')).not.toBeNull();
 
     await act(async () => root.unmount());
   });
@@ -661,16 +650,8 @@ describe('AssetManagementRoot', () => {
     await act(async () => root.unmount());
   });
 
-  it('ignores late hover results and keeps unsupported content on its typed icon', async () => {
+  it('keeps unsupported content on its typed icon without resolving hover media', async () => {
     vi.useFakeTimers();
-    const hover = deferred<{
-      readonly dataUrl: string;
-      readonly descriptorId: string;
-      readonly itemId: string;
-      readonly owner: 'media-library';
-      readonly sourceFingerprint: string;
-      readonly variant: 'hover';
-    }>();
     const item: GlobalMediaLibraryItem = {
       ...createLibrary(),
       id: 'media-library:file123',
@@ -685,10 +666,6 @@ describe('AssetManagementRoot', () => {
       },
     };
     const runtime = createRuntime(item);
-    runtime.source.resolveThumbnail = vi.fn(async (request) => {
-      if (request.variant === 'hover') return hover.promise;
-      return { ...request, dataUrl: 'data:image/png;base64,AA==' };
-    });
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
@@ -704,16 +681,11 @@ describe('AssetManagementRoot', () => {
       entry?.focus();
       await vi.advanceTimersByTimeAsync(190);
       entry?.blur();
-      hover.resolve({
-        owner: 'media-library',
-        itemId: item.id,
-        descriptorId: item.thumbnail?.descriptorId ?? '',
-        sourceFingerprint: item.thumbnail?.sourceFingerprint ?? '',
-        variant: 'hover',
-        dataUrl: 'data:image/png;base64,LATE',
-      });
       await Promise.resolve();
     });
+    expect(runtime.source.resolveThumbnail).not.toHaveBeenCalledWith(
+      expect.objectContaining({ variant: 'hover' }),
+    );
     expect(container.querySelector('.global-library-browser__hover-preview')).toBeNull();
 
     await act(async () => root.unmount());

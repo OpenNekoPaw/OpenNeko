@@ -5,11 +5,11 @@ import {
   projectConversationProjectionPatchForResourceDisplay,
   projectConversationProjectionSnapshotForResourceDisplay,
   messageResourceProjectionKey,
+  type MessageResourceDisplayResolution,
 } from '../../input/message-resource-projector';
 import type { ConversationProjectionAttachmentHostFrame } from './conversation-projection-attachment-server';
 import { createNodeHostContentReadService } from '@neko/content/node';
 import {
-  contentLocatorKey,
   isContentLocator,
   isContentRepresentationLocator,
   type ContentFingerprint,
@@ -18,6 +18,11 @@ import {
 } from '@neko/content';
 import type { AgentResourceDisplayProjectionFact } from '@neko/agent-contracts';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import type { PreviewMediaDescriptor } from '@neko/preview-domain';
+import {
+  createPreviewResourceProjectionService,
+  type PreviewResourceSourceResolution,
+} from '@neko/preview-domain/resource-projection';
 
 export interface AgentResourceDisplayLease {
   readonly url: string;
@@ -69,10 +74,12 @@ export interface AgentResourceDisplayHostIdentity {
   readonly connectionId: string;
 }
 
-interface DisplayLease {
+interface AgentResourceDisplayProjectionOwner {
+  readonly windowId: string;
+  readonly viewId: string;
+  readonly sessionId: string;
+  readonly connectionId: string;
   readonly attachmentId: string;
-  readonly sourceFingerprint: string;
-  readonly lease: AgentResourceDisplayLease;
 }
 
 const MAX_INLINE_DISPLAY_BYTES = 64 * 1024 * 1024;
@@ -100,78 +107,129 @@ export function createAgentResourceDisplayProjector<
   const contentRead = createNodeHostContentReadService({
     workspaceRoot: input.workspace.workspacePath,
   });
-  const leases = new Map<string, DisplayLease>();
+  const descriptorIdsByAttachment = new Map<string, Set<string>>();
   let disposed = false;
+  const previewResources =
+    createPreviewResourceProjectionService<AgentResourceDisplayProjectionOwner>({
+      async resolveSource({ locator, displayName, requestedMediaType }) {
+        if (
+          locator.kind === 'content-representation' ||
+          locator.kind === 'document-entry' ||
+          locator.kind === 'package-resource'
+        ) {
+          const loadDisplayAsset = input.contentAssets.loadDisplayAsset;
+          if (!loadDisplayAsset) {
+            return unavailableProjectionSource(
+              'agent-preview-content-reader-unavailable',
+              'Agent preview content reader is unavailable.',
+            );
+          }
+          const loaded = await loadDisplayAsset.call(input.contentAssets, {
+            locator,
+            maxBytes: MAX_INLINE_DISPLAY_BYTES,
+          });
+          if (loaded.status !== 'ready' || !loaded.bytes) {
+            return unavailableProjectionSource(
+              'agent-preview-content-unavailable',
+              `Agent preview content is unavailable: ${displayName}.`,
+            );
+          }
+          const mediaType = requireDisplayMediaType(
+            displayLocatorPath(locator),
+            loaded.mimeType ?? requestedMediaType,
+          );
+          if (!mediaType) return unsupportedProjectionSource(displayName);
+          return {
+            status: 'ready',
+            source: {
+              kind: 'bytes',
+              bytes: loaded.bytes,
+              mediaType,
+              sourceFingerprint: bytesFingerprint(loaded.bytes),
+              byteLength: loaded.sizeBytes ?? loaded.bytes.byteLength,
+            },
+          };
+        }
+
+        const relativePath = projectableWorkspacePath(locator);
+        if (!relativePath) return unsupportedProjectionSource(displayName);
+        const mediaType = requireDisplayMediaType(relativePath, requestedMediaType);
+        if (!mediaType) return unsupportedProjectionSource(displayName);
+        const metadata = await contentRead.stat(locator);
+        if (metadata.status !== 'ready') {
+          return unavailableProjectionSource(
+            'agent-preview-content-unavailable',
+            `Agent preview content is unavailable: ${displayName}.`,
+          );
+        }
+        return {
+          status: 'ready',
+          source: {
+            kind: 'file',
+            absolutePath: await resolveWorkspaceFile(input.workspace.workspacePath, relativePath),
+            mediaType,
+            sourceFingerprint: resourceFingerprint(metadata.fingerprint, metadata.byteLength),
+            byteLength: metadata.byteLength,
+          },
+        };
+      },
+      async registerSource({ owner, source }) {
+        const registrationOwner = {
+          windowId: owner.windowId,
+          viewId: owner.viewId,
+          sessionId: owner.sessionId,
+          connectionId: owner.connectionId,
+          sourceFingerprint: source.sourceFingerprint,
+        };
+        if (source.kind === 'file') {
+          return {
+            status: 'ready',
+            lease: await input.resources.registerFile(registrationOwner, source),
+          };
+        }
+        if (!input.resources.registerBytes) {
+          return {
+            status: 'unavailable',
+            diagnostic: {
+              code: 'agent-preview-byte-registration-unavailable',
+              message: 'Agent preview byte registration is unavailable.',
+            },
+          };
+        }
+        return {
+          status: 'ready',
+          lease: await input.resources.registerBytes(registrationOwner, source),
+        };
+      },
+    });
 
   const resolveDisplayLocator = async (
     locator: ContentLocator | ContentRepresentationLocator,
     context: { readonly mediaType?: string },
     attachmentId: string,
     conversationId: string,
-  ): Promise<string | undefined> => {
+  ): Promise<MessageResourceDisplayResolution> => {
     if (disposed) throw new Error('Desktop Agent resource display projector is disposed.');
-    if (
-      locator.kind === 'content-representation' ||
-      locator.kind === 'document-entry' ||
-      locator.kind === 'package-resource'
-    ) {
-      const loadDisplayAsset = input.contentAssets.loadDisplayAsset;
-      const registerBytes = input.resources.registerBytes;
-      if (!loadDisplayAsset || !registerBytes) return undefined;
-      const loaded = await loadDisplayAsset.call(input.contentAssets, {
-        locator,
-        maxBytes: MAX_INLINE_DISPLAY_BYTES,
-      });
-      if (loaded.status !== 'ready' || !loaded.bytes) return undefined;
-      const mediaType = requireDisplayMediaType(
-        displayLocatorPath(locator),
-        loaded.mimeType ?? context.mediaType,
-      );
-      if (!mediaType) return undefined;
-      const sourceFingerprint = bytesFingerprint(loaded.bytes);
-      const key = `${attachmentId}:${messageResourceProjectionKey(locator)}`;
-      const current = leases.get(key);
-      if (current?.sourceFingerprint === sourceFingerprint) return current.lease.url;
-      current?.lease.release();
-      leases.delete(key);
-      const lease = await registerBytes(
-        {
-          windowId: input.identity.windowId,
-          viewId: input.identity.viewId,
-          sessionId: `agent-display:${conversationId}:${attachmentId}`,
-          connectionId: input.identity.connectionId,
-          sourceFingerprint,
-        },
-        { bytes: loaded.bytes, mediaType, sourceFingerprint },
-      );
-      leases.set(key, { attachmentId, sourceFingerprint, lease });
-      return lease.url;
-    }
-    const relativePath = projectableWorkspacePath(locator);
-    if (!relativePath) return undefined;
-    const mediaType = requireDisplayMediaType(relativePath, context.mediaType);
-    if (!mediaType) return undefined;
-    const metadata = await contentRead.stat(locator);
-    if (metadata.status !== 'ready') return undefined;
-    const sourceFingerprint = resourceFingerprint(metadata.fingerprint, metadata.byteLength);
-    const key = `${attachmentId}:${contentLocatorKey(locator)}`;
-    const current = leases.get(key);
-    if (current?.sourceFingerprint === sourceFingerprint) return current.lease.url;
-    current?.lease.release();
-    leases.delete(key);
-    const absolutePath = await resolveWorkspaceFile(input.workspace.workspacePath, relativePath);
-    const lease = await input.resources.registerFile(
-      {
+    const descriptorId = `agent-display:${attachmentId}:${displayLocatorIdentity(locator)}`;
+    const displayPath = displayLocatorPath(locator);
+    const projection = await previewResources.project({
+      descriptorId,
+      locator,
+      displayName: path.posix.basename(displayPath),
+      owner: {
         windowId: input.identity.windowId,
         viewId: input.identity.viewId,
         sessionId: `agent-display:${conversationId}:${attachmentId}`,
         connectionId: input.identity.connectionId,
-        sourceFingerprint,
+        attachmentId,
       },
-      { absolutePath, mediaType, sourceFingerprint },
-    );
-    leases.set(key, { attachmentId, sourceFingerprint, lease });
-    return lease.url;
+      ...(context.mediaType ? { requestedMediaType: context.mediaType } : {}),
+    });
+    if (projection.status === 'unavailable') return projection;
+    const descriptorIds = descriptorIdsByAttachment.get(attachmentId) ?? new Set<string>();
+    descriptorIds.add(descriptorId);
+    descriptorIdsByAttachment.set(attachmentId, descriptorIds);
+    return { status: 'ready', descriptor: projection.descriptor };
   };
 
   return {
@@ -206,17 +264,16 @@ export function createAgentResourceDisplayProjector<
       return projected;
     },
     releaseAttachment(attachmentId) {
-      for (const [key, record] of leases) {
-        if (record.attachmentId !== attachmentId) continue;
-        record.lease.release();
-        leases.delete(key);
+      for (const descriptorId of descriptorIdsByAttachment.get(attachmentId) ?? []) {
+        previewResources.release(descriptorId);
       }
+      descriptorIdsByAttachment.delete(attachmentId);
     },
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const record of leases.values()) record.lease.release();
-      leases.clear();
+      previewResources.dispose();
+      descriptorIdsByAttachment.clear();
     },
   };
 
@@ -297,9 +354,8 @@ function collectProjectedResources(
       : undefined;
   if (locator) {
     const diagnosticCodes = readProjectionDiagnosticCodes(owner['resourceProjectionDiagnostics']);
-    const renderUri = owner['renderUri'];
-    const authorized =
-      typeof renderUri === 'string' && renderUri.startsWith('openneko://resource/');
+    const descriptor = owner['previewDescriptor'];
+    const authorized = isProjectedPreviewDescriptor(descriptor);
     if (authorized || diagnosticCodes.length > 0) {
       record({
         status: authorized ? 'authorized' : 'denied',
@@ -310,6 +366,19 @@ function collectProjectedResources(
     }
   }
   for (const item of Object.values(owner)) collectProjectedResources(item, visited, record);
+}
+
+function displayLocatorIdentity(locator: ContentLocator | ContentRepresentationLocator): string {
+  return createHash('sha256').update(messageResourceProjectionKey(locator)).digest('hex');
+}
+
+function isProjectedPreviewDescriptor(value: unknown): value is PreviewMediaDescriptor {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof Reflect.get(value, 'url') === 'string' &&
+    String(Reflect.get(value, 'url')).startsWith('openneko://resource/')
+  );
 }
 
 function readProjectionDiagnosticCodes(value: unknown): readonly string[] {
@@ -329,6 +398,8 @@ function projectableWorkspacePath(locator: ContentLocator): string | undefined {
       return locator.path;
     case 'generated-output':
       return locator.path;
+    case 'media-library':
+      return undefined;
     case 'document-entry':
     case 'package-resource':
       return undefined;
@@ -341,6 +412,8 @@ function displayLocatorPath(locator: ContentLocator | ContentRepresentationLocat
     case 'workspace-file':
     case 'generated-output':
       return content.path;
+    case 'media-library':
+      return content.relativePath;
     case 'document-entry':
       return content.entryPath;
     case 'package-resource':
@@ -369,6 +442,20 @@ function resourceFingerprint(fingerprint: ContentFingerprint, byteLength: number
 
 function bytesFingerprint(bytes: Uint8Array): string {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}:${bytes.byteLength}`;
+}
+
+function unavailableProjectionSource(
+  code: string,
+  message: string,
+): PreviewResourceSourceResolution {
+  return { status: 'unavailable', diagnostic: { code, message } };
+}
+
+function unsupportedProjectionSource(displayName: string): PreviewResourceSourceResolution {
+  return unavailableProjectionSource(
+    'agent-preview-content-unsupported',
+    `Agent preview content type is unsupported: ${displayName}.`,
+  );
 }
 
 function requireDisplayMediaType(

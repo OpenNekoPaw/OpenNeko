@@ -30,7 +30,7 @@ export type ProjectSearchContextResolver = (
 
 export interface ProjectSearchRuntimePorts {
   readonly resolveContext: ProjectSearchContextResolver;
-  readonly getWorkspaceRoots?: () => readonly string[];
-  readonly logger?: ProjectSearchLogger;
-  readonly now?: () => Date;
+  readonly getWorkspaceRoots: () => readonly string[];
+  readonly logger: ProjectSearchLogger;
+  readonly now: () => Date;
 }

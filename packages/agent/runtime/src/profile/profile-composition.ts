@@ -2,14 +2,10 @@ import type { AgentCapabilityDiagnostic } from '@neko/agent-contracts';
 import type {
   IProviderExpressionProfileRegistry,
   ProviderExpressionProfileDescriptor,
-  Skill,
-  SkillProfileReference,
 } from '@neko/agent-contracts';
 import type { ArtifactProfileDescriptor, IArtifactProfileRegistry } from '@neko/agent-contracts';
-import { collectSkillProfileReferences } from '@neko/agent-contracts';
 
 export interface AgentProfileCompositionInput {
-  readonly skill?: Pick<Skill, 'name' | 'profileReferences' | 'mediaWorkflow'>;
   readonly artifactProfileIds?: readonly string[];
   readonly providerExpressionProfileIds?: readonly string[];
   readonly artifactProfileRegistry?: Pick<IArtifactProfileRegistry, 'get'>;
@@ -17,7 +13,6 @@ export interface AgentProfileCompositionInput {
 }
 
 export interface AgentProfileCompositionResult {
-  readonly skillProfileReferences: readonly SkillProfileReference[];
   readonly artifactProfiles: readonly ArtifactProfileDescriptor[];
   readonly providerExpressionProfiles: readonly ProviderExpressionProfileDescriptor[];
   readonly diagnostics: readonly AgentCapabilityDiagnostic[];
@@ -27,17 +22,8 @@ export function composeAgentProfiles(
   input: AgentProfileCompositionInput,
 ): AgentProfileCompositionResult {
   const diagnostics: AgentCapabilityDiagnostic[] = [];
-  const skillProfileReferences = input.skill ? collectSkillProfileReferences(input.skill) : [];
   const artifactProfileIds = new Set(input.artifactProfileIds ?? []);
   const providerExpressionProfileIds = new Set(input.providerExpressionProfileIds ?? []);
-
-  for (const reference of skillProfileReferences) {
-    if (reference.kind === 'artifact') {
-      artifactProfileIds.add(reference.profileId);
-    } else if (reference.kind === 'provider-expression') {
-      providerExpressionProfileIds.add(reference.profileId);
-    }
-  }
 
   const artifactProfiles = Array.from(artifactProfileIds)
     .map((profileId) =>
@@ -55,7 +41,6 @@ export function composeAgentProfiles(
     .filter((profile): profile is ProviderExpressionProfileDescriptor => profile !== undefined);
 
   return {
-    skillProfileReferences,
     artifactProfiles,
     providerExpressionProfiles,
     diagnostics,

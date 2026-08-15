@@ -141,7 +141,9 @@ export {
 
 export {
   createDesktopAgentFactsProjector,
+  createDesktopAgentFactsStore,
   type DesktopAgentFactsProjector,
+  type DesktopAgentFactsStore,
 } from './projection/desktop-agent-facts-projector';
 
 export {

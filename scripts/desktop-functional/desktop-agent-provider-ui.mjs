@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const RESPONSE_MARKER = 'OPENNEKO_UI_AGENT_OK_20260805';
+const APPROVAL_MARKER = 'OPENNEKO_UI_APPROVAL_OK_20260813';
 const RESPONSE_TIMEOUT_MS = 90_000;
 
 export function resolveVisibleAgentProviderAuthorization(env = process.env, userHome = homedir()) {
@@ -165,8 +166,36 @@ export const desktopAgentProviderUiScenario = Object.freeze({
     if (lifecycle?.status !== 'completed') {
       throw new Error('Visible Desktop Agent completed without a persisted lifecycle terminal.');
     }
-    const screenshotArtifact = await screenshot('desktop-agent-provider-response-visible');
+    const responseScreenshot = await screenshot('desktop-agent-provider-response-visible');
     checkpoint('visible-provider-response-complete', { ...evidence, lifecycle });
+
+    const approvalPrompt =
+      'Use the Write Tool once to create notes/approval-ui-visible.txt containing exactly ' +
+      `${APPROVAL_MARKER}. Wait for explicit approval, then reply with exactly ${APPROVAL_MARKER}.`;
+    await type('.agent-composer-textarea', approvalPrompt);
+    await click('.agent-composer-send');
+    await waitForCondition(
+      evaluate,
+      `Boolean(document.querySelector('.agent-pending-approval-panel'))`,
+      'Visible Desktop Agent did not project Tool approval above the composer.',
+    );
+    const pendingApproval = await inspectPendingApprovalSurface(evaluate);
+    checkpoint('visible-tool-approval-above-composer', pendingApproval);
+    const approvalScreenshot = await screenshot('desktop-agent-tool-approval-above-composer');
+    await click('.agent-pending-approval-panel [data-approval-action="approve"]', 0);
+    await waitForProviderResponse(
+      evaluate,
+      prepared.databasePath,
+      `(() => {
+        const panel = document.querySelector('.agent-pending-approval-panel');
+        const stop = document.querySelector('.agent-composer-stop');
+        const text = document.querySelector('[data-owner-root="agent"]')?.textContent ?? '';
+        return !panel && !stop && text.includes(${JSON.stringify(APPROVAL_MARKER)});
+      })()`,
+    );
+    const approvedTool = await inspectApprovedToolResult(evaluate);
+    checkpoint('visible-tool-approval-complete', approvedTool);
+    const approvalCompleteScreenshot = await screenshot('desktop-agent-tool-approval-complete');
     return {
       authorization: {
         providerId: prepared.providerId,
@@ -177,12 +206,75 @@ export const desktopAgentProviderUiScenario = Object.freeze({
       modelSelection,
       conversation: evidence,
       lifecycle,
-      screenshots: [screenshotArtifact],
+      approval: { pending: pendingApproval, completed: approvedTool },
+      screenshots: [responseScreenshot, approvalScreenshot, approvalCompleteScreenshot],
       submitPath: 'visible-composer',
       bridgeCreatedConversation: false,
     };
   },
 });
+
+async function inspectPendingApprovalSurface(evaluate) {
+  return evaluate(`(() => {
+    const panel = document.querySelector('.agent-pending-approval-panel');
+    const composer = document.querySelector('.agent-composer-shell');
+    if (!(panel instanceof HTMLElement) || !(composer instanceof HTMLElement)) {
+      throw new Error('Visible Tool approval or composer surface is missing.');
+    }
+    const panelRect = panel.getBoundingClientRect();
+    const composerRect = composer.getBoundingClientRect();
+    const panelButtons = [...panel.querySelectorAll('button')]
+      .map((button) => button.textContent?.trim() ?? '')
+      .filter(Boolean);
+    const transcriptApprovalButtons = [...document.querySelectorAll(
+      '.agent-message-list button',
+    )].filter((button) => ['Approve', 'Deny', '允许', '拒绝'].includes(button.textContent?.trim() ?? ''));
+    if (panelRect.bottom > composerRect.top + 1) {
+      throw new Error('Visible Tool approval does not sit above the message composer.');
+    }
+    if (Math.abs(panelRect.left - composerRect.left) > 2 || Math.abs(panelRect.width - composerRect.width) > 2) {
+      throw new Error('Visible Tool approval does not share the message composer rail.');
+    }
+    if (panelButtons.length !== 2 || transcriptApprovalButtons.length !== 0) {
+      throw new Error('Visible Tool approval does not expose one canonical action surface.');
+    }
+    if (!panel.querySelector('[data-approval-action="approve"]') || !panel.querySelector('[data-approval-action="deny"]')) {
+      throw new Error('Visible Tool approval actions are not explicitly identified.');
+    }
+    return {
+      panelTop: panelRect.top,
+      panelBottom: panelRect.bottom,
+      panelLeft: panelRect.left,
+      panelWidth: panelRect.width,
+      composerTop: composerRect.top,
+      composerLeft: composerRect.left,
+      composerWidth: composerRect.width,
+      panelButtons,
+      transcriptApprovalButtonCount: transcriptApprovalButtons.length,
+      panelText: panel.textContent?.trim() ?? '',
+    };
+  })()`);
+}
+
+async function inspectApprovedToolResult(evaluate) {
+  return evaluate(`(() => {
+    const root = document.querySelector('[data-owner-root="agent"]');
+    const text = root?.textContent ?? '';
+    if (!text.includes(${JSON.stringify(APPROVAL_MARKER)})) {
+      throw new Error('Approved Tool result marker is not visible in the transcript.');
+    }
+    if (document.querySelector('.agent-pending-approval-panel')) {
+      throw new Error('Resolved Tool approval remains actionable above the composer.');
+    }
+    return {
+      markerVisible: true,
+      approvalPanelVisible: false,
+      transcriptApprovalButtonCount: [...document.querySelectorAll(
+        '.agent-message-list button',
+      )].filter((button) => ['Approve', 'Deny', '允许', '拒绝'].includes(button.textContent?.trim() ?? '')).length,
+    };
+  })()`);
+}
 
 async function inspectVisibleAgentDom(evaluate) {
   return evaluate(`(() => ({

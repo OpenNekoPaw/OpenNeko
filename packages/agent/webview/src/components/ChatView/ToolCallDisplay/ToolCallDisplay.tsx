@@ -21,7 +21,6 @@ import {
   type CanvasAuthoringDiagnosticProjection,
   type CanvasAuthoringPromptFieldAlignmentProjection,
 } from '../../../presenters/tool-call-presenter';
-import { getLogger } from '../../../utils/logger';
 import { CopyIcon } from '@neko/ui/icons';
 import {
   FileIcon,
@@ -33,9 +32,8 @@ import {
 } from './icons';
 import { DocumentImageThumbnails } from './DocumentImageThumbnails';
 import { GenerationJobCard } from './GenerationJobCard';
+import { AgentPreviewCollection } from '../MediaPreview/AgentPreviewCollection';
 import { useToolCallAccessoryRenderer } from '../ToolCallAccessoryContext';
-
-const logger = getLogger('ToolCallDisplay');
 
 interface ToolCallDisplayProps {
   toolCall: ToolCall;
@@ -71,34 +69,17 @@ function ToolCallDisplayComponent({
     void navigator.clipboard.writeText(text);
   }, []);
 
-  const handleConfirm = useCallback(
-    (approved: boolean) => {
-      logger.info('handleConfirm called:', {
-        toolCallId: toolCall.id,
-        toolName: toolCall.name,
-        approved,
-        conversationId,
-      });
-      if (!conversationId) {
-        logger.warn('Cannot confirm tool without conversationId');
-        return;
-      }
-      agentHostMessages.confirmTool(toolCall.id, approved, conversationId);
-    },
-    [agentHostMessages, toolCall.id, toolCall.name, conversationId],
-  );
-
   const projection = projectToolCallDisplayState(toolCall, progress);
   const {
     argsJson,
     resultJson,
     hasExpandableContent,
     isImageTool,
-    imageUrls,
+    imageDescriptors,
     isVideoTool,
-    videoUrls,
+    videoDescriptors,
     isAudioTool,
-    audioUrls,
+    audioDescriptors,
     documentThumbnails,
     copyText,
     isFileTool,
@@ -123,7 +104,8 @@ function ToolCallDisplayComponent({
   const toneClass = isFailed ? 'is-danger' : isSuccess ? 'is-success' : isPending ? 'is-info' : '';
   const compactActionClass =
     'inline-flex items-center gap-1 rounded-md border border-[var(--agent-input-border)] bg-[var(--agent-elevated)] px-1.5 py-0.5 text-[10px] text-[var(--agent-fg)] transition-colors hover:bg-[var(--agent-hover)]';
-  const mediaOutputCount = imageUrls.length + videoUrls.length + audioUrls.length;
+  const mediaOutputCount =
+    imageDescriptors.length + videoDescriptors.length + audioDescriptors.length;
   const attachmentOutputs =
     toolCall.result?.attachments?.filter(
       (attachment) => attachment.contentLocator ?? attachment.assetRef?.contentLocator,
@@ -137,78 +119,24 @@ function ToolCallDisplayComponent({
       mediaOutputCount > 0 ||
       (showAttachmentOutputs && attachmentOutputs.length > 0));
 
-  // Confirmation UI
+  // Approval actions live in the composer-adjacent surface; the transcript retains one fact row.
   if (needsConfirmation) {
-    logger.info('Rendering confirmation UI for:', {
-      toolCallId: toolCall.id,
-      toolName: toolCall.name,
-    });
     return (
-      <div className="my-2">
-        <div className="agent-inline-card is-warning">
-          <div className="agent-inline-header flex items-center gap-2 px-3 py-2">
-            <WarningIcon className="h-4 w-4 shrink-0 text-[var(--agent-warning-fg)]" />
-            <span className="text-[12px] font-medium text-[var(--agent-fg)]">
-              {t('toolCalls.awaitingApproval')}
-            </span>
-          </div>
-          <div className="px-3 py-2 text-[var(--agent-fg)]">
-            <div className="mb-2 flex items-center gap-2">
-              <span className="agent-badge font-mono text-[11px] text-[var(--agent-fg)]">
-                {toolCall.name}
-              </span>
-              {toolCall.confirmation?.action && (
-                <span className="text-[11px] text-[var(--agent-fg-secondary)]">
-                  {toolCall.confirmation.action}
-                </span>
-              )}
-            </div>
-            {toolCall.confirmation?.description && (
-              <p className="mb-2 text-[11px] text-[var(--agent-fg)]">
-                {toolCall.confirmation.description}
-              </p>
-            )}
-            {summary && (
-              <div className="mb-2 truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
-                {summary}
-              </div>
-            )}
-            {hasExpandableContent && (
-              <div className="mb-2">
-                <button
-                  onClick={toggleExpand}
-                  className="flex items-center gap-1 text-[10px] text-[var(--agent-accent)] hover:underline"
-                >
-                  <ChevronIcon
-                    className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                  />
-                  {t('toolCalls.args')}
-                </button>
-                {isExpanded && (
-                  <div className="mt-1 border-l border-[var(--agent-divider)] pl-2">
-                    <pre className="agent-code-block max-h-[100px] w-full max-w-full overflow-x-auto p-1.5 font-mono text-[10px]">
-                      {argsJson}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="flex items-center gap-2 border-t border-[var(--agent-divider)] pt-2">
-              <button
-                onClick={() => handleConfirm(true)}
-                className="neko-button px-3 py-1 text-[11px] leading-4"
-              >
-                {t('toolCalls.approve')}
-              </button>
-              <button
-                onClick={() => handleConfirm(false)}
-                className="neko-button neko-button-secondary px-3 py-1 text-[11px] leading-4"
-              >
-                {t('toolCalls.deny')}
-              </button>
-            </div>
-          </div>
-        </div>
+      <div
+        className="agent-tool-approval-fact"
+        data-agent-tool-call-id={toolCall.id}
+        data-tool-approval-fact="true"
+      >
+        <WarningIcon className="h-3 w-3 shrink-0" />
+        <span className="shrink-0 font-medium text-[var(--agent-fg)]">{toolCall.name}</span>
+        {summary ? (
+          <span className="truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
+            {summary}
+          </span>
+        ) : null}
+        <span className="ml-auto shrink-0 text-[10px] text-[var(--agent-warning-fg)]">
+          {t('toolCalls.awaitingApproval')}
+        </span>
       </div>
     );
   }
@@ -218,9 +146,9 @@ function ToolCallDisplayComponent({
       <GenerationJobCard
         toolCall={toolCall}
         job={generationJob}
-        imageUrls={imageUrls}
-        videoUrls={videoUrls}
-        audioUrls={audioUrls}
+        imageDescriptors={imageDescriptors}
+        videoDescriptors={videoDescriptors}
+        audioDescriptors={audioDescriptors}
         isPending={isPending}
         isSuccess={isSuccess}
         isFailed={isFailed}
@@ -390,48 +318,14 @@ function ToolCallDisplayComponent({
               <ArtifactTransferSummary artifacts={toolCall.result.artifacts} />
             )}
 
-            {isImageTool && imageUrls.length > 0 && (
-              <div className="space-y-2">
-                {imageUrls.map((url, index) => (
-                  <RichContentRenderer
-                    key={url}
-                    kind="image"
-                    data={{
-                      src: url,
-                      alt: `Generated image ${index + 1}`,
-                      name: `generated_${index + 1}.png`,
-                    }}
-                  />
-                ))}
-              </div>
+            {isImageTool && imageDescriptors.length > 0 && (
+              <AgentPreviewCollection descriptors={imageDescriptors} />
             )}
-            {isVideoTool && videoUrls.length > 0 && (
-              <div className="space-y-2">
-                {videoUrls.map((url, index) => (
-                  <RichContentRenderer
-                    key={url}
-                    kind="video"
-                    data={{
-                      src: url,
-                      title: `generated_${index + 1}.mp4`,
-                    }}
-                  />
-                ))}
-              </div>
+            {isVideoTool && videoDescriptors.length > 0 && (
+              <AgentPreviewCollection descriptors={videoDescriptors} />
             )}
-            {isAudioTool && audioUrls.length > 0 && (
-              <div className="space-y-2">
-                {audioUrls.map((url, index) => (
-                  <RichContentRenderer
-                    key={url}
-                    kind="audio"
-                    data={{
-                      src: url,
-                      title: `generated_${index + 1}.mp3`,
-                    }}
-                  />
-                ))}
-              </div>
+            {isAudioTool && audioDescriptors.length > 0 && (
+              <AgentPreviewCollection descriptors={audioDescriptors} />
             )}
           </div>
         </section>

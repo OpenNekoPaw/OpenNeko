@@ -54,7 +54,7 @@ describe('Workspace Media Library sync metadata binding', () => {
       binding.mediaMetadata.upsert({
         partition: binding.mediaProbePartition,
         record: {
-          sourceKey: 'neko/assets/Footage/shot.mov',
+          sourceKey: 'media-library:Footage/shot.mov',
           sourceMtimeMs: -1,
           metadata: {
             fileSize: 1,

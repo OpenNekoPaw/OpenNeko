@@ -4,33 +4,15 @@ import type { AutomationMcpCallResult, AutomationMcpResultProjector } from './mc
 export const BROWSER_USE_OBSERVE_PROFILE: AutomationProfile = Object.freeze({
   id: 'browser-use.observe',
   provider: Object.freeze({
-    extensionId: 'browser-use@openneko',
+    extensionId: 'browser-use',
     providerId: 'browser-use',
     kind: 'browser',
-    upstreamRelease: '0.13.7',
-    deliverySource: Object.freeze({ kind: 'github-release' as const }),
+    deliverySource: Object.freeze({ kind: 'bundled-adapter' as const }),
   }),
   operations: Object.freeze([
-    reviewedObserveOperation(
-      'browser_get_state',
-      'sha256:ac5bc90805141a1a8917bc64ccb1cea0c06646bfca7ec3d811f429600c3201e4',
-    ),
-    reviewedObserveOperation(
-      'browser_get_html',
-      'sha256:1f97e90b491aafea0e369501f4917ef365ff2478557b5d0d83d07002fe0de66a',
-    ),
-    reviewedObserveOperation(
-      'browser_screenshot',
-      'sha256:3b661d759f56b59d15377c68ec7316d16084eb3ef35182cf2e29ec7f6fb23693',
-    ),
-    reviewedObserveOperation(
-      'browser_list_tabs',
-      'sha256:efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49',
-    ),
-    reviewedObserveOperation(
-      'browser_list_sessions',
-      'sha256:efddc7bd8bbcef73a14eb1ace1ffdaec81e518ef1e13c1e9271d0b8acb694a49',
-    ),
+    reviewedObserveOperation('browser_get_state'),
+    reviewedObserveOperation('browser_get_html'),
+    reviewedObserveOperation('browser_screenshot'),
   ]),
   requiredPermissions: Object.freeze({}),
 });
@@ -82,10 +64,10 @@ const mutableBrowserUseMcpResultProjector: AutomationMcpResultProjector = {
 
 export const browserUseMcpResultProjector = Object.freeze(mutableBrowserUseMcpResultProjector);
 
-function reviewedObserveOperation(name: string, inputSchemaDigest: string) {
+function reviewedObserveOperation(name: string) {
   return Object.freeze({
     name,
-    inputSchemaDigest,
+    requiredInputProperties: Object.freeze([]),
     modes: Object.freeze(['observe'] as const),
     trait: Object.freeze({
       effect: 'observe' as const,

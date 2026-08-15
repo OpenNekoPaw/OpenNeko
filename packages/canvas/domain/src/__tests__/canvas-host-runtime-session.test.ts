@@ -59,13 +59,16 @@ describe('CanvasHostRuntimeSession', () => {
     if (redone.status !== 'accepted') throw new Error('Expected redo to succeed.');
     expect(redone.snapshot.canvas.name).toBe('Changed');
 
-    const saved = await runtime.executeIntent(request('save-1', { type: 'save' }));
+    const saved = await runtime.executeIntent(
+      request('save-1', { type: 'save', removedNodeIds: ['removed-node-1'] }),
+    );
     expect(saved.status).toBe('accepted');
     if (saved.status !== 'accepted') throw new Error('Expected save to succeed.');
     expect(saved.snapshot).toMatchObject({ dirty: false });
     expect(saveDocument).toHaveBeenCalledWith({
       canvas: expect.objectContaining({ name: 'Changed' }),
       identity,
+      removedNodeIds: ['removed-node-1'],
     });
     expect(events).toEqual([1, 2, 3, 4]);
   });
@@ -93,6 +96,82 @@ describe('CanvasHostRuntimeSession', () => {
       dirty: false,
       canvas: { name: 'Initial' },
     });
+  });
+
+  it('authorizes embedded preview only for the exact node, output and locator', () => {
+    const firstLocator = {
+      kind: 'generated-output' as const,
+      outputId: 'output-1',
+      digest: 'sha256:output-1',
+      path: 'neko/generated/output-1.png',
+    };
+    const secondLocator = {
+      kind: 'generated-output' as const,
+      outputId: 'output-2',
+      digest: 'sha256:output-2',
+      path: 'neko/generated/output-2.png',
+    };
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: {
+        ...createEmptyCanvasData('Embedded preview'),
+        nodes: [
+          {
+            id: 'generation-1',
+            type: 'generation',
+            position: { x: 0, y: 0 },
+            size: { width: 240, height: 180 },
+            zIndex: 1,
+            data: {
+              recipe: { kind: 'image', prompt: 'Character', count: 2 },
+              outputs: [
+                {
+                  outputId: 'output-1',
+                  jobRef: { kind: 'generation', jobId: 'job-1' },
+                  locator: firstLocator,
+                  kind: 'image',
+                  recipeInputFingerprint: 'recipe-1',
+                },
+                {
+                  outputId: 'output-2',
+                  jobRef: { kind: 'generation', jobId: 'job-1' },
+                  locator: secondLocator,
+                  kind: 'image',
+                  recipeInputFingerprint: 'recipe-1',
+                },
+              ],
+              selectedOutputId: 'output-1',
+            },
+          },
+        ],
+      },
+      effects: {},
+    });
+
+    expect(() =>
+      runtime.authorizePreviewSource({
+        nodeId: 'generation-1',
+        outputId: 'output-1',
+        locator: firstLocator,
+        contentKind: 'image',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      runtime.authorizePreviewSource({
+        nodeId: 'generation-1',
+        outputId: 'output-1',
+        locator: { ...firstLocator, path: 'neko/generated/other.png' },
+        contentKind: 'image',
+      }),
+    ).toThrow('output "output-1" is stale');
+    expect(() =>
+      runtime.authorizePreviewSource({
+        nodeId: 'generation-1',
+        outputId: 'output-2',
+        locator: secondLocator,
+        contentKind: 'image',
+      }),
+    ).not.toThrow();
   });
 
   it('authorizes text preview effects against the exact current File locator', async () => {

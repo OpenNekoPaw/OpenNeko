@@ -52,40 +52,10 @@ describe('persistent World repository', () => {
     await fixture.store.dispose();
   });
 
-  it('isolates an invalid WorldProject from a valid sibling', async () => {
+  it('does not expose the retired mixed authoring/runtime catalog', async () => {
     const fixture = await createFixture();
-    const authoring = new WorldAuthoringService({ repository: fixture.repository, now: () => NOW });
-    for (const suffix of ['valid', 'invalid']) {
-      await authoring.createProject({
-        worldProjectId: `world-project-${suffix}`,
-        title: suffix,
-        draft: definition(),
-      });
-    }
-    await fixture.store.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'corrupt-world-fixture' },
-      async ({ sql }) => {
-        await sql.run(`UPDATE world_projects SET payload_json = ? WHERE world_project_id = ?`, [
-          JSON.stringify({ worldProjectId: 'world-project-invalid' }),
-          'world-project-invalid',
-        ]);
-      },
-    );
-
-    const catalog = await fixture.repository.readCatalog();
-
-    expect(catalog.projects).toEqual([
-      expect.objectContaining({
-        worldProjectId: 'world-project-valid',
-        title: 'valid',
-      }),
-    ]);
-    expect(catalog.diagnostics).toEqual([
-      expect.objectContaining({
-        recordKind: 'world-project',
-        recordId: 'world-project-invalid',
-      }),
-    ]);
+    expect('readCatalog' in fixture.repository).toBe(false);
+    expect('readAuthoringCatalog' in fixture.repository).toBe(false);
     await fixture.store.dispose();
   });
 });

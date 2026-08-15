@@ -13,12 +13,13 @@ describe('Agent resolved Entity context contract', () => {
     kind: AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
     entityRef: { entityId: 'char-xiaoju', entityKind: 'character' },
     entity: {
-      id: 'char-xiaoju',
+      entityId: 'char-xiaoju',
       kind: 'character',
-      canonicalName: '小橘',
-      aliases: ['橘子'],
-      status: 'confirmed',
-      metadata: { role: '侦探' },
+      names: { canonical: '小橘', aliases: ['橘子'] },
+      lifecycle: { state: 'active' },
+      representations: [],
+      createdAt: '2026-08-12T00:00:00.000Z',
+      updatedAt: '2026-08-12T00:00:00.000Z',
     },
   } as const;
 
@@ -35,16 +36,19 @@ describe('Agent resolved Entity context contract', () => {
     expect(
       isAgentResolvedEntityContextData({
         ...context,
-        entity: { ...context.entity, id: 'char-other' },
+        entity: { ...context.entity, entityId: 'char-other' },
       }),
     ).toBe(false);
   });
 
-  it('rejects a canonical Entity that is not confirmed', () => {
+  it('rejects a deprecated canonical Entity', () => {
     expect(
       isAgentResolvedEntityContextData({
         ...context,
-        entity: { ...context.entity, status: 'candidate' },
+        entity: {
+          ...context.entity,
+          lifecycle: { state: 'deprecated', deprecatedAt: '2026-08-12T01:00:00.000Z' },
+        },
       }),
     ).toBe(false);
   });

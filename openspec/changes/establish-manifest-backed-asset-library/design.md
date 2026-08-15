@@ -1,189 +1,118 @@
 ## Context
 
-OpenNeko currently has two useful but different resource paths:
+OpenNeko has two different resource needs. Ordinary workspace and linked files need direct authorized
+access through `ContentLocator`. Reusable Assets need explicit package membership, stable identity,
+immutable user-visible revisions, dependencies, integrity, and a local lifecycle. The current flat
+scanner conflates filesystem presence with membership and derives identity from paths.
 
-- Media Library exposes files from linked directories through ordinary content locators. Its value is
-  that files remain immediately usable without registration or catalog membership.
-- The Assets packages expose a global owned-library runtime and an `AssetManifest`, including `remote`
-  and `registry` source shapes. The runtime is still flat-file and path-ID oriented, and no remote
-  publish/download/reconciliation path implements those source shapes.
-
-The archived “single Media Library” decision correctly removed the legacy AssetEntity catalog from the
-ordinary file path, but overreached by prohibiting any managed Asset Library. Reusable templates,
-presets, models, bundles, and Entity Assets need stable identity, immutable revisions, dependencies,
-integrity, installation, and cloud distribution. Restoring those properties must not make Asset
-membership a prerequisite for opening a file.
-
-This change spans Asset contracts, Node storage and transfer adapters, Resource Browser UI, local
-metadata projections, and Desktop composition. Existing user-owned flat Asset files remain untouched;
-only an explicit new import may create a managed package.
+This change is intentionally local. Network repositories, publishing, account credentials, cloud
+synchronization, remote discovery and Entity Asset conversion are not current product requirements and
+must not shape the local contract. They require a separate OpenSpec if introduced later.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Preserve Media Library as the single direct file-resource entry for arbitrary workspace and linked
-  files.
-- Define Asset Library as an explicit managed-package boundary for reusable, versioned Assets.
-- Make `(assetId, revision, digest)` the durable identity of an immutable Asset revision.
-- Provide local-first cloud publication and replication with verified atomic installation, offline use,
-  dependency transfer, resumable progress, and visible conflicts.
-- Keep credentials, remote state, local installed data, and UI projections in their correct authorities.
-- Provide one canonical Asset path and delete path-derived IDs and legacy catalog fallback.
+- Keep ordinary files catalog-free and directly usable.
+- Define one canonical local Asset package and lifecycle.
+- Make `(assetId, revision, digest)` the exact identity of installed immutable content.
+- Verify and atomically install a complete dependency closure.
+- Separate membership removal, uninstall, and garbage collection.
+- Preserve owner identity and source-level diagnostics in Resources.
+- Delete path-derived identity and legacy catalog success paths.
 
 **Non-Goals:**
 
-- Cataloging, uploading, or synchronizing arbitrary workspace or Media Library files.
-- Replacing `ContentLocator`, filesystem links, provider-owned synchronized directories, or project
-  portability snapshots.
-- A cloud multi-tenant service implementation, collaboration protocol, arbitrary provider registry, or
-  generic filesystem synchronization engine.
-- Background synchronization of mutable Project Entity facts.
-- Preserving successful reads through legacy AssetEntity, `library.json`, or path-derived Asset IDs.
+- Remote provider ports, publication, synchronization, accounts, credentials, CAS, tombstones,
+  reconciliation, resumable network transfer, or public/private discovery.
+- Cataloging or copying arbitrary workspace and Media Library files without explicit import.
+- Entity Asset, Character portability, World portability, or mutable semantic facts.
+- A generic package manager, filesystem synchronization engine, or multi-host service.
 
 ## Decisions
 
-### 1. Asset Library manages packages; Media Library exposes files
+### 1. Asset Library manages explicit local packages
 
-An item enters Asset Library only through explicit import, install, or publish intent and a validated
-manifest. Discovery of a workspace or linked file never allocates an Asset ID. Asset packages may copy
-owned bytes or declare validated package-relative members and dependencies; they cannot persist an
-absolute path or a Media Library link target.
+An Asset enters the library only through explicit import of selected content or installation of a
+validated local package. Filesystem discovery never creates Asset identity or membership. A package
+contains a closed manifest and owned package-relative members; it cannot persist absolute paths, cache
+paths, Media Library targets, runtime URLs, or credential-bearing locations.
 
-This keeps the original simplification of `media-library-resource-entry`: ordinary files are read by
-their owning `ContentLocator` path. Asset Library adds reusable-package lifecycle rather than becoming a
-generic resource resolver.
+Media Library remains the direct file-resource entry. Import may copy selected bytes into staging, but
+does not change or remove the source owner's file.
 
-Alternative considered: use Media Library folders as the Asset catalog. Rejected because filesystem
-presence cannot express immutable revisions, dependency closure, publication state, or package
-integrity without rebuilding the catalog that was intentionally removed.
+### 2. Installed immutable revision is the authority
 
-### 2. Installed immutable revision is the offline authority
+`@neko/assets-domain` defines stable `assetId`, user-visible immutable `revision`, verified `digest`,
+type metadata, dependencies, provenance, license, and package-relative members. Once installed, a
+revision's manifest and bytes cannot change; edited content requires a new revision.
 
-The manifest contract owned by `@neko/assets-domain` will require stable `assetId`, immutable `revision`,
-package `digest`, type metadata, dependencies, provenance, license, and package-relative
-members. A mutable local record points an Asset channel/head to an installed immutable revision, but
-never changes the content of that revision.
+Verified manifests and bytes below the managed Asset root are authoritative. Mutable membership/head
+and rebuildable search rows may live in local metadata, but neither can substitute missing or corrupt
+package content. No network source or fallback resolver participates in open or lookup.
 
-Installed manifests and verified bytes below the managed Asset storage root are the runtime authority.
-SQLite rows for search, remote heads, transfer progress, last reconciliation cursor, and diagnostics are
-rebuildable projections/state; losing them cannot make installed Assets unusable. Credentials and
-refresh tokens remain in the operating-system credential authority and are referenced only by opaque
-account IDs.
+### 3. Local installation commits an exact dependency closure
 
-The manifest `source` field is provenance only. Canonical manifests may retain portable non-secret
-origin identifiers as provenance; provider endpoint, account routing, signed URL, credential-bearing
-URI, and synchronization policy belong only to machine-local `(accountRef, repositoryRef, assetId)`
-binding state. No manifest source variant is invoked as a runtime path or network resolver.
+`@neko/assets-node` stages selected local packages outside the installed namespace, parses the canonical
+manifest, validates member containment, identity, size policy, dependency graph and digests, then commits
+the complete closure atomically. Missing, cyclic, incompatible or digest-mismatched dependencies reject
+the requested install without exposing a partial revision. Cancellation cleans uncommitted staging.
 
-Alternative considered: make the remote catalog authoritative on every open. Rejected because it breaks
-offline use and turns network/provider availability into a local creative-runtime dependency.
+The package owner resolves exact dependency identity. It never substitutes latest revision, filename,
+another local directory, or a stale projection.
 
-### 3. Cloud sync is immutable package replication, not live file sync
+### 4. Removal, uninstall and garbage collection are separate
 
-`@neko/assets-domain` owns a narrow `AssetRemoteRepositoryPort` vocabulary for listing remote heads,
-reading manifests, transferring content-addressed blobs, committing a revision, and publishing or
-reading tombstones. It also owns the sync planner/state machine and typed diagnostics. The port models a
-real replacement point—remote repository implementations—without exposing provider SDK types.
+The default remove action changes only mutable Asset Library membership. It does not trash the source,
+uninstall a revision, delete blobs, or mutate project references. Explicit uninstall rejects a revision
+pinned by another installed dependency or known project reference. Explicit garbage collection deletes
+only bytes proven unreferenced by all installed revisions and pins.
 
-`@neko/assets-node` owns filesystem staging, digest verification, atomic install, resumable transfer
-checkpoints, and a concrete remote adapter. A download follows:
+Existing flat files and retired `library.json` data remain untouched and outside product discovery.
+Only an explicit import can create or reactivate membership.
 
-1. resolve the requested remote revision and dependency closure;
-2. stage manifests and missing blobs outside the installed namespace;
-3. verify schema, IDs, dependency graph, size limits, and digests;
-4. atomically commit every validated package revision;
-5. update rebuildable projections and emit completion.
+### 5. Resources preserves owners and isolates failures
 
-A publish validates and snapshots local package content, uploads missing content-addressed blobs, then
-uses compare-and-set on the expected remote head to commit a new immutable manifest revision. Partial
-uploads never become visible revisions. The same `(assetId, revision)` with a different digest is an
-integrity conflict and must fail closed.
+Installed Assets is one presentation source alongside Project Files, Shared Media and Project Elements;
+it is not a cross-domain catalog. Each item retains its owning identity and only owner-defined actions.
+Search and selection are presentation state.
 
-Alternative considered: generic bidirectional directory sync. Rejected because its rename/delete/conflict
-semantics are incompatible with immutable package revisions and would leak provider behavior into file
-resolution.
+Source reads are independent. A failure while reading Project composition or Character associations is
+reported on Project Elements and does not force Resources Root, Installed Assets, Project Files or Shared
+Media into an unavailable state. Diagnostics remain visible and strict readers remain strict; no invalid
+composition is accepted as empty or rewritten.
 
-### 4. Remote deletion and update never destroy local or project data
+### 6. Package ownership and Desktop boundary
 
-A remote tombstone removes the remote head from normal discovery but does not uninstall a verified local
-revision, delete package bytes referenced by a project, or mutate a Project Entity instantiated from an
-Entity Asset. Uninstall and local garbage collection are separate explicit operations and must respect
-dependency and project pins.
+| Owner | Responsibility | Boundary |
+| --- | --- | --- |
+| `@neko/assets-domain` | manifest codecs, lifecycle rules, diagnostics, public ports | host-neutral |
+| `@neko/assets-node` | staging, digest verification, atomic local install and storage | Node filesystem |
+| `@neko/assets-webview` | Installed Assets projection and typed local intents | Renderer sandbox |
+| `packages/local-metadata` | membership and rebuildable local search rows | local SQLite |
+| `apps/neko-desktop` | sender-bound IPC, authorized paths, concrete Host adapters | Electron trust boundary |
 
-Remote updates produce an update-available projection. Installation may move a local channel/head only
-after the new revision and its dependency closure commit successfully. Entity-specific diff/apply is
-owned by the Entity change; Asset sync only installs the immutable Entity Asset revision.
-
-Alternative considered: mirror remote deletion locally. Rejected because remote account changes must not
-silently destroy valuable offline or project data.
-
-The default Asset Library delete icon means “remove record from library”. It changes only the mutable local
-membership/head projection and leaves source files, installed immutable revisions, blobs, project pins and remote
-revisions intact. Explicit uninstall and unreferenced-byte garbage collection remain separate commands with their
-own blocker analysis. The current path-scanner plus `shell.trashItem` implementation cannot satisfy this contract:
-the Assets-owned record repository must persist active/removed membership, and removed entries must stay absent
-after restart without hiding or deleting ordinary Media Library files.
-
-### 5. UI and Desktop depend only on typed public ports
-
-| Owner                              | Package role and canonical public entry                          | Producer                                                            | Consumer                                | Runtime boundary               | Replaced path                                     | User-data impact                                                      |
-| ---------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------- | ------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------- |
-| Asset contracts and orchestration  | `packages/assets/domain` via `@neko/assets-domain`               | Manifest codecs, lifecycle/sync planner, diagnostics                | Node, Webview, Desktop adapters, Entity | Host-neutral TypeScript        | Flat `GlobalAssetItem` and path-derived identity  | Defines validated replacement facts; no direct IO                     |
-| Local package and transfer runtime | `packages/assets/node` via `@neko/assets-node`                   | Managed storage, staging, integrity, atomic install, remote adapter | Desktop composition                     | Node only                      | Direct flat-file copy/remove                      | Imports only explicitly selected owned bytes after validation         |
-| Asset Library presentation         | `packages/assets/webview` via `@neko/assets-webview`             | Asset source UI and typed intents                                   | Desktop renderer                        | Renderer/Webview sandbox       | Generic flat Asset list and `materials` ambiguity | No durable facts; shows diagnostics and progress                      |
-| Asset membership persistence       | Assets domain contract plus `packages/local-metadata` repository | Active/removed membership and one-time existing-file registration   | Asset Node/domain runtime               | Host-neutral contract + SQLite | Path scan as catalog authority                    | Preserved user choice; removal never deletes source or package bytes  |
-| Rebuildable local state            | `packages/local-metadata` public local-metadata port             | Remote heads, cursors, checkpoints, projections                     | Asset Node/domain runtime               | Node/SQLite                    | Ad hoc or absent sync state                       | May be deleted and rebuilt; contains no credentials or owned bytes    |
-| Application composition            | `apps/neko-desktop` public preload contract and composition root | Window/account lifecycle, IPC binding, OS credential adapter wiring | Renderer and package services           | Electron Main/preload/renderer | App-owned Asset business logic                    | No new business authority; only Electron sender binding and lifecycle |
-
-Production logic remains in `apps/neko-desktop` only where Electron is essential: sender-bound IPC,
-window lifecycle, preload projection, app paths, and operating-system credential access. Manifest rules,
-sync planning, storage, provider semantics, and Asset operations remain package-owned and independently
-testable.
-
-### 6. Asset and Entity share distribution, not semantic authority
-
-`identity` is a first-class Asset type. Its package can contain a frozen Entity semantic snapshot plus
-package-owned representations, but Asset Library does not merge project facts or become the live Entity
-authority. The Entity domain converts between Project Entity and Entity Asset and records provenance.
-The generic cloud sync path distributes Entity Asset revisions; no `EntitySyncService` or parallel global
-Entity catalog is created.
+Desktop does not parse manifests, choose lifecycle outcomes, or invent fallback sources. Renderer never
+receives raw paths or performs package IO.
 
 ## Risks / Trade-offs
 
-- **[Risk] A new Asset Library is mistaken for the retired generic catalog** → Require explicit package
-  lifecycle, forbid discovery-created IDs, and test that ordinary locators work without Asset records.
-- **[Risk] Provider interruption leaves corrupt local Assets** → Stage outside installed storage, verify
-  the whole dependency closure, and atomically commit only valid immutable revisions.
-- **[Risk] Remote conflicts overwrite another publication** → Use expected-head compare-and-set and expose
-  a conflict that requires refresh or an explicitly new revision.
-- **[Risk] Large packages consume duplicate staging space** → Deduplicate by digest, expose estimated size,
-  support cancellation/resume, and garbage-collect only unreferenced staging blobs.
-- **[Risk] Flat-file discovery invents metadata** → Do not inspect retired catalogs; require explicit
-  user import and confirmed package identity, and preserve all unselected files untouched.
-- **[Trade-off] Immutable revisions require a new revision for metadata corrections** → Accept this to keep
-  digest identity, reproducibility, and safe offline/project pins.
+- A new Asset Library could resemble the retired catalog. Explicit import, closed manifests and absence
+  tests prevent discovery-created identity.
+- Atomic install may require duplicate staging space. Size checks occur before writes and cancellation
+  removes uncommitted staging.
+- Immutable revisions require a new revision for corrections. This is accepted for reproducibility and pins.
+- Project reference coverage may initially be incomplete. Uninstall must fail visibly when blocker
+  authority cannot prove safety; record removal remains non-destructive.
 
 ## Replacement Plan
 
-1. Introduce strict manifest/revision/package codecs and new public lifecycle ports without routing normal
-   calls through them yet.
-2. Implement local staging, verification, atomic install, and projection computation; add path-absence
-   tests for path-derived IDs and retired handlers.
-3. Keep current flat files and retired catalogs outside product discovery. Accept only explicit user
-   import selections, validate canonical provenance, and reject credential-bearing source values.
-4. Commit validated imported packages, compute Asset Library projections, and leave ordinary or
-   unselected files accessible through their existing file owners.
-5. Add the remote repository adapter and key-free contract tests, then add real provider evaluation behind
-   explicit credentials.
-6. Switch Resource Browser and Desktop IPC to the new public ports and delete the flat runtime path.
+1. Add strict local manifest/revision/dependency codecs and poison tests.
+2. Implement verified staging, exact lookup and atomic local install.
+3. Add membership, update-head, uninstall, blocker and garbage-collection services.
+4. Switch Installed Assets and Desktop typed IPC to package-owned public ports.
+5. Delete path-derived IDs, flat scanner authority, trash-based removal and legacy catalog reads.
+6. Verify source-level failure isolation and real Electron local import/open/remove/uninstall flows.
 
-Rollback is source-level. Flat files were never rewritten, immutable packages remain intact, and retired
-runtime success is not re-enabled.
-
-## Open Questions
-
-- Which cloud repository provider and authentication flow is selected for the first implementation?
-- What package/revision size limits and remote retention policy apply to the first provider?
-- Is remote publication private-only initially, or must public discovery/license acceptance ship in the
-  same implementation?
+Rollback never re-enables retired readers. Existing source files are untouched; committed immutable
+packages remain readable by the canonical local owner.

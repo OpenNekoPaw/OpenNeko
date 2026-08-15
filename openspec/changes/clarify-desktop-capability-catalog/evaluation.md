@@ -1,120 +1,85 @@
 ## Evaluation Scope
 
-- Change/feature: Plugin Skill and MCP contributions become available to Desktop Pi Agent turns.
-- Decision and owning suite:
-  - `update` `agent-runtime.skill-runtime` for plugin Skill source, receipt and no-source-fallback
-    once the Desktop complete-session driver can install an isolated fixture plugin before launch.
-  - `create` a focused `agent-runtime.plugin-mcp-routing` owner for dynamic MCP registration/call
-    evidence once that same driver can project fixture plugin state. `agent-runtime.perception-routing`
-    is not the owner because it validates media perception model routing rather than dynamic Tool
-    registration.
-- Why real Evaluation is required: Skill selection and Tool registration/routing change model-visible
-  behavior and executable Tool availability.
-- Canonical path:
-  - plugin Skill: OpenNeko install root -> verified `.openneko-plugin` manifest -> Pi SkillHost
-    plugin root -> Pi read receipt.
-  - plugin MCP: verified contribution -> MCPManager connection -> dynamic MCP Tool ->
-    ToolRegistry/Pi projection -> MCP client call.
-- Forbidden fallback: manifest-only readiness, personal/builtin Skill substitution, synthetic Tool,
-  direct MCP call outside Pi, App connector fallback, old capability cards.
+- Change/feature: standalone Skills and locally installed Plugin Skill/MCP contributions enter Desktop Pi Agent turns without Marketplace participation.
+- Owning cases:
+  - update `agent-runtime.skill-runtime` for standalone and Plugin Skill source, receipt and no-source-fallback;
+  - create `agent-runtime.plugin-mcp-routing` for dynamic MCP registration/call and component-local failure;
+  - add Desktop local-install fixture operations before provider-backed execution.
+- Why real Evaluation is required: Skill selection and Tool registration/routing change model-visible behavior and executable Tool availability.
+- Canonical paths:
+  - standalone Skill: exact builtin/personal/project root -> Pi SkillHost -> Entry/Session input catalog -> Pi read receipt;
+  - Plugin Skill: SQLite-installed or explicit bundled Plugin -> root `plugin.json` -> fixed `skills/` -> Pi SkillHost Plugin root -> Pi read receipt;
+  - Plugin MCP: verified `mcp.json` contribution -> MCPManager connection -> dynamic MCP Tool -> ToolRegistry/Pi projection -> MCP client call.
+- Forbidden fallback: Marketplace inventory, `.openneko-plugin`, `.codex-plugin`, old JSON grant, manifest-only readiness, management-card/display-name invocation, personal/builtin same-name substitution, synthetic Tool, direct MCP call outside Pi, App connector fallback or old capability cards.
 
 ## Cases
 
-- Canonical Skill case: an installed fixture plugin contributes a uniquely named Skill; the selected
-  Pi receipt must contain source `plugin`, exact plugin id and expected Host fingerprint.
-- Skill boundary case: uninstall/disabled/invalid plugin Skill cannot be selected and no
-  personal/builtin record may satisfy the expected identity.
-- Canonical MCP case: an installed fixture plugin starts an isolated synthetic MCP server, exposes
-  one Tool and completes a Pi Tool call through the MCP client.
-- MCP failure case: invalid/unsupported/unconnectable contribution produces a runtime diagnostic,
-  registers no Tool and cannot return success.
-- Required evidence: Skill receipt, registered Tool identity, Tool call status, plugin/runtime
-  runtime instance identity, MCP server/tool provenance and zero forbidden fallback counts.
+- Standalone Skill case: with no Plugin and no MCP source, a uniquely named personal or project Skill is selected and its Pi receipt contains the exact source and Host fingerprint.
+- Plugin Skill case: a locally installed and enabled fixture Plugin contributes a uniquely named Skill; the selected receipt contains source `plugin`, exact Plugin identity and expected Host fingerprint.
+- Skill boundary case: disabled, removed, invalid or stale Plugin Skill cannot be selected and no personal/builtin record satisfies the expected identity.
+- Canonical MCP case: a locally installed fixture Plugin starts an isolated synthetic MCP Server, exposes one Tool and completes a Pi Tool call through the MCP client.
+- Component locality case: one Plugin contains a valid Skill and an invalid/unconnectable MCP contribution; the Skill remains executable while MCP registers no Tool and exposes an error diagnostic.
+- State reopen case: SQLite restores install/enablement, current package content is revalidated, and old JSON grant presence cannot change runtime state.
+- Missing package case: an SQLite record whose package is missing remains visible and non-executable without hiding valid sibling Plugins.
+- Required evidence: SQLite Plugin row, verified manifest/component result, Pi Skill receipt, registered Tool identity, Tool call terminal status, runtime instance identity, per-component readiness and zero forbidden-fallback counts.
 
 ## Verification
 
-- Key-free validation: `pnpm test:agent:eval` plus focused suite dry-runs.
-- Deterministic path validation: Pi SkillHost, MCP runtime, Desktop composition and IPC tests with
-  old imports/registrations proven absent.
-- Available catalog support filtering is deterministic Main projection, covered by policy tests that
-  reject App-only/no-contribution/invalid packages and accept Pi-valid Skill or supported MCP
-  packages. It does not substitute for installed plugin Agent routing evidence.
-- Home builtin exclusion uses disposition `excluded`: the changed behavior is a deterministic
-  Desktop management projection and cannot alter Pi Skill selection, injection or execution.
-  Contract, Main and Renderer tests reject builtin Home payloads and omit builtin records,
-  diagnostics, duplicate counts, filters and cards, while Desktop Agent composition regressions
-  continue to prove builtin discovery through the Agent-owned Pi SkillHost path.
-- Foreign marketplace exclusion is deterministic repository ownership, covered by path spies and a
-  Codex/OpenAI local marketplace fixture that must remain unread and unprojected.
-- Real case: run through the Desktop-owned complete-session driver when available.
-- 2026-07-31 deterministic results:
-  - focused Desktop extension/runtime/composition: 3 files, 32 tests passed;
-  - Agent runtime: 98 files, 925 tests passed;
-  - Evaluation harness: 35 files, 234 tests passed; 22 suites and 50 dry-run cases;
-  - application boundary: 1,411 files passed; Agent boundary: 488 files passed;
-  - Desktop lint passed with one unrelated existing unsafe-regex warning;
-  - legacy-debt, strict OpenSpec, focused formatting and `git diff --check` passed;
-  - production Electron packaging passed and contains the empty first-party
-    `extension-marketplace/marketplace.json`.
-- 2026-07-31 Home builtin-exclusion follow-up:
-  - Desktop: 64 files, 360 tests passed, including shared contract, Main projection,
-    Renderer and packaged builtin Agent discovery regressions;
-  - Evaluation harness: 35 files, 234 tests passed; 22 suites and 50 dry-run cases;
-  - application boundary: 1,411 files passed; Agent boundary: 488 files passed;
-  - Desktop lint passed with one unrelated existing Cut unsafe-regex warning;
-  - legacy-debt, unused, strict OpenSpec, production Electron packaging and
-    `git diff --check` passed.
-- 2026-07-31 management-toolbar simplification follow-up:
-  - the Renderer removes source, status, category and sort selectors together with their local
-    state, parsers and selector-only locale keys;
-  - search and the Skill/extension segmented control remain, while Skill personal-first ordering
-    and extension content-creation-first ordering are fixed and deterministic;
-  - focused Renderer coverage passed with 1 file and 19 tests, including `en`/`zh-cn` rendering
-    without selector markup; complete Desktop coverage passed with 64 files and 362 tests;
-  - production Electron packaging passed, and the restarted packaged app exposed only search plus
-    the Skill/extension segmented control on both tabs; source, status, category and sort controls
-    were absent from the visible UI and accessibility tree.
-- Production Electron runtime evidence:
-  - the OpenNeko extension catalog is honestly empty and contains no Codex/OpenAI or other
-    application marketplace records;
-  - the Home Skill tab projects only personal/plugin management records; the current package has
-    neither and therefore shows an honest empty state while deterministic Agent composition tests
-    continue to discover packaged builtin Skills;
-  - Simplified Chinese and English Skill source menus contain only all, personal and plugin;
-    extension title, recommended sorting and empty states were exercised in the packaged app, and
-    the locale was restored to follow-system.
-- Additional boundary regressions prove a package cannot escape the OpenNeko snapshot through an
-  intermediate symlink and a Tool conflict in a later workspace cannot partially replace an earlier
-  workspace's plugin generation. Failed generation construction disposes its MCP manager.
-- Repository-wide Desktop tests currently have three unrelated Resource Browser/Workbench failures,
-  and Desktop typecheck plus `check:unused` are blocked by the same active workbench change and
-  existing input/prompt strictness errors. No reported error references the extension manager,
-  plugin runtime or Agent plugin composition files.
+- Deterministic package validation:
+  - root `plugin.json` codec and fixed component discovery;
+  - old/private/foreign path poison tests;
+  - local staging, containment, identity conflict, SQLite reopen and invalid-record locality;
+  - Skill-only, MCP-only, mixed and unsupported Plugin projections.
+- Deterministic runtime validation:
+  - standalone Pi SkillHost execution without Plugin/MCP dependencies;
+  - Plugin Skill receipt and MCP Tool call through the canonical Agent paths;
+  - idle-only generation swap, resource disposal and sibling contribution preservation.
+- Desktop validation:
+  - producer/consumer/delegation tests for Agent package ownership and sender-bound IPC;
+  - Extensions UI for local install, enable, disable, remove, rescan, invalid records and both locales;
+  - packaged resources contain explicit bundled Plugin roots and no `marketplace.json` or `.openneko-plugin` package.
+- Key-free evaluation: `pnpm test:agent:eval` and focused suite dry-runs prove harness/schema readiness only.
+- Provider-backed acceptance: visible or hidden complete Desktop session, driven through the public Agent input path after installing an isolated local fixture Plugin.
+- Required static gates: storage authority, application/Agent boundaries, internal-versioning, legacy-debt, unused, strict OpenSpec and `git diff --check`.
+
+## Prior Evidence Retained as Foundation
+
+- 2026-07-31 deterministic extension/runtime/composition, Agent runtime, Evaluation harness, application/Agent boundary, lint, packaging and visible Electron checks passed for the previous bundled-Marketplace design.
+- That evidence remains valid only for delivered SkillHost, MCPManager, runtime replacement, typed IPC, bilingual UI and builtin-capability exclusion foundations.
+- It does not prove the new root manifest, Marketplace deletion, SQLite Plugin state, local install workflow, contribution-local readiness or provider-backed Plugin execution.
 
 ## Launch Catalog Ownership
 
-- Plugin/personal/builtin/project Skill installation and runtime provenance remain owned here; executable Entry/Session discovery and first-submit invocation are owned by `unify-agent-launch-and-domain-bindings` and its `agent-runtime.launch-binding` / `agent-runtime.skill-runtime` cases.
-- Required no-fallback evidence includes the exact Pi SkillHost receipt and full source identity, with zero management-card, manifest-only, display-name, personal/builtin substitution or try-next participation.
+- Plugin/personal/builtin/project Skill installation and runtime provenance remain owned by the Agent package and Pi SkillHost.
+- Executable Entry/Session discovery and first-submit invocation must consume exact Pi SkillHost records and receipts.
+- Required no-fallback evidence includes full source identity and zero management-card, manifest-only, display-name, old JSON, Marketplace, personal/builtin substitution or try-next participation.
 
 ## Blocked or Unexecuted Cases
 
-- The repository now has a Desktop-owned complete-session driver, but the current Scenario operation
-  set cannot install a contained global plugin fixture before launch. Provider-backed plugin Skill
-  execution remains `infrastructure-blocked` on that specific fixture/setup capability; key-free or
-  direct runtime tests must not be reported as real Agent behavior acceptance.
-- Current scenario steps cannot install a contained global plugin fixture before Desktop startup, so
-  adding either case to an indexed suite now would create a permanently failing scenario rather than
-  executable coverage. Deterministic Pi SkillHost, generation swap and synthetic MCP call tests are
-  retained as path evidence only; the indexed suite update/create remains blocked on that driver.
-- Because the first-party marketplace is intentionally empty, the production app cannot exercise a
-  real install/remove/readiness cycle without either adding a maintained plugin or adding an isolated
-  Desktop fixture-profile driver. The packaged empty-catalog check is runtime UI evidence, not plugin
-  lifecycle or Agent execution acceptance.
+- Provider-backed Plugin Skill/MCP execution remains unaccepted until the complete-session driver can install an isolated local Plugin fixture before Desktop startup through a product-authorized fixture path.
+- Key-free tests, direct runtime calls, synthetic final text and packaged UI inspection must not be reported as real Agent behavior acceptance.
+- Native-picker install/enable/disable/remove/reopen acceptance remains pending in a packaged Desktop because the current functional driver cannot operate the native directory picker; deterministic Main/application tests cover the lifecycle but do not replace that user-path evidence.
+
+## Current Evidence (2026-08-14)
+
+- `pnpm test:agent:eval` passed 45 files / 310 tests and dry-ran 26 suites / 77 cases; this proves authoring and harness readiness only.
+- `desktop-extension-localization` passed in a visible real Electron development runtime at 1280x800 and 1000x700 with zero console errors or warnings. Pixel inspection confirmed English and Simplified Chinese management entry, Add local Plugin control, bundled Plugin cards and Browser/Computer runtime controls without clipping or overlap.
+- `pnpm --filter @neko/app-desktop package` produced and verified the current darwin-arm64 application bundle. The same localization scenario could not reach the packaged bundle's CDP target before timeout, so packaged-launch evidence is not accepted.
+- Deterministic Agent/Desktop tests cover root manifest validation, SQLite reopen and corrupt-row locality, contained staging, exact mutation identity, system-trash delegation, old JSON grant exclusion, independent Skill/MCP readiness and unsupported App projection.
+- Provider-backed complete-session cases were not run: no fixture installation driver currently reaches the product-authorized local Plugin install boundary before the public Agent input path starts.
+
+## Skill/Plugin Overview and Host Action Decision (2026-08-14)
+
+- Decision: excluded from new provider-backed Agent behavior evaluation.
+- Reason: the overview projection, owning-Plugin navigation, and Personal Skill open/reveal intents do not change Skill prompt content, selection, activation, runtime provenance, Tool routing, or model-visible behavior.
+- Deterministic evidence must cover exact typed routes, current management identity/fingerprint and root containment checks, no physical path projection, Desktop adapter delegation, Personal-vs-Plugin action visibility, and bilingual copy.
+- Existing provider-backed Plugin Skill/MCP cases remain required for the broader runtime change and are neither replaced nor satisfied by these management UI checks.
+- Focused contract/manager/Webview/Renderer/preload tests passed 24/24; the focused Desktop AppHost delegation case and affected package typechecks also passed.
+- The visible `desktop-extension-localization` scenario now checks the Personal Skill overview/actions and Plugin overview boundary, but the development Desktop CDP target was not reachable before timeout in two attempts; no visual acceptance is claimed for this addition.
 
 ## Residual Risk
 
-- OAuth/App connector execution remains outside this change and must display unsupported.
-- OpenNeko-maintained plugin code remains a user-installed trust boundary; management confirmation,
-  package containment and workspace permission policy remain required.
-- The provider-backed complete-session Skill/MCP cases remain `infrastructure-blocked`; deterministic
-  Tool calls and key-free Evaluation cannot substitute for model-selected Pi execution.
+- Root `plugin.json` intentionally uses a minimal portable subset; tracking future external Plugin specifications is deferred to a future install-boundary adapter.
+- Official Marketplace, remote updates, publisher authentication and signatures have no P0 owner and are explicitly excluded.
+- OAuth/App connector execution remains outside this change and must display unsupported per contribution.
+- Local Plugin MCP execution remains a user-installed trust boundary; package containment, explicit enablement, credential isolation, Tool/action approval and exact runtime ownership remain required.

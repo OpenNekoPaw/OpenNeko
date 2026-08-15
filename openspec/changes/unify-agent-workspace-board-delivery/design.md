@@ -95,6 +95,20 @@ resource registry remains the single authorization and transport boundary for bo
 document entries; no data URL, temporary extraction file, raw absolute path or legacy media scheme becomes a second
 successful display path.
 
+Agent, Canvas, Resource Browser and Asset Center SHALL NOT construct `PreviewMediaDescriptor` records or choose
+file-versus-bytes transport independently. A package-owned Preview resource projection service accepts the stable
+locator, exact Surface owner and presentation metadata, asks one injected source resolver for the authorized source,
+registers that source through one injected exact-resource port and owns the resulting descriptor/lease lifecycle.
+The source resolver may return a seekable file source for ordinary image/audio/video files or an authorized byte
+source for archive entries and computed representations; this is one locator-driven transport decision inside the
+same service, not a Surface-specific preview path.
+
+Lightweight and full Preview remain presentation modes over the same `PreviewMediaDescriptor` and viewer kernel.
+Agent/Canvas/Resource Browser use lightweight chrome, while the main Preview panel uses full controls and a durable
+presentation snapshot. Neither mode may fall back to raw `<img src>`, a separately created `<audio>`/`<video>`, a
+local path or an independently authorized resource when descriptor projection fails. Per-resource failure stays
+visible on that Surface and valid siblings continue through the same service.
+
 ## Acceptance
 
 Use isolated Electron fixtures to prove process takeover, one Canvas effect, visible flat content graph,

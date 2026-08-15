@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./root": "./src/root.tsx"
+    "./root": "./src/root.tsx",
+    "./project-workspace": "./src/project-workspace.tsx",
+    "./style.css": "./src/style.css"
   },
   "scripts": {
     "test": "vitest run",

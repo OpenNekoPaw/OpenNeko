@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   getKeyboardBoundaryMetadata,
   useFocusedWebviewRoot,
@@ -73,6 +73,7 @@ import { t } from './i18n';
 import { getLogger } from './utils/logger';
 import type { CanvasConnectionMutationResult } from './utils/canvasConnectionAuthoring';
 import { centerNodeAt } from './utils/nodeSizing';
+import { findFreePosition } from './utils/containerLayout';
 
 // =============================================================================
 // Constants & Host API
@@ -100,8 +101,7 @@ export interface CanvasAppProps {
 
 export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const canOpenHostExport = hostPort.supportsMessage('canvasAction');
-  const canOpenHostPlayback = hostPort.supportsMessage('media:probe');
-  const canSendToAgent = hostPort.supportsMessage('sendToAgent');
+  const canOpenHostPlayback = hostPort.supportsMessage('preview:resolveResource');
   const canOpenBoardRef = hostPort.supportsMessage('openCanvasBoardRef');
   const canvasStoreApi = useCanvasStoreApi();
   const playbackStoreApi = usePlaybackStoreApi();
@@ -112,6 +112,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   // Interaction tool: select/marquee by default, hand tool pans on drag.
   const [interactionTool, setInteractionTool] = useState<'select' | 'pan'>('select');
   const [isSpacePanActive, setIsSpacePanActive] = useState(false);
+  const [isFullscreenPreviewOpen, setIsFullscreenPreviewOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const isHudVisible = true;
   const isGridVisible = true;
@@ -119,6 +120,10 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const zoomControlsRef = useRef<HTMLDivElement | null>(null);
   const [zoomControlsElement, setZoomControlsElement] = useState<HTMLDivElement | null>(null);
   const [miniMapWidth, setMiniMapWidth] = useState(200);
+  const handleFullscreenPreviewOpenChange = useCallback((open: boolean) => {
+    setIsFullscreenPreviewOpen(open);
+    if (open) setIsSpacePanActive(false);
+  }, []);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const { isKeyboardFocused, isKeyboardFocusedRef, setKeyboardFocused } = useFocusedWebviewRoot(
@@ -137,7 +142,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const addNode = useCanvasStore((state) => state.addNode);
   const updateConnection = useCanvasStore((state) => state.updateConnection);
   const deleteSelected = useCanvasStore((state) => state.deleteSelected);
-  const setPlaybackEntry = useCanvasStore((state) => state.setPlaybackEntry);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
@@ -359,10 +363,16 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
         if (!action.generationKind) {
           throw new Error(`Canvas generation action "${actionId}" has no Generation kind`);
         }
-        const nodePosition = centerNodeAt(
-          position,
-          resolveCanvasGenerationNodeDefaultSize(action.generationKind),
-        );
+        const nodeSize = resolveCanvasGenerationNodeDefaultSize(action.generationKind);
+        const preferredPosition = centerNodeAt(position, nodeSize);
+        const nodePosition = findFreePosition({
+          preferred: {
+            x: Math.round(preferredPosition.x / 20) * 20,
+            y: Math.round(preferredPosition.y / 20) * 20,
+          },
+          size: nodeSize,
+          nodes: canvasData?.nodes ?? [],
+        });
         void hostPort
           .createGenerationNode(action.generationKind, nodePosition)
           .catch((error: unknown) => {
@@ -384,7 +394,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       }
       throw new Error(`Direct creation is not supported for Canvas action "${action.id}"`);
     },
-    [requestCanvasFilePickerSource, hostPort],
+    [canvasData?.nodes, requestCanvasFilePickerSource, hostPort],
   );
 
   const handleSelectAddAction = useCallback(
@@ -588,19 +598,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     intervalMs: 100,
   });
 
-  // =========================================================================
-  // Agent handlers
-  // =========================================================================
-
-  /** Send selected nodes as context to the Agent panel */
-  const handleSendToAgent = useCallback(() => {
-    hostPort.postMessage({
-      type: 'sendToAgent',
-      nodeIds: selectedNodeIds,
-      action: 'context',
-    });
-  }, [selectedNodeIds, hostPort]);
-
   const handleDocumentOpen = useCallback(
     (locator: ContentLocator) => {
       void hostPort.previewResource(locator);
@@ -645,17 +642,12 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     addActionAt,
     handleFitContent,
     handleResetViewport,
-    handleCopy,
-    handleCut,
     handlePaste,
     handlePasteInPlace,
-    handleDuplicate,
     handleGroup,
     handleUngroup,
     undo,
     redo,
-    onSendToAgent: canSendToAgent ? handleSendToAgent : undefined,
-    onSetPlaybackEntry: setPlaybackEntry,
   });
 
   // =========================================================================
@@ -695,8 +687,9 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       canDeleteSelection: selectedNodeIds.length > 0 || selectedConnectionIds.length > 0,
       hasNodes: nodes.length > 0,
       isKeyboardFocused,
+      isModalPreviewOpen: isFullscreenPreviewOpen,
     }),
-    [isKeyboardFocused, nodes, selectedConnectionIds, selectedNodeIds],
+    [isFullscreenPreviewOpen, isKeyboardFocused, nodes, selectedConnectionIds, selectedNodeIds],
   );
 
   useCanvasKeyboardController({
@@ -723,7 +716,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   });
 
   // Keep ref in sync with latest handler (for Host message dispatch)
-  keyboardActionRef.current = handleKeyboardAction;
+  keyboardActionRef.current = isFullscreenPreviewOpen ? () => undefined : handleKeyboardAction;
 
   useEffect(() => {
     if (!hostPort || !canvasData) {
@@ -780,7 +773,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!hostPort || !canvasData) return;
     const projectionStatus = (canvasData as { projectionStatus?: ProjectedCanvasStatus })
       .projectionStatus;
@@ -1047,6 +1040,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
                   onMarqueeSelect={handleMarqueeSelect}
                   onDocumentOpen={handleDocumentOpen}
                   onCanvasEmbedOpen={handleCanvasEmbedOpen}
+                  onFullscreenPreviewOpenChange={handleFullscreenPreviewOpenChange}
                   onConnectionUpdate={updateConnection}
                   isPanMode={isPanMode}
                   isSpacePanActive={isSpacePanActive}

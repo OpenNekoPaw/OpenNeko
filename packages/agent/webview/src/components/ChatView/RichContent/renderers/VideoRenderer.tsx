@@ -1,19 +1,18 @@
 /**
- * VideoRenderer — Adapter wrapping VideoCard for the RichContent registry.
+ * VideoRenderer — authorized Preview descriptor adapter for the RichContent registry.
  */
 
+import { parsePreviewMediaDescriptor, type PreviewMediaDescriptor } from '@neko/preview-domain';
+import { LightweightPreview } from '@neko/preview-webview/root';
 import type { RichContentProps, RichContentRendererEntry } from '../types';
-import { VideoCard } from '../../MediaPreview';
+import { getLocale } from '../../../../i18n';
 
 // ---------------------------------------------------------------------------
 // Data shape
 // ---------------------------------------------------------------------------
 
 export interface VideoRichData {
-  src: string;
-  poster?: string;
-  title?: string;
-  localPath?: string;
+  descriptor: PreviewMediaDescriptor;
 }
 
 // ---------------------------------------------------------------------------
@@ -22,23 +21,22 @@ export interface VideoRichData {
 
 function isVideoRichData(data: unknown): data is VideoRichData {
   if (typeof data !== 'object' || data === null) return false;
-  const d = data as Record<string, unknown>;
-  return typeof d['src'] === 'string';
+  try {
+    return parsePreviewMediaDescriptor(Reflect.get(data, 'descriptor')).contentKind === 'video';
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-function VideoRendererComponent({ data, className, inline }: RichContentProps<VideoRichData>) {
+function VideoRendererComponent({ data, className }: RichContentProps<VideoRichData>) {
   return (
-    <VideoCard
-      src={data.src}
-      poster={data.poster}
-      title={data.title}
-      inline={inline}
-      className={className}
-    />
+    <div className={className}>
+      <LightweightPreview descriptor={data.descriptor} locale={getLocale()} />
+    </div>
   );
 }
 

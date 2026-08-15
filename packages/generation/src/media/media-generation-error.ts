@@ -15,6 +15,7 @@ export interface MediaGenerationErrorSummary {
   readonly url?: string;
   readonly responseBody?: string;
   readonly isRetryable?: boolean;
+  readonly outcomeUnknown?: boolean;
   readonly cause?: MediaGenerationErrorSummary;
 }
 
@@ -41,6 +42,13 @@ export function formatMediaGenerationErrorSummary(summary: MediaGenerationErrorS
   const message =
     details.length > 0 ? `${summary.message} (${details.join(', ')})` : summary.message;
   return truncateLogField(message, MAX_ERROR_MESSAGE_LENGTH);
+}
+
+export function isMediaGenerationOutcomeUnknown(summary: MediaGenerationErrorSummary): boolean {
+  return (
+    summary.outcomeUnknown === true ||
+    (summary.cause !== undefined && isMediaGenerationOutcomeUnknown(summary.cause))
+  );
 }
 
 export function getMediaGenerationHttpStatus(error: unknown): number | undefined {
@@ -90,6 +98,7 @@ function summarizeError(error: unknown, depth: number): MediaGenerationErrorSumm
       readObjectField(error, 'data'),
     ),
     isRetryable: firstBoolean(readObjectField(error, 'isRetryable')),
+    outcomeUnknown: firstBoolean(readObjectField(error, 'outcomeUnknown')),
     cause:
       depth < 2 && cause !== undefined && cause !== null
         ? summarizeError(cause, depth + 1)

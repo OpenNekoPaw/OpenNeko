@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { PiSkillHost } from '../skill-host';
+import { buildSkillActivationId, PiSkillHost, type PiSkillHostSnapshot } from '../skill-host';
 
 const BUILTIN_ROOT = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -12,6 +12,7 @@ const BUILTIN_ROOT = resolve(
 );
 const EXPECTED_BUILTINS = [
   'audio-mixing',
+  'character-creator',
   'color-grading',
   'image',
   'media-production',
@@ -24,6 +25,7 @@ const EXPECTED_BUILTINS = [
   'subtitle-assistant',
   'video',
   'video-editing',
+  'world-creator',
 ] as const;
 
 describe('Pi builtin Skill packages', () => {
@@ -42,12 +44,53 @@ describe('Pi builtin Skill packages', () => {
   it('keeps creation and storyboard methodology in Skill content without runtime authority', async () => {
     const snapshot = await discoverBuiltins(env);
 
-    expect(snapshot.invoke('skill-creator')).toContain('A root `manifest.json` is not part');
-    const storyboard = snapshot.invoke('storyboard');
+    expect(invokeSelected(snapshot, 'skill-creator')).toContain(
+      'A root `manifest.json` is not part',
+    );
+    const characterCreation = invokeSelected(snapshot, 'character-creator');
+    expect(characterCreation).toContain('source-backed facts from creative inferences');
+    expect(characterCreation).toContain('workspace Character or global Character');
+    expect(characterCreation).not.toContain('CharacterProject');
+    expect(characterCreation).not.toContain('draft lifecycle');
+    const worldCreation = invokeSelected(snapshot, 'world-creator');
+    expect(worldCreation).toContain('source-backed facts from creative inferences');
+    expect(worldCreation).toContain('dependency placeholders');
+    expect(worldCreation).toContain('workspace World or global World');
+    expect(worldCreation).not.toContain('ContentLocator');
+    expect(worldCreation).not.toContain('WorldProjectCreate');
+    expect(worldCreation).not.toContain('WorldProject');
+    expect(worldCreation).not.toContain('draft lifecycle');
+    const storyboard = invokeSelected(snapshot, 'storyboard');
     expect(storyboard).toContain('actual pixel-level visual evidence, OCR, or panel boundaries');
     expect(storyboard).not.toContain('ReadDocument');
     expect(storyboard).not.toContain('ReadImage');
     expect(storyboard).not.toContain('QuerySemanticCoverage');
+  });
+
+  it('keeps the full builtin catalog free of OpenNeko runtime protocols', async () => {
+    const snapshot = await discoverBuiltins(env);
+    const forbidden = [
+      'CharacterProjectCreate',
+      'UpdateCharacterDraft',
+      'CreateTask',
+      'GetTask',
+      'ReadDocument',
+      'ReadImage',
+      'QuerySemanticCoverage',
+      'openneko.',
+      'agents/neko.yaml',
+      '.neko/skills',
+      'Webview',
+      'cache paths',
+      'provider task handles',
+      'polling state',
+    ];
+
+    for (const skill of snapshot.skills) {
+      for (const token of forbidden) {
+        expect(skill.content, `${skill.name} must not contain ${token}`).not.toContain(token);
+      }
+    }
   });
 });
 
@@ -55,5 +98,11 @@ function discoverBuiltins(env: NodeExecutionEnv) {
   return new PiSkillHost(env, {
     isTrusted: () => true,
     isEnabled: () => true,
-  }).discover([{ path: BUILTIN_ROOT, source: { kind: 'builtin' }, entryPointKind: 'skill' }]);
+  }).discover([{ path: BUILTIN_ROOT, source: { kind: 'builtin' } }]);
+}
+
+function invokeSelected(snapshot: PiSkillHostSnapshot, name: string): string {
+  const record = snapshot.records.find((candidate) => candidate.name === name);
+  if (!record) throw new Error(`Fixture Skill '${name}' is unavailable.`);
+  return snapshot.invokeExact(name, buildSkillActivationId(record));
 }

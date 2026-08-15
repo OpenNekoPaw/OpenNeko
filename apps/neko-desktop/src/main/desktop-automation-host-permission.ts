@@ -51,7 +51,7 @@ export function createDesktopAutomationHostPermission(options: {
           options.isAccessibilityTrusted(true);
           return;
         case 'input-control':
-          throw new Error('Automation Input Control permission is not qualified.');
+          throw new Error('Automation Input Control permission is unavailable.');
       }
     },
   });

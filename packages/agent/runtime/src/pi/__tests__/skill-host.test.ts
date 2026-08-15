@@ -3,12 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   buildSkillActivationId,
   PiSkillHost,
   SkillHostError,
+  type PiSkillHostSnapshot,
   type SkillHostPolicy,
   type SkillSourceKind,
 } from '../skill-host';
@@ -43,8 +44,6 @@ describe('PiSkillHost', () => {
       expect.objectContaining({
         name: 'shared',
         source: { kind: 'project' },
-        trusted: true,
-        enabled: true,
       }),
     ]);
     expect(snapshot.warnings).toHaveLength(2);
@@ -52,7 +51,7 @@ describe('PiSkillHost', () => {
       expect.objectContaining({ name: 'shared', source: { kind: 'builtin' } }),
       expect.objectContaining({ name: 'shared', source: { kind: 'personal' } }),
     ]);
-    expect(snapshot.invoke('shared')).toContain('Project body');
+    expect(invokeSelected(snapshot, 'shared')).toContain('Project body');
   });
 
   it('preserves plugin identity and deterministically selects same-name plugin Skills', async () => {
@@ -61,26 +60,24 @@ describe('PiSkillHost', () => {
     const snapshot = await new PiSkillHost(env, policy).discover([
       {
         path: join(root, 'plugin-b'),
-        source: { kind: 'plugin', pluginId: 'beta@market' },
-        entryPointKind: 'skill',
+        source: { kind: 'plugin', pluginId: 'beta' },
       },
       {
         path: join(root, 'plugin-a'),
-        source: { kind: 'plugin', pluginId: 'alpha@market' },
-        entryPointKind: 'skill',
+        source: { kind: 'plugin', pluginId: 'alpha' },
       },
     ]);
 
     expect(snapshot.records[0]).toMatchObject({
       name: 'shared',
-      source: { kind: 'plugin', pluginId: 'alpha@market' },
+      source: { kind: 'plugin', pluginId: 'alpha' },
     });
     expect(snapshot.warnings).toEqual([
       expect.objectContaining({
         selectedSource: 'plugin',
-        selectedPluginId: 'alpha@market',
+        selectedPluginId: 'alpha',
         shadowedSource: 'plugin',
-        shadowedPluginId: 'beta@market',
+        shadowedPluginId: 'beta',
       }),
     ]);
     await expect(
@@ -88,10 +85,10 @@ describe('PiSkillHost', () => {
     ).resolves.toMatchObject({
       receipt: {
         skillName: 'shared',
-        source: { kind: 'plugin', pluginId: 'alpha@market' },
+        source: { kind: 'plugin', pluginId: 'alpha' },
       },
     });
-    expect(snapshot.invoke('shared')).toContain('Plugin A body');
+    expect(invokeSelected(snapshot, 'shared')).toContain('Plugin A body');
   });
 
   it('rejects a plugin Skill root without a valid plugin identity', async () => {
@@ -101,7 +98,6 @@ describe('PiSkillHost', () => {
         {
           path: join(root, 'plugin'),
           source: { kind: 'plugin', pluginId: '../invalid' },
-          entryPointKind: 'skill',
         },
       ]),
     ).rejects.toThrow('invalid plugin id');
@@ -118,81 +114,24 @@ describe('PiSkillHost', () => {
     const snapshot = await new PiSkillHost(env, policy).discover(sourceRoots(root, ['project']));
 
     expect(snapshot.skills[0]!.disableModelInvocation).toBe(true);
-    expect(snapshot.invoke('explicit-only')).toContain('Explicit body');
+    expect(invokeSelected(snapshot, 'explicit-only')).toContain('Explicit body');
   });
 
-  it('keeps same-named Skills and command artifacts in independent entry-point namespaces', async () => {
-    await createSkill(root, 'project', 'review', 'Skill review body');
-    const commandRoot = join(root, 'project-commands');
-    await createCommandArtifact(commandRoot, 'review', 'Command review body', {
-      argumentHint: '<scope>',
-      supportsArguments: true,
-    });
-
-    const snapshot = await new PiSkillHost(env, policy).discover([
-      ...sourceRoots(root, ['project']),
-      {
-        path: commandRoot,
-        source: { kind: 'project' },
-        entryPointKind: 'command-artifact',
-      },
-    ]);
-
-    const skill = snapshot.records.find((record) => record.entryPoint.kind === 'skill');
-    const command = snapshot.records.find(
-      (record) => record.entryPoint.kind === 'command-artifact',
-    );
-    expect(skill).toMatchObject({ name: 'review', entryPoint: { kind: 'skill' } });
-    expect(command).toMatchObject({
-      name: 'review',
-      entryPoint: {
-        kind: 'command-artifact',
-        commandId: 'review',
-        artifactId: 'command:review',
-        argumentHint: '<scope>',
-        supportsArguments: true,
-      },
-    });
-    expect(snapshot.warnings).toEqual([]);
-    expect(buildSkillActivationId(skill!)).not.toBe(buildSkillActivationId(command!));
-    expect(snapshot.invokeExact('review', buildSkillActivationId(skill!))).toContain(
-      'Skill review body',
-    );
-    expect(snapshot.invokeExact('review', buildSkillActivationId(command!))).toContain(
-      'Command review body',
-    );
-  });
-
-  it('isolates invalid command artifacts while preserving valid siblings', async () => {
-    const commandRoot = join(root, 'project-commands');
-    await createCommandArtifact(commandRoot, 'review', 'Review body');
+  it('treats Host-specific portable metadata as inert Skill content metadata', async () => {
+    const directory = await createSkill(root, 'project', 'ordinary', 'Ordinary body');
     await writeFile(
-      join(commandRoot, 'broken.md'),
-      '---\nname: another-name\ndescription: broken fixture\n---\nBroken body\n',
+      join(directory, 'SKILL.md'),
+      `---\nname: ordinary\ndescription: ordinary fixture\nmetadata:\n  openneko.binding: workspace\n  openneko.authoring-target-kind: character-project\n  model: forbidden-provider\n---\nOrdinary body\n`,
       'utf8',
     );
 
-    const snapshot = await new PiSkillHost(env, policy).discover([
-      {
-        path: commandRoot,
-        source: { kind: 'project' },
-        entryPointKind: 'command-artifact',
-      },
-    ]);
+    const snapshot = await new PiSkillHost(env, policy).discover(sourceRoots(root, ['project']));
 
-    expect(snapshot.records).toEqual([
-      expect.objectContaining({
-        name: 'review',
-        entryPoint: expect.objectContaining({ kind: 'command-artifact' }),
-      }),
-    ]);
-    expect(snapshot.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'invalid_metadata',
-        source: { kind: 'project' },
-        path: join(commandRoot, 'broken.md'),
-      }),
-    ]);
+    expect(snapshot.records).toHaveLength(1);
+    expect(snapshot.records[0]).toEqual(
+      expect.objectContaining({ name: 'ordinary', source: { kind: 'project' } }),
+    );
+    expect(invokeSelected(snapshot, 'ordinary')).toContain('Ordinary body');
   });
 
   it('rejects stale or cross-entry activation identities without name fallback', async () => {
@@ -206,7 +145,7 @@ describe('PiSkillHost', () => {
     expect(() => second.invokeExact('review', buildSkillActivationId(firstRecord))).toThrowError(
       expect.objectContaining<Partial<SkillHostError>>({ code: 'skill-not-found' }),
     );
-    expect(second.invoke('review')).toContain('Version two');
+    expect(invokeSelected(second, 'review')).toContain('Version two');
   });
 
   it('exposes only process-local virtual locators and contained relative resources', async () => {
@@ -216,7 +155,8 @@ describe('PiSkillHost', () => {
     const host = new PiSkillHost(env, policy);
     const snapshot = await host.discover(sourceRoots(root, ['project']));
     const record = snapshot.records[0]!;
-    const resource = snapshot.resource('portable', 'references/guide.md');
+    const activationId = buildSkillActivationId(record);
+    const resource = snapshot.resource('portable', activationId, 'references/guide.md');
 
     expect(record.locator.value).toMatch(/^\/__neko_skills\/[0-9a-f-]+\/[0-9a-f]{64}\/SKILL\.md$/);
     expect(record.locator.value).not.toContain(root);
@@ -233,7 +173,7 @@ describe('PiSkillHost', () => {
         locatorKind: 'skill',
       },
     });
-    expect(() => snapshot.resource('portable', '../secret.txt')).toThrowError(
+    expect(() => snapshot.resource('portable', activationId, '../secret.txt')).toThrowError(
       expect.objectContaining<Partial<SkillHostError>>({ code: 'invalid-resource-path' }),
     );
   });
@@ -247,7 +187,13 @@ describe('PiSkillHost', () => {
     const snapshot = await new PiSkillHost(env, policy).discover(sourceRoots(root, ['project']));
 
     await expect(
-      snapshot.readText(snapshot.resource('portable', 'references/outside.txt')),
+      snapshot.readText(
+        snapshot.resource(
+          'portable',
+          buildSkillActivationId(snapshot.records[0]!),
+          'references/outside.txt',
+        ),
+      ),
     ).rejects.toMatchObject({ code: 'resource-outside-skill' });
   });
 
@@ -259,8 +205,8 @@ describe('PiSkillHost', () => {
     const second = await host.discover(sourceRoots(root, ['project']));
 
     expect(first.records[0]!.fingerprint).not.toBe(second.records[0]!.fingerprint);
-    expect(first.invoke('changing')).toContain('Version one');
-    expect(second.invoke('changing')).toContain('Version two');
+    expect(invokeSelected(first, 'changing')).toContain('Version one');
+    expect(invokeSelected(second, 'changing')).toContain('Version two');
     await expect(second.readText(first.records[0]!.locator)).rejects.toMatchObject({
       code: 'invalid-locator',
     });
@@ -293,60 +239,13 @@ describe('PiSkillHost', () => {
     expect(snapshot.records[0]!.source.kind).toBe('builtin');
     expect(snapshot.warnings).toEqual([]);
   });
-
-  it('executes scripts only after the explicit user/workspace permission policy allows it', async () => {
-    const skillRoot = await createSkill(root, 'project', 'processor', 'Use scripts/process.mjs');
-    await mkdir(join(skillRoot, 'scripts'));
-    await writeFile(join(skillRoot, 'scripts', 'process.mjs'), 'export {};', 'utf8');
-    let allowExecution = false;
-    const authorize = vi.fn(() =>
-      allowExecution
-        ? { allowed: true as const }
-        : { allowed: false as const, reason: 'user denied' },
-    );
-    const processorResult = {
-      status: 'succeeded' as const,
-      processorId: 'skill-script',
-      registrationId: 'skill-script:fixture',
-      run: { processorRunId: 'processor-run-1', stageId: 'main', attempt: 1 },
-      outputs: [],
-      diagnostics: [],
-      exitCode: 0,
-    };
-    const execute = vi.fn(async () => processorResult);
-    const host = new PiSkillHost(env, policy, {
-      authorizer: { authorize },
-      executor: { execute },
-    });
-    const snapshot = await host.discover(sourceRoots(root, ['project']));
-    const script = snapshot.resource('processor', 'scripts/process.mjs');
-    const input = {
-      skillName: 'processor',
-      script,
-      args: ['--fixture'],
-      conversationId: 'conversation-1',
-      turnId: 'turn-1',
-      workspaceTrusted: true,
-    };
-
-    await expect(
-      snapshot.executeExternalProcessor({ ...input, workspaceTrusted: false }),
-    ).rejects.toMatchObject({ code: 'external-processor-denied' });
-    expect(authorize).not.toHaveBeenCalled();
-
-    await expect(snapshot.executeExternalProcessor(input)).rejects.toMatchObject({
-      code: 'external-processor-denied',
-    });
-    expect(execute).not.toHaveBeenCalled();
-
-    allowExecution = true;
-    await expect(snapshot.executeExternalProcessor(input)).resolves.toEqual(processorResult);
-    expect(execute).toHaveBeenCalledWith({
-      physicalScriptPath: expect.stringMatching(/\/project\/processor\/scripts\/process\.mjs$/),
-      args: ['--fixture'],
-    });
-  });
 });
+
+function invokeSelected(snapshot: PiSkillHostSnapshot, name: string): string {
+  const record = snapshot.records.find((candidate) => candidate.name === name);
+  if (!record) throw new Error(`Fixture Skill '${name}' is unavailable.`);
+  return snapshot.invokeExact(name, buildSkillActivationId(record));
+}
 
 async function createSkill(
   root: string,
@@ -364,33 +263,9 @@ function skillDocument(name: string, body: string): string {
   return `---\nname: ${name}\ndescription: ${name} fixture\n---\n${body}\n`;
 }
 
-async function createCommandArtifact(
-  commandRoot: string,
-  name: string,
-  body: string,
-  metadata: { readonly argumentHint?: string; readonly supportsArguments?: boolean } = {},
-): Promise<void> {
-  await mkdir(commandRoot, { recursive: true });
-  await writeFile(
-    join(commandRoot, `${name}.md`),
-    [
-      '---',
-      `name: ${name}`,
-      `description: ${name} command fixture`,
-      ...(metadata.argumentHint === undefined ? [] : [`argument-hint: ${metadata.argumentHint}`]),
-      `supports-arguments: ${metadata.supportsArguments ?? false}`,
-      '---',
-      body,
-      '',
-    ].join('\n'),
-    'utf8',
-  );
-}
-
 function sourceRoots(root: string, sources: readonly Exclude<SkillSourceKind, 'plugin'>[]) {
   return sources.map((kind) => ({
     path: join(root, kind),
     source: { kind },
-    entryPointKind: 'skill' as const,
   }));
 }

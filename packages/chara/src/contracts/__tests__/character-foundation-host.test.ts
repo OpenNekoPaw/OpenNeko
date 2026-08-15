@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createEmptyCharacterBackgroundStory,
-  createEmptyCharacterOriginSetting,
-} from '../character-lore-storyline-memory';
-import {
   createCharacterFoundationHostRequest,
   createCharacterFoundationCommandHostRequest,
   parseCharacterFoundationAnyHostRequest,
@@ -15,17 +11,17 @@ import {
 function emptySnapshot() {
   return {
     character: {
-      projects: [],
+      globalCharacters: [],
       versions: [],
       relationships: [],
       characterRuns: [],
       dialogueRuns: [],
       rooms: [],
       roomRuns: [],
+      storylines: [],
+      storylineDrafts: [],
       storylineVersions: [],
-      storylineRuns: [],
-      storylineObservationCandidates: [],
-      memoryScopes: [],
+      companionContinuities: [],
       presentationConfigurations: [],
     },
     diagnostics: [],
@@ -55,28 +51,86 @@ describe('Character Foundation host contract', () => {
     expect(() =>
       parseCharacterFoundationSnapshot({ ...emptySnapshot(), activeWorldId: 'world-a' }),
     ).toThrow(/unsupported fields/u);
+    expect(() =>
+      parseCharacterFoundationSnapshot({
+        ...emptySnapshot(),
+        character: { ...emptySnapshot().character, storylineRuns: [] },
+      }),
+    ).toThrow(/Character catalog contains unsupported fields/u);
+  });
+
+  it('accepts only exact GlobalCharacterVersion ownership in the management snapshot', () => {
+    const snapshot = emptySnapshot();
+    const definition = {
+      summary: 'A global character.',
+      backgroundStory: {
+        overview: '',
+        origins: [],
+        personalHistory: [],
+        formativeEvents: [],
+        establishedRelationships: [],
+      },
+      originSetting: {
+        overview: '',
+        eras: [],
+        cultures: [],
+        socialEnvironment: [],
+        importantPlaces: [],
+        organizations: [],
+        believedRules: [],
+      },
+      canon: [],
+      knowledgeBoundary: [],
+      behaviorPolicy: [],
+      expressionPolicy: [],
+      representationRefs: [],
+    };
+    expect(
+      parseCharacterFoundationSnapshot({
+        ...snapshot,
+        character: {
+          ...snapshot.character,
+          versions: [
+            {
+              characterVersionId: 'character-version-a',
+              globalCharacterId: 'global-character-a',
+              label: 'v1',
+              definition,
+              acceptedEvidenceIds: [],
+              publishedAt: '2026-08-15T00:00:00.000Z',
+            },
+          ],
+        },
+      }).character.versions[0],
+    ).toMatchObject({ globalCharacterId: 'global-character-a' });
+    expect(() =>
+      parseCharacterFoundationSnapshot({
+        ...snapshot,
+        character: {
+          ...snapshot.character,
+          versions: [
+            {
+              characterVersionId: 'character-version-a',
+              characterProjectId: 'character-project-a',
+              label: 'v1',
+              definition,
+              acceptedEvidenceIds: [],
+              publishedAt: '2026-08-15T00:00:00.000Z',
+            },
+          ],
+        },
+      }),
+    ).toThrow(/GlobalCharacterVersion contains unsupported fields|owner identity/u);
   });
 
   it('strictly parses registered commands and rejects unavailable interaction routes', () => {
-    const request = createCharacterFoundationCommandHostRequest('foundation-command-1', {
-      operation: 'character-project-create',
-      input: {
-        characterProjectId: 'character-project-a',
-        displayName: 'Lin',
-        draft: {
-          summary: 'An archivist.',
-          backgroundStory: createEmptyCharacterBackgroundStory(),
-          originSetting: createEmptyCharacterOriginSetting(),
-          canon: [],
-          knowledgeBoundary: [],
-          behaviorPolicy: [],
-          expressionPolicy: [],
-          representationRefs: [],
-        },
-      },
-    });
-
-    expect(parseCharacterFoundationAnyHostRequest(request)).toEqual(request);
+    expect(() =>
+      parseCharacterFoundationAnyHostRequest({
+        requestId: 'foundation-command-removed-authoring',
+        operation: 'character-project-create',
+        input: {},
+      }),
+    ).toThrow(/Unknown Character Foundation operation 'character-project-create'/u);
     expect(() =>
       parseCharacterFoundationAnyHostRequest({
         requestId: 'foundation-command-unavailable',
@@ -112,9 +166,13 @@ describe('Character Foundation host contract', () => {
       input: {
         roomRunId: 'room-run-a',
         characterRoomId: 'room-a',
-        runtimeKind: 'companion',
-        relationshipBindings: [
-          { participantId: 'participant-template-a', relationshipId: 'relationship-a' },
+        mode: 'companion',
+        companionBindings: [
+          {
+            participantId: 'participant-template-a',
+            companionContinuityId: 'continuity-a',
+            relationshipId: 'relationship-a',
+          },
         ],
       },
     });
@@ -134,7 +192,6 @@ describe('Character Foundation host contract', () => {
       input: {
         characterRunId: 'character-run-a',
         participantId: 'participant-a',
-        chat: { providerRef: 'provider:chat-a', modelRef: 'model:chat-a' },
         tts: {
           providerRef: 'provider:tts-a',
           voiceRepresentationId: 'voice-a',
@@ -154,39 +211,29 @@ describe('Character Foundation host contract', () => {
     ).toThrow(/unsupported fields/u);
   });
 
-  it('strictly parses storyline publication and memory review commands', () => {
-    const storyline = createCharacterFoundationCommandHostRequest('foundation-storyline-1', {
-      operation: 'character-storyline-publish',
-      input: {
-        characterStorylineVersionId: 'character-storyline-version-a',
-        characterVersionId: 'character-version-a',
-        label: 'Trust arc',
-        premise: 'The sealed archive opens.',
-        desire: 'Protect its record.',
-        conflict: 'The record must be shared.',
-        growthArc: 'Learn to trust a witness.',
-        stages: [{ stageId: 'guarded', title: 'Guarded', description: 'Keeps distance.' }],
-        turningPoints: [],
-        constraints: [],
-        acceptedEvidenceIds: [],
-      },
-    });
+  it('rejects Project authoring and parses memory review commands', () => {
     const memory = createCharacterFoundationCommandHostRequest('foundation-memory-1', {
-      operation: 'character-memory-candidate-accept',
+      operation: 'companion-memory-candidate-accept',
       input: {
-        characterMemoryScopeId: 'character-memory-scope-a',
-        characterMemoryCandidateId: 'character-memory-candidate-a',
-        characterMemoryEntryId: 'character-memory-entry-a',
-        expectedMemoryRevision: 2,
+        companionContinuityId: 'companion-continuity-a',
+        companionMemoryCandidateId: 'companion-memory-candidate-a',
+        companionMemoryEntryId: 'companion-memory-entry-a',
+        expectedContinuityRevision: 2,
       },
     });
 
-    expect(parseCharacterFoundationAnyHostRequest(storyline)).toEqual(storyline);
+    expect(() =>
+      parseCharacterFoundationAnyHostRequest({
+        requestId: 'foundation-storyline-removed',
+        operation: 'character-storyline-publish',
+        input: {},
+      }),
+    ).toThrow(/Unknown Character Foundation operation 'character-storyline-publish'/u);
     expect(parseCharacterFoundationAnyHostRequest(memory)).toEqual(memory);
     expect(() =>
       parseCharacterFoundationAnyHostRequest({
         ...memory,
-        input: { ...memory.input, expectedMemoryRevision: -1 },
+        input: { ...memory.input, expectedContinuityRevision: -1 },
       }),
     ).toThrow(/non-negative integer/u);
 
@@ -197,8 +244,14 @@ describe('Character Foundation host contract', () => {
         input: {
           relationshipId: 'relationship-a',
           candidateId: 'relationship-memory-candidate-a',
+          sourceCharacterVersionId: 'character-version-a',
+          provenance: {
+            kind: 'room-event',
+            roomRunId: 'room-run-a',
+            roomEventId: 'room-event-rain',
+          },
           content: 'The user waited in the rain.',
-          sourceRef: 'room-event:rain',
+          expectedRelationshipRevision: 1,
         },
       },
     );
@@ -206,8 +259,11 @@ describe('Character Foundation host contract', () => {
     expect(() =>
       parseCharacterFoundationAnyHostRequest({
         ...relationship,
-        input: { ...relationship.input, sourceRef: 'file:/private/transcript.json' },
+        input: {
+          ...relationship.input,
+          provenance: { kind: 'room-event', roomRunId: 'room-run-a' },
+        },
       }),
-    ).toThrow(/opaque non-file reference/u);
+    ).toThrow(/RoomEvent identity/u);
   });
 });

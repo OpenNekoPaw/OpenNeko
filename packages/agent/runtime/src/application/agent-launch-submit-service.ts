@@ -55,6 +55,12 @@ type AgentRuntimeEntryTargetReceipt = AgentEntryTargetReceipt & {
 };
 
 export interface AgentEntryRuntimeMaterializationPort {
+  validate(input: {
+    readonly receipt: AgentRuntimeEntryTargetReceipt;
+    readonly input: AgentDraftInputIntent;
+    readonly references: AgentDraftSubmitInput['references'];
+    readonly resourceGrantIds: readonly string[];
+  }): Promise<void>;
   materialize(input: {
     readonly requestId: string;
     readonly connection: AgentLaunchConnectionIdentity;
@@ -122,15 +128,24 @@ export function createAgentLaunchDraftSubmissionApplicationService(options: {
         binding: requestedBinding,
         ...(existing === undefined ? {} : { conversationId: existing.conversationId }),
       });
-      const runtimeMaterialization =
-        existing === undefined && isRuntimeEntryTargetReceipt(draftInput.entryTargetReceipt)
-          ? await options.runtimeEntry.materialize({
-              requestId,
-              connection,
-              receipt: draftInput.entryTargetReceipt,
-              input: draftInput.input,
-            })
-          : undefined;
+      const shouldMaterializeRuntime =
+        existing === undefined && isRuntimeEntryTargetReceipt(draftInput.entryTargetReceipt);
+      if (shouldMaterializeRuntime) {
+        await options.runtimeEntry.validate({
+          receipt: draftInput.entryTargetReceipt,
+          input: draftInput.input,
+          references: draftInput.references,
+          resourceGrantIds: draftInput.resourceGrantIds,
+        });
+      }
+      const runtimeMaterialization = shouldMaterializeRuntime
+        ? await options.runtimeEntry.materialize({
+            requestId,
+            connection,
+            receipt: draftInput.entryTargetReceipt,
+            input: draftInput.input,
+          })
+        : undefined;
       const context =
         existing?.context ??
         runtimeMaterialization?.context ??
@@ -211,10 +226,11 @@ function entryMaterializesRequestedOwner(
   if (requested.kind !== 'unbound') return false;
   if (receipt.binding.kind === 'character-dialogue') {
     if (receipt.binding.participants.length > 1) return committed.kind === 'room';
-    const participant = receipt.binding.participants[0]!;
+    const participant = receipt.binding.participants[0];
+    if (!participant) return false;
     return (
       committed.kind === 'character' &&
-      committed.characterId === participant.characterProjectId &&
+      committed.characterId === participant.globalCharacterId &&
       committed.characterVersionId === participant.characterVersionId &&
       committed.roleProfileId === participant.roleProfileId &&
       committed.characterRunId !== undefined &&
@@ -223,13 +239,18 @@ function entryMaterializesRequestedOwner(
   }
   return (
     committed.kind === 'world' &&
-    committed.worldExperienceId === receipt.binding.worldExperienceId &&
-    committed.worldExperienceVersionId === receipt.binding.worldExperienceVersionId &&
+    committed.worldExperienceId === receipt.binding.globalWorldId &&
+    committed.worldExperienceVersionId === receipt.binding.worldVersionId &&
+    JSON.stringify(committed.characters) ===
+      JSON.stringify(
+        receipt.binding.participants.map((participant) => ({
+          characterId: participant.globalCharacterId,
+          characterVersionId: participant.characterVersionId,
+        })),
+      ) &&
     committed.worldRunId !== undefined &&
-    (receipt.binding.launch.kind === 'new'
-      ? committed.participantId === receipt.binding.launch.participantId &&
-        committed.roleScopeId === receipt.binding.launch.roleScopeId
-      : committed.worldRunId === receipt.binding.launch.worldRunId)
+    (receipt.binding.launch.kind === 'new' ||
+      committed.worldRunId === receipt.binding.launch.worldRunId)
   );
 }
 

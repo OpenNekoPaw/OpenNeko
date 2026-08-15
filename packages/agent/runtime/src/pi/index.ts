@@ -29,12 +29,6 @@ export {
   SkillHostError,
   buildSkillActivationId,
   createNodePiSkillHost,
-  type ExecuteSkillExternalProcessorInput,
-  type SkillExternalProcessorAuthorizer,
-  type SkillExternalProcessorExecutor,
-  type SkillExternalProcessorPermissionDecision,
-  type SkillExternalProcessorPermissionInput,
-  type SkillExternalProcessorResult,
   type SkillHostErrorCode,
   type SkillHostPolicy,
   type SkillHostRecord,
@@ -176,13 +170,15 @@ export {
   type PiToolResultImageBatchOptions,
   type ProjectOpenNekoToolOptions,
 } from './openneko-tool';
-export {
-  PI_TOOL_CONFIRMATION_DEFAULT_TIMEOUT_MS,
-  PiToolConfirmationRegistry,
-} from './tool-confirmation-registry';
+export { PiToolConfirmationRegistry } from './tool-confirmation-registry';
 export type { AuthEvent, AuthPrompt } from '@earendil-works/pi-ai';
 export {
   createPersonalSkillManagementId,
   createPersonalSkillManager,
   type PersonalSkillManager,
+  type PersonalSkillManagementRecord,
 } from './personal-skill-manager';
+export {
+  createNodeSkillPackageCreationService,
+  type SkillPackageCreationService,
+} from './skill-package-creation-service';

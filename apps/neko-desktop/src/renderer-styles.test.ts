@@ -30,6 +30,55 @@ describe('Desktop renderer styles', () => {
     );
   });
 
+  it('aligns embedded Project Content with the compact Resource Browser list language', () => {
+    const groupsRule = styles.match(
+      /\.project-content-root\.is-embedded \.project-content-groups\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const rowRule = styles.match(
+      /\.project-content-root\.is-embedded \.project-content-row\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const iconRule = styles.match(
+      /\.project-content-root\.is-embedded \.project-content-row-icon\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const emptyRule = styles.match(
+      /\.project-content-root\.is-embedded \.project-content-empty\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const embeddedRootRule = styles.match(
+      /\.project-content-root\.is-embedded\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(groupsRule?.groups?.body).toMatch(/display\s*:\s*block/u);
+    expect(groupsRule?.groups?.body).toMatch(/padding\s*:\s*4px 5px 16px/u);
+    expect(rowRule?.groups?.body).toMatch(/min-height\s*:\s*32px/u);
+    expect(rowRule?.groups?.body).toMatch(
+      /grid-template-columns\s*:\s*24px minmax\(0, 1fr\) auto/u,
+    );
+    expect(rowRule?.groups?.body).toMatch(/border-radius\s*:\s*6px/u);
+    expect(iconRule?.groups?.body).toMatch(/width\s*:\s*24px/u);
+    expect(iconRule?.groups?.body).toMatch(/height\s*:\s*24px/u);
+    expect(emptyRule?.groups?.body).toMatch(/font-size\s*:\s*9px/u);
+    expect(embeddedRootRule?.groups?.body).toMatch(/background\s*:\s*transparent/u);
+    expect(styles).toMatch(/\.project-content-row\s*\{[^}]*min-height\s*:\s*76px/u);
+  });
+
+  it('uses a strong underline instead of a filled background for Project Browser modes', () => {
+    const modesRule = styles.match(/\.project-resource-dock__views\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const buttonRule = styles.match(
+      /\.project-resource-dock__views button\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const selectedRule = styles.match(
+      /\.project-resource-dock__views button\[aria-selected='true'\]\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(modesRule?.groups?.body).toMatch(/background\s*:\s*transparent/u);
+    expect(buttonRule?.groups?.body).toMatch(/border-bottom\s*:\s*2px solid transparent/u);
+    expect(selectedRule?.groups?.body).toMatch(
+      /border-bottom-color\s*:\s*var\(--neko-focus-border\)/u,
+    );
+    expect(selectedRule?.groups?.body).toMatch(/background\s*:\s*transparent/u);
+    expect(selectedRule?.groups?.body).toMatch(/font-weight\s*:\s*650/u);
+  });
+
   it('keeps the temporary primary-sidebar hover hit region continuous', () => {
     const frameRule = styles.match(
       /\.application-primary-sidebar-frame\s*>\s*\.home-navigation\s*\{(?<body>[\s\S]*?)\n\}/u,
@@ -313,7 +362,7 @@ describe('Desktop renderer styles', () => {
       /\.project-workspace\[data-right-presentation='hidden'\] \.project-main-group__tabs,[\s\S]*?\.project-workspace\[data-right-presentation='overlay'\] \.project-main-group__tabs\s*\{[^}]*padding-right\s*:\s*132px/u,
     );
     expect(resourceDockRule?.groups?.body).toMatch(
-      /grid-template-rows\s*:\s*var\(--neko-desktop-workbench-panel-header-height\) minmax\(0, 1fr\)/u,
+      /grid-template-rows\s*:\s*var\(--neko-desktop-workbench-panel-header-height\) 34px minmax\(0, 1fr\)/u,
     );
   });
 
@@ -434,7 +483,10 @@ describe('Desktop renderer styles', () => {
       /\.management-surface-list\.is-grid \.management-surface-row\s*\{[\s\S]*?min-height\s*:\s*132px[\s\S]*?flex-direction\s*:\s*column/u,
     );
     expect(styles).toMatch(
-      /\.agent-extension-management-root \.management-surface-row__select\[data-selected='true'\]\s*\{[^}]*border-color[^}]*background/u,
+      /\.agent-extension-management-root \.agent-extension-catalog-row\[data-selected='true'\]\s*\{[^}]*border-color[^}]*background/u,
+    );
+    expect(styles).not.toMatch(
+      /\.agent-extension-management-root [^{]*\[data-selected='true'\][^{]*\{[^}]*box-shadow\s*:\s*inset/u,
     );
     expect(styles).toMatch(
       /\.desktop-workbench-main-panel\[data-panel-size='compact'\] \.management-surface-list\.is-grid\s*\{[\s\S]*?grid-template-columns\s*:\s*1fr/u,
@@ -452,6 +504,47 @@ describe('Desktop renderer styles', () => {
     expect(styles).not.toMatch(/\.project-management-detail(?:__content)?\s*\{/u);
     expect(styles).not.toMatch(
       /\.home-(?:management|project-(?:selector|list|grid|card)|sort-control|search-field|segmented-control|status-badge)/u,
+    );
+  });
+
+  it('aligns Character and World detail content with their management catalogs', () => {
+    const characterStyles = readFileSync(
+      new URL('../../../packages/chara-webview/src/style.css', import.meta.url),
+      'utf8',
+    );
+    const worldStyles = readFileSync(
+      new URL('../../../packages/world-webview/src/style.css', import.meta.url),
+      'utf8',
+    );
+    const panelRule = styles.match(/\.desktop-workbench-main-panel\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(panelRule?.groups?.body).toMatch(
+      /--neko-management-content-top\s*:\s*clamp\(66px, 10vh, 104px\)/u,
+    );
+    expect(panelRule?.groups?.body).toMatch(/--neko-management-content-inline\s*:\s*32px/u);
+    expect(characterStyles).toMatch(
+      /\.character-management--catalog\s*\{[^}]*padding\s*:\s*var\(--neko-management-content-top/u,
+    );
+    expect(characterStyles).toMatch(
+      /\.character-management-detail\s*\{[^}]*width\s*:\s*min\(100%, 1020px\)/u,
+    );
+    expect(characterStyles).toMatch(
+      /\.character-management-detail__identity\s*\{[^}]*padding\s*:\s*var\(--neko-management-content-top[^}]*var\(--neko-management-content-inline/u,
+    );
+    expect(worldStyles).toMatch(
+      /\.world-management--catalog\s*\{[^}]*padding\s*:\s*var\(--neko-management-content-top[^}]*var\(--neko-management-content-inline/u,
+    );
+    expect(worldStyles).toMatch(
+      /\.world-management--catalog\s*>\s*\*\s*\{[^}]*width\s*:\s*min\(1020px, 100%\)/u,
+    );
+    expect(worldStyles).toMatch(
+      /\.world-management__detail-section:first-child\s*\{[^}]*padding-top\s*:\s*var\(--neko-management-content-top/u,
+    );
+    expect(worldStyles).toMatch(
+      /\.world-management__detail-section\s*\{[^}]*var\(--neko-management-content-inline/u,
+    );
+    expect(worldStyles).toMatch(
+      /@container \(max-width: 720px\)\s*\{[\s\S]*?\.world-management--catalog\s*\{[^}]*padding\s*:\s*40px 16px 36px/u,
     );
   });
 

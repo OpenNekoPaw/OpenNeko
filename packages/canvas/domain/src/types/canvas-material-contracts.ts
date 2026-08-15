@@ -1,6 +1,7 @@
 import type { JobRef } from '@neko/shared/job-lifecycle';
 import { isCanvasMaterialGenerationContext, type CanvasMaterialGenerationContext } from './canvas';
 import {
+  isProjectDurableContentLocator,
   validateContentLocator,
   type ContentLocator,
   type GeneratedOutputContentLocator,
@@ -251,7 +252,11 @@ export function isCanvasMaterialAuthoringRequest(
         return false;
       }
       const locator = validateContentLocator(value['locator']);
-      return locator.ok && locator.locator.kind !== 'generated-output';
+      return (
+        locator.ok &&
+        locator.locator.kind !== 'generated-output' &&
+        isCanvasDurableMaterialContentLocator(locator.locator)
+      );
     }
     case 'entity-representation-replace': {
       if (
@@ -279,6 +284,7 @@ export function isCanvasMaterialAuthoringRequest(
       return (
         locator.ok &&
         locator.locator.kind !== 'generated-output' &&
+        isCanvasDurableMaterialContentLocator(locator.locator) &&
         value['expectedEntity'].entityId === value['entity'].entityId
       );
     }
@@ -362,7 +368,7 @@ export function isCanvasMaterialAuthoringRequest(
         return false;
       }
       const locator = validateContentLocator(value['locator']);
-      if (!locator.ok) return false;
+      if (!locator.ok || !isCanvasDurableMaterialContentLocator(locator.locator)) return false;
       return locator.locator.kind === 'generated-output'
         ? isCanvasGenerationEvidence(value['generation'])
         : value['generation'] === undefined;
@@ -443,7 +449,7 @@ export function isCanvasProjectMediaLibraryCopyRequest(
     ]) &&
     value['kind'] === 'copy-to-project-media-library' &&
     isCanvasMaterialAuthoringIdentity(value['identity']) &&
-    validateContentLocator(value['source']).ok &&
+    isCanvasDurableMaterialContentLocator(value['source']) &&
     isNonEmptyString(value['libraryName']) &&
     isNormalizedPortableDirectory(value['destinationDirectory']) &&
     isSafeSourceName(value['fileName']) &&
@@ -467,7 +473,7 @@ export function isCanvasGlobalMediaLibraryCopyRequest(
     ]) &&
     value['kind'] === 'copy-to-global-media-library' &&
     isCanvasMaterialAuthoringIdentity(value['identity']) &&
-    validateContentLocator(value['source']).ok &&
+    isCanvasDurableMaterialContentLocator(value['source']) &&
     isNonEmptyString(value['globalLibraryId']) &&
     isNormalizedPortableDirectory(value['destinationDirectory']) &&
     isSafeSourceName(value['fileName']) &&
@@ -513,6 +519,7 @@ export function validateCanvasMaterialNodePersistence(
     });
   }
   const locator = validateContentLocator(data['contentLocator']);
+  const durableLocator = locator.ok && isCanvasDurableMaterialContentLocator(locator.locator);
   if (data['contentLocator'] === undefined) {
     diagnostics.push({
       code: 'canvas-material-content-locator-required',
@@ -520,7 +527,7 @@ export function validateCanvasMaterialNodePersistence(
       message:
         'Persisted Canvas Media/File nodes require a canonical ContentLocator; raw paths and ResourceRefs are not content identity.',
     });
-  } else if (!locator.ok) {
+  } else if (!durableLocator) {
     diagnostics.push({
       code: 'canvas-material-content-locator-invalid',
       target: `${target}.contentLocator`,
@@ -528,7 +535,7 @@ export function validateCanvasMaterialNodePersistence(
     });
   }
 
-  if (locator.ok && locator.locator.kind === 'generated-output') {
+  if (durableLocator && locator.locator.kind === 'generated-output') {
     if (!isCanvasGenerationEvidence(data['generation'])) {
       diagnostics.push({
         code: 'canvas-material-generation-evidence-required',
@@ -559,6 +566,62 @@ export function validateCanvasMaterialNodePersistence(
 
   collectForbiddenPersistenceValues(data, target, diagnostics, new Set());
   return diagnostics;
+}
+
+/**
+ * Canvas persists the owning content identity. Managed workspace links are a
+ * rebuildable runtime projection and therefore cannot become Canvas facts.
+ */
+export function isCanvasDurableMaterialContentLocator(value: unknown): value is ContentLocator {
+  return isProjectDurableContentLocator(value);
+}
+
+/**
+ * Identifies a locator-shaped user fact that is safe to retain only as an
+ * unavailable Canvas node. It is never authorized, resolved, or rewritten.
+ */
+export function isSafeUnavailableCanvasMaterialLocator(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (value['kind'] === 'workspace-file') {
+    return isSafeUnavailableWorkspaceFileLocator(value);
+  }
+  if (
+    value['kind'] !== 'document-entry' ||
+    !hasOnlyKeys(value, ['kind', 'source', 'entryPath', 'fingerprint']) ||
+    !isRecord(value['source']) ||
+    !isSafeUnavailableWorkspaceFileLocator(value['source'])
+  ) {
+    return false;
+  }
+  return validateContentLocator({
+    ...value,
+    source: { ...value['source'], path: 'unavailable/source' },
+  }).ok;
+}
+
+function isSafeUnavailableWorkspaceFileLocator(value: Record<string, unknown>): boolean {
+  if (!hasOnlyKeys(value, ['kind', 'path', 'fingerprint'])) return false;
+  if (value['kind'] !== 'workspace-file' || !isNormalizedUnavailableProjectPath(value['path'])) {
+    return false;
+  }
+  return validateContentLocator({ ...value, path: 'unavailable/source' }).ok;
+}
+
+function isNormalizedUnavailableProjectPath(value: unknown): value is string {
+  if (typeof value !== 'string' || value.normalize('NFC') !== value) return false;
+  if (!value || value.includes('\0') || value.includes('${') || value.includes('\\')) return false;
+  if (value.startsWith('/') || /^[A-Za-z]:(?:\/|$)/.test(value)) return false;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(value)) return false;
+  return value
+    .split('/')
+    .every(
+      (segment) =>
+        segment.length > 0 &&
+        segment !== '.' &&
+        segment !== '..' &&
+        !segment.startsWith('.') &&
+        !segment.includes(':'),
+    );
 }
 
 function isCanvasGenerationJobRef(value: unknown): value is CanvasGenerationJobRef {

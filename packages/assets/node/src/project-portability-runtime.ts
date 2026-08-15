@@ -12,8 +12,8 @@ import {
   type DesktopProjectPortabilityProgressEvent,
 } from '@neko/assets-domain/contracts';
 import { PortableMediaLibrarySnapshotService } from './portable-media-library-snapshot';
-import { WorkspaceMediaLibrarySyncService } from './workspace-media-library-sync';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import { inspectProjectMediaLibraryPortability } from './project-media-library-portability';
 
 export interface ProjectPortabilityShellPort {
   getProjection(windowId: string): Promise<{ readonly rendererSessionId: string }>;
@@ -21,7 +21,6 @@ export interface ProjectPortabilityShellPort {
 }
 
 export class ProjectPortabilityRuntime {
-  private readonly syncService: WorkspaceMediaLibrarySyncService;
   private readonly snapshotService: PortableMediaLibrarySnapshotService;
   private readonly eventSequences = new Map<string, number>();
 
@@ -36,30 +35,36 @@ export class ProjectPortabilityRuntime {
       }) => Promise<string | undefined>;
     },
   ) {
-    this.syncService = new WorkspaceMediaLibrarySyncService(
-      options.globalMediaLibraryRoot,
-      options.metadataRepositories,
-    );
     this.snapshotService = new PortableMediaLibrarySnapshotService({
       metadataRepositories: options.metadataRepositories,
-      syncService: this.syncService,
+      globalMediaLibraryRoot: options.globalMediaLibraryRoot,
     });
   }
 
   async inspect(windowId: string, value: unknown): Promise<DesktopProjectPortabilityInspectResult> {
     const request = parseDesktopProjectPortabilityRequest(value);
     const context = await this.resolveContext(windowId, request.identity);
-    const [projection, resumableSnapshot] = await Promise.all([
-      this.syncService.inspect(context.workspace),
-      createWorkspaceMediaLibrarySyncMetadataBinding({
-        workspaceId: context.workspace.workspaceId,
-        repositories: this.options.metadataRepositories,
-      }).findResumableSnapshot(),
+    const inspection = await inspectProjectMediaLibraryPortability({
+      projectId: request.identity.projectId,
+      workspace: context.workspace,
+      globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+    });
+    const metadata = createWorkspaceMediaLibrarySyncMetadataBinding({
+      workspaceId: context.workspace.workspaceId,
+      repositories: this.options.metadataRepositories,
+    });
+    const [resumableSnapshot, completedSnapshot] = await Promise.all([
+      metadata.findResumableSnapshot(),
+      inspection.references.requirements.coverage === 'complete'
+        ? metadata.findCompletedSnapshot(inspection.references.requirements.fingerprint)
+        : Promise.resolve(null),
     ]);
     return {
       requestId: request.requestId,
       identity: request.identity,
-      portability: projection.portability,
+      portability: completedSnapshot
+        ? { ...inspection.portability, state: 'portable-snapshot-ready' }
+        : inspection.portability,
       ...(resumableSnapshot ? { resumableSnapshot } : {}),
     };
   }
@@ -73,6 +78,7 @@ export class ProjectPortabilityRuntime {
     });
     if (!destinationPath) return cancelledPlan(request.requestId, request.identity);
     const plan = await this.snapshotService.plan({
+      projectId: request.identity.projectId,
       workspace: context.workspace,
       destinationPath,
     });
@@ -93,6 +99,7 @@ export class ProjectPortabilityRuntime {
     });
     if (!destinationPath) return cancelledPlan(request.requestId, request.identity);
     const plan = await this.snapshotService.resume({
+      projectId: request.identity.projectId,
       workspace: context.workspace,
       snapshotId: request.snapshotId,
       destinationPath,
@@ -113,6 +120,7 @@ export class ProjectPortabilityRuntime {
     const request = parseDesktopProjectPortabilityExecuteRequest(value);
     const context = await this.resolveContext(windowId, request.identity);
     const result = await this.snapshotService.execute({
+      projectId: request.identity.projectId,
       workspace: context.workspace,
       snapshotId: request.snapshotId,
       expectedOperationFingerprint: request.expectedOperationFingerprint,
@@ -140,6 +148,7 @@ export class ProjectPortabilityRuntime {
     const request = parseDesktopProjectPortabilityResumeRequest(value);
     const context = await this.resolveContext(windowId, request.identity);
     await this.snapshotService.cancel({
+      projectId: request.identity.projectId,
       workspace: context.workspace,
       snapshotId: request.snapshotId,
     });

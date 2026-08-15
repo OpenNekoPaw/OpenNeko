@@ -1,5 +1,9 @@
 ## Why
 
+> Foundation dependency clarification (2026-08-14): this capability consumes the exact Foundation
+> Run/View path established by `refine-world-management-authoring-and-runtime`; it is not required for
+> deterministic basic World runtime and MUST NOT replace its owner, facts or success semantics.
+
 World 的 Agent roles 与实时表现只有在精确 capability binding、延迟/取消资格和安全评估成立时才能进入消费路径。缺少资格时必须拒绝相关 capability，不能切换 provider、profile 或事实来源。
 
 ## What Changes

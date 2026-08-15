@@ -50,6 +50,12 @@
   contract readiness only.
 - `pnpm check:unused` no longer reports any export from this change; it remains non-zero because the
   pre-existing dirty Renderer worktree exports unused `activateWorkbenchMainView`.
+- Shared Preview resource projection passed 5 focused files / 35 tests for Agent locator diagnostics,
+  exact descriptor/lease lifecycle, main and quick Preview presentation, seekable file resources and
+  authorized byte resources. The cross-Surface Canvas/Preview/Asset Center set passed 5 files / 64 tests.
+  `pnpm test:agent:eval` passed 45 files / 310 tests and strict dry-run discovery passed 27 suites / 80
+  cases. The Desktop typecheck reaches only the unrelated dirty Canvas save contract error requiring
+  `removedNodeIds`; no Preview type error remains.
 
 ## Remaining evidence
 

@@ -74,7 +74,7 @@ export class WriteTool extends BuiltinTool {
   override readonly isDestructive = true;
   readonly requirements = {
     writableProject: true,
-    authoringTargetKind: 'content-project',
+    authoringTargetKind: 'content-document',
   } as const;
 
   async execute(args: Record<string, unknown>, options?: ToolExecuteOptions): Promise<ToolResult> {

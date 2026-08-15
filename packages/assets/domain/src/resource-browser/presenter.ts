@@ -1,8 +1,3 @@
-import {
-  projectEntityInspector,
-  type ProjectEntityInspectorOwnerCapabilities,
-  type ProjectEntityManagementProjection,
-} from '@neko/entity-domain';
 import { contentLocatorKey } from '@neko/content';
 import { modeForTextDocument } from '@neko/text-editor-domain';
 import { type MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
@@ -11,30 +6,31 @@ import type {
   ResourceBrowserAssetItem,
   ResourceBrowserCapability,
   ResourceBrowserContentItem,
-  ResourceBrowserEntityItem,
   ResourceBrowserItemKind,
+  ResourceBrowserMediaLibraryRootItem,
 } from './contract';
-import type { ResourceBrowserContentEntry } from './ports';
+import type { ResourceBrowserContentEntry, ResourceBrowserMediaLibraryRootEntry } from './ports';
 
 export function presentResourceBrowserContentItem(
   entry: ResourceBrowserContentEntry,
-  facet: 'files' | 'media',
+  source: 'files' | 'media',
   options: { readonly canvasAvailable?: boolean } = {},
 ): ResourceBrowserContentItem {
   const kind = presentContentKind(entry.metadata?.mediaType);
   const parentResourceId = entry.parentLocator
-    ? stableResourceId('content', `${facet}:${contentLocatorKey(entry.parentLocator)}`)
-    : undefined;
+    ? stableResourceId('content', `${source}:${contentLocatorKey(entry.parentLocator)}`)
+    : source === 'media' && entry.libraryName
+      ? mediaLibraryRootResourceId(entry.libraryName)
+      : undefined;
   return {
-    resourceId: stableResourceId('content', `${facet}:${contentLocatorKey(entry.locator)}`),
-    facet,
+    resourceId: stableResourceId('content', `${source}:${contentLocatorKey(entry.locator)}`),
+    source,
     kind,
     label: entry.label,
     role: entry.role,
     depth: entry.depth,
     ...(parentResourceId ? { parentResourceId } : {}),
     ...(entry.libraryName ? { libraryName: entry.libraryName } : {}),
-    ...(entry.libraryStatus ? { libraryStatus: entry.libraryStatus } : {}),
     ...(entry.description ? { description: entry.description } : {}),
     locator: entry.locator,
     ...presentThumbnail(
@@ -47,99 +43,33 @@ export function presentResourceBrowserContentItem(
       entry.capabilities,
       options.canvasAvailable ?? false,
       entry.metadata?.mediaType,
-      facet,
+      source,
       entry.locator,
     ),
   };
 }
 
-export function presentResourceBrowserEntityItem(
-  projection: ProjectEntityManagementProjection,
-  options: {
-    readonly canvasAvailable?: boolean;
-    readonly capabilities?: ProjectEntityInspectorOwnerCapabilities;
-  },
-): ResourceBrowserEntityItem {
-  const inspector = projectEntityInspector({
-    projection,
-    capabilities: options.capabilities,
-  });
-  if (projection.status === 'candidate') {
-    const candidate = projection.candidate;
-    return {
-      resourceId: stableResourceId('candidate', candidate.candidateId),
-      facet: 'entities',
-      kind: candidate.kind,
-      label: candidate.proposedNames.display ?? candidate.proposedNames.canonical,
-      ...(candidate.proposedNames.aliases.length > 0
-        ? { description: candidate.proposedNames.aliases.join(', ') }
-        : {}),
-      candidateRef: { candidateId: candidate.candidateId, entityKind: candidate.kind },
-      entityStatus: 'candidate',
-      sourceOwners: projection.sourceOwners,
-      evidenceCount: candidate.evidence.length,
-      inspector,
-      role: 'entity',
-      depth: 0,
-      capabilities: [],
-    };
-  }
-  const entity = projection.entity;
-  const binding =
-    entity.representations.find((candidate) => candidate.isDefault) ?? entity.representations[0];
-  const representationLocator = binding?.target;
-  const attentionBindingIds = projection.bindingAvailability
-    .filter((candidate) => candidate.availability === 'needs-attention')
-    .map((candidate) => candidate.bindingId);
+export function presentResourceBrowserMediaLibraryRootItem(
+  entry: ResourceBrowserMediaLibraryRootEntry,
+): ResourceBrowserMediaLibraryRootItem {
   return {
-    resourceId: stableResourceId('entity', `${entity.kind}:${entity.entityId}`),
-    facet: 'entities',
-    kind: entity.kind,
-    label: entity.names.display ?? entity.names.canonical,
-    ...(entity.names.aliases.length > 0 ? { description: entity.names.aliases.join(', ') } : {}),
-    entityRef: {
-      entityId: entity.entityId,
-      entityKind: entity.kind,
-    },
-    entityStatus: projection.status,
-    sourceOwners: projection.sourceOwners,
-    attentionBindingIds,
-    inspector,
-    representationAvailability:
-      attentionBindingIds.length > 0
-        ? 'needs-attention'
-        : representationLocator
-          ? 'active'
-          : 'unbound',
-    role: 'entity',
+    resourceId: mediaLibraryRootResourceId(entry.libraryName),
+    source: 'media',
+    kind: 'directory',
+    label: entry.label,
+    role: 'library-root',
     depth: 0,
-    ...(representationLocator ? { representationLocator } : {}),
-    ...(binding
-      ? {
-          representationBindingId: binding.bindingId,
-          representationRole: binding.role,
-        }
-      : {}),
-    ...(representationLocator
-      ? {
-          thumbnail: {
-            descriptorId: stableResourceId('thumbnail', contentLocatorKey(representationLocator)),
-            sourceFingerprint: binding?.acceptedAt ?? 'unknown',
-            mediaType: 'entity-representation',
-          },
-        }
-      : {}),
-    capabilities:
-      representationLocator && projection.status !== 'deprecated'
-        ? ['preview', ...(options.canvasAvailable ? (['add-to-canvas'] as const) : [])]
-        : [],
+    libraryName: entry.libraryName,
+    libraryStatus: entry.libraryStatus,
+    ...(entry.description ? { description: entry.description } : {}),
+    capabilities: [],
   };
 }
 
 export function presentResourceBrowserAssetItem(asset: GlobalAssetItem): ResourceBrowserAssetItem {
   return {
     resourceId: stableResourceId('asset', asset.id),
-    facet: 'assets',
+    source: 'assets',
     kind: 'asset',
     label: asset.label,
     ...(asset.description ? { description: asset.description } : {}),
@@ -194,12 +124,12 @@ function presentContentCapabilities(
   capabilities: MediaLibraryProjectionEntry['capabilities'],
   canvasAvailable: boolean,
   mediaType: string | undefined,
-  facet: 'files' | 'media',
+  source: 'files' | 'media',
   locator: ResourceBrowserContentItem['locator'],
 ): readonly ResourceBrowserCapability[] {
   const result: ResourceBrowserCapability[] = [];
   if (
-    facet === 'files' &&
+    source === 'files' &&
     locator.kind === 'workspace-file' &&
     capabilities.includes('read') &&
     modeForTextDocument(locator.path)
@@ -231,4 +161,8 @@ function stableResourceId(namespace: string, value: string): string {
     second = Math.imul(second ^ (code + index), 0x85ebca6b);
   }
   return `${namespace}:${(first >>> 0).toString(16)}${(second >>> 0).toString(16)}`;
+}
+
+function mediaLibraryRootResourceId(libraryName: string): string {
+  return stableResourceId('media-library-root', libraryName);
 }

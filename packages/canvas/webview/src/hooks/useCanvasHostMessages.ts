@@ -678,8 +678,6 @@ export function useCanvasHostMessages(
             window.addEventListener('message', handleWindowMessage);
             return () => window.removeEventListener('message', handleWindowMessage);
           })();
-      hostPort.postMessage({ type: 'ready' });
-
       return () => {
         unsubscribe();
         window.removeEventListener('compositionstart', handleCompositionStart);

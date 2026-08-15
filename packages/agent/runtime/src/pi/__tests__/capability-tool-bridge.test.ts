@@ -576,6 +576,7 @@ describe('bridgePiCapabilityTools', () => {
 
   it('preflights explicit identity, workspace trust, and product permission', async () => {
     const preflight = vi.fn(() => ({ allowed: false as const, reason: 'user denied' }));
+    const execute = vi.fn(async () => ({ content: [], details: {} }));
     const bridge = bridgePiCapabilityTools({
       tools: [
         {
@@ -584,7 +585,7 @@ describe('bridgePiCapabilityTools', () => {
           description: 'Write project state',
           parameters: Type.Object({ value: Type.String() }),
           requirements: { workspaceTrust: true },
-          execute: async () => ({ content: [], details: {} }),
+          execute,
         },
       ],
       identity,
@@ -629,6 +630,7 @@ describe('bridgePiCapabilityTools', () => {
       identity: { ...identity, toolCallId: 'tool-call-1' },
       workspaceTrusted: true,
     });
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it('propagates domain execution failures without converting them to success', async () => {

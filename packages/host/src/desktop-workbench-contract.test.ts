@@ -19,11 +19,11 @@ import {
 } from './desktop-workbench-contract';
 
 describe('Desktop Workbench contract', () => {
-  it('creates an orthogonal Chat-first default without Agent Main state', () => {
+  it('creates a Chat + fresh Main default without fabricating a Main View', () => {
     expect(createDefaultDesktopWorkbenchLayout('window-1')).toEqual({
       windowId: 'window-1',
       resourceDock: { presentation: 'docked', width: 320 },
-      display: { mode: 'chat-only', chatPosition: 'left', chatWidth: 360 },
+      display: { mode: 'chat-main', chatPosition: 'left', chatWidth: 360 },
       main: {
         views: [],
         groups: [{ groupId: 'main:primary', viewIds: [] }],
@@ -68,6 +68,53 @@ describe('Desktop Workbench contract', () => {
     expect(preview.main.split).toEqual({ axis: 'columns', ratio: 0.5 });
     expect(focused.main.activeGroupId).toBe('main:primary');
     expect(focused.main.views).toHaveLength(2);
+  });
+
+  it('side-opens from an empty primary Main and relocates an existing primary target', () => {
+    const standalone = openOrFocusMainView(
+      createDefaultDesktopWorkbenchLayout('window-1'),
+      {
+        viewId: 'character-view-1',
+        viewInstanceId: 'character-view-instance-1',
+        workspaceId: 'character-library',
+        kind: 'character-authoring',
+        ownerId: 'character-project-1',
+        displayLabel: 'Lead',
+        characterProjectId: 'character-project-1',
+      },
+      { groupId: 'main:primary', splitAxis: 'columns' },
+    );
+    expect(standalone.main.groups).toEqual([
+      { groupId: 'main:primary', viewIds: [] },
+      {
+        groupId: 'main:secondary',
+        viewIds: ['character-view-1'],
+        activeViewId: 'character-view-1',
+      },
+    ]);
+
+    const primaryCharacter = openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-2'), {
+      viewId: 'character-view-2',
+      viewInstanceId: 'character-view-instance-2',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'character-authoring',
+      ownerId: 'character-project-2',
+      displayLabel: 'Rival',
+      characterProjectId: 'character-project-2',
+    });
+    const relocated = openOrFocusMainView(primaryCharacter, primaryCharacter.main.views[0]!, {
+      groupId: 'main:primary',
+      splitAxis: 'columns',
+    });
+    expect(relocated.main.groups).toEqual([
+      { groupId: 'main:primary', viewIds: [] },
+      {
+        groupId: 'main:secondary',
+        viewIds: ['character-view-2'],
+        activeViewId: 'character-view-2',
+      },
+    ]);
   });
 
   it('focuses one exact Text Editor View per Workspace document', () => {
@@ -285,7 +332,7 @@ describe('Desktop Workbench contract', () => {
     expect(moved.main.split?.axis).toBe('rows');
   });
 
-  it('allows Chat + Main to expose an empty Main group but rejects Main only without a View', () => {
+  it('keeps an empty Main group visible without requiring a fabricated View', () => {
     const initial = createDefaultDesktopWorkbenchLayout('window-1');
     const emptyChatMain = setWorkbenchDisplayMode(initial, 'chat-main', 'right');
     expect(emptyChatMain.display).toEqual({
@@ -294,9 +341,9 @@ describe('Desktop Workbench contract', () => {
       chatWidth: 360,
     });
     expect(emptyChatMain.main).toEqual(initial.main);
-    expect(() => setWorkbenchDisplayMode(initial, 'main-only')).toThrow(
-      "display mode 'main-only' requires an attached Main View",
-    );
+    const emptyMainOnly = setWorkbenchDisplayMode(initial, 'main-only');
+    expect(emptyMainOnly.display.mode).toBe('main-only');
+    expect(emptyMainOnly.main).toEqual(initial.main);
     const withCanvas = openOrFocusMainView(initial, viewRef('canvas-1', 'canvas'));
     const changed = setWorkbenchDisplayMode(withCanvas, 'chat-main', 'right');
     expect(changed.main).toEqual(withCanvas.main);

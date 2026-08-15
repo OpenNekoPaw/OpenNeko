@@ -109,9 +109,9 @@ describe('progressive character memory contracts', () => {
       ...makeObservation(),
       entityRef: undefined,
       candidate: {
-        id: 'candidate-rin',
+        candidateId: 'candidate-rin',
         kind: 'character',
-        name: 'Rin-like character',
+        canonicalName: 'Rin-like character',
         confidence: 0.7,
       },
     });

@@ -124,6 +124,28 @@ describe('agent input triggers', () => {
     ).toBe(false);
   });
 
+  it('rejects Host-specific target requirements on ordinary Skill entries', () => {
+    expect(() =>
+      parseAgentInputCatalogEntry({
+        id: 'skill:builtin:skill-creator',
+        name: 'skill-creator',
+        description: 'Create a Skill package.',
+        trigger: 'skill',
+        prefix: '$',
+        phaseRequirement: 'any',
+        bindingRequirement: 'any',
+        authoringTargetKind: 'character-project',
+        source: { kind: 'builtin', sourceId: 'skill-creator' },
+        availability: { status: 'available' },
+        executable: {
+          kind: 'skill',
+          skillName: 'skill-creator',
+          activationId: 'skill:builtin:skill-creator',
+        },
+      }),
+    ).toThrow("unsupported field 'authoringTargetKind'");
+  });
+
   it('projects compact as Session-only and fail-visible in Draft', () => {
     const compact = parseAgentInputCatalogEntry({
       id: 'command:builtin:compact',

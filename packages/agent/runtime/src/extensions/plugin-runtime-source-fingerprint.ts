@@ -10,7 +10,7 @@ export function createPluginRuntimeSourceFingerprint(
 ): string {
   const source = {
     packages: snapshot.records
-      .filter((record) => record.installed && record.enabled)
+      .filter((record) => record.enabled)
       .map((record) => ({ id: record.id, version: record.version }))
       .sort((left, right) => left.id.localeCompare(right.id)),
     runtimeDescriptors: [...snapshot.runtimeDescriptors].sort((left, right) =>

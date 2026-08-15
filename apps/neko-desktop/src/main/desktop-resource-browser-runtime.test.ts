@@ -5,8 +5,6 @@ import { DEFAULT_CANVAS_DATA } from '@neko/canvas-domain';
 import type { ILogger } from '@neko/shared/logger';
 import { parseCanvasHostIntentRequest, type CanvasHostIntentResult } from '@neko/canvas-domain';
 import {
-  createResourceBrowserEntityIntentRequest,
-  createResourceBrowserSearchRequest,
   createResourceBrowserSnapshotRequest,
   type ResourceBrowserProjectionEvent,
 } from '@neko/assets-domain/resource-browser/contract';
@@ -97,7 +95,7 @@ describe('createResourceToCanvasInteraction', () => {
       identity: resourceIdentity,
       item: {
         resourceId: 'content:cat',
-        facet: 'media',
+        source: 'media',
         role: 'content',
         depth: 0,
         kind: 'image',
@@ -159,7 +157,7 @@ describe('createResourceToCanvasInteraction', () => {
         identity: resourceIdentity,
         item: {
           resourceId: 'content:cat',
-          facet: 'media',
+          source: 'media',
           role: 'content',
           depth: 0,
           kind: 'image',
@@ -174,76 +172,6 @@ describe('createResourceToCanvasInteraction', () => {
       }),
     ).rejects.toThrow('stale or not attached');
     expect(executeIntent).not.toHaveBeenCalled();
-  });
-
-  it('retains stable Entity and active representation evidence in Canvas authoring', async () => {
-    const executeIntent = vi.fn<ResourceBrowserNodeRuntimeOptions['canvas']['executeIntent']>(
-      async (_windowId, payload) => accepted(payload),
-    );
-    const addToCanvas = createResourceToCanvasInteraction({
-      shell: shellWithViews([canvasView]),
-      canvas: { executeIntent },
-      windowId: 'window-1',
-    });
-
-    await addToCanvas({
-      identity: resourceIdentity,
-      item: {
-        resourceId: 'entity:character-neko',
-        facet: 'entities',
-        role: 'entity',
-        depth: 0,
-        kind: 'character',
-        label: 'Neko',
-        entityRef: { entityId: 'character-neko', entityKind: 'character' },
-        entityStatus: 'confirmed',
-        sourceOwners: ['project-entity'],
-        attentionBindingIds: [],
-        inspector: {
-          status: 'confirmed',
-          kind: 'character',
-          names: { canonical: 'Neko', aliases: [] },
-          facts: {},
-          entityId: 'character-neko',
-          bindings: [],
-          operations: ['edit'],
-          blockers: [],
-        },
-        representationAvailability: 'active',
-        representationLocator: {
-          kind: 'workspace-file',
-          path: 'characters/neko.png',
-        },
-        representationBindingId: 'binding-neko-portrait',
-        representationRole: 'portrait',
-        capabilities: ['preview', 'add-to-canvas'],
-      },
-      target: {
-        documentId: 'boards/a.nkc',
-        sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewInstanceId),
-      },
-    });
-
-    expect(executeIntent).toHaveBeenCalledWith(
-      'window-1',
-      expect.objectContaining({
-        intent: {
-          type: 'author-material',
-          request: expect.objectContaining({
-            kind: 'direct-reference',
-            locator: {
-              kind: 'workspace-file',
-              path: 'characters/neko.png',
-            },
-            entity: {
-              entityId: 'character-neko',
-              bindingId: 'binding-neko-portrait',
-              role: 'portrait',
-            },
-          }),
-        },
-      }),
-    );
   });
 });
 
@@ -297,26 +225,6 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
     const tab = projection.window.tabs[0];
     const project = projection.catalog.projects[0];
     if (!tab || !project) throw new Error('Project Resource runtime fixture failed to attach.');
-    await mkdir(path.join(workspacePath, 'neko'), { recursive: true });
-    await writeFile(
-      path.join(workspacePath, 'neko', 'entities.json'),
-      `${JSON.stringify({
-        projectId: project.workspaceId,
-        entities: [
-          {
-            entityId: 'character-rin',
-            kind: 'character',
-            names: { canonical: 'Rin', aliases: [] },
-            facts: {},
-            representations: [],
-            lifecycle: { state: 'active' },
-            createdAt: '2026-08-05T00:00:00.000Z',
-            updatedAt: '2026-08-05T00:00:00.000Z',
-          },
-        ],
-      })}\n`,
-      'utf8',
-    );
     const identity = createDesktopResourceBrowserIdentity({
       projectId: project.projectId,
       workspaceId: project.workspaceId,
@@ -331,7 +239,6 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       logger: createLogger(),
       revealPath: () => undefined,
     });
-    const executeEntityIntent = vi.fn(async () => undefined);
     const runtime = new ResourceBrowserNodeRuntime({
       globalAssetRoot: path.join(root, '.neko', 'assets'),
       globalMediaLibraryRoot: path.join(root, '.neko', 'media-libraries'),
@@ -341,6 +248,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       openCreativeDocument: async () => undefined,
       openTextEditor: async () => undefined,
       selectSource: async () => undefined,
+      selectWorkspaceFiles: async () => undefined,
       trashWorkspaceItem: async () => undefined,
       selectConfiguredGlobalMediaLibrary: async () => undefined,
       selectGlobalMediaLibrarySource: async () => undefined,
@@ -356,9 +264,6 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
         executeIntent: async () => {
           throw new Error('Canvas execution is not expected by this identity test.');
         },
-      },
-      entity: {
-        executeIntent: executeEntityIntent,
       },
       cut: { addResource: async () => undefined },
     });
@@ -411,46 +316,12 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       } finally {
         unsubscribe();
       }
-      expect(
-        resolveDesktopWindowWorkspaceWorkbench(projection.window, project.workspaceId).layout.main
-          .views,
-      ).toEqual([expect.objectContaining({ kind: 'canvas' })]);
-      const entities = await runtime.search(
-        windowId,
-        createResourceBrowserSearchRequest({
-          requestId: 'search-entities',
-          identity,
-          facet: 'entities',
-          query: 'Rin',
-        }),
-      );
-      const entity = entities.items[0];
-      if (!entity || entity.facet !== 'entities' || entity.entityStatus === 'candidate') {
-        throw new Error('Project Resource runtime fixture did not project its canonical Entity.');
-      }
-      const intent = {
-        type: 'edit' as const,
-        entityId: 'character-rin',
-        changes: { facts: { role: 'lead' } },
-      };
-      await runtime.execute(
-        windowId,
-        createResourceBrowserEntityIntentRequest({
-          requestId: 'edit-entity',
-          identity,
-          resourceId: entity.resourceId,
-          intent,
-        }),
-      );
-      expect(executeEntityIntent).toHaveBeenCalledWith({
-        identity,
-        item: entity,
-        intent,
-        workspace: expect.objectContaining({
-          workspaceId: project.workspaceId,
-          workspacePath,
-        }),
-      });
+      const mainViews = resolveDesktopWindowWorkspaceWorkbench(
+        projection.window,
+        project.workspaceId,
+      ).layout.main.views;
+      expect(mainViews).toEqual([expect.objectContaining({ kind: 'canvas' })]);
+      expect(mainViews.some((view) => view.kind === 'project-content')).toBe(false);
       shell.setRendererSessionId(windowId, 'renderer-session-2');
       await expect(
         runtime.getSnapshot(
@@ -852,6 +723,7 @@ async function createGlobalLibraryRuntimeFixture(
     openCreativeDocument: async () => undefined,
     openTextEditor: async () => undefined,
     selectSource: async () => undefined,
+    selectWorkspaceFiles: async () => undefined,
     trashWorkspaceItem: async () => undefined,
     selectConfiguredGlobalMediaLibrary: async () => undefined,
     selectGlobalMediaLibrarySource: async () => undefined,
@@ -866,11 +738,6 @@ async function createGlobalLibraryRuntimeFixture(
     canvas: {
       executeIntent: async () => {
         throw new Error('Canvas execution is not expected by this global-library test.');
-      },
-    },
-    entity: {
-      executeIntent: async () => {
-        throw new Error('Entity execution is not expected by this global-library test.');
       },
     },
     cut: {
