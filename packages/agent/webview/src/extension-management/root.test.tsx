@@ -241,7 +241,7 @@ function createRuntime(
 function skill(
   name: string,
   source: 'personal' | 'plugin',
-  sourceId = source,
+  sourceId: string = source,
 ): AgentManagedSkillItem {
   return {
     id: `${source}:${sourceId}:${name}`,
