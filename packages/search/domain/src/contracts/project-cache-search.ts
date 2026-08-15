@@ -3,9 +3,9 @@
 // =============================================================================
 
 import {
-  isContentLocator,
   isContentSourceRef,
   isHostProjectedRuntimeValue,
+  isProjectDurableContentLocator,
   type ContentLocator,
   type ContentSourceRef,
 } from '@neko/content';
@@ -796,12 +796,23 @@ export function isProjectSearchItem(value: unknown): value is ProjectSearchItem 
     typeof value['label'] === 'string' &&
     isProjectSearchPartitionKind(value['source']['partition']) &&
     (value['source']['contentLocator'] === undefined ||
-      isContentLocator(value['source']['contentLocator'])) &&
+      isProjectSearchDurableContentLocator(value['source']['contentLocator'])) &&
     typeof value['projectRoot'] === 'string' &&
     typeof value['searchText'] === 'string' &&
     isProjectIndexFreshness(value['freshness']) &&
-    optionalProjectSearchVisualResource(value['visualResource'])
+    optionalProjectSearchVisualResource(value['visualResource']) &&
+    isProjectSearchDurableVisualResource(value['visualResource'])
   );
+}
+
+function isProjectSearchDurableContentLocator(value: unknown): value is ContentLocator {
+  return isProjectDurableContentLocator(value);
+}
+
+function isProjectSearchDurableVisualResource(value: unknown): boolean {
+  if (!isRecord(value) || value['representationLocator'] === undefined) return true;
+  if (!isContentRepresentationLocator(value['representationLocator'])) return false;
+  return isProjectSearchDurableContentLocator(value['representationLocator'].source);
 }
 
 export function projectMediaSemanticIndexToSearchItems(

@@ -1,5 +1,5 @@
 import type { ContentLocator } from '@neko/content';
-import { validateContentLocator } from '@neko/content';
+import { isProjectDurableContentLocator, validateContentLocator } from '@neko/content';
 import { isCreativeEntityKind, type CreativeEntityKind } from './creative-entity-identity';
 import { isEntityRepresentationRole } from './project-entity-representation';
 import type {
@@ -217,6 +217,7 @@ function isInspectorBinding(value: unknown): boolean {
     isIdentity(value['bindingId']) &&
     isEntityRepresentationRole(value['role']) &&
     target.ok &&
+    isProjectDurableContentLocator(target.locator) &&
     (value['availability'] === 'available' ||
       value['availability'] === 'needs-attention' ||
       value['availability'] === 'unknown') &&
@@ -318,7 +319,9 @@ function parseBinding(
   const record = requireRecord(value, 'Project Entity binding is invalid.');
   requireOnlyKeys(record, ['role', 'target', 'isDefault']);
   const target = validateContentLocator(record['target']);
-  if (!target.ok) throw new Error('Project Entity binding target is invalid.');
+  if (!target.ok || !isProjectDurableContentLocator(target.locator)) {
+    throw new Error('Project Entity binding target is invalid.');
+  }
   const role = record['role'];
   if (!isEntityRepresentationRole(role)) {
     throw new Error('Project Entity binding role is invalid.');

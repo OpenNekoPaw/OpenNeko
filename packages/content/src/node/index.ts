@@ -15,3 +15,10 @@ export {
   NodeAuthorizedWorkspaceDirectoryCreator,
   type NodeAuthorizedWorkspaceDirectoryCreatorOptions,
 } from './workspace-directory-creator';
+export {
+  authorizeWorkspaceContainedPath,
+  type AuthorizeWorkspacePathInput,
+  type WorkspacePathGuardDiagnostic,
+  type WorkspacePathGuardDiagnosticCode,
+  type WorkspacePathGuardResult,
+} from './workspace-path-guard';

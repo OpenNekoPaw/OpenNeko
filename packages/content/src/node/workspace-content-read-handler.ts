@@ -208,9 +208,14 @@ function guardDiagnosticCode(
 ): ContentIoDiagnosticCode {
   switch (code) {
     case 'workspace-path-unavailable':
+    case 'library-link-broken':
       return 'content-missing';
+    case 'library-permission-denied':
+      return 'content-unauthorized';
     case 'invalid-workspace-path':
-    case 'retired-linked-media-path':
+    case 'library-entry-not-link':
+    case 'library-link-loop':
+    case 'nested-link-escape':
     case 'unmanaged-symlink':
       return 'content-unauthorized';
   }

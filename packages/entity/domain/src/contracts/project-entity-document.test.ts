@@ -60,6 +60,53 @@ describe('Project Entity document contract', () => {
     expect(decoded).toEqual({ ok: true, document, diagnostics: [] });
   });
 
+  it('persists Media Library identity instead of its managed Workspace projection', () => {
+    const entity = createEntity({ entityId: 'character-rin', kind: 'character', canonical: 'Rin' });
+    const representation = {
+      bindingId: 'binding-rin-portrait',
+      role: 'portrait' as const,
+      source: 'user' as const,
+      acceptedAt: '2026-08-05T01:00:00.000Z',
+    };
+    expect(
+      assertProjectEntityDocument(
+        createDocument([
+          {
+            ...entity,
+            representations: [
+              {
+                ...representation,
+                target: {
+                  kind: 'media-library',
+                  libraryName: 'Characters',
+                  relativePath: 'portraits/rin.png',
+                },
+              },
+            ],
+          },
+        ]),
+      ),
+    ).toBeTruthy();
+    expect(() =>
+      assertProjectEntityDocument(
+        createDocument([
+          {
+            ...entity,
+            representations: [
+              {
+                ...representation,
+                target: {
+                  kind: 'workspace-file',
+                  path: 'neko/assets/Characters/portraits/rin.png',
+                },
+              },
+            ],
+          },
+        ]),
+      ),
+    ).toThrow(ProjectEntityContractError);
+  });
+
   it('diagnoses unsupported document fields and rejects former facts and provenance authority', () => {
     const valid = createEntity({ entityId: 'character-rin', kind: 'character', canonical: 'Rin' });
     expect(

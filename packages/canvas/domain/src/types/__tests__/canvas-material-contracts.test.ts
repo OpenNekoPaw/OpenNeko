@@ -77,6 +77,14 @@ describe('Canvas material contracts', () => {
     ).toBe(true);
     expect(
       isCanvasMaterialAuthoringRequest({
+        kind: 'direct-reference',
+        identity,
+        locator: { kind: 'workspace-file', path: 'neko/assets/Characters/reference.png' },
+        mediaKind: 'image',
+      }),
+    ).toBe(false);
+    expect(
+      isCanvasMaterialAuthoringRequest({
         kind: 'external-import',
         identity,
         sourceToken: 'selection-1',
@@ -298,6 +306,20 @@ describe('Canvas material contracts', () => {
   });
 
   it('enforces referenced, generated, Entity and secret persistence invariants', () => {
+    expect(
+      validateCanvasMaterialNodePersistence('media', {
+        assetPath: 'Books/story.epub/image/cover.jpg',
+        contentLocator: {
+          kind: 'document-entry',
+          source: { kind: 'workspace-file', path: 'neko/assets/Books/story.epub' },
+          entryPath: 'image/cover.jpg',
+        },
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'canvas-material-content-locator-invalid' }),
+      ]),
+    );
     expect(
       validateCanvasMaterialNodePersistence('media', {
         assetPath: 'media/reference.png',

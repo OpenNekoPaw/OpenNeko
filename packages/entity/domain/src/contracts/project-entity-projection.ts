@@ -1,6 +1,6 @@
 import {
   isContentIoDiagnostic,
-  isContentLocator,
+  isProjectDurableContentLocator,
   type ContentIoDiagnostic,
   type ContentLocator,
 } from '@neko/content';
@@ -73,7 +73,7 @@ export function isEntityBindingAvailabilityProjectionValue(
     isStableIdentity(value['bindingId']) &&
     isStableIdentity(value['entityId']) &&
     isCreativeEntityKind(value['entityKind']) &&
-    isContentLocator(value['representation']) &&
+    isProjectDurableContentLocator(value['representation']) &&
     isEntityRepresentationRole(value['role']) &&
     isOneOf(value['owner'], PROJECT_ENTITY_BINDING_RESOURCE_OWNERS) &&
     isOneOf(value['availability'], PROJECT_ENTITY_BINDING_AVAILABILITY_STATES) &&

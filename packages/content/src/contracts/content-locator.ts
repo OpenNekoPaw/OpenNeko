@@ -251,10 +251,7 @@ export function normalizeWorkspaceContentPath(value: string): string | undefined
   if (normalized.startsWith('/') || /^[A-Za-z]:(?:\/|$)/.test(normalized)) return undefined;
   if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(normalized)) return undefined;
   const segments = normalized.split('/');
-  const lower = normalized.toLocaleLowerCase('en-US');
   if (
-    lower === 'neko/assets' ||
-    lower.startsWith('neko/assets/') ||
     segments.some(
       (segment) =>
         segment.length === 0 ||
@@ -267,6 +264,31 @@ export function normalizeWorkspaceContentPath(value: string): string | undefined
     return undefined;
   }
   return segments.join('/');
+}
+
+/**
+ * Identifies the workspace-relative projection used to expose associated Media
+ * Libraries to sender-bound runtimes. The path is valid for runtime access but
+ * must not replace the owning MediaLibraryContentLocator in durable facts.
+ */
+export function isWorkspaceMediaLibraryProjectionPath(value: string): boolean {
+  const normalized = normalizeWorkspaceContentPath(value);
+  if (!normalized || normalized !== value) return false;
+  const lower = normalized.toLocaleLowerCase('en-US');
+  return lower === 'neko/assets' || lower.startsWith('neko/assets/');
+}
+
+/**
+ * Validates a locator that will become a durable Project fact. Managed Media
+ * Library workspace paths are runtime projections; their owning
+ * MediaLibraryContentLocator must be persisted instead.
+ */
+export function isProjectDurableContentLocator(value: unknown): value is ContentLocator {
+  const validation = validateContentLocator(value);
+  if (!validation.ok) return false;
+  const source =
+    validation.locator.kind === 'document-entry' ? validation.locator.source : validation.locator;
+  return source.kind !== 'workspace-file' || !isWorkspaceMediaLibraryProjectionPath(source.path);
 }
 
 function validateWorkspaceFileLocator(

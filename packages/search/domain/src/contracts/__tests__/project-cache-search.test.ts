@@ -126,6 +126,21 @@ describe('project cache/search contracts', () => {
         },
       }),
     ).toBe(false);
+    expect(
+      isProjectSearchItem({
+        ...item,
+        visualResource: {
+          ...item.visualResource,
+          representationLocator: {
+            ...representationLocator,
+            source: {
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/hero.png',
+            },
+          },
+        },
+      }),
+    ).toBe(false);
     expect(isProjectSearchItem({ ...item, freshness: 'old' })).toBe(false);
     expect(
       isProjectSearchItem({

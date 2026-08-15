@@ -1,4 +1,5 @@
 import {
+  isCanvasDurableMaterialContentLocator,
   resolveCanvasTextFilePreviewKind,
   selectedCanvasGenerationOutput,
   type CanvasGenerationOutputBinding,
@@ -71,7 +72,9 @@ export function resolveCanvasFullscreenPreviewRequest(
     node.data.contentLocator
   ) {
     const validation = validateContentLocator(node.data.contentLocator);
-    if (!validation.ok) return undefined;
+    if (!validation.ok || !isCanvasDurableMaterialContentLocator(validation.locator)) {
+      return undefined;
+    }
     const previewKind = node.data.mediaType;
     return {
       nodeId: node.id,
@@ -98,7 +101,9 @@ export function resolveCanvasFullscreenPreviewRequest(
 
   if (node.type === 'file' && node.data.contentLocator) {
     const validation = validateContentLocator(node.data.contentLocator);
-    if (!validation.ok) return undefined;
+    if (!validation.ok || !isCanvasDurableMaterialContentLocator(validation.locator)) {
+      return undefined;
+    }
     const fileName = node.data.path || node.data.title;
     const previewKind = resolveFileFullscreenPreviewKind(
       node.data.mediaKind,

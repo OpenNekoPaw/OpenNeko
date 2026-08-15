@@ -1,6 +1,7 @@
 import { validateContentLocator, type ContentLocator } from '@neko/content';
 import {
   deriveCanvasMaterialOrigin,
+  isCanvasDurableMaterialContentLocator,
   isCanvasEntityRepresentationEvidence,
   isCanvasGenerationEvidence,
   isCanvasMaterialActionDescriptor,
@@ -71,7 +72,7 @@ export function resolveCanvasMaterialActionTargets(
       return [];
     }
     const locatorResult = validateContentLocator(node.data.contentLocator);
-    if (!locatorResult.ok) {
+    if (!locatorResult.ok || !isCanvasDurableMaterialContentLocator(locatorResult.locator)) {
       if (isSafeUnavailableCanvasMaterialLocator(node.data.contentLocator)) return [];
       throw new Error(
         `Canvas material node "${nodeId}" requires a valid canonical ContentLocator.`,

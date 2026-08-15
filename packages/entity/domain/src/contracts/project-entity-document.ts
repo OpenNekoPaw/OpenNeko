@@ -1,4 +1,8 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import {
+  isProjectDurableContentLocator,
+  validateContentLocator,
+  type ContentLocator,
+} from '@neko/content';
 import { isCreativeEntityKind, type CreativeEntityKind } from './creative-entity-identity';
 import {
   isEntityRepresentationRole,
@@ -385,6 +389,7 @@ function parseRepresentation(value: unknown): ProjectEntityRepresentationBinding
     !isStableIdentity(value['bindingId']) ||
     !isEntityRepresentationRole(value['role']) ||
     !target.ok ||
+    !isProjectDurableContentLocator(target.locator) ||
     !isOneOf(value['source'], PROJECT_ENTITY_BINDING_SOURCES) ||
     (value['isDefault'] !== undefined && typeof value['isDefault'] !== 'boolean') ||
     !isTimestamp(value['acceptedAt'])
@@ -412,7 +417,7 @@ function isProjectEntityCandidateEvidence(value: unknown): value is ProjectEntit
     isStableIdentity(value['evidenceId']) &&
     isOneOf(value['owner'], PROJECT_ENTITY_CANDIDATE_SOURCE_OWNERS) &&
     isStableIdentity(value['sourceId']) &&
-    (locator === undefined || locator.ok) &&
+    (locator === undefined || (locator.ok && isProjectDurableContentLocator(locator.locator))) &&
     (value['label'] === undefined || isNonEmptyString(value['label'])) &&
     isOptionalConfidence(value['confidence']) &&
     (value['observedAt'] === undefined || isTimestamp(value['observedAt']))

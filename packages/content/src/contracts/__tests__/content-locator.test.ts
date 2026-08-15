@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   contentLocatorKey,
   contentLocatorsEqual,
+  isProjectDurableContentLocator,
+  isWorkspaceMediaLibraryProjectionPath,
   normalizeMediaLibraryContentPath,
   normalizeWorkspaceContentPath,
   parseContentReferenceTarget,
@@ -20,6 +22,38 @@ describe('content locator contracts', () => {
         fingerprint: { strategy: 'sha256', value: 'alice-content' },
       }),
     ).toMatchObject({ ok: true });
+  });
+
+  it('accepts a managed-link Workspace locator as a runtime access projection', () => {
+    expect(
+      validateContentLocator({
+        kind: 'workspace-file',
+        path: 'neko/assets/Characters/portraits/alice.png',
+      }),
+    ).toEqual({
+      ok: true,
+      locator: {
+        kind: 'workspace-file',
+        path: 'neko/assets/Characters/portraits/alice.png',
+      },
+    });
+    expect(isWorkspaceMediaLibraryProjectionPath('neko/assets/Characters/alice.png')).toBe(true);
+    expect(isWorkspaceMediaLibraryProjectionPath('Neko/Assets/Characters/alice.png')).toBe(true);
+    expect(isWorkspaceMediaLibraryProjectionPath('media/Characters/alice.png')).toBe(false);
+    expect(
+      isProjectDurableContentLocator({
+        kind: 'document-entry',
+        source: { kind: 'workspace-file', path: 'neko/assets/Books/story.epub' },
+        entryPath: 'cover.png',
+      }),
+    ).toBe(false);
+    expect(
+      isProjectDurableContentLocator({
+        kind: 'media-library',
+        libraryName: 'Books',
+        relativePath: 'story.epub',
+      }),
+    ).toBe(true);
   });
 
   it('accepts document, generated output, and package resource locators', () => {

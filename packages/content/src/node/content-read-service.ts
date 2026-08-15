@@ -17,6 +17,7 @@ import type {
   PackageResourceContentLocator,
 } from '../contracts';
 import { NodeWorkspaceContentReadHandler } from './workspace-content-read-handler';
+import type { AuthorizeWorkspacePathInput, WorkspacePathGuardResult } from './workspace-path-guard';
 
 export interface NodeDocumentEntryReader {
   readEntry(sourcePath: string, entryPath: string): Promise<Uint8Array>;
@@ -38,6 +39,9 @@ export interface CreateNodeHostContentReadServiceOptions {
   readonly mediaLibraryHandler?: ContentReadHandler<MediaLibraryContentLocator>;
   readonly packageResourceHandler?: ContentReadHandler<PackageResourceContentLocator>;
   readonly defaultMaxBytes?: number;
+  readonly workspacePathAuthorizer?: (
+    input: AuthorizeWorkspacePathInput,
+  ) => Promise<WorkspacePathGuardResult>;
 }
 
 export function createNodeHostContentReadService(
@@ -45,6 +49,7 @@ export function createNodeHostContentReadService(
 ): ContentReadService {
   const workspaceFile = new NodeWorkspaceContentReadHandler({
     workspaceRoot: options.workspaceRoot,
+    ...(options.workspacePathAuthorizer ? { authorize: options.workspacePathAuthorizer } : {}),
     ...(options.defaultMaxBytes !== undefined ? { defaultMaxBytes: options.defaultMaxBytes } : {}),
   });
   return new ExplicitContentReadService({
