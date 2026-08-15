@@ -3,10 +3,14 @@ import { describe, expect, it } from 'vitest';
 
 describe('Project Node canonical authority', () => {
   it('does not import SQLite, local metadata, cache, Host, or Electron', async () => {
-    const source = await readFile(
-      new URL('./project-entity-character-association-repository.ts', import.meta.url),
-      'utf8',
-    );
+    const source = (
+      await Promise.all(
+        [
+          new URL('./project-entity-character-association-repository.ts', import.meta.url),
+          new URL('./project-membership-repository.ts', import.meta.url),
+        ].map((url) => readFile(url, 'utf8')),
+      )
+    ).join('\n');
     expect(source).not.toMatch(/local-metadata|sqlite|cache|@neko\/host|electron/u);
   });
 
@@ -21,6 +25,8 @@ describe('Project Node canonical authority', () => {
         new URL('../../../apps/neko-desktop/src/main/index.ts', import.meta.url),
       ].map((url) => readFile(url, 'utf8')),
     );
-    expect(sources.join('\n')).not.toMatch(/project-composition|ProjectComposition/u);
+    expect(sources.join('\n')).not.toMatch(
+      /project-composition-file-repository|ProjectCompositionFileRepository/u,
+    );
   });
 });

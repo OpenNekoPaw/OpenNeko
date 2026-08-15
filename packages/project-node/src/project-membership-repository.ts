@@ -3,6 +3,7 @@ import type { Dirent } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import type { ProjectCompositionRepositoryPort } from '@neko/project/application';
 import {
   decodeProjectRecordName,
   parseProjectGlobalReferenceJson,
@@ -35,7 +36,7 @@ export interface ProjectMembershipRepositoryProjection {
   readonly diagnostics: readonly ProjectPersistenceDiagnostic[];
 }
 
-export class ProjectMembershipRepository {
+export class ProjectMembershipRepository implements ProjectCompositionRepositoryPort {
   private readonly targetDirectory: string;
   private readonly globalReferenceDirectory: string;
 

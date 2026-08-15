@@ -6,6 +6,7 @@ import {
   projectTargetMembershipRelativePath,
   serializeProjectTargetMembershipFact,
 } from '@neko/project/contracts';
+import { ProjectCompositionCommitService } from '@neko/project/application';
 import { ProjectMembershipRepository } from './project-membership-repository';
 
 const authority = { workspaceId: 'workspace-1', projectId: 'project-1' };
@@ -18,11 +19,12 @@ afterEach(async () => {
 describe('ProjectMembershipRepository', () => {
   it('atomically commits local memberships and exact global references', async () => {
     const repository = new ProjectMembershipRepository(await fixture(), authority);
-    await repository.commitTarget({
+    const service = new ProjectCompositionCommitService({ repository });
+    await service.addTarget({
       projectId: authority.projectId,
-      target: { kind: 'content-project', contentProjectId: 'project-1' },
+      target: { kind: 'character-project', characterProjectId: 'character-project-1' },
     });
-    await repository.commitGlobalReference({
+    await service.addGlobalReference({
       projectId: authority.projectId,
       reference: {
         kind: 'character-version',
@@ -30,7 +32,7 @@ describe('ProjectMembershipRepository', () => {
         characterVersionId: 'character-version-1',
       },
     });
-    await repository.commitGlobalReference({
+    await service.addGlobalReference({
       projectId: authority.projectId,
       reference: {
         kind: 'world-version',
@@ -44,7 +46,7 @@ describe('ProjectMembershipRepository', () => {
       targets: [
         {
           projectId: authority.projectId,
-          target: { kind: 'content-project', contentProjectId: 'project-1' },
+          target: { kind: 'character-project', characterProjectId: 'character-project-1' },
         },
       ],
       globalReferences: [
@@ -68,7 +70,7 @@ describe('ProjectMembershipRepository', () => {
       diagnostics: [],
     });
 
-    await repository.replaceGlobalReference({
+    await service.updateGlobalReference({
       previous: {
         projectId: authority.projectId,
         reference: {
@@ -86,7 +88,7 @@ describe('ProjectMembershipRepository', () => {
         },
       },
     });
-    await repository.removeGlobalReference({
+    await service.removeGlobalReference({
       projectId: authority.projectId,
       reference: {
         kind: 'character-version',

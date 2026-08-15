@@ -1,6 +1,6 @@
 {
   "name": "@neko/project-node",
-  "description": "Atomic workspace-relative persistence for Content Project facts",
+  "description": "Atomic workspace-relative persistence for mixed-domain Project facts",
   "private": true,
   "type": "module",
   "exports": {
