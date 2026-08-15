@@ -47,6 +47,19 @@ describe('MarkdownStreamingSession', () => {
     });
   });
 
+  it('derives stable node identities independently of traversal changes outside the node range', () => {
+    const sessionId = createMarkdownSessionId('range-identity');
+    const first = snapshot(
+      new MarkdownStreamingSession({ sessionId }).append('Prefix.\n\n- stable item\n\n'),
+    );
+    const reparsed = snapshot(
+      new MarkdownStreamingSession({ sessionId }).append('Prefix.\n\n- stable item\n\n'),
+    );
+    const firstList = findNode(first.document.root, 'list');
+    const reparsedList = findNode(reparsed.document.root, 'list');
+    expect(firstList?.id).toBe(reparsedList?.id);
+  });
+
   it('holds incomplete fenced code and active tables in the mutable tail', () => {
     const fenceSession = new MarkdownStreamingSession();
     const beforeFence = snapshot(fenceSession.append('Stable.\n\n'));

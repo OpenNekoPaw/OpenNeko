@@ -109,7 +109,6 @@ interface NormalizationContext {
   readonly source: string;
   readonly sourceLength: number;
   readonly sessionId: MarkdownSessionId;
-  ordinal: number;
   readonly diagnostics: MarkdownDiagnostic[];
 }
 
@@ -152,7 +151,6 @@ export function parseNormalizedMarkdown(
     source,
     sourceLength: source.length,
     sessionId,
-    ordinal: 0,
     diagnostics: [],
   };
   const root = normalizeRoot(mdastRoot, context);
@@ -693,8 +691,6 @@ function sourceNode<T extends { readonly type: string }>(
   readonly range: MarkdownSourceRange;
   readonly provenance: { readonly kind: 'source'; readonly range: MarkdownSourceRange };
 } {
-  const ordinal = context.ordinal;
-  context.ordinal += 1;
   return {
     ...fields,
     id: deriveMarkdownNodeId(
@@ -703,7 +699,6 @@ function sourceNode<T extends { readonly type: string }>(
       range.startOffset,
       range.endOffset,
       context.source.slice(range.startOffset, range.endOffset),
-      ordinal,
     ),
     range,
     provenance: { kind: 'source', range },
