@@ -180,6 +180,12 @@ Host 授权选择和目标路径；Node adapter 在临时目录执行路径 cont
 
 Batch B 和 C 都必须原子切换本批 owning boundary 内的 producer、consumer、registration、fixture 和测试。若一个旧 producer 仍有真实 consumer，该批不得声明完成；若旧 symbol 仅剩其他活跃提案引用，必须先通过 successor disposition 明确退休或转移，不得添加 compatibility adapter。
 
+### 10. Project 文件候选在 producer 边界逐项隔离
+
+Agent Entry 为精确 Project 搜索文件时，Host-side workspace scanner 是原始文件系统名称到 canonical `ContentLocator` 的 producer。它必须在候选进入 Agent projection 前逐项执行 locator validation。不能表达为 canonical Workspace locator 的单个文件只产生一条可观测 diagnostic 并从本次候选中排除；它不得使 Project 绑定、sibling 文件、Composer 上下文或 Agent 启动失败。
+
+Agent projection 保留严格 contract assertion，以拒绝其他 producer 绕过校验的非法 locator。修复不得把非法路径改写为另一个路径、回退 raw path、扫描隐藏存储或吞掉 diagnostic。该行为是读取时的 fail-local projection，不修改、删除或迁移用户文件。
+
 ## Risks / Trade-offs
 
 - 破坏性删除会使旧 installed/adaptation/recovery 数据不可恢复；这是本次明确产品决策，实施前用 owner 精确清单和删除范围测试避免误删 canonical 用户事实。

@@ -36,3 +36,7 @@
 ## 7. Documentation and verification
 
 - [x] 7.1 Delivery batch D: update canonical Chinese/English Project, Character, World, Agent, Desktop composition and package-boundary docs; run focused package tests, archive-security tests, `pnpm typecheck`, `pnpm lint`, architecture/OpenSpec checks, Neko quality review, visible Electron UI validation and applicable real Agent evaluation, recording unrelated blockers and residual risks.
+
+## 8. Project file mention regression
+
+- [x] 8.1 Validate each raw Workspace file candidate at the Host-side producer boundary, isolate invalid locator candidates with an observable diagnostic, preserve valid sibling files and Project-bound Agent launch, add deterministic path-level tests, and repeat visible Electron Project selection without raw-path or alternate-source fallback.

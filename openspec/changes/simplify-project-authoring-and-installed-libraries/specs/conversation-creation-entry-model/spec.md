@@ -10,6 +10,12 @@ OpenNeko SHALL present Conversation and Creation as the only visible choices in 
 - **THEN** Agent Entry retains that Project in the Composer context bar and remains in the Agent scene
 - **AND** it does not open the Project Workspace, infer a domain target or create another Project
 
+#### Scenario: One Project file cannot form a canonical locator
+
+- **WHEN** the selected Project contains one filesystem entry that cannot be represented by the canonical Workspace `ContentLocator`
+- **THEN** Host excludes only that file candidate and reports one local diagnostic while retaining the Project in the Composer context bar
+- **AND** valid sibling files remain searchable and the Agent launch request does not fail or substitute a raw path
+
 #### Scenario: User enters Conversation without selections
 
 - **WHEN** the user chooses Conversation without a Character, World or durable Assistant Conversation

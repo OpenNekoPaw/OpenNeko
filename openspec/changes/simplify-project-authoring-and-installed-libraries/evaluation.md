@@ -3,6 +3,7 @@
 - `character-creator`: update `skill.character-creator` for Assistant-bound global first creation and Project-bound exact Character target rejection.
 - `world-creator`: create `skill.world-creator` for Assistant-bound global first creation and Project-bound exact World target rejection.
 - Runtime selection reuses deterministic Agent Webview and runtime coverage for exact global Character multi-select, World single-select and combined World participants.
+- Project file candidate isolation is `excluded` from provider-backed behavior evaluation because it is a deterministic pre-provider Host projection contract. Focused Agent Runtime and Desktop tests must prove invalid candidates are diagnosed and omitted while valid sibling candidates and the exact Project launch remain available.
 - Forbidden paths: workspace-local runtime launch, installed-release lookup, adaptation, recovery, Project publication planning and active/recent/name/current fallback.
 
 ## Focused Cases
@@ -31,11 +32,17 @@ Date: 2026-08-16
   - `world-creator`: `sha256:916941b2d9cb34b1c5c20d8306e4f534226fa471c3813a711c113ca1340d2cdb`
 - Focused Agent Webview entry tests passed: 5 files / 80 tests.
 - Focused Desktop cleanup tests passed: 2 files / 111 tests.
+- Project file locator regression passed:
+  - `pnpm --filter @neko/agent-runtime test -- agent-content-controller.test.ts`: 126 files / 1193 tests.
+  - `pnpm exec vitest run apps/neko-desktop/src/main/desktop-agent-launch-runtime.test.ts`: 1 file / 6 tests.
+  - `pnpm exec vitest run apps/neko-desktop/src/main/app-host.test.ts`: 1 file / 67 tests.
+  - The Host workspace scanner diagnosed and omitted a `world-project:legacy` subtree while preserving the valid `guide.md` sibling and the strict downstream locator assertion.
 - `openspec validate simplify-project-authoring-and-installed-libraries --strict` passed.
+- `pnpm check:application-boundaries`, `pnpm check:agent-boundaries` and `pnpm check:package-boundaries` passed.
 - `pnpm check:legacy-debt` passed with zero blocking production debt surfaces.
 - `pnpm lint` passed with repository baseline warnings and zero errors.
 - `pnpm typecheck` was blocked by an unrelated dirty-worktree Canvas change at `packages/canvas/domain/src/canvas-host-runtime-session.ts:769`: `removedNodeIds` is missing.
-- `pnpm check:unused` was blocked by unrelated dirty-worktree Canvas/Assets findings: one Canvas package dependency, one Assets Node export and two Canvas Webview exports.
+- `pnpm check:unused` was blocked by unrelated dirty-worktree findings: one Canvas package dependency, one root `@neko/world` dev dependency, one Assets Node export and two Canvas Webview exports.
 
 ## Visible Electron UI Validation
 
@@ -47,6 +54,7 @@ Date: 2026-08-16
   - Creation visibly listed only Projects (`Blame`, `worlds`, `neko-test`). Selecting `Blame` added it to the Composer context and did not navigate to Project Workspace.
   - Conversation visibly exposed Character and World context actions and their global version selectors without Skill cards.
   - The `$` menu visibly contained both builtin `$character-creator` and `$world-creator`, with Assistant/global and Creation/workspace placement descriptions.
+  - After clearing and reselecting the historical `worlds` Project through the visible Creation entry, `worlds` remained in the Composer context bar and no `invalid content locator` error appeared. The Project cards and existing primary sidebar remained usable.
 - Blocked state: the current local global catalog contained only one eligible Character and one eligible World. The visible runtime therefore could not demonstrate two selected Characters plus one World in one dense state. The canonical multi-select/single-select/combined binding is covered by the focused 80-test Agent Webview suite, but deterministic tests do not replace the missing visible dense-state evidence.
 - Result: `blocked` for complete UI acceptance; no visual clipping, overlap, sidebar regression or unintended Project navigation was observed in the states that could be exercised.
 
