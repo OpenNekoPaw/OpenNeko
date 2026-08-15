@@ -4,6 +4,13 @@
 > exact CharacterVersion actor refs and optional ProjectEntity object association. Story and Experience
 > contracts remain unavailable until their complete producer, consumer, persistence and UI paths are
 > qualified; this change must not pre-register empty production paths.
+>
+> Foundation handoff (2026-08-14):
+> [`refine-world-management-authoring-and-runtime`](../refine-world-management-authoring-and-runtime/)
+> owns the only production `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch` management,
+> authoring and deterministic runtime product path. This change is limited to future Story/Experience
+> topology after a real producer and consumer are qualified and MUST NOT redefine Foundation identities,
+> repositories, scenes, bridges or Webview Roots.
 
 ## Why
 

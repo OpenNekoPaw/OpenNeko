@@ -1,6 +1,12 @@
 > Gated by [`simplify-resource-entity-character-world-boundaries`](../simplify-resource-entity-character-world-boundaries/):
 > Foundation surfaces may consume only existing exact World owners. Experience-ready UI or success paths
 > remain unavailable until their runtime producer, persistence and product qualification are complete.
+>
+> Foundation handoff (2026-08-14):
+> [`refine-world-management-authoring-and-runtime`](../refine-world-management-authoring-and-runtime/)
+> supersedes this change's Foundation Library, Studio and Runtime surface scope. This change may proceed
+> later only for a fully qualified WorldExperience interaction surface and MUST NOT register parallel
+> Foundation scenes, IPC, Webview Roots or product availability.
 
 ## Why
 

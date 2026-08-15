@@ -7,7 +7,7 @@
 
 OpenNeko 已有 `@neko/world` / `@neko/world-node` Foundation，能够表达 `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch` 的最小事实链，但尚未把用户的创作意图以及剧本、角色、场景、素材和玩法说明编译成可审核、可发布、可运行并可在运行中继续改造的互动世界。现有设计还没有把 Content-to-Experience 编译、能力缺口诊断、持续世界改造与 World Story、World Gameplay、Experience composition 的独立生命周期讲清楚，容易继续要求作者围绕代码或某个引擎实现具体体验，或让 Agent、Renderer、游戏引擎和世界模型成为第二事实来源。
 
-路线图仍将 Interactive World 定义为实验方向，并要求真实用户、重复行为和真实闭环证据后才能晋级。当前 Foundation/transformation 实现只有 package 与隔离 UI 证据，不满足晋级条件；它必须保留为实验原型，生产 Desktop World 入口则恢复为 fail-visible unavailable。
+路线图仍将完整 Interactive World 定义为实验方向，并要求真实用户、重复行为和真实闭环证据后才能晋级。后续 `refine-world-management-authoring-and-runtime` 可以在自身完整门禁通过后启用基础 World 管理、目录创作与确定性 Foundation Runtime；该晋级不启用 World Story、Gameplay、完整 WorldExperience、Agent Play 或 realtime presentation。
 
 ## What Changes
 

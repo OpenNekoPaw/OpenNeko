@@ -1,5 +1,8 @@
 ## 1. Authoring and publication
 
+> Do not implement these tasks until Story/Experience producers and consumers are qualified. Foundation
+> authoring, runtime, Save/branch and replay are owned by `refine-world-management-authoring-and-runtime`.
+
 - [ ] 1.1 实现 World、World Story 和 Experience headless authoring/publication services。
 - [ ] 1.2 实现 immutable dependency validation、install/catalog projection 和 invalid-record isolation。
 

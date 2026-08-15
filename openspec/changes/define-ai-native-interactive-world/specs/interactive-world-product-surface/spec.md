@@ -1,19 +1,19 @@
 ## ADDED Requirements
 
-### Requirement: Experimental World surfaces do not bypass roadmap promotion
+### Requirement: Basic World promotion does not bypass complete Experience qualification
 
-The production Desktop SHALL keep World navigation and management unavailable until a later promotion change records real-user, repeated-behavior and end-to-end-loop evidence. Foundation packages, durable records, scene contracts and isolated UI fixtures MAY remain available for experimentation, but MUST NOT make the production World route successful.
+The production Desktop MAY expose basic World Management, directory World Authoring and deterministic Foundation Runtime only after `refine-world-management-authoring-and-runtime` provides their exact package producers, consumers, persistence, scenes, visible Electron evidence and fail-local diagnostics. That basic promotion MUST NOT mark World Story, Gameplay, complete WorldExperience, Agent Play or realtime presentation ready. Before the basic owner path is qualified, the affected operation SHALL remain owner-qualified unavailable without changing durable World facts.
 
-#### Scenario: User opens World navigation before promotion
+#### Scenario: User opens qualified basic World management
 
-- **WHEN** a user invokes World navigation from a production Desktop Window
-- **THEN** Host returns an owner-qualified unavailable diagnostic and preserves the current scene
-- **AND** no World Root is mounted and no World durable record is changed
+- **WHEN** the basic World management producer, consumer and visible product path have passed their owning change gates
+- **THEN** Host mounts only the narrow World Management catalog/detail composition
+- **AND** no complete WorldExperience, Story, Gameplay, Agent or realtime success path is inferred
 
-#### Scenario: Desktop restores an old experimental World scene
+#### Scenario: Desktop restores an old mixed Foundation scene
 
-- **WHEN** a Window contains a persisted World Management presentation
-- **THEN** Host replaces only that presentation with a fresh canonical Agent Entry scene and reports a presentation-reset diagnostic
+- **WHEN** a Window contains a persisted legacy mixed Foundation presentation
+- **THEN** Host resets only that invalid presentation to the canonical fresh scene and reports a presentation diagnostic
 - **AND** World projects, versions, runs, saves, branches and protected background runtime remain unchanged
 
 ### Requirement: Desktop presents a World Library rather than a Game Hub

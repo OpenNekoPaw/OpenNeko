@@ -1,6 +1,10 @@
 > Gated by [`simplify-resource-entity-character-world-boundaries`](../simplify-resource-entity-character-world-boundaries/):
 > the ownership design remains valid, but Gameplay/Agent Play must not register a production repository,
 > handler or ready state before a real consumer and persistence path are qualified.
+>
+> Foundation dependency clarification (2026-08-14): this capability may consume exact Run/View refs
+> from `refine-world-management-authoring-and-runtime`, but Gameplay/Agent Play is not part of the basic
+> runtime and MUST NOT add Foundation state, event or repository alternatives.
 
 ## Why
 

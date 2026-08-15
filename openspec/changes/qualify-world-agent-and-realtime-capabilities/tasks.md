@@ -1,5 +1,8 @@
 ## 1. Composition and qualification
 
+> Keep all tasks gated until exact Foundation runtime consumption is available; lack of Agent/realtime
+> qualification must not disable or reroute deterministic basic World runtime.
+
 - [ ] 1.1 定义窄 World-Agent ports、role scopes、immutable turn context 和 exact execution receipts。
 - [ ] 1.2 实现 required/optional capability resolver、qualification、stream、interrupt/cancel 和 stale-result rejection。
 - [ ] 1.3 添加 provider/profile fallback poison tests 和 participant/Run isolation tests。

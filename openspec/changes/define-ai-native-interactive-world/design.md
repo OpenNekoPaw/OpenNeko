@@ -2,7 +2,7 @@
 
 `@neko/world` 与 `@neko/world-node` 已提供 `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch`、WorldEvent、WorldState 和 participant-scoped WorldView 的 Foundation；完整 WorldExperience 的 Desktop producer/consumer path 仍保持 unavailable。前置变更 `define-character-dialogue-chatroom-world-foundation` 建立了这条最小真实闭包，本设计必须原地扩展它，不能建立第二套世界事实链。
 
-当前代码还组合了可写 World Foundation Desktop scene，但路线图没有记录 Interactive World 的晋级证据。工程原型不能反向改变产品门禁，因此本 change 只保留已完成的 Foundation/transformation 实验闭包，并负责关闭生产入口与拆分后续设计；它不再作为完整 World 产品的长期总 change。
+当前代码还组合了可写 World Foundation Desktop scene，但路线图没有记录完整 Interactive World 的晋级证据。工程原型不能反向改变高级能力门禁，因此本 change 只保留已完成的 Foundation/transformation 实验闭包并拆分后续设计；后续 `refine-world-management-authoring-and-runtime` 负责以窄管理、目录创作和确定性 Runtime 路径重新资格化 Foundation，不把它提升为完整 WorldExperience。
 
 本设计把 Neko World 定位为 AI-native、内容驱动的互动世界能力族，而不是一个万能 domain：Content-to-Experience authoring 把用户意图以及剧本、角色、场景、素材和玩法说明编译为 owner-qualified 候选；World Definition/Runtime 提供共同事实、规则与状态，World Story 提供世界级冲突与发展，World Gameplay 提供可选玩法，World Experience 负责创作组合、发布和运行绑定，World Presentation 负责文本、Web、游戏引擎、世界模型或其他界面的可见执行。Character 与 Character Story 由 Chara 独立拥有；Agent Play 负责理解、规划与经授权控制。消费期 AI、Web、Game Engine、World Model 和自定义代码都是作品按能力选择的执行/表现依赖，不是所有 World 的共同前提。
 
@@ -360,7 +360,7 @@ WorldProject 与 portable WorldSave 使用稳定的 owning-domain 文件结构�
 5. 接入 CharacterVersion/CharacterRun/CharacterStorylineRun、Entity/Asset/Content、AgentSession/Play 和可选外部 Game adapter；跨 owner 只传递 typed intent、committed event、candidate 与 projection。
 6. 实现文字+2D World Webview、Desktop World Library、typed IPC 和隔离 fixture workspace；完成真实 Electron 入口、reload、切换、关闭与资源释放验收后才将 surface 标为 ready。
 7. 后续独立变更增加通过资格的 Game Engine、Voice/Live2D、image/video/spatial World Model profile；非实时动态 Generation 继续留在传统 authoring 和 Replay 导出路径。
-8. 将现有生产 World Foundation scene 封闭为 unavailable，旧 presentation 局部重置为 Agent Entry；保留全部 durable World facts。
+8. 将旧 mixed World Foundation scene 封闭并删除；`refine-world-management-authoring-and-runtime` 通过窄 Management、Workspace Authoring 和 deterministic Runtime scenes重新资格化基础闭环，同时保留全部 durable World facts和完整WorldExperience门禁。
 9. 由五个 follow-up changes 分别承接未完成设计，不在本 change 继续堆叠完整产品任务。
 
 取消本方向时可删除尚未进入生产组合的 World contracts/package和Desktop route。若已经产生 WorldProject、WorldExperienceVersion 或 WorldSave，必须保留读取/导出或提供显式迁移，不能按 cache 删除。
