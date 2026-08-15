@@ -25,11 +25,9 @@ import { filterAndSortProjectCatalog, parseProjectCatalogSort } from '@neko/proj
 import { createDesktopI18n } from './i18n';
 import {
   DESKTOP_PRIMARY_MAIN_GROUP_ID,
-  DESKTOP_SECONDARY_MAIN_GROUP_ID,
   DESKTOP_WORKBENCH_LIMITS,
   closeMainView,
   createDefaultDesktopWorkbenchLayout,
-  openOrFocusMainView,
   openOrFocusCutView,
 } from '@neko/host/desktop-workbench-contract';
 import {

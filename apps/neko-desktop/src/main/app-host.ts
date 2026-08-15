@@ -218,7 +218,6 @@ import {
   type CharacterAuthoringSnapshot,
   type CharacterPortableExportSelection,
   type CharacterPortableImportTarget,
-  type CharacterPortableHostBinding,
   type CharacterPortableHostResult,
   type CharacterRoomWorkbenchProjectionEvent,
   type CharacterRoomWorkbenchSnapshotResult,
@@ -246,7 +245,6 @@ import {
   type WorldManagementHostResult,
   type WorldPortableExportSelection,
   type WorldPortableImportTarget,
-  type WorldPortableHostBinding,
   type WorldPortableHostResult,
   type WorldPortableOperationResult,
   type WorldRuntimeBinding,
@@ -3414,46 +3412,6 @@ export class DesktopAppHost {
     this.canvas?.reconcileWindow(windowId, workbenches);
     this.cut?.reconcileWindow(windowId, workbenches);
   }
-}
-
-function portableBinding(input: CharacterPortableHostBinding): CharacterPortableHostBinding {
-  return {
-    workspaceId: input.workspaceId,
-    workspaceGrantId: input.workspaceGrantId,
-    authority: input.authority,
-  };
-}
-
-function samePortableBinding(
-  left: CharacterPortableHostBinding,
-  right: CharacterPortableHostBinding,
-): boolean {
-  return (
-    left.workspaceId === right.workspaceId &&
-    left.workspaceGrantId === right.workspaceGrantId &&
-    left.authority.kind === right.authority.kind &&
-    left.authority.projectId === right.authority.projectId
-  );
-}
-
-function worldPortableBinding(input: WorldPortableHostBinding): WorldPortableHostBinding {
-  return {
-    workspaceId: input.workspaceId,
-    workspaceGrantId: input.workspaceGrantId,
-    authority: input.authority,
-  };
-}
-
-function sameWorldPortableBinding(
-  left: WorldPortableHostBinding,
-  right: WorldPortableHostBinding,
-): boolean {
-  return (
-    left.workspaceId === right.workspaceId &&
-    left.workspaceGrantId === right.workspaceGrantId &&
-    left.authority.kind === right.authority.kind &&
-    left.authority.projectId === right.authority.projectId
-  );
 }
 
 function characterAuthoringCommand(
