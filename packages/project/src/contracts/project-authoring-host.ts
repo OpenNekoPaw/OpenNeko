@@ -3,6 +3,12 @@ import {
   type ProjectAuthoringNavigationItem,
 } from './project-authoring-navigation';
 import { parseProjectContentProjection, type ProjectContentProjection } from './project-content';
+import {
+  parseProjectCreativeWorkspaceProjection,
+  parseProjectGlobalReferenceMutation,
+  type ProjectCreativeWorkspaceProjection,
+  type ProjectGlobalReferenceMutation,
+} from './project-composition';
 
 export const PROJECT_AUTHORING_HOST_CHANNEL = 'openneko:project:authoring-navigation' as const;
 
@@ -26,6 +32,28 @@ export interface ProjectContentHostRequest extends ProjectAuthoringNavigationBin
   readonly operation: 'content-get';
 }
 
+export interface ProjectCreativeWorkspaceBinding {
+  readonly workspaceId: string;
+  readonly workspaceGrantId: string;
+  readonly projectId: string;
+}
+
+export interface ProjectCreativeWorkspaceHostRequest extends ProjectCreativeWorkspaceBinding {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+  readonly operation: 'creative-workspace-get';
+}
+
+export interface ProjectCreativeWorkspaceMutationHostRequest
+  extends ProjectCreativeWorkspaceBinding {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+  readonly operation: 'creative-workspace-reference-mutate';
+  readonly mutation: ProjectGlobalReferenceMutation;
+}
+
 export interface ProjectAuthoringCatalogHostRequest {
   readonly requestId: string;
   readonly rendererSessionId: string;
@@ -36,7 +64,9 @@ export interface ProjectAuthoringCatalogHostRequest {
 export type ProjectAuthoringHostRequest =
   | ProjectAuthoringNavigationHostRequest
   | ProjectAuthoringCatalogHostRequest
-  | ProjectContentHostRequest;
+  | ProjectContentHostRequest
+  | ProjectCreativeWorkspaceHostRequest
+  | ProjectCreativeWorkspaceMutationHostRequest;
 
 export interface ProjectAuthoringNavigationHostResult {
   readonly requestId: string;
@@ -70,6 +100,23 @@ export interface ProjectContentHostResult {
   readonly projection: ProjectContentProjection;
 }
 
+export interface ProjectCreativeWorkspaceHostResult extends ProjectCreativeWorkspaceBinding {
+  readonly requestId: string;
+  readonly projection: ProjectCreativeWorkspaceProjection;
+}
+
+export interface ProjectCreativeWorkspaceHostPort {
+  getCreativeWorkspace(
+    windowId: string,
+    binding: ProjectCreativeWorkspaceBinding,
+  ): Promise<ProjectCreativeWorkspaceHostResult>;
+  mutateCreativeWorkspaceReference(
+    windowId: string,
+    binding: ProjectCreativeWorkspaceBinding,
+    mutation: ProjectGlobalReferenceMutation,
+  ): Promise<ProjectCreativeWorkspaceHostResult>;
+}
+
 export interface OpenNekoDesktopProjectAuthoringBridge {
   readonly projectAuthoring: {
     getCatalog(windowId: string): Promise<ProjectAuthoringCatalogHostResult>;
@@ -82,6 +129,46 @@ export interface OpenNekoDesktopProjectAuthoringBridge {
       binding: ProjectAuthoringNavigationBinding,
     ): Promise<ProjectContentHostResult>;
   };
+}
+
+export function createProjectCreativeWorkspaceHostRequest(input: {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+  readonly binding: ProjectCreativeWorkspaceBinding;
+}): ProjectCreativeWorkspaceHostRequest {
+  const request = parseProjectAuthoringHostRequest({
+    requestId: input.requestId,
+    rendererSessionId: input.rendererSessionId,
+    windowId: input.windowId,
+    operation: 'creative-workspace-get',
+    ...input.binding,
+  });
+  if (request.operation !== 'creative-workspace-get') {
+    throw new Error('Project authoring owner returned another Creative Workspace operation.');
+  }
+  return request;
+}
+
+export function createProjectCreativeWorkspaceMutationHostRequest(input: {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+  readonly binding: ProjectCreativeWorkspaceBinding;
+  readonly mutation: ProjectGlobalReferenceMutation;
+}): ProjectCreativeWorkspaceMutationHostRequest {
+  const request = parseProjectAuthoringHostRequest({
+    requestId: input.requestId,
+    rendererSessionId: input.rendererSessionId,
+    windowId: input.windowId,
+    operation: 'creative-workspace-reference-mutate',
+    ...input.binding,
+    mutation: input.mutation,
+  });
+  if (request.operation !== 'creative-workspace-reference-mutate') {
+    throw new Error('Project authoring owner returned another Workspace mutation operation.');
+  }
+  return request;
 }
 
 export function createProjectContentHostRequest(input: {
@@ -202,7 +289,88 @@ export function parseProjectAuthoringHostRequest(value: unknown): ProjectAuthori
   if (operation === 'content-get') {
     return parseProjectContentHostRequest(record);
   }
+  if (operation === 'creative-workspace-get') {
+    requireExactKeys(record, [
+      'requestId',
+      'rendererSessionId',
+      'windowId',
+      'operation',
+      'workspaceId',
+      'workspaceGrantId',
+      'projectId',
+    ]);
+    return {
+      ...parseProjectCreativeWorkspaceRequestBinding(record),
+      operation,
+    };
+  }
+  if (operation === 'creative-workspace-reference-mutate') {
+    requireExactKeys(record, [
+      'requestId',
+      'rendererSessionId',
+      'windowId',
+      'operation',
+      'workspaceId',
+      'workspaceGrantId',
+      'projectId',
+      'mutation',
+    ]);
+    return {
+      ...parseProjectCreativeWorkspaceRequestBinding(record),
+      operation,
+      mutation: parseProjectGlobalReferenceMutation(record['mutation']),
+    };
+  }
   throw new Error(`Unknown Project authoring operation: ${String(operation)}`);
+}
+
+export function parseProjectCreativeWorkspaceHostResult(
+  value: unknown,
+  expectedRequestId: string,
+  expectedBinding: ProjectCreativeWorkspaceBinding,
+): ProjectCreativeWorkspaceHostResult {
+  const record = requireRecord(value, 'Project Creative Workspace result');
+  requireExactKeys(record, [
+    'requestId',
+    'workspaceId',
+    'workspaceGrantId',
+    'projectId',
+    'projection',
+  ]);
+  const result = {
+    requestId: requireMatchingRequestId(record['requestId'], expectedRequestId),
+    workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
+    workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
+    projectId: requireIdentity(record['projectId'], 'Project'),
+    projection: parseProjectCreativeWorkspaceProjection(record['projection']),
+  };
+  for (const key of ['workspaceId', 'workspaceGrantId', 'projectId'] as const) {
+    if (result[key] !== expectedBinding[key]) {
+      throw new Error(`Project Creative Workspace result ${key} mismatch.`);
+    }
+  }
+  if (result.projection.composition.projectId !== result.projectId) {
+    throw new Error('Project Creative Workspace projection belongs to another Project.');
+  }
+  return result;
+}
+
+function parseProjectCreativeWorkspaceRequestBinding(
+  record: Readonly<Record<string, unknown>>,
+): Readonly<{
+  requestId: string;
+  rendererSessionId: string;
+  windowId: string;
+}> &
+  ProjectCreativeWorkspaceBinding {
+  return {
+    requestId: requireIdentity(record['requestId'], 'Project authoring request'),
+    rendererSessionId: requireIdentity(record['rendererSessionId'], 'Renderer session'),
+    windowId: requireIdentity(record['windowId'], 'Desktop Window'),
+    workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
+    workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
+    projectId: requireIdentity(record['projectId'], 'Project'),
+  };
 }
 
 export function parseProjectContentHostResult(
