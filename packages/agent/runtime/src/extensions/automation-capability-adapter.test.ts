@@ -261,7 +261,7 @@ describe('Agent Automation Capability adapter', () => {
 
 function createService() {
   return {
-    listCompatibilityDiagnostics: vi.fn(() => []),
+    listSupportDiagnostics: vi.fn(() => []),
     listAvailableOperations: vi.fn(() => BROWSER_USE_OBSERVE_PROFILE.operations),
     listOwnedSessions: vi.fn(() => []),
     listSessionControls: vi.fn(() => []),

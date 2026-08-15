@@ -41,7 +41,7 @@ describe('AutomationApplicationService', () => {
     expect(
       fixture.service.listAvailableOperations('browser.default').map((item) => item.name),
     ).toEqual(['browser_screenshot', 'browser_click']);
-    expect(fixture.service.listCompatibilityDiagnostics()).toEqual([
+    expect(fixture.service.listSupportDiagnostics()).toEqual([
       {
         profileId: 'browser.default',
         operation: 'browser_get_html',
@@ -66,7 +66,7 @@ describe('AutomationApplicationService', () => {
     expect(
       contradicted.service.listAvailableOperations('browser.default').map((item) => item.name),
     ).not.toContain('browser_screenshot');
-    expect(contradicted.service.listCompatibilityDiagnostics()).toContainEqual({
+    expect(contradicted.service.listSupportDiagnostics()).toContainEqual({
       profileId: 'browser.default',
       operation: 'browser_screenshot',
       code: 'operation-annotations-contradictory',
@@ -99,7 +99,7 @@ describe('AutomationApplicationService', () => {
       transientObservations: provider.transientObservations,
     });
 
-    expect(service.listCompatibilityDiagnostics()).toEqual(
+    expect(service.listSupportDiagnostics()).toEqual(
       localProfile.operations.map((operation) => ({
         profileId: localProfile.id,
         operation: operation.name,

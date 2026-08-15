@@ -68,7 +68,7 @@ async function prepareResourceBrowserFixture({ fixtureHome }) {
     writeFile(join(workspacePath, 'notes.txt'), 'Local workspace file.\n', 'utf8'),
     writeFile(join(workspacePath, 'episode.fountain'), 'MIO\nHello.\n', 'utf8'),
     writeFile(
-      join(workspacePath, 'neko', 'assets', 'Retired', 'legacy.txt'),
+      join(workspacePath, 'neko', 'assets', 'Retired', 'retired.txt'),
       'Preserved retired linked-media bytes.\n',
       'utf8',
     ),

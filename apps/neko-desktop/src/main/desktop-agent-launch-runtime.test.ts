@@ -132,12 +132,12 @@ describe('Desktop Agent launch native adapter', () => {
         context,
         references: [
           {
-            id: 'file:legacy-reference',
-            label: 'legacy-reference.png',
+            id: 'file:retired-reference',
+            label: 'retired-reference.png',
             contentLocator: {
               kind: 'media-library',
               libraryName: 'References',
-              relativePath: 'legacy-reference.png',
+              relativePath: 'retired-reference.png',
             } as never,
           },
         ],

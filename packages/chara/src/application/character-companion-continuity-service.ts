@@ -5,7 +5,7 @@ import {
   type CharacterVersion,
   type CompanionContinuityProjection,
   type CompanionMemoryCandidate,
-  type CompanionMemoryCompatibility,
+  type CompanionMemoryConstraints,
   type CompanionMemoryEntry,
   type CompanionMemoryProvenance,
 } from '@neko/chara/contracts';
@@ -109,7 +109,7 @@ export class CharacterCompanionContinuityService {
       readonly sourceCharacterVersionId: string;
       readonly provenance: CompanionMemoryProvenance;
       readonly content: string;
-      readonly compatibility: CompanionMemoryCompatibility;
+      readonly constraints: CompanionMemoryConstraints;
       readonly sensitivityTraits: readonly string[];
       readonly retentionTraits: readonly string[];
       readonly expectedContinuityRevision: number;
@@ -168,7 +168,7 @@ export class CharacterCompanionContinuityService {
           sourceCharacterVersionId: candidate.sourceCharacterVersionId,
           provenance: candidate.provenance,
           content: candidate.content,
-          compatibility: candidate.compatibility,
+          constraints: candidate.constraints,
           sensitivityTraits: candidate.sensitivityTraits,
           retentionTraits: candidate.retentionTraits,
           status: 'active',
@@ -251,7 +251,7 @@ export class CharacterCompanionContinuityService {
           sourceCharacterVersionId: candidate.sourceCharacterVersionId,
           provenance: candidate.provenance,
           content: candidate.content,
-          compatibility: candidate.compatibility,
+          constraints: candidate.constraints,
           sensitivityTraits: candidate.sensitivityTraits,
           retentionTraits: candidate.retentionTraits,
           status: 'active',
@@ -412,7 +412,7 @@ export function projectCompanionContinuity(
   const diagnostics: CompanionContinuityProjection['diagnostics'][number][] = [];
   for (const entry of continuity.entries) {
     if (entry.status !== 'active') continue;
-    const reasons = compatibilityReasons(entry.compatibility, publication);
+    const reasons = constraintReasons(entry.constraints, publication);
     if (reasons.length === 0) eligibleEntries.push(structuredClone(entry));
     else {
       diagnostics.push({
@@ -494,21 +494,21 @@ function requireNewEntry(
   }
 }
 
-function compatibilityReasons(
-  compatibility: CompanionMemoryCompatibility,
+function constraintReasons(
+  constraints: CompanionMemoryConstraints,
   publication: CharacterVersion,
 ): readonly string[] {
   const canon = new Set(publication.definition.canon);
   const knowledgeBoundary = new Set(publication.definition.knowledgeBoundary);
   const behaviorPolicy = new Set(publication.definition.behaviorPolicy);
   return [
-    ...compatibility.requiredCanonFacts
+    ...constraints.requiredCanonFacts
       .filter((fact) => !canon.has(fact))
       .map((fact) => `Required canon fact is absent: ${fact}`),
-    ...compatibility.prohibitedKnowledgeBoundaries
+    ...constraints.prohibitedKnowledgeBoundaries
       .filter((boundary) => knowledgeBoundary.has(boundary))
       .map((boundary) => `Knowledge boundary prohibits this memory: ${boundary}`),
-    ...compatibility.requiredBehaviorPolicies
+    ...constraints.requiredBehaviorPolicies
       .filter((policy) => !behaviorPolicy.has(policy))
       .map((policy) => `Required behavior policy is absent: ${policy}`),
   ];

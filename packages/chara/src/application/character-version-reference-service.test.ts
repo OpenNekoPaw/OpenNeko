@@ -321,7 +321,7 @@ const catalog: CharacterDurableCatalog = {
             turnId: 'turn-a',
           },
           content: 'Memory',
-          compatibility: {
+          constraints: {
             requiredCanonFacts: [],
             prohibitedKnowledgeBoundaries: [],
             requiredBehaviorPolicies: [],
@@ -345,7 +345,7 @@ const catalog: CharacterDurableCatalog = {
             turnId: 'turn-a',
           },
           content: 'Memory',
-          compatibility: {
+          constraints: {
             requiredCanonFacts: [],
             prohibitedKnowledgeBoundaries: [],
             requiredBehaviorPolicies: [],

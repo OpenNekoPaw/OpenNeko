@@ -13,7 +13,7 @@ import {
   parseCompanionMemoryCandidate,
   parseCompanionMemoryProvenance,
   type CharacterCompanionContinuity,
-  type CompanionMemoryCompatibility,
+  type CompanionMemoryConstraints,
   type CompanionMemoryProvenance,
 } from './character-companion-continuity';
 import {
@@ -140,7 +140,7 @@ export type CharacterFoundationCommand =
         readonly sourceCharacterVersionId: string;
         readonly provenance: CompanionMemoryProvenance;
         readonly content: string;
-        readonly compatibility: CompanionMemoryCompatibility;
+        readonly constraints: CompanionMemoryConstraints;
         readonly sensitivityTraits: readonly string[];
         readonly retentionTraits: readonly string[];
         readonly expectedContinuityRevision: number;

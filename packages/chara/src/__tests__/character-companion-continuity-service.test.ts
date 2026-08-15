@@ -30,7 +30,7 @@ describe('CharacterCompanionContinuityService', () => {
         turnId: 'turn-first',
       },
       content: 'The user prefers tea.',
-      compatibility: {
+      constraints: {
         requiredCanonFacts: ['Lin drinks tea.'],
         prohibitedKnowledgeBoundaries: [],
         requiredBehaviorPolicies: ['Honor stated preferences.'],
@@ -76,7 +76,7 @@ describe('CharacterCompanionContinuityService', () => {
       sourceCharacterVersionId: 'version-a',
       provenance: { kind: 'room-event', roomRunId: 'room-a', roomEventId: 'event-a' },
       content: 'The old oath still applies.',
-      compatibility: {
+      constraints: {
         requiredCanonFacts: ['Removed oath.'],
         prohibitedKnowledgeBoundaries: [],
         requiredBehaviorPolicies: [],
@@ -171,7 +171,7 @@ async function propose(
       turnId,
     },
     content,
-    compatibility: {
+    constraints: {
       requiredCanonFacts: [],
       prohibitedKnowledgeBoundaries: [],
       requiredBehaviorPolicies: [],

@@ -735,7 +735,7 @@ describe('Character Companion continuity surface', () => {
                   turnId: 'turn:1',
                 },
                 content: 'The user prefers jasmine tea.',
-                compatibility: {
+                constraints: {
                   requiredCanonFacts: [],
                   prohibitedKnowledgeBoundaries: [],
                   requiredBehaviorPolicies: [],

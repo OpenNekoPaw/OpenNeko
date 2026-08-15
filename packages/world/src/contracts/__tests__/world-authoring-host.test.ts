@@ -117,7 +117,7 @@ describe('World authoring Host contract', () => {
     ).toThrow();
     expect(() =>
       parseWorldAuthoringHostRequest({
-        requestId: 'legacy-request',
+        requestId: 'retired-request',
         rendererSessionId: 'renderer-1',
         windowId: 'window-1',
         ...binding,

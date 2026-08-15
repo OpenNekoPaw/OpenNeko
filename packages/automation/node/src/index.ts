@@ -32,9 +32,9 @@ import {
   type AutomationSessionPhase,
 } from '@neko/automation-contracts/session-control';
 import {
-  inspectAutomationProviderCompatibility,
-  type AutomationCompatibilityDiagnostic,
-} from './compatibility';
+  inspectAutomationProviderSupport,
+  type AutomationSupportDiagnostic,
+} from './provider-support';
 
 export * from './browser-use';
 export * from './browser-use-targets';
@@ -43,7 +43,7 @@ export * from './cua-driver-targets';
 export * from './local-runtime-management';
 export * from './mcp-provider';
 export * from './permission-management';
-export * from './compatibility';
+export * from './provider-support';
 export * from './session-authorization';
 export * from './session-owned-mcp-runtime';
 export * from './target-selection-coordinator';
@@ -174,7 +174,7 @@ export class AutomationError extends Error {
 }
 
 export interface AutomationApplicationService {
-  listCompatibilityDiagnostics(): readonly AutomationCompatibilityDiagnostic[];
+  listSupportDiagnostics(): readonly AutomationSupportDiagnostic[];
   listAvailableOperations(profileId: string): readonly AutomationReviewedOperation[];
   listOwnedSessions(extensionId: string): readonly AutomationSessionSnapshot[];
   listSessionControls(scope: unknown): readonly AutomationSessionControlProjection[];
@@ -214,15 +214,15 @@ export async function createAutomationApplicationService(options: {
     providers.set(key, provider);
   }
 
-  const compatibleOperationsByProfile = new Map<
+  const supportedOperationsByProfile = new Map<
     string,
     ReadonlyMap<string, AutomationReviewedOperation>
   >();
-  const diagnostics: AutomationCompatibilityDiagnostic[] = [];
+  const diagnostics: AutomationSupportDiagnostic[] = [];
   for (const profile of profiles) {
     const provider = providers.get(providerKey(profile.provider));
     if (!provider) {
-      compatibleOperationsByProfile.set(profile.id, new Map());
+      supportedOperationsByProfile.set(profile.id, new Map());
       diagnostics.push(
         ...profile.operations.map((operation) => ({
           profileId: profile.id,
@@ -236,7 +236,7 @@ export async function createAutomationApplicationService(options: {
     try {
       inspection = parseAutomationProviderInspection(await provider.inspect());
     } catch {
-      compatibleOperationsByProfile.set(profile.id, new Map());
+      supportedOperationsByProfile.set(profile.id, new Map());
       diagnostics.push(
         ...profile.operations.map((operation) => ({
           profileId: profile.id,
@@ -246,18 +246,18 @@ export async function createAutomationApplicationService(options: {
       );
       continue;
     }
-    const compatibility = inspectAutomationProviderCompatibility(profile, inspection);
+    const support = inspectAutomationProviderSupport(profile, inspection);
     const available = new Map(
-      compatibility.compatibleOperations.map((operation) => [operation.name, operation]),
+      support.supportedOperations.map((operation) => [operation.name, operation]),
     );
-    diagnostics.push(...compatibility.diagnostics);
-    compatibleOperationsByProfile.set(profile.id, available);
+    diagnostics.push(...support.diagnostics);
+    supportedOperationsByProfile.set(profile.id, available);
   }
 
   return new DefaultAutomationApplicationService(
     new Map(profiles.map((profile) => [profile.id, profile])),
     providers,
-    compatibleOperationsByProfile,
+    supportedOperationsByProfile,
     Object.freeze(diagnostics),
     options.extensionRuntime,
     options.sessionGrants,
@@ -287,23 +287,23 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
   constructor(
     private readonly profiles: ReadonlyMap<string, AutomationProfile>,
     private readonly providers: ReadonlyMap<string, AutomationProviderPort>,
-    private readonly compatibleOperationsByProfile: ReadonlyMap<
+    private readonly supportedOperationsByProfile: ReadonlyMap<
       string,
       ReadonlyMap<string, AutomationReviewedOperation>
     >,
-    private readonly diagnostics: readonly AutomationCompatibilityDiagnostic[],
+    private readonly diagnostics: readonly AutomationSupportDiagnostic[],
     private readonly extensionRuntime: AutomationExtensionRuntimePort,
     private readonly sessionGrants: AutomationSessionGrantPort,
     private readonly hostPermissions: AutomationHostPermissionPort,
     private readonly transientObservations: AutomationTransientObservationPort,
   ) {}
 
-  listCompatibilityDiagnostics(): readonly AutomationCompatibilityDiagnostic[] {
+  listSupportDiagnostics(): readonly AutomationSupportDiagnostic[] {
     return this.diagnostics;
   }
 
   listAvailableOperations(profileId: string): readonly AutomationReviewedOperation[] {
-    const operations = this.compatibleOperationsByProfile.get(profileId);
+    const operations = this.supportedOperationsByProfile.get(profileId);
     if (!operations) {
       throw new AutomationError(
         'provider-unavailable',
@@ -605,7 +605,7 @@ class DefaultAutomationApplicationService implements AutomationApplicationServic
     if (session.remainingSteps <= 0) {
       throw new AutomationError('step-budget-exhausted', 'Automation step budget is exhausted.');
     }
-    const operation = this.compatibleOperationsByProfile
+    const operation = this.supportedOperationsByProfile
       .get(session.profile.id)
       ?.get(request.operation);
     if (!operation || !operation.modes.includes(session.request.mode)) {

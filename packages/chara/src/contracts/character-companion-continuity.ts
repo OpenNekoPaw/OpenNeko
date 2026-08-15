@@ -27,7 +27,7 @@ export type CompanionMemoryProvenance =
       readonly roomEventId: string;
     };
 
-export interface CompanionMemoryCompatibility {
+export interface CompanionMemoryConstraints {
   readonly requiredCanonFacts: readonly string[];
   readonly prohibitedKnowledgeBoundaries: readonly string[];
   readonly requiredBehaviorPolicies: readonly string[];
@@ -39,7 +39,7 @@ export interface CompanionMemoryCandidate {
   readonly sourceCharacterVersionId: string;
   readonly provenance: CompanionMemoryProvenance;
   readonly content: string;
-  readonly compatibility: CompanionMemoryCompatibility;
+  readonly constraints: CompanionMemoryConstraints;
   readonly sensitivityTraits: readonly string[];
   readonly retentionTraits: readonly string[];
   readonly expectedContinuityRevision: number;
@@ -56,7 +56,7 @@ export interface CompanionMemoryEntry {
   readonly sourceCharacterVersionId: string;
   readonly provenance: CompanionMemoryProvenance;
   readonly content: string;
-  readonly compatibility: CompanionMemoryCompatibility;
+  readonly constraints: CompanionMemoryConstraints;
   readonly sensitivityTraits: readonly string[];
   readonly retentionTraits: readonly string[];
   readonly status: CompanionMemoryEntryStatus;
@@ -204,7 +204,7 @@ export function parseCompanionMemoryCandidate(value: unknown): CompanionMemoryCa
       'sourceCharacterVersionId',
       'provenance',
       'content',
-      'compatibility',
+      'constraints',
       'sensitivityTraits',
       'retentionTraits',
       'expectedContinuityRevision',
@@ -241,7 +241,7 @@ export function parseCompanionMemoryCandidate(value: unknown): CompanionMemoryCa
     ),
     provenance: parseCompanionMemoryProvenance(record['provenance']),
     content: requireIdentity(record['content'], 'Companion memory candidate content'),
-    compatibility: parseCompanionMemoryCompatibility(record['compatibility']),
+    constraints: parseCompanionMemoryConstraints(record['constraints']),
     sensitivityTraits: requireStringSet(
       record['sensitivityTraits'],
       'Companion sensitivity traits',
@@ -270,7 +270,7 @@ export function parseCompanionMemoryEntry(value: unknown): CompanionMemoryEntry 
       'sourceCharacterVersionId',
       'provenance',
       'content',
-      'compatibility',
+      'constraints',
       'sensitivityTraits',
       'retentionTraits',
       'status',
@@ -317,7 +317,7 @@ export function parseCompanionMemoryEntry(value: unknown): CompanionMemoryEntry 
     ),
     provenance: parseCompanionMemoryProvenance(record['provenance']),
     content: requireIdentity(record['content'], 'Companion memory entry content'),
-    compatibility: parseCompanionMemoryCompatibility(record['compatibility']),
+    constraints: parseCompanionMemoryConstraints(record['constraints']),
     sensitivityTraits: requireStringSet(
       record['sensitivityTraits'],
       'Companion sensitivity traits',
@@ -370,11 +370,11 @@ export function parseCompanionMemoryProvenance(value: unknown): CompanionMemoryP
   };
 }
 
-export function parseCompanionMemoryCompatibility(value: unknown): CompanionMemoryCompatibility {
+export function parseCompanionMemoryConstraints(value: unknown): CompanionMemoryConstraints {
   const record = requireExactRecord(
     value,
     ['requiredCanonFacts', 'prohibitedKnowledgeBoundaries', 'requiredBehaviorPolicies'],
-    'Companion memory compatibility',
+    'Companion memory constraints',
   );
   return {
     requiredCanonFacts: requireStringSet(

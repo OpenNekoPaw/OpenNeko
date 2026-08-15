@@ -5,7 +5,7 @@ import type {
   AutomationReviewedOperation,
 } from '@neko/automation-contracts';
 
-export interface AutomationCompatibilityDiagnostic {
+export interface AutomationSupportDiagnostic {
   readonly profileId: string;
   readonly operation: string;
   readonly code:
@@ -16,18 +16,18 @@ export interface AutomationCompatibilityDiagnostic {
     | 'operation-annotations-contradictory';
 }
 
-export interface AutomationProfileCompatibility {
-  readonly compatibleOperations: readonly AutomationReviewedOperation[];
-  readonly diagnostics: readonly AutomationCompatibilityDiagnostic[];
+export interface AutomationProfileSupport {
+  readonly supportedOperations: readonly AutomationReviewedOperation[];
+  readonly diagnostics: readonly AutomationSupportDiagnostic[];
 }
 
-export function inspectAutomationProviderCompatibility(
+export function inspectAutomationProviderSupport(
   profile: AutomationProfile,
   inspection: AutomationProviderInspection,
-): AutomationProfileCompatibility {
+): AutomationProfileSupport {
   if (!sameProviderIdentity(profile.provider, inspection.provider)) {
     return {
-      compatibleOperations: Object.freeze([]),
+      supportedOperations: Object.freeze([]),
       diagnostics: Object.freeze(
         profile.operations.map((operation) => ({
           profileId: profile.id,
@@ -38,8 +38,8 @@ export function inspectAutomationProviderCompatibility(
     };
   }
   const discovered = new Map(inspection.operations.map((operation) => [operation.name, operation]));
-  const compatibleOperations: AutomationReviewedOperation[] = [];
-  const diagnostics: AutomationCompatibilityDiagnostic[] = [];
+  const supportedOperations: AutomationReviewedOperation[] = [];
+  const diagnostics: AutomationSupportDiagnostic[] = [];
   for (const reviewed of profile.operations) {
     const actual = discovered.get(reviewed.name);
     if (!actual) {
@@ -61,11 +61,11 @@ export function inspectAutomationProviderCompatibility(
         code: 'operation-annotations-contradictory',
       });
     } else {
-      compatibleOperations.push(reviewed);
+      supportedOperations.push(reviewed);
     }
   }
   return {
-    compatibleOperations: Object.freeze(compatibleOperations),
+    supportedOperations: Object.freeze(supportedOperations),
     diagnostics: Object.freeze(diagnostics),
   };
 }

@@ -10,7 +10,7 @@ import type {
   AutomationLocalRuntimeDiagnosticCode,
   AutomationLocalRuntimeProjection,
 } from '@neko/automation-contracts/local-runtime-management';
-import { inspectAutomationProviderCompatibility } from './compatibility';
+import { inspectAutomationProviderSupport } from './provider-support';
 
 export interface AutomationLocalRuntimeSourceDescriptor {
   readonly sourceId: string;
@@ -204,7 +204,7 @@ async function projectSource(
     };
   }
   const profile = localProfile(source, inspection.runtimeId);
-  const compatibility = inspectAutomationProviderCompatibility(
+  const support = inspectAutomationProviderSupport(
     profile,
     parseAutomationProviderInspection({
       provider: profile.provider,
@@ -212,7 +212,7 @@ async function projectSource(
     }),
   );
   const diagnostics = Object.freeze(
-    [...new Set(compatibility.diagnostics.map((diagnostic) => diagnostic.code))].sort(),
+    [...new Set(support.diagnostics.map((diagnostic) => diagnostic.code))].sort(),
   ) as readonly AutomationLocalRuntimeDiagnosticCode[];
   return {
     ...baseProjection(source),

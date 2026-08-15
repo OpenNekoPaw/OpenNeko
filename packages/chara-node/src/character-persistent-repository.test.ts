@@ -491,7 +491,7 @@ describe('persistent Character repository', () => {
       sourceCharacterVersionId: 'character-version-a',
       provenance: { kind: 'room-event', roomRunId: 'room-run-a', roomEventId: 'event-a' },
       content: 'Lin remembers trusting the user.',
-      compatibility: {
+      constraints: {
         requiredCanonFacts: [],
         prohibitedKnowledgeBoundaries: [],
         requiredBehaviorPolicies: [],

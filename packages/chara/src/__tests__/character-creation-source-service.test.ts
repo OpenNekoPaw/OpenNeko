@@ -36,7 +36,7 @@ describe('CharacterCreationSourceService', () => {
         evidence: [
           {
             kind: 'project-entity',
-            evidenceId: 'evidence:legacy-project',
+            evidenceId: 'evidence:retired-project',
             sourceWorkspaceId: 'workspace:story',
             sourceWorkspaceGrantId: 'grant:story',
             contentProjectId: 'content-project:story',

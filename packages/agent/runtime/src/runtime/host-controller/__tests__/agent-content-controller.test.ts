@@ -160,7 +160,7 @@ describe('Agent content controller', () => {
     const reportMentionContributorError = vi.fn();
     const readDirectory = vi.fn(async () => [
       { name: 'guide.md', type: 'file' as const },
-      { name: 'world-project:legacy', type: 'directory' as const },
+      { name: 'world-project:retired', type: 'directory' as const },
     ]);
     try {
       const projection = await searchAgentWorkspaceMentions({
@@ -192,7 +192,7 @@ describe('Agent content controller', () => {
       expect(reportMentionContributorError).toHaveBeenCalledOnce();
       expect(reportMentionContributorError.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
-          message: expect.stringContaining('world-project:legacy'),
+          message: expect.stringContaining('world-project:retired'),
         }),
       );
       expect(readDirectory).toHaveBeenCalledOnce();
