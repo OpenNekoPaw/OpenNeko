@@ -21,7 +21,7 @@
       },
       "zIndex": 1,
       "data": {
-        "assetPath": "workspace/library-image.svg",
+        "assetPath": "library-image.svg",
         "contentLocator": {
           "kind": "media-library",
           "libraryName": "workspace",

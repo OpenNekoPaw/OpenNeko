@@ -1,13 +1,9 @@
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { platform } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parse as parseToml } from 'smol-toml';
 import { openFixtureWorkspace } from '../../desktop-functional/desktop-operations.mjs';
-import {
-  clickApplicationNavigation,
-  recoverFixtureProjectMediaLibrary,
-  registerFixtureGlobalMediaLibrary,
-} from '../../desktop-functional/desktop-workbench-scenes.mjs';
 import { evaluateArtifactChecks } from '../runner/artifact-checks.mjs';
 import { createDesktopAgentDriver } from './driver.mjs';
 import { requiresOpenNekoResourceObservation } from './evidence.mjs';
@@ -45,6 +41,20 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         await mkdir(join(fixtureHome, 'global-media'), { recursive: true });
         await cp(source, target, { recursive: true, errorOnExist: true });
         await rm(source, { recursive: true, force: true });
+        const globalConnectionDirectory = join(fixtureHome, '.neko', 'media-libraries', 'local');
+        await mkdir(globalConnectionDirectory, { recursive: true });
+        await symlink(
+          target,
+          join(globalConnectionDirectory, mediaLibrary.libraryName),
+          platform() === 'win32' ? 'junction' : 'dir',
+        );
+        const assetsDirectory = join(workspacePath, 'neko', 'assets');
+        await mkdir(assetsDirectory, { recursive: true });
+        await symlink(
+          target,
+          join(assetsDirectory, mediaLibrary.libraryName),
+          platform() === 'win32' ? 'junction' : 'dir',
+        );
       }
       const configText = await readAuthorizedConfiguration(authorization);
       await mkdir(join(fixtureHome, '.neko'), { recursive: true });
@@ -77,31 +87,11 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
             'Desktop Agent Media Library Evaluation requires the Workspace start surface.',
           );
         }
-        const mediaLibrary = executionCase.fixture.mediaLibrary;
-        const registered = await registerFixtureGlobalMediaLibrary({
-          evaluate,
-          click,
-          waitForSelector,
-          libraryName: mediaLibrary.libraryName,
-        });
-        await clickApplicationNavigation(evaluate, click, 0);
-        await waitForSelector(
-          `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
-        );
-        mediaLibrarySetup = { mediaLibrary, registered };
+        mediaLibrarySetup = { mediaLibrary: executionCase.fixture.mediaLibrary };
       }
       const opened =
         startSurface === 'workspace' ? await openFixtureWorkspace(evaluate) : undefined;
       await waitForSelector('[data-owner-root="agent"]', 30_000);
-      if (mediaLibrarySetup) {
-        const recovery = await recoverFixtureProjectMediaLibrary({
-          evaluate,
-          waitForSelector,
-          libraryName: mediaLibrarySetup.mediaLibrary.libraryName,
-          expectedContentLabel: mediaLibrarySetup.mediaLibrary.contentLabel,
-        });
-        mediaLibrarySetup = { ...mediaLibrarySetup, recovery };
-      }
       await waitForStableDesktopAgentRenderer({
         evaluate,
         waitForDesktopBridge,

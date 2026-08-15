@@ -27,7 +27,7 @@
       "id": "media-library-workspace",
       "root": "shared-fixtures/media-library-workspace",
       "source": "repository",
-      "digest": "sha256:34c0794d752a5f1efb505e10cf89ba2e9e51a55d90a4e4051bff69dbd4066bad",
+      "digest": "sha256:2bea2c8f6facfde2c260b83e3be6fb4a0925ecf9ebf520d276a8a0d1feb5fbbf",
       "mutable": true,
       "mediaLibrary": {
         "libraryName": "workspace",
@@ -44,7 +44,7 @@
       "visibility": "public"
     },
     {
-      "id": "retired-workspace-prefix-rejected",
+      "id": "direct-media-library-locator-rejected",
       "file": "cases/retired-workspace-prefix-rejected.json",
       "group": "boundary",
       "visibility": "public"

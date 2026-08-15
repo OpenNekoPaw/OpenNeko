@@ -5,52 +5,62 @@
   "caseGroup": "canonical",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Attach a confirmed linked Media Library image by its portable locator and read the same short reference through the normal content capability.",
+    "userBehavior": "Attach one document and one image through a managed Workspace Media Library link and read both through their Workspace references.",
     "canonicalPath": [
-      "Desktop Media Library registration controls",
-      "Project explicit Media Library recovery controls",
-      "media-library locator context binding",
+      "managed neko/assets Workspace link",
+      "workspace-file context binding",
+      "ReadDocument input_ref resolution",
       "ReadImage image_ref resolution",
-      "Project ContentReadService"
+      "Workspace ContentReadService managed-link authorization"
     ],
     "observables": [
       {
         "ref": "media-library-facts",
         "kind": "runtime-fact",
-        "description": "Successful content-read Tool facts preserve the portable Media Library locator and marker text without Host binding details.",
+        "description": "Successful document and image Tool facts preserve Workspace locators and marker text without Host link targets.",
         "required": true
       }
     ],
-    "expectedResult": "The linked image context exposes one short image_ref and ReadImage resolves it to the exact media-library locator before the final marker.",
-    "expectedFailure": "Missing explicit binding, workspace-file substitution, absolute path disclosure, failed image read, runtime diagnostics, or missing marker fails visibly."
+    "expectedResult": "ReadDocument and ReadImage resolve their short references to exact workspace-file locators below the managed link before the final marker.",
+    "expectedFailure": "A media-library locator, absolute target, .neko binding, failed linked read, runtime diagnostic, or missing marker fails visibly."
   },
-  "fixtureRefs": [
-    "media-library-workspace"
-  ],
+  "fixtureRefs": ["media-library-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "使用附件中显示的 image_ref 调用 ReadImage 一次，image_refs 只包含这一个短引用，analysis=describe。不要调用搜索、Asset、Read 或 shell 工具，不要构造 locator、绝对路径、链接目标、缓存路径或 project://assets。读取成功后输出 MEDIA_LIBRARY_CANONICAL_7X9，并单独输出 MEDIA_LIBRARY_READ_OK。",
+      "prompt": "先使用附件中 linked-story.md 的 input_ref 调用 ReadDocument 一次，mode=content、include_images=false、max_chars=1000；再使用 library-image.svg 的 image_ref 调用 ReadImage 一次，image_refs 只包含这一个短引用，analysis=describe。不要调用搜索、Asset、Read 或 shell 工具，不要构造 locator、绝对路径、链接目标、缓存路径或 media-library。两次读取成功后输出 MEDIA_LIBRARY_DOCUMENT_7X9，并单独输出 WORKSPACE_LINKED_MEDIA_READ_OK。",
       "contextPayloads": [
         {
+          "type": "file",
+          "id": "workspace-file:neko/assets/workspace/linked-story.md",
+          "label": "linked-story.md",
+          "summary": "Workspace-linked document",
+          "data": {
+            "kind": "authorized-content-reference",
+            "locator": {
+              "kind": "workspace-file",
+              "path": "neko/assets/workspace/linked-story.md"
+            },
+            "mediaType": "document",
+            "source": "workspace"
+          }
+        },
+        {
           "type": "image",
-          "id": "media-library:workspace/library-image.svg",
+          "id": "workspace-file:neko/assets/workspace/library-image.svg",
           "label": "library-image.svg",
           "summary": "Confirmed linked Media Library image",
           "data": {
             "kind": "authorized-content-reference",
             "locator": {
-              "kind": "media-library",
-              "libraryName": "workspace",
-              "relativePath": "library-image.svg"
+              "kind": "workspace-file",
+              "path": "neko/assets/workspace/library-image.svg"
             },
             "mediaType": "image",
-            "source": "media-library"
+            "source": "workspace"
           }
         }
       ]
@@ -73,7 +83,33 @@
       "evidenceRef": "media-library-facts"
     },
     {
-      "id": "read",
+      "id": "read-document",
+      "kind": "tool-call",
+      "name": "ReadDocument",
+      "status": "success",
+      "expectedArguments": {
+        "source": {
+          "kind": "workspace-file",
+          "path": "neko/assets/workspace/linked-story.md"
+        },
+        "mode": "content",
+        "start_batch": false,
+        "include_manifest": false,
+        "include_images": false,
+        "max_chars": 1000,
+        "max_images": 5
+      },
+      "resultIncludes": {
+        "source": {
+          "kind": "workspace-file",
+          "path": "neko/assets/workspace/linked-story.md"
+        },
+        "text": "MEDIA_LIBRARY_DOCUMENT_7X9"
+      },
+      "evidenceRef": "media-library-facts"
+    },
+    {
+      "id": "read-image",
       "kind": "tool-call",
       "name": "ReadImage",
       "status": "success",
@@ -81,9 +117,8 @@
         "images": [
           {
             "contentLocator": {
-              "kind": "media-library",
-              "libraryName": "workspace",
-              "relativePath": "library-image.svg"
+              "kind": "workspace-file",
+              "path": "neko/assets/workspace/library-image.svg"
             }
           }
         ],
@@ -96,9 +131,8 @@
         "images": [
           {
             "contentLocator": {
-              "kind": "media-library",
-              "libraryName": "workspace",
-              "relativePath": "library-image.svg"
+              "kind": "workspace-file",
+              "path": "neko/assets/workspace/library-image.svg"
             }
           }
         ]
@@ -116,10 +150,7 @@
       "id": "answer",
       "kind": "final-answer",
       "mode": "contains",
-      "text": [
-        "MEDIA_LIBRARY_CANONICAL_7X9",
-        "MEDIA_LIBRARY_READ_OK"
-      ],
+      "text": ["MEDIA_LIBRARY_DOCUMENT_7X9", "WORKSPACE_LINKED_MEDIA_READ_OK"],
       "evidenceRef": "media-library-facts"
     }
   ],

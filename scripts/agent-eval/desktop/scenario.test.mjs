@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateDesktopFunctionalScenario } from '../../desktop-functional/scenario-contract.mjs';
@@ -126,9 +126,18 @@ provider_id = "provider-1"
       await expect(
         readFile(join(fixtureHome, 'global-media', 'workspace', 'library-image.svg'), 'utf8'),
       ).resolves.toBe('<svg />');
+      await expect(
+        realpath(join(prepared.workspacePath, 'neko', 'assets', 'workspace')),
+      ).resolves.toBe(await realpath(join(fixtureHome, 'global-media', 'workspace')));
+      await expect(
+        realpath(join(fixtureHome, '.neko', 'media-libraries', 'local', 'workspace')),
+      ).resolves.toBe(await realpath(join(fixtureHome, 'global-media', 'workspace')));
       await expect(stat(join(prepared.workspacePath, 'media-source'))).rejects.toMatchObject({
         code: 'ENOENT',
       });
+      await expect(
+        stat(join(prepared.workspacePath, '.neko', 'media-libraries', 'workspace.json')),
+      ).rejects.toMatchObject({ code: 'ENOENT' });
       await expect(readFile(join(fixtureHome, '.neko', 'config.toml'), 'utf8')).resolves.toBe(
         config,
       );
