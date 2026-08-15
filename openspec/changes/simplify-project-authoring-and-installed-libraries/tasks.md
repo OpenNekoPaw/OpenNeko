@@ -40,3 +40,7 @@
 ## 8. Project file mention regression
 
 - [x] 8.1 Validate each raw Workspace file candidate at the Host-side producer boundary, isolate invalid locator candidates with an observable diagnostic, preserve valid sibling files and Project-bound Agent launch, add deterministic path-level tests, and repeat visible Electron Project selection without raw-path or alternate-source fallback.
+
+## 9. Internal versioning quality gate
+
+- [x] 9.1 Atomically synchronize external, domain and correctness allowance registries with the canonical Character/World/Project/Desktop cutover; delete stale occurrences, register only evidence-backed user domain versions, third-party versions and real CAS tokens, remove unqualified legacy/compatibility markers, and pass `pnpm check:no-internal-versioning` with zero baseline or new internal debt.

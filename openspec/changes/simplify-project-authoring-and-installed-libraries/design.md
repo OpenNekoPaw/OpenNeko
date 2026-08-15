@@ -186,6 +186,14 @@ Agent Entry 为精确 Project 搜索文件时，Host-side workspace scanner 是�
 
 Agent projection 保留严格 contract assertion，以拒绝其他 producer 绕过校验的非法 locator。修复不得把非法路径改写为另一个路径、回退 raw path、扫描隐藏存储或吞掉 diagnostic。该行为是读取时的 fail-local projection，不修改、删除或迁移用户文件。
 
+### 11. Internal-versioning audit 与本次原子替换同步
+
+本变更新增和重写了大量 Character/World 用户领域版本 occurrence，并替换了旧 World transformation contract。三类 internal-versioning allowance registry 必须与当前 canonical source 一次性同步：删除已消失 occurrence，更新仍存在 occurrence 的精确 identity，并为新增 occurrence 按真实 owner 分类。用户管理的 Character/World/Asset 版本只进入 domain allowance；第三方协议和服务版本只进入 external allowance；只有存在明确 stale-write 消费者、正确性不变量和移除条件的 CAS token 才进入 correctness allowance。
+
+`worldStateRevision` / `expectedWorldStateRevision` 由 `@neko/world` state authority 拥有。Webview 和 Host command 携带调用方观察到的精确状态位置，World application service 在提交 action 或 fork 前比较该位置，repository 再校验 WorldRun、WorldState 与 event sequence 一致性。没有该 token，异步 Agent/用户 action 可以在另一个 event 已提交后覆盖或追加到未观察状态；因此它是有真实消费者的并发正确性事实，不是 schema、contract、cache 或 migration generation。其移除条件是 World action 准备与提交不再跨异步边界，并能由单一串行 owner 在不暴露 caller-observed state 的前提下保证相同 stale-write 不变量。
+
+无法证明属于上述三类的 `legacy`、`compatibility`、内部版本或 alternate-path occurrence 不得通过新增 allowance 放行，必须在 owning code/test 中删除或改为不表达旧成功路径的 canonical 名称。
+
 ## Risks / Trade-offs
 
 - 破坏性删除会使旧 installed/adaptation/recovery 数据不可恢复；这是本次明确产品决策，实施前用 owner 精确清单和删除范围测试避免误删 canonical 用户事实。

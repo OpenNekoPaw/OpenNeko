@@ -1831,116 +1831,6 @@
       "token": "version"
     },
     {
-      "category": "internal-version-field",
-      "externalOwner": "OpenNeko extension package manifest",
-      "fieldScope": "Deterministic package-tree digest fixture for an external extension release",
-      "id": "9869d6560ec303d70ee6",
-      "isolationRule": "The value is external package manifest metadata included in the inspected package tree; it cannot dispatch an internal contract, schema, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
-      "path": "packages/agent/runtime/src/extensions/extension-package-integrity.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Official MCP client connection fixture protocol release",
-      "id": "4eb7b9db8fc56cd4a872",
-      "isolationRule": "The fixture value is negotiated external MCP connection metadata and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
-      "token": "protocolVersion"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Official MCP client connection fixture server implementation release",
-      "id": "69dc3669fdc53adb6530",
-      "isolationRule": "The fixture value identifies one external MCP server implementation and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Mismatched MCP client connection fixture protocol release",
-      "id": "1e9a2a48858051030059",
-      "isolationRule": "The fixture value is negotiated external MCP connection metadata used to reject one mismatched endpoint and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
-      "token": "protocolVersion"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Mismatched MCP server implementation release fixture",
-      "id": "1a007bb84633e75e2716",
-      "isolationRule": "The fixture value identifies an external MCP server implementation used to prove exact endpoint rejection and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Browser Use MCP server",
-      "fieldScope": "Reviewed Browser Use MCP server implementation release identity",
-      "id": "224671a13582fcfda50f",
-      "isolationRule": "The value qualifies the exact external Browser Use MCP server implementation; mismatch rejects only that endpoint and cannot dispatch an internal contract, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Cua Driver MCP server",
-      "fieldScope": "Reviewed Cua Driver MCP server implementation release identity",
-      "id": "9f6fc68fbefdadfb5e67",
-      "isolationRule": "The value qualifies the exact external Cua Driver MCP server implementation; mismatch rejects only that endpoint and cannot dispatch an internal contract, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://github.com/injaneity/pi-computer-use/releases/tag/v0.19.2",
-      "path": "apps/neko-desktop/src/main/desktop-automation-endpoint-host.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Automation endpoint server identity fixture implementation release",
-      "id": "412ed4af7eae2b63cad5",
-      "isolationRule": "The fixture value identifies one external MCP server implementation and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "packages/automation/node/src/endpoint-management.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Mismatched external MCP server implementation release fixture",
-      "id": "e49eefac1751f57f2076",
-      "isolationRule": "The fixture value proves that an unreviewed external MCP server identity is rejected and cannot select an OpenNeko contract, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "packages/automation/node/src/endpoint-management.test.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Reviewed endpoint connector expected MCP server implementation release",
-      "id": "08bd6c7db65bd0a4ba90",
-      "isolationRule": "The field qualifies one external MCP server identity; mismatch rejects only that endpoint and cannot dispatch an internal contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "packages/automation/node/src/endpoint-management.ts",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Model Context Protocol lifecycle specification",
-      "fieldScope": "Endpoint probe result MCP server implementation release",
-      "id": "f47a5efe883f6940d3bb",
-      "isolationRule": "The field reports the connected external MCP server identity for qualification only and cannot dispatch an internal contract, persistence shape, migration, provider fallback, or alternate runtime path.",
-      "normativeSource": "https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle",
-      "path": "packages/automation/node/src/endpoint-management.ts",
-      "token": "version"
-    },
-    {
       "category": "versioned-path-or-key",
       "externalOwner": "Configured DeepSeek-compatible model provider",
       "fieldScope": "Agent Evaluation explicit chat model identity",
@@ -2338,6 +2228,86 @@
       "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
       "normativeSource": "https://semver.org/",
       "path": "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'browser-use', version: '0.1.0' }, (apps/neko-desktop/src/main/desktop-automation-local-runtime-provider-inspector.test.ts:8)",
+      "id": "381fdbc139f5f24ac5f4",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-local-runtime-provider-inspector.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'cua-driver', version: '0.19.2' }, (apps/neko-desktop/src/main/desktop-automation-local-runtime-provider-inspector.test.ts:47)",
+      "id": "41b0261969aac3a4d64a",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-local-runtime-provider-inspector.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'cua-driver', version: 'fixture' }, (apps/neko-desktop/src/main/desktop-automation-plugin-tool-adapter.test.ts:41)",
+      "id": "2f5384f6562f5dc43dd0",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-plugin-tool-adapter.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'browser-use', version: 'fixture' }, (apps/neko-desktop/src/main/desktop-automation-plugin-tool-adapter.test.ts:163)",
+      "id": "f929884fd8b3e0ac6347",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-automation-plugin-tool-adapter.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "protocolVersion: '2025-06-18', (apps/neko-desktop/src/main/desktop-browser-use-mcp-client-factory.test.ts:427)",
+      "id": "2fa332f38b9b6a102a71",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-browser-use-mcp-client-factory.test.ts",
+      "token": "protocolVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'browser-use', version: '0.1.0' }, (apps/neko-desktop/src/main/desktop-browser-use-mcp-client-factory.test.ts:428)",
+      "id": "f10296992fef3cb7ff79",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-browser-use-mcp-client-factory.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "protocolVersion: '2025-06-18', (apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.test.ts:176)",
+      "id": "1a6894bfb5658455d0c3",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.test.ts",
+      "token": "protocolVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "External Automation MCP server implementation",
+      "fieldScope": "server: { name: 'cua-driver', version: '0.19.2' }, (apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.test.ts:177)",
+      "id": "633ac34df171e8fec710",
+      "isolationRule": "The value remains external provider metadata at the Automation/MCP boundary and cannot select an OpenNeko contract, persistence shape, migration, provider fallback, or alternate success path.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/latest/basic/lifecycle",
+      "path": "apps/neko-desktop/src/main/desktop-cua-driver-mcp-client-factory.test.ts",
       "token": "version"
     }
   ]
