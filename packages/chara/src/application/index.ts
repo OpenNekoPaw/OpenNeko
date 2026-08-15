@@ -8,6 +8,7 @@ export * from './character-version-deletion-service';
 export * from './character-management-service';
 export * from './character-localized-asset-repository';
 export * from './character-portable-package-service';
+export * from './character-global-catalog-service';
 export * from './character-authoring-host-service';
 export * from './character-room-service';
 export * from './character-room-conversation-service';

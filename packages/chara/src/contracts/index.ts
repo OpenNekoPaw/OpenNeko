@@ -7,6 +7,7 @@ export * from './character-storyline';
 export * from './character-presentation';
 
 export * from './character';
+export * from './character-global-catalog';
 export * from './character-creation-source';
 export * from './character-version-lineage';
 export * from './character-version-reference';
