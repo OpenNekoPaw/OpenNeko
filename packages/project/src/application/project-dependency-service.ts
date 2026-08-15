@@ -18,32 +18,32 @@ export class ProjectDependencyService {
     },
   ) {}
 
-  async read(contentProjectId: string, signal?: AbortSignal): Promise<ProjectDependencySnapshot> {
-    return (await this.readWithOwners(contentProjectId, signal)).dependencies;
+  async read(projectId: string, signal?: AbortSignal): Promise<ProjectDependencySnapshot> {
+    return (await this.readWithOwners(projectId, signal)).dependencies;
   }
 
   async readWithOwners(
-    contentProjectId: string,
+    projectId: string,
     signal?: AbortSignal,
   ): Promise<{
     readonly characters: CharacterAuthoringCatalog;
     readonly worlds: WorldAuthoringCatalog;
     readonly dependencies: ProjectDependencySnapshot;
   }> {
-    if (!contentProjectId.trim()) throw new Error('Content Project identity must be non-empty.');
+    if (!projectId.trim()) throw new Error('Project identity must be non-empty.');
     signal?.throwIfAborted();
     const [characters, worlds, contentReferences] = await Promise.all([
       this.options.characters.readAuthoringCatalog(signal),
       this.options.worlds.readAuthoringCatalog(signal),
-      this.options.references.readReferences(contentProjectId, signal),
+      this.options.references.readReferences(projectId, signal),
     ]);
-    requireProjectScope(characters.scope, contentProjectId, 'Character');
-    requireProjectScope(worlds.scope, contentProjectId, 'World');
+    requireProjectScope(characters.scope, projectId, 'Character');
+    requireProjectScope(worlds.scope, projectId, 'World');
     return {
       characters,
       worlds,
       dependencies: deriveProjectDependencySnapshot({
-        projectId: contentProjectId,
+        projectId,
         content: contentReferences,
         characters,
         worlds,
@@ -53,11 +53,11 @@ export class ProjectDependencyService {
 }
 
 function requireProjectScope(
-  scope: { readonly kind: string; readonly contentProjectId?: string },
-  contentProjectId: string,
+  scope: { readonly kind: string; readonly projectId?: string },
+  projectId: string,
   owner: string,
 ): void {
-  if (scope.kind !== 'content-project' || scope.contentProjectId !== contentProjectId) {
-    throw new Error(`${owner} catalog does not belong to Content Project '${contentProjectId}'.`);
+  if (scope.kind !== 'project' || scope.projectId !== projectId) {
+    throw new Error(`${owner} catalog does not belong to Project '${projectId}'.`);
   }
 }

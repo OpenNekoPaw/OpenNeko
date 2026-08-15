@@ -12,11 +12,13 @@ import {
 } from '@neko/project/contracts';
 import {
   CubeIcon,
+  CopyIcon,
   FolderIcon,
   LoadingIcon,
   PlusIcon,
   RefreshIcon,
   TrashIcon,
+  UploadIcon,
   UserIcon,
   WarningIcon,
 } from '@neko/ui';
@@ -127,6 +129,14 @@ export function ProjectWorkspaceRoot({
       setState({ kind: 'ready', projectId: binding.projectId, projection: result.projection });
     });
   };
+  const mutateObject = async (
+    mutation: Parameters<typeof host.mutateCreativeWorkspaceObject>[2],
+  ): Promise<void> => {
+    await runAction(async () => {
+      const result = await host.mutateCreativeWorkspaceObject(windowId, workspaceBinding, mutation);
+      setState({ kind: 'ready', projectId: binding.projectId, projection: result.projection });
+    });
+  };
 
   if (state.projectId !== binding.projectId || state.kind === 'loading') {
     return (
@@ -155,6 +165,7 @@ export function ProjectWorkspaceRoot({
         icon={<FolderIcon size={14} />}
         items={composition.content}
         label={text(locale, '内容', 'Content')}
+        locale={locale}
         disabled={busy}
         onOpenTarget={(item) => void runAction(() => onOpenTarget(item))}
       />
@@ -162,8 +173,27 @@ export function ProjectWorkspaceRoot({
         icon={<UserIcon size={14} />}
         items={composition.characters}
         label={text(locale, '工作区角色', 'Workspace Characters')}
+        locale={locale}
         disabled={busy}
         onOpenTarget={(item) => void runAction(() => onOpenTarget(item))}
+        onSynchronize={(item, conflictChoice) =>
+          item.target.kind === 'character-project'
+            ? mutateObject({
+                kind: 'synchronize-character',
+                characterProjectId: item.target.characterProjectId,
+                globalCharacterId:
+                  conflictChoice === 'save-as-new' || !item.synchronization
+                    ? `global-character:${globalThis.crypto.randomUUID()}`
+                    : item.synchronization.globalObjectId,
+                characterVersionId: `character-version:${globalThis.crypto.randomUUID()}`,
+                label: item.label,
+                ...(item.synchronization && conflictChoice !== 'save-as-new'
+                  ? { lastSyncedCharacterVersionId: item.synchronization.lastSyncedVersionId }
+                  : {}),
+                ...(conflictChoice === 'base-on-current' ? { conflictChoice } : {}),
+              })
+            : Promise.resolve()
+        }
       />
       <GlobalReferenceGroup
         availableItems={composition.availableGlobalCharacters}
@@ -177,13 +207,47 @@ export function ProjectWorkspaceRoot({
         onUpdate={(previousReference, reference) =>
           mutateReference({ kind: 'update', previousReference, reference })
         }
+        onCopy={(reference, label) => {
+          if (reference.kind !== 'character-version') {
+            throw new Error('Character copy requires an exact CharacterVersion reference.');
+          }
+          return mutateObject({
+            kind: 'copy-character-reference',
+            reference,
+            characterProjectId: `character-project:${globalThis.crypto.randomUUID()}`,
+            entity: {
+              kind: 'create',
+              entityId: `entity:${globalThis.crypto.randomUUID()}`,
+              name: label,
+            },
+          });
+        }}
       />
       <WorkspaceTargetGroup
         icon={<CubeIcon size={14} />}
         items={composition.worlds}
         label={text(locale, '工作区世界', 'Workspace Worlds')}
+        locale={locale}
         disabled={busy}
         onOpenTarget={(item) => void runAction(() => onOpenTarget(item))}
+        onSynchronize={(item, conflictChoice) =>
+          item.target.kind === 'world-project'
+            ? mutateObject({
+                kind: 'synchronize-world',
+                worldProjectId: item.target.worldProjectId,
+                globalWorldId:
+                  conflictChoice === 'save-as-new' || !item.synchronization
+                    ? `global-world:${globalThis.crypto.randomUUID()}`
+                    : item.synchronization.globalObjectId,
+                worldVersionId: `world-version:${globalThis.crypto.randomUUID()}`,
+                label: item.label,
+                ...(item.synchronization && conflictChoice !== 'save-as-new'
+                  ? { lastSyncedWorldVersionId: item.synchronization.lastSyncedVersionId }
+                  : {}),
+                ...(conflictChoice === 'base-on-current' ? { conflictChoice } : {}),
+              })
+            : Promise.resolve()
+        }
       />
       <GlobalReferenceGroup
         availableItems={composition.availableGlobalWorlds}
@@ -197,6 +261,16 @@ export function ProjectWorkspaceRoot({
         onUpdate={(previousReference, reference) =>
           mutateReference({ kind: 'update', previousReference, reference })
         }
+        onCopy={(reference) => {
+          if (reference.kind !== 'world-version') {
+            throw new Error('World copy requires an exact WorldVersion reference.');
+          }
+          return mutateObject({
+            kind: 'copy-world-reference',
+            reference,
+            worldProjectId: `world-project:${globalThis.crypto.randomUUID()}`,
+          });
+        }}
       />
 
       {actionError ? (
@@ -224,13 +298,20 @@ function WorkspaceTargetGroup({
   icon,
   items,
   label,
+  locale,
   onOpenTarget,
+  onSynchronize,
 }: {
   readonly disabled: boolean;
   readonly icon: JSX.Element;
   readonly items: readonly ProjectMixedDomainTargetItem[];
   readonly label: string;
+  readonly locale: SupportedLocale;
   readonly onOpenTarget: (item: ProjectMixedDomainTargetItem) => void;
+  readonly onSynchronize?: (
+    item: ProjectMixedDomainTargetItem,
+    conflictChoice?: 'base-on-current' | 'save-as-new',
+  ) => Promise<void> | void;
 }): JSX.Element {
   return (
     <section className="project-workspace-root__section" data-project-workspace-group={label}>
@@ -244,16 +325,54 @@ function WorkspaceTargetGroup({
       ) : (
         <div className="project-workspace-root__targets">
           {items.map((item) => (
-            <button
-              disabled={disabled || item.diagnostic !== undefined}
-              key={item.identity}
-              title={item.diagnostic ?? item.label}
-              type="button"
-              onClick={() => onOpenTarget(item)}
-            >
-              <span>{item.label}</span>
-              {item.diagnostic ? <small>{item.diagnostic}</small> : null}
-            </button>
+            <div className="project-workspace-root__reference" key={item.identity}>
+              <button
+                disabled={disabled || item.diagnostic !== undefined}
+                title={item.diagnostic ?? item.label}
+                type="button"
+                onClick={() => onOpenTarget(item)}
+              >
+                <span>{item.label}</span>
+                {item.diagnostic ? <small>{item.diagnostic}</small> : null}
+              </button>
+              {onSynchronize ? (
+                item.synchronization &&
+                item.synchronization.currentVersionId !==
+                  item.synchronization.lastSyncedVersionId ? (
+                  <>
+                    <button
+                      disabled={disabled || item.diagnostic !== undefined}
+                      title={text(
+                        locale,
+                        '基于当前全局版本同步',
+                        'Synchronize based on current global version',
+                      )}
+                      type="button"
+                      onClick={() => void onSynchronize(item, 'base-on-current')}
+                    >
+                      <RefreshIcon size={14} />
+                    </button>
+                    <button
+                      disabled={disabled || item.diagnostic !== undefined}
+                      title={text(locale, '另存为新全局对象', 'Save as new global object')}
+                      type="button"
+                      onClick={() => void onSynchronize(item, 'save-as-new')}
+                    >
+                      <PlusIcon size={14} />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    disabled={disabled || item.diagnostic !== undefined}
+                    title={text(locale, '同步到全局', 'Synchronize to global')}
+                    type="button"
+                    onClick={() => void onSynchronize(item)}
+                  >
+                    <UploadIcon size={14} />
+                  </button>
+                )
+              ) : null}
+            </div>
           ))}
         </div>
       )}
@@ -269,6 +388,7 @@ function GlobalReferenceGroup({
   label,
   locale,
   onAdd,
+  onCopy,
   onRemove,
   onUpdate,
 }: {
@@ -279,6 +399,10 @@ function GlobalReferenceGroup({
   readonly label: string;
   readonly locale: SupportedLocale;
   readonly onAdd: (reference: ProjectGlobalReference) => Promise<void> | void;
+  readonly onCopy: (
+    reference: ProjectGlobalReferenceItem['reference'],
+    label: string,
+  ) => Promise<void> | void;
   readonly onRemove: (reference: ProjectGlobalReference) => Promise<void> | void;
   readonly onUpdate: (
     previousReference: ProjectGlobalReference,
@@ -322,6 +446,7 @@ function GlobalReferenceGroup({
               locale={locale}
               onRemove={onRemove}
               onUpdate={onUpdate}
+              onCopy={onCopy}
             />
           ))}
         </div>
@@ -379,6 +504,7 @@ function GlobalReferenceRow({
   item,
   locale,
   onRemove,
+  onCopy,
   onUpdate,
 }: {
   readonly availableItems: readonly ProjectGlobalReferenceItem[];
@@ -386,6 +512,10 @@ function GlobalReferenceRow({
   readonly item: ProjectGlobalReferenceItem;
   readonly locale: SupportedLocale;
   readonly onRemove: (reference: ProjectGlobalReference) => Promise<void> | void;
+  readonly onCopy: (
+    reference: ProjectGlobalReferenceItem['reference'],
+    label: string,
+  ) => Promise<void> | void;
   readonly onUpdate: (
     previousReference: ProjectGlobalReference,
     reference: ProjectGlobalReference,
@@ -413,6 +543,14 @@ function GlobalReferenceRow({
         </select>
       ) : null}
       <div className="project-workspace-root__reference-actions">
+        <button
+          disabled={disabled || item.diagnostic !== undefined}
+          title={text(locale, '复制到工作区', 'Copy to Workspace')}
+          type="button"
+          onClick={() => onCopy(item.reference, item.label)}
+        >
+          <CopyIcon size={14} />
+        </button>
         <button
           disabled={disabled || !selected || item.diagnostic !== undefined}
           title={text(locale, '更新精确版本引用', 'Update exact version reference')}

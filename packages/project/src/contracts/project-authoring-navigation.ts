@@ -132,7 +132,7 @@ function parseSnapshot(
     throw new Error(`Unknown Project authoring snapshot owner: ${String(owner)}`);
   }
   const expectedOwner =
-    target.kind === 'content-project'
+    target.kind === 'content-document'
       ? 'content'
       : target.kind === 'character-project'
         ? 'character'

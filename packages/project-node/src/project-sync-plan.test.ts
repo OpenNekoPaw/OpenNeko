@@ -20,6 +20,7 @@ describe('Project sync plan', () => {
       recursive: true,
     });
     await mkdir(path.join(root, 'media'), { recursive: true });
+    await mkdir(path.join(root, 'neko', 'assets'), { recursive: true });
     await mkdir(path.join(root, '.neko', 'media-libraries'), { recursive: true });
     await writeFile(
       path.join(root, 'neko', 'project.json'),
@@ -47,6 +48,7 @@ describe('Project sync plan', () => {
     await writeFile(path.join(root, '.env'), 'API_KEY=secret');
     await writeFile(path.join(external, 'external.mov'), 'external-bytes');
     await symlink(external, path.join(root, 'external-library'));
+    await symlink(external, path.join(root, 'neko', 'assets', 'Footage'));
 
     const plan = await createProjectSyncPlan({
       workspaceRoot: root,

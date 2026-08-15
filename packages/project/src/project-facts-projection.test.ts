@@ -52,7 +52,7 @@ describe('Project fact projections', () => {
       characterAssociations: associationProjections,
       worlds,
       entities: {
-        contentProjectId: projectId,
+        projectId,
         projections: [
           entity('entity-rin', 'character', 'Rin'),
           entity('entity-station', 'scene', 'Station'),
@@ -89,7 +89,7 @@ describe('Project fact projections', () => {
       {
         kind: 'open-character-studio',
         characterProjectId: 'character-rin',
-        authority: { kind: 'content-project', contentProjectId: projectId },
+        authority: { kind: 'project', projectId },
       },
     ]);
   });
@@ -127,7 +127,7 @@ describe('Project fact projections', () => {
       }),
       worlds,
       entities: {
-        contentProjectId: projectId,
+        projectId,
         projections: [entity('entity-rin', 'character', 'Rin')],
         diagnostics: [],
       },
@@ -252,13 +252,7 @@ describe('Project application services', () => {
       },
     });
 
-    await expect(
-      service.read({ contentProjectId: projectId, contentLabel: 'Story' }),
-    ).resolves.toEqual([
-      expect.objectContaining({
-        kind: 'authoring-target',
-        identity: `content-project:${projectId}`,
-      }),
+    await expect(service.read({ projectId })).resolves.toEqual([
       expect.objectContaining({
         kind: 'authoring-target',
         identity: 'character-project:character-rin',
@@ -278,7 +272,7 @@ describe('Project application services', () => {
     const worlds = { readAuthoringCatalog: vi.fn(async () => worldCatalog([])) };
     const entities = {
       readProjectContentEntities: vi.fn(async () => ({
-        contentProjectId: projectId,
+        projectId,
         projections: [],
         diagnostics: [],
       })),
@@ -286,7 +280,7 @@ describe('Project application services', () => {
     await expect(
       new ProjectContentService({ associations, characters, worlds, entities }).read(projectId),
     ).resolves.toMatchObject({
-      contentProjectId: projectId,
+      projectId,
       characters: [],
       worlds: [],
     });
@@ -296,20 +290,41 @@ describe('Project application services', () => {
     expect(entities.readProjectContentEntities).toHaveBeenCalledTimes(1);
   });
 
-  it('creates owner-scoped targets and writes only the irreducible Entity association', async () => {
-    const save = vi.fn(async () => undefined);
+  it('prepares owner facts and commits each Project-local target once', async () => {
+    const commitCharacter = vi.fn(async () => undefined);
+    const commitWorld = vi.fn(async () => undefined);
+    const entityDocument = {
+      projectId,
+      entities: [
+        {
+          entityId: 'entity-rin',
+          kind: 'character' as const,
+          names: { canonical: 'Rin', display: 'Rin', aliases: [] },
+          representations: [],
+          lifecycle: { state: 'active' as const },
+          createdAt: '2026-08-13T00:00:00.000Z',
+          updatedAt: '2026-08-13T00:00:00.000Z',
+        },
+      ],
+    };
     const service = new ProjectLocalAuthoringService({
-      associations: { save },
-      characters: { createProject: vi.fn(async () => character('character-rin', 'Rin')) },
-      entities: {
-        createCharacterEntity: vi.fn(async () => undefined),
-        requireCharacterEntity: vi.fn(async () => undefined),
+      characters: {
+        prepareProject: vi.fn(async () => character('character-rin', 'Rin')),
+        prepareWorkspaceCopy: vi.fn(async () => character('character-rin', 'Rin')),
       },
-      worlds: { createProject: vi.fn(async () => world('world-home', 'Home')) },
+      commit: { commitCharacter, commitWorld },
+      entities: {
+        prepareCharacterEntity: vi.fn(),
+        readCharacterEntityDocument: vi.fn(async () => entityDocument),
+      },
+      worlds: {
+        prepareProject: vi.fn(async () => world('world-home', 'Home')),
+        prepareWorkspaceCopy: vi.fn(async () => world('world-home', 'Home')),
+      },
       now: () => '2026-08-13T00:00:00.000Z',
     });
     await service.createCharacter(
-      { workspaceId: 'workspace-1', contentProjectId: projectId },
+      { workspaceId: 'workspace-1', projectId },
       {
         characterProjectId: 'character-rin',
         displayName: 'Rin',
@@ -319,10 +334,26 @@ describe('Project application services', () => {
       { kind: 'existing', entityId: 'entity-rin' },
     );
     await service.createWorld(
-      { workspaceId: 'workspace-1', contentProjectId: projectId },
+      { workspaceId: 'workspace-1', projectId },
       { worldProjectId: 'world-home', title: 'Home', draft: world('world-home', 'Home').draft },
     );
-    expect(save).toHaveBeenCalledWith(association);
+    expect(commitCharacter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        association,
+        entityDocument: { previous: entityDocument },
+        membership: {
+          projectId,
+          target: { kind: 'character-project', characterProjectId: 'character-rin' },
+        },
+      }),
+      undefined,
+    );
+    expect(commitWorld).toHaveBeenCalledWith(
+      expect.objectContaining({
+        membership: { projectId, target: { kind: 'world-project', worldProjectId: 'world-home' } },
+      }),
+      undefined,
+    );
   });
 });
 
@@ -331,7 +362,7 @@ function characterCatalog(
   diagnostics: CharacterAuthoringCatalog['diagnostics'] = [],
 ): CharacterAuthoringCatalog {
   return {
-    scope: { kind: 'content-project', contentProjectId: projectId },
+    scope: { kind: 'project', projectId },
     projects,
     versions: [],
     authoringTestSnapshots: [],
@@ -344,7 +375,7 @@ function worldCatalog(
   diagnostics: WorldAuthoringCatalog['diagnostics'] = [],
 ): WorldAuthoringCatalog {
   return {
-    scope: { kind: 'content-project', contentProjectId: projectId },
+    scope: { kind: 'project', projectId },
     projects,
     versions: [],
     diagnostics,

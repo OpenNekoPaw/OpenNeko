@@ -23,65 +23,72 @@ import type {
 import { useEffect, useMemo, useState } from 'react';
 
 export * from './authoring-workbench';
+export * from './project-workspace';
 
 export type ProjectCatalogSort =
   'updated-descending' | 'updated-ascending' | 'name-ascending' | 'name-descending';
 
 export interface ProjectContentRootProps {
   readonly binding: ProjectAuthoringNavigationBinding;
+  readonly chrome?: 'standalone' | 'embedded';
   readonly host: OpenNekoDesktopProjectAuthoringBridge['projectAuthoring'];
   readonly initialProjection?: ProjectContentProjection;
+  readonly onOpenCharacter?: (characterProjectId: string, label: string) => void;
+  readonly onOpenWorld?: (worldProjectId: string, label: string) => void;
   readonly windowId: string;
 }
 
 export function ProjectContentRoot({
   binding,
+  chrome = 'standalone',
   host,
   initialProjection,
+  onOpenCharacter,
+  onOpenWorld,
   windowId,
 }: ProjectContentRootProps): JSX.Element {
   const { t } = useTranslation();
   const loadFailedLabel = t('projectContent.loadFailed');
-  const { workspaceId, workspaceGrantId, contentProjectId } = binding;
+  const { workspaceId, workspaceGrantId, projectId } = binding;
   const [state, setState] = useState<
-    | { readonly status: 'loading'; readonly contentProjectId: string }
+    | { readonly status: 'loading'; readonly projectId: string }
     | {
         readonly status: 'ready';
-        readonly contentProjectId: string;
+        readonly projectId: string;
         readonly projection: ProjectContentProjection;
       }
-    | { readonly status: 'failed'; readonly contentProjectId: string; readonly message: string }
+    | { readonly status: 'failed'; readonly projectId: string; readonly message: string }
   >(
-    initialProjection?.contentProjectId === contentProjectId
-      ? { status: 'ready', contentProjectId, projection: initialProjection }
-      : { status: 'loading', contentProjectId },
+    initialProjection?.projectId === projectId
+      ? { status: 'ready', projectId, projection: initialProjection }
+      : { status: 'loading', projectId },
   );
 
   useEffect(() => {
-    if (initialProjection?.contentProjectId === contentProjectId) {
-      setState({ status: 'ready', contentProjectId, projection: initialProjection });
+    if (initialProjection?.projectId === projectId) {
+      setState({ status: 'ready', projectId, projection: initialProjection });
       return;
     }
     const controller = new AbortController();
-    setState({ status: 'loading', contentProjectId });
-    void host.getContent(windowId, { workspaceId, workspaceGrantId, contentProjectId }).then(
+    setState({ status: 'loading', projectId });
+    void host.getContent(windowId, { workspaceId, workspaceGrantId, projectId }).then(
       (result) => {
         if (!controller.signal.aborted)
-          setState({ status: 'ready', contentProjectId, projection: result.projection });
+          setState({ status: 'ready', projectId, projection: result.projection });
       },
       (error: unknown) => {
         if (!controller.signal.aborted) {
           setState({
             status: 'failed',
-            contentProjectId,
-            message: error instanceof Error ? error.message : loadFailedLabel,
+            projectId,
+            message: describeProjectAuthoringError(error, loadFailedLabel),
           });
         }
       },
     );
     return () => controller.abort();
   }, [
-    contentProjectId,
+    projectId,
     host,
     initialProjection,
     loadFailedLabel,
@@ -90,7 +97,7 @@ export function ProjectContentRoot({
     workspaceId,
   ]);
 
-  const visibleState = state.contentProjectId === contentProjectId ? state : undefined;
+  const visibleState = state.projectId === projectId ? state : undefined;
   if (!visibleState || visibleState.status === 'loading') {
     return (
       <section className="project-content-root is-loading" aria-label={t('projectContent.title')}>
@@ -113,10 +120,12 @@ export function ProjectContentRoot({
   }
   const projection = visibleState.projection;
   return (
-    <section className="project-content-root" aria-label={t('projectContent.title')}>
-      <header className="project-content-header">
-        <h2>{t('projectContent.title')}</h2>
-      </header>
+    <section className={`project-content-root is-${chrome}`} aria-label={t('projectContent.title')}>
+      {chrome === 'standalone' ? (
+        <header className="project-content-header">
+          <h2>{t('projectContent.title')}</h2>
+        </header>
+      ) : null}
       <div className="project-content-groups">
         <ProjectContentGroupSection
           group="characters"
@@ -127,6 +136,12 @@ export function ProjectContentRoot({
             metadata: item.characterProjectId,
             availability: item.availability,
             diagnostic: item.diagnostic,
+            ...(onOpenCharacter && item.availability === 'available'
+              ? {
+                  activate: () =>
+                    onOpenCharacter(item.characterProjectId, item.label ?? item.characterProjectId),
+                }
+              : {}),
           }))}
           projection={projection}
         />
@@ -139,6 +154,12 @@ export function ProjectContentRoot({
             metadata: item.worldProjectId,
             availability: item.availability,
             diagnostic: item.diagnostic,
+            ...(onOpenWorld && item.availability === 'available'
+              ? {
+                  activate: () =>
+                    onOpenWorld(item.worldProjectId, item.label ?? item.worldProjectId),
+                }
+              : {}),
           }))}
           projection={projection}
         />
@@ -170,6 +191,15 @@ export function ProjectContentRoot({
   );
 }
 
+function describeProjectAuthoringError(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : fallback;
+  if (!message.startsWith("Error invoking remote method '")) return message;
+  const boundary = message.indexOf("':");
+  if (boundary < 0) return message;
+  const detail = message.slice(boundary + 2).trimStart();
+  return detail.startsWith('Error:') ? detail.slice('Error:'.length).trimStart() : detail;
+}
+
 function ProjectContentGroupSection({
   group,
   icon,
@@ -184,6 +214,7 @@ function ProjectContentGroupSection({
     readonly metadata: string;
     readonly availability: string;
     readonly diagnostic?: string;
+    readonly activate?: () => void;
   }[];
   readonly projection: ProjectContentProjection;
 }): JSX.Element {
@@ -201,28 +232,7 @@ function ProjectContentGroupSection({
       ) : (
         <div className="project-content-list">
           {items.map((item) => (
-            <div
-              className="project-content-row"
-              data-availability={item.availability}
-              data-owner-identity={item.identity}
-              key={item.identity}
-            >
-              <span className="project-content-row-icon" aria-hidden="true">
-                {icon}
-              </span>
-              <div>
-                <strong>{item.label}</strong>
-                <small>{item.metadata}</small>
-              </div>
-              {item.availability !== 'available' ? (
-                <span className="project-content-status">
-                  {item.availability === 'needs-attention'
-                    ? t('projectContent.availability.needs-attention')
-                    : t('projectContent.availability.inactive')}
-                </span>
-              ) : null}
-              {item.diagnostic ? <p role="status">{item.diagnostic}</p> : null}
-            </div>
+            <ProjectContentRow icon={icon} item={item} key={item.identity} />
           ))}
         </div>
       )}
@@ -237,6 +247,65 @@ function ProjectContentGroupSection({
         </p>
       ))}
     </section>
+  );
+}
+
+function ProjectContentRow({
+  icon,
+  item,
+}: {
+  readonly icon: JSX.Element;
+  readonly item: {
+    readonly identity: string;
+    readonly label: string;
+    readonly metadata: string;
+    readonly availability: string;
+    readonly diagnostic?: string;
+    readonly activate?: () => void;
+  };
+}): JSX.Element {
+  const { t } = useTranslation();
+  const content = (
+    <>
+      <span className="project-content-row-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="project-content-row-copy">
+        <strong>{item.label}</strong>
+        <small>{item.metadata}</small>
+      </span>
+      {item.availability !== 'available' ? (
+        <span className="project-content-status">
+          {item.availability === 'needs-attention'
+            ? t('projectContent.availability.needs-attention')
+            : t('projectContent.availability.inactive')}
+        </span>
+      ) : null}
+      {item.diagnostic ? (
+        <span className="project-content-row-diagnostic" role="status">
+          {item.diagnostic}
+        </span>
+      ) : null}
+    </>
+  );
+  return item.activate ? (
+    <button
+      className="project-content-row is-actionable"
+      data-availability={item.availability}
+      data-owner-identity={item.identity}
+      onClick={item.activate}
+      type="button"
+    >
+      {content}
+    </button>
+  ) : (
+    <div
+      className="project-content-row"
+      data-availability={item.availability}
+      data-owner-identity={item.identity}
+    >
+      {content}
+    </div>
   );
 }
 

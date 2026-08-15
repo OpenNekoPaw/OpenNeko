@@ -10,6 +10,7 @@ export * from './project-creative-workspace-service';
 export * from './project-composition-commit-service';
 export * from './project-global-reference-mutation-service';
 export * from './project-authoring-navigation-service';
+export * from './project-workspace-object-mutation-service';
 export * from './project-character-version-reference-reader';
 export * from './project-entity-character-handoff';
 export * from './project-entity-character-resource-projection';

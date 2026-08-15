@@ -205,8 +205,13 @@ export function createProjectCompositionProjection(input: {
   return parseProjectMixedDomainTargetProjection({
     projectId: input.projectId,
     content: projectContentItems(input.content),
-    characters: projectCharacterItems(input.characters, input.targets, diagnostics),
-    worlds: projectWorldItems(input.worlds, input.targets, diagnostics),
+    characters: projectCharacterItems(
+      input.characters,
+      input.targets,
+      input.globalCharacters,
+      diagnostics,
+    ),
+    worlds: projectWorldItems(input.worlds, input.targets, input.globalWorlds, diagnostics),
     globalCharacters,
     globalWorlds,
     availableGlobalCharacters,
@@ -243,6 +248,7 @@ function projectContentItems(
 function projectCharacterItems(
   catalog: ProjectCharacterCatalogProjection,
   targets: readonly ProjectAuthoringTargetRef[],
+  globalCatalog: GlobalCharacterCatalog,
   diagnostics: ProjectCompositionDiagnostic[],
 ): readonly (ProjectMixedDomainTargetItem & {
   readonly target: { readonly kind: 'character-project'; readonly characterProjectId: string };
@@ -263,6 +269,14 @@ function projectCharacterItems(
     const message =
       diagnostic?.message ??
       (project ? undefined : `CharacterProject '${characterProjectId}' is unavailable.`);
+    const link = globalCatalog.links.find(
+      (candidate) => candidate.characterProjectId === characterProjectId,
+    );
+    const linkedCharacter = link
+      ? globalCatalog.characters.find(
+          (candidate) => candidate.globalCharacterId === link.globalCharacterId,
+        )
+      : undefined;
     if (message) {
       diagnostics.push({
         owner: { kind: 'character-project', characterProjectId },
@@ -276,6 +290,16 @@ function projectCharacterItems(
       identity: `character-project:${characterProjectId}`,
       label: project?.displayName ?? characterProjectId,
       ...(message ? { diagnostic: message } : {}),
+      ...(link && linkedCharacter
+        ? {
+            synchronization: {
+              kind: 'character' as const,
+              globalObjectId: link.globalCharacterId,
+              lastSyncedVersionId: link.lastSyncedCharacterVersionId,
+              currentVersionId: linkedCharacter.currentCharacterVersionId,
+            },
+          }
+        : {}),
     };
   });
 }
@@ -283,6 +307,7 @@ function projectCharacterItems(
 function projectWorldItems(
   catalog: ProjectWorldCatalogProjection,
   targets: readonly ProjectAuthoringTargetRef[],
+  globalCatalog: GlobalWorldCatalog,
   diagnostics: ProjectCompositionDiagnostic[],
 ): readonly (ProjectMixedDomainTargetItem & {
   readonly target: { readonly kind: 'world-project'; readonly worldProjectId: string };
@@ -299,6 +324,12 @@ function projectWorldItems(
     const message =
       diagnostic?.message ??
       (project ? undefined : `WorldProject '${worldProjectId}' is unavailable.`);
+    const link = globalCatalog.links.find(
+      (candidate) => candidate.worldProjectId === worldProjectId,
+    );
+    const linkedWorld = link
+      ? globalCatalog.worlds.find((candidate) => candidate.globalWorldId === link.globalWorldId)
+      : undefined;
     if (message) {
       diagnostics.push({
         owner: { kind: 'world-project', worldProjectId },
@@ -312,6 +343,16 @@ function projectWorldItems(
       identity: `world-project:${worldProjectId}`,
       label: project?.title ?? worldProjectId,
       ...(message ? { diagnostic: message } : {}),
+      ...(link && linkedWorld
+        ? {
+            synchronization: {
+              kind: 'world' as const,
+              globalObjectId: link.globalWorldId,
+              lastSyncedVersionId: link.lastSyncedWorldVersionId,
+              currentVersionId: linkedWorld.currentWorldVersionId,
+            },
+          }
+        : {}),
     };
   });
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createProjectCreativeWorkspaceHostRequest,
   createProjectCreativeWorkspaceMutationHostRequest,
+  createProjectCreativeWorkspaceObjectMutationHostRequest,
   parseProjectAuthoringHostRequest,
   parseProjectCreativeWorkspaceHostResult,
 } from './contracts/project-authoring-host';
@@ -44,6 +45,38 @@ describe('Project Creative Workspace Host contract', () => {
         },
       }),
     ).toMatchObject({ operation: 'creative-workspace-reference-mutate', ...binding });
+    expect(
+      createProjectCreativeWorkspaceObjectMutationHostRequest({
+        requestId: 'request-object-mutation',
+        rendererSessionId: 'renderer-1',
+        windowId: 'window-1',
+        binding,
+        mutation: {
+          kind: 'copy-world-reference',
+          reference: {
+            kind: 'world-version',
+            globalWorldId: 'global-world-1',
+            worldVersionId: 'world-version-1',
+          },
+          worldProjectId: 'world-project-copy',
+        },
+      }),
+    ).toEqual({
+      requestId: 'request-object-mutation',
+      rendererSessionId: 'renderer-1',
+      windowId: 'window-1',
+      operation: 'creative-workspace-object-mutate',
+      ...binding,
+      mutation: {
+        kind: 'copy-world-reference',
+        reference: {
+          kind: 'world-version',
+          globalWorldId: 'global-world-1',
+          worldVersionId: 'world-version-1',
+        },
+        worldProjectId: 'world-project-copy',
+      },
+    });
 
     expect(
       parseProjectCreativeWorkspaceHostResult(

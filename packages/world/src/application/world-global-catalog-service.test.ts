@@ -74,6 +74,40 @@ describe('WorldGlobalCatalogService', () => {
     expect(repository.commitCatalog).not.toHaveBeenCalled();
   });
 
+  it('prepares a fresh Workspace World from one exact global version', async () => {
+    const sourceVersion = worldVersion('world-version-2');
+    const repository = repositoryFixture({
+      worlds: [
+        {
+          globalWorldId: 'global-world-1',
+          title: 'Neko World',
+          currentWorldVersionId: sourceVersion.worldVersionId,
+          worldVersionIds: [sourceVersion.worldVersionId],
+          createdAt: '2026-08-15T00:00:00.000Z',
+          updatedAt: '2026-08-15T00:00:00.000Z',
+        },
+      ],
+      versions: [sourceVersion],
+      links: [],
+      diagnostics: [],
+    });
+
+    await expect(
+      serviceFixture(repository).prepareWorkspaceCopy({
+        globalWorldId: 'global-world-1',
+        worldVersionId: 'world-version-2',
+        worldProjectId: 'world-project-copy',
+      }),
+    ).resolves.toMatchObject({
+      worldProjectId: 'world-project-copy',
+      title: 'Neko World',
+      draft: sourceVersion.definition,
+      sourceRefs: [],
+    });
+    expect(repository.commitCatalog).not.toHaveBeenCalled();
+    expect(repository.commitGlobalCatalog).not.toHaveBeenCalled();
+  });
+
   it('imports one exact version without creating a Workspace link', async () => {
     const repository = repositoryFixture();
     const receipt = await serviceFixture(repository).importVersion({

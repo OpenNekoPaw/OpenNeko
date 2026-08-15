@@ -25,7 +25,7 @@ export function projectEntityCharacterHandoffs(input: {
   }
   return createCharacterProductHandoffs({
     characterProjectId: association.characterProjectId,
-    authoringAuthority: { kind: 'content-project', contentProjectId: input.projectId },
+    authoringAuthority: { kind: 'project', projectId: input.projectId },
     ...(input.characterVersionId === undefined
       ? {}
       : { characterVersionId: input.characterVersionId }),

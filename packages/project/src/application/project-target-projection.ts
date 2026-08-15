@@ -27,10 +27,8 @@ export type {
 } from '../contracts/project-authoring-navigation';
 
 export function projectAuthoringNavigation(input: {
-  readonly projectId: string;
   readonly localTargets: readonly ProjectLocalTargetRef[];
   readonly dependencies: readonly ProjectPublicationDependencyRef[];
-  readonly content: ProjectTargetResolution;
   readonly localTargetResolutions: readonly ProjectTargetResolution[];
   readonly dependencyResolutions: readonly ProjectTargetResolution[];
   readonly snapshots?: readonly ProjectAuthoringPresentationSnapshotRef[];
@@ -38,38 +36,18 @@ export function projectAuthoringNavigation(input: {
   const snapshots = new Map(
     input.snapshots?.map((snapshot) => [snapshot.targetIdentity, snapshot]),
   );
-  const contentIdentity = `content-project:${input.projectId}`;
-  if (input.content.identity !== contentIdentity) {
-    throw new Error(
-      `Content target resolution '${input.content.identity}' does not match '${contentIdentity}'.`,
-    );
-  }
-  const content: ProjectAuthoringNavigationItem = {
-    kind: 'authoring-target',
-    target: {
-      kind: 'content-project',
-      contentProjectId: input.projectId,
-    },
-    identity: contentIdentity,
-    label: input.content.label ?? input.projectId,
-    diagnostic: input.content.diagnostic,
-    snapshot: snapshots.get(contentIdentity),
-  };
   const tree = projectTargetTree(input);
-  return [
-    content,
-    ...tree.map((item): ProjectAuthoringNavigationItem => {
-      if (item.kind !== 'local-target') return item;
-      return {
-        kind: 'authoring-target',
-        target: item.target,
-        identity: item.identity,
-        label: item.label ?? item.identity,
-        diagnostic: item.diagnostic,
-        snapshot: snapshots.get(item.identity),
-      };
-    }),
-  ];
+  return tree.map((item): ProjectAuthoringNavigationItem => {
+    if (item.kind !== 'local-target') return item;
+    return {
+      kind: 'authoring-target',
+      target: item.target,
+      identity: item.identity,
+      label: item.label ?? item.identity,
+      diagnostic: item.diagnostic,
+      snapshot: snapshots.get(item.identity),
+    };
+  });
 }
 
 export function projectTargetTree(input: {

@@ -5,7 +5,6 @@ import {
 } from '@neko/chara/contracts';
 import {
   createProjectLocalAuthoringHostRequest,
-  createProjectLocalAuthoringRetryHostRequest,
   parseProjectLocalAuthoringHostRequest,
   parseProjectLocalAuthoringHostResult,
 } from './contracts/project-local-authoring-host';
@@ -15,7 +14,7 @@ describe('Project local authoring Host contract', () => {
     const binding = {
       workspaceId: 'workspace-1',
       workspaceGrantId: 'grant-1',
-      contentProjectId: 'project-1',
+      projectId: 'project-1',
     };
     const request = createProjectLocalAuthoringHostRequest({
       requestId: 'request-1',
@@ -102,61 +101,18 @@ describe('Project local authoring Host contract', () => {
     });
   });
 
-  it('round-trips a canonical partial receipt and exact retry request', () => {
-    const binding = {
-      workspaceId: 'workspace-1',
-      workspaceGrantId: 'grant-1',
-      contentProjectId: 'project-1',
-    };
-    const receipt = partialReceipt(binding);
-    expect(
-      parseProjectLocalAuthoringHostResult(
-        {
-          requestId: 'request-incomplete',
-          ...binding,
-          status: 'incomplete',
-          target: receipt.target,
-          receipt,
-        },
-        'request-incomplete',
-        binding,
-        receipt.target,
-      ),
-    ).toEqual({
-      requestId: 'request-incomplete',
-      ...binding,
-      status: 'incomplete',
-      target: receipt.target,
-      receipt,
-    });
-    expect(
-      createProjectLocalAuthoringRetryHostRequest({
-        requestId: 'request-retry',
-        rendererSessionId: 'renderer-1',
-        windowId: 'window-1',
-        binding,
-        receipt,
-        entity: { kind: 'create', entityId: 'entity-1', name: 'Aster' },
-      }),
-    ).toMatchObject({
-      operation: 'retry-local-character',
-      ...binding,
-      input: { receipt, entity: { entityId: 'entity-1' } },
-    });
-  });
-
   it('rejects cross-Project responses and unknown creation fields', () => {
     const binding = {
       workspaceId: 'workspace-1',
       workspaceGrantId: 'grant-1',
-      contentProjectId: 'project-1',
+      projectId: 'project-1',
     };
     expect(() =>
       parseProjectLocalAuthoringHostResult(
         {
           requestId: 'request-1',
           ...binding,
-          contentProjectId: 'project-other',
+          projectId: 'project-other',
           status: 'created',
           target: { kind: 'world-project', worldProjectId: 'world-1' },
         },
@@ -164,7 +120,7 @@ describe('Project local authoring Host contract', () => {
         binding,
         { kind: 'world-project', worldProjectId: 'world-1' },
       ),
-    ).toThrow(/contentProjectId mismatch/u);
+    ).toThrow(/projectId mismatch/u);
     expect(() =>
       parseProjectLocalAuthoringHostResult(
         {
@@ -180,53 +136,35 @@ describe('Project local authoring Host contract', () => {
     ).toThrow(/target identity mismatch/u);
   });
 
-  it('rejects non-prefix receipts and cross-authority retries', () => {
+  it('rejects obsolete retry operations and incomplete outcomes', () => {
     const binding = {
       workspaceId: 'workspace-1',
       workspaceGrantId: 'grant-1',
-      contentProjectId: 'project-1',
+      projectId: 'project-1',
     };
     expect(() =>
-      createProjectLocalAuthoringRetryHostRequest({
-        requestId: 'request-invalid-prefix',
+      parseProjectLocalAuthoringHostRequest({
+        requestId: 'request-retry',
         rendererSessionId: 'renderer-1',
         windowId: 'window-1',
+        operation: 'retry-local-character',
         binding,
-        receipt: {
-          ...partialReceipt(binding),
-          completedSteps: ['character-project', 'project-entity'],
-        },
-        entity: { kind: 'existing', entityId: 'entity-1' },
+        input: {},
       }),
-    ).toThrow(/canonical partial step prefix/u);
+    ).toThrow(/unknown or missing fields|Unknown Project local authoring operation/u);
     expect(() =>
-      createProjectLocalAuthoringRetryHostRequest({
-        requestId: 'request-cross-authority',
-        rendererSessionId: 'renderer-1',
-        windowId: 'window-1',
-        binding,
-        receipt: {
-          ...partialReceipt(binding),
-          authority: { workspaceId: 'workspace-other', contentProjectId: 'project-other' },
+      parseProjectLocalAuthoringHostResult(
+        {
+          requestId: 'request-incomplete',
+          ...binding,
+          status: 'incomplete',
+          target: { kind: 'character-project', characterProjectId: 'character-1' },
+          receipt: {},
         },
-        entity: { kind: 'existing', entityId: 'entity-1' },
-      }),
-    ).toThrow(/authority mismatch/u);
+        'request-incomplete',
+        binding,
+        { kind: 'character-project', characterProjectId: 'character-1' },
+      ),
+    ).toThrow(/unknown or missing fields/u);
   });
 });
-
-function partialReceipt(binding: {
-  readonly workspaceId: string;
-  readonly contentProjectId: string;
-}) {
-  return {
-    authority: {
-      workspaceId: binding.workspaceId,
-      contentProjectId: binding.contentProjectId,
-    },
-    target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
-    entityId: 'entity-1',
-    completedSteps: ['character-project'] as const,
-    nextStep: 'project-entity' as const,
-  };
-}

@@ -66,6 +66,12 @@ export interface CreateGlobalCharacterInput {
   readonly acceptedEvidenceIds?: readonly string[];
 }
 
+export interface PrepareCharacterWorkspaceCopyInput {
+  readonly globalCharacterId: string;
+  readonly characterVersionId: string;
+  readonly characterProjectId: string;
+}
+
 export type ImportCharacterGlobalVersionInput =
   | {
       readonly target: { readonly kind: 'new'; readonly globalCharacterId: string };
@@ -225,6 +231,40 @@ export class CharacterGlobalCatalogService {
     });
     await this.ports.repository.commitGlobalCatalog({ character, version }, signal);
     return structuredClone({ globalCharacter: character, characterVersion: version });
+  }
+
+  async prepareWorkspaceCopy(
+    input: PrepareCharacterWorkspaceCopyInput,
+    signal?: AbortSignal,
+  ): Promise<CharacterProject> {
+    signal?.throwIfAborted();
+    const catalog = await this.readCatalog(signal);
+    const character = catalog.characters.find(
+      (candidate) => candidate.globalCharacterId === input.globalCharacterId,
+    );
+    const version = catalog.versions.find(
+      (candidate) => candidate.characterVersionId === input.characterVersionId,
+    );
+    if (
+      !character?.characterVersionIds.includes(input.characterVersionId) ||
+      version?.globalCharacterId !== input.globalCharacterId
+    ) {
+      throw new CharacterGlobalCatalogError(
+        'global-character-unavailable',
+        `CharacterVersion '${input.characterVersionId}' does not belong to exact GlobalCharacter '${input.globalCharacterId}'.`,
+      );
+    }
+    const timestamp = this.now();
+    return parseCharacterProject({
+      characterProjectId: input.characterProjectId,
+      displayName: character.displayName,
+      draft: version.definition,
+      evidence: [],
+      candidates: [],
+      reviewStatus: 'draft',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
   }
 
   async importVersion(

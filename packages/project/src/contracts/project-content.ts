@@ -51,7 +51,7 @@ export interface ProjectContentDiagnostic {
 }
 
 export interface ProjectContentProjection {
-  readonly contentProjectId: string;
+  readonly projectId: string;
   readonly characters: readonly ProjectContentCharacterItem[];
   readonly worlds: readonly ProjectContentWorldItem[];
   readonly elements: readonly ProjectContentElementItem[];
@@ -62,11 +62,11 @@ export interface ProjectContentProjection {
 export function parseProjectContentProjection(value: unknown): ProjectContentProjection {
   const record = requireExactRecord(
     value,
-    ['contentProjectId', 'characters', 'worlds', 'elements', 'candidates', 'diagnostics'],
+    ['projectId', 'characters', 'worlds', 'elements', 'candidates', 'diagnostics'],
     'Project Content projection',
   );
   const projection = {
-    contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project identity'),
+    projectId: requireIdentity(record['projectId'], 'Project identity'),
     characters: requireArray(
       record['characters'],
       parseCharacterItem,

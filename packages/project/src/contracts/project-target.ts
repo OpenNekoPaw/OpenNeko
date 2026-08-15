@@ -1,7 +1,8 @@
 import type { CharacterProject, CharacterVersion } from '@neko/chara/contracts';
 import type { WorldExperienceVersionId, WorldProject, WorldVersion } from '@neko/world/contracts';
 
-export type ContentProjectId = string;
+export type ProjectId = string;
+export type ContentDocumentId = string;
 export type CharacterProjectId = CharacterProject['characterProjectId'];
 export type CharacterVersionId = CharacterVersion['characterVersionId'];
 export type WorldProjectId = WorldProject['worldProjectId'];
@@ -12,7 +13,7 @@ export type ProjectLocalTargetRef =
   | { readonly kind: 'world-project'; readonly worldProjectId: WorldProjectId };
 
 export type ProjectAuthoringTargetRef =
-  | { readonly kind: 'content-project'; readonly contentProjectId: ContentProjectId }
+  | { readonly kind: 'content-document'; readonly documentId: ContentDocumentId }
   | ProjectLocalTargetRef;
 
 export type ProjectGlobalReference =
@@ -70,11 +71,11 @@ export function parseProjectLocalTargetRef(value: unknown): ProjectLocalTargetRe
 
 export function parseProjectAuthoringTargetRef(value: unknown): ProjectAuthoringTargetRef {
   const record = requireRecord(value, 'Project authoring target');
-  if (record['kind'] === 'content-project') {
-    requireExactKeys(record, ['kind', 'contentProjectId'], 'Content Project authoring target');
+  if (record['kind'] === 'content-document') {
+    requireExactKeys(record, ['kind', 'documentId'], 'Content document authoring target');
     return {
-      kind: 'content-project',
-      contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project identity'),
+      kind: 'content-document',
+      documentId: requireDocumentId(record['documentId']),
     };
   }
   return parseProjectLocalTargetRef(record);
@@ -145,8 +146,8 @@ export function projectLocalTargetKey(target: ProjectLocalTargetRef): string {
 }
 
 export function projectAuthoringTargetKey(target: ProjectAuthoringTargetRef): string {
-  return target.kind === 'content-project'
-    ? `content-project:${target.contentProjectId}`
+  return target.kind === 'content-document'
+    ? `content-document:${target.documentId}`
     : projectLocalTargetKey(target);
 }
 
@@ -243,4 +244,8 @@ function requireRelativePath(value: unknown, label: string): string {
     throw new Error(`${label} must be a normalized relative path.`);
   }
   return path.replaceAll('\\', '/');
+}
+
+function requireDocumentId(value: unknown): string {
+  return requireRelativePath(value, 'Content document identity');
 }

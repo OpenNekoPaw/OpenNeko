@@ -27,15 +27,12 @@ export class ProjectAuthoringNavigationService {
   ) {}
 
   async read(input: {
-    readonly contentProjectId: string;
-    readonly contentLabel: string;
+    readonly projectId: string;
     readonly signal?: AbortSignal;
   }): Promise<readonly ProjectAuthoringNavigationItem[]> {
     const { characters, worlds, dependencies } = await new ProjectDependencyService(
       this.options,
-    ).readWithOwners(input.contentProjectId, input.signal);
-    requireProjectScope(characters, input.contentProjectId, 'Character');
-    requireProjectScope(worlds, input.contentProjectId, 'World');
+    ).readWithOwners(input.projectId, input.signal);
     const localTargets: ProjectLocalTargetRef[] = [
       ...characters.projects.map((project) => ({
         kind: 'character-project' as const,
@@ -48,13 +45,8 @@ export class ProjectAuthoringNavigationService {
     ];
     const dependencyRefs = dependencies.dependencies.map((item) => item.dependency);
     return projectAuthoringNavigation({
-      projectId: input.contentProjectId,
       localTargets,
       dependencies: dependencyRefs,
-      content: {
-        identity: `content-project:${input.contentProjectId}`,
-        label: input.contentLabel,
-      },
       localTargetResolutions: localTargets.map((target) =>
         resolveLocalTarget(target, characters, worlds),
       ),
@@ -147,19 +139,4 @@ function resolveLocalTarget(
         diagnostic:
           diagnostic?.message ?? `WorldProject '${target.worldProjectId}' is unavailable.`,
       };
-}
-
-function requireProjectScope(
-  catalog: CharacterAuthoringCatalog | WorldAuthoringCatalog,
-  contentProjectId: string,
-  owner: string,
-): void {
-  if (
-    catalog.scope.kind !== 'content-project' ||
-    catalog.scope.contentProjectId !== contentProjectId
-  ) {
-    throw new Error(
-      `${owner} authoring catalog does not match Content Project '${contentProjectId}'.`,
-    );
-  }
 }

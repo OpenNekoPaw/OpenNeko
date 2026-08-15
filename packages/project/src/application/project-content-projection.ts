@@ -19,7 +19,7 @@ import {
 } from '../contracts/project-entity-character-resource-projection';
 
 export interface ProjectContentEntityCatalog {
-  readonly contentProjectId: string;
+  readonly projectId: string;
   readonly projections: readonly ProjectEntityManagementProjection[];
   readonly diagnostics: readonly ProjectEntityDiagnostic[];
 }
@@ -32,14 +32,7 @@ export function projectContentProjection(input: {
   readonly entities: ProjectContentEntityCatalog;
   readonly worlds: WorldAuthoringCatalog;
 }): ProjectContentProjection {
-  requireProjectScope(input.entities.contentProjectId, input.projectId, 'Entity');
-  if (
-    input.worlds.scope.kind !== 'content-project' ||
-    input.worlds.scope.contentProjectId !== input.projectId
-  ) {
-    throw new Error(`World authoring catalog does not match Content Project '${input.projectId}'.`);
-  }
-
+  requireProjectScope(input.entities.projectId, input.projectId, 'Entity');
   const characterAssociations = input.characterAssociations.map(
     parseProjectEntityCharacterResourceProjection,
   );
@@ -183,7 +176,7 @@ export function projectContentProjection(input: {
   );
 
   return parseProjectContentProjection({
-    contentProjectId: input.projectId,
+    projectId: input.projectId,
     characters,
     worlds,
     elements,

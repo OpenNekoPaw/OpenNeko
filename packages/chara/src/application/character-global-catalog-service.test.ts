@@ -109,6 +109,41 @@ describe('CharacterGlobalCatalogService', () => {
     expect(existingVersion.characterVersionId).toBe('character-version-2');
   });
 
+  it('prepares a fresh Workspace Character from one exact global version', async () => {
+    const sourceVersion = characterVersion('character-version-2');
+    const repository = repositoryFixture({
+      characters: [
+        {
+          globalCharacterId: 'global-character-1',
+          displayName: 'Neko',
+          currentCharacterVersionId: sourceVersion.characterVersionId,
+          characterVersionIds: [sourceVersion.characterVersionId],
+          createdAt: '2026-08-15T00:00:00.000Z',
+          updatedAt: '2026-08-15T00:00:00.000Z',
+        },
+      ],
+      versions: [sourceVersion],
+      links: [],
+      diagnostics: [],
+    });
+
+    await expect(
+      serviceFixture(repository).prepareWorkspaceCopy({
+        globalCharacterId: 'global-character-1',
+        characterVersionId: 'character-version-2',
+        characterProjectId: 'character-project-copy',
+      }),
+    ).resolves.toMatchObject({
+      characterProjectId: 'character-project-copy',
+      displayName: 'Neko',
+      draft: sourceVersion.definition,
+      evidence: [],
+      candidates: [],
+    });
+    expect(repository.commitCatalog).not.toHaveBeenCalled();
+    expect(repository.commitGlobalCatalog).not.toHaveBeenCalled();
+  });
+
   it('imports one exact version without creating a Workspace link', async () => {
     const repository = repositoryFixture();
     const service = serviceFixture(repository);

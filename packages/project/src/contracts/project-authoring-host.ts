@@ -4,10 +4,12 @@ import {
 } from './project-authoring-navigation';
 import { parseProjectContentProjection, type ProjectContentProjection } from './project-content';
 import {
-  parseProjectCreativeWorkspaceProjection,
   parseProjectGlobalReferenceMutation,
-  type ProjectCreativeWorkspaceProjection,
+  parseProjectCreativeWorkspaceProjection,
   type ProjectGlobalReferenceMutation,
+  type ProjectCreativeWorkspaceProjection,
+  parseProjectWorkspaceObjectMutation,
+  type ProjectWorkspaceObjectMutation,
 } from './project-composition';
 
 export const PROJECT_AUTHORING_HOST_CHANNEL = 'openneko:project:authoring-navigation' as const;
@@ -15,8 +17,10 @@ export const PROJECT_AUTHORING_HOST_CHANNEL = 'openneko:project:authoring-naviga
 export interface ProjectAuthoringNavigationBinding {
   readonly workspaceId: string;
   readonly workspaceGrantId: string;
-  readonly contentProjectId: string;
+  readonly projectId: string;
 }
+
+export type ProjectCreativeWorkspaceBinding = ProjectAuthoringNavigationBinding;
 
 export interface ProjectAuthoringNavigationHostRequest extends ProjectAuthoringNavigationBinding {
   readonly requestId: string;
@@ -32,26 +36,27 @@ export interface ProjectContentHostRequest extends ProjectAuthoringNavigationBin
   readonly operation: 'content-get';
 }
 
-export interface ProjectCreativeWorkspaceBinding {
-  readonly workspaceId: string;
-  readonly workspaceGrantId: string;
-  readonly projectId: string;
-}
-
-export interface ProjectCreativeWorkspaceHostRequest extends ProjectCreativeWorkspaceBinding {
+export interface ProjectCreativeWorkspaceHostRequest extends ProjectAuthoringNavigationBinding {
   readonly requestId: string;
   readonly rendererSessionId: string;
   readonly windowId: string;
   readonly operation: 'creative-workspace-get';
 }
 
-export interface ProjectCreativeWorkspaceMutationHostRequest
-  extends ProjectCreativeWorkspaceBinding {
+export interface ProjectCreativeWorkspaceMutationHostRequest extends ProjectAuthoringNavigationBinding {
   readonly requestId: string;
   readonly rendererSessionId: string;
   readonly windowId: string;
   readonly operation: 'creative-workspace-reference-mutate';
   readonly mutation: ProjectGlobalReferenceMutation;
+}
+
+export interface ProjectCreativeWorkspaceObjectMutationHostRequest extends ProjectAuthoringNavigationBinding {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+  readonly operation: 'creative-workspace-object-mutate';
+  readonly mutation: ProjectWorkspaceObjectMutation;
 }
 
 export interface ProjectAuthoringCatalogHostRequest {
@@ -66,24 +71,25 @@ export type ProjectAuthoringHostRequest =
   | ProjectAuthoringCatalogHostRequest
   | ProjectContentHostRequest
   | ProjectCreativeWorkspaceHostRequest
-  | ProjectCreativeWorkspaceMutationHostRequest;
+  | ProjectCreativeWorkspaceMutationHostRequest
+  | ProjectCreativeWorkspaceObjectMutationHostRequest;
 
 export interface ProjectAuthoringNavigationHostResult {
   readonly requestId: string;
   readonly workspaceId: string;
-  readonly contentProjectId: string;
+  readonly projectId: string;
   readonly navigation: readonly ProjectAuthoringNavigationItem[];
 }
 
 export interface ProjectAuthoringCatalogEntry {
   readonly workspaceId: string;
-  readonly contentProjectId: string;
+  readonly projectId: string;
   readonly label: string;
   readonly navigation: readonly ProjectAuthoringNavigationItem[];
 }
 
 export interface ProjectAuthoringCatalogDiagnostic {
-  readonly contentProjectId: string;
+  readonly projectId: string;
   readonly message: string;
 }
 
@@ -96,11 +102,11 @@ export interface ProjectAuthoringCatalogHostResult {
 export interface ProjectContentHostResult {
   readonly requestId: string;
   readonly workspaceId: string;
-  readonly contentProjectId: string;
+  readonly projectId: string;
   readonly projection: ProjectContentProjection;
 }
 
-export interface ProjectCreativeWorkspaceHostResult extends ProjectCreativeWorkspaceBinding {
+export interface ProjectCreativeWorkspaceHostResult extends ProjectAuthoringNavigationBinding {
   readonly requestId: string;
   readonly projection: ProjectCreativeWorkspaceProjection;
 }
@@ -108,17 +114,22 @@ export interface ProjectCreativeWorkspaceHostResult extends ProjectCreativeWorks
 export interface ProjectCreativeWorkspaceHostPort {
   getCreativeWorkspace(
     windowId: string,
-    binding: ProjectCreativeWorkspaceBinding,
+    binding: ProjectAuthoringNavigationBinding,
   ): Promise<ProjectCreativeWorkspaceHostResult>;
   mutateCreativeWorkspaceReference(
     windowId: string,
-    binding: ProjectCreativeWorkspaceBinding,
+    binding: ProjectAuthoringNavigationBinding,
     mutation: ProjectGlobalReferenceMutation,
+  ): Promise<ProjectCreativeWorkspaceHostResult>;
+  mutateCreativeWorkspaceObject(
+    windowId: string,
+    binding: ProjectAuthoringNavigationBinding,
+    mutation: ProjectWorkspaceObjectMutation,
   ): Promise<ProjectCreativeWorkspaceHostResult>;
 }
 
 export interface OpenNekoDesktopProjectAuthoringBridge {
-  readonly projectAuthoring: {
+  readonly projectAuthoring: ProjectCreativeWorkspaceHostPort & {
     getCatalog(windowId: string): Promise<ProjectAuthoringCatalogHostResult>;
     getNavigation(
       windowId: string,
@@ -135,7 +146,7 @@ export function createProjectCreativeWorkspaceHostRequest(input: {
   readonly requestId: string;
   readonly rendererSessionId: string;
   readonly windowId: string;
-  readonly binding: ProjectCreativeWorkspaceBinding;
+  readonly binding: ProjectAuthoringNavigationBinding;
 }): ProjectCreativeWorkspaceHostRequest {
   const request = parseProjectAuthoringHostRequest({
     requestId: input.requestId,
@@ -154,7 +165,7 @@ export function createProjectCreativeWorkspaceMutationHostRequest(input: {
   readonly requestId: string;
   readonly rendererSessionId: string;
   readonly windowId: string;
-  readonly binding: ProjectCreativeWorkspaceBinding;
+  readonly binding: ProjectAuthoringNavigationBinding;
   readonly mutation: ProjectGlobalReferenceMutation;
 }): ProjectCreativeWorkspaceMutationHostRequest {
   const request = parseProjectAuthoringHostRequest({
@@ -167,6 +178,27 @@ export function createProjectCreativeWorkspaceMutationHostRequest(input: {
   });
   if (request.operation !== 'creative-workspace-reference-mutate') {
     throw new Error('Project authoring owner returned another Workspace mutation operation.');
+  }
+  return request;
+}
+
+export function createProjectCreativeWorkspaceObjectMutationHostRequest(input: {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+  readonly binding: ProjectAuthoringNavigationBinding;
+  readonly mutation: ProjectWorkspaceObjectMutation;
+}): ProjectCreativeWorkspaceObjectMutationHostRequest {
+  const request = parseProjectAuthoringHostRequest({
+    requestId: input.requestId,
+    rendererSessionId: input.rendererSessionId,
+    windowId: input.windowId,
+    operation: 'creative-workspace-object-mutate',
+    ...input.binding,
+    mutation: input.mutation,
+  });
+  if (request.operation !== 'creative-workspace-object-mutate') {
+    throw new Error('Project authoring owner returned another Workspace object operation.');
   }
   return request;
 }
@@ -220,7 +252,7 @@ export function parseProjectAuthoringNavigationHostRequest(
     'operation',
     'workspaceId',
     'workspaceGrantId',
-    'contentProjectId',
+    'projectId',
   ]);
   if (record['operation'] !== 'navigation-get') {
     throw new Error(`Unknown Project authoring operation: ${String(record['operation'])}`);
@@ -232,7 +264,7 @@ export function parseProjectAuthoringNavigationHostRequest(
     operation: 'navigation-get',
     workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
     workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
-    contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project'),
+    projectId: requireIdentity(record['projectId'], 'Project'),
   };
 }
 
@@ -255,7 +287,7 @@ export function parseProjectContentHostRequest(value: unknown): ProjectContentHo
     'operation',
     'workspaceId',
     'workspaceGrantId',
-    'contentProjectId',
+    'projectId',
   ]);
   if (record['operation'] !== 'content-get') {
     throw new Error(`Unknown Project authoring operation: ${String(record['operation'])}`);
@@ -267,7 +299,7 @@ export function parseProjectContentHostRequest(value: unknown): ProjectContentHo
     operation: 'content-get',
     workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
     workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
-    contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project'),
+    projectId: requireIdentity(record['projectId'], 'Project'),
   };
 }
 
@@ -300,7 +332,7 @@ export function parseProjectAuthoringHostRequest(value: unknown): ProjectAuthori
       'projectId',
     ]);
     return {
-      ...parseProjectCreativeWorkspaceRequestBinding(record),
+      ...parseProjectAuthoringBindingRequest(record),
       operation,
     };
   }
@@ -316,9 +348,26 @@ export function parseProjectAuthoringHostRequest(value: unknown): ProjectAuthori
       'mutation',
     ]);
     return {
-      ...parseProjectCreativeWorkspaceRequestBinding(record),
+      ...parseProjectAuthoringBinding(record),
       operation,
       mutation: parseProjectGlobalReferenceMutation(record['mutation']),
+    };
+  }
+  if (operation === 'creative-workspace-object-mutate') {
+    requireExactKeys(record, [
+      'requestId',
+      'rendererSessionId',
+      'windowId',
+      'operation',
+      'workspaceId',
+      'workspaceGrantId',
+      'projectId',
+      'mutation',
+    ]);
+    return {
+      ...parseProjectAuthoringBinding(record),
+      operation,
+      mutation: parseProjectWorkspaceObjectMutation(record['mutation']),
     };
   }
   throw new Error(`Unknown Project authoring operation: ${String(operation)}`);
@@ -327,7 +376,7 @@ export function parseProjectAuthoringHostRequest(value: unknown): ProjectAuthori
 export function parseProjectCreativeWorkspaceHostResult(
   value: unknown,
   expectedRequestId: string,
-  expectedBinding: ProjectCreativeWorkspaceBinding,
+  expectedBinding: ProjectAuthoringNavigationBinding,
 ): ProjectCreativeWorkspaceHostResult {
   const record = requireRecord(value, 'Project Creative Workspace result');
   requireExactKeys(record, [
@@ -337,32 +386,29 @@ export function parseProjectCreativeWorkspaceHostResult(
     'projectId',
     'projection',
   ]);
-  const result = {
-    requestId: requireMatchingRequestId(record['requestId'], expectedRequestId),
-    workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
-    workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
-    projectId: requireIdentity(record['projectId'], 'Project'),
-    projection: parseProjectCreativeWorkspaceProjection(record['projection']),
-  };
-  for (const key of ['workspaceId', 'workspaceGrantId', 'projectId'] as const) {
-    if (result[key] !== expectedBinding[key]) {
-      throw new Error(`Project Creative Workspace result ${key} mismatch.`);
-    }
-  }
-  if (result.projection.composition.projectId !== result.projectId) {
+  const binding = parseAndRequireBindingResult(record, expectedRequestId, expectedBinding);
+  const projection = parseProjectCreativeWorkspaceProjection(record['projection']);
+  if (projection.composition.projectId !== binding.projectId) {
     throw new Error('Project Creative Workspace projection belongs to another Project.');
   }
-  return result;
+  return { ...binding, projection };
 }
 
-function parseProjectCreativeWorkspaceRequestBinding(
+function parseProjectAuthoringBindingRequest(
   record: Readonly<Record<string, unknown>>,
-): Readonly<{
+): ProjectCreativeWorkspaceHostRequest {
+  return {
+    ...parseProjectAuthoringBinding(record),
+    operation: 'creative-workspace-get',
+  };
+}
+
+function parseProjectAuthoringBinding(record: Readonly<Record<string, unknown>>): Readonly<{
   requestId: string;
   rendererSessionId: string;
   windowId: string;
 }> &
-  ProjectCreativeWorkspaceBinding {
+  ProjectAuthoringNavigationBinding {
   return {
     requestId: requireIdentity(record['requestId'], 'Project authoring request'),
     rendererSessionId: requireIdentity(record['rendererSessionId'], 'Renderer session'),
@@ -373,22 +419,41 @@ function parseProjectCreativeWorkspaceRequestBinding(
   };
 }
 
+function parseAndRequireBindingResult(
+  record: Readonly<Record<string, unknown>>,
+  expectedRequestId: string,
+  expectedBinding: ProjectAuthoringNavigationBinding,
+): Readonly<{ requestId: string }> & ProjectAuthoringNavigationBinding {
+  const result = {
+    requestId: requireMatchingRequestId(record['requestId'], expectedRequestId),
+    workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
+    workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
+    projectId: requireIdentity(record['projectId'], 'Project'),
+  };
+  for (const key of ['workspaceId', 'workspaceGrantId', 'projectId'] as const) {
+    if (result[key] !== expectedBinding[key]) {
+      throw new Error(`Project authoring result ${key} mismatch.`);
+    }
+  }
+  return result;
+}
+
 export function parseProjectContentHostResult(
   value: unknown,
   expectedRequestId: string,
 ): ProjectContentHostResult {
   const record = requireRecord(value, 'Project Content result');
-  requireExactKeys(record, ['requestId', 'workspaceId', 'contentProjectId', 'projection']);
+  requireExactKeys(record, ['requestId', 'workspaceId', 'projectId', 'projection']);
   const requestId = requireMatchingRequestId(record['requestId'], expectedRequestId);
-  const contentProjectId = requireIdentity(record['contentProjectId'], 'Content Project');
+  const projectId = requireIdentity(record['projectId'], 'Project');
   const projection = parseProjectContentProjection(record['projection']);
-  if (projection.contentProjectId !== contentProjectId) {
-    throw new Error('Project Content result projection belongs to another Content Project.');
+  if (projection.projectId !== projectId) {
+    throw new Error('Project Content result projection belongs to another Project.');
   }
   return {
     requestId,
     workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
-    contentProjectId,
+    projectId,
     projection,
   };
 }
@@ -398,7 +463,7 @@ export function parseProjectAuthoringNavigationHostResult(
   expectedRequestId: string,
 ): ProjectAuthoringNavigationHostResult {
   const record = requireRecord(value, 'Project authoring navigation result');
-  requireExactKeys(record, ['requestId', 'workspaceId', 'contentProjectId', 'navigation']);
+  requireExactKeys(record, ['requestId', 'workspaceId', 'projectId', 'navigation']);
   const requestId = requireIdentity(record['requestId'], 'Project authoring request');
   if (requestId !== expectedRequestId) {
     throw new Error(
@@ -408,7 +473,7 @@ export function parseProjectAuthoringNavigationHostResult(
   return {
     requestId,
     workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
-    contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project'),
+    projectId: requireIdentity(record['projectId'], 'Project'),
     navigation: parseProjectAuthoringNavigation(record['navigation']),
   };
 }
@@ -430,19 +495,19 @@ export function parseProjectAuthoringCatalogHostResult(
     requestId,
     projects: record['projects'].map((value) => {
       const project = requireRecord(value, 'Project authoring catalog entry');
-      requireExactKeys(project, ['workspaceId', 'contentProjectId', 'label', 'navigation']);
+      requireExactKeys(project, ['workspaceId', 'projectId', 'label', 'navigation']);
       return {
         workspaceId: requireIdentity(project['workspaceId'], 'Workspace'),
-        contentProjectId: requireIdentity(project['contentProjectId'], 'Content Project'),
-        label: requireIdentity(project['label'], 'Content Project label'),
+        projectId: requireIdentity(project['projectId'], 'Project'),
+        label: requireIdentity(project['label'], 'Project label'),
         navigation: parseProjectAuthoringNavigation(project['navigation']),
       };
     }),
     diagnostics: record['diagnostics'].map((value) => {
       const diagnostic = requireRecord(value, 'Project authoring catalog diagnostic');
-      requireExactKeys(diagnostic, ['contentProjectId', 'message']);
+      requireExactKeys(diagnostic, ['projectId', 'message']);
       return {
-        contentProjectId: requireIdentity(diagnostic['contentProjectId'], 'Content Project'),
+        projectId: requireIdentity(diagnostic['projectId'], 'Project'),
         message: requireIdentity(diagnostic['message'], 'Project authoring diagnostic'),
       };
     }),

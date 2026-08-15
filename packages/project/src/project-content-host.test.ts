@@ -8,7 +8,7 @@ import {
 const binding = {
   workspaceId: 'workspace-1',
   workspaceGrantId: 'grant-1',
-  contentProjectId: 'project-1',
+  projectId: 'project-1',
 };
 
 describe('Project Content Host contract', () => {
@@ -28,9 +28,9 @@ describe('Project Content Host contract', () => {
         {
           requestId: 'request-1',
           workspaceId: 'workspace-1',
-          contentProjectId: 'project-1',
+          projectId: 'project-1',
           projection: {
-            contentProjectId: 'project-1',
+            projectId: 'project-1',
             characters: [],
             worlds: [],
             elements: [],
@@ -40,7 +40,7 @@ describe('Project Content Host contract', () => {
         },
         'request-1',
       ),
-    ).toMatchObject({ contentProjectId: 'project-1' });
+    ).toMatchObject({ projectId: 'project-1' });
   });
 
   it('rejects mutation payloads and cross-Project projections', () => {
@@ -58,9 +58,9 @@ describe('Project Content Host contract', () => {
         {
           requestId: 'request-1',
           workspaceId: 'workspace-1',
-          contentProjectId: 'project-1',
+          projectId: 'project-1',
           projection: {
-            contentProjectId: 'project-other',
+            projectId: 'project-other',
             characters: [],
             worlds: [],
             elements: [],
@@ -70,6 +70,6 @@ describe('Project Content Host contract', () => {
         },
         'request-1',
       ),
-    ).toThrow(/another Content Project/u);
+    ).toThrow(/another Project/u);
   });
 });

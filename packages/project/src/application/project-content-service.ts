@@ -20,7 +20,7 @@ export class ProjectContentService {
     },
   ) {}
 
-  async read(contentProjectId: string, signal?: AbortSignal): Promise<ProjectContentProjection> {
+  async read(projectId: string, signal?: AbortSignal): Promise<ProjectContentProjection> {
     signal?.throwIfAborted();
     const [associations, characters, worlds, entities] = await Promise.all([
       this.ports.associations.list(),
@@ -29,11 +29,11 @@ export class ProjectContentService {
       this.ports.entities.readProjectContentEntities(signal),
     ]);
     return projectContentProjection({
-      projectId: contentProjectId,
+      projectId,
       associations,
       characters,
       characterAssociations: projectEntityCharacterResourceProjections({
-        projectId: contentProjectId,
+        projectId,
         associations: associations.associations,
         characters,
       }),

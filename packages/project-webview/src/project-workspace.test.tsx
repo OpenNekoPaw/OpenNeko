@@ -23,6 +23,13 @@ describe('ProjectWorkspaceRoot', () => {
       projectId: 'project-1',
       projection: creativeWorkspaceProjection(),
     }));
+    const mutateCreativeWorkspaceObject = vi.fn(async (..._args: unknown[]) => ({
+      requestId: 'request-object-mutation',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'grant-1',
+      projectId: 'project-1',
+      projection: creativeWorkspaceProjection(),
+    }));
 
     render(
       <ProjectWorkspaceRoot
@@ -34,6 +41,7 @@ describe('ProjectWorkspaceRoot', () => {
         host={{
           getCreativeWorkspace,
           mutateCreativeWorkspaceReference,
+          mutateCreativeWorkspaceObject,
         }}
         locale="en"
         onOpenTarget={onOpenTarget}
@@ -70,6 +78,43 @@ describe('ProjectWorkspaceRoot', () => {
         },
       ),
     );
+
+    fireEvent.click(screen.getAllByTitle('Copy to Workspace')[0]!);
+    await waitFor(() =>
+      expect(mutateCreativeWorkspaceObject).toHaveBeenCalledWith(
+        'window-1',
+        expect.objectContaining({ projectId: 'project-1' }),
+        expect.objectContaining({
+          kind: 'copy-character-reference',
+          reference: {
+            kind: 'character-version',
+            globalCharacterId: 'global-character-rin',
+            characterVersionId: 'character-version-rin',
+          },
+          characterProjectId: expect.stringMatching(/^character-project:/u),
+          entity: expect.objectContaining({
+            kind: 'create',
+            entityId: expect.stringMatching(/^entity:/u),
+            name: 'Global Rin',
+          }),
+        }),
+      ),
+    );
+
+    fireEvent.click(screen.getByTitle('Synchronize to global'));
+    await waitFor(() =>
+      expect(mutateCreativeWorkspaceObject).toHaveBeenCalledWith(
+        'window-1',
+        expect.objectContaining({ projectId: 'project-1' }),
+        expect.objectContaining({
+          kind: 'synchronize-character',
+          characterProjectId: 'character-rin',
+          globalCharacterId: expect.stringMatching(/^global-character:/u),
+          characterVersionId: expect.stringMatching(/^character-version:/u),
+          label: 'Rin',
+        }),
+      ),
+    );
   });
 
   it('contains stale Project failures inside the Workspace', async () => {
@@ -93,6 +138,7 @@ describe('ProjectWorkspaceRoot', () => {
         host={{
           getCreativeWorkspace,
           mutateCreativeWorkspaceReference: vi.fn(),
+          mutateCreativeWorkspaceObject: vi.fn(),
         }}
         locale="en"
         onOpenTarget={vi.fn()}
@@ -104,6 +150,84 @@ describe('ProjectWorkspaceRoot', () => {
       'The Workspace returned data for another Project.',
     );
     expect(screen.queryByText('Rin')).toBeNull();
+  });
+
+  it('requires an explicit choice when a Workspace object has a stale global base', async () => {
+    const projection = creativeWorkspaceProjection();
+    const staleProjection = {
+      ...projection,
+      composition: {
+        ...projection.composition,
+        characters: projection.composition.characters.map((item) => ({
+          ...item,
+          synchronization: {
+            kind: 'character' as const,
+            globalObjectId: 'global-character-rin',
+            lastSyncedVersionId: 'character-version-rin',
+            currentVersionId: 'character-version-rin-next',
+          },
+        })),
+      },
+    };
+    const mutateCreativeWorkspaceObject = vi.fn(async (..._args: unknown[]) => ({
+      requestId: 'request-object-mutation',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'grant-1',
+      projectId: 'project-1',
+      projection: staleProjection,
+    }));
+    render(
+      <ProjectWorkspaceRoot
+        binding={{
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          projectId: 'project-1',
+        }}
+        host={{
+          getCreativeWorkspace: vi.fn(async () => ({
+            requestId: 'request-workspace',
+            workspaceId: 'workspace-1',
+            workspaceGrantId: 'grant-1',
+            projectId: 'project-1',
+            projection: staleProjection,
+          })),
+          mutateCreativeWorkspaceReference: vi.fn(),
+          mutateCreativeWorkspaceObject,
+        }}
+        locale="en"
+        onOpenTarget={vi.fn()}
+        windowId="window-1"
+      />,
+    );
+
+    fireEvent.click(await screen.findByTitle('Synchronize based on current global version'));
+    await waitFor(() =>
+      expect(mutateCreativeWorkspaceObject).toHaveBeenCalledWith(
+        'window-1',
+        expect.objectContaining({ projectId: 'project-1' }),
+        expect.objectContaining({
+          kind: 'synchronize-character',
+          globalCharacterId: 'global-character-rin',
+          lastSyncedCharacterVersionId: 'character-version-rin',
+          conflictChoice: 'base-on-current',
+        }),
+      ),
+    );
+
+    fireEvent.click(screen.getByTitle('Save as new global object'));
+    await waitFor(() =>
+      expect(mutateCreativeWorkspaceObject).toHaveBeenLastCalledWith(
+        'window-1',
+        expect.objectContaining({ projectId: 'project-1' }),
+        expect.not.objectContaining({ lastSyncedCharacterVersionId: expect.anything() }),
+      ),
+    );
+    const saveAsNew = mutateCreativeWorkspaceObject.mock.calls.at(-1)?.[2];
+    expect(saveAsNew).toMatchObject({
+      kind: 'synchronize-character',
+      globalCharacterId: expect.stringMatching(/^global-character:/u),
+    });
+    expect(saveAsNew).not.toHaveProperty('conflictChoice');
   });
 });
 

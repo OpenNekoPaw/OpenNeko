@@ -131,11 +131,11 @@ function contentDependency(locator: ContentLocator): readonly ProjectPublication
 }
 
 function requireScope(
-  scope: { readonly kind: string; readonly contentProjectId?: string },
+  scope: { readonly kind: string; readonly projectId?: string },
   projectId: string,
   owner: string,
 ): void {
-  if (scope.kind !== 'content-project' || scope.contentProjectId !== projectId) {
+  if (scope.kind !== 'project' || scope.projectId !== projectId) {
     throw new Error(`${owner} catalog does not belong to Content Project '${projectId}'.`);
   }
 }

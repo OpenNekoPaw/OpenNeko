@@ -6,6 +6,7 @@ import {
   type ProjectGlobalReference,
   type ProjectLocalTargetRef,
 } from './project-target';
+import type { ProjectLocalCharacterEntitySelection } from './project-local-authoring';
 
 export interface ProjectContentDocumentTargetRef {
   readonly kind: 'content-document';
@@ -19,7 +20,22 @@ export interface ProjectMixedDomainTargetItem {
   readonly identity: string;
   readonly label: string;
   readonly diagnostic?: string;
+  readonly synchronization?: ProjectWorkspaceSynchronization;
 }
+
+export type ProjectWorkspaceSynchronization =
+  | {
+      readonly kind: 'character';
+      readonly globalObjectId: string;
+      readonly lastSyncedVersionId: string;
+      readonly currentVersionId: string;
+    }
+  | {
+      readonly kind: 'world';
+      readonly globalObjectId: string;
+      readonly lastSyncedVersionId: string;
+      readonly currentVersionId: string;
+    };
 
 export interface ProjectGlobalReferenceItem {
   readonly reference: ProjectGlobalReference;
@@ -67,6 +83,37 @@ export type ProjectGlobalReferenceMutation =
   | {
       readonly kind: 'remove';
       readonly reference: ProjectGlobalReference;
+    };
+
+export type ProjectWorkspaceObjectMutation =
+  | {
+      readonly kind: 'copy-character-reference';
+      readonly reference: Extract<ProjectGlobalReference, { readonly kind: 'character-version' }>;
+      readonly characterProjectId: string;
+      readonly entity: ProjectLocalCharacterEntitySelection;
+    }
+  | {
+      readonly kind: 'copy-world-reference';
+      readonly reference: Extract<ProjectGlobalReference, { readonly kind: 'world-version' }>;
+      readonly worldProjectId: string;
+    }
+  | {
+      readonly kind: 'synchronize-character';
+      readonly characterProjectId: string;
+      readonly globalCharacterId: string;
+      readonly characterVersionId: string;
+      readonly label: string;
+      readonly lastSyncedCharacterVersionId?: string;
+      readonly conflictChoice?: 'base-on-current' | 'save-as-new';
+    }
+  | {
+      readonly kind: 'synchronize-world';
+      readonly worldProjectId: string;
+      readonly globalWorldId: string;
+      readonly worldVersionId: string;
+      readonly label: string;
+      readonly lastSyncedWorldVersionId?: string;
+      readonly conflictChoice?: 'base-on-current' | 'save-as-new';
     };
 
 export type ProjectCompositionDiagnosticOwner =
@@ -164,6 +211,90 @@ export function parseProjectGlobalReferenceMutation(
   throw new Error(`Unknown Project global reference mutation: ${String(record['kind'])}`);
 }
 
+export function parseProjectWorkspaceObjectMutation(
+  value: unknown,
+): ProjectWorkspaceObjectMutation {
+  const record = exactRecord(value, 'Project Workspace object mutation');
+  if (record['kind'] === 'copy-character-reference') {
+    exactKeys(record, ['kind', 'reference', 'characterProjectId', 'entity']);
+    const reference = parseProjectGlobalReference(record['reference']);
+    if (reference.kind !== 'character-version') {
+      throw new Error('Character copy requires an exact CharacterVersion reference.');
+    }
+    return {
+      kind: 'copy-character-reference',
+      reference,
+      characterProjectId: identity(record['characterProjectId'], 'CharacterProject'),
+      entity: parseCharacterEntitySelection(record['entity']),
+    };
+  }
+  if (record['kind'] === 'copy-world-reference') {
+    exactKeys(record, ['kind', 'reference', 'worldProjectId']);
+    const reference = parseProjectGlobalReference(record['reference']);
+    if (reference.kind !== 'world-version') {
+      throw new Error('World copy requires an exact WorldVersion reference.');
+    }
+    return {
+      kind: 'copy-world-reference',
+      reference,
+      worldProjectId: identity(record['worldProjectId'], 'WorldProject'),
+    };
+  }
+  if (record['kind'] === 'synchronize-character') {
+    exactKeys(
+      record,
+      [
+        'kind',
+        'characterProjectId',
+        'globalCharacterId',
+        'characterVersionId',
+        'label',
+        'lastSyncedCharacterVersionId',
+        'conflictChoice',
+      ],
+      ['lastSyncedCharacterVersionId', 'conflictChoice'],
+    );
+    return {
+      kind: 'synchronize-character',
+      characterProjectId: identity(record['characterProjectId'], 'CharacterProject'),
+      globalCharacterId: identity(record['globalCharacterId'], 'GlobalCharacter'),
+      characterVersionId: identity(record['characterVersionId'], 'CharacterVersion'),
+      label: identity(record['label'], 'CharacterVersion label'),
+      ...optionalIdentity(
+        record,
+        'lastSyncedCharacterVersionId',
+        'Last synchronized CharacterVersion',
+      ),
+      ...optionalConflictChoice(record),
+    } as ProjectWorkspaceObjectMutation;
+  }
+  if (record['kind'] === 'synchronize-world') {
+    exactKeys(
+      record,
+      [
+        'kind',
+        'worldProjectId',
+        'globalWorldId',
+        'worldVersionId',
+        'label',
+        'lastSyncedWorldVersionId',
+        'conflictChoice',
+      ],
+      ['lastSyncedWorldVersionId', 'conflictChoice'],
+    );
+    return {
+      kind: 'synchronize-world',
+      worldProjectId: identity(record['worldProjectId'], 'WorldProject'),
+      globalWorldId: identity(record['globalWorldId'], 'GlobalWorld'),
+      worldVersionId: identity(record['worldVersionId'], 'WorldVersion'),
+      label: identity(record['label'], 'WorldVersion label'),
+      ...optionalIdentity(record, 'lastSyncedWorldVersionId', 'Last synchronized WorldVersion'),
+      ...optionalConflictChoice(record),
+    } as ProjectWorkspaceObjectMutation;
+  }
+  throw new Error(`Unknown Project Workspace object mutation: ${String(record['kind'])}`);
+}
+
 export function parseProjectCreativeWorkspaceProjection(
   value: unknown,
 ): ProjectCreativeWorkspaceProjection {
@@ -179,7 +310,11 @@ function parseTargetItem<K extends ProjectWorkspaceTargetRef['kind']>(
   readonly target: Extract<ProjectWorkspaceTargetRef, { readonly kind: K }>;
 } {
   const record = exactRecord(value, 'Project mixed-domain target item');
-  exactKeys(record, ['target', 'identity', 'label', 'diagnostic'], ['diagnostic']);
+  exactKeys(
+    record,
+    ['target', 'identity', 'label', 'diagnostic', 'synchronization'],
+    ['diagnostic', 'synchronization'],
+  );
   const target = parseProjectWorkspaceTargetRef(record['target']);
   if (target.kind !== expectedKind) {
     throw new Error(`Project mixed-domain target requires '${expectedKind}'.`);
@@ -193,7 +328,52 @@ function parseTargetItem<K extends ProjectWorkspaceTargetRef['kind']>(
     identity: targetIdentity,
     label: identity(record['label'], 'Project target label'),
     ...optionalIdentity(record, 'diagnostic', 'Project target diagnostic'),
+    ...(record['synchronization'] === undefined
+      ? {}
+      : { synchronization: parseWorkspaceSynchronization(record['synchronization']) }),
   };
+}
+
+function parseWorkspaceSynchronization(value: unknown): ProjectWorkspaceSynchronization {
+  const record = exactRecord(value, 'Project Workspace synchronization');
+  exactKeys(record, ['kind', 'globalObjectId', 'lastSyncedVersionId', 'currentVersionId']);
+  if (record['kind'] !== 'character' && record['kind'] !== 'world') {
+    throw new Error(`Unknown Project Workspace synchronization kind: ${String(record['kind'])}`);
+  }
+  return {
+    kind: record['kind'],
+    globalObjectId: identity(record['globalObjectId'], 'Global object'),
+    lastSyncedVersionId: identity(record['lastSyncedVersionId'], 'Last synchronized version'),
+    currentVersionId: identity(record['currentVersionId'], 'Current global version'),
+  };
+}
+
+function parseCharacterEntitySelection(value: unknown): ProjectLocalCharacterEntitySelection {
+  const record = exactRecord(value, 'Project Character Entity selection');
+  if (record['kind'] === 'create') {
+    exactKeys(record, ['kind', 'entityId', 'name']);
+    return {
+      kind: 'create',
+      entityId: identity(record['entityId'], 'Project Entity'),
+      name: identity(record['name'], 'Project Entity name'),
+    };
+  }
+  if (record['kind'] === 'existing') {
+    exactKeys(record, ['kind', 'entityId']);
+    return { kind: 'existing', entityId: identity(record['entityId'], 'Project Entity') };
+  }
+  throw new Error(`Unknown Project Character Entity selection: ${String(record['kind'])}`);
+}
+
+function optionalConflictChoice(record: Readonly<Record<string, unknown>>): {
+  readonly conflictChoice?: 'base-on-current' | 'save-as-new';
+} {
+  const choice = record['conflictChoice'];
+  if (choice === undefined) return {};
+  if (choice !== 'base-on-current' && choice !== 'save-as-new') {
+    throw new Error(`Unknown synchronization conflict choice: ${String(choice)}`);
+  }
+  return { conflictChoice: choice };
 }
 
 function parseGlobalReferenceItem<K extends ProjectGlobalReference['kind']>(

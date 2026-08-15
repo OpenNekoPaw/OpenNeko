@@ -11,7 +11,6 @@ export function projectEntityCharacterResourceProjections(input: {
   readonly associations: readonly ProjectEntityCharacterAssociationFact[];
   readonly characters: CharacterAuthoringCatalog;
 }): readonly ProjectEntityCharacterResourceProjection[] {
-  requireMatchingCatalogScope(input.projectId, input.characters);
   return input.associations.map((association) => {
     if (association.projectId !== input.projectId) {
       throw new Error('Project Entity Character association belongs to another Content Project.');
@@ -55,18 +54,6 @@ export function projectEntityCharacterResourceProjections(input: {
       interactionStatus: publishedVersionCount > 0 ? 'select-version' : 'unavailable',
     };
   });
-}
-
-function requireMatchingCatalogScope(
-  projectId: string,
-  characters: CharacterAuthoringCatalog,
-): void {
-  if (
-    characters.scope.kind !== 'content-project' ||
-    characters.scope.contentProjectId !== projectId
-  ) {
-    throw new Error(`Character catalog does not belong to Content Project '${projectId}'.`);
-  }
 }
 
 function findCharacterProjectDiagnostic(

@@ -63,6 +63,12 @@ export interface CreateGlobalWorldInput {
   readonly acceptedSourceRefIds?: readonly string[];
 }
 
+export interface PrepareWorldWorkspaceCopyInput {
+  readonly globalWorldId: string;
+  readonly worldVersionId: string;
+  readonly worldProjectId: string;
+}
+
 export type ImportWorldGlobalVersionInput =
   | {
       readonly target: { readonly kind: 'new'; readonly globalWorldId: string };
@@ -212,6 +218,39 @@ export class WorldGlobalCatalogService {
     });
     await this.ports.repository.commitGlobalCatalog({ world, version }, signal);
     return structuredClone({ globalWorld: world, worldVersion: version });
+  }
+
+  async prepareWorkspaceCopy(
+    input: PrepareWorldWorkspaceCopyInput,
+    signal?: AbortSignal,
+  ): Promise<WorldProject> {
+    signal?.throwIfAborted();
+    const catalog = await this.readCatalog(signal);
+    const world = catalog.worlds.find(
+      (candidate) => candidate.globalWorldId === input.globalWorldId,
+    );
+    const version = catalog.versions.find(
+      (candidate) => candidate.worldVersionId === input.worldVersionId,
+    );
+    if (
+      !world?.worldVersionIds.includes(input.worldVersionId) ||
+      version?.globalWorldId !== input.globalWorldId
+    ) {
+      throw new WorldGlobalCatalogError(
+        'global-world-unavailable',
+        `WorldVersion '${input.worldVersionId}' does not belong to exact GlobalWorld '${input.globalWorldId}'.`,
+      );
+    }
+    const timestamp = this.now();
+    return parseWorldProject({
+      worldProjectId: input.worldProjectId,
+      title: world.title,
+      draft: version.definition,
+      sourceRefs: [],
+      reviewStatus: 'draft',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
   }
 
   async importVersion(

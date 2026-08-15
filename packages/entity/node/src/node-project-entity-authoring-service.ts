@@ -4,6 +4,7 @@ import {
   requireActiveProjectEntity,
   type CreateProjectEntityRequest,
   type ProjectEntityCandidateWorkflowPort,
+  type ProjectEntityDocument,
   type ProjectEntityOperationCommitPort,
 } from '@neko/entity-domain';
 import { NodeProjectEntityRepository } from './node-project-entity-repository';
@@ -51,6 +52,51 @@ export class NodeProjectEntityAuthoringService {
       throw authoringError('Project-local Character creation requires a character-kind Entity.');
     }
     await this.operations.create(request, signal);
+  }
+
+  async prepareCharacterEntity(
+    request: CreateProjectEntityRequest,
+    signal?: AbortSignal,
+  ): Promise<{
+    readonly previous: ProjectEntityDocument;
+    readonly next: ProjectEntityDocument;
+  }> {
+    if (request.semantic.kind !== 'character') {
+      throw authoringError('Project-local Character creation requires a character-kind Entity.');
+    }
+    const previous = await this.repository.load(signal);
+    let next: ProjectEntityDocument | undefined;
+    const operations = new ProjectEntityOperationService({
+      candidates: unavailableCandidateWorkflow,
+      references: [],
+      commits: {
+        commit: async (mutation) => {
+          const prepared = await mutation(previous);
+          if (prepared.candidateDecision || prepared.referencePlan) {
+            throw authoringError(
+              'Project-local Entity authoring cannot commit candidate or reference effects.',
+            );
+          }
+          next = prepared.next;
+          return prepared.next;
+        },
+      },
+    });
+    await operations.create(request, signal);
+    if (!next) throw authoringError('Project-local Entity preparation produced no document.');
+    return { previous, next };
+  }
+
+  async readCharacterEntityDocument(
+    entityId: string,
+    signal?: AbortSignal,
+  ): Promise<ProjectEntityDocument> {
+    const document = await this.repository.load(signal);
+    const entity = requireActiveProjectEntity(document, entityId);
+    if (entity.kind !== 'character') {
+      throw authoringError(`Project Entity '${entityId}' is not character-kind.`, entityId);
+    }
+    return document;
   }
 
   async requireCharacterEntity(entityId: string, signal?: AbortSignal): Promise<void> {

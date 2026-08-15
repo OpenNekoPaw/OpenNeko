@@ -1,7 +1,7 @@
 import type { ProjectLocalTargetRef } from './project-target';
 
 export interface ProjectWorkspaceAuthority {
-  readonly contentProjectId: string;
+  readonly projectId: string;
   readonly workspaceId: string;
 }
 
@@ -16,26 +16,7 @@ export type ProjectLocalCharacterEntitySelection =
       readonly entityId: string;
     };
 
-export type ProjectLocalCharacterCreationStep =
-  'character-project' | 'project-entity' | 'entity-character-association';
-
-export interface ProjectLocalCharacterCreationReceipt {
-  readonly authority: ProjectWorkspaceAuthority;
-  readonly target: Extract<ProjectLocalTargetRef, { readonly kind: 'character-project' }>;
-  readonly entityId: string;
-  readonly completedSteps: readonly ProjectLocalCharacterCreationStep[];
-  readonly nextStep?: Exclude<ProjectLocalCharacterCreationStep, 'character-project'>;
+export interface ProjectLocalAuthoringOutcome {
+  readonly status: 'created';
+  readonly target: ProjectLocalTargetRef;
 }
-
-export type ProjectLocalAuthoringOutcome =
-  | {
-      readonly status: 'created';
-      readonly target: ProjectLocalTargetRef;
-    }
-  | {
-      readonly status: 'incomplete';
-      readonly target: Extract<ProjectLocalTargetRef, { readonly kind: 'character-project' }>;
-      readonly receipt: ProjectLocalCharacterCreationReceipt & {
-        readonly nextStep: Exclude<ProjectLocalCharacterCreationStep, 'character-project'>;
-      };
-    };

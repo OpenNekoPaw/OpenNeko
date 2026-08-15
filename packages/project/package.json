@@ -1,6 +1,6 @@
 {
   "name": "@neko/project",
-  "description": "Host-neutral Content Project facts and rebuildable projection services",
+  "description": "Host-neutral mixed-domain Project facts and rebuildable projection services",
   "private": true,
   "type": "module",
   "exports": {
