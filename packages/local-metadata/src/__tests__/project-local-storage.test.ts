@@ -12,7 +12,7 @@ interface LocalRecord {
 
 function createCodec(
   relativePath: string,
-  kind: 'binding' | 'presentation' | 'cache' = 'binding',
+  kind: 'presentation' | 'cache' = 'presentation',
 ): ProjectLocalRecordCodec<LocalRecord> {
   return {
     owner: '@neko/test-owner',
@@ -35,7 +35,6 @@ function createCodec(
 
 describe('project-local record initialization', () => {
   it.each([
-    ['binding', '.neko/media-libraries/library-a.json'],
     ['presentation', '.neko/presentation/canvas/view.json'],
     ['cache', '.neko/cache/search/results.json'],
   ] as const)('initializes absent %s state from its owner default', (kind, relativePath) => {
@@ -48,19 +47,19 @@ describe('project-local record initialization', () => {
 
   it('isolates one malformed record and leaves valid siblings and unknown files untouched', () => {
     const localFiles = new Map([
-      ['.neko/media-libraries/valid.json', '{"selected":"entry-a"}'],
-      ['.neko/media-libraries/invalid.json', '{not-json'],
-      ['.neko/media-libraries/future-owner.bin', 'opaque future bytes'],
+      ['.neko/presentation/test/valid.json', '{"selected":"entry-a"}'],
+      ['.neko/presentation/test/invalid.json', '{not-json'],
+      ['.neko/presentation/test/future-owner.bin', 'opaque future bytes'],
     ]);
     const before = new Map(localFiles);
 
     const valid = readProjectLocalJsonRecord(
-      localFiles.get('.neko/media-libraries/valid.json') ?? null,
-      createCodec('.neko/media-libraries/valid.json'),
+      localFiles.get('.neko/presentation/test/valid.json') ?? null,
+      createCodec('.neko/presentation/test/valid.json'),
     );
     const invalid = readProjectLocalJsonRecord(
-      localFiles.get('.neko/media-libraries/invalid.json') ?? null,
-      createCodec('.neko/media-libraries/invalid.json'),
+      localFiles.get('.neko/presentation/test/invalid.json') ?? null,
+      createCodec('.neko/presentation/test/invalid.json'),
     );
 
     expect(valid).toEqual({
@@ -73,7 +72,7 @@ describe('project-local record initialization', () => {
       value: { selected: null },
       diagnostic: {
         code: 'project-local-record-invalid',
-        relativePath: '.neko/media-libraries/invalid.json',
+        relativePath: '.neko/presentation/test/invalid.json',
       },
     });
     expect(localFiles).toEqual(before);
@@ -86,7 +85,7 @@ describe('project-local record initialization', () => {
     ]);
     const before = new Map(projectFacts);
 
-    readProjectLocalJsonRecord(null, createCodec('.neko/media-libraries/library-a.json'));
+    readProjectLocalJsonRecord(null, createCodec('.neko/presentation/test/view.json'));
     readProjectLocalJsonRecord(
       null,
       createCodec('.neko/presentation/canvas/view.json', 'presentation'),
@@ -98,7 +97,7 @@ describe('project-local record initialization', () => {
 
   it('rejects identity and owner records outside their exact local roots', () => {
     expect(() => readProjectLocalJsonRecord(null, createCodec('.neko/workspace.json'))).toThrow(
-      'must be owned below .neko/media-libraries/',
+      'must be owned below .neko/presentation/',
     );
     expect(() =>
       readProjectLocalJsonRecord(null, createCodec('neko/settings.json', 'presentation')),
@@ -137,6 +136,19 @@ describe('project transfer traversal', () => {
       traverse: false,
     });
   });
+
+  it.each(['sync', 'package', 'enumerate'] as const)(
+    'never follows a managed Media Library link during %s traversal',
+    (operation) => {
+      expect(
+        decideProjectTraversal('neko/assets/Footage', 'symbolic-link', operation),
+      ).toMatchObject({
+        action: 'visit',
+        traverse: false,
+        followSymbolicLink: false,
+      });
+    },
+  );
 
   it('rejects project-local and unsafe paths from portable output', () => {
     expect(() => assertProjectPortablePath('.neko/media-libraries/a.json')).toThrow(

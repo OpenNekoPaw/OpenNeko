@@ -1,6 +1,6 @@
 export const PROJECT_LOCAL_ROOT_RELATIVE_PATH = '.neko';
 
-export type ProjectLocalRecordKind = 'binding' | 'presentation' | 'cache';
+export type ProjectLocalRecordKind = 'presentation' | 'cache';
 
 export interface ProjectLocalRecordCodec<T> {
   /** The package or domain that exclusively owns this record. */
@@ -40,7 +40,6 @@ export type ProjectLocalRecordReadResult<T> =
     };
 
 const RECORD_ROOTS: Readonly<Record<ProjectLocalRecordKind, string>> = {
-  binding: '.neko/media-libraries',
   presentation: '.neko/presentation',
   cache: '.neko/cache',
 };
