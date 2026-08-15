@@ -1,3 +1,7 @@
+> Extended by `restore-workspace-linked-media-access`: the target-free project binding and global
+> connection remain canonical; `neko/assets` is restored as a binding-derived Workspace access projection
+> for Agent and other Workspace-restricted consumers, not as a replacement authority.
+
 ## Context
 
 The current product has three coupled storage paths:

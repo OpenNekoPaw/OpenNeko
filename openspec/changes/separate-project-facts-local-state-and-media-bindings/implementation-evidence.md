@@ -1,5 +1,9 @@
 # Implementation Evidence
 
+> Historical evidence only. `restore-workspace-linked-media-access` supersedes and removes the
+> `MediaLibraryContentLocator`, Project-local binding repository and direct resolver described below.
+> Managed `neko/assets` links plus `workspace-file` are the canonical implementation.
+
 ## 2026-08-13 — Project-local Media Library boundary
 
 Implemented the canonical `MediaLibraryContentLocator`, exact Project-local binding repository and

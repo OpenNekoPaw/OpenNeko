@@ -4,3 +4,4 @@
 
 - [`browser-computer-automation-2026-08-10.md`](browser-computer-automation-2026-08-10.md)：Browser Use / Computer Use 当前闭环与发布阻塞。
 - [`2026-08-12-resource-entity-character-world-gap.md`](2026-08-12-resource-entity-character-world-gap.md)：资源、Project Entity、Character 与 World 边界收敛的实现基础、冲突路径、数据资格化和发布 Gap。
+- [`2026-08-14-media-library-refactor-conflict-audit.md`](2026-08-14-media-library-refactor-conflict-audit.md)：媒体库 symlink-only 改造打断既有 identity、binding、global connection、Content 与 Agent 路径的冲突审计及恢复边界。

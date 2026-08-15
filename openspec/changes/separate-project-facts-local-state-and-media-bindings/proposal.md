@@ -1,3 +1,7 @@
+> Superseded in part by `restore-workspace-linked-media-access`: the `.neko` Media Library binding and
+> direct `media-library` project locator decisions below are not product requirements. Managed Workspace
+> links and `workspace-file` identity are canonical.
+
 ## Why
 
 OpenNeko currently mixes synchronized project facts, machine-local Media Library links, rebuildable
