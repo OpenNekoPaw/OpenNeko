@@ -67,63 +67,56 @@ describe('HomeExperienceQuickActions', () => {
     expect(screen.queryByText('Owner targets')).toBeNull();
   });
 
-  it('shows catalog-backed global actions only on the Assistant Draft Entry', () => {
-    const onSkillSelect = vi.fn();
-    const skill = {
-      id: 'storyboard',
-      name: 'storyboard',
-      description: 'Build a storyboard.',
-      tags: [],
-      source: 'builtin' as const,
-      enabled: true,
-      invocationKind: 'skill' as const,
-    };
-    const view = render(
-      <HomeExperienceQuickActions
-        mode="assistant"
-        detailExpanded={false}
-        skills={[skill]}
-        onSkillSelect={onSkillSelect}
-        onExpandedChange={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByRole('button', { name: 'Skills' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'storyboard' })).toBeNull();
-    view.rerender(
-      <HomeExperienceQuickActions
-        mode="assistant"
-        detailExpanded
-        skills={[skill]}
-        onSkillSelect={onSkillSelect}
-        onExpandedChange={vi.fn()}
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: /storyboard/u }));
-    expect(onSkillSelect).toHaveBeenCalledWith(skill);
-
-    view.rerender(
-      <HomeExperienceQuickActions
-        mode="character-dialogue"
-        detailExpanded={false}
-        skills={[skill]}
-        onExpandedChange={vi.fn()}
-      />,
-    );
-    expect(screen.queryByRole('button', { name: 'storyboard' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Characters and rooms' })).toBeTruthy();
-  });
-
-  it('omits unavailable World content instead of rendering a prompt', () => {
+  it('does not render a quick panel before Conversation chooses Characters or a World', () => {
     const { container } = render(
-      <HomeExperienceQuickActions
-        mode="world-experience"
-        detailExpanded={false}
-        onExpandedChange={vi.fn()}
-      />,
+      <HomeExperienceQuickActions mode="assistant" detailExpanded onExpandedChange={vi.fn()} />,
     );
 
     expect(container.firstChild).toBeNull();
+  });
+
+  it('renders only the selected Conversation context selector', () => {
+    render(
+      <HomeExperienceQuickActions
+        mode="assistant"
+        detailExpanded
+        title="Choose Characters"
+        onExpandedChange={vi.fn()}
+      >
+        <div>Character targets</div>
+      </HomeExperienceQuickActions>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Choose Characters' })).toBeTruthy();
+    expect(screen.getByText('Character targets')).toBeTruthy();
+  });
+
+  it('renders only the Project selector in Creation', () => {
+    render(
+      <HomeExperienceQuickActions mode="authoring" detailExpanded onExpandedChange={vi.fn()}>
+        <div>Project target</div>
+      </HomeExperienceQuickActions>,
+    );
+
+    expect(screen.getByText('Project target')).toBeTruthy();
+    expect(screen.queryByText('character-creator')).toBeNull();
+    expect(screen.queryByText('world-creator')).toBeNull();
+  });
+
+  it('renders an explicit selector while World context remains selected', () => {
+    render(
+      <HomeExperienceQuickActions
+        mode="world-experience"
+        detailExpanded
+        title="Choose Characters"
+        onExpandedChange={vi.fn()}
+      >
+        <div>Character targets</div>
+      </HomeExperienceQuickActions>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Choose Characters' })).toBeTruthy();
+    expect(screen.getByText('Character targets')).toBeTruthy();
   });
 
   it('uses normal-flow wrapping and has no retained Overlay presentation path', () => {

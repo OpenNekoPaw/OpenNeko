@@ -45,60 +45,11 @@ import assetManagementSurfaceSource from './DesktopAssetManagementSurface.tsx?ra
 import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 describe('Desktop scene Workbench', () => {
-  it('binds Character creation handoff only to its exact fresh Agent Draft', () => {
-    const projection = agentProjection();
-    const composition = resolveActiveDesktopWindowWorkbench(projection.window);
-    const interaction = composition.scene.slots.interaction;
-    if (!interaction) throw new Error('Agent projection requires an interaction surface.');
-    const handoff = {
-      kind: 'character-creation' as const,
-      intentId: 'character-creation-1',
-      skill: {
-        name: 'character-creator' as const,
-        source: { kind: 'builtin' as const },
-      },
-      prompt: '',
-      references: [],
-      returnTarget: { kind: 'character-management' as const },
-    };
-    const common = {
-      projection,
-      workbenchInstanceId: composition.workbenchInstanceId,
-      interaction,
-      onChooseWorkspaceTarget: vi.fn(async () => undefined),
-      onSelectWorkspaceProjectTarget: vi.fn(async () => undefined),
-      onLoadAuthoringTargets: vi.fn(async () => ({
-        targets: [],
-        creationContexts: [],
-        diagnostics: [],
-      })),
-      onSelectAuthoringTarget: vi.fn(async () => undefined),
-      onCreateAuthoringTarget: vi.fn(async () => undefined),
-    };
-
-    expect(
-      createDesktopAgentSurfaceProps({
-        ...common,
-        characterCreationHandoff: {
-          draftId:
-            interaction.scope.kind === 'workspace' ? 'wrong-draft' : interaction.scope.draftId,
-          intent: handoff,
-        },
-      }),
-    ).toMatchObject({ characterCreationHandoff: handoff });
-    expect(
-      createDesktopAgentSurfaceProps({
-        ...common,
-        characterCreationHandoff: { draftId: 'wrong-draft', intent: handoff },
-      }),
-    ).not.toHaveProperty('characterCreationHandoff');
-  });
-
   it('binds a finalized CharacterVersion handoff only to its exact fresh Agent Draft', () => {
     const projection = agentProjection();
     const composition = resolveActiveDesktopWindowWorkbench(projection.window);
     const interaction = composition.scene.slots.interaction;
-    if (!interaction || interaction.scope.kind === 'workspace') {
+    if (!interaction || interaction.kind !== 'agent' || interaction.scope.kind === 'workspace') {
       throw new Error('Agent projection requires an unbound interaction surface.');
     }
     const intent = {
@@ -110,7 +61,7 @@ describe('Desktop scene Workbench', () => {
         mode: 'companion' as const,
         participants: [
           {
-            characterProjectId: 'character-project:rin',
+            globalCharacterId: 'global-character:rin',
             characterVersionId: 'character-version:rin-2',
           },
         ],
@@ -280,6 +231,28 @@ describe('Desktop scene Workbench', () => {
     );
   });
 
+  it('restores a fresh empty Main from Cut-only without fabricating a Main View', () => {
+    const fresh = createDefaultDesktopWorkbenchLayout('window-empty');
+    const withCut = openOrFocusCutView(fresh, {
+      viewId: 'cut:empty',
+      viewInstanceId: 'cut-view:empty',
+      projectId: 'content:empty',
+      workspaceId: 'workspace-empty',
+      kind: 'cut',
+      ownerId: 'cut-session:empty',
+      displayLabel: 'empty.otio',
+      documentId: 'cuts/empty.otio',
+    });
+    const withoutMain = toggleWorkbenchRegion(withCut, 'main');
+    const cutOnly = toggleWorkbenchRegion(withoutMain, 'agent');
+    const restoredMain = toggleWorkbenchRegion(cutOnly, 'main');
+
+    expect(cutOnly.display.mode).toBe('empty-main');
+    expect(restoredMain.display.mode).toBe('main-only');
+    expect(restoredMain.main.views).toEqual([]);
+    expect(restoredMain.main.groups).toEqual([{ groupId: 'main:primary', viewIds: [] }]);
+  });
+
   it('switches Cut Panel tabs without replacing the active Main Canvas', () => {
     const initial = activeWorkbenchLayout(workspaceProjection());
     const firstCut = initial.cutPanel!.views[0]!;
@@ -383,6 +356,24 @@ describe('Desktop scene Workbench', () => {
 
     expect(markup.match(/primary-sidebar-toggle/gu) ?? []).toHaveLength(1);
     expect(markup).toContain('aria-label="Expand sidebar"');
+  });
+
+  it('preserves the existing primary Sidebar navigation', () => {
+    const markup = renderShell(<DesktopShellView projection={agentProjection()} />);
+    const primaryNavigation = markup.match(
+      /<nav class="home-primary-navigation"[\s\S]*?<\/nav>/u,
+    )?.[0];
+    if (!primaryNavigation) throw new Error('Primary product navigation is missing.');
+
+    expect(primaryNavigation.match(/class="home-nav-button/gu) ?? []).toHaveLength(6);
+    expect(primaryNavigation).toContain('aria-label="Start creating"');
+    expect(primaryNavigation).toContain('aria-label="Characters"');
+    expect(primaryNavigation).toContain('aria-label="Worlds"');
+    expect(primaryNavigation).toContain('aria-label="Asset Center"');
+    expect(primaryNavigation).toContain('aria-label="Extensions"');
+    expect(primaryNavigation).toContain('aria-label="All projects"');
+    expect(primaryNavigation).not.toContain('aria-label="Conversation"');
+    expect(primaryNavigation).not.toContain('aria-label="Creation"');
   });
 
   it('places structural Workspace controls in shared Workbench title chrome only', () => {
@@ -780,7 +771,7 @@ describe('Desktop scene Workbench', () => {
     const characterSurface = {
       kind: 'character-authoring' as const,
       workspaceId: 'workspace-1',
-      authority: { kind: 'content-project' as const, contentProjectId: 'project-1' },
+      authority: { kind: 'project' as const, projectId: 'project-1' },
       viewId: 'view:character-1',
       viewInstanceId: 'view-instance:character-1',
       characterProjectId: 'character-project-1',
@@ -806,7 +797,7 @@ describe('Desktop scene Workbench', () => {
         {
           kind: 'world-authoring',
           workspaceId: 'workspace-1',
-          authority: { kind: 'content-project', contentProjectId: 'project-1' },
+          authority: { kind: 'project', projectId: 'project-1' },
           viewId: 'view:character-1',
           viewInstanceId: 'view-instance:character-1',
           worldProjectId: 'world-project-1',
@@ -814,91 +805,6 @@ describe('Desktop scene Workbench', () => {
         'project-other',
       ),
     ).toBe(false);
-  });
-
-  it('keeps standalone Character authoring beside the explicit empty primary Main', () => {
-    const base = baseProjection();
-    const workspaceId = 'character-library-workspace';
-    const characterProjectId = 'character-project-1';
-    const viewId = `character-authoring:${characterProjectId}`;
-    const viewInstanceId = 'character-authoring-view-1';
-    const layout = openOrFocusMainView(
-      createDefaultDesktopWorkbenchLayout(base.window.windowId),
-      {
-        viewId,
-        viewInstanceId,
-        workspaceId,
-        kind: 'character-authoring',
-        ownerId: characterProjectId,
-        displayLabel: 'Character one',
-        characterProjectId,
-      },
-      { groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID, splitAxis: 'columns' },
-    );
-    const scope = {
-      kind: 'workspace' as const,
-      draftId: 'draft-character-1',
-      workspaceId,
-      workspaceGrantId: 'workspace-grant-character-1',
-    };
-    const scene = parseDesktopWorkbenchSceneProjection({
-      sceneId: 'scene:window-1:character-library',
-      windowId: base.window.windowId,
-      context: { kind: 'agent', agentViewId: 'agent-view-character-1', scope },
-      slots: {
-        interaction: {
-          kind: 'agent',
-          agentSurfaceId: 'agent-surface-character-1',
-          agentViewId: 'agent-view-character-1',
-          phase: 'draft',
-          scope,
-        },
-        secondaryMain: {
-          kind: 'character-authoring',
-          workspaceId,
-          authority: { kind: 'standalone-library', library: 'character' },
-          viewId,
-          viewInstanceId,
-          characterProjectId,
-        },
-        status: { kind: 'scene-status', sceneId: 'scene:window-1:character-library' },
-      },
-    });
-    const catalog = { projects: [] };
-    const agentHome = {
-      conversations: [],
-      attention: { needsInput: 0, needsReview: 0, running: 0 },
-    };
-    const projection = withWorkbench(
-      {
-        ...base,
-        catalog,
-        agentHome,
-        conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
-        window: { ...base.window, activeTarget: { kind: 'home' }, tabs: [] },
-      },
-      scene,
-      layout,
-    );
-
-    vi.stubGlobal('window', { openNekoDesktop: { characterAuthoring: {} } });
-    const markup = renderShell(<DesktopShellView projection={projection} />);
-    vi.unstubAllGlobals();
-
-    expect(layout.main.groups).toEqual([
-      { groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID, viewIds: [] },
-      {
-        groupId: DESKTOP_SECONDARY_MAIN_GROUP_ID,
-        viewIds: [viewId],
-        activeViewId: viewId,
-      },
-    ]);
-    expect(markup).toContain('data-main-split="columns"');
-    expect(markup).toContain('data-workbench-slot="main"');
-    expect(markup).toContain('data-workbench-slot="secondaryMain"');
-    expect(markup).toContain('data-right-presentation="hidden"');
-    expect(desktopShellSource).toContain('data-authoring-authority="standalone-empty"');
-    expect(desktopShellSource).toContain('data-authoring-authority="standalone-character"');
   });
 
   it('uses one Workbench shell and the package-owned Asset Management surface', () => {
@@ -919,6 +825,16 @@ describe('Desktop scene Workbench', () => {
     expect(desktopShellSource).not.toMatch(/node:fs|readFile|writeFile|workspacePath/u);
   });
 
+  it('opens project-local World authoring in Secondary Main without replacing the Board', () => {
+    const start = desktopShellSource.indexOf('const openWorkspaceTarget =');
+    const end = desktopShellSource.indexOf('const resourceDock =', start);
+    const source = desktopShellSource.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(source).toContain("target.kind === 'character-project'");
+    expect(source).toContain('groupId: DESKTOP_SECONDARY_MAIN_GROUP_ID');
+  });
+
   it('mounts only the visible management or authoring Root during exact Scene switching', () => {
     const portalDeckStart = desktopShellSource.indexOf('const portalDeck =');
     const portalDeckEnd = desktopShellSource.indexOf('return (', portalDeckStart);
@@ -935,30 +851,27 @@ describe('Desktop scene Workbench', () => {
     expect(runtimeSource).not.toMatch(/retainedManagement|hiddenCharacter|studioPortalDeck/u);
   });
 
-  it('keeps Character management read-only and delegates exact authoring without a Studio owner', () => {
+  it('keeps Character management read-only and does not open Project authoring from management', () => {
     const detailStart = desktopShellSource.indexOf('<CharacterDetailSurface');
     const detailEnd = desktopShellSource.indexOf('/>', detailStart);
     const detailSource = desktopShellSource.slice(detailStart, detailEnd);
     expect(detailSource).toContain('onExport: actions.onExportCharacterPackage');
-    expect(detailSource).toContain('onImport: actions.onImportCharacterPackage');
-    expect(detailSource).toContain('onOpenAuthoring: actions.onOpenCharacterAuthoring');
+    expect(detailSource).toContain('onImport: () =>');
+    expect(detailSource).toContain('globalCharacterId: character.globalCharacterId');
+    expect(detailSource).toContain(
+      'expectedCurrentCharacterVersionId: character.currentCharacterVersionId',
+    );
+    expect(detailSource).not.toContain('onOpenAuthoring');
     expect(detailSource).not.toContain('CharacterAuthoringSurface');
     expect(desktopShellSource).not.toMatch(/CharacterStudio(?:Scene|Workbench|Controller)/u);
     expect(desktopShellSource).not.toMatch(/rawPath|zipPath|recentWorkspace|activeWorkspace/u);
   });
 
-  it('delegates portable file selection and bytes to Host ports without renderer path authority', () => {
-    const start = desktopShellSource.indexOf('const exportCharacterPackage = (');
-    const end = desktopShellSource.indexOf('const actions: ShellActions = {', start);
-    const portableSource = desktopShellSource.slice(start, end);
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(portableSource).toMatch(/characterPortable\s*\.getExportScope/u);
-    expect(portableSource).toMatch(/characterPortable\s*\.previewImport/u);
-    expect(desktopShellSource).toMatch(/characterPortable\s*\.exportPackage/u);
-    expect(desktopShellSource).toMatch(/characterPortable\s*\.commitImport/u);
-    expect(desktopShellSource).toMatch(/characterPortable\s*\.cancelImport/u);
-    expect(portableSource).not.toMatch(/readFile|writeFile|rawPath|zipPath|packagePath/u);
-    expect(portableSource).not.toMatch(/latest|activeWorkspace|recentWorkspace|fakeProject/u);
+  it('does not retain standalone Character package selection producers', () => {
+    expect(desktopShellSource).not.toContain('const exportCharacterPackage = (');
+    expect(desktopShellSource).not.toContain('const previewCharacterPackageImport = (');
+    expect(desktopShellSource).not.toContain('selectAuthoringLibrary');
+    expect(desktopShellSource).not.toMatch(/readFile|writeFile|rawPath|zipPath|packagePath/u);
   });
 
   it('finalizes before opening the exact Character Dialogue entry and never infers a version', () => {
@@ -974,33 +887,29 @@ describe('Desktop scene Workbench', () => {
     expect(source).not.toMatch(/latest|versions\[0\]|activeCharacter|recentCharacter/u);
   });
 
-  it('loads the aggregate project-local catalog without a Project-first selection step', () => {
-    const start = desktopShellSource.indexOf('onLoadAuthoringTargets: async () =>');
-    const end = desktopShellSource.indexOf('onSelectAuthoringTarget: async', start);
-    const catalogLoaderSource = desktopShellSource.slice(start, end);
+  it('adds the exact Workspace Project to Creation context without navigating', () => {
+    const start = desktopShellSource.indexOf(
+      'onSelectWorkspaceProjectTarget: async (projectId) =>',
+    );
+    const end = desktopShellSource.indexOf('onLoadAuthoringTargets: async', start);
+    const projectSelectionSource = desktopShellSource.slice(start, end);
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
-    expect(catalogLoaderSource).toContain('projectAuthoring.getCatalog');
-    expect(catalogLoaderSource).toContain("kind: 'project-local'");
-    expect(catalogLoaderSource).not.toContain('workspaceGrants.selectProject');
-    expect(desktopShellSource).not.toContain('onLoadProjectAuthoringTargets');
+    expect(projectSelectionSource).toContain('workspaceGrants.selectProject');
+    expect(projectSelectionSource).toContain('projectId');
+    expect(projectSelectionSource).toContain('workspaceGrantId: result.grant.workspaceGrantId');
+    expect(projectSelectionSource).toContain("kind: 'project' as const");
+    expect(projectSelectionSource).not.toContain('projectAuthoring.getCatalog');
+    expect(projectSelectionSource).not.toContain('scenes.transition');
+    expect(projectSelectionSource).not.toContain("kind: 'open-project-workspace'");
   });
 
-  it('keeps manual standalone creation grant-first and separate from quick generation and import', () => {
+  it('removes standalone management creation producers', () => {
     const actionsStart = desktopShellSource.indexOf('const actions: ShellActions = {');
-    const start = desktopShellSource.indexOf('onManualCreateCharacter: () =>', actionsStart);
-    const end = desktopShellSource.indexOf('onOpenCharacterAuthoring:', start);
-    const manualSource = desktopShellSource.slice(start, end);
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    expect(manualSource.indexOf('selectAuthoringLibrary')).toBeLessThan(
-      manualSource.indexOf("operation: 'character-project-create'"),
-    );
-    expect(manualSource).toContain("kind: 'open-character-authoring'");
-    expect(manualSource).toContain(
-      "authority: { kind: 'standalone-library', library: 'character' }",
-    );
-    expect(manualSource).not.toMatch(/characterCreationHandoff|character-creator|portable|import/u);
+    expect(actionsStart).toBeGreaterThanOrEqual(0);
+    expect(desktopShellSource).not.toContain('onManualCreateCharacter:');
+    expect(desktopShellSource).not.toContain('onOpenCharacterAuthoring:');
+    expect(desktopShellSource).not.toContain("kind: 'standalone-library'");
     expect(desktopShellSource).toContain('DesktopResourceBrowserSurface');
     expect(desktopShellSource).toContain('onCharacterCreated');
   });

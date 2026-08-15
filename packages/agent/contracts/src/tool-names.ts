@@ -149,6 +149,10 @@ export const TOOL_NAMES_CHARA = {
   FILL_CHARACTER_DRAFT: 'chara.character.fillDraft',
 } as const;
 
+export const TOOL_NAMES_WORLD = {
+  FILL_WORLD_DRAFT: 'world.world.fillDraft',
+} as const;
+
 export const TOOL_NAMES_SKILLS = {
   CREATE_SKILL: 'CreateSkill',
 } as const;
@@ -180,6 +184,7 @@ export const TOOL_NAMES = {
   ...TOOL_NAMES_SYSTEM,
   ...TOOL_NAMES_CREATION,
   ...TOOL_NAMES_CHARA,
+  ...TOOL_NAMES_WORLD,
   ...TOOL_NAMES_SKILLS,
   ...TOOL_NAMES_EXECUTION,
 } as const;

@@ -171,6 +171,21 @@ describe('CharacterAuthoringService', () => {
     expect(repository.projects.size).toBe(0);
   });
 
+  it('creates an ordinary local draft without installed provenance', async () => {
+    const repository = new MemoryCharacterAuthoringRepository();
+    const service = new CharacterAuthoringService({ repository, now: () => firstTime });
+
+    const project = await service.createProject({
+      characterProjectId: 'character-project-local',
+      displayName: 'Local',
+      draft: definition(),
+    });
+
+    expect(project).not.toHaveProperty('externalSource');
+    expect(project).not.toHaveProperty('draftBasisCharacterVersionId');
+    expect(repository.lineages.size).toBe(0);
+  });
+
   it('continues the one working draft from an exact owned CharacterVersion', async () => {
     const repository = new MemoryCharacterAuthoringRepository();
     const service = new CharacterAuthoringService({
@@ -268,13 +283,16 @@ describe('CharacterAuthoringService', () => {
 
     const project = await service.fillFreshDraft({
       characterProjectId: 'character-project-fresh',
+      displayName: 'Aster',
       draft: definition('Created from reviewed evidence.'),
     });
 
+    expect(project.displayName).toBe('Aster');
     expect(project.draft.summary).toBe('Created from reviewed evidence.');
     await expect(
       service.fillFreshDraft({
         characterProjectId: 'character-project-fresh',
+        displayName: 'Aster',
         draft: definition('A second overwrite attempt.'),
       }),
     ).rejects.toMatchObject({

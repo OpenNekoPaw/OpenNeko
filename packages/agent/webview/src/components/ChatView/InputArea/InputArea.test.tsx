@@ -840,8 +840,8 @@ describe('InputArea composer controls', () => {
     expect(screen.queryByText(/branch|分支|local|本地/iu)).toBeNull();
   });
 
-  it('renders Authoring directory selection inside the Entry context bar', () => {
-    const onChooseDirectory = vi.fn(async () => undefined);
+  it('renders Project selection inside the Creation context bar', () => {
+    const onChooseProject = vi.fn(async () => undefined);
     render(
       <Harness>
         <InputArea
@@ -850,26 +850,28 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
-          entryContextAction={{
-            kind: 'directory',
-            label: '打开目录',
-            onInvoke: onChooseDirectory,
-          }}
+          entryContextActions={[
+            {
+              kind: 'project',
+              label: '选择项目',
+              onInvoke: onChooseProject,
+            },
+          ]}
         />
       </Harness>,
     );
 
-    const button = screen.getByRole('button', { name: '打开目录' });
+    const button = screen.getByRole('button', { name: '选择项目' });
     const bar = screen.getByLabelText('当前上下文');
     expect(button.closest('.agent-entry-binding-bar')).toBe(bar);
     expect(button.closest('.agent-composer-toolbar')).toBeNull();
     fireEvent.click(button);
-    expect(onChooseDirectory).toHaveBeenCalledOnce();
+    expect(onChooseProject).toHaveBeenCalledOnce();
   });
 
-  it('renders Character and unavailable World entries through the shared context bar', () => {
+  it('renders Character and unavailable World actions together in the shared context bar', () => {
     const onChooseCharacters = vi.fn();
-    const { rerender } = render(
+    render(
       <Harness>
         <InputArea
           presentation="entry"
@@ -877,11 +879,19 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
-          entryContextAction={{
-            kind: 'character',
-            label: '选择角色',
-            onInvoke: onChooseCharacters,
-          }}
+          entryContextActions={[
+            {
+              kind: 'character',
+              label: '选择角色',
+              onInvoke: onChooseCharacters,
+            },
+            {
+              kind: 'world',
+              label: '选择世界',
+              disabled: true,
+              disabledReason: '世界模式尚不可用',
+            },
+          ]}
         />
       </Harness>,
     );
@@ -890,24 +900,6 @@ describe('InputArea composer controls', () => {
     expect(characterAction.getAttribute('data-entry-context-action')).toBe('character');
     fireEvent.click(characterAction);
     expect(onChooseCharacters).toHaveBeenCalledOnce();
-
-    rerender(
-      <Harness>
-        <InputArea
-          presentation="entry"
-          inputValue=""
-          isThinking={false}
-          onInputChange={vi.fn()}
-          onSend={vi.fn()}
-          entryContextAction={{
-            kind: 'world',
-            label: '选择世界',
-            disabled: true,
-            disabledReason: '世界模式尚不可用',
-          }}
-        />
-      </Harness>,
-    );
 
     const worldAction = screen.getByRole('button', { name: '选择世界' });
     expect(worldAction.getAttribute('data-entry-context-action')).toBe('world');
@@ -926,11 +918,13 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
-          entryContextAction={{
-            kind: 'directory',
-            label: '打开目录',
-            onInvoke: vi.fn(async () => undefined),
-          }}
+          entryContextActions={[
+            {
+              kind: 'project',
+              label: '选择项目',
+              onInvoke: vi.fn(async () => undefined),
+            },
+          ]}
           entryWorkspaceTarget={{
             label: 'Blame',
             context: {
@@ -938,13 +932,13 @@ describe('InputArea composer controls', () => {
               workspaceId: 'workspace-1',
               workspaceGrantId: 'grant-1',
             },
-            target: { kind: 'content-project', contentProjectId: 'project-1' },
-            authority: { kind: 'content-project', contentProjectId: 'project-1' },
+            target: { kind: 'content-document', documentId: 'documents/story.md' },
+            authority: { kind: 'project', projectId: 'project-1' },
           }}
           onClearEntryWorkspaceTarget={onClearEntryWorkspaceTarget}
           selectedCharacterLaunches={[
             {
-              characterProjectId: 'character-project-1',
+              globalCharacterId: 'character-project-1',
               characterVersionId: 'character-version-1',
               label: 'Aster',
             },
@@ -958,8 +952,8 @@ describe('InputArea composer controls', () => {
     expect(bar.getAttribute('data-entry-binding-bar')).toBe('true');
     expect(within(bar).getByText('Blame')).toBeTruthy();
     expect(within(bar).getByText('Aster')).toBeTruthy();
-    expect(within(bar).getByRole('button', { name: '打开目录' })).toBeTruthy();
-    expect(bar.querySelector('[data-entry-binding-kind="content-project"]')).not.toBeNull();
+    expect(within(bar).getByRole('button', { name: '选择项目' })).toBeTruthy();
+    expect(bar.querySelector('[data-entry-binding-kind="content-document"]')).not.toBeNull();
     expect(bar.querySelector('[data-entry-binding-kind="character-dialogue"]')).not.toBeNull();
     expect(document.querySelector('[data-character-launch-selections]')).toBeNull();
 
@@ -967,6 +961,54 @@ describe('InputArea composer controls', () => {
     fireEvent.click(within(bar).getByRole('button', { name: '清除: Aster' }));
     expect(onClearEntryWorkspaceTarget).toHaveBeenCalledOnce();
     expect(onRemoveCharacterLaunch).toHaveBeenCalledWith('character-version-1');
+  });
+
+  it('shows multiple Characters and one World together in the Conversation context bar', () => {
+    const onRemoveCharacterLaunch = vi.fn();
+    const onRemoveWorldLaunch = vi.fn();
+    render(
+      <Harness>
+        <InputArea
+          presentation="entry"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          selectedCharacterLaunches={[
+            {
+              globalCharacterId: 'character-project-1',
+              characterVersionId: 'character-version-1',
+              label: 'Aster',
+            },
+            {
+              globalCharacterId: 'character-project-2',
+              characterVersionId: 'character-version-2',
+              label: 'Beryl',
+            },
+          ]}
+          selectedWorldLaunch={{
+            globalWorldId: 'global-world-1',
+            worldVersionId: 'world-version-1',
+            label: 'Rain Station',
+            versionLabel: 'Published v1',
+          }}
+          onRemoveCharacterLaunch={onRemoveCharacterLaunch}
+          onRemoveWorldLaunch={onRemoveWorldLaunch}
+        />
+      </Harness>,
+    );
+
+    const bar = screen.getByLabelText('当前上下文');
+    expect(within(bar).getByText('Aster')).toBeTruthy();
+    expect(within(bar).getByText('Beryl')).toBeTruthy();
+    expect(within(bar).getByText('Rain Station')).toBeTruthy();
+    expect(bar.querySelectorAll('[data-entry-binding-kind="character-dialogue"]')).toHaveLength(2);
+    expect(bar.querySelectorAll('[data-entry-binding-kind="world-experience"]')).toHaveLength(1);
+
+    fireEvent.click(within(bar).getByRole('button', { name: '清除: Beryl' }));
+    fireEvent.click(within(bar).getByRole('button', { name: '清除: Rain Station' }));
+    expect(onRemoveCharacterLaunch).toHaveBeenCalledWith('character-version-2');
+    expect(onRemoveWorldLaunch).toHaveBeenCalledOnce();
   });
 
   it('does not reserve a context-bar row when the Entry draft has no binding', () => {
@@ -1646,7 +1688,7 @@ describe('InputArea composer controls', () => {
               roleProfileId: 'role-profile-xiaoju',
             },
             characterLaunchSelection: {
-              characterProjectId: 'char-xiaoju',
+              globalCharacterId: 'char-xiaoju',
               characterVersionId: 'character-version-xiaoju',
             },
           },
@@ -1670,7 +1712,7 @@ describe('InputArea composer controls', () => {
               roleProfileId: 'role-profile-cn',
             },
             characterLaunchSelection: {
-              characterProjectId: 'char-cn',
+              globalCharacterId: 'char-cn',
               characterVersionId: 'character-version-cn',
             },
           },
@@ -1704,7 +1746,7 @@ describe('InputArea composer controls', () => {
 
     expect(onSend).not.toHaveBeenCalled();
     expect(onAddCharacterLaunch).toHaveBeenCalledWith({
-      characterProjectId: 'char-xiaoju',
+      globalCharacterId: 'char-xiaoju',
       characterVersionId: 'character-version-xiaoju',
       label: '小橘',
     });
@@ -1728,7 +1770,7 @@ describe('InputArea composer controls', () => {
               roleProfileId: 'role-profile-xiaoju',
             },
             characterLaunchSelection: {
-              characterProjectId: 'char-xiaoju',
+              globalCharacterId: 'char-xiaoju',
               characterVersionId: 'character-version-xiaoju',
             },
           },
@@ -1964,9 +2006,8 @@ describe('InputArea composer controls', () => {
             kind: 'media',
             label: 'Hero portrait',
             contentLocator: {
-              kind: 'media-library',
-              libraryName: 'Characters',
-              relativePath: 'hero.png',
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/hero.png',
             },
             source: 'media-library',
             mediaType: 'image',
@@ -1978,7 +2019,7 @@ describe('InputArea composer controls', () => {
     );
 
     fireEvent.change(screen.getByPlaceholderText('输入任何问题...'), {
-      target: { value: '参考 @Characters/hero.png' },
+      target: { value: '参考 @neko/assets/Characters/hero.png' },
     });
 
     const token = screen.getByText('Hero portrait').closest('[data-agent-reference-token]');
@@ -1997,9 +2038,8 @@ describe('InputArea composer controls', () => {
           expect.objectContaining({
             label: 'Hero portrait',
             contentLocator: {
-              kind: 'media-library',
-              libraryName: 'Characters',
-              relativePath: 'hero.png',
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/hero.png',
             },
             mediaType: 'image',
             source: 'media-library',
@@ -2022,9 +2062,8 @@ describe('InputArea composer controls', () => {
             kind: 'media',
             label: '灯神立绘',
             contentLocator: {
-              kind: 'media-library',
-              libraryName: 'Characters',
-              relativePath: 'lamp-spirit.png',
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/lamp-spirit.png',
             },
             source: 'media-library',
             mediaType: 'image',

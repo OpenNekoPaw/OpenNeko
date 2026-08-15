@@ -140,6 +140,22 @@ describe('Character canonical contracts', () => {
     expect(project).not.toHaveProperty('draftBasisCharacterVersionId');
   });
 
+  it('rejects retired installed-release provenance from canonical CharacterProject facts', () => {
+    expect(() =>
+      parseCharacterProject({
+        characterProjectId: 'character-project-adapted',
+        displayName: 'Adapted',
+        draft: definition(),
+        externalSource: { kind: 'installed-character-release' },
+        evidence: [],
+        candidates: [],
+        reviewStatus: 'draft',
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ).toThrow('unsupported fields: externalSource');
+  });
+
   it('keeps an authoring-test snapshot separate from CharacterVersion identity', () => {
     const snapshot = parseCharacterAuthoringTestSnapshot({
       authoringTestSnapshotId: 'authoring-test-a',

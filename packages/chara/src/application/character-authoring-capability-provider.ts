@@ -19,6 +19,7 @@ import {
 } from '@neko/chara/contracts';
 
 export interface CharacterCreationProposalInput {
+  readonly displayName: string;
   readonly summary: string;
   readonly backgroundOverview: string;
   readonly originOverview: string;
@@ -31,6 +32,7 @@ export interface CharacterCreationProposalInput {
 }
 
 export interface CharacterCreationProposal {
+  readonly displayName: string;
   readonly draft: CharacterDefinition;
   readonly sourceFacts: readonly string[];
   readonly inferredSuggestions: readonly string[];
@@ -47,12 +49,30 @@ export interface CharacterAuthoringCapabilityPorts {
   }): Promise<CharacterProject>;
 }
 
+export interface GlobalCharacterCreationCapabilityPorts {
+  createGlobal(input: {
+    readonly proposal: CharacterCreationProposal;
+    readonly signal?: AbortSignal;
+  }): Promise<{
+    readonly globalCharacter: {
+      readonly globalCharacterId: string;
+      readonly displayName: string;
+      readonly currentCharacterVersionId: string;
+    };
+    readonly characterVersion: {
+      readonly characterVersionId: string;
+      readonly globalCharacterId: string;
+    };
+  }>;
+}
+
 export function createCharacterCreationProposal(
   input: CharacterCreationProposalInput,
 ): CharacterCreationProposal {
   const backgroundStory = createEmptyCharacterBackgroundStory();
   const originSetting = createEmptyCharacterOriginSetting();
   return {
+    displayName: requireText(input.displayName, 'display_name'),
     draft: parseCharacterDefinition({
       summary: requireText(input.summary, 'summary'),
       backgroundStory: {
@@ -83,6 +103,75 @@ export function createCharacterAuthoringCapabilityProvider(
   });
 }
 
+export function createGlobalCharacterCreationCapabilityProvider(
+  createGlobal: GlobalCharacterCreationCapabilityPorts['createGlobal'],
+): AgentCapabilityProvider {
+  return new GlobalCharacterCreationCapabilityProvider({ createGlobal });
+}
+
+class GlobalCharacterCreationCapabilityProvider implements AgentCapabilityProvider {
+  readonly id = 'neko-global-character-creation';
+  readonly hostRequirements = [{ host: 'desktop' as const }];
+
+  constructor(private readonly ports: GlobalCharacterCreationCapabilityPorts) {}
+
+  getPromptFragments(_context: AgentCapabilityContext): PromptFragment[] {
+    return [
+      {
+        id: 'neko-chara:global-creation',
+        priority: 72,
+        content:
+          'Assistant Character creation commits one confirmed proposal directly as a global Character and its first immutable version. Separate source-backed facts from inferred suggestions, present the complete proposal with the pending global write, and treat the standard Tool approval as the single mutation confirmation. On success, describe the result as a global Character and use its display name; do not expose internal identities, version metadata, lifecycle labels, or field counts unless a diagnostic requires them. It never creates or infers a Project, workspace Character, synchronization link, runtime, Room, Storyline, memory, model, Skill, or Tool configuration fact.',
+        locales: {
+          zh: {
+            content:
+              '助手角色快创会把已确认的提案直接提交为全局角色及其首个不可变版本。必须区分素材事实与推断建议，展示完整提案和待执行的全局写入，并将标准 Tool 审批作为唯一变更确认。成功后应称为“全局角色”并使用角色显示名；除诊断需要外，不得展示内部 identity、版本元数据、生命周期标签或字段数量。不得创建或推断 Project、工作区角色、同步关系、运行时、Room、Storyline、记忆、模型、Skill 或 Tool 配置事实。',
+          },
+        },
+      },
+    ];
+  }
+
+  getTools(_context: AgentCapabilityContext): Tool[] {
+    return [
+      {
+        name: TOOL_NAMES_CHARA.FILL_CHARACTER_DRAFT,
+        description:
+          'Create a global Character and its first immutable version from a reviewed proposal.',
+        category: 'project',
+        requiresConfirmation: true,
+        safetyKind: 'confirmation-gated',
+        parameters: CREATION_PARAMETERS,
+        execute: async (args, options): Promise<ToolResult> => {
+          try {
+            const proposal = createCharacterCreationProposal(parseProposalInput(args));
+            const receipt = await this.ports.createGlobal({
+              proposal,
+              ...(options?.signal ? { signal: options.signal } : {}),
+            });
+            return {
+              success: true,
+              data: {
+                placement: 'global',
+                globalCharacterId: receipt.globalCharacter.globalCharacterId,
+                characterVersionId: receipt.characterVersion.characterVersionId,
+                displayName: receipt.globalCharacter.displayName,
+                sourceFacts: proposal.sourceFacts,
+                inferredSuggestions: proposal.inferredSuggestions,
+              },
+            };
+          } catch (error) {
+            return {
+              success: false,
+              error: `${TOOL_NAMES_CHARA.FILL_CHARACTER_DRAFT} failed: ${error instanceof Error ? error.message : String(error)}`,
+            };
+          }
+        },
+      },
+    ];
+  }
+}
+
 class CharacterAuthoringCapabilityProvider implements AgentCapabilityProvider {
   readonly id = 'neko-chara-authoring';
   readonly hostRequirements = [{ host: 'desktop' as const }];
@@ -96,11 +185,11 @@ class CharacterAuthoringCapabilityProvider implements AgentCapabilityProvider {
         id: 'neko-chara:authoring',
         priority: 72,
         content:
-          'Character authoring fills only the exact CharacterProject draft authorized for the current Conversation. Separate source-backed facts from inferred suggestions, present the complete proposal together with the pending draft operation, and treat the standard Tool approval as the single mutation confirmation without adding a text-confirmation gate. When no exact CharacterProject authoring target is bound, return a proposal and state that the current Conversation has no writable Character draft target; do not conflate this with CharacterVersion publication or suggest that capability may appear later. It never publishes a CharacterVersion or creates runtime, Room, Storyline, memory, model, Skill, or Tool configuration facts.',
+          'Character authoring fills only the exact fresh workspace Character authorized for the current Conversation. Separate source-backed facts from inferred suggestions, present the complete proposal together with the pending workspace write, and treat the standard Tool approval as the single mutation confirmation without adding a text-confirmation gate. On success, describe the result as a workspace Character and use its display name; do not expose internal CharacterProject identity or draft lifecycle fields unless the user explicitly asks or a diagnostic requires them. When no exact CharacterProject authoring target is bound, return a proposal and state that the current Conversation has no writable workspace Character target; do not conflate this with global CharacterVersion synchronization or suggest that capability may appear later. It never synchronizes a CharacterVersion or creates runtime, Room, Storyline, memory, model, Skill, or Tool configuration facts.',
         locales: {
           zh: {
             content:
-              '角色创作只填写当前会话已授权的精确 CharacterProject 草案。必须区分素材事实与推断建议，先展示完整提案，再使用标准 Tool 审批执行草案操作，不得增加文字确认门槛。未绑定精确 CharacterProject 创作目标时，只返回提案并明确当前会话没有可写角色草稿目标；不得把它与 CharacterVersion 定稿混为一谈，也不得暗示能力稍后会自行出现。不得创建 CharacterVersion、运行时、Room、Storyline、记忆、模型、Skill 或 Tool 配置事实。',
+              '角色创作只填写当前会话已授权的精确全新工作区角色。必须区分素材事实与推断建议，先展示完整提案，再使用标准 Tool 审批执行工作区写入，不得增加文字确认门槛。成功后应称为“工作区角色”并使用角色显示名；除非用户明确询问或诊断需要，不得展示内部 CharacterProject identity 或草稿生命周期字段。未绑定精确 CharacterProject 创作目标时，只返回提案并明确当前会话没有可写工作区角色目标；不得把它与全局 CharacterVersion 同步混为一谈，也不得暗示能力稍后会自行出现。不得同步 CharacterVersion，也不得创建运行时、Room、Storyline、记忆、模型、Skill 或 Tool 配置事实。',
           },
         },
       },
@@ -115,7 +204,7 @@ class CharacterAuthoringCapabilityProvider implements AgentCapabilityProvider {
     return {
       name: TOOL_NAMES_CHARA.FILL_CHARACTER_DRAFT,
       description:
-        'Fill the exact selected fresh CharacterProject draft from a user-reviewed character creation proposal.',
+        'Create the exact selected fresh workspace Character from a user-reviewed character proposal.',
       category: 'project',
       requiresConfirmation: true,
       safetyKind: 'confirmation-gated',
@@ -136,16 +225,13 @@ class CharacterAuthoringCapabilityProvider implements AgentCapabilityProvider {
           return {
             success: true,
             data: {
-              characterProjectId: project.characterProjectId,
-              reviewStatus: project.reviewStatus,
+              placement: 'workspace',
+              displayName: project.displayName,
               sourceFacts: proposal.sourceFacts,
               inferredSuggestions: proposal.inferredSuggestions,
               handoffs: createCharacterProductHandoffs({
                 characterProjectId: project.characterProjectId,
-                authoringAuthority:
-                  binding.authority.kind === 'content-project'
-                    ? binding.authority
-                    : requireStandaloneCharacterAuthority(binding.authority.library),
+                authoringAuthority: binding.authority,
               }),
             },
           };
@@ -160,21 +246,12 @@ class CharacterAuthoringCapabilityProvider implements AgentCapabilityProvider {
   }
 }
 
-function requireStandaloneCharacterAuthority(library: 'character' | 'world'): {
-  readonly kind: 'standalone-library';
-  readonly library: 'character';
-} {
-  if (library !== 'character') {
-    throw new Error('Character creation cannot use the standalone World library.');
-  }
-  return { kind: 'standalone-library', library };
-}
-
 const STRING_LIST = { type: 'array' as const, items: { type: 'string' as const } };
 
 const CREATION_PARAMETERS: ToolParameters = {
   type: 'object',
   properties: {
+    display_name: { type: 'string' },
     summary: { type: 'string' },
     background_overview: { type: 'string' },
     origin_overview: { type: 'string' },
@@ -186,6 +263,7 @@ const CREATION_PARAMETERS: ToolParameters = {
     inferred_suggestions: STRING_LIST,
   },
   required: [
+    'display_name',
     'summary',
     'background_overview',
     'origin_overview',
@@ -201,6 +279,7 @@ const CREATION_PARAMETERS: ToolParameters = {
 
 function parseProposalInput(args: Record<string, unknown>): CharacterCreationProposalInput {
   return {
+    displayName: requireText(args['display_name'], 'display_name'),
     summary: requireText(args['summary'], 'summary'),
     backgroundOverview: requireText(args['background_overview'], 'background_overview'),
     originOverview: requireText(args['origin_overview'], 'origin_overview'),

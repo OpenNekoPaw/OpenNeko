@@ -16,7 +16,7 @@ import type { CharacterVersionReferenceInventoryService } from './character-vers
 export class CharacterAuthoringHostService {
   constructor(
     private readonly options: {
-      readonly scope: CharacterAuthoringCatalogScope;
+      readonly scope: Extract<CharacterAuthoringCatalogScope, { readonly kind: 'project' }>;
       readonly characterProjectId: string;
       readonly catalog: CharacterAuthoringCatalogPort;
       readonly authoring: CharacterAuthoringService;
@@ -191,12 +191,7 @@ export class CharacterAuthoringHostService {
 
 function sameScope(
   actual: CharacterAuthoringCatalogScope,
-  expected: CharacterAuthoringCatalogScope,
+  expected: Extract<CharacterAuthoringCatalogScope, { readonly kind: 'project' }>,
 ): boolean {
-  return (
-    actual.kind === expected.kind &&
-    (actual.kind === 'standalone-library' ||
-      (expected.kind === 'content-project' &&
-        actual.contentProjectId === expected.contentProjectId))
-  );
+  return actual.kind === 'project' && actual.projectId === expected.projectId;
 }

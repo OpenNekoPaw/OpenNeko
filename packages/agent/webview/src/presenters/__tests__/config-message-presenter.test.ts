@@ -227,9 +227,8 @@ describe('config message presenter', () => {
             source: 'media-library',
             icon: '🎭',
             contentLocator: {
-              kind: 'media-library',
-              libraryName: 'Characters',
-              relativePath: 'hero.png',
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/hero.png',
             },
             mediaType: 'image',
             entityType: 'character',
@@ -295,9 +294,8 @@ describe('config message presenter', () => {
               summary: 'Media: Hero portrait',
               source: 'media-library',
               contentLocator: {
-                kind: 'media-library',
-                libraryName: 'Characters',
-                relativePath: 'hero.png',
+                kind: 'workspace-file',
+                path: 'neko/assets/Characters/hero.png',
               },
               mediaType: 'image',
               entityType: 'character',
@@ -307,15 +305,14 @@ describe('config message presenter', () => {
           icon: '🎭',
           source: 'media-library',
           contentLocator: {
-            kind: 'media-library',
-            libraryName: 'Characters',
-            relativePath: 'hero.png',
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/hero.png',
           },
           mediaType: 'image',
           entityType: 'character',
           navigationData: { partition: 'media-library' },
           searchText:
-            'Hero portrait Media: Hero portrait 小橘 alias Characters/hero.png image character media-library',
+            'Hero portrait Media: Hero portrait 小橘 alias neko/assets/Characters/hero.png image character media-library',
         },
       ],
     });

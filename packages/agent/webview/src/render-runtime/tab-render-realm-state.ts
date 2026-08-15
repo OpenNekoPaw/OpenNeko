@@ -24,16 +24,28 @@ export interface AgentEntryDraftSnapshot {
   readonly inputValue: string;
   readonly contextReferences: readonly AgentContextPayload[];
   readonly characterLaunches: readonly {
-    readonly characterProjectId: string;
+    readonly globalCharacterId: string;
     readonly characterVersionId: string;
     readonly label: string;
   }[];
+  readonly worldLaunch?: {
+    readonly globalWorldId: string;
+    readonly worldVersionId: string;
+    readonly label: string;
+    readonly versionLabel: string;
+  };
   readonly workspaceTarget?:
     | {
         readonly label: string;
         readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
         readonly target?: undefined;
         readonly authority?: undefined;
+      }
+    | {
+        readonly label: string;
+        readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+        readonly target?: undefined;
+        readonly authority: import('@neko/agent-contracts').AgentAuthoringAuthority;
       }
     | {
         readonly label: string;
@@ -373,6 +385,7 @@ function parseEntryDraft(value: unknown, recoverInvalidEntryMode = false): Agent
     throw new Error(`${path}.characterLaunches must not contain duplicate CharacterVersions.`);
   }
   const workspaceTarget = parseEntryWorkspaceTarget(value.workspaceTarget, path);
+  const worldLaunch = parseEntryWorldLaunch(value.worldLaunch, path);
   const entryMode = value.entryMode;
   if (entryMode !== undefined && !isAgentEntryMode(entryMode) && !recoverInvalidEntryMode) {
     throw new Error(`${path}.entryMode is invalid.`);
@@ -384,6 +397,7 @@ function parseEntryDraft(value: unknown, recoverInvalidEntryMode = false): Agent
       parseEntryContextReference(reference, `${path}.contextReferences[${index}]`),
     ),
     characterLaunches: parsedCharacterLaunches,
+    ...(worldLaunch === undefined ? {} : { worldLaunch }),
     ...(workspaceTarget === undefined ? {} : { workspaceTarget }),
     selectedModel: stringValue(value.selectedModel, `${path}.selectedModel`),
     ...(value.mediaModelSelection === undefined
@@ -432,10 +446,13 @@ function parseEntryWorkspaceTarget(
   }
   const label = nonEmptyString(value.label, `${path}.workspaceTarget.label`);
   if (value.target === undefined) {
-    if (value.authority !== undefined) {
-      throw new Error(`${path}.workspaceTarget authority requires an authoring target.`);
-    }
-    return { label, context };
+    return value.authority === undefined
+      ? { label, context }
+      : {
+          label,
+          context,
+          authority: parseAgentAuthoringAuthority(value.authority),
+        };
   }
   if (value.authority === undefined) {
     throw new Error(`${path}.workspaceTarget target requires its exact authority.`);
@@ -455,16 +472,39 @@ function parseEntryCharacterLaunch(
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
   if (
     Object.keys(value).length !== 3 ||
-    !('characterProjectId' in value) ||
+    !('globalCharacterId' in value) ||
     !('characterVersionId' in value) ||
     !('label' in value)
   ) {
     throw new Error(`${path} has unsupported fields.`);
   }
   return {
-    characterProjectId: nonEmptyString(value.characterProjectId, `${path}.characterProjectId`),
+    globalCharacterId: nonEmptyString(value.globalCharacterId, `${path}.globalCharacterId`),
     characterVersionId: nonEmptyString(value.characterVersionId, `${path}.characterVersionId`),
     label: nonEmptyString(value.label, `${path}.label`),
+  };
+}
+
+function parseEntryWorldLaunch(
+  value: unknown,
+  path: string,
+): AgentEntryDraftSnapshot['worldLaunch'] {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error(`${path}.worldLaunch must be an object.`);
+  if (
+    Object.keys(value).length !== 4 ||
+    !('globalWorldId' in value) ||
+    !('worldVersionId' in value) ||
+    !('label' in value) ||
+    !('versionLabel' in value)
+  ) {
+    throw new Error(`${path}.worldLaunch has unsupported fields.`);
+  }
+  return {
+    globalWorldId: nonEmptyString(value.globalWorldId, `${path}.worldLaunch.globalWorldId`),
+    worldVersionId: nonEmptyString(value.worldVersionId, `${path}.worldLaunch.worldVersionId`),
+    label: nonEmptyString(value.label, `${path}.worldLaunch.label`),
+    versionLabel: nonEmptyString(value.versionLabel, `${path}.worldLaunch.versionLabel`),
   };
 }
 

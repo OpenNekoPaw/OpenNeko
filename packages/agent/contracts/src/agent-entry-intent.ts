@@ -8,27 +8,37 @@ export const AGENT_ENTRY_MODES = [
 export type AgentEntryMode = (typeof AGENT_ENTRY_MODES)[number];
 
 export type AgentAuthoringTargetRef =
-  | { readonly kind: 'content-project'; readonly contentProjectId: string }
+  | { readonly kind: 'content-document'; readonly documentId: string }
   | { readonly kind: 'character-project'; readonly characterProjectId: string }
   | { readonly kind: 'world-project'; readonly worldProjectId: string };
 
-export type AgentAuthoringAuthority =
-  | { readonly kind: 'content-project'; readonly contentProjectId: string }
-  | { readonly kind: 'standalone-library'; readonly library: 'character' | 'world' };
+export type AgentAuthoringAuthority = {
+  readonly kind: 'project';
+  readonly projectId: string;
+};
 
-export interface AgentAuthoringBinding {
+interface AgentAuthoringContextBinding {
   readonly kind: 'authoring';
   readonly workspaceId: string;
   readonly workspaceGrantId: string;
   readonly authority: AgentAuthoringAuthority;
+}
+
+export interface AgentProjectAuthoringBinding extends AgentAuthoringContextBinding {
+  readonly target: null;
+}
+
+export interface AgentAuthoringTargetBinding extends AgentAuthoringContextBinding {
   readonly target: AgentAuthoringTargetRef;
 }
+
+export type AgentAuthoringBinding = AgentProjectAuthoringBinding | AgentAuthoringTargetBinding;
 
 export const AGENT_AUTHORING_BINDING_METADATA_KEY = 'agentAuthoringBinding';
 
 export function readAgentAuthoringBindingMetadata(
   metadata: Readonly<Record<string, unknown>> | undefined,
-): AgentAuthoringBinding {
+): AgentAuthoringTargetBinding {
   if (metadata === undefined || !(AGENT_AUTHORING_BINDING_METADATA_KEY in metadata)) {
     throw new Error('Agent authoring Tool execution is missing its exact target binding.');
   }
@@ -36,11 +46,14 @@ export function readAgentAuthoringBindingMetadata(
   if (binding.kind !== 'authoring') {
     throw new Error('Agent authoring Tool execution received a non-authoring target binding.');
   }
+  if (binding.target === null) {
+    throw new Error('Agent authoring Tool execution is missing its exact target binding.');
+  }
   return binding;
 }
 
 export interface AgentCompanionCharacterDialogueParticipant {
-  readonly characterProjectId: string;
+  readonly globalCharacterId: string;
   readonly characterVersionId: string;
   readonly roleProfileId?: string;
 }
@@ -52,7 +65,7 @@ export interface AgentNarrativeStorylineNodeSelection {
 }
 
 export interface AgentNarrativeCharacterDialogueParticipant {
-  readonly characterProjectId: string;
+  readonly globalCharacterId: string;
   readonly characterVersionId: string;
   readonly storyline?: AgentNarrativeStorylineNodeSelection;
   readonly roleProfileId?: string;
@@ -84,12 +97,19 @@ export type AgentCharacterDialogueLineage =
     };
 
 export interface AgentCharacterDialogueTargetOption {
-  readonly characterProjectId: string;
+  readonly globalCharacterId: string;
   readonly characterVersionId: string;
   readonly displayName: string;
   readonly versionLabel: string;
   readonly lineage: AgentCharacterDialogueLineage;
   readonly storylines: readonly AgentCharacterDialogueStorylineOption[];
+}
+
+export interface AgentWorldExperienceTargetOption {
+  readonly globalWorldId: string;
+  readonly worldVersionId: string;
+  readonly displayName: string;
+  readonly versionLabel: string;
 }
 
 export type AgentCharacterDialogueLaunchBinding =
@@ -107,8 +127,6 @@ export type AgentCharacterDialogueLaunchBinding =
 export type AgentWorldExperienceLaunch =
   | {
       readonly kind: 'new';
-      readonly participantId: string;
-      readonly roleScopeId: string;
     }
   | {
       readonly kind: 'continue';
@@ -119,8 +137,9 @@ export type AgentWorldExperienceLaunch =
 
 export interface AgentWorldExperienceLaunchBinding {
   readonly kind: 'world-experience';
-  readonly worldExperienceId: string;
-  readonly worldExperienceVersionId: string;
+  readonly globalWorldId: string;
+  readonly worldVersionId: string;
+  readonly participants: readonly AgentCompanionCharacterDialogueParticipant[];
   readonly launch: AgentWorldExperienceLaunch;
 }
 
@@ -201,8 +220,8 @@ export function parseAgentEntryTargetBinding(value: unknown): AgentEntryTargetBi
         'Agent authoring binding',
       );
       const authority = parseAgentAuthoringAuthority(record['authority']);
-      const target = parseAgentAuthoringTargetRef(record['target']);
-      requireCompatibleAuthoringAuthority(authority, target);
+      const target =
+        record['target'] === null ? null : parseAgentAuthoringTargetRef(record['target']);
       return {
         kind: 'authoring',
         workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
@@ -232,16 +251,19 @@ export function parseAgentEntryTargetBinding(value: unknown): AgentEntryTargetBi
     case 'world-experience':
       requireExactKeys(
         record,
-        ['kind', 'worldExperienceId', 'worldExperienceVersionId', 'launch'],
+        ['kind', 'globalWorldId', 'worldVersionId', 'participants', 'launch'],
         'Agent World Experience binding',
       );
+      if (!Array.isArray(record['participants'])) {
+        throw new Error('Agent World Experience participants must be an array.');
+      }
+      const participants = record['participants'].map(parseCompanionCharacterParticipant);
+      requireUniqueCharacterVersions(participants);
       return {
         kind: 'world-experience',
-        worldExperienceId: requireIdentity(record['worldExperienceId'], 'World Experience'),
-        worldExperienceVersionId: requireIdentity(
-          record['worldExperienceVersionId'],
-          'World Experience Version',
-        ),
+        globalWorldId: requireIdentity(record['globalWorldId'], 'Global World'),
+        worldVersionId: requireIdentity(record['worldVersionId'], 'World Version'),
+        participants,
         launch: parseWorldLaunch(record['launch']),
       };
     default:
@@ -267,7 +289,7 @@ export function parseAgentCharacterDialogueTargetOptions(
     requireExactKeys(
       record,
       [
-        'characterProjectId',
+        'globalCharacterId',
         'characterVersionId',
         'displayName',
         'versionLabel',
@@ -298,7 +320,7 @@ export function parseAgentCharacterDialogueTargetOptions(
       throw new Error('Agent Character Dialogue storyline options must use unique versions.');
     }
     return {
-      characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
+      globalCharacterId: requireIdentity(record['globalCharacterId'], 'GlobalCharacter'),
       characterVersionId: requireIdentity(record['characterVersionId'], 'CharacterVersion'),
       displayName: requireIdentity(record['displayName'], 'Character display name'),
       versionLabel: requireIdentity(record['versionLabel'], 'Character version label'),
@@ -308,6 +330,32 @@ export function parseAgentCharacterDialogueTargetOptions(
   });
   if (new Set(options.map((option) => option.characterVersionId)).size !== options.length) {
     throw new Error('Agent Character Dialogue target options must use unique CharacterVersions.');
+  }
+  return options;
+}
+
+export function parseAgentWorldExperienceTargetOptions(
+  value: unknown,
+): readonly AgentWorldExperienceTargetOption[] {
+  if (!Array.isArray(value)) {
+    throw new Error('Agent World Experience target options must be an array.');
+  }
+  const options = value.map((item) => {
+    const record = requireRecord(item, 'Agent World Experience target option');
+    requireExactKeys(
+      record,
+      ['globalWorldId', 'worldVersionId', 'displayName', 'versionLabel'],
+      'Agent World Experience target option',
+    );
+    return {
+      globalWorldId: requireIdentity(record['globalWorldId'], 'GlobalWorld'),
+      worldVersionId: requireIdentity(record['worldVersionId'], 'WorldVersion'),
+      displayName: requireIdentity(record['displayName'], 'World display name'),
+      versionLabel: requireIdentity(record['versionLabel'], 'World version label'),
+    };
+  });
+  if (new Set(options.map((option) => option.worldVersionId)).size !== options.length) {
+    throw new Error('Agent World Experience target options must use unique WorldVersions.');
   }
   return options;
 }
@@ -384,11 +432,11 @@ function parseAgentEntryMode(value: unknown): AgentEntryMode {
 
 export function parseAgentAuthoringTargetRef(value: unknown): AgentAuthoringTargetRef {
   const record = requireRecord(value, 'Agent authoring target');
-  if (record['kind'] === 'content-project') {
-    requireExactKeys(record, ['kind', 'contentProjectId'], 'Content authoring target');
+  if (record['kind'] === 'content-document') {
+    requireExactKeys(record, ['kind', 'documentId'], 'Content document authoring target');
     return {
-      kind: 'content-project',
-      contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project'),
+      kind: 'content-document',
+      documentId: requireIdentity(record['documentId'], 'Content document'),
     };
   }
   if (record['kind'] === 'character-project') {
@@ -410,44 +458,14 @@ export function parseAgentAuthoringTargetRef(value: unknown): AgentAuthoringTarg
 
 export function parseAgentAuthoringAuthority(value: unknown): AgentAuthoringAuthority {
   const record = requireRecord(value, 'Agent authoring authority');
-  if (record['kind'] === 'content-project') {
-    requireExactKeys(record, ['kind', 'contentProjectId'], 'Content Project authoring authority');
-    return {
-      kind: 'content-project',
-      contentProjectId: requireIdentity(record['contentProjectId'], 'Content Project'),
-    };
+  if (record['kind'] !== 'project') {
+    throw new Error(`Unknown Agent authoring authority '${String(record['kind'])}'.`);
   }
-  if (record['kind'] === 'standalone-library') {
-    requireExactKeys(record, ['kind', 'library'], 'Standalone authoring authority');
-    if (record['library'] !== 'character' && record['library'] !== 'world') {
-      throw new Error(`Unknown standalone authoring library '${String(record['library'])}'.`);
-    }
-    return { kind: 'standalone-library', library: record['library'] };
-  }
-  throw new Error(`Unknown Agent authoring authority '${String(record['kind'])}'.`);
-}
-
-function requireCompatibleAuthoringAuthority(
-  authority: AgentAuthoringAuthority,
-  target: AgentAuthoringTargetRef,
-): void {
-  if (target.kind === 'content-project') {
-    if (
-      authority.kind !== 'content-project' ||
-      authority.contentProjectId !== target.contentProjectId
-    ) {
-      throw new Error('Content Project target requires its exact Content Project authority.');
-    }
-    return;
-  }
-  if (authority.kind === 'standalone-library') {
-    const expectedLibrary = target.kind === 'character-project' ? 'character' : 'world';
-    if (authority.library !== expectedLibrary) {
-      throw new Error(
-        `Agent authoring target does not belong to the '${authority.library}' library.`,
-      );
-    }
-  }
+  requireExactKeys(record, ['kind', 'projectId'], 'Project authoring authority');
+  return {
+    kind: 'project',
+    projectId: requireIdentity(record['projectId'], 'Project'),
+  };
 }
 
 function parseCharacterConversationMode(value: unknown): 'companion' | 'narrative' {
@@ -464,8 +482,8 @@ function requireUniqueCharacterVersions(
   if (new Set(versionIds).size !== versionIds.length) {
     throw new Error('Agent Character Dialogue participants must use unique CharacterVersions.');
   }
-  const projectIds = participants.map((participant) => participant.characterProjectId);
-  if (new Set(projectIds).size !== projectIds.length) {
+  const characterIds = participants.map((participant) => participant.globalCharacterId);
+  if (new Set(characterIds).size !== characterIds.length) {
     throw new Error(
       'Agent Character Dialogue participants must select at most one version of each Character.',
     );
@@ -478,12 +496,12 @@ function parseCompanionCharacterParticipant(
   const record = requireRecord(value, 'Agent Character Dialogue participant');
   requireAllowedKeys(
     record,
-    ['characterProjectId', 'characterVersionId', 'roleProfileId'],
-    ['characterProjectId', 'characterVersionId'],
+    ['globalCharacterId', 'characterVersionId', 'roleProfileId'],
+    ['globalCharacterId', 'characterVersionId'],
     'Agent Character Dialogue participant',
   );
   return {
-    characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
+    globalCharacterId: requireIdentity(record['globalCharacterId'], 'GlobalCharacter'),
     characterVersionId: requireIdentity(record['characterVersionId'], 'CharacterVersion'),
     ...(record['roleProfileId'] === undefined
       ? {}
@@ -497,12 +515,12 @@ function parseNarrativeCharacterParticipant(
   const record = requireRecord(value, 'Agent Narrative Character participant');
   requireAllowedKeys(
     record,
-    ['characterProjectId', 'characterVersionId', 'storyline', 'roleProfileId'],
-    ['characterProjectId', 'characterVersionId'],
+    ['globalCharacterId', 'characterVersionId', 'storyline', 'roleProfileId'],
+    ['globalCharacterId', 'characterVersionId'],
     'Agent Narrative Character participant',
   );
   return {
-    characterProjectId: requireIdentity(record['characterProjectId'], 'CharacterProject'),
+    globalCharacterId: requireIdentity(record['globalCharacterId'], 'GlobalCharacter'),
     characterVersionId: requireIdentity(record['characterVersionId'], 'CharacterVersion'),
     ...(record['storyline'] === undefined
       ? {}
@@ -535,12 +553,8 @@ function parseNarrativeStorylineNodeSelection(
 function parseWorldLaunch(value: unknown): AgentWorldExperienceLaunch {
   const record = requireRecord(value, 'Agent World Experience launch');
   if (record['kind'] === 'new') {
-    requireExactKeys(record, ['kind', 'participantId', 'roleScopeId'], 'New World launch');
-    return {
-      kind: 'new',
-      participantId: requireIdentity(record['participantId'], 'World participant'),
-      roleScopeId: requireIdentity(record['roleScopeId'], 'World role scope'),
-    };
+    requireExactKeys(record, ['kind'], 'New World launch');
+    return { kind: 'new' };
   }
   if (record['kind'] === 'continue') {
     requireAllowedKeys(

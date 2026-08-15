@@ -132,8 +132,14 @@ export function createCharacterAuthoringFileRepository(options: {
         signal,
       );
     },
-    deletePublication: (characterProjectId, characterVersionId, signal) =>
-      deletePublication(options.workspaceRoot, characterProjectId, characterVersionId, signal),
+    deletePublication: (characterProjectId, characterVersionId, signal) => {
+      return deletePublication(
+        options.workspaceRoot,
+        characterProjectId,
+        characterVersionId,
+        signal,
+      );
+    },
     async saveAuthoringTestSnapshot(snapshot, signal) {
       const canonical = parseCharacterAuthoringTestSnapshot(snapshot);
       const path = characterAuthoringTestPath(
@@ -169,10 +175,12 @@ export function createCharacterAuthoringFileRepository(options: {
       readProjectRecord(options.workspaceRoot, identity, signal),
     readCharacterVersion: (identity, signal) =>
       findPublication(options.workspaceRoot, identity, signal),
-    createStoryline: (storyline, draft, signal) =>
-      createStoryline(options.workspaceRoot, storyline, draft, signal),
-    updateStoryline: (storyline, draft, signal) =>
-      updateStoryline(options.workspaceRoot, storyline, draft, signal),
+    createStoryline: (storyline, draft, signal) => {
+      return createStoryline(options.workspaceRoot, storyline, draft, signal);
+    },
+    updateStoryline: (storyline, draft, signal) => {
+      return updateStoryline(options.workspaceRoot, storyline, draft, signal);
+    },
     readStoryline: async (identity, signal) =>
       (await findStoryline(options.workspaceRoot, identity, signal))?.storyline,
     readStorylineDraft: async (identity, signal) => {
@@ -194,20 +202,23 @@ export function createCharacterAuthoringFileRepository(options: {
       }
       return draft;
     },
-    storeStorylineVersion: (version, signal) =>
-      storeStorylineVersion(options.workspaceRoot, version, signal),
+    storeStorylineVersion: (version, signal) => {
+      return storeStorylineVersion(options.workspaceRoot, version, signal);
+    },
     readStorylineVersion: async (identity, signal) =>
       (await findStorylineVersion(options.workspaceRoot, identity, signal))?.version,
     listStorylines: (characterProjectId, signal) =>
       listStorylines(options.workspaceRoot, characterProjectId, signal),
     listStorylineVersions: (characterStorylineId, signal) =>
       listStorylineVersions(options.workspaceRoot, characterStorylineId, signal),
-    deleteStoryline: (characterStorylineId, signal) =>
-      deleteStoryline(options.workspaceRoot, characterStorylineId, signal),
+    deleteStoryline: (characterStorylineId, signal) => {
+      return deleteStoryline(options.workspaceRoot, characterStorylineId, signal);
+    },
     readLocalizedAssetBindingCatalog: (characterProjectId, signal) =>
       readLocalizedAssetBindingCatalog(options.workspaceRoot, characterProjectId, signal),
-    saveLocalizedAssetBindingCatalog: (catalog, signal) =>
-      saveLocalizedAssetBindingCatalog(options.workspaceRoot, catalog, signal),
+    saveLocalizedAssetBindingCatalog: (catalog, signal) => {
+      return saveLocalizedAssetBindingCatalog(options.workspaceRoot, catalog, signal);
+    },
     listLocalizedAssets: (characterProjectId, signal) =>
       listLocalizedAssets(options.workspaceRoot, characterProjectId, signal),
     readLocalizedAsset: (characterProjectId, relativeAssetPath, maxBytes, signal) =>
@@ -218,14 +229,15 @@ export function createCharacterAuthoringFileRepository(options: {
         maxBytes,
         signal,
       ),
-    storeLocalizedAsset: (characterProjectId, relativeAssetPath, bytes, signal) =>
-      storeLocalizedAsset(
+    storeLocalizedAsset: (characterProjectId, relativeAssetPath, bytes, signal) => {
+      return storeLocalizedAsset(
         options.workspaceRoot,
         characterProjectId,
         relativeAssetPath,
         bytes,
         signal,
-      ),
+      );
+    },
     readAuthoringCatalog: (signal) => readCatalog(options, signal),
   };
 }

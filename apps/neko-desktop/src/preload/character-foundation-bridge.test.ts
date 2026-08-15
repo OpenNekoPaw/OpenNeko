@@ -4,7 +4,7 @@ import {
   CHARACTER_ROOM_WORKBENCH_CHANNELS,
   type RoomView,
 } from '@neko/chara/contracts';
-import { WORLD_FOUNDATION_HOST_CHANNEL } from '@neko/world/contracts';
+import { WORLD_MANAGEMENT_HOST_CHANNEL } from '@neko/world/contracts';
 
 const electron = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,
@@ -30,7 +30,7 @@ await import('./index');
 function emptySnapshot() {
   return {
     character: {
-      projects: [],
+      globalCharacters: [],
       versions: [],
       relationships: [],
       characterRuns: [],
@@ -95,7 +95,7 @@ describe('Desktop Character Foundation preload bridge', () => {
           catalog: {
             targets: [
               {
-                characterProjectId: 'character-project-a',
+                globalCharacterId: 'global-character-a',
                 characterVersionId: 'character-version-a',
                 displayName: 'A',
                 versionLabel: 'Published A',
@@ -126,17 +126,7 @@ describe('Desktop Character Foundation preload bridge', () => {
     });
   });
 
-  it('strictly binds a Character command to its response identity', async () => {
-    electron.invoke.mockImplementation(
-      async (channel: string, request: { readonly requestId: string }) => {
-        expect(channel).toBe(CHARACTER_FOUNDATION_HOST_CHANNEL);
-        expect(request).toMatchObject({
-          operation: 'character-project-set-review',
-          input: { characterProjectId: 'character-project-a', reviewStatus: 'ready' },
-        });
-        return { requestId: request.requestId, snapshot: emptySnapshot() };
-      },
-    );
+  it('rejects removed Foundation authoring commands before IPC', async () => {
     const bridge = electron.bridge;
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
 
@@ -144,32 +134,43 @@ describe('Desktop Character Foundation preload bridge', () => {
       bridge.characterFoundation.execute({
         operation: 'character-project-set-review',
         input: { characterProjectId: 'character-project-a', reviewStatus: 'ready' },
-      }),
-    ).resolves.toEqual(emptySnapshot());
+      } as never),
+    ).rejects.toThrow();
   });
 
-  it('strictly binds World Foundation snapshot and commands to the owner channel', async () => {
-    const snapshot = { world: { projects: [], versions: [], runtimes: [] }, diagnostics: [] };
+  it('strictly binds the narrow World management catalog to its exact request', async () => {
     electron.invoke.mockImplementation(
-      async (channel: string, request: { readonly requestId: string }) => {
-        expect(channel).toBe(WORLD_FOUNDATION_HOST_CHANNEL);
-        return { requestId: request.requestId, snapshot };
+      async (
+        channel: string,
+        request: {
+          readonly requestId: string;
+          readonly operation: string;
+          readonly query: unknown;
+        },
+      ) => {
+        expect(channel).toBe(WORLD_MANAGEMENT_HOST_CHANNEL);
+        expect(request).toMatchObject({
+          operation: 'catalog-get',
+          query: { search: 'archive', sort: 'title' },
+        });
+        return {
+          requestId: request.requestId,
+          operation: request.operation,
+          catalog: {
+            scope: { kind: 'global-catalog' },
+            query: request.query,
+            items: [],
+            diagnostics: [],
+          },
+        };
       },
     );
     const bridge = electron.bridge;
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
 
-    await expect(bridge.worldFoundation.getSnapshot()).resolves.toEqual(snapshot);
     await expect(
-      bridge.worldFoundation.execute({
-        operation: 'world-project-set-review',
-        input: { worldProjectId: 'world-project-a', reviewStatus: 'ready' },
-      }),
-    ).resolves.toEqual(snapshot);
-    expect(electron.invoke.mock.calls[1]?.[1]).toMatchObject({
-      operation: 'world-project-set-review',
-      input: { worldProjectId: 'world-project-a', reviewStatus: 'ready' },
-    });
+      bridge.worldManagement.getCatalog({ search: 'archive', sort: 'title' }),
+    ).resolves.toMatchObject({ query: { search: 'archive', sort: 'title' }, items: [] });
   });
 
   it('subscribes the exact RoomRun projection without accepting foreign events', async () => {

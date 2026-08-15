@@ -17,14 +17,11 @@ import { ConversationController } from './ConversationController';
 import type {
   AgentInteractionProjection,
   CharacterDialogueHandoffIntent,
-  CharacterCreationHandoffIntent,
 } from '@neko/agent-contracts';
 
 export interface AppShellProps {
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly initialInput?: { readonly id: string; readonly value: string };
-  readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
-  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
   readonly presentation?: 'default' | 'desktop-dock';
@@ -40,8 +37,6 @@ export function AppShell({
   conversationFeed,
   initialConversation,
   initialInput,
-  characterCreationHandoff,
-  onCharacterCreationHandoffConsumed,
   characterDialogueHandoff,
   onCharacterDialogueHandoffConsumed,
   presentation = 'default',
@@ -102,8 +97,6 @@ export function AppShell({
         emptyStatePresentation={presentation === 'desktop-dock' ? 'desktop-dock' : 'default'}
         initialConversation={initialConversation}
         initialInput={initialInput}
-        characterCreationHandoff={characterCreationHandoff}
-        onCharacterCreationHandoffConsumed={onCharacterCreationHandoffConsumed}
         characterDialogueHandoff={characterDialogueHandoff}
         onCharacterDialogueHandoffConsumed={onCharacterDialogueHandoffConsumed}
         conversationFeed={conversationFeed}

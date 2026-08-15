@@ -12,26 +12,6 @@ export interface CharacterFoundationCommandPort {
 export class CharacterFoundationCommandService implements CharacterFoundationCommandPort {
   constructor(
     private readonly services: {
-      readonly characterCreation: {
-        createProject(
-          input: CommandInput<'character-project-create'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-      };
-      readonly characterAuthoring: {
-        updateDraft(
-          input: CommandInput<'character-project-update-draft'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-        setReviewStatus(
-          input: CommandInput<'character-project-set-review'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-        publish(
-          input: CommandInput<'character-version-publish'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-      };
       readonly relationships: {
         create(input: CommandInput<'relationship-create'>, signal?: AbortSignal): Promise<unknown>;
         propose(
@@ -76,25 +56,6 @@ export class CharacterFoundationCommandService implements CharacterFoundationCom
           signal?: AbortSignal,
         ): Promise<unknown>;
       };
-      readonly storylines: {
-        create(
-          input: CommandInput<'character-storyline-create'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-        updateDraft(
-          input: CommandInput<'character-storyline-update-draft'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-        publish(
-          input: CommandInput<'character-storyline-publish'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-        restoreAsDraft(
-          input: CommandInput<'character-storyline-restore-as-draft'>,
-          signal?: AbortSignal,
-        ): Promise<unknown>;
-        delete(characterStorylineId: string, signal?: AbortSignal): Promise<unknown>;
-      };
       readonly companionContinuity: {
         propose(
           input: CommandInput<'companion-memory-candidate-propose'>,
@@ -123,18 +84,6 @@ export class CharacterFoundationCommandService implements CharacterFoundationCom
   async execute(command: CharacterFoundationCommand, signal?: AbortSignal): Promise<void> {
     signal?.throwIfAborted();
     switch (command.operation) {
-      case 'character-project-create':
-        await this.services.characterCreation.createProject(command.input, signal);
-        return;
-      case 'character-project-update-draft':
-        await this.services.characterAuthoring.updateDraft(command.input, signal);
-        return;
-      case 'character-project-set-review':
-        await this.services.characterAuthoring.setReviewStatus(command.input, signal);
-        return;
-      case 'character-version-publish':
-        await this.services.characterAuthoring.publish(command.input, signal);
-        return;
       case 'relationship-create':
         await this.services.relationships.create(command.input, signal);
         return;
@@ -164,21 +113,6 @@ export class CharacterFoundationCommandService implements CharacterFoundationCom
         return;
       case 'character-presentation-configure':
         await this.services.presentation.updateConfigurations([command.input], signal);
-        return;
-      case 'character-storyline-publish':
-        await this.services.storylines.publish(command.input, signal);
-        return;
-      case 'character-storyline-create':
-        await this.services.storylines.create(command.input, signal);
-        return;
-      case 'character-storyline-update-draft':
-        await this.services.storylines.updateDraft(command.input, signal);
-        return;
-      case 'character-storyline-restore-as-draft':
-        await this.services.storylines.restoreAsDraft(command.input, signal);
-        return;
-      case 'character-storyline-delete':
-        await this.services.storylines.delete(command.input.characterStorylineId, signal);
         return;
       case 'companion-memory-candidate-propose':
         await this.services.companionContinuity.propose(command.input, signal);

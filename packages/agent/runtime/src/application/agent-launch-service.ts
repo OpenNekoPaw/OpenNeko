@@ -38,6 +38,11 @@ import { modelSupportsPurpose, type AssistantConfigState } from '@neko/host/sett
 import type { AgentSkillCatalog } from './agent-app-host';
 import { buildSkillActivationId } from '../pi/skill-host';
 
+const BUILTIN_CREATOR_TARGET_KINDS = {
+  'character-creator': 'character-project',
+  'world-creator': 'world-project',
+} as const;
+
 export interface AgentLaunchCatalogSource {
   readCatalog(interaction: AgentDraftInteractionProjection): Promise<{
     readonly models: readonly AgentModelCatalogEntry[];
@@ -708,12 +713,7 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
         bindingReceiptId,
         identity: JSON.stringify(file.locator),
         name: file.name,
-        description:
-          file.locator.kind === 'workspace-file'
-            ? file.locator.path
-            : file.locator.kind === 'media-library'
-              ? `${file.locator.libraryName}/${file.locator.relativePath}`
-              : file.name,
+        description: file.locator.kind === 'workspace-file' ? file.locator.path : file.name,
       });
       return {
         entry,
@@ -814,6 +814,7 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
           `Agent Draft ${intent.kind} catalog entry '${intent.catalogEntryId}' is stale or unavailable.`,
         );
       }
+      requireBuiltinCreatorTarget(entry, state.entryIntent.mode, input.entryTargetReceipt);
     }
     for (const receipt of input.references) {
       const entry = state.inputs.find((candidate) => candidate.id === receipt.catalogEntryId);
@@ -904,6 +905,24 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
 
   private requireActive(): void {
     if (this.disposed) throw new Error('Agent launch application service is disposed.');
+  }
+}
+
+function requireBuiltinCreatorTarget(
+  entry: AgentInputCatalogEntry,
+  mode: AgentEntryMode,
+  receipt: AgentDraftSubmitInput['entryTargetReceipt'],
+): void {
+  if (entry.trigger !== 'skill' || entry.source.kind !== 'builtin') return;
+  const expectedTargetKind =
+    BUILTIN_CREATOR_TARGET_KINDS[entry.name as keyof typeof BUILTIN_CREATOR_TARGET_KINDS];
+  if (expectedTargetKind === undefined) return;
+  if (mode === 'assistant') return;
+  const binding = receipt?.binding;
+  if (binding?.kind !== 'authoring' || binding.target?.kind !== expectedTargetKind) {
+    throw new Error(
+      `Builtin Skill ${entry.name} requires one exact ${expectedTargetKind} authoring target receipt.`,
+    );
   }
 }
 

@@ -25,7 +25,7 @@ export interface AgentAuthoringMutationAuthority {
 }
 
 export function createAgentAuthoringMutationAuthority(options: {
-  readonly content: AgentAuthoringMutationTargetProvider<'content-project'>;
+  readonly content: AgentAuthoringMutationTargetProvider<'content-document'>;
   readonly character: AgentAuthoringMutationTargetProvider<'character-project'>;
   readonly world: AgentAuthoringMutationTargetProvider<'world-project'>;
 }): AgentAuthoringMutationAuthority {
@@ -36,12 +36,15 @@ export function createAgentAuthoringMutationAuthority(options: {
       if (receipt.binding.kind !== 'authoring') {
         throw new Error('Agent authoring mutation requires an exact Authoring target receipt.');
       }
+      if (receipt.binding.target === null) {
+        throw new Error('Agent authoring mutation requires an exact Authoring target receipt.');
+      }
       if (receipt.binding.target.kind !== expectedTargetKind) {
         throw new Error(
           `Agent authoring mutation for '${expectedTargetKind}' cannot use '${receipt.binding.target.kind}' authority.`,
         );
       }
-      if (receipt.binding.target.kind === 'content-project') {
+      if (receipt.binding.target.kind === 'content-document') {
         await options.content.validate(
           { ...receipt.binding, target: receipt.binding.target },
           signal,

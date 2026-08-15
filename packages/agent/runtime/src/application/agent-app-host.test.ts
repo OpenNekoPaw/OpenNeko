@@ -277,8 +277,8 @@ describe('AgentAppHost', () => {
     const authorize = vi.fn(async ({ receipt }) => {
       if (receipt.binding.kind !== 'authoring') throw new Error('Expected Authoring binding.');
       if (
-        receipt.binding.target.kind === 'content-project' &&
-        receipt.binding.target.contentProjectId === 'content-denied'
+        receipt.binding.target.kind === 'content-document' &&
+        receipt.binding.target.documentId === 'documents/denied.md'
       ) {
         throw new Error('Content owner denied the exact target.');
       }
@@ -314,7 +314,7 @@ describe('AgentAppHost', () => {
       description: 'Exercises exact per-Turn authoring mutation authority.',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
       category: 'project',
-      requirements: { writableProject: true, authoringTargetKind: 'content-project' },
+      requirements: { writableProject: true, authoringTargetKind: 'content-document' },
       execute: executeMutation,
     });
     const mutationNames = workspace.tools
@@ -354,7 +354,7 @@ describe('AgentAppHost', () => {
       conversationId: 'conversation-content-target',
       prompt: 'write content',
       entryTargetReceipt: {
-        ...authoringTargetReceipt('content-project', 'content-1'),
+        ...authoringTargetReceipt('content-document', 'documents/story.md'),
         mode: 'assistant',
       },
       modelPolicy: policy,
@@ -371,13 +371,13 @@ describe('AgentAppHost', () => {
       expect.objectContaining({
         metadata: expect.objectContaining({
           [AGENT_AUTHORING_BINDING_METADATA_KEY]: expect.objectContaining({
-            target: { kind: 'content-project', contentProjectId: 'content-1' },
+            target: { kind: 'content-document', documentId: 'documents/story.md' },
           }),
         }),
       }),
     );
     expect(authorize).toHaveBeenCalledWith(
-      expect.objectContaining({ expectedTargetKind: 'content-project' }),
+      expect.objectContaining({ expectedTargetKind: 'content-document' }),
     );
 
     await workspace.executeTurn({
@@ -425,7 +425,7 @@ describe('AgentAppHost', () => {
     const denied = await workspace.executeTurn({
       conversationId: 'conversation-content-denied',
       prompt: 'write denied content',
-      entryTargetReceipt: authoringTargetReceipt('content-project', 'content-denied'),
+      entryTargetReceipt: authoringTargetReceipt('content-document', 'documents/denied.md'),
       modelPolicy: policy,
       configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
@@ -3735,8 +3735,8 @@ function authoringTargetReceipt(
   targetId: string,
 ): AgentEntryTargetReceipt {
   const target: AgentAuthoringTargetRef =
-    kind === 'content-project'
-      ? { kind, contentProjectId: targetId }
+    kind === 'content-document'
+      ? { kind, documentId: targetId }
       : kind === 'character-project'
         ? { kind, characterProjectId: targetId }
         : { kind, worldProjectId: targetId };
@@ -3749,6 +3749,7 @@ function authoringTargetReceipt(
       kind: 'authoring',
       workspaceId: 'workspace-authoring',
       workspaceGrantId: 'workspace-grant-authoring',
+      authority: { kind: 'project', projectId: 'project-authoring' },
       target,
     },
   };

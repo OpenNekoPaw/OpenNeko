@@ -22,7 +22,7 @@ import {
   type AgentHostRouteEffectContext,
   type AgentConversationControllerTurnRequest,
   createAgentContentEffects,
-  type AgentLinkedMediaLibraryFileSearchInput,
+  type AgentWorkspaceLinkedMediaFileSearchInput,
   type AgentContentInteractionPort,
 } from '@neko/agent-runtime/runtime/host-controller';
 import {
@@ -284,11 +284,16 @@ export interface CreateAgentControllerCompositionOptions {
     readonly workspacePath: string;
   }) => ConfigManager;
   readonly contentInteraction: AgentContentInteractionPort;
-  readonly searchLinkedMediaLibraryFiles?: (
+  readonly searchWorkspaceLinkedMediaFiles?: (
     projectId: string,
     workspace: AssetWorkspaceResolution,
-    input: AgentLinkedMediaLibraryFileSearchInput,
-  ) => Promise<readonly import('@neko/content').MediaLibraryContentLocator[]>;
+    input: AgentWorkspaceLinkedMediaFileSearchInput,
+  ) => Promise<readonly import('@neko/content').WorkspaceFileContentLocator[]>;
+  readonly resolveProjectWorkspaceReadPath?: (
+    projectId: string,
+    workspace: AssetWorkspaceResolution,
+    locator: import('@neko/content').WorkspaceFileContentLocator,
+  ) => Promise<string>;
   readonly configInteraction: AgentConfigInteractionPort;
   readonly conversationReferences?: AgentConversationReferenceResolutionPort;
   readonly resources: AgentResourceDisplayRegistrationPort;
@@ -471,7 +476,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       });
       return disposal;
     };
-    const searchLinkedMediaLibraryFiles = this.options.searchLinkedMediaLibraryFiles;
+    const searchWorkspaceLinkedMediaFiles = this.options.searchWorkspaceLinkedMediaFiles;
     const projectId = 'projectId' in input.identity ? input.identity.projectId : undefined;
     const effects: AgentControllerEffects = {
       conversation: this.createConversationEffects(
@@ -520,10 +525,20 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         workspace: input.workspace.workspace,
         host: this.options.host,
         interaction: this.options.contentInteraction,
-        ...(searchLinkedMediaLibraryFiles && projectId
+        ...(this.options.resolveProjectWorkspaceReadPath && projectId
           ? {
-              searchLinkedMediaLibraryFiles: (searchInput) =>
-                searchLinkedMediaLibraryFiles(projectId, input.workspace.workspace, searchInput),
+              resolveWorkspaceReadPath: (locator) =>
+                this.options.resolveProjectWorkspaceReadPath?.(
+                  projectId,
+                  input.workspace.workspace,
+                  locator,
+                ) ?? Promise.reject(new Error('Agent Workspace resolver is unavailable.')),
+            }
+          : {}),
+        ...(searchWorkspaceLinkedMediaFiles && projectId
+          ? {
+              searchWorkspaceLinkedMediaFiles: (searchInput) =>
+                searchWorkspaceLinkedMediaFiles(projectId, input.workspace.workspace, searchInput),
             }
           : {}),
         reportMentionContributorError: this.options.reportError,

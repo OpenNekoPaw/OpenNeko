@@ -1232,8 +1232,7 @@ export function createPersistentCharacterRepository(options: {
 
 export function createPersistentCharacterRuntimeRepositories(options: {
   readonly metadataStore: LocalMetadataStore;
-  readonly authoring?: Pick<CharacterAuthoringRepository, 'readProject'> &
-    Pick<CharacterPublicationReader, 'readPublication'>;
+  readonly publications?: Pick<CharacterPublicationReader, 'readPublication'>;
 }): CharacterRuntimeRepositories {
   const repository = createPersistentCharacterRepository(options);
   const storylinePersistence = pickRepository(repository, [
@@ -1308,10 +1307,9 @@ export function createPersistentCharacterRuntimeRepositories(options: {
     storyline: Object.freeze({
       ...storylinePersistence,
       readCharacterProject: (characterProjectId: string, signal?: AbortSignal) =>
-        options.authoring?.readProject(characterProjectId, signal) ??
         repository.readCharacterProject(characterProjectId, signal),
       readCharacterVersion: (characterVersionId: string, signal?: AbortSignal) =>
-        options.authoring?.readPublication(characterVersionId, signal) ??
+        options.publications?.readPublication(characterVersionId, signal) ??
         repository.readCharacterVersion(characterVersionId, signal),
     }),
     relationship: pickRepository(repository, [

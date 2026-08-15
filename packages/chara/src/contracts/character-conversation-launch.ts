@@ -29,7 +29,7 @@ export type CharacterConversationLaunchLineage =
     };
 
 export interface CharacterConversationLaunchTarget {
-  readonly characterProjectId: string;
+  readonly globalCharacterId: string;
   readonly characterVersionId: string;
   readonly displayName: string;
   readonly versionLabel: string;
@@ -133,7 +133,7 @@ function parseCharacterConversationLaunchTarget(value: unknown): CharacterConver
   const record = requireExactRecord(
     value,
     [
-      'characterProjectId',
+      'globalCharacterId',
       'characterVersionId',
       'displayName',
       'versionLabel',
@@ -143,9 +143,9 @@ function parseCharacterConversationLaunchTarget(value: unknown): CharacterConver
     'Character conversation launch target',
   );
   return {
-    characterProjectId: requireIdentity(
-      record['characterProjectId'],
-      'Character conversation launch CharacterProject',
+    globalCharacterId: requireIdentity(
+      record['globalCharacterId'],
+      'Character conversation launch GlobalCharacter',
     ),
     characterVersionId: requireIdentity(
       record['characterVersionId'],

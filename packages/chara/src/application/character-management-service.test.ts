@@ -37,7 +37,7 @@ describe('Character management projection', () => {
     await expect(service.readDetails()).resolves.toEqual([
       expect.objectContaining({
         characterProjectId: 'character-a',
-        placement: { kind: 'content-project', contentProjectId: 'project-a' },
+        placement: { kind: 'project', projectId: 'project-a' },
         storylineCount: 1,
         lineage: expect.objectContaining({
           status: 'available',
@@ -115,7 +115,7 @@ function createService(lineage: {
       agent: emptyReader('agent'),
       project: emptyReader('project'),
     }),
-    placement: { kind: 'content-project', contentProjectId: 'project-a' },
+    placement: { kind: 'project', projectId: 'project-a' },
   });
 }
 

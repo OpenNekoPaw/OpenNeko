@@ -25,6 +25,9 @@ export interface AgentDraftHostRuntimeAdapter extends AgentHostRuntimeAdapter {
   loadCharacterDialogueTargets(): Promise<
     readonly import('./agent-entry-intent').AgentCharacterDialogueTargetOption[]
   >;
+  loadWorldExperienceTargets?(): Promise<
+    readonly import('./agent-entry-intent').AgentWorldExperienceTargetOption[]
+  >;
   configureEntryTarget(
     mode: import('./agent-entry-intent').AgentEntryMode,
     binding?: import('./agent-entry-intent').AgentEntryTargetBinding,

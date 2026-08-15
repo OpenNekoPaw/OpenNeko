@@ -23,7 +23,7 @@ describe('CharacterStorylineTimelineSurface', () => {
 function snapshot(): CharacterFoundationSnapshot {
   return {
     character: {
-      projects: [],
+      globalCharacters: [],
       versions: [],
       relationships: [],
       characterRuns: [

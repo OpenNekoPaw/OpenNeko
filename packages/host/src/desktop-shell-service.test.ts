@@ -11,7 +11,6 @@ import {
   createDefaultDesktopWorkbenchLayout,
   closeMainView,
   DESKTOP_PRIMARY_MAIN_GROUP_ID,
-  DESKTOP_SECONDARY_MAIN_GROUP_ID,
   openOrFocusCutView,
   openOrFocusMainView,
 } from './desktop-workbench-contract';
@@ -813,7 +812,7 @@ describe('DesktopShellService', () => {
         sceneId: transitioned.scene.sceneId,
         intent: {
           kind: 'select-world-detail',
-          selection: { kind: 'project', worldProjectId: 'world-project:archive-city' },
+          selection: { kind: 'global', globalWorldId: 'global-world:archive-city' },
         },
       }),
     );
@@ -823,17 +822,60 @@ describe('DesktopShellService', () => {
         context: {
           kind: 'creative-management',
           catalog: 'worlds',
-          detail: { kind: 'project', worldProjectId: 'world-project:archive-city' },
+          detail: { kind: 'global', globalWorldId: 'global-world:archive-city' },
         },
         slots: {
           main: { kind: 'creative-management', catalog: 'worlds' },
           secondaryMain: {
             kind: 'world-detail',
-            selection: { kind: 'project', worldProjectId: 'world-project:archive-city' },
+            selection: { kind: 'global', globalWorldId: 'global-world:archive-city' },
           },
         },
       },
     });
+  });
+
+  it('transitions to one exact fixed World Runtime scene and preserves it across renderer reload', async () => {
+    const fixture = createFixture();
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const projection = await fixture.service.getProjection(windowId);
+    const binding = {
+      worldProjectId: 'world-project-1',
+      worldVersionId: 'world-version-1',
+      worldRunId: 'world-run-1',
+      worldSaveId: 'world-save-1',
+      branchId: 'branch-main',
+      participantId: 'participant-1',
+      actorId: 'actor-1',
+    };
+
+    const transitioned = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'world-runtime-1',
+        rendererSessionId: projection.rendererSessionId,
+        windowId,
+        sceneId: activeScene(projection.window).sceneId,
+        intent: { kind: 'open-world-runtime', binding },
+      }),
+    );
+
+    expect(transitioned).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: { kind: 'world-runtime', binding },
+        slots: {
+          interaction: { kind: 'world-runtime-interaction', worldRunId: 'world-run-1' },
+          main: { kind: 'world-runtime-main', worldRunId: 'world-run-1' },
+          rightManager: { kind: 'world-runtime-manager', worldRunId: 'world-run-1' },
+          cutPanel: { kind: 'world-runtime-timeline', worldRunId: 'world-run-1' },
+          status: { kind: 'world-runtime-status', worldRunId: 'world-run-1' },
+        },
+      },
+    });
+    if (transitioned.status !== 'transitioned') throw new Error('Expected World Runtime Scene.');
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-2');
+    expect(await fixture.service.getSceneProjection(windowId)).toEqual(transitioned.scene);
   });
 
   it('preserves qualified Character Interaction while resetting unavailable management scenes', async () => {
@@ -1383,164 +1425,6 @@ describe('DesktopShellService', () => {
     const committed = await fixture.service.getProjection(windowId);
     expect(committed.catalog.projects).toHaveLength(1);
     expect(committed.agentHome.conversations).toEqual([]);
-  });
-
-  it('opens standalone Character authoring without registering a Content Project', async () => {
-    const repository = createInMemoryDesktopShellStateRepository();
-    const library: AssetWorkspaceResolution = {
-      workspaceId: 'character-library-workspace',
-      workspacePath: '/libraries/characters',
-      displayName: 'Characters',
-      locator: { kind: 'variable', value: '${HOME}/.neko/characters' },
-    };
-    const authority = new DesktopWorkspaceGrantAuthority({
-      resolver: { resolve: vi.fn(async () => library) },
-      createIdentity: () => 'character-library-grant',
-    });
-    const fixture = createFixture(repository, authority);
-    const windowId = await fixture.service.claimWindowId();
-    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
-    const projection = await fixture.service.getProjection(windowId);
-    const grant = authority.authorize({
-      windowId,
-      label: 'Characters',
-      hostResource: library.workspacePath,
-    });
-
-    const result = await fixture.service.transitionScene(
-      createDesktopSceneTransitionRequest({
-        requestId: 'scene-request-character-authoring',
-        rendererSessionId: projection.rendererSessionId,
-        windowId,
-        sceneId: activeScene(projection.window).sceneId,
-        intent: {
-          kind: 'open-character-authoring',
-          workspaceGrantId: grant.workspaceGrantId,
-          authority: { kind: 'standalone-library', library: 'character' },
-          characterProjectId: 'character-1',
-        },
-      }),
-    );
-
-    expect(result).toMatchObject({
-      status: 'transitioned',
-      scene: {
-        context: {
-          kind: 'agent',
-          scope: {
-            kind: 'workspace',
-            workspaceId: library.workspaceId,
-            workspaceGrantId: grant.workspaceGrantId,
-          },
-        },
-        slots: {
-          secondaryMain: {
-            kind: 'character-authoring',
-            authority: { kind: 'standalone-library', library: 'character' },
-            characterProjectId: 'character-1',
-          },
-        },
-      },
-    });
-    const committed = await fixture.service.getProjection(windowId);
-    expect(committed.catalog.projects).toEqual([]);
-    expect(committed.window.activeTarget).toEqual({ kind: 'home' });
-    expect(committed.window.tabs).toEqual([]);
-    expect(activeWorkbench(committed.window).main.views).toEqual([
-      expect.objectContaining({
-        kind: 'character-authoring',
-        characterProjectId: 'character-1',
-      }),
-    ]);
-    expect(activeWorkbench(committed.window).main.views[0]).not.toHaveProperty('projectId');
-    expect(activeWorkbench(committed.window).main.groups).toEqual([
-      { groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID, viewIds: [] },
-      {
-        groupId: DESKTOP_SECONDARY_MAIN_GROUP_ID,
-        viewIds: ['character-authoring:character-1'],
-        activeViewId: 'character-authoring:character-1',
-      },
-    ]);
-    const closed = await fixture.service.updateWorkbench(
-      windowId,
-      committed.rendererSessionId,
-      activeInstance(committed.window).workbenchInstanceId,
-      closeMainView(
-        activeWorkbench(committed.window),
-        activeWorkbench(committed.window).main.views[0]!.viewId,
-      ),
-    );
-    expect(activeWorkbench(closed.window).main).toEqual({
-      views: [],
-      groups: [{ groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID, viewIds: [] }],
-      activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
-    });
-    expect(activeScene(closed.window).slots.main).toBeUndefined();
-    expect(activeScene(closed.window).slots.secondaryMain).toBeUndefined();
-  });
-
-  it('detaches standalone Character authoring from the previously active Content Project', async () => {
-    const projectWorkspace: AssetWorkspaceResolution = {
-      workspaceId: '11111111-1111-4111-8111-111111111111',
-      workspacePath: '/workspace/demo',
-      displayName: 'Demo',
-      locator: { kind: 'variable', value: '${HOME}/workspace/demo' },
-    };
-    const libraryWorkspace: AssetWorkspaceResolution = {
-      workspaceId: 'character-library-workspace',
-      workspacePath: '/libraries/characters',
-      displayName: 'Characters',
-      locator: { kind: 'variable', value: '${HOME}/.neko/characters' },
-    };
-    const authority = new DesktopWorkspaceGrantAuthority({
-      resolver: {
-        resolve: vi.fn(async (resource) =>
-          resource === libraryWorkspace.workspacePath ? libraryWorkspace : projectWorkspace,
-        ),
-      },
-      createIdentity: () => 'routed-grant',
-    });
-    const fixture = createFixture(undefined, authority);
-    const windowId = await fixture.service.claimWindowId();
-    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
-    const initial = await fixture.service.getProjection(windowId);
-    const opened = await openContent(
-      fixture,
-      windowId,
-      projectWorkspace.workspacePath,
-      initial.rendererSessionId,
-    );
-    const libraryGrant = authority.authorize({
-      windowId,
-      label: libraryWorkspace.displayName,
-      hostResource: libraryWorkspace.workspacePath,
-    });
-    const result = await fixture.service.transitionScene(
-      createDesktopSceneTransitionRequest({
-        requestId: 'open-standalone-character-after-project',
-        rendererSessionId: opened.projection.rendererSessionId,
-        windowId,
-        sceneId: activeScene(opened.projection.window).sceneId,
-        intent: {
-          kind: 'open-character-authoring',
-          workspaceGrantId: libraryGrant.workspaceGrantId,
-          authority: { kind: 'standalone-library', library: 'character' },
-          characterProjectId: 'character-1',
-        },
-      }),
-    );
-    expect(result.status).toBe('transitioned');
-    const committed = await fixture.service.getProjection(windowId);
-    expect(committed.window.activeTarget).toEqual({ kind: 'home' });
-    expect(activeScene(committed.window).context).toMatchObject({
-      kind: 'agent',
-      scope: { kind: 'workspace', workspaceId: libraryWorkspace.workspaceId },
-    });
-    expect(activeScene(committed.window).slots.main).toBeUndefined();
-    expect(activeScene(committed.window).slots.secondaryMain).toMatchObject({
-      kind: 'character-authoring',
-      authority: { kind: 'standalone-library', library: 'character' },
-    });
   });
 
   it('keeps Workspace Scene refs atomic with Workbench updates and startup restoration', async () => {
@@ -2456,7 +2340,7 @@ describe('DesktopShellService', () => {
     expect(activeScene(character.window).slots.secondaryMain).toEqual({
       kind: 'character-authoring',
       workspaceId: project.workspaceId,
-      authority: { kind: 'content-project', contentProjectId: project.projectId },
+      authority: { kind: 'project', projectId: project.projectId },
       viewId: 'view:character-1',
       viewInstanceId: 'view-instance:character-1',
       characterProjectId: 'character-project-1',
@@ -2489,7 +2373,7 @@ describe('DesktopShellService', () => {
     expect(activeScene(world.window).slots.secondaryMain).toEqual({
       kind: 'world-authoring',
       workspaceId: project.workspaceId,
-      authority: { kind: 'content-project', contentProjectId: project.projectId },
+      authority: { kind: 'project', projectId: project.projectId },
       viewId: 'view:world-1',
       viewInstanceId: 'view-instance:world-1',
       worldProjectId: 'world-project-1',

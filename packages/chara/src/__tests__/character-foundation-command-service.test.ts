@@ -1,36 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createEmptyCharacterBackgroundStory,
-  createEmptyCharacterOriginSetting,
-} from '../contracts';
 import { CharacterFoundationCommandService } from '../application/character-foundation-command-service';
 
 describe('CharacterFoundationCommandService', () => {
   it('delegates Character commands to their one owning service', async () => {
     const services = createServices();
     const service = new CharacterFoundationCommandService(services);
-    const characterInput = {
-      characterProjectId: 'character-project-a',
-      displayName: 'Lin',
-      draft: {
-        summary: 'An archivist.',
-        backgroundStory: createEmptyCharacterBackgroundStory(),
-        originSetting: createEmptyCharacterOriginSetting(),
-        canon: [],
-        knowledgeBoundary: [],
-        behaviorPolicy: [],
-        expressionPolicy: [],
-        representationRefs: [],
-      },
-      sources: { evidence: [], assetRepresentations: [] },
-    };
-    await service.execute({ operation: 'character-project-create', input: characterInput });
-    const storylineInput = {
-      characterStorylineId: 'character-storyline-a',
-      characterStorylineVersionId: 'character-storyline-version-a',
-      label: 'First arc',
-    } as const;
-    await service.execute({ operation: 'character-storyline-publish', input: storylineInput });
     const presentationInput = {
       characterRunId: 'character-run-a',
       participantId: 'participant-a',
@@ -47,17 +21,11 @@ describe('CharacterFoundationCommandService', () => {
       input: presentationInput,
     });
 
-    expect(services.characterCreation.createProject).toHaveBeenCalledWith(
-      characterInput,
-      undefined,
-    );
-    expect(services.characterAuthoring.publish).not.toHaveBeenCalled();
     expect(services.rooms.createRoom).not.toHaveBeenCalled();
     expect(services.presentation.updateConfigurations).toHaveBeenCalledWith(
       [presentationInput],
       undefined,
     );
-    expect(services.storylines.publish).toHaveBeenCalledWith(storylineInput, undefined);
   });
 });
 

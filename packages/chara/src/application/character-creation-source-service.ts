@@ -34,7 +34,7 @@ export interface CharacterCreationSourceAuthority {
     requireConfirmedCharacter(
       input: Pick<
         CharacterProjectEntityEvidenceSource,
-        'sourceWorkspaceId' | 'sourceWorkspaceGrantId' | 'contentProjectId' | 'entityId'
+        'sourceWorkspaceId' | 'sourceWorkspaceGrantId' | 'projectId' | 'entityId'
       >,
       signal?: AbortSignal,
     ): Promise<void>;
@@ -42,6 +42,10 @@ export interface CharacterCreationSourceAuthority {
 }
 
 export interface CharacterCreationProjectPort {
+  prepareProject(
+    input: CreateCharacterProjectInput,
+    signal?: AbortSignal,
+  ): Promise<CharacterProject>;
   createProject(
     input: CreateCharacterProjectInput,
     signal?: AbortSignal,
@@ -78,6 +82,24 @@ export class CharacterCreationSourceService {
     );
   }
 
+  async prepareProject(
+    input: CreateCharacterFromSourcesInput,
+    signal?: AbortSignal,
+  ): Promise<CharacterProject> {
+    signal?.throwIfAborted();
+    requireUnboundFreshDraft(input.draft);
+    const seed = await this.review(input.sources, signal);
+    return await this.options.projects.prepareProject(
+      {
+        characterProjectId: input.characterProjectId,
+        displayName: input.displayName,
+        draft: input.draft,
+        seed,
+      },
+      signal,
+    );
+  }
+
   async review(
     selection: CharacterCreationSourceSelection,
     signal?: AbortSignal,
@@ -99,7 +121,7 @@ export class CharacterCreationSourceService {
           {
             sourceWorkspaceId: source.sourceWorkspaceId,
             sourceWorkspaceGrantId: source.sourceWorkspaceGrantId,
-            contentProjectId: source.contentProjectId,
+            projectId: source.projectId,
             entityId: source.entityId,
           },
           signal,

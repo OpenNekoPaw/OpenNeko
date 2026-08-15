@@ -1,9 +1,60 @@
-import { describe, expect, it, vi } from 'vitest';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IDocumentAccessService } from '@neko/content/document';
+import { createNodeDocumentAccessService } from '@neko/content/document/node';
 import type { ContentRepresentationService } from '@neko/content';
+import { createNodeHostContentReadService } from '@neko/content/node';
+import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import { createHostAgentContentAccessRuntime } from '../capability/host-content-access-runtime-adapter';
 
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true, force: true })),
+  );
+});
+
 describe('HostAgentContentAccessRuntime document representations', () => {
+  it('reads a document through the managed Workspace media link without a Media Library locator', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'agent-linked-document-workspace-'));
+    const libraryPath = await mkdtemp(path.join(tmpdir(), 'agent-linked-document-library-'));
+    temporaryDirectories.push(workspacePath, libraryPath);
+    await mkdir(path.join(workspacePath, 'neko', 'assets'), { recursive: true });
+    await writeFile(path.join(libraryPath, 'story.md'), '# Linked story\n');
+    await symlink(
+      libraryPath,
+      path.join(workspacePath, 'neko', 'assets', 'Reference'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    const workspace = {
+      workspaceId: 'workspace-linked-document',
+      workspacePath,
+      displayName: 'Workspace',
+      locator: { kind: 'relative' as const, value: '.' },
+    };
+    const runtime = createHostAgentContentAccessRuntime({
+      contentRead: createNodeHostContentReadService({ workspaceRoot: workspacePath }),
+      documentAccess: createNodeDocumentAccessService(),
+      resolveDocumentHostFilePath: (source) => resolveWorkspaceContentLocator(workspace, source),
+    });
+
+    const result = await runtime.resolveDocumentContent({
+      source: { kind: 'workspace-file', path: 'neko/assets/Reference/story.md' },
+    });
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      source: { kind: 'workspace-file', path: 'neko/assets/Reference/story.md' },
+      text: '# Linked story\n',
+    });
+    expect(JSON.stringify(result)).not.toContain(libraryPath);
+  });
+
   it('projects computed document pages as representation locators without physical paths', async () => {
     const getRepresentation = vi.fn(
       async (request: Parameters<ContentRepresentationService['getRepresentation']>[0]) => ({

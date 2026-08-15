@@ -1178,7 +1178,7 @@
 .character-management--catalog {
   width: min(1020px, calc(100% - 64px));
   margin: 0 auto;
-  padding: clamp(66px, 10vh, 104px) 0 52px;
+  padding: var(--neko-management-content-top, clamp(66px, 10vh, 104px)) 0 52px;
   background: transparent;
 }
 
@@ -1468,7 +1468,7 @@
 .character-management-detail {
   display: flex;
   box-sizing: border-box;
-  width: min(100%, 760px);
+  width: min(100%, 1020px);
   min-width: 0;
   flex: 0 0 auto;
   flex-direction: column;
@@ -1499,7 +1499,8 @@
   min-width: 0;
   align-items: flex-start;
   gap: 14px;
-  padding: 20px 22px;
+  padding: var(--neko-management-content-top, clamp(66px, 10vh, 104px))
+    var(--neko-management-content-inline, 32px) 24px;
 }
 
 .character-management-detail__avatar {
@@ -1549,7 +1550,7 @@
 }
 
 .character-management-detail__section {
-  padding: 18px 22px 20px;
+  padding: 24px var(--neko-management-content-inline, 32px) 26px;
 }
 
 .character-management-detail__section-heading {
@@ -1637,7 +1638,7 @@
 }
 
 .character-management-detail__diagnostics {
-  padding: 13px 22px;
+  padding: 14px var(--neko-management-content-inline, 32px);
   border-left: 3px solid var(--neko-warning, #b7791f);
   color: var(--neko-fg-secondary, #656a70);
   background: color-mix(in srgb, var(--neko-warning, #b7791f) 9%, var(--neko-elevated, #fff));
@@ -1654,7 +1655,7 @@
 .character-management-detail__footer {
   display: grid;
   gap: 12px;
-  padding: 18px 22px 20px;
+  padding: 22px var(--neko-management-content-inline, 32px) 24px;
 }
 
 .character-management-detail__version-select {
@@ -2158,6 +2159,19 @@
     padding-top: 40px;
   }
 
+  .character-management-detail__identity {
+    padding: 40px 16px 22px;
+  }
+
+  .character-management-detail__section,
+  .character-management-detail__footer {
+    padding-inline: 16px;
+  }
+
+  .character-management-detail__diagnostics {
+    padding-inline: 16px;
+  }
+
   .character-management__header {
     align-items: flex-start;
     flex-direction: column;
@@ -2184,6 +2198,19 @@
   .character-management--catalog {
     width: min(100% - 24px, 1020px);
     padding-top: 28px;
+  }
+
+  .character-management-detail__identity {
+    padding: 28px 12px 20px;
+  }
+
+  .character-management-detail__section,
+  .character-management-detail__footer {
+    padding-inline: 12px;
+  }
+
+  .character-management-detail__diagnostics {
+    padding-inline: 12px;
   }
 
   .character-management__header-actions > button {

@@ -2,12 +2,14 @@ import {
   classifyAgentHostRoute,
   createAgentHostWorkspaceScopeRequiredDiagnostic,
   parseAgentCharacterDialogueTargetOptions,
+  parseAgentWorldExperienceTargetOptions,
   type AgentDraftHostRuntimeAdapter,
   type AgentHostToWebviewMessage,
   type AgentLaunchCatalogProjection,
 } from '@neko/agent-contracts';
 import type { OpenNekoAgentLaunchBridge } from '@neko/agent-contracts/agent-launch-host';
 import type { OpenNekoDesktopCharacterBridge } from '@neko/chara/contracts';
+import type { OpenNekoDesktopWorldManagementBridge } from '@neko/world/contracts';
 import {
   createDesktopAgentPresentationStateKey,
   readDesktopAgentPresentationState,
@@ -20,7 +22,9 @@ export interface ElectronAgentLaunchHostRuntimeAdapter extends AgentDraftHostRun
 }
 
 export function createElectronAgentLaunchHostRuntimeAdapter(input: {
-  readonly bridge: OpenNekoAgentLaunchBridge & OpenNekoDesktopCharacterBridge;
+  readonly bridge: OpenNekoAgentLaunchBridge &
+    OpenNekoDesktopCharacterBridge &
+    Partial<OpenNekoDesktopWorldManagementBridge>;
   readonly catalog: AgentLaunchCatalogProjection;
   readonly draftId: string;
   readonly storage?: DesktopAgentPresentationStorage;
@@ -58,7 +62,7 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
       const catalog = await input.bridge.characterFoundation.getConversationLaunchCatalog();
       return parseAgentCharacterDialogueTargetOptions(
         catalog.targets.map((target) => ({
-          characterProjectId: target.characterProjectId,
+          globalCharacterId: target.globalCharacterId,
           characterVersionId: target.characterVersionId,
           displayName: target.displayName,
           versionLabel: target.versionLabel,
@@ -68,6 +72,31 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
             label: storyline.label,
           })),
         })),
+      );
+    },
+    async loadWorldExperienceTargets() {
+      if (disposed) throw new Error('Agent launch adapter is disposed.');
+      const worldManagement = input.bridge.worldManagement;
+      if (!worldManagement) throw new Error('World Experience target catalog is unavailable.');
+      const catalog = await worldManagement.getCatalog({
+        search: '',
+        sort: 'recently-updated',
+      });
+      const eligible = catalog.items.filter(
+        (item) => item.status === 'available' && item.runtimeEligible,
+      );
+      const details = await Promise.all(
+        eligible.map((item) => worldManagement.getDetail(item.globalWorldId)),
+      );
+      return parseAgentWorldExperienceTargetOptions(
+        details.flatMap((detail) =>
+          detail.versions.map((version) => ({
+            globalWorldId: detail.globalWorldId,
+            worldVersionId: version.worldVersionId,
+            displayName: detail.title,
+            versionLabel: version.label,
+          })),
+        ),
       );
     },
     async configureEntryTarget(mode, binding) {

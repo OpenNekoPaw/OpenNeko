@@ -19,11 +19,11 @@ import {
 } from './desktop-workbench-contract';
 
 describe('Desktop Workbench contract', () => {
-  it('creates an orthogonal Chat-first default without Agent Main state', () => {
+  it('creates a Chat + fresh Main default without fabricating a Main View', () => {
     expect(createDefaultDesktopWorkbenchLayout('window-1')).toEqual({
       windowId: 'window-1',
       resourceDock: { presentation: 'docked', width: 320 },
-      display: { mode: 'chat-only', chatPosition: 'left', chatWidth: 360 },
+      display: { mode: 'chat-main', chatPosition: 'left', chatWidth: 360 },
       main: {
         views: [],
         groups: [{ groupId: 'main:primary', viewIds: [] }],
@@ -332,7 +332,7 @@ describe('Desktop Workbench contract', () => {
     expect(moved.main.split?.axis).toBe('rows');
   });
 
-  it('allows Chat + Main to expose an empty Main group but rejects Main only without a View', () => {
+  it('keeps an empty Main group visible without requiring a fabricated View', () => {
     const initial = createDefaultDesktopWorkbenchLayout('window-1');
     const emptyChatMain = setWorkbenchDisplayMode(initial, 'chat-main', 'right');
     expect(emptyChatMain.display).toEqual({
@@ -341,9 +341,9 @@ describe('Desktop Workbench contract', () => {
       chatWidth: 360,
     });
     expect(emptyChatMain.main).toEqual(initial.main);
-    expect(() => setWorkbenchDisplayMode(initial, 'main-only')).toThrow(
-      "display mode 'main-only' requires an attached Main View",
-    );
+    const emptyMainOnly = setWorkbenchDisplayMode(initial, 'main-only');
+    expect(emptyMainOnly.display.mode).toBe('main-only');
+    expect(emptyMainOnly.main).toEqual(initial.main);
     const withCanvas = openOrFocusMainView(initial, viewRef('canvas-1', 'canvas'));
     const changed = setWorkbenchDisplayMode(withCanvas, 'chat-main', 'right');
     expect(changed.main).toEqual(withCanvas.main);

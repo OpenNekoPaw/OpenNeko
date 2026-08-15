@@ -529,7 +529,17 @@ function decodeRow(row: LocalMetadataSqlRow): AgentConversationLifecycleRecord {
       error,
     );
   }
-  const record = parseAgentConversationLifecycleRecord(decoded);
+  let record: AgentConversationLifecycleRecord;
+  try {
+    record = parseAgentConversationLifecycleRecord(decoded);
+  } catch (error) {
+    if (error instanceof LocalMetadataError) throw error;
+    throw persistenceError(
+      'decode-agent-conversation-lifecycle',
+      error instanceof Error ? error.message : String(error),
+      error,
+    );
+  }
   if (
     record.conversationId !== readString(row, 'conversation_id') ||
     record.pendingTurn.requestId !== readString(row, 'request_id') ||

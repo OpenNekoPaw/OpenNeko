@@ -79,9 +79,8 @@ describe('projectMessageIdentities', () => {
             {
               role: 'portrait',
               representation: {
-                kind: 'media-library',
-                libraryName: 'Characters',
-                relativePath: 'xiaoju.png',
+                kind: 'workspace-file',
+                path: 'neko/assets/Characters/xiaoju.png',
               },
               isDefault: true,
             },
@@ -142,18 +141,16 @@ function createCharacterDialogueSession(
         {
           role: 'portrait',
           representation: {
-            kind: 'media-library',
-            libraryName: 'Characters',
-            relativePath: 'xiaoju-portrait.png',
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/xiaoju-portrait.png',
           },
           isDefault: true,
         },
         {
           role: 'portrait',
           representation: {
-            kind: 'media-library',
-            libraryName: 'Characters',
-            relativePath: 'xiaoju.png',
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/xiaoju.png',
           },
         },
       ],
@@ -180,9 +177,8 @@ function createEmbodyCharacterSession(): EmbodyCharacterSessionProjection {
         {
           role: 'portrait',
           representation: {
-            kind: 'media-library',
-            libraryName: 'Characters',
-            relativePath: 'xiaoju.png',
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/xiaoju.png',
           },
           isDefault: true,
         },

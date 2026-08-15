@@ -1,5 +1,4 @@
 import {
-  AGENT_ENTRY_MODES,
   type AgentDraftInteractionProjection,
   type AgentDomainBinding,
   type AgentEntryIntentProjection,
@@ -42,10 +41,12 @@ export interface HomeExperienceEntryProjectionInput {
   readonly workspaceTarget?: {
     readonly context: Extract<AgentDomainBinding, { readonly kind: 'workspace' }>;
     readonly target?: import('@neko/agent-contracts').AgentAuthoringTargetRef;
+    readonly authority?: import('@neko/agent-contracts').AgentAuthoringAuthority;
   };
   readonly workspaceChooserAvailable: boolean;
   readonly characterTargetsAvailable?: boolean;
   readonly characterLaunches?: readonly import('../components/ChatView/InputArea/types').SelectedCharacterLaunch[];
+  readonly worldLaunch?: import('../components/ChatView/InputArea/types').SelectedWorldLaunch;
   readonly characterConversationMode?: import('../components/ChatView/InputArea/types').CharacterConversationMode;
   readonly bindingPending: boolean;
   readonly configurationReady: boolean;
@@ -57,6 +58,8 @@ const OPTION_LABEL_KEYS: Record<AgentEntryMode, string> = {
   'character-dialogue': 'chat.entryExperience.mode.characterDialogue',
   'world-experience': 'chat.entryExperience.mode.worldExperience',
 };
+
+const PRODUCT_ENTRY_MODES = ['assistant', 'authoring'] as const satisfies readonly AgentEntryMode[];
 
 const TITLE_KEYS: Record<AgentEntryMode, string> = {
   assistant: 'chat.entryExperience.assistant.title',
@@ -78,19 +81,16 @@ export function projectHomeExperienceEntry(
   const submissionBlockedReasonKey = projectSubmissionBlockedReason(input);
   return {
     mode: input.mode,
-    options: AGENT_ENTRY_MODES.map((mode) => ({
+    options: PRODUCT_ENTRY_MODES.map((mode) => ({
       mode,
       labelKey: OPTION_LABEL_KEYS[mode],
       disabled: false,
-      ...(mode === 'world-experience'
-        ? { descriptionKey: 'chat.entryExperience.validation.worldUnavailable' as const }
-        : {}),
     })),
     titleKey: TITLE_KEYS[input.mode],
     descriptionKey: DESCRIPTION_KEYS[input.mode],
     ...(submissionBlockedReasonKey === undefined ? {} : { submissionBlockedReasonKey }),
     showWorkspaceControl: input.mode === 'authoring',
-    showSkillSuggestions: input.mode === 'assistant',
+    showSkillSuggestions: input.mode === 'assistant' || input.mode === 'authoring',
   };
 }
 
@@ -111,7 +111,10 @@ function projectSubmissionBlockedReason(
       if (!input.workspaceChooserAvailable) {
         return 'chat.entryExperience.validation.workspaceChooserUnavailable';
       }
-      if (!input.workspaceTarget?.target) {
+      if (
+        !input.workspaceTarget ||
+        (!input.workspaceTarget.target && !input.workspaceTarget.authority)
+      ) {
         return 'chat.entryExperience.validation.workspaceRequired';
       }
       if (!hasExactAuthoringReceipt(input.intent, input.workspaceTarget)) {
@@ -141,8 +144,49 @@ function projectSubmissionBlockedReason(
         ? undefined
         : 'chat.entryExperience.validation.configurationRequired';
     case 'world-experience':
-      return 'chat.entryExperience.validation.worldUnavailable';
+      if (input.worldLaunch === undefined) {
+        return 'chat.entryExperience.validation.worldUnavailable';
+      }
+      if (
+        !hasExactWorldExperienceReceipt(
+          input.intent,
+          input.worldLaunch,
+          input.characterLaunches ?? [],
+        )
+      ) {
+        return 'chat.entryExperience.validation.worldUnavailable';
+      }
+      return input.configurationReady
+        ? undefined
+        : 'chat.entryExperience.validation.configurationRequired';
   }
+}
+
+function hasExactWorldExperienceReceipt(
+  intent: AgentEntryIntentProjection,
+  world: NonNullable<HomeExperienceEntryProjectionInput['worldLaunch']>,
+  characters: readonly import('../components/ChatView/InputArea/types').SelectedCharacterLaunch[],
+): boolean {
+  const receipt = intent.targetReceipt;
+  if (
+    intent.mode !== 'world-experience' ||
+    receipt?.mode !== 'world-experience' ||
+    receipt.binding.kind !== 'world-experience'
+  ) {
+    return false;
+  }
+  return (
+    receipt.binding.globalWorldId === world.globalWorldId &&
+    receipt.binding.worldVersionId === world.worldVersionId &&
+    JSON.stringify(receipt.binding.participants) ===
+      JSON.stringify(
+        characters.map((character) => ({
+          globalCharacterId: character.globalCharacterId,
+          characterVersionId: character.characterVersionId,
+        })),
+      ) &&
+    receipt.binding.launch.kind === 'new'
+  );
 }
 
 function hasExactCharacterDialogueReceipt(
@@ -159,7 +203,7 @@ function hasExactCharacterDialogueReceipt(
     return false;
   }
   const expectedParticipants = selections.map((selection) => ({
-    characterProjectId: selection.characterProjectId,
+    globalCharacterId: selection.globalCharacterId,
     characterVersionId: selection.characterVersionId,
   }));
   return (
@@ -185,6 +229,8 @@ function hasExactAuthoringReceipt(
     receipt.binding.kind === 'authoring' &&
     receipt.binding.workspaceId === selection.context.workspaceId &&
     receipt.binding.workspaceGrantId === selection.context.workspaceGrantId &&
-    JSON.stringify(receipt.binding.target) === JSON.stringify(selection.target)
+    (selection.target === undefined
+      ? selection.authority !== undefined && receipt.binding.target === null
+      : JSON.stringify(receipt.binding.target) === JSON.stringify(selection.target))
   );
 }

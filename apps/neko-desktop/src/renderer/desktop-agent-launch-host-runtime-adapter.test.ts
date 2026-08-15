@@ -12,7 +12,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
     bridge.characterFoundation.getConversationLaunchCatalog.mockResolvedValueOnce({
       targets: [
         {
-          characterProjectId: 'character-project-a',
+          globalCharacterId: 'global-character-a',
           characterVersionId: 'character-version-a',
           displayName: 'A',
           versionLabel: 'Published A',
@@ -45,7 +45,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
 
     await expect(adapter.loadCharacterDialogueTargets()).resolves.toEqual([
       {
-        characterProjectId: 'character-project-a',
+        globalCharacterId: 'global-character-a',
         characterVersionId: 'character-version-a',
         displayName: 'A',
         versionLabel: 'Published A',
@@ -61,6 +61,94 @@ describe('Electron Agent launch Host runtime adapter', () => {
           ],
         },
         storylines: [{ storylineVersionId: 'storyline-version-a', label: 'Arc A' }],
+      },
+    ]);
+  });
+
+  it('maps every exact runtime-eligible WorldVersion without selecting latest by name', async () => {
+    const bridge = {
+      ...createBridge(),
+      worldManagement: {
+        getCatalog: vi.fn(
+          async (
+            _query: import('@neko/world/contracts').WorldManagementCatalogQuery,
+          ): Promise<import('@neko/world/contracts').WorldManagementCatalogProjection> => ({
+            scope: { kind: 'global-catalog' as const },
+            query: { search: '', sort: 'recently-updated' as const },
+            items: [
+              {
+                status: 'available' as const,
+                globalWorldId: 'global-world-a',
+                title: 'Rain Station',
+                summary: '',
+                currentWorldVersionId: 'world-version-a-2',
+                updatedAt: '2026-08-14T00:00:00.000Z',
+                versionCount: 2,
+                runtimeCount: 0,
+                runtimeEligible: true,
+                attentionCount: 0,
+              },
+              {
+                status: 'invalid' as const,
+                globalWorldId: 'global-world-unusable',
+                message: 'World version is invalid.',
+              },
+            ],
+            diagnostics: [],
+          }),
+        ),
+        getDetail: vi.fn(
+          async (
+            _globalWorldId: string,
+          ): Promise<import('@neko/world/contracts').WorldManagementDetailProjection> => ({
+            globalWorldId: 'global-world-a',
+            title: 'Rain Station',
+            summary: '',
+            currentWorldVersionId: 'world-version-a-2',
+            createdAt: '2026-08-13T00:00:00.000Z',
+            updatedAt: '2026-08-14T00:00:00.000Z',
+            versions: [
+              {
+                worldProjectId: 'world-project-a',
+                worldVersionId: 'world-version-a-1',
+                label: 'Published v1',
+                publishedAt: '2026-08-13T00:00:00.000Z',
+                runtimeCount: 0,
+                current: false,
+              },
+              {
+                worldProjectId: 'world-project-a',
+                worldVersionId: 'world-version-a-2',
+                label: 'Published v2',
+                publishedAt: '2026-08-14T00:00:00.000Z',
+                runtimeCount: 0,
+                current: true,
+              },
+            ],
+            recentRuntimes: [],
+            diagnostics: [],
+          }),
+        ),
+      },
+    };
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog: createCatalog(),
+      draftId: 'draft:entry',
+    });
+
+    await expect(adapter.loadWorldExperienceTargets?.()).resolves.toEqual([
+      {
+        globalWorldId: 'global-world-a',
+        worldVersionId: 'world-version-a-1',
+        displayName: 'Rain Station',
+        versionLabel: 'Published v1',
+      },
+      {
+        globalWorldId: 'global-world-a',
+        worldVersionId: 'world-version-a-2',
+        displayName: 'Rain Station',
+        versionLabel: 'Published v2',
       },
     ]);
   });
@@ -311,8 +399,8 @@ describe('Electron Agent launch Host runtime adapter', () => {
       kind: 'authoring' as const,
       workspaceId: 'workspace:1',
       workspaceGrantId: 'workspace-grant:1',
-      authority: { kind: 'content-project' as const, contentProjectId: 'content:1' },
-      target: { kind: 'content-project' as const, contentProjectId: 'content:1' },
+      authority: { kind: 'project' as const, projectId: 'project:1' },
+      target: { kind: 'content-document' as const, documentId: 'document:1' },
     };
     const workspaceCatalog = createCatalog({
       binding: {

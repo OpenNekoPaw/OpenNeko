@@ -628,8 +628,8 @@ function authoringReceipt() {
       kind: 'authoring' as const,
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant:1',
-      authority: { kind: 'content-project' as const, contentProjectId: 'content-1' },
-      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+      authority: { kind: 'project' as const, projectId: 'project-1' },
+      target: { kind: 'content-document' as const, documentId: 'documents/story.md' },
     },
   };
 }

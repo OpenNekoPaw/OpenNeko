@@ -9,14 +9,14 @@ describe('Character product handoffs', () => {
     expect(
       createCharacterProductHandoffs({
         characterProjectId: 'character-project-1',
-        authoringAuthority: { kind: 'standalone-library', library: 'character' },
+        authoringAuthority: { kind: 'project', projectId: 'project-1' },
       }),
     ).toEqual([
       { kind: 'open-character', characterProjectId: 'character-project-1' },
       {
         kind: 'open-character-studio',
         characterProjectId: 'character-project-1',
-        authority: { kind: 'standalone-library', library: 'character' },
+        authority: { kind: 'project', projectId: 'project-1' },
       },
     ]);
   });
@@ -25,7 +25,7 @@ describe('Character product handoffs', () => {
     expect(
       createCharacterProductHandoffs({
         characterProjectId: 'character-project-1',
-        authoringAuthority: { kind: 'content-project', contentProjectId: 'content-project-1' },
+        authoringAuthority: { kind: 'project', projectId: 'project-1' },
         characterVersionId: 'character-version-1',
       }),
     ).toContainEqual({
@@ -37,7 +37,7 @@ describe('Character product handoffs', () => {
       expect(() =>
         createCharacterProductHandoffs({
           characterProjectId: 'character-project-1',
-          authoringAuthority: { kind: 'content-project', contentProjectId: 'content-project-1' },
+          authoringAuthority: { kind: 'project', projectId: 'project-1' },
           characterVersionId,
         }),
       ).toThrow('exact CharacterVersion identity');
@@ -69,8 +69,8 @@ describe('Character product handoffs', () => {
       parseCharacterProductHandoff({
         kind: 'open-character-studio',
         characterProjectId: 'character-project-1',
-        authority: { kind: 'standalone-library', library: 'world' },
+        authority: { kind: 'standalone-library', library: 'character' },
       }),
-    ).toThrow('standalone Character library');
+    ).toThrow('Unknown Character Studio handoff authority: standalone-library');
   });
 });

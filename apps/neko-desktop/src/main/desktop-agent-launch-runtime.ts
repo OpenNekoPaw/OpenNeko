@@ -65,15 +65,12 @@ export function createDesktopAgentConversationReferenceResolver(input: {
 
   function resolveReference(reference: AgentFileReference): AgentContextPayload {
     const locator = reference.contentLocator;
-    if (locator.kind !== 'workspace-file' && locator.kind !== 'media-library') {
+    if (locator.kind !== 'workspace-file') {
       throw new Error(
-        `Agent reference '${reference.label}' is not an authorized project content locator.`,
+        `Agent reference '${reference.label}' must use an authorized Workspace file locator.`,
       );
     }
-    const portableLocation =
-      locator.kind === 'workspace-file'
-        ? `workspace-file:${locator.path}`
-        : `media-library:${locator.libraryName}/${locator.relativePath}`;
+    const portableLocation = `workspace-file:${locator.path}`;
     return {
       type: 'file',
       id: reference.id,
@@ -83,7 +80,9 @@ export function createDesktopAgentConversationReferenceResolver(input: {
         kind: AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND,
         locator,
         ...(reference.mediaType === undefined ? {} : { mediaType: reference.mediaType }),
-        ...(reference.source === undefined ? {} : { source: reference.source }),
+        ...(reference.source === undefined || reference.source === 'media-library'
+          ? {}
+          : { source: reference.source }),
       },
     };
   }
@@ -496,9 +495,7 @@ function projectReferenceMessageContext(
       summary:
         file.locator.kind === 'workspace-file'
           ? file.locator.path
-          : file.locator.kind === 'media-library'
-            ? `${file.locator.libraryName}/${file.locator.relativePath}`
-            : file.name,
+          : file.name,
       ...(file.mediaType === undefined ? {} : { mediaType: file.mediaType }),
       contentLocator: file.locator,
     };

@@ -4,7 +4,7 @@ export const skillDescriptions = {
   'skillDescriptions.audio-mixing':
     'Audio mixing and sound design assistant. Use after the Agent has confirmed the user intends to mix audio, adjust levels, add or balance music, normalize sound, fade audio, or apply ducking.',
   'skillDescriptions.character-creator':
-    'Create a reviewable character draft from a user concept, prompt, or authorized project evidence. Use when the user wants to design a new role, turn source material into a character setting, or quickly fill a newly selected Character authoring target without publishing or starting roleplay.',
+    'Create a reviewable Character from a user concept, prompt, or authorized evidence. Creation mode saves to the current Project workspace; Assistant mode saves directly to the global Character catalog without starting roleplay.',
   'skillDescriptions.color-grading':
     'Color grading and correction assistant. Use after the Agent has confirmed the user intends to adjust color, exposure, contrast, white balance, LUTs, saturation, or a cinematic/film look.',
   'skillDescriptions.image':
@@ -29,4 +29,6 @@ export const skillDescriptions = {
     'Generate or transform a single video clip from prompts, images, keyframes, or reference video, separate from timeline editing.',
   'skillDescriptions.video-editing':
     'Video editing assistant for timeline operations. Use after the Agent has confirmed the user intends to edit a timeline, trim or split clips, merge clips, add transitions, or adjust timing.',
+  'skillDescriptions.world-creator':
+    'Create a reviewable World from a user concept, prompt, or authorized evidence. Creation mode saves to the current Project workspace; Assistant mode saves directly to the global World catalog without starting world interaction.',
 } as const satisfies MessageBundle;

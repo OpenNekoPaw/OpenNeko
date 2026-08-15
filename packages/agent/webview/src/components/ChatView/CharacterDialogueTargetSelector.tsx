@@ -38,9 +38,9 @@ export function CharacterDialogueTargetSelector({
         </div>
       ) : (
         <div className="agent-entry-resource-grid agent-entry-character-target-grid" role="group">
-          {targetsByProject.map(({ characterProjectId, displayName, versions }) => {
+          {targetsByProject.map(({ globalCharacterId, displayName, versions }) => {
             const selectedTarget = selected.find(
-              (item) => item.characterProjectId === characterProjectId,
+              (item) => item.globalCharacterId === globalCharacterId,
             );
             const active = selectedTarget !== undefined;
             const exactVersion = selectedTarget
@@ -51,7 +51,7 @@ export function CharacterDialogueTargetSelector({
                 ? versions[0]
                 : undefined;
             return (
-              <div className="agent-entry-character-card" key={characterProjectId}>
+              <div className="agent-entry-character-card" key={globalCharacterId}>
                 <EntryResourceCard
                   resourceKind="character"
                   label={displayName}
@@ -72,7 +72,7 @@ export function CharacterDialogueTargetSelector({
                   onSelect={() => {
                     if (active) {
                       onChange(
-                        selected.filter((item) => item.characterProjectId !== characterProjectId),
+                        selected.filter((item) => item.globalCharacterId !== globalCharacterId),
                       );
                       return;
                     }
@@ -91,7 +91,7 @@ export function CharacterDialogueTargetSelector({
                       value={selectedTarget?.characterVersionId ?? ''}
                       onChange={(event) => {
                         const remaining = selected.filter(
-                          (item) => item.characterProjectId !== characterProjectId,
+                          (item) => item.globalCharacterId !== globalCharacterId,
                         );
                         if (!event.target.value) {
                           onChange(remaining);
@@ -102,7 +102,7 @@ export function CharacterDialogueTargetSelector({
                         );
                         if (!target) {
                           throw new Error(
-                            `CharacterVersion '${event.target.value}' is unavailable for exact Character '${characterProjectId}'.`,
+                            `CharacterVersion '${event.target.value}' is unavailable for exact Character '${globalCharacterId}'.`,
                           );
                         }
                         onChange([...remaining, selectionFromTarget(target)]);
@@ -134,24 +134,24 @@ function groupTargetsByProject(targets: readonly AgentCharacterDialogueTargetOpt
   const groups = new Map<
     string,
     {
-      readonly characterProjectId: string;
+      readonly globalCharacterId: string;
       readonly displayName: string;
       readonly versions: AgentCharacterDialogueTargetOption[];
     }
   >();
   for (const target of targets) {
-    const current = groups.get(target.characterProjectId);
+    const current = groups.get(target.globalCharacterId);
     if (current) {
       if (current.displayName !== target.displayName) {
         throw new Error(
-          `Character '${target.characterProjectId}' has inconsistent launch display names.`,
+          `Character '${target.globalCharacterId}' has inconsistent launch display names.`,
         );
       }
       current.versions.push(target);
       continue;
     }
-    groups.set(target.characterProjectId, {
-      characterProjectId: target.characterProjectId,
+    groups.set(target.globalCharacterId, {
+      globalCharacterId: target.globalCharacterId,
       displayName: target.displayName,
       versions: [target],
     });
@@ -161,7 +161,7 @@ function groupTargetsByProject(targets: readonly AgentCharacterDialogueTargetOpt
 
 function selectionFromTarget(target: AgentCharacterDialogueTargetOption): SelectedCharacterLaunch {
   return {
-    characterProjectId: target.characterProjectId,
+    globalCharacterId: target.globalCharacterId,
     characterVersionId: target.characterVersionId,
     label: target.displayName,
   };

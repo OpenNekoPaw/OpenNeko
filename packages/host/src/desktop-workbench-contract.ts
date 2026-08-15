@@ -106,7 +106,7 @@ export function createDefaultDesktopWorkbenchLayout(
       width: 320,
     },
     display: {
-      mode: 'chat-only',
+      mode: 'chat-main',
       chatPosition: 'left',
       chatWidth: 360,
     },
@@ -237,9 +237,6 @@ export function setWorkbenchDisplayMode(
   mode: DesktopWorkbenchDisplayMode,
   chatPosition = workbench.display.chatPosition,
 ): DesktopWorkbenchLayoutProjection {
-  if (mode === 'main-only' && workbench.main.views.length === 0) {
-    throw invalidPayload(`Desktop display mode '${mode}' requires an attached Main View.`);
-  }
   if (mode === 'empty-main' && workbench.cutPanel?.presentation !== 'docked') {
     throw invalidPayload(`Desktop display mode '${mode}' requires a docked Cut Panel.`);
   }

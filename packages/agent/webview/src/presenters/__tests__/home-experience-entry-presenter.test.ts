@@ -20,6 +20,10 @@ describe('home experience entry presenter', () => {
 
     expect(projection).toMatchObject({
       mode: 'assistant',
+      options: [
+        { mode: 'assistant', disabled: false },
+        { mode: 'authoring', disabled: false },
+      ],
       showWorkspaceControl: false,
       showSkillSuggestions: true,
     });
@@ -33,8 +37,8 @@ describe('home experience entry presenter', () => {
         workspaceId: 'workspace-1',
         workspaceGrantId: 'grant-1',
       },
-      target: { kind: 'content-project' as const, contentProjectId: 'content-1' },
-      authority: { kind: 'content-project' as const, contentProjectId: 'content-1' },
+      target: { kind: 'content-document' as const, documentId: 'documents/story.md' },
+      authority: { kind: 'project' as const, projectId: 'project-1' },
     };
 
     expect(
@@ -86,6 +90,28 @@ describe('home experience entry presenter', () => {
         configurationReady: true,
       }).submissionBlockedReasonKey,
     ).toBeUndefined();
+
+    const projectContext = {
+      context: target.context,
+      authority: target.authority,
+    };
+    expect(
+      projectHomeExperienceEntry({
+        mode: 'authoring',
+        intent: entryIntent('authoring', {
+          kind: 'authoring',
+          workspaceId: target.context.workspaceId,
+          workspaceGrantId: target.context.workspaceGrantId,
+          authority: target.authority,
+          target: null,
+        }),
+        draft: draft(target.context),
+        workspaceTarget: projectContext,
+        workspaceChooserAvailable: true,
+        bindingPending: false,
+        configurationReady: true,
+      }).submissionBlockedReasonKey,
+    ).toBeUndefined();
   });
 
   it('does not accept a stale Workspace binding for Assistant', () => {
@@ -108,7 +134,7 @@ describe('home experience entry presenter', () => {
   it('allows Character Dialogue only with the exact selected version receipt', () => {
     const characterLaunches = [
       {
-        characterProjectId: 'character-project-a',
+        globalCharacterId: 'character-project-a',
         characterVersionId: 'character-version-a',
         label: 'A',
       },
@@ -125,7 +151,7 @@ describe('home experience entry presenter', () => {
           mode: 'companion',
           participants: [
             {
-              characterProjectId: 'character-project-a',
+              globalCharacterId: 'character-project-a',
               characterVersionId: 'character-version-a',
             },
           ],
@@ -169,7 +195,7 @@ describe('home experience entry presenter', () => {
           mode: 'narrative',
           participants: [
             {
-              characterProjectId: 'character-project-a',
+              globalCharacterId: 'character-project-a',
               characterVersionId: 'character-version-a',
             },
           ],
@@ -230,8 +256,72 @@ describe('home experience entry presenter', () => {
         workspaceChooserAvailable: true,
         bindingPending: false,
         configurationReady: true,
-      }).options.find((option) => option.mode === 'world-experience'),
-    ).toMatchObject({ disabled: false });
+      }).options.map((option) => option.mode),
+    ).toEqual(['assistant', 'authoring']);
+  });
+
+  it('allows World Experience only for the exact World and Character combination', () => {
+    const worldLaunch = {
+      globalWorldId: 'global-world-a',
+      worldVersionId: 'world-version-a',
+      label: 'World A',
+      versionLabel: 'v1',
+    };
+    const characterLaunches = [
+      {
+        globalCharacterId: 'character-a',
+        characterVersionId: 'character-version-a',
+        label: 'Character A',
+      },
+    ];
+    const intent: AgentEntryIntentProjection = {
+      mode: 'world-experience',
+      targetReceipt: {
+        targetReceiptId: 'target-receipt-world',
+        draftId: 'draft-1',
+        connectionId: 'connection-1',
+        mode: 'world-experience',
+        binding: {
+          kind: 'world-experience',
+          globalWorldId: worldLaunch.globalWorldId,
+          worldVersionId: worldLaunch.worldVersionId,
+          participants: [
+            {
+              globalCharacterId: characterLaunches[0]!.globalCharacterId,
+              characterVersionId: characterLaunches[0]!.characterVersionId,
+            },
+          ],
+          launch: { kind: 'new' },
+        },
+      },
+    };
+
+    expect(
+      projectHomeExperienceEntry({
+        mode: 'world-experience',
+        intent,
+        draft: draft({ kind: 'unbound' }),
+        characterLaunches,
+        worldLaunch,
+        workspaceChooserAvailable: true,
+        bindingPending: false,
+        configurationReady: true,
+      }).submissionBlockedReasonKey,
+    ).toBeUndefined();
+    expect(
+      projectHomeExperienceEntry({
+        mode: 'world-experience',
+        intent,
+        draft: draft({ kind: 'unbound' }),
+        characterLaunches: [
+          { ...characterLaunches[0]!, characterVersionId: 'character-version-other' },
+        ],
+        worldLaunch,
+        workspaceChooserAvailable: true,
+        bindingPending: false,
+        configurationReady: true,
+      }).submissionBlockedReasonKey,
+    ).toBe('chat.entryExperience.validation.worldUnavailable');
   });
 });
 

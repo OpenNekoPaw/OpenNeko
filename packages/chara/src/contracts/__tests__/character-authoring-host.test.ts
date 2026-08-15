@@ -13,7 +13,7 @@ describe('Character authoring Host contract', () => {
   const binding: CharacterAuthoringBinding = {
     workspaceId: 'workspace-1',
     workspaceGrantId: 'grant-1',
-    authority: { kind: 'content-project', contentProjectId: 'content-project-1' },
+    authority: { kind: 'project', projectId: 'project-1' },
     characterProjectId: 'character-1',
   };
 
@@ -129,26 +129,27 @@ describe('Character authoring Host contract', () => {
     ).toThrow('targets another CharacterProject');
   });
 
-  it('keeps standalone and project-local authorities explicit', () => {
-    const standalone = createCharacterAuthoringSnapshotRequest({
-      requestId: 'request-standalone',
-      rendererSessionId: 'renderer-1',
-      windowId: 'window-1',
-      binding: {
-        workspaceId: 'character-library-workspace',
-        workspaceGrantId: 'character-library-grant',
-        authority: { kind: 'standalone-library' },
-        characterProjectId: 'character-standalone',
-      },
-    });
-
-    expect(standalone.authority).toEqual({ kind: 'standalone-library' });
+  it('rejects retired standalone and Content Project authority shapes', () => {
     expect(() =>
       parseCharacterAuthoringHostRequest({
-        ...standalone,
-        authority: { kind: 'standalone-library', contentProjectId: 'fake-project' },
+        requestId: 'request-standalone',
+        rendererSessionId: 'renderer-1',
+        windowId: 'window-1',
+        ...binding,
+        authority: { kind: 'standalone-library' },
+        operation: 'authoring-snapshot-get',
       }),
-    ).toThrow('unknown or missing fields');
+    ).toThrow();
+    expect(() =>
+      parseCharacterAuthoringHostRequest({
+        requestId: 'request-content-project',
+        rendererSessionId: 'renderer-1',
+        windowId: 'window-1',
+        ...binding,
+        authority: { kind: 'content-project', contentProjectId: 'project-1' },
+        operation: 'authoring-snapshot-get',
+      }),
+    ).toThrow();
   });
 
   it('parses one owner snapshot and rejects cross-target or internal-version payloads', () => {

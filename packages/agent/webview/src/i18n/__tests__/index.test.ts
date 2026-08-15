@@ -69,6 +69,7 @@ describe('i18n module', () => {
         'subtitle-assistant',
         'video',
         'video-editing',
+        'world-creator',
       ] as const;
 
       for (const locale of ['en', 'zh-cn'] as const) {
@@ -80,7 +81,8 @@ describe('i18n module', () => {
       }
 
       setLocale('zh-cn');
-      expect(t('skillDescriptions.character-creator')).toContain('可审阅的角色草稿');
+      expect(t('skillDescriptions.character-creator')).toContain('助手模式直接保存到全局角色目录');
+      expect(t('skillDescriptions.world-creator')).toContain('助手模式直接保存到全局世界目录');
     });
 
     it('should localize every builtin command description without translating command names', () => {

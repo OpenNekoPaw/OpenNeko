@@ -1056,7 +1056,8 @@ body {
 }
 
 .agent-entry-authoring-actions,
-.agent-entry-character-target-grid {
+.agent-entry-character-target-grid,
+.agent-entry-world-target-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
@@ -1258,23 +1259,27 @@ body {
 
 @media (max-width: 700px) {
   .agent-entry-authoring-actions,
-  .agent-entry-character-target-grid {
+  .agent-entry-character-target-grid,
+  .agent-entry-world-target-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-.agent-entry-character-target-grid {
+.agent-entry-character-target-grid,
+.agent-entry-world-target-grid {
   margin-top: 8px;
 }
 
-.agent-entry-character-card {
+.agent-entry-character-card,
+.agent-entry-world-card {
   display: grid;
   min-width: 0;
   align-content: start;
   gap: 6px;
 }
 
-.agent-entry-character-version-picker {
+.agent-entry-character-version-picker,
+.agent-entry-world-version-picker {
   display: grid;
   min-width: 0;
   gap: 4px;
@@ -1284,7 +1289,8 @@ body {
   line-height: 14px;
 }
 
-.agent-entry-character-version-picker select {
+.agent-entry-character-version-picker select,
+.agent-entry-world-version-picker select {
   width: 100%;
   min-width: 0;
   padding: 7px 28px 7px 9px;
@@ -1296,12 +1302,14 @@ body {
   font-size: 11px;
 }
 
-.agent-entry-character-version-picker select:focus-visible {
+.agent-entry-character-version-picker select:focus-visible,
+.agent-entry-world-version-picker select:focus-visible {
   border-color: var(--agent-composer-focus-border);
   outline: none;
 }
 
-.agent-entry-character-version-picker select:disabled {
+.agent-entry-character-version-picker select:disabled,
+.agent-entry-world-version-picker select:disabled {
   cursor: default;
   opacity: 0.5;
 }
@@ -2818,7 +2826,6 @@ body {
 .agent-dropdown-item:focus-visible {
   border-color: var(--agent-menu-row-hover-border);
   background: var(--agent-menu-row-hover-bg);
-  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-hover-border);
   outline: none;
 }
 
@@ -2826,7 +2833,6 @@ body {
   color: var(--agent-menu-row-selected-fg);
   border-color: var(--agent-menu-row-selected-border);
   background: var(--agent-menu-row-selected-bg);
-  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-indicator);
 }
 
 .agent-dropdown-item-selected::before {
@@ -3485,14 +3491,12 @@ body {
 .agent-header-menu-item:focus-visible {
   border-color: var(--agent-menu-row-hover-border);
   background: var(--agent-menu-row-hover-bg);
-  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-hover-border);
   outline: none;
 }
 
 .agent-header-menu-item.is-active {
   border-color: var(--agent-menu-row-selected-border);
   background: var(--agent-menu-row-selected-bg);
-  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-indicator);
   color: var(--agent-menu-row-selected-fg);
 }
 
@@ -3661,7 +3665,6 @@ body {
 .agent-history-menu-item.is-active {
   border-color: var(--agent-menu-row-selected-border);
   background: var(--agent-menu-row-selected-bg);
-  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-indicator);
 }
 
 .agent-header-menu-item-main {

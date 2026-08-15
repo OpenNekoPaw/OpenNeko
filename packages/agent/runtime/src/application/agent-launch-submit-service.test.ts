@@ -197,7 +197,7 @@ describe('Agent launch Draft submission application service', () => {
           mode: 'companion' as const,
           participants: [
             {
-              characterProjectId: 'character-project-1',
+              globalCharacterId: 'character-project-1',
               characterVersionId: 'character-version-1',
               roleProfileId: 'role-profile-1',
             },
@@ -250,13 +250,10 @@ describe('Agent launch Draft submission application service', () => {
         mode: 'world-experience' as const,
         binding: {
           kind: 'world-experience' as const,
-          worldExperienceId: 'world-experience-1',
-          worldExperienceVersionId: 'world-experience-version-1',
-          launch: {
-            kind: 'new' as const,
-            participantId: 'participant-1',
-            roleScopeId: 'role-scope-1',
-          },
+          globalWorldId: 'global-world-1',
+          worldVersionId: 'world-version-1',
+          participants: [],
+          launch: { kind: 'new' as const },
         },
       },
     };

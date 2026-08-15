@@ -389,6 +389,10 @@ export interface CreateAgentAppHostOptions {
   readonly resolveContentReadService?: (
     workspace: AssetWorkspaceResolution,
   ) => ContentReadService | undefined;
+  readonly resolveDocumentHostFilePath?: (
+    workspace: AssetWorkspaceResolution,
+    source: import('@neko/content').WorkspaceFileContentLocator,
+  ) => Promise<string>;
   readonly pluginToolAdapters?: AgentPluginToolAdapterPort;
   readonly loadTransientToolResultImage?: (input: {
     readonly receiptId: string;
@@ -756,6 +760,13 @@ class DefaultAgentAppHost implements AgentAppHost {
       providerTurnAdmission: this.providerTurns,
       structuredProjectAuthoring: !isAssistantSpace,
       ...(contentReadService ? { contentReadService } : {}),
+      ...(this.options.resolveDocumentHostFilePath
+        ? {
+            resolveDocumentHostFilePath: (source) =>
+              this.options.resolveDocumentHostFilePath?.(workspace, source) ??
+              Promise.reject(new Error('Agent document resolver is unavailable.')),
+          }
+        : {}),
       ...(this.options.loadTransientToolResultImage === undefined
         ? {}
         : { loadTransientToolResultImage: this.options.loadTransientToolResultImage }),
@@ -843,6 +854,9 @@ interface DefaultAgentWorkspaceRuntimeOptions {
   readonly providerTurnAdmission: AgentProviderTurnScheduler;
   readonly structuredProjectAuthoring: boolean;
   readonly contentReadService?: ContentReadService;
+  readonly resolveDocumentHostFilePath?: (
+    source: import('@neko/content').WorkspaceFileContentLocator,
+  ) => Promise<string>;
   readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
   readonly authoringMutationAuthority?: AgentAuthoringMutationAuthority;
   readonly workspaceCapabilityProviders: readonly AgentCapabilityProvider[];
@@ -906,6 +920,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     this.contentAccessRuntime = createAgentContentAccessRuntime(
       options.workspace,
       options.contentReadService,
+      options.resolveDocumentHostFilePath,
     );
     this.toolResultAssetLoader = createPiToolResultAssetLoader(
       this.contentAccessRuntime,
@@ -2181,6 +2196,9 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 function createAgentContentAccessRuntime(
   workspace: AssetWorkspaceResolution,
   contentRead?: ContentReadService,
+  resolveDocumentHostFilePath?: (
+    source: import('@neko/content').WorkspaceFileContentLocator,
+  ) => Promise<string>,
 ): AgentContentAccessRuntime {
   const documentLowLevelAccess = createNodeDocumentLowLevelAccess();
   return createHostAgentContentAccessRuntime({
@@ -2194,7 +2212,9 @@ function createAgentContentAccessRuntime(
         },
       }),
     documentAccess: createNodeDocumentAccessService(),
-    resolveDocumentHostFilePath: (source) => resolveWorkspaceContentLocator(workspace, source),
+    resolveDocumentHostFilePath:
+      resolveDocumentHostFilePath ??
+      ((source) => resolveWorkspaceContentLocator(workspace, source)),
   });
 }
 
@@ -2235,7 +2255,7 @@ function bindAgentAuthoringMutationAuthority(
       authority === undefined ||
       receipt === null ||
       receipt.binding.kind !== 'authoring' ||
-      receipt.binding.target.kind !== expectedTargetKind
+      receipt.binding.target?.kind !== expectedTargetKind
     ) {
       return [];
     }

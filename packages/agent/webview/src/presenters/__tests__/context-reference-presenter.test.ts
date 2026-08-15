@@ -36,9 +36,8 @@ describe('context-reference-presenter', () => {
       summary: 'Media: Hero reference',
       data: {
         contentLocator: {
-          kind: 'media-library',
-          libraryName: 'References',
-          relativePath: 'hero.png',
+          kind: 'workspace-file',
+          path: 'neko/assets/References/hero.png',
         },
         navigationData: {
           partition: 'media-library',
@@ -54,9 +53,8 @@ describe('context-reference-presenter', () => {
         label: 'Hero reference',
         summary: 'Media: Hero reference',
         contentLocator: {
-          kind: 'media-library',
-          libraryName: 'References',
-          relativePath: 'hero.png',
+          kind: 'workspace-file',
+          path: 'neko/assets/References/hero.png',
         },
         navigationData: { partition: 'media-library' },
       },

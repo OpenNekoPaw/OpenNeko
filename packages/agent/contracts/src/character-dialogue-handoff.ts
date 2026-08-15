@@ -13,7 +13,7 @@ export interface CharacterDialogueHandoffIntent {
 export function createCharacterDialogueHandoffIntent(input: {
   readonly intentId: string;
   readonly label: string;
-  readonly characterProjectId: string;
+  readonly globalCharacterId: string;
   readonly characterVersionId: string;
 }): CharacterDialogueHandoffIntent {
   return parseCharacterDialogueHandoffIntent({
@@ -25,7 +25,7 @@ export function createCharacterDialogueHandoffIntent(input: {
       mode: 'companion',
       participants: [
         {
-          characterProjectId: input.characterProjectId,
+          globalCharacterId: input.globalCharacterId,
           characterVersionId: input.characterVersionId,
         },
       ],

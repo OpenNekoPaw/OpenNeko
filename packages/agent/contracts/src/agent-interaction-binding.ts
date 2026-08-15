@@ -43,6 +43,10 @@ export type AgentDomainBinding =
       readonly worldRunId?: string;
       readonly participantId: string;
       readonly roleScopeId: string;
+      readonly characters: readonly {
+        readonly characterId: string;
+        readonly characterVersionId: string;
+      }[];
     };
 
 export type AgentBoundDomainBinding = Exclude<AgentDomainBinding, { readonly kind: 'unbound' }>;
@@ -268,10 +272,19 @@ export function parseAgentDomainBinding(value: unknown): AgentDomainBinding {
           'worldRunId',
           'participantId',
           'roleScopeId',
+          'characters',
         ],
-        ['kind', 'worldExperienceId', 'worldExperienceVersionId', 'participantId', 'roleScopeId'],
+        [
+          'kind',
+          'worldExperienceId',
+          'worldExperienceVersionId',
+          'participantId',
+          'roleScopeId',
+          'characters',
+        ],
         'World Agent binding',
       );
+      const characters = requireWorldCharacterBindings(record['characters']);
       return {
         kind: 'world',
         worldExperienceId: requireIdentity(record['worldExperienceId'], 'World Experience'),
@@ -284,6 +297,7 @@ export function parseAgentDomainBinding(value: unknown): AgentDomainBinding {
           : { worldRunId: requireIdentity(record['worldRunId'], 'World Run') }),
         participantId: requireIdentity(record['participantId'], 'World participant'),
         roleScopeId: requireIdentity(record['roleScopeId'], 'World role scope'),
+        characters,
       };
     default:
       throw new Error(`Unknown Agent domain binding '${String(record['kind'])}'.`);
@@ -324,6 +338,28 @@ function requireIdentityArray(value: unknown, label: string): readonly string[] 
     throw new Error(`${label} identities must not contain duplicates.`);
   }
   return identities;
+}
+
+function requireWorldCharacterBindings(value: unknown): readonly {
+  readonly characterId: string;
+  readonly characterVersionId: string;
+}[] {
+  if (!Array.isArray(value)) throw new Error('World Character bindings must be an array.');
+  const characters = value.map((item) => {
+    const record = requireRecord(item, 'World Character binding must be an object.');
+    requireExactKeys(record, ['characterId', 'characterVersionId'], 'World Character binding');
+    return {
+      characterId: requireIdentity(record['characterId'], 'World Character'),
+      characterVersionId: requireIdentity(record['characterVersionId'], 'World Character Version'),
+    };
+  });
+  if (
+    new Set(characters.map((character) => character.characterId)).size !== characters.length ||
+    new Set(characters.map((character) => character.characterVersionId)).size !== characters.length
+  ) {
+    throw new Error('World Character bindings must use unique exact identities.');
+  }
+  return characters;
 }
 
 function requireExactKeys(record: Record<string, unknown>, keys: readonly string[], label: string) {

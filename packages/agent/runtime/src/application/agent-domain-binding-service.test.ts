@@ -86,6 +86,7 @@ describe('Agent domain binding application service', () => {
         worldExperienceVersionId: 'world-version:two',
         participantId: 'participant:one',
         roleScopeId: 'scope:one',
+        characters: [],
       }),
     ).resolves.toMatchObject({
       status: 'unavailable',
@@ -123,6 +124,7 @@ describe('Agent domain binding application service', () => {
       worldExperienceVersionId: 'world-version:one',
       participantId: 'participant:one',
       roleScopeId: 'role-scope:one',
+      characters: [],
     };
 
     await expect(service.resolve(requested)).resolves.toEqual({

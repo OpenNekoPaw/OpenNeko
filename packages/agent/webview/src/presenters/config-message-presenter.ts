@@ -831,7 +831,7 @@ function isProjectFileMentionInfo(value: unknown): value is ProjectFileMentionIn
   return Boolean(
     record &&
     isContentLocator(record.locator) &&
-    (record.locator.kind === 'workspace-file' || record.locator.kind === 'media-library') &&
+    record.locator.kind === 'workspace-file' &&
     readString(record, 'name') &&
     (record.type === 'file' || record.type === 'folder') &&
     (record.icon === undefined || typeof record.icon === 'string') &&

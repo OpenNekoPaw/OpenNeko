@@ -8,7 +8,6 @@ export * from './agent-autoheal';
 export * from './agent-ai-source';
 export * from './agent-capability-activation';
 export * from './agent-context';
-export * from './character-creation-handoff';
 export * from './agent-home';
 export * from './agent-image-transport';
 export * from './agent-availability';

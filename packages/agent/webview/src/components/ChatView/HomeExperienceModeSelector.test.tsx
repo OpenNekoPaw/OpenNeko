@@ -7,8 +7,8 @@ vi.mock('../../i18n/I18nContext', () => ({
     t: (key: string) =>
       ({
         'chat.entryExperience.label': 'Choose a conversation mode',
-        'chat.entryExperience.mode.assistant': 'Assistant',
-        'chat.entryExperience.mode.authoring': 'Authoring',
+        'chat.entryExperience.mode.assistant': 'Conversation',
+        'chat.entryExperience.mode.authoring': 'Creation',
         'chat.entryExperience.mode.characterDialogue': 'Character Dialogue',
         'chat.entryExperience.mode.worldExperience': 'World Experience',
         'chat.entryExperience.validation.characterUnavailable': 'Character is unavailable',
@@ -20,22 +20,10 @@ vi.mock('../../i18n/I18nContext', () => ({
 const options = [
   { mode: 'assistant' as const, labelKey: 'chat.entryExperience.mode.assistant', disabled: false },
   { mode: 'authoring' as const, labelKey: 'chat.entryExperience.mode.authoring', disabled: false },
-  {
-    mode: 'character-dialogue' as const,
-    labelKey: 'chat.entryExperience.mode.characterDialogue',
-    disabled: false,
-    descriptionKey: 'chat.entryExperience.validation.characterUnavailable' as const,
-  },
-  {
-    mode: 'world-experience' as const,
-    labelKey: 'chat.entryExperience.mode.worldExperience',
-    disabled: false,
-    descriptionKey: 'chat.entryExperience.validation.worldUnavailable' as const,
-  },
 ];
 
 describe('HomeExperienceModeSelector', () => {
-  it('changes Draft configuration among the four intent-qualified modes', () => {
+  it('changes Draft configuration between Conversation and Creation', () => {
     const onChange = vi.fn();
     render(
       <HomeExperienceModeSelector
@@ -54,10 +42,10 @@ describe('HomeExperienceModeSelector', () => {
     const tablist = screen.getByRole('tablist', { name: 'Choose a conversation mode' });
     expect(tablist).toBeTruthy();
     expect(tablist.style.maxWidth).toBe('480px');
-    expect(screen.getAllByRole('tab')).toHaveLength(4);
-    expect(screen.getByRole('tab', { name: 'Assistant' }).style.height).toBe('24px');
-    expect(screen.getByRole('tab', { name: 'Assistant' }).style.fontSize).toBe('12px');
-    fireEvent.click(screen.getByRole('tab', { name: 'Authoring' }));
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
+    expect(screen.getByRole('tab', { name: 'Conversation' }).style.height).toBe('24px');
+    expect(screen.getByRole('tab', { name: 'Conversation' }).style.fontSize).toBe('12px');
+    fireEvent.click(screen.getByRole('tab', { name: 'Creation' }));
     expect(onChange).toHaveBeenCalledWith('authoring');
   });
 
@@ -65,7 +53,7 @@ describe('HomeExperienceModeSelector', () => {
     render(
       <HomeExperienceModeSelector
         projection={{
-          mode: 'character-dialogue',
+          mode: 'authoring',
           options,
           titleKey: 'title',
           descriptionKey: 'description',
@@ -77,17 +65,17 @@ describe('HomeExperienceModeSelector', () => {
       />,
     );
 
-    expect(
-      screen.getByRole('tab', { name: 'Character Dialogue' }).getAttribute('aria-selected'),
-    ).toBe('true');
-    expect(screen.getByRole('tab', { name: 'Assistant' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('tab', { name: 'Creation' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: 'Conversation' })).toHaveProperty('disabled', true);
   });
 
-  it('keeps the final mode thumb inside the padded right boundary', () => {
+  it('keeps the Creation thumb inside the padded right boundary', () => {
     const { container } = render(
       <HomeExperienceModeSelector
         projection={{
-          mode: 'world-experience',
+          mode: 'authoring',
           options,
           titleKey: 'title',
           descriptionKey: 'description',
@@ -99,7 +87,7 @@ describe('HomeExperienceModeSelector', () => {
 
     const thumb = container.querySelector<HTMLElement>('.neko-segmented-control-thumb');
     expect(thumb?.style.left).toBe('2px');
-    expect(thumb?.style.width).toBe('calc(0.25 * (100% - 4px))');
-    expect(thumb?.style.transform).toBe('translateX(300%)');
+    expect(thumb?.style.width).toBe('calc(0.5 * (100% - 4px))');
+    expect(thumb?.style.transform).toBe('translateX(100%)');
   });
 });

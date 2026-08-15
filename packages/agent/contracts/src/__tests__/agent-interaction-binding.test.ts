@@ -33,6 +33,7 @@ describe('Agent interaction binding contract', () => {
       worldRunId: 'world-run-9',
       participantId: 'participant-user',
       roleScopeId: 'world-role-participant',
+      characters: [{ characterId: 'character-rin', characterVersionId: 'character-version-rin-7' }],
     });
     if (character.kind !== 'character' || world.kind !== 'world') {
       throw new Error('Fixture bindings did not retain their exact domain kinds.');
@@ -131,6 +132,7 @@ describe('Agent interaction binding contract', () => {
           worldExperienceVersionId: 'world-experience-version-4',
           participantId: 'participant-user',
           roleScopeId: 'world-role-participant',
+          characters: [],
         },
       }),
     ).toThrow('World Run');

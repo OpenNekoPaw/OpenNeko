@@ -33,7 +33,7 @@ vi.mock('../../i18n/I18nContext', () => ({
 
 const targets = [
   {
-    characterProjectId: 'character-project-a',
+    globalCharacterId: 'character-project-a',
     characterVersionId: 'character-version-a',
     displayName: 'A',
     versionLabel: 'Published A',
@@ -46,7 +46,7 @@ const targets = [
     storylines: [{ storylineVersionId: 'storyline-version-a', label: 'Arc A' }],
   },
   {
-    characterProjectId: 'character-project-a',
+    globalCharacterId: 'character-project-a',
     characterVersionId: 'character-version-a-branch',
     displayName: 'A',
     versionLabel: 'Published A branch',
@@ -62,7 +62,7 @@ const targets = [
     storylines: [],
   },
   {
-    characterProjectId: 'character-project-b',
+    globalCharacterId: 'character-project-b',
     characterVersionId: 'character-version-b',
     displayName: 'B',
     versionLabel: 'Published B',
@@ -112,7 +112,7 @@ describe('CharacterDialogueTargetSelector', () => {
     });
     const dialogueSelection = [
       {
-        characterProjectId: 'character-project-a',
+        globalCharacterId: 'character-project-a',
         characterVersionId: 'character-version-a-branch',
         label: 'A',
       },
@@ -132,7 +132,7 @@ describe('CharacterDialogueTargetSelector', () => {
     const roomSelection = [
       ...dialogueSelection,
       {
-        characterProjectId: 'character-project-b',
+        globalCharacterId: 'character-project-b',
         characterVersionId: 'character-version-b',
         label: 'B',
       },
@@ -151,7 +151,7 @@ describe('CharacterDialogueTargetSelector', () => {
     fireEvent.click(screen.getByText('A').closest('button')!);
     expect(onChange).toHaveBeenLastCalledWith([
       {
-        characterProjectId: 'character-project-b',
+        globalCharacterId: 'character-project-b',
         characterVersionId: 'character-version-b',
         label: 'B',
       },
@@ -176,7 +176,7 @@ describe('CharacterDialogueTargetSelector', () => {
     const onChange = vi.fn();
     const selected = [
       {
-        characterProjectId: 'character-project-a',
+        globalCharacterId: 'character-project-a',
         characterVersionId: 'character-version-a-branch',
         label: 'A',
       },
@@ -196,7 +196,7 @@ describe('CharacterDialogueTargetSelector', () => {
     });
     expect(onChange).toHaveBeenCalledWith([
       {
-        characterProjectId: 'character-project-a',
+        globalCharacterId: 'character-project-a',
         characterVersionId: 'character-version-a',
         label: 'A',
       },

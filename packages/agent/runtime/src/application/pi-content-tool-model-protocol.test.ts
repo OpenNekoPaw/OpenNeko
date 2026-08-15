@@ -277,9 +277,8 @@ describe('Pi content Tool model protocol', () => {
       images: [
         {
           contentLocator: {
-            kind: 'media-library',
-            libraryName: 'Reference',
-            relativePath: 'library-image.png',
+            kind: 'workspace-file',
+            path: 'neko/assets/Reference/library-image.png',
           },
         },
       ],
@@ -554,9 +553,8 @@ function searchResult() {
             partition: 'media-library',
             sourceKind: 'media-library',
             contentLocator: {
-              kind: 'media-library',
-              libraryName: 'Reference',
-              relativePath: 'library-image.png',
+              kind: 'workspace-file',
+              path: 'neko/assets/Reference/library-image.png',
             },
           },
         },

@@ -25,6 +25,7 @@ const EXPECTED_BUILTINS = [
   'subtitle-assistant',
   'video',
   'video-editing',
+  'world-creator',
 ] as const;
 
 describe('Pi builtin Skill packages', () => {
@@ -48,7 +49,17 @@ describe('Pi builtin Skill packages', () => {
     );
     const characterCreation = invokeSelected(snapshot, 'character-creator');
     expect(characterCreation).toContain('source-backed facts from creative inferences');
-    expect(characterCreation).toContain('available authoring capability');
+    expect(characterCreation).toContain('workspace Character or global Character');
+    expect(characterCreation).not.toContain('CharacterProject');
+    expect(characterCreation).not.toContain('draft lifecycle');
+    const worldCreation = invokeSelected(snapshot, 'world-creator');
+    expect(worldCreation).toContain('source-backed facts from creative inferences');
+    expect(worldCreation).toContain('dependency placeholders');
+    expect(worldCreation).toContain('workspace World or global World');
+    expect(worldCreation).not.toContain('ContentLocator');
+    expect(worldCreation).not.toContain('WorldProjectCreate');
+    expect(worldCreation).not.toContain('WorldProject');
+    expect(worldCreation).not.toContain('draft lifecycle');
     const storyboard = invokeSelected(snapshot, 'storyboard');
     expect(storyboard).toContain('actual pixel-level visual evidence, OCR, or panel boundaries');
     expect(storyboard).not.toContain('ReadDocument');

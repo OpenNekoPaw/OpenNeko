@@ -61,6 +61,10 @@ export interface UpdateCharacterDraftInput {
   readonly draft: CharacterDefinition;
 }
 
+export interface FillFreshCharacterInput extends UpdateCharacterDraftInput {
+  readonly displayName: string;
+}
+
 export interface AddCharacterEvidenceInput {
   readonly characterProjectId: string;
   readonly evidence: CharacterEvidenceRef;
@@ -170,6 +174,15 @@ export class CharacterAuthoringService {
     input: CreateCharacterProjectInput,
     signal?: AbortSignal,
   ): Promise<CharacterProject> {
+    const project = await this.prepareProject(input, signal);
+    await this.options.repository.saveProject(project, signal);
+    return clone(project);
+  }
+
+  async prepareProject(
+    input: CreateCharacterProjectInput,
+    signal?: AbortSignal,
+  ): Promise<CharacterProject> {
     const existing = await this.options.repository.readProject(input.characterProjectId, signal);
     if (existing) {
       throw authoringError(
@@ -193,7 +206,6 @@ export class CharacterAuthoringService {
       createdAt: timestamp,
       updatedAt: timestamp,
     });
-    await this.options.repository.saveProject(project, signal);
     return clone(project);
   }
 
@@ -209,7 +221,7 @@ export class CharacterAuthoringService {
   }
 
   async fillFreshDraft(
-    input: UpdateCharacterDraftInput,
+    input: FillFreshCharacterInput,
     signal?: AbortSignal,
   ): Promise<CharacterProject> {
     return this.updateProject(
@@ -222,7 +234,12 @@ export class CharacterAuthoringService {
             project.characterProjectId,
           );
         }
-        return { ...project, draft: clone(input.draft), reviewStatus: 'draft' };
+        return {
+          ...project,
+          displayName: input.displayName,
+          draft: clone(input.draft),
+          reviewStatus: 'draft',
+        };
       },
       signal,
     );

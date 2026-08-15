@@ -1748,8 +1748,8 @@ function authoringReceipt(): AgentEntryTargetReceipt {
       kind: 'authoring',
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant-1',
-      authority: { kind: 'content-project', contentProjectId: 'content-1' },
-      target: { kind: 'content-project', contentProjectId: 'content-1' },
+      authority: { kind: 'project', projectId: 'project-1' },
+      target: { kind: 'content-document', documentId: 'document-1' },
     },
   };
 }

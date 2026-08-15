@@ -3,7 +3,6 @@ import {
   createEmptyCharacterOriginSetting,
   parseCharacterCreationSourceSelection,
   type CharacterDefinition,
-  type CharacterProject,
 } from '@neko/chara/contracts';
 import {
   CharacterCreationSourceService,
@@ -31,6 +30,25 @@ describe('CharacterCreationSourceService', () => {
     ).toThrow("Unknown Character creation evidence source 'neko-character-archive'");
   });
 
+  it('rejects contentProjectId as a Project identity alias', () => {
+    expect(() =>
+      parseCharacterCreationSourceSelection({
+        evidence: [
+          {
+            kind: 'project-entity',
+            evidenceId: 'evidence:legacy-project',
+            sourceWorkspaceId: 'workspace:story',
+            sourceWorkspaceGrantId: 'grant:story',
+            contentProjectId: 'content-project:story',
+            entityId: 'entity:lin',
+            observedAt,
+          },
+        ],
+        assetRepresentations: [],
+      }),
+    ).toThrow('contains unsupported fields: contentProjectId');
+  });
+
   it('reviews File, exact Asset and confirmed Entity sources before one fresh CharacterProject write', async () => {
     const authority = authorityFixture();
     const projects = projectPortFixture();
@@ -56,7 +74,7 @@ describe('CharacterCreationSourceService', () => {
             evidenceId: 'evidence:entity',
             sourceWorkspaceId: 'workspace:story',
             sourceWorkspaceGrantId: 'grant:story',
-            contentProjectId: 'content-project:story',
+            projectId: 'project:story',
             entityId: 'entity:lin',
             observedAt,
           },
@@ -90,7 +108,7 @@ describe('CharacterCreationSourceService', () => {
       {
         sourceWorkspaceId: 'workspace:story',
         sourceWorkspaceGrantId: 'grant:story',
-        contentProjectId: 'content-project:story',
+        projectId: 'project:story',
         entityId: 'entity:lin',
       },
       undefined,
@@ -118,7 +136,7 @@ describe('CharacterCreationSourceService', () => {
             }),
             {
               evidenceId: 'evidence:entity',
-              sourceRef: 'project-entity:content-project%3Astory/entity%3Alin',
+              sourceRef: 'project-entity:project%3Astory/entity%3Alin',
               observedAt,
             },
           ],
@@ -256,23 +274,25 @@ function authorityFixture() {
 }
 
 function projectPortFixture() {
+  const prepare = async (input: Parameters<CharacterCreationProjectPort['createProject']>[0]) => ({
+    characterProjectId: input.characterProjectId,
+    displayName: input.displayName,
+    draft: {
+      ...input.draft,
+      representationRefs: [
+        ...input.draft.representationRefs,
+        ...(input.seed?.representationRefs ?? []),
+      ],
+    },
+    evidence: input.seed?.evidence ?? [],
+    candidates: [],
+    reviewStatus: 'draft' as const,
+    createdAt: observedAt,
+    updatedAt: observedAt,
+  });
   return {
-    createProject: vi.fn(async (input): Promise<CharacterProject> => ({
-      characterProjectId: input.characterProjectId,
-      displayName: input.displayName,
-      draft: {
-        ...input.draft,
-        representationRefs: [
-          ...input.draft.representationRefs,
-          ...(input.seed?.representationRefs ?? []),
-        ],
-      },
-      evidence: input.seed?.evidence ?? [],
-      candidates: [],
-      reviewStatus: 'draft',
-      createdAt: observedAt,
-      updatedAt: observedAt,
-    })),
+    prepareProject: vi.fn(prepare),
+    createProject: vi.fn(prepare),
   } satisfies CharacterCreationProjectPort;
 }
 

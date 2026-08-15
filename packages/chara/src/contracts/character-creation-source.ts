@@ -30,7 +30,7 @@ export interface CharacterProjectEntityEvidenceSource {
   readonly evidenceId: string;
   readonly sourceWorkspaceId: string;
   readonly sourceWorkspaceGrantId: string;
-  readonly contentProjectId: string;
+  readonly projectId: string;
   readonly entityId: string;
   readonly excerpt?: string;
   readonly observedAt: string;
@@ -91,9 +91,9 @@ export function createCharacterContentEvidenceSourceRef(
 }
 
 export function createCharacterProjectEntityEvidenceSourceRef(
-  source: Pick<CharacterProjectEntityEvidenceSource, 'contentProjectId' | 'entityId'>,
+  source: Pick<CharacterProjectEntityEvidenceSource, 'projectId' | 'entityId'>,
 ): string {
-  return ownerQualifiedRef('project-entity', [source.contentProjectId, source.entityId]);
+  return ownerQualifiedRef('project-entity', [source.projectId, source.entityId]);
 }
 
 export function createCharacterAssetRepresentationResourceRef(
@@ -150,7 +150,7 @@ function parseCharacterCreationEvidenceSource(value: unknown): CharacterCreation
         'evidenceId',
         'sourceWorkspaceId',
         'sourceWorkspaceGrantId',
-        'contentProjectId',
+        'projectId',
         'entityId',
         'excerpt',
         'observedAt',
@@ -169,10 +169,7 @@ function parseCharacterCreationEvidenceSource(value: unknown): CharacterCreation
           record['sourceWorkspaceGrantId'],
           'Character evidence source Workspace grant',
         ),
-        contentProjectId: requireIdentity(
-          record['contentProjectId'],
-          'Character evidence Content Project',
-        ),
+        projectId: requireIdentity(record['projectId'], 'Character evidence Project'),
         entityId: requireIdentity(record['entityId'], 'Character evidence Project Entity'),
         observedAt: requireIsoDate(record['observedAt'], 'Character evidence observedAt'),
       },

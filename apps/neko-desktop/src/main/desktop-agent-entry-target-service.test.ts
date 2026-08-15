@@ -13,9 +13,9 @@ const connection: AgentLaunchConnectionIdentity = {
 };
 
 describe('Desktop Agent Entry target service', () => {
-  it('issues a receipt only for the exact registered Content Project and Workspace grant', async () => {
+  it('issues a receipt only for the exact registered Project, Content document, and Workspace grant', async () => {
     const fixture = createFixture();
-    const binding = authoring({ kind: 'content-project', contentProjectId: 'content-1' });
+    const binding = authoring({ kind: 'content-document', documentId: 'documents/story.md' });
 
     await expect(
       fixture.service.configure({
@@ -50,11 +50,11 @@ describe('Desktop Agent Entry target service', () => {
         kind: 'character-project',
         characterProjectId: 'character-1',
       },
-      { kind: 'content-project', contentProjectId: 'content-1' },
+      { kind: 'project', projectId: 'project-1' },
     );
     const world = authoring(
       { kind: 'world-project', worldProjectId: 'world-1' },
-      { kind: 'content-project', contentProjectId: 'content-1' },
+      { kind: 'project', projectId: 'project-1' },
     );
 
     await fixture.service.configure({
@@ -70,40 +70,41 @@ describe('Desktop Agent Entry target service', () => {
       binding: world,
     });
 
-    expect(fixture.requireProjectLocalTarget).toHaveBeenNthCalledWith(1, {
+    expect(fixture.requireProjectTarget).toHaveBeenNthCalledWith(1, {
       workspace: { root: 'project' },
-      contentProjectId: 'content-1',
+      projectId: 'project-1',
       target: character.target,
     });
     expect(fixture.validateCharacterProject).toHaveBeenCalledWith({
       workspace: { root: 'project' },
-      contentProjectId: 'content-1',
+      projectId: 'project-1',
       characterProjectId: 'character-1',
     });
     expect(fixture.validateWorldProject).toHaveBeenCalledWith({
       workspace: { root: 'project' },
-      contentProjectId: 'content-1',
+      projectId: 'project-1',
       worldProjectId: 'world-1',
     });
   });
 
-  it('delegates standalone targets without fabricating a Content Project scope', async () => {
+  it('rejects a project-local target when the exact Content Project is unavailable', async () => {
     const fixture = createFixture({ projects: [] });
-    await fixture.service.configure({
-      connection,
-      draftId: 'draft-1',
-      mode: 'authoring',
-      binding: authoring({
-        kind: 'character-project',
-        characterProjectId: 'standalone-character-1',
+    await expect(
+      fixture.service.configure({
+        connection,
+        draftId: 'draft-1',
+        mode: 'authoring',
+        binding: authoring(
+          { kind: 'character-project', characterProjectId: 'character-1' },
+          { kind: 'project', projectId: 'project-missing' },
+        ),
       }),
-    });
+    ).rejects.toThrow(
+      "Project 'project-missing' is not registered for the exact Workspace.",
+    );
 
-    expect(fixture.requireProjectLocalTarget).not.toHaveBeenCalled();
-    expect(fixture.validateCharacterProject).toHaveBeenCalledWith({
-      workspace: { root: 'project' },
-      characterProjectId: 'standalone-character-1',
-    });
+    expect(fixture.requireProjectTarget).not.toHaveBeenCalled();
+    expect(fixture.validateCharacterProject).not.toHaveBeenCalled();
   });
 
   it('delegates Character Dialogue target validation to the exact Chara owner', async () => {
@@ -111,7 +112,7 @@ describe('Desktop Agent Entry target service', () => {
     const binding = {
       kind: 'character-dialogue' as const,
       mode: 'companion' as const,
-      participants: [{ characterProjectId: 'character-1', characterVersionId: 'version-1' }],
+      participants: [{ globalCharacterId: 'global-character-1', characterVersionId: 'version-1' }],
     };
     await expect(
       fixture.service.configure({
@@ -138,28 +139,43 @@ describe('Desktop Agent Entry target service', () => {
           kind: 'character-dialogue',
           mode: 'companion',
           participants: [
-            { characterProjectId: 'character-1', characterVersionId: 'version-stale' },
+            { globalCharacterId: 'global-character-1', characterVersionId: 'version-stale' },
           ],
         },
       }),
     ).rejects.toThrow('[character/agent-character-dialogue-target-unavailable]');
   });
 
-  it('keeps the unqualified World Experience owner unavailable without Assistant fallback', async () => {
+  it('delegates the exact global World and Character participants to the World owner', async () => {
     const fixture = createFixture();
+    const binding = {
+      kind: 'world-experience' as const,
+      globalWorldId: 'global-world-1',
+      worldVersionId: 'world-version-1',
+      participants: [
+        { globalCharacterId: 'global-character-1', characterVersionId: 'character-version-1' },
+      ],
+      launch: { kind: 'new' as const },
+    };
     await expect(
       fixture.service.configure({
         connection,
         draftId: 'draft-1',
         mode: 'world-experience',
-        binding: {
-          kind: 'world-experience',
-          worldExperienceId: 'world-experience-1',
-          worldExperienceVersionId: 'world-experience-version-1',
-          launch: { kind: 'new', participantId: 'participant-1', roleScopeId: 'role-1' },
-        },
+        binding,
       }),
-    ).rejects.toThrow('[world/agent-world-experience-provider-unavailable]');
+    ).resolves.toMatchObject({ mode: 'world-experience', targetReceipt: { binding } });
+    expect(fixture.validateWorldExperience).toHaveBeenCalledWith(binding);
+
+    fixture.validateWorldExperience.mockRejectedValueOnce(new Error('WorldVersion is stale.'));
+    await expect(
+      fixture.service.configure({
+        connection,
+        draftId: 'draft-1',
+        mode: 'world-experience',
+        binding,
+      }),
+    ).rejects.toThrow('[world/agent-world-experience-target-unavailable]');
   });
 });
 
@@ -168,26 +184,29 @@ function createFixture(input: { readonly projects?: readonly ProjectRef[] } = {}
     workspace: { root: 'project' },
     workspaceId: 'workspace-1',
   }));
-  const requireProjectLocalTarget = vi.fn(async () => undefined);
+  const requireProjectTarget = vi.fn(async () => undefined);
   const validateCharacterProject = vi.fn(async () => true);
   const validateWorldProject = vi.fn(async () => true);
   const validateCharacterDialogue = vi.fn(async () => undefined);
+  const validateWorldExperience = vi.fn(async () => undefined);
   return {
     resolveWorkspace,
-    requireProjectLocalTarget,
+    requireProjectTarget,
     validateCharacterProject,
     validateWorldProject,
     validateCharacterDialogue,
+    validateWorldExperience,
     service: createDesktopAgentEntryTargetService({
       resolveWorkspace,
-      readContentProjects: async () =>
+      readProjects: async () =>
         input.projects ?? [
-          { projectId: 'content-1', workspaceId: 'workspace-1', unavailable: false },
+          { projectId: 'project-1', workspaceId: 'workspace-1', unavailable: false },
         ],
-      requireProjectLocalTarget,
+      requireProjectTarget,
       validateCharacterProject,
       validateWorldProject,
       validateCharacterDialogue,
+      validateWorldExperience,
       createIdentity: () => 'receipt-1',
     }),
   };
@@ -208,13 +227,7 @@ function authoring(
     workspaceId: 'workspace-1',
     workspaceGrantId: 'grant-1',
     authority:
-      authority ??
-      (target.kind === 'content-project'
-        ? { kind: 'content-project', contentProjectId: target.contentProjectId }
-        : {
-            kind: 'standalone-library',
-            library: target.kind === 'character-project' ? 'character' : 'world',
-          }),
+      authority ?? { kind: 'project', projectId: 'project-1' },
     target,
   };
 }

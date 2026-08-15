@@ -1,58 +1,33 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthoringTargetSelector } from './AuthoringTargetSelector';
-import type { AgentComposerAuthoringTargetOption } from '../ComposerWorkspaceContext';
 
 vi.mock('../../i18n/I18nContext', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 describe('AuthoringTargetSelector', () => {
-  it('renders exact owner-qualified targets directly without a category submenu', async () => {
+  it('renders only Workspace Projects and never promotes installed targets into Projects', async () => {
     const selected = {
-      label: 'Characters / Aster',
+      label: 'Novel',
       context: {
         kind: 'workspace' as const,
-        workspaceId: 'character-library',
-        workspaceGrantId: 'grant-character',
+        workspaceId: 'project-1',
+        workspaceGrantId: 'grant-project-1',
       },
-      target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
-      authority: { kind: 'standalone-library' as const, library: 'character' as const },
     };
-    const characterOption = {
-      optionId: 'standalone-character:character-1',
-      label: 'Aster',
-      workspaceLabel: 'Characters',
-      target: selected.target,
-      placement: { kind: 'standalone-library' as const, library: 'character' as const },
-    };
-    const contentOption = {
-      optionId: 'content-project:project-1',
-      label: 'Novel',
-      workspaceLabel: 'Projects',
-      target: { kind: 'content-project' as const, contentProjectId: 'project-1' },
-      placement: { kind: 'content-project' as const, contentProjectId: 'project-1' },
-    };
-    const worldOption = {
-      optionId: 'project-1:world-project:world-1',
-      label: 'Cinder Sea',
-      workspaceLabel: 'Novel',
-      target: { kind: 'world-project' as const, worldProjectId: 'world-1' },
-      placement: { kind: 'project-local' as const, contentProjectId: 'project-1' },
-    };
-    const onSelectAuthoringTarget = vi.fn(async (option: AgentComposerAuthoringTargetOption) =>
-      option === characterOption
-        ? selected
-        : {
-            ...selected,
-            label: 'Projects / Novel',
-            target: contentOption.target,
-            authority: contentOption.placement,
-          },
-    );
+    const onSelectProject = vi.fn(async () => selected);
     const onChange = vi.fn(async () => undefined);
     const loadAuthoringCatalog = vi.fn(async () => ({
-      targets: [contentOption, characterOption, worldOption],
+      targets: [
+        {
+          optionId: 'installed-world-1',
+          label: 'Cinder Sea',
+          workspaceLabel: 'Installed Worlds',
+          target: { kind: 'world-project' as const, worldProjectId: 'world-1' },
+          placement: { kind: 'project' as const, projectId: 'project-1' },
+        },
+      ],
       creationContexts: [],
       diagnostics: [],
     }));
@@ -61,11 +36,10 @@ describe('AuthoringTargetSelector', () => {
       <AuthoringTargetSelector
         presentation={{
           kind: 'entry',
-          projects: [],
+          projects: [{ projectId: 'project-1', label: 'Novel' }],
           onChooseDirectory: vi.fn(async () => selected),
-          onSelectProject: vi.fn(async () => undefined),
+          onSelectProject,
           loadAuthoringCatalog,
-          onSelectAuthoringTarget,
         }}
         selected={selected}
         pending={false}
@@ -73,33 +47,19 @@ describe('AuthoringTargetSelector', () => {
       />,
     );
 
-    expect(loadAuthoringCatalog).toHaveBeenCalledOnce();
-    expect(await screen.findByText('Cinder Sea')).toBeTruthy();
+    expect(loadAuthoringCatalog).not.toHaveBeenCalled();
     const resources = screen.getByLabelText('chat.entryAction.label');
-    expect(resources.querySelector('[data-entry-resource-kind="project"]')?.textContent).toContain(
-      'Novel',
-    );
-    expect(screen.getByRole('button', { name: /Aster/u })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Cinder Sea/u })).toBeTruthy();
     expect(resources.querySelectorAll('[data-entry-resource-kind="project"]')).toHaveLength(1);
-    expect(resources.querySelectorAll('[data-entry-resource-kind="character"]')).toHaveLength(1);
-    expect(resources.querySelectorAll('[data-entry-resource-kind="world"]')).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: /chat.entryAction.chooseProject/u })).toBeNull();
-    expect(screen.queryByRole('button', { name: /chat.entryAction.chooseCharacter/u })).toBeNull();
-    expect(screen.queryByRole('button', { name: /chat.entryAction.chooseWorld/u })).toBeNull();
-    expect(screen.queryByLabelText('chat.input.workspace.createTarget')).toBeNull();
-    expect(screen.queryByText('chat.entryContext.currentTarget')).toBeNull();
-    expect(screen.queryByRole('button', { name: /chat.entryContext.clearTarget/u })).toBeNull();
-    expect(screen.getByRole('button', { name: /Aster/u }).getAttribute('aria-pressed')).toBe(
-      'true',
-    );
+    expect(resources.querySelectorAll('[data-entry-resource-kind="character"]')).toHaveLength(0);
+    expect(resources.querySelectorAll('[data-entry-resource-kind="world"]')).toHaveLength(0);
+    expect(screen.queryByText('Cinder Sea')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /Aster/u }));
-    await waitFor(() => expect(onSelectAuthoringTarget).toHaveBeenCalledWith(characterOption));
+    fireEvent.click(screen.getByRole('button', { name: /Novel/u }));
+    await waitFor(() => expect(onSelectProject).toHaveBeenCalledWith('project-1'));
     expect(onChange).toHaveBeenCalledWith(selected);
   });
 
-  it('does not load an owner catalog while the selector body is unmounted', () => {
+  it('does not load an owner catalog for the Project-only selector', () => {
     const loadAuthoringCatalog = vi.fn(async () => ({
       targets: [],
       creationContexts: [],
@@ -121,7 +81,7 @@ describe('AuthoringTargetSelector', () => {
         onChange={vi.fn(async () => undefined)}
       />,
     );
-    expect(loadAuthoringCatalog).toHaveBeenCalledOnce();
+    expect(loadAuthoringCatalog).not.toHaveBeenCalled();
   });
 
   it('keeps existing projects directly selectable without loading copy while the catalog resolves', async () => {
@@ -141,8 +101,6 @@ describe('AuthoringTargetSelector', () => {
         workspaceId: 'project-1',
         workspaceGrantId: 'grant-project-1',
       },
-      target: { kind: 'content-project' as const, contentProjectId: 'project-1' },
-      authority: { kind: 'content-project' as const, contentProjectId: 'project-1' },
     };
     const onSelectProject = vi.fn(async () => selectedProject);
     const onChange = vi.fn(async () => undefined);
@@ -167,6 +125,7 @@ describe('AuthoringTargetSelector', () => {
 
     const resources = screen.getByLabelText('chat.entryAction.label');
     expect(resources.querySelectorAll('[data-entry-resource-kind="project"]')).toHaveLength(3);
+    expect(loadAuthoringCatalog).not.toHaveBeenCalled();
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.queryByText('chat.input.workspace.loadingTargets')).toBeNull();
 
@@ -175,28 +134,22 @@ describe('AuthoringTargetSelector', () => {
     expect(onChange).toHaveBeenCalledWith(selectedProject);
   });
 
-  it('creates a fresh Character target in an explicit standalone or project-local destination', async () => {
-    const standalone = {
-      creationId: 'standalone-character',
-      label: 'Characters / New',
-      targetKind: 'character-project' as const,
-      placement: { kind: 'standalone-library' as const, library: 'character' as const },
-    };
+  it('creates a fresh Character target only in an explicit project-local destination', async () => {
     const projectLocal = {
       creationId: 'project-1-character',
       label: 'Blame / Character',
       targetKind: 'character-project' as const,
-      placement: { kind: 'project-local' as const, contentProjectId: 'project-1' },
+      placement: { kind: 'project' as const, projectId: 'project-1' },
     };
     const created = {
-      label: 'Characters / Aster',
+      label: 'Blame / Aster',
       context: {
         kind: 'workspace' as const,
-        workspaceId: 'character-library',
-        workspaceGrantId: 'grant-character',
+        workspaceId: 'project-1',
+        workspaceGrantId: 'grant-project-1',
       },
       target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
-      authority: { kind: 'standalone-library' as const, library: 'character' as const },
+      authority: { kind: 'project' as const, projectId: 'project-1' },
     };
     const onCreateAuthoringTarget = vi.fn(async () => ({
       status: 'created' as const,
@@ -213,16 +166,7 @@ describe('AuthoringTargetSelector', () => {
           onSelectProject: vi.fn(async () => undefined),
           loadAuthoringCatalog: vi.fn(async () => ({
             targets: [],
-            creationContexts: [
-              standalone,
-              projectLocal,
-              {
-                creationId: 'standalone-world',
-                label: 'Worlds / New',
-                targetKind: 'world-project' as const,
-                placement: { kind: 'standalone-library' as const, library: 'world' as const },
-              },
-            ],
+            creationContexts: [projectLocal],
             diagnostics: [],
           })),
           onCreateAuthoringTarget,
@@ -234,76 +178,16 @@ describe('AuthoringTargetSelector', () => {
     );
 
     const name = screen.getByRole('textbox', { name: 'chat.entryAuthoring.nameLabel' });
-    expect(await screen.findByRole('button', { name: /Characters \/ New/u })).toHaveProperty(
+    expect(await screen.findByRole('button', { name: /Blame \/ Character/u })).toHaveProperty(
       'disabled',
       true,
     );
-    expect(screen.queryByText('Worlds / New')).toBeNull();
-
     fireEvent.change(name, { target: { value: 'Aster' } });
-    fireEvent.click(screen.getByRole('button', { name: /Characters \/ New/u }));
+    fireEvent.click(screen.getByRole('button', { name: /Blame \/ Character/u }));
 
-    await waitFor(() => expect(onCreateAuthoringTarget).toHaveBeenCalledWith(standalone, 'Aster'));
-    expect(onChange).toHaveBeenCalledWith(created);
-  });
-
-  it('keeps an incomplete Character visible and retries only its supplied repair action', async () => {
-    const context = {
-      creationId: 'project-1-character',
-      label: 'Blame / Character',
-      targetKind: 'character-project' as const,
-      placement: { kind: 'project-local' as const, contentProjectId: 'project-1' },
-    };
-    const created = {
-      label: 'Blame / Aster',
-      context: {
-        kind: 'workspace' as const,
-        workspaceId: 'workspace-1',
-        workspaceGrantId: 'grant-1',
-      },
-      target: { kind: 'character-project' as const, characterProjectId: 'character-1' },
-      authority: { kind: 'content-project' as const, contentProjectId: 'project-1' },
-    };
-    const retry = vi.fn(async () => ({ status: 'created' as const, target: created }));
-    const onCreateAuthoringTarget = vi.fn(async () => ({
-      status: 'incomplete' as const,
-      retry,
-    }));
-    const onChange = vi.fn(async () => undefined);
-
-    render(
-      <AuthoringTargetSelector
-        presentation={{
-          kind: 'entry',
-          projects: [],
-          onChooseDirectory: vi.fn(async () => undefined),
-          onSelectProject: vi.fn(async () => undefined),
-          loadAuthoringCatalog: vi.fn(async () => ({
-            targets: [],
-            creationContexts: [context],
-            diagnostics: [],
-          })),
-          onCreateAuthoringTarget,
-        }}
-        pending={false}
-        creationOnlyKind="character-project"
-        onChange={onChange}
-      />,
+    await waitFor(() =>
+      expect(onCreateAuthoringTarget).toHaveBeenCalledWith(projectLocal, 'Aster'),
     );
-
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Aster' } });
-    fireEvent.click(await screen.findByRole('button', { name: /Blame \/ Character/u }));
-    expect((await screen.findByRole('alert', { name: '' })).textContent).toBe(
-      'chat.entryAuthoring.creationIncomplete',
-    );
-    expect(onChange).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Blame \/ Character/u })).toHaveProperty(
-      'disabled',
-      true,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'chat.entryAuthoring.retryMissingStep' }));
-    await waitFor(() => expect(retry).toHaveBeenCalledOnce());
     expect(onChange).toHaveBeenCalledWith(created);
   });
 

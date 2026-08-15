@@ -9,14 +9,14 @@ describe('Character Dialogue handoff', () => {
     const handoff = createCharacterDialogueHandoffIntent({
       intentId: 'character-dialogue:1',
       label: 'Rin',
-      characterProjectId: 'character-project:rin',
+      globalCharacterId: 'character-project:rin',
       characterVersionId: 'character-version:rin-2',
     });
 
     expect(parseCharacterDialogueHandoffIntent(handoff)).toEqual(handoff);
     expect(handoff.binding.participants).toEqual([
       {
-        characterProjectId: 'character-project:rin',
+        globalCharacterId: 'character-project:rin',
         characterVersionId: 'character-version:rin-2',
       },
     ]);
@@ -45,7 +45,7 @@ describe('Character Dialogue handoff', () => {
           mode: 'narrative',
           participants: [
             {
-              characterProjectId: 'character-project:rin',
+              globalCharacterId: 'character-project:rin',
               characterVersionId: 'character-version:rin-2',
             },
           ],

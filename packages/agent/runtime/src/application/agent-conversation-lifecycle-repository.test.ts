@@ -96,7 +96,7 @@ describe('persistent Agent conversation lifecycle repository', () => {
         kind: 'authoring',
         workspaceId: 'workspace:1',
         workspaceGrantId: 'workspace-grant:1',
-        authority: { kind: 'standalone-library', library: 'world' },
+        authority: { kind: 'project', projectId: 'project:1' },
         target: { kind: 'world-project', worldProjectId: 'world:1' },
       },
     });
@@ -225,6 +225,65 @@ describe('persistent Agent conversation lifecycle repository', () => {
       );
       expect(stored).toEqual([{ payload_json: payload }]);
     }
+    await expect(fixture.repository.readConversation(valid.conversationId)).resolves.toEqual(valid);
+    await fixture.store.dispose();
+  });
+
+  it('classifies an obsolete Character participant field as a local lifecycle decode failure', async () => {
+    const fixture = await createFixture();
+    const valid = createRecord('conversation:valid', 'request:valid', 'turn:valid');
+    await fixture.repository.commitFirstSubmit(valid);
+    const obsolete = createRecord('conversation:obsolete', 'request:obsolete', 'turn:obsolete');
+    const obsoletePayload = JSON.stringify({
+      ...obsolete,
+      initialInput: {
+        ...obsolete.initialInput,
+        entryTargetReceipt: {
+          targetReceiptId: 'target-receipt:obsolete',
+          draftId: 'draft:obsolete',
+          connectionId: 'connection:obsolete',
+          mode: 'character-dialogue',
+          binding: {
+            kind: 'character-dialogue',
+            mode: 'companion',
+            participants: [
+              {
+                characterProjectId: 'character-project:obsolete',
+                characterVersionId: 'character-version:obsolete',
+              },
+            ],
+          },
+        },
+      },
+    });
+    await fixture.store.transaction(
+      {
+        mode: 'state-write',
+        ownership: 'state',
+        operation: 'insert-obsolete-character-participant',
+      },
+      async ({ sql }) => {
+        await sql.run(
+          `INSERT INTO agent_conversation_records(
+             conversation_id, request_id, turn_id, payload_json, provider_claimed
+           ) VALUES (?, ?, ?, ?, 0)`,
+          [
+            obsolete.conversationId,
+            obsolete.pendingTurn.requestId,
+            obsolete.pendingTurn.turnId,
+            obsoletePayload,
+          ],
+        );
+      },
+    );
+
+    await expect(
+      fixture.repository.readConversation(obsolete.conversationId),
+    ).rejects.toMatchObject({
+      operation: 'decode-agent-conversation-lifecycle',
+      message:
+        "Agent Character Dialogue participant contains unsupported field 'characterProjectId'.",
+    });
     await expect(fixture.repository.readConversation(valid.conversationId)).resolves.toEqual(valid);
     await fixture.store.dispose();
   });

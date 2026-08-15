@@ -54,7 +54,7 @@ describe('CharacterAuthoringHostService', () => {
 
   it('rejects a catalog from another Content Project without reading an active target', async () => {
     const service = createService({
-      scope: { kind: 'content-project', contentProjectId: 'content-other' },
+      scope: { kind: 'project', projectId: 'project-other' },
       projects: [characterProject('character-1')],
     });
 
@@ -66,7 +66,7 @@ describe('CharacterAuthoringHostService', () => {
   it('rejects a snapshot read for another CharacterProject before catalog access', async () => {
     const readAuthoringCatalog = vi.fn();
     const service = new CharacterAuthoringHostService({
-      scope: { kind: 'content-project', contentProjectId: 'content-1' },
+      scope: { kind: 'project', projectId: 'project-1' },
       characterProjectId: 'character-1',
       catalog: { readAuthoringCatalog },
       authoring: {} as CharacterAuthoringService,
@@ -275,11 +275,11 @@ function createService(
     ...authoringMethods,
   } as unknown as CharacterAuthoringService;
   return new CharacterAuthoringHostService({
-    scope: { kind: 'content-project', contentProjectId: 'content-1' },
+    scope: { kind: 'project', projectId: 'project-1' },
     characterProjectId: 'character-1',
     catalog: {
       readAuthoringCatalog: async () => ({
-        scope: { kind: 'content-project', contentProjectId: 'content-1' },
+        scope: { kind: 'project', projectId: 'project-1' },
         projects: [],
         versions: [],
         authoringTestSnapshots: [],

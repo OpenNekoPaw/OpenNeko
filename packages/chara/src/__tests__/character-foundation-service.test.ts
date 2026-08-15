@@ -2,128 +2,54 @@ import { describe, expect, it } from 'vitest';
 import {
   createEmptyCharacterBackgroundStory,
   createEmptyCharacterOriginSetting,
+  type GlobalCharacterCatalog,
 } from '../contracts';
-import { CharacterFoundationService, type CharacterDurableCatalog } from '../application';
+import { CharacterFoundationService, type CharacterRuntimeCatalog } from '../application';
 
-describe('CharacterFoundationService conversation launch catalog', () => {
-  it('projects published CharacterVersions and isolates an orphan publication', async () => {
-    const catalog = createCatalog();
-    const service = new CharacterFoundationService({
-      characterCatalog: { readCatalog: async () => catalog },
-    });
+describe('CharacterFoundationService global catalog', () => {
+  it('projects immutable global versions in linear history order', async () => {
+    const service = createService(globalCatalog());
 
     await expect(service.getConversationLaunchCatalog()).resolves.toEqual({
       targets: [
-        {
-          characterProjectId: 'character-project-lin',
-          characterVersionId: 'character-version-lin',
+        expect.objectContaining({
+          characterVersionId: 'character-version-1',
           displayName: 'Lin',
-          versionLabel: 'Published Lin',
-          lineage: {
-            coverage: 'complete',
-            state: 'unlinked',
-            isHead: false,
-            path: [
-              {
-                characterVersionId: 'character-version-lin',
-                label: 'Published Lin',
-              },
-            ],
-          },
-          storylines: [
-            {
-              characterStorylineVersionId: 'storyline-version-lin',
-              label: 'Archive arc',
-            },
-          ],
-        },
+          lineage: expect.objectContaining({ isHead: false, state: 'declared-root' }),
+        }),
+        expect.objectContaining({
+          characterVersionId: 'character-version-2',
+          displayName: 'Lin',
+          lineage: expect.objectContaining({ isHead: true, state: 'linked' }),
+        }),
       ],
-      diagnostics: [
-        {
-          characterVersionId: 'character-version-orphan',
-          message:
-            "CharacterVersion 'character-version-orphan' references unavailable CharacterProject 'character-project-missing'.",
-        },
-      ],
+      diagnostics: [],
     });
   });
 
-  it('projects exact branch paths and isolates a lineage-reader failure to its Character', async () => {
-    const base = createCatalog();
-    const linVersion = base.versions[0];
-    if (!linVersion) throw new Error('Character fixture version is missing.');
-    const catalog: CharacterDurableCatalog = {
-      ...base,
-      versions: [
-        { ...linVersion, characterVersionId: 'version-root', label: 'Root' },
-        { ...linVersion, characterVersionId: 'version-left', label: 'Left' },
-        { ...linVersion, characterVersionId: 'version-right', label: 'Right' },
-      ],
-      storylineVersions: [],
-    };
-    const service = new CharacterFoundationService({
-      characterCatalog: { readCatalog: async () => catalog },
-      lineage: {
-        readLineage: async () => ({
-          characterProjectId: 'character-project-lin',
-          relations: [
-            { characterVersionId: 'version-root', parentCharacterVersionIds: [] },
-            {
-              characterVersionId: 'version-left',
-              parentCharacterVersionIds: ['version-root'],
-            },
-            {
-              characterVersionId: 'version-right',
-              parentCharacterVersionIds: ['version-root'],
-            },
-          ],
-        }),
-      },
-    });
-
-    const result = await service.getConversationLaunchCatalog();
-    expect(result.targets.map((target) => target.lineage)).toEqual([
-      {
-        coverage: 'complete',
-        state: 'declared-root',
-        isHead: false,
-        path: [{ characterVersionId: 'version-root', label: 'Root' }],
-      },
-      {
-        coverage: 'complete',
-        state: 'linked',
-        isHead: true,
-        path: [
-          { characterVersionId: 'version-root', label: 'Root' },
-          { characterVersionId: 'version-left', label: 'Left' },
+  it('combines global versions with runtime history without mutable Projects', async () => {
+    const service = createService(globalCatalog());
+    await expect(service.getSnapshot()).resolves.toMatchObject({
+      character: {
+        globalCharacters: [expect.objectContaining({ globalCharacterId: 'global-character-lin' })],
+        versions: [
+          expect.objectContaining({ characterVersionId: 'character-version-1' }),
+          expect.objectContaining({ characterVersionId: 'character-version-2' }),
         ],
+        characterRuns: [],
       },
-      {
-        coverage: 'complete',
-        state: 'linked',
-        isHead: true,
-        path: [
-          { characterVersionId: 'version-root', label: 'Root' },
-          { characterVersionId: 'version-right', label: 'Right' },
-        ],
-      },
-    ]);
-
-    const unavailable = new CharacterFoundationService({
-      characterCatalog: { readCatalog: async () => catalog },
-      lineage: { readLineage: async () => Promise.reject(new Error('lineage is corrupt')) },
-    });
-    await expect(unavailable.getConversationLaunchCatalog()).resolves.toMatchObject({
-      targets: [
-        { lineage: { coverage: 'unavailable', message: 'lineage is corrupt' } },
-        { lineage: { coverage: 'unavailable', message: 'lineage is corrupt' } },
-        { lineage: { coverage: 'unavailable', message: 'lineage is corrupt' } },
-      ],
     });
   });
 });
 
-function createCatalog(): CharacterDurableCatalog {
+function createService(global: GlobalCharacterCatalog): CharacterFoundationService {
+  return new CharacterFoundationService({
+    globalCatalog: { readCatalog: async () => global },
+    runtime: { readRuntimeCatalog: async () => emptyRuntimeCatalog() },
+  });
+}
+
+function globalCatalog(): GlobalCharacterCatalog {
   const definition = {
     summary: 'An archivist.',
     backgroundStory: createEmptyCharacterBackgroundStory(),
@@ -135,66 +61,41 @@ function createCatalog(): CharacterDurableCatalog {
     representationRefs: [],
   };
   return {
-    projects: [
+    characters: [
       {
-        characterProjectId: 'character-project-lin',
+        globalCharacterId: 'global-character-lin',
         displayName: 'Lin',
-        draft: definition,
-        evidence: [],
-        candidates: [],
-        reviewStatus: 'ready',
+        currentCharacterVersionId: 'character-version-2',
+        characterVersionIds: ['character-version-1', 'character-version-2'],
         createdAt: '2026-08-11T00:00:00.000Z',
-        updatedAt: '2026-08-11T00:00:00.000Z',
+        updatedAt: '2026-08-12T00:00:00.000Z',
       },
     ],
     versions: [
       {
-        characterProjectId: 'character-project-lin',
-        characterVersionId: 'character-version-lin',
-        label: 'Published Lin',
+        globalCharacterId: 'global-character-lin',
+        characterVersionId: 'character-version-1',
+        label: 'Lin 1',
         definition,
         acceptedEvidenceIds: [],
         publishedAt: '2026-08-11T00:00:00.000Z',
       },
       {
-        characterProjectId: 'character-project-missing',
-        characterVersionId: 'character-version-orphan',
-        label: 'Orphan',
+        globalCharacterId: 'global-character-lin',
+        characterVersionId: 'character-version-2',
+        label: 'Lin 2',
         definition,
         acceptedEvidenceIds: [],
-        publishedAt: '2026-08-11T00:00:00.000Z',
+        publishedAt: '2026-08-12T00:00:00.000Z',
       },
     ],
-    storylineVersions: [
-      {
-        characterStorylineVersionId: 'storyline-version-lin',
-        characterStorylineId: 'storyline-lin',
-        characterVersionId: 'character-version-lin',
-        label: 'Archive arc',
-        premise: 'An archive opens.',
-        constraints: [],
-        nodeOrder: ['node-one'],
-        nodes: [
-          {
-            storylineNodeId: 'node-one',
-            title: 'Guarded',
-            spoilerVisibility: 'visible',
-            context: {
-              situation: 'Keeps distance.',
-              allowedStoryFacts: [],
-              forbiddenStoryFacts: [],
-              narrativeMemories: [],
-              knowledgeBoundary: [],
-              behaviorConstraints: [],
-              expressionConstraints: [],
-              authorOnlyNotes: [],
-            },
-          },
-        ],
-        edges: [],
-        publishedAt: '2026-08-11T00:00:00.000Z',
-      },
-    ],
+    links: [],
+    diagnostics: [],
+  };
+}
+
+function emptyRuntimeCatalog(): CharacterRuntimeCatalog {
+  return {
     relationships: [],
     characterRuns: [],
     dialogueRuns: [],
@@ -202,6 +103,7 @@ function createCatalog(): CharacterDurableCatalog {
     roomRuns: [],
     storylines: [],
     storylineDrafts: [],
+    storylineVersions: [],
     companionContinuities: [],
     presentationConfigurations: [],
     diagnostics: [],

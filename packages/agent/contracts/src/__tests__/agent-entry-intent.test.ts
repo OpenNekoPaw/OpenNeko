@@ -4,6 +4,7 @@ import {
   parseAgentCharacterDialogueTargetOptions,
   parseAgentEntryIntentProjection,
   parseAgentEntryTargetReceipt,
+  parseAgentWorldExperienceTargetOptions,
 } from '../agent-entry-intent';
 
 describe('Agent Entry intent contract', () => {
@@ -21,12 +22,22 @@ describe('Agent Entry intent contract', () => {
 
   it.each([
     {
+      mode: 'authoring' as const,
+      binding: {
+        kind: 'authoring' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        authority: { kind: 'project' as const, projectId: 'project-1' },
+        target: null,
+      },
+    },
+    {
       mode: 'assistant' as const,
       binding: {
         kind: 'authoring' as const,
-        workspaceId: 'character-library',
-        workspaceGrantId: 'grant-character-library',
-        authority: { kind: 'standalone-library' as const, library: 'character' as const },
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'grant-1',
+        authority: { kind: 'project' as const, projectId: 'project-1' },
         target: { kind: 'character-project' as const, characterProjectId: 'character-project-1' },
       },
     },
@@ -36,7 +47,7 @@ describe('Agent Entry intent contract', () => {
         kind: 'authoring' as const,
         workspaceId: 'workspace-1',
         workspaceGrantId: 'grant-1',
-        authority: { kind: 'content-project' as const, contentProjectId: 'content-project-1' },
+        authority: { kind: 'project' as const, projectId: 'project-1' },
         target: { kind: 'character-project' as const, characterProjectId: 'character-project-1' },
       },
     },
@@ -47,7 +58,7 @@ describe('Agent Entry intent contract', () => {
         mode: 'companion' as const,
         participants: [
           {
-            characterProjectId: 'character-project-1',
+            globalCharacterId: 'character-project-1',
             characterVersionId: 'character-version-1',
           },
         ],
@@ -57,9 +68,10 @@ describe('Agent Entry intent contract', () => {
       mode: 'world-experience' as const,
       binding: {
         kind: 'world-experience' as const,
-        worldExperienceId: 'world-experience-1',
-        worldExperienceVersionId: 'world-experience-version-1',
-        launch: { kind: 'new' as const, participantId: 'participant-1', roleScopeId: 'role-1' },
+        globalWorldId: 'global-world-1',
+        worldVersionId: 'world-version-1',
+        participants: [],
+        launch: { kind: 'new' as const },
       },
     },
   ])('parses an exact $mode receipt', ({ mode, binding }) => {
@@ -89,7 +101,7 @@ describe('Agent Entry intent contract', () => {
           mode: 'companion',
           participants: [
             {
-              characterProjectId: 'character-project-1',
+              globalCharacterId: 'character-project-1',
               characterVersionId: 'character-version-1',
             },
           ],
@@ -121,7 +133,7 @@ describe('Agent Entry intent contract', () => {
           kind: 'authoring',
           workspaceId: 'workspace-1',
           workspaceGrantId: 'grant-1',
-          authority: { kind: 'standalone-library', library: 'character' },
+          authority: { kind: 'project', projectId: 'project-1' },
           target: { kind: 'character-project', characterProjectId: 'character-project-1' },
         },
       }),
@@ -136,13 +148,65 @@ describe('Agent Entry intent contract', () => {
           mode: 'world-experience',
           binding: {
             kind: 'world-experience',
-            worldExperienceId: 'world-experience-1',
-            worldExperienceVersionId: 'world-experience-version-1',
-            launch: { kind: 'new', participantId: 'participant-1', roleScopeId: 'role-1' },
+            globalWorldId: 'global-world-1',
+            worldVersionId: 'world-version-1',
+            participants: [],
+            launch: { kind: 'new' },
           },
         },
       }),
     ).toThrow('does not match');
+  });
+
+  it('rejects the retired standalone authoring authority without a compatibility decoder', () => {
+    expect(() =>
+      parseAgentEntryTargetReceipt({
+        targetReceiptId: 'target-receipt-standalone',
+        draftId: 'draft-1',
+        connectionId: 'connection-1',
+        mode: 'authoring',
+        binding: {
+          kind: 'authoring',
+          workspaceId: 'character-library',
+          workspaceGrantId: 'grant-character-library',
+          authority: { kind: 'standalone-library', library: 'character' },
+          target: { kind: 'character-project', characterProjectId: 'character-project-1' },
+        },
+      }),
+    ).toThrow("Unknown Agent authoring authority 'standalone-library'");
+  });
+
+  it('rejects contentProjectId-as-Project and the retired Content Project target shape', () => {
+    const binding = {
+      kind: 'authoring',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'grant-1',
+      authority: { kind: 'content-project', contentProjectId: 'project-1' },
+      target: { kind: 'content-document', documentId: 'documents/story.md' },
+    };
+    expect(() =>
+      parseAgentEntryTargetReceipt({
+        targetReceiptId: 'target-receipt-old-authority',
+        draftId: 'draft-1',
+        connectionId: 'connection-1',
+        mode: 'authoring',
+        binding,
+      }),
+    ).toThrow("Unknown Agent authoring authority 'content-project'");
+
+    expect(() =>
+      parseAgentEntryTargetReceipt({
+        targetReceiptId: 'target-receipt-old-target',
+        draftId: 'draft-1',
+        connectionId: 'connection-1',
+        mode: 'authoring',
+        binding: {
+          ...binding,
+          authority: { kind: 'project', projectId: 'project-1' },
+          target: { kind: 'content-project', contentProjectId: 'project-1' },
+        },
+      }),
+    ).toThrow("Unknown Agent authoring target 'content-project'");
   });
 
   it('rejects duplicate CharacterVersions and internal contract generation fields', () => {
@@ -155,8 +219,8 @@ describe('Agent Entry intent contract', () => {
         kind: 'character-dialogue',
         mode: 'companion',
         participants: [
-          { characterProjectId: 'character-1', characterVersionId: 'version-1' },
-          { characterProjectId: 'character-2', characterVersionId: 'version-1' },
+          { globalCharacterId: 'character-1', characterVersionId: 'version-1' },
+          { globalCharacterId: 'character-2', characterVersionId: 'version-1' },
         ],
       },
     };
@@ -167,8 +231,8 @@ describe('Agent Entry intent contract', () => {
         binding: {
           ...receipt.binding,
           participants: [
-            { characterProjectId: 'character-1', characterVersionId: 'version-1' },
-            { characterProjectId: 'character-1', characterVersionId: 'version-2' },
+            { globalCharacterId: 'character-1', characterVersionId: 'version-1' },
+            { globalCharacterId: 'character-1', characterVersionId: 'version-2' },
           ],
         },
       }),
@@ -190,7 +254,7 @@ describe('Agent Entry intent contract', () => {
           mode: 'narrative',
           participants: [
             {
-              characterProjectId: 'character-project-1',
+              globalCharacterId: 'character-project-1',
               characterVersionId: 'character-version-1',
               storyline: {
                 characterStorylineId: 'storyline-1',
@@ -206,7 +270,7 @@ describe('Agent Entry intent contract', () => {
       mode: 'narrative',
       participants: [
         {
-          characterProjectId: 'character-project-1',
+          globalCharacterId: 'character-project-1',
           characterVersionId: 'character-version-1',
           storyline: {
             characterStorylineId: 'storyline-1',
@@ -228,7 +292,7 @@ describe('Agent Entry intent contract', () => {
         binding: {
           kind: 'character-dialogue',
           participants: [
-            { characterProjectId: 'character-project-1', characterVersionId: 'version-1' },
+            { globalCharacterId: 'character-project-1', characterVersionId: 'version-1' },
           ],
           storylineVersionId: 'storyline-version-1',
         },
@@ -246,7 +310,7 @@ describe('Agent Entry intent contract', () => {
           mode: 'companion',
           participants: [
             {
-              characterProjectId: 'character-project-1',
+              globalCharacterId: 'character-project-1',
               characterVersionId: 'version-1',
               storyline: {
                 characterStorylineId: 'storyline-1',
@@ -264,7 +328,7 @@ describe('Agent Entry intent contract', () => {
     expect(
       parseAgentCharacterDialogueTargetOptions([
         {
-          characterProjectId: 'character-project-1',
+          globalCharacterId: 'character-project-1',
           characterVersionId: 'character-version-1',
           displayName: 'Lin',
           versionLabel: 'Published Lin',
@@ -279,7 +343,7 @@ describe('Agent Entry intent contract', () => {
       ]),
     ).toEqual([
       {
-        characterProjectId: 'character-project-1',
+        globalCharacterId: 'character-project-1',
         characterVersionId: 'character-version-1',
         displayName: 'Lin',
         versionLabel: 'Published Lin',
@@ -295,7 +359,7 @@ describe('Agent Entry intent contract', () => {
     expect(() =>
       parseAgentCharacterDialogueTargetOptions([
         {
-          characterProjectId: 'character-project-1',
+          globalCharacterId: 'character-project-1',
           characterVersionId: 'character-version-1',
           displayName: 'Lin',
           versionLabel: 'Published Lin',
@@ -310,5 +374,25 @@ describe('Agent Entry intent contract', () => {
         },
       ]),
     ).toThrow('unsupported field');
+  });
+
+  it('parses exact World Experience versions and rejects duplicate versions', () => {
+    const target = {
+      globalWorldId: 'global-world-1',
+      worldVersionId: 'world-version-1',
+      displayName: 'Rain Station',
+      versionLabel: 'Published v1',
+    };
+    const targets = [target];
+    expect(parseAgentWorldExperienceTargetOptions(targets)).toEqual(targets);
+    expect(() =>
+      parseAgentWorldExperienceTargetOptions([
+        ...targets,
+        { ...target, globalWorldId: 'global-world-2' },
+      ]),
+    ).toThrow('unique WorldVersions');
+    expect(() => parseAgentWorldExperienceTargetOptions([{ ...target, latest: true }])).toThrow(
+      'unsupported field',
+    );
   });
 });

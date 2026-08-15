@@ -144,9 +144,8 @@ describe('MentionMenu icon projection', () => {
             kind: 'media',
             label: 'Hero portrait',
             contentLocator: {
-              kind: 'media-library',
-              libraryName: 'Characters',
-              relativePath: 'hero.png',
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/hero.png',
             },
             mediaType: 'image',
             source: 'media-library',
@@ -184,7 +183,7 @@ describe('MentionMenu icon projection', () => {
     expect(screen.getByText('Media Library')).toBeTruthy();
     expect(screen.getByText('Entities')).toBeTruthy();
     expect(screen.getByText('config/project.json')).toBeTruthy();
-    expect(screen.getByText('Characters/hero.png')).toBeTruthy();
+    expect(screen.getByText('neko/assets/Characters/hero.png')).toBeTruthy();
     expect(screen.getByText('Image')).toBeTruthy();
     expect(screen.getByText('Character')).toBeTruthy();
     expect(panel.className).toContain('agent-composer-popover');
@@ -242,9 +241,8 @@ describe('MentionMenu icon projection', () => {
       kind: 'media',
       label: 'Hero portrait',
       contentLocator: {
-        kind: 'media-library',
-        libraryName: 'Characters',
-        relativePath: 'hero.png',
+        kind: 'workspace-file',
+        path: 'neko/assets/Characters/hero.png',
       },
       mediaType: 'image',
       source: 'media-library',

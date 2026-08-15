@@ -46,6 +46,7 @@ import {
   type CharacterConversationMode,
   type SelectedFileReference,
   type SelectedCharacterLaunch,
+  type SelectedWorldLaunch,
 } from './types';
 import {
   filterSkillInvocations,
@@ -113,18 +114,20 @@ interface InputAreaProps {
   /** Callback to update attached files (when managed externally) */
   onAttachedFilesChange?: (files: MessageAttachment[]) => void;
   onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
-  entryContextAction?: {
-    readonly kind: 'directory' | 'character' | 'world';
+  entryContextActions?: readonly {
+    readonly kind: 'project' | 'character' | 'world';
     readonly label: string;
     readonly onInvoke?: () => void | Promise<void>;
     readonly disabled?: boolean;
     readonly disabledReason?: string;
-  };
+  }[];
   entryWorkspaceTarget?: AgentComposerWorkspaceTarget;
   onClearEntryWorkspaceTarget?: () => Promise<void>;
   selectedCharacterLaunches?: readonly SelectedCharacterLaunch[];
+  selectedWorldLaunch?: SelectedWorldLaunch;
   onAddCharacterLaunch?: (selection: SelectedCharacterLaunch) => void;
   onRemoveCharacterLaunch?: (characterVersionId: string) => void;
+  onRemoveWorldLaunch?: () => void;
   entryCharacterConversationMode?: CharacterConversationMode;
   onEntryCharacterConversationModeChange?: (mode: CharacterConversationMode) => void;
   entryCharacterConversationModeDisabled?: boolean;
@@ -236,12 +239,14 @@ export function InputArea({
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
   onAuthorizeResource,
-  entryContextAction,
+  entryContextActions = [],
   entryWorkspaceTarget,
   onClearEntryWorkspaceTarget,
   selectedCharacterLaunches = [],
+  selectedWorldLaunch,
   onAddCharacterLaunch,
   onRemoveCharacterLaunch,
+  onRemoveWorldLaunch,
   entryCharacterConversationMode,
   onEntryCharacterConversationModeChange,
   entryCharacterConversationModeDisabled = false,
@@ -935,7 +940,7 @@ export function InputArea({
       throw new Error('Character selection requires an exact Character launch handler.');
     }
     onAddCharacterLaunch({
-      characterProjectId: selection.characterProjectId,
+      globalCharacterId: selection.globalCharacterId,
       characterVersionId: selection.characterVersionId,
       label: item.label,
     });
@@ -1243,18 +1248,25 @@ export function InputArea({
         </div>
 
         {presentation === 'entry' &&
-        (entryContextAction || entryWorkspaceTarget || selectedCharacterLaunches.length > 0) ? (
+        (entryContextActions.length > 0 ||
+          entryWorkspaceTarget ||
+          selectedCharacterLaunches.length > 0 ||
+          selectedWorldLaunch) ? (
           <div
             className="agent-entry-binding-bar"
             aria-label={t('chat.entryContext.bindingBar')}
             data-entry-binding-bar="true"
           >
-            {entryContextAction ? (
-              <EntryContextActionButton action={entryContextAction} composerDisabled={disabled} />
-            ) : null}
+            {entryContextActions.map((action) => (
+              <EntryContextActionButton
+                key={action.kind}
+                action={action}
+                composerDisabled={disabled}
+              />
+            ))}
             {entryWorkspaceTarget ? (
               <EntryBindingItem
-                kind={entryWorkspaceTarget.target?.kind ?? 'content-project'}
+                kind={entryWorkspaceTarget.target?.kind ?? 'content-document'}
                 label={entryWorkspaceTarget.label}
                 removeLabel={t('chat.entryContext.clearTarget')}
                 onRemove={
@@ -1275,6 +1287,14 @@ export function InputArea({
                 }
               />
             ))}
+            {selectedWorldLaunch ? (
+              <EntryBindingItem
+                kind="world-experience"
+                label={selectedWorldLaunch.label}
+                removeLabel={t('chat.entryContext.clearTarget')}
+                onRemove={onRemoveWorldLaunch}
+              />
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -1286,7 +1306,7 @@ function EntryContextActionButton({
   action,
   composerDisabled,
 }: {
-  readonly action: NonNullable<InputAreaProps['entryContextAction']>;
+  readonly action: NonNullable<InputAreaProps['entryContextActions']>[number];
   readonly composerDisabled: boolean;
 }): JSX.Element {
   const icon =
@@ -1321,7 +1341,10 @@ function EntryBindingItem({
   removeLabel,
   onRemove,
 }: {
-  readonly kind: NonNullable<AgentComposerWorkspaceTarget['target']>['kind'] | 'character-dialogue';
+  readonly kind:
+    | NonNullable<AgentComposerWorkspaceTarget['target']>['kind']
+    | 'character-dialogue'
+    | 'world-experience';
   readonly label: string;
   readonly removeLabel: string;
   readonly onRemove?: () => void;
@@ -1329,7 +1352,7 @@ function EntryBindingItem({
   const icon =
     kind === 'character-project' || kind === 'character-dialogue' ? (
       <UserIcon size={14} />
-    ) : kind === 'world-project' ? (
+    ) : kind === 'world-project' || kind === 'world-experience' ? (
       <PanoramaIcon size={14} />
     ) : (
       <FolderIcon size={14} />

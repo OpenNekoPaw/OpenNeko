@@ -31,7 +31,9 @@ import type {
 } from '@neko/chara/contracts';
 import type {
   OpenNekoDesktopWorldAuthoringBridge,
-  OpenNekoDesktopWorldBridge,
+  OpenNekoDesktopWorldManagementBridge,
+  OpenNekoDesktopWorldPortableBridge,
+  OpenNekoDesktopWorldRuntimeBridge,
 } from '@neko/world/contracts';
 
 declare global {
@@ -61,8 +63,10 @@ declare global {
       OpenNekoDesktopCharacterBridge &
       OpenNekoDesktopCharacterAuthoringBridge &
       OpenNekoDesktopCharacterPortableBridge &
-      OpenNekoDesktopWorldBridge &
+      OpenNekoDesktopWorldManagementBridge &
       OpenNekoDesktopWorldAuthoringBridge &
+      OpenNekoDesktopWorldPortableBridge &
+      OpenNekoDesktopWorldRuntimeBridge &
       OpenNekoDesktopCharacterAvatarBridge &
       OpenNekoDesktopCharacterRoomWorkbenchBridge;
   }

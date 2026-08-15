@@ -226,10 +226,11 @@ function entryMaterializesRequestedOwner(
   if (requested.kind !== 'unbound') return false;
   if (receipt.binding.kind === 'character-dialogue') {
     if (receipt.binding.participants.length > 1) return committed.kind === 'room';
-    const participant = receipt.binding.participants[0]!;
+    const participant = receipt.binding.participants[0];
+    if (!participant) return false;
     return (
       committed.kind === 'character' &&
-      committed.characterId === participant.characterProjectId &&
+      committed.characterId === participant.globalCharacterId &&
       committed.characterVersionId === participant.characterVersionId &&
       committed.roleProfileId === participant.roleProfileId &&
       committed.characterRunId !== undefined &&
@@ -238,13 +239,18 @@ function entryMaterializesRequestedOwner(
   }
   return (
     committed.kind === 'world' &&
-    committed.worldExperienceId === receipt.binding.worldExperienceId &&
-    committed.worldExperienceVersionId === receipt.binding.worldExperienceVersionId &&
+    committed.worldExperienceId === receipt.binding.globalWorldId &&
+    committed.worldExperienceVersionId === receipt.binding.worldVersionId &&
+    JSON.stringify(committed.characters) ===
+      JSON.stringify(
+        receipt.binding.participants.map((participant) => ({
+          characterId: participant.globalCharacterId,
+          characterVersionId: participant.characterVersionId,
+        })),
+      ) &&
     committed.worldRunId !== undefined &&
-    (receipt.binding.launch.kind === 'new'
-      ? committed.participantId === receipt.binding.launch.participantId &&
-        committed.roleScopeId === receipt.binding.launch.roleScopeId
-      : committed.worldRunId === receipt.binding.launch.worldRunId)
+    (receipt.binding.launch.kind === 'new' ||
+      committed.worldRunId === receipt.binding.launch.worldRunId)
   );
 }
 

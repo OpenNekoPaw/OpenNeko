@@ -12,8 +12,7 @@ import {
 } from './character-version-reference';
 
 export type CharacterManagementPlacement =
-  | { readonly kind: 'standalone-library' }
-  | { readonly kind: 'content-project'; readonly contentProjectId: string };
+  { readonly kind: 'global-catalog' } | { readonly kind: 'project'; readonly projectId: string };
 
 export interface CharacterManagementLineageNodeSummary {
   readonly characterVersionId: string;
@@ -77,28 +76,21 @@ export function parseCharacterManagementDetailProjection(
 }
 
 function parseCharacterManagementPlacement(value: unknown): CharacterManagementPlacement {
-  const record = requireExactRecord(
-    value,
-    ['kind', 'contentProjectId'],
-    'Character management placement',
-  );
+  const record = requireExactRecord(value, ['kind', 'projectId'], 'Character management placement');
   const kind = requireOneOf(
     record['kind'],
-    ['standalone-library', 'content-project'] as const,
+    ['global-catalog', 'project'] as const,
     'Character management placement kind',
   );
-  if (kind === 'standalone-library') {
-    if (record['contentProjectId'] !== undefined) {
-      throw new Error('Standalone Character placement cannot carry Content Project identity.');
+  if (kind === 'global-catalog') {
+    if (record['projectId'] !== undefined) {
+      throw new Error('Global Character placement cannot carry Project identity.');
     }
     return { kind };
   }
   return {
     kind,
-    contentProjectId: requireIdentity(
-      record['contentProjectId'],
-      'Character management Content Project identity',
-    ),
+    projectId: requireIdentity(record['projectId'], 'Character management Project identity'),
   };
 }
 

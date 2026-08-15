@@ -17,7 +17,6 @@ import type { AgentHostRuntimeAdapter } from './messages';
 import type {
   AgentInteractionProjection,
   CharacterDialogueHandoffIntent,
-  CharacterCreationHandoffIntent,
 } from '@neko/agent-contracts';
 import {
   ComposerWorkspaceProvider,
@@ -37,8 +36,6 @@ export interface AgentWebviewRootProps {
   readonly foundation?: WebviewFoundationContextValue;
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly initialInput?: { readonly id: string; readonly value: string };
-  readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
-  readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
   readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
   readonly presentation?: 'default' | 'desktop-dock';
@@ -59,8 +56,6 @@ export function AgentWebviewRoot({
   conversationFeed,
   initialConversation,
   initialInput,
-  characterCreationHandoff,
-  onCharacterCreationHandoffConsumed,
   characterDialogueHandoff,
   onCharacterDialogueHandoffConsumed,
   locale,
@@ -88,8 +83,6 @@ export function AgentWebviewRoot({
                   agentPresentation={agentPresentation}
                   initialConversation={initialConversation}
                   initialInput={initialInput}
-                  characterCreationHandoff={characterCreationHandoff}
-                  onCharacterCreationHandoffConsumed={onCharacterCreationHandoffConsumed}
                   characterDialogueHandoff={characterDialogueHandoff}
                   onCharacterDialogueHandoffConsumed={onCharacterDialogueHandoffConsumed}
                   presentation={presentation}

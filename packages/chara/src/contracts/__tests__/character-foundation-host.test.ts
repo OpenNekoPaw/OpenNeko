@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createEmptyCharacterBackgroundStory,
-  createEmptyCharacterOriginSetting,
-} from '../character-lore-storyline-memory';
-import {
   createCharacterFoundationHostRequest,
   createCharacterFoundationCommandHostRequest,
   parseCharacterFoundationAnyHostRequest,
@@ -15,7 +11,7 @@ import {
 function emptySnapshot() {
   return {
     character: {
-      projects: [],
+      globalCharacters: [],
       versions: [],
       relationships: [],
       characterRuns: [],
@@ -63,36 +59,78 @@ describe('Character Foundation host contract', () => {
     ).toThrow(/Character catalog contains unsupported fields/u);
   });
 
-  it('strictly parses registered commands and rejects unavailable interaction routes', () => {
-    const request = createCharacterFoundationCommandHostRequest('foundation-command-1', {
-      operation: 'character-project-create',
-      input: {
-        characterProjectId: 'character-project-a',
-        displayName: 'Lin',
-        draft: {
-          summary: 'An archivist.',
-          backgroundStory: createEmptyCharacterBackgroundStory(),
-          originSetting: createEmptyCharacterOriginSetting(),
-          canon: [],
-          knowledgeBoundary: [],
-          behaviorPolicy: [],
-          expressionPolicy: [],
-          representationRefs: [],
-        },
-        sources: { evidence: [], assetRepresentations: [] },
+  it('accepts only exact GlobalCharacterVersion ownership in the management snapshot', () => {
+    const snapshot = emptySnapshot();
+    const definition = {
+      summary: 'A global character.',
+      backgroundStory: {
+        overview: '',
+        origins: [],
+        personalHistory: [],
+        formativeEvents: [],
+        establishedRelationships: [],
       },
-    });
-
-    expect(parseCharacterFoundationAnyHostRequest(request)).toEqual(request);
+      originSetting: {
+        overview: '',
+        eras: [],
+        cultures: [],
+        socialEnvironment: [],
+        importantPlaces: [],
+        organizations: [],
+        believedRules: [],
+      },
+      canon: [],
+      knowledgeBoundary: [],
+      behaviorPolicy: [],
+      expressionPolicy: [],
+      representationRefs: [],
+    };
+    expect(
+      parseCharacterFoundationSnapshot({
+        ...snapshot,
+        character: {
+          ...snapshot.character,
+          versions: [
+            {
+              characterVersionId: 'character-version-a',
+              globalCharacterId: 'global-character-a',
+              label: 'v1',
+              definition,
+              acceptedEvidenceIds: [],
+              publishedAt: '2026-08-15T00:00:00.000Z',
+            },
+          ],
+        },
+      }).character.versions[0],
+    ).toMatchObject({ globalCharacterId: 'global-character-a' });
     expect(() =>
-      parseCharacterFoundationAnyHostRequest({
-        ...request,
-        input: {
-          ...request.input,
-          seed: { evidence: [], representationRefs: [] },
+      parseCharacterFoundationSnapshot({
+        ...snapshot,
+        character: {
+          ...snapshot.character,
+          versions: [
+            {
+              characterVersionId: 'character-version-a',
+              characterProjectId: 'character-project-a',
+              label: 'v1',
+              definition,
+              acceptedEvidenceIds: [],
+              publishedAt: '2026-08-15T00:00:00.000Z',
+            },
+          ],
         },
       }),
-    ).toThrow(/unsupported fields/u);
+    ).toThrow(/GlobalCharacterVersion contains unsupported fields|owner identity/u);
+  });
+
+  it('strictly parses registered commands and rejects unavailable interaction routes', () => {
+    expect(() =>
+      parseCharacterFoundationAnyHostRequest({
+        requestId: 'foundation-command-removed-authoring',
+        operation: 'character-project-create',
+        input: {},
+      }),
+    ).toThrow(/Unknown Character Foundation operation 'character-project-create'/u);
     expect(() =>
       parseCharacterFoundationAnyHostRequest({
         requestId: 'foundation-command-unavailable',
@@ -173,15 +211,7 @@ describe('Character Foundation host contract', () => {
     ).toThrow(/unsupported fields/u);
   });
 
-  it('strictly parses storyline publication and memory review commands', () => {
-    const storyline = createCharacterFoundationCommandHostRequest('foundation-storyline-1', {
-      operation: 'character-storyline-publish',
-      input: {
-        characterStorylineId: 'character-storyline-a',
-        characterStorylineVersionId: 'character-storyline-version-a',
-        label: 'Trust arc',
-      },
-    });
+  it('rejects Project authoring and parses memory review commands', () => {
     const memory = createCharacterFoundationCommandHostRequest('foundation-memory-1', {
       operation: 'companion-memory-candidate-accept',
       input: {
@@ -192,7 +222,13 @@ describe('Character Foundation host contract', () => {
       },
     });
 
-    expect(parseCharacterFoundationAnyHostRequest(storyline)).toEqual(storyline);
+    expect(() =>
+      parseCharacterFoundationAnyHostRequest({
+        requestId: 'foundation-storyline-removed',
+        operation: 'character-storyline-publish',
+        input: {},
+      }),
+    ).toThrow(/Unknown Character Foundation operation 'character-storyline-publish'/u);
     expect(parseCharacterFoundationAnyHostRequest(memory)).toEqual(memory);
     expect(() =>
       parseCharacterFoundationAnyHostRequest({

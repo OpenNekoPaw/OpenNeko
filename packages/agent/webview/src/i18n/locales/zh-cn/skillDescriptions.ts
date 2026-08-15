@@ -4,7 +4,7 @@ export const skillDescriptions = {
   'skillDescriptions.audio-mixing':
     '音频混音与声音设计助手。适用于已确认需要混音、调整音量、添加或平衡音乐、响度标准化、淡入淡出或自动闪避的任务。',
   'skillDescriptions.character-creator':
-    '根据用户构想、提示词或已授权的项目资料创建可审阅的角色草稿。适用于设计新角色、从资料整理角色设定，或填充新选择的角色创作目标；不会自动发布或开始角色扮演。',
+    '根据用户构想、提示词或已授权资料创建可审阅的角色。创作模式保存到当前项目工作区，助手模式直接保存到全局角色目录；不会自动开始角色扮演。',
   'skillDescriptions.color-grading':
     '调色与色彩校正助手。适用于已确认需要调整色彩、曝光、对比度、白平衡、LUT、饱和度或电影感风格的任务。',
   'skillDescriptions.image':
@@ -29,4 +29,6 @@ export const skillDescriptions = {
     '根据提示词、图像、关键帧或参考视频生成或转换单个视频片段，与时间线剪辑分开处理。',
   'skillDescriptions.video-editing':
     '面向时间线操作的视频剪辑助手。适用于裁剪或拆分片段、合并片段、添加转场或调整时序。',
+  'skillDescriptions.world-creator':
+    '根据用户构想、提示词或已授权资料创建可审阅的世界。创作模式保存到当前项目工作区，助手模式直接保存到全局世界目录；不会自动开始世界互动。',
 } as const satisfies MessageBundle;

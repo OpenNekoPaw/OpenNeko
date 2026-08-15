@@ -15,6 +15,12 @@ export type AgentComposerWorkspaceTarget =
   | {
       readonly label: string;
       readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+      readonly target?: undefined;
+      readonly authority: AgentAuthoringAuthority;
+    }
+  | {
+      readonly label: string;
+      readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
       readonly target: AgentAuthoringTargetRef;
       readonly authority: AgentAuthoringAuthority;
     };
@@ -30,10 +36,7 @@ export type AgentComposerAuthoringTargetOption = {
   readonly label: string;
   readonly workspaceLabel: string;
   readonly target: AgentAuthoringTargetRef;
-  readonly placement:
-    | { readonly kind: 'content-project'; readonly contentProjectId: string }
-    | { readonly kind: 'project-local'; readonly contentProjectId: string }
-    | { readonly kind: 'standalone-library'; readonly library: 'character' | 'world' };
+  readonly placement: { readonly kind: 'project'; readonly projectId: string };
   readonly disabled?: boolean;
 };
 
@@ -46,22 +49,14 @@ export interface AgentComposerAuthoringCatalog {
 export interface AgentComposerAuthoringCreationContext {
   readonly creationId: string;
   readonly label: string;
-  readonly targetKind: 'content-project' | 'character-project' | 'world-project';
-  readonly placement:
-    | { readonly kind: 'new-content-project' }
-    | { readonly kind: 'standalone-library'; readonly library: 'character' | 'world' }
-    | { readonly kind: 'project-local'; readonly contentProjectId: string };
+  readonly targetKind: 'character-project' | 'world-project';
+  readonly placement: { readonly kind: 'project'; readonly projectId: string };
 }
 
-export type AgentComposerAuthoringCreationResult =
-  | {
-      readonly status: 'created';
-      readonly target: AgentComposerWorkspaceTarget;
-    }
-  | {
-      readonly status: 'incomplete';
-      readonly retry: () => Promise<AgentComposerAuthoringCreationResult>;
-    };
+export interface AgentComposerAuthoringCreationResult {
+  readonly status: 'created';
+  readonly target: AgentComposerWorkspaceTarget;
+}
 
 export type AgentComposerWorkspacePresentation =
   | {

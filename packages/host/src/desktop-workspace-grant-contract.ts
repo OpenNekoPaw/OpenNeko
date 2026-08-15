@@ -22,10 +22,6 @@ export type DesktopWorkspaceGrantTargetRequest =
   | (DesktopWorkspaceGrantTargetRequestBase & {
       readonly operation: 'select-project';
       readonly projectId: string;
-    })
-  | (DesktopWorkspaceGrantTargetRequestBase & {
-      readonly operation: 'select-authoring-library';
-      readonly library: 'character' | 'world';
     });
 
 export type DesktopWorkspaceGrantTargetResult =
@@ -52,10 +48,6 @@ export interface OpenNekoDesktopWorkspaceGrantBridge {
     chooseDirectory(windowId: string): Promise<DesktopWorkspaceGrantTargetResult>;
     createContentProject(windowId: string): Promise<DesktopWorkspaceGrantTargetResult>;
     selectProject(windowId: string, projectId: string): Promise<DesktopWorkspaceGrantTargetResult>;
-    selectAuthoringLibrary(
-      windowId: string,
-      library: 'character' | 'world',
-    ): Promise<DesktopWorkspaceGrantTargetResult>;
   };
 }
 
@@ -94,18 +86,6 @@ export function createDesktopWorkspaceProjectTargetRequest(input: {
   return parseDesktopWorkspaceGrantTargetRequest({ ...input, operation: 'select-project' });
 }
 
-export function createDesktopWorkspaceAuthoringLibraryTargetRequest(input: {
-  readonly requestId: string;
-  readonly rendererSessionId: string;
-  readonly windowId: string;
-  readonly library: 'character' | 'world';
-}): DesktopWorkspaceGrantTargetRequest {
-  return parseDesktopWorkspaceGrantTargetRequest({
-    ...input,
-    operation: 'select-authoring-library',
-  });
-}
-
 export function parseDesktopWorkspaceGrantTargetRequest(
   value: unknown,
 ): DesktopWorkspaceGrantTargetRequest {
@@ -138,17 +118,6 @@ export function parseDesktopWorkspaceGrantTargetRequest(
       operation,
       projectId: requireIdentity(record['projectId'], 'Desktop Workspace target Project'),
     };
-  }
-  if (operation === 'select-authoring-library') {
-    requireExactKeys(
-      record,
-      ['requestId', 'rendererSessionId', 'windowId', 'operation', 'library'],
-      'Desktop Workspace authoring library target request',
-    );
-    if (record['library'] !== 'character' && record['library'] !== 'world') {
-      throw invalid(`Unknown Desktop authoring library '${String(record['library'])}'.`);
-    }
-    return { ...base, operation, library: record['library'] };
   }
   throw invalid(`Unknown Desktop Workspace target operation '${String(operation)}'.`);
 }

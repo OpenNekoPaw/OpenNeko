@@ -595,7 +595,6 @@ function startLeaseRenewal(
         onFailure();
       }
     }, authority.leaseRenewalDelay(current()));
-    timer.unref?.();
   };
   schedule();
   return {

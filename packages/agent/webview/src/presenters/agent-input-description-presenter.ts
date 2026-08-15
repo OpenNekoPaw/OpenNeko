@@ -44,6 +44,7 @@ const BUILTIN_SKILL_DESCRIPTION_KEYS = {
   'subtitle-assistant': 'skillDescriptions.subtitle-assistant',
   video: 'skillDescriptions.video',
   'video-editing': 'skillDescriptions.video-editing',
+  'world-creator': 'skillDescriptions.world-creator',
 } as const;
 
 export function projectCommandDescription(input: {

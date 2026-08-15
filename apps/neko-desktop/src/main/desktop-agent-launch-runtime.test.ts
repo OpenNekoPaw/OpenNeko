@@ -55,9 +55,8 @@ describe('Desktop Agent launch native adapter', () => {
             id: 'file:reference-image',
             label: 'reference.png',
             contentLocator: {
-              kind: 'media-library',
-              libraryName: 'References',
-              relativePath: 'reference.png',
+              kind: 'workspace-file',
+              path: 'neko/assets/References/reference.png',
             },
             mediaType: 'image',
             source: 'media-library',
@@ -111,12 +110,10 @@ describe('Desktop Agent launch native adapter', () => {
         id: 'file:reference-image',
         data: expect.objectContaining({
           locator: {
-            kind: 'media-library',
-            libraryName: 'References',
-            relativePath: 'reference.png',
+            kind: 'workspace-file',
+            path: 'neko/assets/References/reference.png',
           },
           mediaType: 'image',
-          source: 'media-library',
         }),
       }),
       expect.objectContaining({
@@ -128,6 +125,24 @@ describe('Desktop Agent launch native adapter', () => {
       }),
     ]);
     expect(authorizeWorkspace).toHaveBeenCalledWith(context);
+
+    await expect(
+      resolver.resolve({
+        conversationId: 'conversation-direct-media-library',
+        context,
+        references: [
+          {
+            id: 'file:legacy-reference',
+            label: 'legacy-reference.png',
+            contentLocator: {
+              kind: 'media-library',
+              libraryName: 'References',
+              relativePath: 'legacy-reference.png',
+            } as never,
+          },
+        ],
+      }),
+    ).rejects.toThrow('must use an authorized Workspace file locator');
 
     await expect(
       resolver.resolve({

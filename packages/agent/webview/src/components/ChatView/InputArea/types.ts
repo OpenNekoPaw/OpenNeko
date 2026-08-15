@@ -162,7 +162,7 @@ export interface MentionItem {
   navigationData?: Record<string, string>;
   /** Exact owner selection used only by the unbound Agent Entry. */
   characterLaunchSelection?: {
-    readonly characterProjectId: string;
+    readonly globalCharacterId: string;
     readonly characterVersionId: string;
   };
   /** Host-provided normalized or expanded search text */
@@ -174,9 +174,16 @@ export interface MentionItem {
 }
 
 export interface SelectedCharacterLaunch {
-  readonly characterProjectId: string;
+  readonly globalCharacterId: string;
   readonly characterVersionId: string;
   readonly label: string;
+}
+
+export interface SelectedWorldLaunch {
+  readonly globalWorldId: string;
+  readonly worldVersionId: string;
+  readonly label: string;
+  readonly versionLabel: string;
 }
 
 export interface SelectedFileReference extends AgentFileReference {

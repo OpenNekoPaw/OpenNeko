@@ -1,8 +1,9 @@
 import { requireExactRecord, requireIdentity } from './codec';
 
-export type CharacterAuthoringHandoffAuthority =
-  | { readonly kind: 'content-project'; readonly contentProjectId: string }
-  | { readonly kind: 'standalone-library'; readonly library: 'character' };
+export interface CharacterAuthoringHandoffAuthority {
+  readonly kind: 'project';
+  readonly projectId: string;
+}
 
 export type CharacterProductHandoff =
   | {
@@ -107,32 +108,18 @@ function parseCharacterAuthoringHandoffAuthority(
     throw new Error('Character Studio handoff authority must be an object.');
   }
   const kind = (value as Readonly<Record<string, unknown>>)['kind'];
-  if (kind === 'content-project') {
-    const record = requireExactRecord(
-      value,
-      ['kind', 'contentProjectId'],
-      'Character Studio Content Project authority',
-    );
-    return {
-      kind,
-      contentProjectId: requireIdentity(
-        record['contentProjectId'],
-        'Character Studio Content Project',
-      ),
-    };
+  if (kind !== 'project') {
+    throw new Error(`Unknown Character Studio handoff authority: ${String(kind)}`);
   }
-  if (kind === 'standalone-library') {
-    const record = requireExactRecord(
-      value,
-      ['kind', 'library'],
-      'Character Studio standalone authority',
-    );
-    if (record['library'] !== 'character') {
-      throw new Error('Character Studio handoff requires the standalone Character library.');
-    }
-    return { kind, library: 'character' };
-  }
-  throw new Error(`Unknown Character Studio handoff authority: ${String(kind)}`);
+  const record = requireExactRecord(
+    value,
+    ['kind', 'projectId'],
+    'Character Studio Project authority',
+  );
+  return {
+    kind,
+    projectId: requireIdentity(record['projectId'], 'Character Studio Project'),
+  };
 }
 
 function requireExactCharacterVersionId(value: unknown): string {

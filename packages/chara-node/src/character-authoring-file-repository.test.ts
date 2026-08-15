@@ -28,11 +28,9 @@ afterEach(async () => {
 });
 
 describe('Character authoring file repository', () => {
-  it.each([
-    { kind: 'standalone-library' as const },
-    { kind: 'content-project' as const, contentProjectId: 'content-project-1' },
-  ])('uses the same service and file shape for $kind placement', async (scope) => {
+  it('uses the canonical service and file shape for exact Project placement', async () => {
     const root = await workspace();
+    const scope = { kind: 'project' as const, projectId: 'project-1' };
     const repository = createCharacterAuthoringFileRepository({ workspaceRoot: root, scope });
     const service = new CharacterAuthoringService({
       repository,
@@ -189,7 +187,7 @@ describe('Character authoring file repository', () => {
     const root = await workspace();
     const repository = createCharacterAuthoringFileRepository({
       workspaceRoot: root,
-      scope: { kind: 'content-project', contentProjectId: 'content-project-1' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     const service = new CharacterAuthoringService({ repository, now: () => NOW });
     await service.createProject({
@@ -211,12 +209,12 @@ describe('Character authoring file repository', () => {
     await expect(readFile(invalid, 'utf8')).resolves.toContain('character-invalid');
   });
 
-  it('does not project a Project-local Character into the standalone library root', async () => {
+  it('does not project a Project-local Character into another Project root', async () => {
     const projectRoot = await workspace();
     const libraryRoot = await workspace();
     const projectRepository = createCharacterAuthoringFileRepository({
       workspaceRoot: projectRoot,
-      scope: { kind: 'content-project', contentProjectId: 'content-project-1' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     await new CharacterAuthoringService({
       repository: projectRepository,
@@ -226,11 +224,13 @@ describe('Character authoring file repository', () => {
       displayName: 'Local',
       draft: definition(),
     });
-    const libraryRepository = createCharacterAuthoringFileRepository({
+    const otherProjectRepository = createCharacterAuthoringFileRepository({
       workspaceRoot: libraryRoot,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-2' },
     });
-    await expect(libraryRepository.readAuthoringCatalog()).resolves.toMatchObject({ projects: [] });
+    await expect(otherProjectRepository.readAuthoringCatalog()).resolves.toMatchObject({
+      projects: [],
+    });
     await expect(projectRepository.readAuthoringCatalog()).resolves.toMatchObject({
       projects: [expect.objectContaining({ characterProjectId: 'project-local-character' })],
     });
@@ -240,12 +240,12 @@ describe('Character authoring file repository', () => {
     expect(() =>
       createCharacterAuthoringFileRepository({
         workspaceRoot: 'relative',
-        scope: { kind: 'standalone-library' },
+        scope: { kind: 'project', projectId: 'project-1' },
       }),
     ).toThrow('absolute Host-authorized path');
     const repository = createCharacterAuthoringFileRepository({
       workspaceRoot: await workspace(),
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     await expect(repository.readProject('../escape')).rejects.toMatchObject({
       code: 'character-record-invalid',
@@ -256,7 +256,7 @@ describe('Character authoring file repository', () => {
     const root = await workspace();
     const repository = createCharacterAuthoringFileRepository({
       workspaceRoot: root,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     const publication = {
       characterVersionId: 'character-version-1',
@@ -281,7 +281,7 @@ describe('Character authoring file repository', () => {
     const root = await workspace();
     const repository = createCharacterAuthoringFileRepository({
       workspaceRoot: root,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     await new CharacterAuthoringService({ repository, now: () => NOW }).createProject({
       characterProjectId: 'character-project-delete',
@@ -331,7 +331,7 @@ describe('Character authoring file repository', () => {
     const outside = await workspace();
     const repository = createCharacterAuthoringFileRepository({
       workspaceRoot: root,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     const service = new CharacterAuthoringService({ repository, now: () => NOW });
     await service.createProject({
@@ -415,11 +415,9 @@ describe('Character authoring file repository', () => {
     await expect(readFile(outsideRecord, 'utf8')).resolves.toContain('character-version-linked');
   });
 
-  it.each([
-    { kind: 'standalone-library' as const },
-    { kind: 'content-project' as const, contentProjectId: 'content-project-1' },
-  ])('stores the same lineage record for $kind placement', async (scope) => {
+  it('stores lineage only for exact Project placement', async () => {
     const root = await workspace();
+    const scope = { kind: 'project' as const, projectId: 'project-1' };
     const repository = createCharacterAuthoringFileRepository({ workspaceRoot: root, scope });
     const lineage = {
       characterProjectId: 'character-project-lineage',
@@ -445,7 +443,7 @@ describe('Character authoring file repository', () => {
     const root = await workspace();
     const repository = createCharacterAuthoringFileRepository({
       workspaceRoot: root,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     await repository.saveLineage({
       characterProjectId: 'character-valid',
@@ -469,7 +467,7 @@ describe('Character authoring file repository', () => {
     const root = await workspace();
     const repository = createCharacterAuthoringFileRepository({
       workspaceRoot: root,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     await repository.storePublication({
       characterVersionId: 'version-newer',
@@ -498,7 +496,7 @@ describe('Character authoring file repository', () => {
     const root = await workspace();
     const repository = createCharacterAuthoringFileRepository({
       workspaceRoot: root,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     const projectDirectory = join(root, 'neko/characters/character-interrupted');
     await mkdir(join(projectDirectory, 'lineage.json'), { recursive: true });
@@ -524,7 +522,7 @@ describe('Character authoring file repository', () => {
     const outside = await workspace();
     const repository = createCharacterAuthoringFileRepository({
       workspaceRoot: root,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     const outsideRecord = join(outside, 'lineage.json');
     await writeFile(
@@ -546,7 +544,7 @@ describe('Character authoring file repository', () => {
     const root = await workspace();
     const repository = createCharacterAuthoringFileRepository({
       workspaceRoot: root,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     await new CharacterAuthoringService({
       repository,
@@ -593,7 +591,7 @@ describe('Character authoring file repository', () => {
     const root = await workspace();
     const repository = createCharacterAuthoringFileRepository({
       workspaceRoot: root,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-1' },
     });
     await new CharacterAuthoringService({
       repository,

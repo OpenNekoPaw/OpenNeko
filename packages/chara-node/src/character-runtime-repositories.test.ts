@@ -65,7 +65,7 @@ describe('Character runtime repositories', () => {
     await initializeCharacterRuntimePersistenceTables(store);
     const authoringRepository = createCharacterAuthoringFileRepository({
       workspaceRoot: libraryRoot,
-      scope: { kind: 'standalone-library' },
+      scope: { kind: 'project', projectId: 'project-runtime' },
     });
     const authoring = new CharacterAuthoringService({
       repository: authoringRepository,

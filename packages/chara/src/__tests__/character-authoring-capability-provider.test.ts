@@ -6,11 +6,49 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import {
   createCharacterAuthoringCapabilityProvider,
+  createGlobalCharacterCreationCapabilityProvider,
   type CharacterCreationProposal,
 } from '@neko/chara/application';
 import type { CharacterProject } from '@neko/chara/contracts';
 
 describe('CharacterAuthoringCapabilityProvider', () => {
+  it('creates a global Character in Assistant authority without a Project binding', async () => {
+    const createGlobal = vi.fn(async ({ proposal }) => ({
+      globalCharacter: {
+        globalCharacterId: 'global-character-aster',
+        displayName: proposal.displayName,
+        currentCharacterVersionId: 'character-version-aster-1',
+      },
+      characterVersion: {
+        characterVersionId: 'character-version-aster-1',
+        globalCharacterId: 'global-character-aster',
+      },
+    }));
+    const provider = createGlobalCharacterCreationCapabilityProvider(createGlobal);
+    expect(provider.requirements).toBeUndefined();
+    expect(provider.getPromptFragments?.({ hostContext: null })?.[0]?.content).toContain(
+      'directly as a global Character',
+    );
+    const [tool] = provider.getTools({ hostContext: null });
+    expect(tool?.requirements).toBeUndefined();
+    expect(tool?.requiresConfirmation).toBe(true);
+
+    await expect(tool!.execute(proposalArgs())).resolves.toEqual({
+      success: true,
+      data: {
+        placement: 'global',
+        globalCharacterId: 'global-character-aster',
+        characterVersionId: 'character-version-aster-1',
+        displayName: 'Aster',
+        sourceFacts: ['The reference says she repairs clocks.'],
+        inferredSuggestions: ['A patient speaking rhythm would fit.'],
+      },
+    });
+    expect(createGlobal).toHaveBeenCalledWith(
+      expect.objectContaining({ proposal: expect.objectContaining({ displayName: 'Aster' }) }),
+    );
+  });
+
   it('fills only the exact CharacterProject binding and keeps evidence classifications observable', async () => {
     const fillDraft = vi.fn(async ({ binding, proposal }) =>
       project(binding.target.characterProjectId, proposal),
@@ -19,8 +57,11 @@ describe('CharacterAuthoringCapabilityProvider', () => {
     const promptFragments = provider.getPromptFragments?.({ hostContext: null });
     expect(promptFragments?.[0]?.content).toContain('single mutation confirmation');
     expect(promptFragments?.[0]?.content).toContain('without adding a text-confirmation gate');
-    expect(promptFragments?.[0]?.content).toContain('no writable Character draft target');
-    expect(promptFragments?.[0]?.content).toContain('do not conflate this with CharacterVersion');
+    expect(promptFragments?.[0]?.content).toContain('no writable workspace Character target');
+    expect(promptFragments?.[0]?.content).toContain(
+      'do not conflate this with global CharacterVersion synchronization',
+    );
+    expect(promptFragments?.[0]?.content).toContain('do not expose internal CharacterProject');
     const [tool] = provider.getTools({ hostContext: null } satisfies AgentCapabilityContext);
     expect(tool?.name).toBe(TOOL_NAMES_CHARA.FILL_CHARACTER_DRAFT);
     expect(tool?.requiresConfirmation).toBe(true);
@@ -35,7 +76,7 @@ describe('CharacterAuthoringCapabilityProvider', () => {
           kind: 'authoring',
           workspaceId: 'workspace-1',
           workspaceGrantId: 'grant-1',
-          authority: { kind: 'standalone-library', library: 'character' },
+          authority: { kind: 'project', projectId: 'project-1' },
           target: { kind: 'character-project', characterProjectId: 'character-1' },
         },
       },
@@ -44,8 +85,8 @@ describe('CharacterAuthoringCapabilityProvider', () => {
     expect(result).toEqual({
       success: true,
       data: {
-        characterProjectId: 'character-1',
-        reviewStatus: 'draft',
+        placement: 'workspace',
+        displayName: 'Aster',
         sourceFacts: ['The reference says she repairs clocks.'],
         inferredSuggestions: ['A patient speaking rhythm would fit.'],
         handoffs: [
@@ -53,7 +94,7 @@ describe('CharacterAuthoringCapabilityProvider', () => {
           {
             kind: 'open-character-studio',
             characterProjectId: 'character-1',
-            authority: { kind: 'standalone-library', library: 'character' },
+            authority: { kind: 'project', projectId: 'project-1' },
           },
         ],
       },
@@ -64,6 +105,7 @@ describe('CharacterAuthoringCapabilityProvider', () => {
           target: { kind: 'character-project', characterProjectId: 'character-1' },
         }),
         proposal: expect.objectContaining({
+          displayName: 'Aster',
           draft: expect.objectContaining({
             summary: 'A clockmaker who notices impossible details.',
             backgroundStory: expect.objectContaining({ overview: 'Raised above a repair shop.' }),
@@ -102,7 +144,7 @@ describe('CharacterAuthoringCapabilityProvider', () => {
             kind: 'authoring',
             workspaceId: 'workspace-1',
             workspaceGrantId: 'grant-1',
-            authority: { kind: 'standalone-library', library: 'character' },
+            authority: { kind: 'project', projectId: 'project-1' },
             target: { kind: 'character-project', characterProjectId: 'character-failed' },
           },
         },
@@ -123,6 +165,7 @@ describe('CharacterAuthoringCapabilityProvider', () => {
 
 function proposalArgs(): Record<string, unknown> {
   return {
+    display_name: 'Aster',
     summary: 'A clockmaker who notices impossible details.',
     background_overview: 'Raised above a repair shop.',
     origin_overview: 'A rain-soaked canal city.',
@@ -141,7 +184,7 @@ function project(
 ): CharacterProject {
   return {
     characterProjectId,
-    displayName: 'Fixture',
+    displayName: proposal.displayName,
     draft: proposal.draft,
     evidence: [],
     candidates: [],

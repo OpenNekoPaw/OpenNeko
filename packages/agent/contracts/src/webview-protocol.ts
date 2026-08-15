@@ -482,7 +482,7 @@ export interface ProjectMentionExtra {
   entityType?: string;
   navigationData?: Record<string, string>;
   characterLaunchSelection?: {
-    readonly characterProjectId: string;
+    readonly globalCharacterId: string;
     readonly characterVersionId: string;
     readonly characterStorylineVersionId?: string;
   };

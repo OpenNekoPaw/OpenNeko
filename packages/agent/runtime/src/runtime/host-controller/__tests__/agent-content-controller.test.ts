@@ -97,7 +97,7 @@ describe('Agent content controller', () => {
     }
   });
 
-  it('merges linked Media Library locators and keeps contributor failures local', async () => {
+  it('merges workspace-linked media locators and keeps contributor failures local', async () => {
     const workspacePath = await mkdtemp(join(tmpdir(), 'agent-mention-linked-media-'));
     const missingGitignore = Object.assign(new Error('missing'), { code: 'ENOENT' });
     const reportMentionContributorError = vi.fn();
@@ -120,8 +120,8 @@ describe('Agent content controller', () => {
         host,
         filter: '',
         purpose: 'entry',
-        searchLinkedMediaLibraryFiles: async () => [
-          { kind: 'media-library', libraryName: 'Reference', relativePath: 'hero.png' },
+        searchWorkspaceLinkedMediaFiles: async () => [
+          { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
         ],
         reportMentionContributorError,
       });
@@ -129,9 +129,9 @@ describe('Agent content controller', () => {
       expect(projection.files).toEqual([
         expect.objectContaining({ name: 'local.md', source: 'workspace' }),
         expect.objectContaining({
-          locator: { kind: 'media-library', libraryName: 'Reference', relativePath: 'hero.png' },
+          locator: { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
           name: 'hero.png',
-          source: 'media-library',
+          source: 'workspace',
           mediaType: 'image',
         }),
       ]);
@@ -142,7 +142,7 @@ describe('Agent content controller', () => {
         host,
         filter: '',
         purpose: 'entry',
-        searchLinkedMediaLibraryFiles: async () => Promise.reject(contributorFailure),
+        searchWorkspaceLinkedMediaFiles: async () => Promise.reject(contributorFailure),
         reportMentionContributorError,
       });
       expect(fallbackProjection.files).toEqual([

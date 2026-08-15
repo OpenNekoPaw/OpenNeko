@@ -6,7 +6,7 @@ import type {
 } from '@neko/agent-contracts';
 import { createAgentEntryTargetApplicationService } from '@neko/agent-runtime/application';
 
-interface DesktopAgentContentProjectRef {
+interface DesktopAgentProjectRef {
   readonly projectId: string;
   readonly workspaceId: string;
   readonly unavailable?: unknown;
@@ -17,29 +17,27 @@ export function createDesktopAgentEntryTargetService<TWorkspace>(options: {
     windowId: string,
     workspaceGrantId: string,
   ) => Promise<{ readonly workspace: TWorkspace; readonly workspaceId: string }>;
-  readonly readContentProjects: (
-    windowId: string,
-  ) => Promise<readonly DesktopAgentContentProjectRef[]>;
-  readonly requireProjectLocalTarget: (input: {
+  readonly readProjects: (windowId: string) => Promise<readonly DesktopAgentProjectRef[]>;
+  readonly requireProjectTarget: (input: {
     readonly workspace: TWorkspace;
-    readonly contentProjectId: string;
-    readonly target: Extract<
-      AgentAuthoringTargetRef,
-      { readonly kind: 'character-project' | 'world-project' }
-    >;
+    readonly projectId: string;
+    readonly target: AgentAuthoringTargetRef;
   }) => Promise<void>;
   readonly validateCharacterProject: (input: {
     readonly workspace: TWorkspace;
-    readonly contentProjectId?: string;
+    readonly projectId: string;
     readonly characterProjectId: string;
   }) => Promise<boolean>;
   readonly validateWorldProject: (input: {
     readonly workspace: TWorkspace;
-    readonly contentProjectId?: string;
+    readonly projectId: string;
     readonly worldProjectId: string;
   }) => Promise<boolean>;
   readonly validateCharacterDialogue: (
     binding: Extract<AgentEntryTargetBinding, { readonly kind: 'character-dialogue' }>,
+  ) => Promise<void>;
+  readonly validateWorldExperience: (
+    binding: Extract<AgentEntryTargetBinding, { readonly kind: 'world-experience' }>,
   ) => Promise<void>;
   readonly createIdentity: () => string;
 }) {
@@ -54,33 +52,41 @@ export function createDesktopAgentEntryTargetService<TWorkspace>(options: {
     if (resolution.workspaceId !== binding.workspaceId) {
       throw new Error('Agent authoring grant resolves to another Workspace.');
     }
-    const authority = binding.authority;
-    const project =
-      authority.kind === 'content-project'
-        ? (await options.readContentProjects(connection.windowId)).find(
-            (candidate) =>
-              candidate.projectId === authority.contentProjectId &&
-              candidate.workspaceId === binding.workspaceId &&
-              !candidate.unavailable,
-          )
-        : undefined;
-    if (authority.kind === 'content-project' && !project) {
+    const project = (await options.readProjects(connection.windowId)).find(
+      (candidate) =>
+        candidate.projectId === binding.authority.projectId &&
+        candidate.workspaceId === binding.workspaceId &&
+        !candidate.unavailable,
+    );
+    if (!project) {
       throw new Error(
-        `Content Project '${authority.contentProjectId}' is not registered for the exact Workspace.`,
+        `Project '${binding.authority.projectId}' is not registered for the exact Workspace.`,
       );
     }
     return { workspace: resolution.workspace, project };
   };
 
   return createAgentEntryTargetApplicationService({
+    projectAuthoring: {
+      validate: async (connection, binding) => {
+        await resolveAuthority(connection, binding);
+        return { status: 'ready', binding };
+      },
+    },
     contentAuthoring: {
       validate: async (connection, binding) => {
-        const { project } = await resolveAuthority(connection, binding);
-        if (!project || project.projectId !== binding.target.contentProjectId) {
+        const { workspace, project } = await resolveAuthority(connection, binding);
+        try {
+          await options.requireProjectTarget({
+            workspace,
+            projectId: project.projectId,
+            target: binding.target,
+          });
+        } catch (error) {
           return unavailable(
             'content',
             'agent-content-authoring-target-unavailable',
-            `Content Project '${binding.target.contentProjectId}' is not registered for the exact Workspace.`,
+            describeError(error),
           );
         }
         return { status: 'ready', binding };
@@ -89,24 +95,22 @@ export function createDesktopAgentEntryTargetService<TWorkspace>(options: {
     characterAuthoring: {
       validate: async (connection, binding) => {
         const { workspace, project } = await resolveAuthority(connection, binding);
-        if (project) {
-          try {
-            await options.requireProjectLocalTarget({
-              workspace,
-              contentProjectId: project.projectId,
-              target: binding.target,
-            });
-          } catch (error) {
-            return unavailable(
-              'project',
-              'agent-project-character-membership-unavailable',
-              describeError(error),
-            );
-          }
+        try {
+          await options.requireProjectTarget({
+            workspace,
+            projectId: project.projectId,
+            target: binding.target,
+          });
+        } catch (error) {
+          return unavailable(
+            'project',
+            'agent-project-character-membership-unavailable',
+            describeError(error),
+          );
         }
         const valid = await options.validateCharacterProject({
           workspace,
-          ...(project ? { contentProjectId: project.projectId } : {}),
+          projectId: project.projectId,
           characterProjectId: binding.target.characterProjectId,
         });
         return valid
@@ -121,24 +125,22 @@ export function createDesktopAgentEntryTargetService<TWorkspace>(options: {
     worldAuthoring: {
       validate: async (connection, binding) => {
         const { workspace, project } = await resolveAuthority(connection, binding);
-        if (project) {
-          try {
-            await options.requireProjectLocalTarget({
-              workspace,
-              contentProjectId: project.projectId,
-              target: binding.target,
-            });
-          } catch (error) {
-            return unavailable(
-              'project',
-              'agent-project-world-membership-unavailable',
-              describeError(error),
-            );
-          }
+        try {
+          await options.requireProjectTarget({
+            workspace,
+            projectId: project.projectId,
+            target: binding.target,
+          });
+        } catch (error) {
+          return unavailable(
+            'project',
+            'agent-project-world-membership-unavailable',
+            describeError(error),
+          );
         }
         const valid = await options.validateWorldProject({
           workspace,
-          ...(project ? { contentProjectId: project.projectId } : {}),
+          projectId: project.projectId,
           worldProjectId: binding.target.worldProjectId,
         });
         return valid
@@ -164,22 +166,22 @@ export function createDesktopAgentEntryTargetService<TWorkspace>(options: {
         }
       },
     },
-    worldExperience: unavailableRuntimeProvider(
-      'world',
-      'agent-world-experience-provider-unavailable',
-      'World Experience launch is unavailable.',
-    ),
+    worldExperience: {
+      validate: async (_connection, binding) => {
+        try {
+          await options.validateWorldExperience(binding);
+          return { status: 'ready', binding };
+        } catch (error) {
+          return unavailable(
+            'world',
+            'agent-world-experience-target-unavailable',
+            describeError(error),
+          );
+        }
+      },
+    },
     createIdentity: options.createIdentity,
   });
-}
-
-function unavailableRuntimeProvider(owner: string, code: string, message: string) {
-  return {
-    validate: async (
-      _connection: AgentLaunchConnectionIdentity,
-      _binding: AgentEntryTargetBinding,
-    ) => unavailable(owner, code, message),
-  };
 }
 
 function unavailable(owner: string, code: string, message: string) {

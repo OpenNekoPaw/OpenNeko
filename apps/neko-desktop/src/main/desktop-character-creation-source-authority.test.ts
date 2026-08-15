@@ -50,7 +50,7 @@ describe('Desktop Character creation source authority', () => {
       authority.projectEntities.requireConfirmedCharacter({
         sourceWorkspaceId: 'workspace:story',
         sourceWorkspaceGrantId: 'grant:story',
-        contentProjectId: 'content:workspace:story',
+        projectId: 'content:workspace:story',
         entityId: 'entity:lin',
       }),
     ).resolves.toBeUndefined();
@@ -98,7 +98,7 @@ describe('Desktop Character creation source authority', () => {
       authority.projectEntities.requireConfirmedCharacter({
         sourceWorkspaceId: 'workspace:story',
         sourceWorkspaceGrantId: 'grant:story',
-        contentProjectId: 'content:workspace:story',
+        projectId: 'content:workspace:story',
         entityId: 'entity:missing',
       }),
     ).rejects.toThrow("Project Entity 'entity:missing' does not exist");

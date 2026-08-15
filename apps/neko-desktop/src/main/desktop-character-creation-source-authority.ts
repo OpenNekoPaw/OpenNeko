@@ -44,10 +44,10 @@ export function createDesktopCharacterCreationSourceAuthority(input: {
           source.sourceWorkspaceGrantId,
           source.sourceWorkspaceId,
         );
-        const contentProjectId = `content:${resolution.workspace.workspaceId}`;
-        if (source.contentProjectId !== contentProjectId) {
+        const projectId = `content:${resolution.workspace.workspaceId}`;
+        if (source.projectId !== projectId) {
           throw new Error(
-            `Content Project '${source.contentProjectId}' does not match the authorized Workspace.`,
+            `Project '${source.projectId}' does not match the authorized Workspace.`,
           );
         }
         await new NodeProjectEntityAuthoringService({

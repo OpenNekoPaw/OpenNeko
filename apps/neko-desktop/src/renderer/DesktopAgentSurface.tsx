@@ -5,7 +5,6 @@ import type {
   AgentInteractionProjection,
   AgentLaunchHostResult,
   CharacterDialogueHandoffIntent,
-  CharacterCreationHandoffIntent,
   DesktopAgentConnectionIdentity,
 } from '@neko/agent-contracts';
 import { TOOL_NAMES_CHARA } from '@neko/agent-contracts';
@@ -142,8 +141,6 @@ export type DesktopAgentSurfaceProps =
       readonly initialInput?: { readonly id: string; readonly value: string };
       readonly tab: DesktopProjectTabProjection;
       readonly agentPresentation?: AgentInteractionProjection;
-      readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
-      readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
       readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
       readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
       readonly onCharacterProductHandoff?: (handoff: CharacterProductHandoff) => void;
@@ -156,8 +153,6 @@ export type DesktopAgentSurfaceProps =
       readonly agentSurfaceId: string;
       readonly agentPresentation: AgentInteractionProjection;
       readonly viewId: string;
-      readonly characterCreationHandoff?: CharacterCreationHandoffIntent;
-      readonly onCharacterCreationHandoffConsumed?: (intentId: string) => void;
       readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
       readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
       readonly onCharacterProductHandoff?: (handoff: CharacterProductHandoff) => void;
@@ -393,8 +388,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
                     : state.initialConversation
                 }
                 initialInput={state.initialInput}
-                characterCreationHandoff={props.characterCreationHandoff}
-                onCharacterCreationHandoffConsumed={props.onCharacterCreationHandoffConsumed}
                 characterDialogueHandoff={props.characterDialogueHandoff}
                 onCharacterDialogueHandoffConsumed={props.onCharacterDialogueHandoffConsumed}
                 locale={locale}

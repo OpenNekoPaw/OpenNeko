@@ -14,9 +14,10 @@ import type {
   UserCharacterRelationship,
 } from '@neko/chara/contracts';
 
-export type CharacterAuthoringCatalogScope =
-  | { readonly kind: 'standalone-library' }
-  | { readonly kind: 'content-project'; readonly contentProjectId: string };
+export type CharacterAuthoringCatalogScope = {
+  readonly kind: 'project';
+  readonly projectId: string;
+};
 
 export interface CharacterAuthoringCatalog {
   readonly scope: CharacterAuthoringCatalogScope;
