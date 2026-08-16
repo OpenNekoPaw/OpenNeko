@@ -83,6 +83,11 @@ Canvas selection SHALL be composer presentation state or exact turn intent.
 The logical default Canvas SHALL be the canonical Workspace Board.
 
 - Selecting or entering a Workspace Conversation SHALL NOT create `workspace.nkc`.
+- The canonical Board identity SHALL be the primary Canvas index for the turn.
+- When the request relates to Canvas content or may be answered by it, the Agent SHALL query the
+  canonical Board before exploring unrelated Workspace files or directories.
+- A missing Board query SHALL remain read-only, SHALL NOT create the Board, and SHALL NOT treat the
+  missing Board as an empty successful result.
 - An empty Board SHALL only be lazy-created when an existing eligible creator-visible typed artifact delivery occurs.
 - Ordinary conversation, reasoning, and logs SHALL NOT write to the Board.
 
@@ -90,6 +95,13 @@ The logical default Canvas SHALL be the canonical Workspace Board.
 
 - **WHEN** the composer displays the Board as the default Canvas option
 - **THEN** no `workspace.nkc` file is created.
+
+#### Scenario: canonical Board index is queried first
+
+- **WHEN** the logical Board is selected and the user asks a request that relates to or may be answered by Canvas content
+- **THEN** the turn prompt identifies the canonical Board identity as the primary Canvas index
+- **AND** the Agent queries that exact Board through the registered Canvas capability before exploring unrelated Workspace files or directories
+- **AND** a missing Board remains absent and does not become an empty successful result.
 
 #### Scenario: lazy create only for typed artifact
 
@@ -108,6 +120,11 @@ When a specific Canvas is selected, the turn SHALL use that Canvas as the exclus
 
 - The turn boundary SHALL read only the light index/summary of the selected Canvas.
 - Full Canvas content SHALL only be read when the Agent task actually needs it.
+- The selected exact Canvas SHALL be the primary creative context for the turn.
+- When the request relates to Canvas content or may be answered by it, the Agent SHALL query the
+  selected exact Canvas before exploring unrelated Workspace files or directories.
+- The Agent SHALL NOT use generic file, directory, or shell operations to rediscover or read the
+  selected `.nkc` document.
 - Eligible typed artifacts SHALL be written precisely to the selected Canvas.
 - The system SHALL NOT mirror the canonical Board to the selected Canvas.
 - The system SHALL NOT infer a Canvas from active/recent Canvas.
@@ -117,6 +134,13 @@ When a specific Canvas is selected, the turn SHALL use that Canvas as the exclus
 - **WHEN** a turn starts with a selected Canvas
 - **THEN** only that Canvas light index/summary is read for turn context
 - **AND** the full Canvas document is not injected into every turn.
+
+#### Scenario: selected Canvas is queried before Workspace exploration
+
+- **WHEN** an exact Canvas is selected and the user asks a request that relates to or may be answered by its content
+- **THEN** the turn prompt identifies that exact Canvas as the primary creative context
+- **AND** the Agent queries that exact Canvas through the registered Canvas capability before exploring unrelated Workspace files or directories
+- **AND** an unrelated request does not force the full Canvas document to load.
 
 #### Scenario: precise artifact delivery
 

@@ -15,6 +15,7 @@
 - [x] 2.2 Turn 边界只读取轻量 Canvas summary 注入 context；完整 Canvas 内容仅由 Agent 任务按需访问。
 - [x] 2.3 合格 typed artifact 投递写入精确 selected Canvas；未选择时写入 canonical Board；普通对话/推理/日志不写 Board。
 - [x] 2.4 切换 Canvas 只影响后续 Turn；已提交 Turn 使用其创建时的精确 selection。
+- [x] 2.5 Board/exact Canvas identity 是本轮首要画布索引；相关或可能由画布回答的请求先查询所选 Canvas，禁止先通过通用目录/文件操作重新发现它；Board 缺失时不创建、不伪装为空成功，无关请求不强制读取完整文档。
 
 ## 3. Desktop typed IPC projection
 
@@ -40,6 +41,7 @@
 - [x] 5.4 运行最小相关测试与 typecheck（package 级）。
 - [x] 5.5 补足 exact Canvas 文件名、双击 open/focus、Board no-op、rail 整栏宽度与圆角样式测试。
 - [x] 5.6 补足 Workspace 首轮不读取/配置/提交 Entry intent/receipt 且不写 Entry snapshot 的回归测试。
+- [x] 5.7 补足 Canvas prompt 路由测试：Board/exact identity、exact authoritative summary、优先查询 selected Canvas、禁止通用目录/文件重新发现、Board 缺失不预创建/不伪装为空成功，以及无 target 不注入。
 
 ## 6. UI / Agent Evaluation
 

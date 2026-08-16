@@ -45,6 +45,10 @@ AgentWebview composer canvas selector
 3. Workspace context bar 仅显示 Workspace label + Canvas index（逻辑默认 Board 为
    可见选项）；不显示读写状态、范围或权限信息。
 4. Turn 边界只读取轻量 Canvas index/summary；完整 Canvas 内容仅由 Agent 任务按需访问。
+   默认 Board 或具体 Canvas 被选中时，其 canonical/exact identity 作为本轮首要画布索引；具体
+   Canvas 同时注入轻量 summary。与画布内容相关或可能由画布回答的请求必须先通过 Canvas query
+   capability 查询所选 identity，不得先用通用目录/文件工具重新发现所选 Canvas。Board 不存在时
+   查询保持只读且不得创建或伪装为空结果；与画布无关的请求不因此强制读取完整文档。
 5. 只有既有合格 creator-visible typed artifact 投递才由 Canvas owner lazy-create
    `workspace.nkc`；普通对话、推理、日志不写 Board。
 6. 单一 canonical contract，不引入版本字段、active/recent fallback、多路径或兼容分支。
