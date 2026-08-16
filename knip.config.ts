@@ -187,11 +187,9 @@ const config: KnipConfig = {
     'packages/agent/runtime': {
       entry: [
         'src/index.ts',
-        'src/approval/index.ts',
         'src/pi/index.ts',
         'src/runtime/index.ts',
         'src/tools/index.ts',
-        'src/validation/index.ts',
         'src/workspace/index.ts',
       ],
     },
@@ -212,8 +210,6 @@ const config: KnipConfig = {
       entry: [
         'functional/desktop-openneko-consumer.mjs',
         'scripts/three-reference-preset-feasibility.mts',
-        'src/audio/main.tsx',
-        'src/video/main.tsx',
         'src/cbz/main.tsx',
         'src/docx/main.tsx',
         'src/epub/main.tsx',

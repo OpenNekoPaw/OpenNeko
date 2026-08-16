@@ -208,7 +208,8 @@ export interface ToolParameters {
 /**
  * Tool behavioral traits for creative permission decisions.
  *
- * Used by PermissionRuleMatcher to conditionally allow/ask in auto mode:
+ * The traits describe what a tool may cost or undo so a permission decision can map stable
+ * tool semantics onto an allow/ask/auto policy:
  * - Reversible OR local tools → auto-allow
  * - Network + within budget → auto-allow
  * - Over budget or irreversible + network → ask user

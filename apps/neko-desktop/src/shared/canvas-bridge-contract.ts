@@ -22,7 +22,6 @@ export const DESKTOP_CANVAS_CHANNELS = {
   materialActionsResolve: 'open-neko:canvas:material-actions-resolve',
   textFilePreviewRead: 'open-neko:canvas:text-file-preview-read',
   intentExecute: 'open-neko:canvas:intent-execute',
-  previewVariantResolve: 'open-neko:canvas:preview-variant-resolve',
   previewResourceResolve: 'open-neko:canvas:preview-resource-resolve',
   previewResourceRelease: 'open-neko:canvas:preview-resource-release',
   projectionEvent: 'open-neko:canvas:projection-event',
@@ -38,9 +37,6 @@ export interface OpenNekoDesktopCanvasBridge {
     readTextFilePreview(
       request: CanvasTextFilePreviewRequest,
     ): Promise<CanvasTextFilePreviewResult>;
-    resolvePreviewVariant(
-      request: DesktopCanvasPreviewVariantRequest,
-    ): Promise<DesktopCanvasPreviewVariantResult>;
     resolvePreviewResource(
       request: DesktopCanvasPreviewResourceRequest,
     ): Promise<DesktopCanvasPreviewResourceResult>;
@@ -50,20 +46,6 @@ export interface OpenNekoDesktopCanvasBridge {
       listener: (event: CanvasHostProjectionEvent) => void,
     ): () => void;
   };
-}
-
-export interface DesktopCanvasPreviewVariantRequest {
-  readonly identity: CanvasHostRuntimeIdentity;
-  readonly requestId: string;
-  readonly sourceId: string;
-  readonly locator: ContentLocator;
-  readonly role: 'source' | 'thumbnail' | 'proxy' | 'fov-crop';
-  readonly mediaType?: string;
-}
-
-export interface DesktopCanvasPreviewVariantResult {
-  readonly requestId: string;
-  readonly url: string;
 }
 
 export interface DesktopCanvasPreviewResourceRequest {
@@ -85,47 +67,6 @@ export interface DesktopCanvasPreviewResourceResult {
 export interface DesktopCanvasPreviewResourceReleaseRequest {
   readonly identity: CanvasHostRuntimeIdentity;
   readonly descriptorId: string;
-}
-
-export function parseDesktopCanvasPreviewVariantRequest(
-  value: unknown,
-): DesktopCanvasPreviewVariantRequest {
-  if (!isRecord(value)) {
-    throw new Error('Desktop Canvas preview request must be an object.');
-  }
-  const locator = validateContentLocator(value['locator']);
-  if (!locator.ok) throw new Error('Desktop Canvas preview requires a valid ContentLocator.');
-  const role = value['role'];
-  if (role !== 'source' && role !== 'thumbnail' && role !== 'proxy' && role !== 'fov-crop') {
-    throw new Error('Desktop Canvas preview role is invalid.');
-  }
-  const mediaType = value['mediaType'];
-  if (mediaType !== undefined && (typeof mediaType !== 'string' || mediaType.trim().length === 0)) {
-    throw new Error('Desktop Canvas preview media type is invalid.');
-  }
-  return {
-    identity: parseCanvasHostRuntimeIdentity(value['identity']),
-    requestId: requireIdentity(value['requestId'], 'preview request'),
-    sourceId: requireIdentity(value['sourceId'], 'preview source'),
-    locator: locator.locator,
-    role,
-    ...(mediaType === undefined ? {} : { mediaType }),
-  };
-}
-
-export function parseDesktopCanvasPreviewVariantResult(
-  value: unknown,
-  requestId: string,
-): DesktopCanvasPreviewVariantResult {
-  if (
-    !isRecord(value) ||
-    value['requestId'] !== requestId ||
-    typeof value['url'] !== 'string' ||
-    !value['url'].startsWith('openneko://resource/')
-  ) {
-    throw new Error('Desktop Canvas preview result is invalid.');
-  }
-  return { requestId, url: value['url'] };
 }
 
 export function parseDesktopCanvasPreviewResourceRequest(

@@ -104,10 +104,7 @@ import type {
   CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
 import { parseCanvasHostRuntimeIdentity } from '@neko/canvas-domain';
-import {
-  type DesktopCanvasPreviewResourceResult,
-  type DesktopCanvasPreviewVariantResult,
-} from '../shared/canvas-bridge-contract';
+import { type DesktopCanvasPreviewResourceResult } from '../shared/canvas-bridge-contract';
 import type { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import type {
   CutHostRuntimeProjectionEvent,
@@ -2835,15 +2832,6 @@ export class DesktopAppHost {
     this.requireActive();
     const window = this.windows.resolveSender(sender);
     return this.requireCanvas().readTextFilePreview(window.windowId, payload);
-  }
-
-  async resolveCanvasPreviewVariant(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopCanvasPreviewVariantResult> {
-    this.requireActive();
-    const window = this.windows.resolveSender(sender);
-    return this.requireCanvas().resolvePreviewVariant(window.windowId, payload);
   }
 
   async resolveCanvasPreviewResource(

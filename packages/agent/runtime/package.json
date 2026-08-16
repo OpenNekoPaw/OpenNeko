@@ -4,8 +4,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./validation": "./src/validation/index.ts",
-    "./approval": "./src/approval/index.ts",
     "./application": "./src/application/index.ts",
     "./command": "./src/command/index.ts",
     "./pi": "./src/pi/index.ts",
@@ -51,7 +49,6 @@
     "@neko/preview-domain": "workspace:*",
     "@neko/search-domain": "workspace:*",
     "@neko/shared": "workspace:*",
-    "ajv": "^8.17.1",
     "sharp": "^0.35.3",
     "typebox": "^1.1.38",
     "yaml": "2.9.0"

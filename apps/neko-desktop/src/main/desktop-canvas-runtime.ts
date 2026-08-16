@@ -43,12 +43,9 @@ import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import {
   parseDesktopCanvasPreviewResourceReleaseRequest,
   parseDesktopCanvasPreviewResourceRequest,
-  parseDesktopCanvasPreviewVariantRequest,
   type DesktopCanvasPreviewResourceRequest,
   type DesktopCanvasPreviewResourceResult,
   type DesktopCanvasPreviewResourceReleaseRequest,
-  type DesktopCanvasPreviewVariantRequest,
-  type DesktopCanvasPreviewVariantResult,
 } from '../shared/canvas-bridge-contract';
 import type {
   PreviewResourceLease,
@@ -144,7 +141,7 @@ export class DesktopCanvasRuntime {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly workspace: DesktopCanvasViewGrant['workspace'];
         readonly locator: ContentLocator;
-        readonly purpose: 'inline-variant' | 'viewer-source';
+        readonly purpose: 'viewer-source';
         readonly descriptorId: string;
         readonly displayName: string;
         readonly mediaType?: string;
@@ -249,51 +246,6 @@ export class DesktopCanvasRuntime {
     return (await this.requireSession(windowId, request.identity)).session.readTextFilePreview(
       request,
     );
-  }
-
-  async resolvePreviewVariant(
-    windowId: string,
-    value: DesktopCanvasPreviewVariantRequest | unknown,
-  ): Promise<DesktopCanvasPreviewVariantResult> {
-    const request = parseDesktopCanvasPreviewVariantRequest(value);
-    const entry = await this.requireSession(windowId, request.identity);
-    const projectPreviewResource = this.options.projectPreviewResource;
-    if (!projectPreviewResource) {
-      throw new Error('Canvas preview variant capability is unavailable.');
-    }
-    const key = previewLeaseKey(request);
-    const locatorKey = contentLocatorKey(request.locator);
-    const current = this.previewLeases.get(key);
-    if (current?.locatorKey === locatorKey && current.mediaType === request.mediaType) {
-      return { requestId: request.requestId, url: current.lease.url };
-    }
-    if (current) this.releasePreviewProjection(current.descriptor.descriptorId);
-    this.previewLeases.delete(key);
-    const descriptorId = `canvas-inline:${request.identity.sessionId}:${request.sourceId}:${request.role}`;
-    const projection = await projectPreviewResource({
-      identity: request.identity,
-      workspace: entry.workspace,
-      locator: request.locator,
-      purpose: 'inline-variant',
-      descriptorId,
-      displayName: canvasPreviewDisplayName(request.locator),
-      ...(request.mediaType === undefined ? {} : { mediaType: request.mediaType }),
-    });
-    if (projection.status === 'unavailable') throw new Error(projection.diagnostic.message);
-    const lease = projection.lease;
-    this.previewLeases.set(key, {
-      windowId,
-      viewId: request.identity.viewId,
-      sessionKey: sessionKey(request.identity),
-      locatorKey,
-      ...(request.mediaType === undefined ? {} : { mediaType: request.mediaType }),
-      lease,
-      descriptor: projection.descriptor,
-    });
-    return {
-      requestId: request.requestId,
-      url: lease.url,
-    };
   }
 
   async resolvePreviewResource(
@@ -1055,24 +1007,6 @@ function sessionKey(identity: CanvasHostRuntimeIdentity): string {
     identity.sessionId,
     identity.rendererSessionId,
   ].join(':');
-}
-
-function previewLeaseKey(request: DesktopCanvasPreviewVariantRequest): string {
-  return [sessionKey(request.identity), request.sourceId, request.role].join(':');
-}
-
-function canvasPreviewDisplayName(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return portableBaseName(locator.path);
-    case 'media-library':
-      return portableBaseName(locator.relativePath);
-    case 'document-entry':
-      return portableBaseName(locator.entryPath);
-    case 'package-resource':
-      return portableBaseName(locator.resourcePath);
-  }
 }
 
 function isFileNotFound(error: unknown): boolean {

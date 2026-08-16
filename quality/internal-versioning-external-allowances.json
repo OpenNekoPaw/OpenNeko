@@ -721,46 +721,6 @@
       "token": "/v1/"
     },
     {
-      "category": "versioned-path-or-key",
-      "externalOwner": "OpenAI-compatible Images API",
-      "fieldScope": "OpenAI-compatible image generation endpoint template",
-      "id": "a7a5f0fd62f6620d241d",
-      "isolationRule": "The route is provider-bound configuration for one explicit adapter and cannot identify OpenNeko data, component state, migrations, or fallback implementations.",
-      "normativeSource": "https://platform.openai.com/docs/api-reference/images/create",
-      "path": "packages/generation/src/media/adapters/openai-compat-media-adapter.ts",
-      "token": "/v1/"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "OpenAI-compatible Videos API",
-      "fieldScope": "OpenAI-compatible video generation endpoint template",
-      "id": "78cdaaaf21bf03e40fab",
-      "isolationRule": "The route is provider-bound configuration for one explicit adapter and cannot identify OpenNeko data, component state, migrations, or fallback implementations.",
-      "normativeSource": "https://platform.openai.com/docs/api-reference/videos",
-      "path": "packages/generation/src/media/adapters/openai-compat-media-adapter.ts",
-      "token": "/v1/"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "OpenAI-compatible Videos API",
-      "fieldScope": "OpenAI-compatible video status endpoint template",
-      "id": "0a9ee2cac1ee3cd14c63",
-      "isolationRule": "The route is provider-bound configuration for one explicit adapter and failure stays request-local without internal migration or provider fallback.",
-      "normativeSource": "https://platform.openai.com/docs/api-reference/videos",
-      "path": "packages/generation/src/media/adapters/openai-compat-media-adapter.ts",
-      "token": "/v1/"
-    },
-    {
-      "category": "versioned-path-or-key",
-      "externalOwner": "OpenAI-compatible Videos API",
-      "fieldScope": "OpenAI-compatible video cancellation endpoint template",
-      "id": "97f28c3a8d1c5afe0648",
-      "isolationRule": "The route is provider-bound configuration for one explicit adapter and failure stays request-local without internal migration or provider fallback.",
-      "normativeSource": "https://platform.openai.com/docs/api-reference/videos",
-      "path": "packages/generation/src/media/adapters/openai-compat-media-adapter.ts",
-      "token": "/v1/"
-    },
-    {
       "category": "internal-version-field",
       "externalOwner": "Runway API",
       "fieldScope": "Runway-Version request header value",

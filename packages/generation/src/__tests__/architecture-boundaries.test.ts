@@ -114,7 +114,6 @@ describe('@neko/generation architecture boundaries', () => {
       'packages/generation/src/job/contracts.ts',
       'packages/canvas/domain/src/types/canvas-workspace-board.ts',
       'packages/canvas/domain/src/utils/canvasWorkspaceBoardProjection.ts',
-      'packages/agent/contracts/src/creative-ai-invocation.ts',
       'packages/agent/runtime/src/runtime/turn/creator-visible-artifact-collector.ts',
     ];
     const forbiddenImports = [

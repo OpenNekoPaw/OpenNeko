@@ -14,7 +14,6 @@ const preview: MessageBundle = {
   // Video player
   'preview.video.loading': 'Loading video...',
   'preview.video.error': 'Error: {error}',
-  'preview.video.noMediaInfo': 'No media info available',
   'preview.video.pipActive': 'Playing in Picture-in-Picture',
   'preview.video.pauseButton': 'Pause (Space)',
   'preview.video.playButton': 'Play (Space)',
@@ -41,7 +40,6 @@ const preview: MessageBundle = {
   // Audio player
   'preview.audio.loading': 'Loading audio...',
   'preview.audio.error': 'Error: {error}',
-  'preview.audio.noMediaInfo': 'No media info available',
   'preview.audio.defaultFilename': 'Audio File',
   'preview.audio.unknownCodec': 'Unknown',
   'preview.audio.mono': 'Mono',

@@ -1086,15 +1086,27 @@ describe('createCanvasWebviewHost', () => {
     });
 
     delegateListener?.({
-      type: 'preview:variantResolved',
+      type: 'preview:resourceResolved',
       requestId: 'preview-1',
-      url: 'data:image/png;base64,Y2F0',
+      descriptor: {
+        descriptorId: 'preview-descriptor-1',
+        contentKind: 'image',
+        resourceUrl: 'openneko://resource/preview-1',
+        displayName: 'preview.png',
+        mediaType: 'image/png',
+      },
     });
 
     expect(listener).toHaveBeenCalledWith({
-      type: 'preview:variantResolved',
+      type: 'preview:resourceResolved',
       requestId: 'preview-1',
-      url: 'data:image/png;base64,Y2F0',
+      descriptor: {
+        descriptorId: 'preview-descriptor-1',
+        contentKind: 'image',
+        resourceUrl: 'openneko://resource/preview-1',
+        displayName: 'preview.png',
+        mediaType: 'image/png',
+      },
     });
 
     host.setState({ canvasViewportSnapshots: 'corrupt' });

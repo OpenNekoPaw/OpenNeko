@@ -125,8 +125,6 @@ import {
 import {
   DESKTOP_CANVAS_CHANNELS,
   isSameCanvasHostIdentity,
-  parseDesktopCanvasPreviewVariantRequest,
-  parseDesktopCanvasPreviewVariantResult,
   parseDesktopCanvasPreviewResourceReleaseRequest,
   parseDesktopCanvasPreviewResourceRequest,
   parseDesktopCanvasPreviewResourceResult,
@@ -1625,18 +1623,6 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       return parseCanvasHostIntentResult(response, request.requestId, request.commandId);
-    },
-    async resolvePreviewVariant(value) {
-      const request = parseDesktopCanvasPreviewVariantRequest(value);
-      const identity = currentCanvasIdentities.get(canvasIdentityKey(request.identity));
-      if (!identity || !isSameCanvasHostIdentity(request.identity, identity)) {
-        throw new Error('Desktop Canvas preview requires a current owner-bound snapshot.');
-      }
-      const response: unknown = await ipcRenderer.invoke(
-        DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
-        request,
-      );
-      return parseDesktopCanvasPreviewVariantResult(response, request.requestId);
     },
     async resolvePreviewResource(value) {
       const request = parseDesktopCanvasPreviewResourceRequest(value);

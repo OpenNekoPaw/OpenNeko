@@ -179,53 +179,6 @@ export {
 } from './session/agent-message-queue';
 
 export {
-  createAgentCapabilityRuntimeRegistries,
-  type AgentCapabilityRuntimeRegistries,
-} from './capability/capability-runtime-registries';
-
-export {
-  EXTERNAL_RESEARCH_CAPABILITY_PROVIDER_ID,
-  WEB_FETCH_TOOL_NAME,
-  WEB_SEARCH_TOOL_NAME,
-  createExternalResearchCapabilityProvider,
-  resolveExternalResearchCapability,
-  type CreateExternalResearchCapabilityProviderOptions,
-  type ExternalResearchProviderResolver,
-} from './capability/external-research-capability-provider';
-
-export {
-  createFakeExternalResearchProvider,
-  type FakeExternalResearchProviderOptions,
-} from './capability/fake-external-research-provider';
-
-export {
-  createMcpExternalResearchProvider,
-  type CreateMcpExternalResearchProviderOptions,
-} from './capability/mcp-external-research-provider';
-
-export { createExternalResearchCapabilityProviderFromMcpConfig } from './capability/external-research-mcp-capability';
-
-export {
-  saveResearchNoteMarkdown,
-  serializeResearchNoteMarkdown,
-  type ResearchNoteMarkdownFs,
-  type SaveResearchNoteMarkdownInput,
-} from './capability/research-note-markdown';
-
-export {
-  projectExternalResearchToolResult,
-  type ExternalResearchTraceProjection,
-} from './capability/external-research-projection';
-
-export {
-  createCapabilityRuntimeBindingStore,
-  mergeCapabilityRuntimeBindings,
-  type CapabilityRuntimeBindingLogger,
-  type CapabilityRuntimeBindingStore,
-  type CapabilityRuntimeBindings,
-} from './capability/capability-runtime-bindings';
-
-export {
   buildConfigBridgeGlobalErrorMessage,
   runConfigBridgeQueryRuntime,
   type ConfigBridgeRuntimeLogger,
@@ -247,29 +200,6 @@ export {
   type WorkspaceInputProcessorRuntime,
   type WorkspaceInputProcessorRuntimeOptions,
 } from './turn/workspace-input-processor-runtime';
-
-export {
-  createDeveloperModeTemporaryProcessorRequest,
-  createAgentExternalProcessorRuntime,
-  type AgentExternalProcessorRuntime,
-  type AgentExternalProcessorRuntimeOptions,
-  type AgentExternalProcessorPlanInput,
-  type AgentExternalProcessorPlanResult,
-  type AgentExternalProcessorReadyPlan,
-  type AgentExternalProcessorBlockedPlan,
-  type AgentExternalProcessorResultInput,
-  type AgentExternalProcessorResultProjection,
-  type AgentExternalProcessorChainApprovalContinuationInput,
-  type AgentExternalProcessorChainRun,
-  type AgentExternalProcessorChainStageInput,
-  type AgentExternalProcessorChainStagePlanResult,
-  type AgentExternalProcessorChainStageRecord,
-  type AgentExternalProcessorChainStartInput,
-  type AgentExternalProcessorChainTargetChangeInput,
-  type DeveloperModeTemporaryProcessorRequest,
-  type DeveloperModeTemporaryProcessorRequestInput,
-  type DeveloperModeTemporaryProcessorDefinition,
-} from './capability/external-processor-runtime';
 
 export {
   createAgentTurnContext,
@@ -382,18 +312,6 @@ export {
   projectResourceValue,
   type MessageResourceProjectionOptions,
 } from '../input/message-resource-projector';
-
-export type {
-  BackfillSink,
-  IPerceptionPipeline,
-  MediaProbePort,
-  PerceptionClientPort,
-  PerceptionPipelinePorts,
-  PerceptualAssetPort,
-  PerceptualAssetResolverPort,
-  ResolvedPerceptualAsset,
-} from '../perception';
-export { createPerceptionPipeline, PerceptionPipeline } from '../perception';
 
 export {
   buildActiveConversationMessage,

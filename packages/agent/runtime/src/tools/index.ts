@@ -124,14 +124,6 @@ export type {
 
 export type { PerceptionToolMetadata, PerceptionToolResult } from '@neko/agent-contracts';
 
-// Pattern matching utilities (shared by permission and skill modules)
-export {
-  normalizeToolCall,
-  matchesPattern,
-  isInPatternList,
-  type ToolCallLike,
-} from './tool-pattern-matcher';
-
 // Tier resolver (tiered lazy loading)
 export { resolveToolGroupTier } from './tier-resolver';
 

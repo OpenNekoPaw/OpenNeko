@@ -330,7 +330,6 @@ export function createCanvasWebviewHost(
           delegate.postMessage(value);
         }
         return;
-      case 'preview:resolveVariant':
       case 'preview:resolveResource':
       case 'preview:releaseResource':
         if (!delegate || !supportsMessage(value['type'])) {

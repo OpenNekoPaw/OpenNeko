@@ -1683,56 +1683,6 @@ describe('DesktopCanvasRuntime', () => {
     expect((await runtime.getSnapshot('window-1', identity)).canvas.nodes).toEqual([]);
   });
 
-  it('resolves an inline preview from the exact Canvas workspace without exposing a path', async () => {
-    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-preview-'));
-    roots.push(workspacePath);
-    await writeFixtureFile(workspacePath, 'media/cat.png', 'image');
-    const identity = createIdentity();
-    const release = vi.fn();
-    const registerPreviewResource = vi.fn(async () => ({
-      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
-      sourceFingerprint: '1:5',
-      byteLength: 5,
-      mediaType: 'image/png',
-      release,
-    }));
-    const runtime = createRuntime(workspacePath, identity, registerPreviewResource);
-
-    await runtime.getSnapshot('window-1', identity);
-    await expect(
-      runtime.resolvePreviewVariant('window-1', {
-        identity,
-        requestId: 'preview-1',
-        sourceId: 'image-node-1',
-        locator: { kind: 'workspace-file', path: 'media/cat.png' },
-        role: 'thumbnail',
-        mediaType: 'image',
-      }),
-    ).resolves.toEqual({
-      requestId: 'preview-1',
-      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
-    });
-    expect(registerPreviewResource).toHaveBeenCalledWith({
-      identity,
-      workspace: expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
-      locator: { kind: 'workspace-file', path: 'media/cat.png' },
-      purpose: 'inline-variant',
-      mediaType: 'image',
-    });
-
-    await expect(
-      runtime.resolvePreviewVariant('window-1', {
-        identity,
-        requestId: 'preview-escape',
-        sourceId: 'image-node-escape',
-        locator: { kind: 'workspace-file', path: '../cat.png' },
-        role: 'thumbnail',
-      }),
-    ).rejects.toThrow('valid ContentLocator');
-    runtime.detachWindow('window-1');
-    expect(release).toHaveBeenCalledOnce();
-  });
-
   it('authorizes and releases embedded Preview leases for exact Canvas outputs fail-locally', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-preview-'));
     roots.push(workspacePath);
@@ -2779,7 +2729,7 @@ function createRuntime(
     readonly identity: CanvasHostRuntimeIdentity;
     readonly workspace: DesktopCanvasViewGrant['workspace'];
     readonly locator: import('@neko/content').ContentLocator;
-    readonly purpose: 'inline-variant' | 'viewer-source';
+    readonly purpose: 'viewer-source';
     readonly mediaType?: string;
   }) => Promise<{
     readonly url: string;

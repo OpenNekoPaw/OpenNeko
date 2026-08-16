@@ -350,10 +350,6 @@ describe('Desktop architecture boundaries', () => {
       'utf8',
     );
     const canvasRuntime = readFileSync(path.join(mainRoot, 'desktop-canvas-runtime.ts'), 'utf8');
-    const canvasPreviewResolver = readFileSync(
-      path.join(repositoryRoot, 'packages/canvas/webview/src/preview/previewResolver.ts'),
-      'utf8',
-    );
 
     expect(openNekoProtocol).toContain('protocol.handle(');
     expect(openNekoProtocol).toContain('OPENNEKO_SCHEME');
@@ -368,9 +364,15 @@ describe('Desktop architecture boundaries', () => {
     expect(existsSync(path.join(mainRoot, 'desktop-canvas-media-runtime.ts'))).toBe(false);
     expect(canvasRuntime).not.toMatch(/\.(?:startPcm|prepareAudio|prepareVideo)\s*\(/u);
     expect(canvasRuntime).toContain("'viewer-source'");
-    expect(canvasPreviewResolver).not.toContain('assetPath:');
-    expect(canvasPreviewResolver).not.toContain('activeCanvas');
-    expect(canvasPreviewResolver).not.toContain('recentCanvas');
+    expect(canvasRuntime).toContain('resolvePreviewResource');
+    expect(canvasRuntime).not.toContain('resolvePreviewVariant');
+    expect(canvasRuntime).not.toContain("'inline-variant'");
+    expect(
+      existsSync(path.join(repositoryRoot, 'packages/canvas/webview/src/preview/previewResolver.ts')),
+    ).toBe(false);
+    expect(
+      existsSync(path.join(repositoryRoot, 'packages/canvas/webview/src/preview/previewRuntime.ts')),
+    ).toBe(false);
   });
 
   it('compiles every embedded package Root utility class in the Desktop renderer', () => {

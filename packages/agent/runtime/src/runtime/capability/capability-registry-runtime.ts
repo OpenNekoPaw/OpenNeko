@@ -6,18 +6,11 @@ import type {
   AgentCapabilityManifest,
   AgentCapabilityProvider,
   AgentCapabilityTrustLevel,
-  AgentProfileRegistrationResult,
-  AgentProfileSource,
-  IProviderCardRegistry,
-  IProviderExpressionProfileRegistry,
   IToolCategoryRegistry,
   IToolRegistry,
   PromptFragment,
-  ProviderCard,
-  ProviderExpressionProfileDescriptor,
   Tool,
 } from '@neko/agent-contracts';
-import type { ArtifactProfileDescriptor, IArtifactProfileRegistry } from '@neko/agent-contracts';
 
 export interface CapabilityProtocolInfo {
   readonly providerId: string;
@@ -27,23 +20,10 @@ export interface CapabilityProtocolInfo {
   readonly source: 'provider' | 'manifest';
 }
 
-interface ProviderCardTarget {
-  readonly providerId: string;
-  readonly modelId?: string;
-}
-
-interface ProfileTarget {
-  readonly profileId: string;
-  readonly source: AgentProfileSource;
-}
-
 interface RegisteredProvider {
   provider: AgentCapabilityProvider;
   protocol: CapabilityProtocolInfo;
   registeredTools: string[];
-  registeredProviderCards: ProviderCardTarget[];
-  registeredArtifactProfiles: ProfileTarget[];
-  registeredProviderExpressionProfiles: ProfileTarget[];
 }
 
 export interface CapabilityRegistryRuntimeDeps {
@@ -51,12 +31,6 @@ export interface CapabilityRegistryRuntimeDeps {
   toolCategoryRegistry?: Pick<IToolCategoryRegistry, 'categorizeTool'> & {
     clearTools?(): void;
   };
-  providerCardRegistry?: Pick<IProviderCardRegistry, 'register' | 'unregister'>;
-  artifactProfileRegistry?: Pick<IArtifactProfileRegistry, 'register' | 'unregister'>;
-  providerExpressionProfileRegistry?: Pick<
-    IProviderExpressionProfileRegistry,
-    'register' | 'unregister'
-  >;
 }
 
 export type CapabilityDiscoveryDeps = CapabilityRegistryRuntimeDeps;
@@ -124,7 +98,6 @@ export class CapabilityRegistryRuntime {
     string,
     { toolName: string; providerId: string }
   >();
-  private readonly providerCardOwners = new Map<string, string>();
   private readonly diagnostics: CapabilityRuntimeDiagnostic[] = [];
   private readonly logger: CapabilityRegistryRuntimeLogger;
   private capabilityContext: AgentCapabilityContext | null = null;
@@ -184,9 +157,6 @@ export class CapabilityRegistryRuntime {
     }
 
     const registeredTools: string[] = [];
-    const registeredProviderCards: ProviderCardTarget[] = [];
-    const registeredArtifactProfiles: ProfileTarget[] = [];
-    const registeredProviderExpressionProfiles: ProfileTarget[] = [];
 
     try {
       const tools: Tool[] = provider.getTools(context);
@@ -207,73 +177,13 @@ export class CapabilityRegistryRuntime {
       this.logger.warn(`Failed to get tools from provider "${id}"`, { error: err });
     }
 
-    if (
-      provider.getProviderExpressionProfiles &&
-      (this.deps.providerCardRegistry || this.deps.providerExpressionProfileRegistry)
-    ) {
-      try {
-        const profiles: ProviderExpressionProfileDescriptor[] =
-          provider.getProviderExpressionProfiles(context);
-        for (const profile of profiles) {
-          if (this.deps.providerCardRegistry) {
-            this.recordCapabilityNameCollision({
-              kind: 'provider-card',
-              name: formatProviderCardTarget(profile),
-              providerId: id,
-              existingOwner: this.providerCardOwners.get(toProviderCardOwnerKey(profile)),
-              existsInRuntime: false,
-            });
-            this.deps.providerCardRegistry.register(profile);
-            this.providerCardOwners.set(toProviderCardOwnerKey(profile), id);
-            registeredProviderCards.push(toProviderCardTarget(profile));
-          }
-          if (this.deps.providerExpressionProfileRegistry) {
-            this.recordProfileRegistrationResult(
-              this.deps.providerExpressionProfileRegistry.register(profile),
-              id,
-              'provider-expression-profile',
-            );
-            registeredProviderExpressionProfiles.push(toProfileTarget(profile));
-          }
-        }
-      } catch (err) {
-        this.logger.warn(`Failed to get provider expression profiles from provider "${id}"`, {
-          error: err,
-        });
-      }
-    }
-
-    if (provider.getArtifactProfiles && this.deps.artifactProfileRegistry) {
-      try {
-        const profiles: ArtifactProfileDescriptor[] = provider.getArtifactProfiles(context);
-        for (const profile of profiles) {
-          this.recordProfileRegistrationResult(
-            this.deps.artifactProfileRegistry.register(profile),
-            id,
-            'artifact-profile',
-          );
-          registeredArtifactProfiles.push(toProfileTarget(profile));
-        }
-      } catch (err) {
-        this.logger.warn(`Failed to get artifact profiles from provider "${id}"`, { error: err });
-      }
-    }
-
     this.providers.set(id, {
       provider,
       protocol: resolveCapabilityProtocolInfo(id, provider, 'provider'),
       registeredTools,
-      registeredProviderCards,
-      registeredArtifactProfiles,
-      registeredProviderExpressionProfiles,
     });
 
-    this.logger.info(
-      `Provider "${id}" registered: ` +
-        `${registeredTools.length} tools, ${registeredProviderCards.length} provider cards, ` +
-        `${registeredArtifactProfiles.length} artifact profiles, ` +
-        `${registeredProviderExpressionProfiles.length} provider expression profiles`,
-    );
+    this.logger.info(`Provider "${id}" registered: ${registeredTools.length} tools`);
 
     this.syncToolCategories();
   }
@@ -290,28 +200,6 @@ export class CapabilityRegistryRuntime {
       const shortName = normalizeCapabilityShortName(toolName);
       if (this.toolShortNameOwners.get(shortName)?.providerId === id) {
         this.toolShortNameOwners.delete(shortName);
-      }
-    }
-
-    if (this.deps.providerCardRegistry) {
-      for (const target of entry.registeredProviderCards) {
-        this.deps.providerCardRegistry.unregister(target.providerId, undefined, target.modelId);
-        const key = toProviderCardOwnerKey(target);
-        if (this.providerCardOwners.get(key) === id) {
-          this.providerCardOwners.delete(key);
-        }
-      }
-    }
-
-    if (this.deps.artifactProfileRegistry) {
-      for (const target of entry.registeredArtifactProfiles) {
-        this.deps.artifactProfileRegistry.unregister(target.profileId, target.source);
-      }
-    }
-
-    if (this.deps.providerExpressionProfileRegistry) {
-      for (const target of entry.registeredProviderExpressionProfiles) {
-        this.deps.providerExpressionProfileRegistry.unregister(target.profileId, target.source);
       }
     }
 
@@ -432,7 +320,7 @@ export class CapabilityRegistryRuntime {
   }
 
   private recordCapabilityNameCollision(input: {
-    kind: 'tool' | 'provider-card';
+    kind: 'tool';
     name: string;
     providerId: string;
     existingOwner?: string;
@@ -468,9 +356,7 @@ export class CapabilityRegistryRuntime {
       },
     });
 
-    if (input.kind === 'tool') {
-      this.recordToolShortNameCollision(input.name, input.providerId, input.existingOwner);
-    }
+    this.recordToolShortNameCollision(input.name, input.providerId, input.existingOwner);
   }
 
   private recordToolShortNameCollision(
@@ -532,67 +418,12 @@ export class CapabilityRegistryRuntime {
     this.diagnostics.push(diagnostic);
     emitCapabilityDiagnostic(this.logger, level, diagnostic);
   }
-
-  private recordProfileRegistrationResult(
-    result: AgentProfileRegistrationResult,
-    providerId: string,
-    capabilityKind: 'artifact-profile' | 'provider-expression-profile',
-  ): void {
-    for (const diagnostic of result.diagnostics) {
-      this.recordCapabilityDiagnostic(toCapabilityDiagnosticLevel(diagnostic.severity), {
-        code: `extension.capability.${capabilityKind}.${diagnostic.code}`,
-        reason: diagnostic.code,
-        message: diagnostic.message,
-        context: {
-          capabilityKind,
-          providerId,
-          profileId: diagnostic.profileId ?? null,
-          profileKind: diagnostic.kind ?? null,
-          source: diagnostic.source ?? null,
-          expected: diagnostic.expected ?? null,
-          actual: diagnostic.actual ?? null,
-          ...(diagnostic.details ? { details: diagnostic.details } : {}),
-        },
-      });
-    }
-  }
-}
-
-function toCapabilityDiagnosticLevel(
-  severity: AgentProfileRegistrationResult['diagnostics'][number]['severity'],
-): CapabilityDiagnosticLevel {
-  return severity === 'info' ? 'info' : 'warn';
 }
 
 function normalizeCapabilityShortName(name: string): string {
   const trimmed = name.trim();
   const tail = trimmed.split(/[.:/]/).filter(Boolean).at(-1) ?? trimmed;
   return tail.toLocaleLowerCase();
-}
-
-function toProviderCardTarget(card: ProviderCard): ProviderCardTarget {
-  return {
-    providerId: card.providerId,
-    ...(card.modelId ? { modelId: card.modelId } : {}),
-  };
-}
-
-function toProfileTarget(profile: {
-  readonly profileId: string;
-  readonly source: AgentProfileSource;
-}): ProfileTarget {
-  return {
-    profileId: profile.profileId,
-    source: profile.source,
-  };
-}
-
-function toProviderCardOwnerKey(target: ProviderCardTarget): string {
-  return target.modelId ? `${target.providerId}\u0000${target.modelId}` : target.providerId;
-}
-
-function formatProviderCardTarget(target: ProviderCardTarget): string {
-  return target.modelId ? `${target.providerId}/${target.modelId}` : target.providerId;
 }
 
 function resolveCapabilityProtocolInfo(

@@ -342,11 +342,6 @@ export function registerDesktopIpc(
       appHost.executeCanvasIntent(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.resolveCanvasPreviewVariant(requireSender(event), payload),
-  );
-  ipcMain.handle(
     DESKTOP_CANVAS_CHANNELS.previewResourceResolve,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.resolveCanvasPreviewResource(requireSender(event), payload),
@@ -517,7 +512,6 @@ export function registerDesktopIpc(
       DESKTOP_CANVAS_CHANNELS.materialActionsResolve,
       DESKTOP_CANVAS_CHANNELS.textFilePreviewRead,
       DESKTOP_CANVAS_CHANNELS.intentExecute,
-      DESKTOP_CANVAS_CHANNELS.previewVariantResolve,
       DESKTOP_CANVAS_CHANNELS.previewResourceResolve,
       DESKTOP_CANVAS_CHANNELS.previewResourceRelease,
       DESKTOP_CUT_CHANNELS.snapshotGet,

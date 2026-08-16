@@ -128,7 +128,6 @@ export {
 // Factory
 import type { MediaExecutionProviderResolver, MediaGenerationConfigPort } from './types';
 import { getMediaAdapterRegistry } from './adapters/media-adapter-registry';
-import { OpenAICompatMediaAdapter } from './adapters/openai-compat-media-adapter';
 import { RunwayMediaAdapter } from './adapters/runway-media-adapter';
 import { LumaMediaAdapter } from './adapters/luma-media-adapter';
 import { MiniMaxMediaAdapter } from './adapters/minimax-media-adapter';
@@ -166,16 +165,7 @@ export function createMediaPlatform(deps: MediaPlatformDeps): MediaPlatform {
   // Get or create adapter registry
   const adapterRegistry = getMediaAdapterRegistry();
 
-  // Register built-in adapters
-  // OpenAI-compatible adapters (covers OpenAI, NekoAPI, and other compatible APIs)
-  const openaiCompatAdapter = new OpenAICompatMediaAdapter();
-  adapterRegistry.registerBuiltin('openai', openaiCompatAdapter);
-  adapterRegistry.registerBuiltin('generic', openaiCompatAdapter); // For NekoAPI and other compatible APIs
-  adapterRegistry.registerBuiltin('newapi', openaiCompatAdapter); // NewAPI is OpenAI-compatible
-  adapterRegistry.registerBuiltin('xai', openaiCompatAdapter);
-  adapterRegistry.registerBuiltin('kling', openaiCompatAdapter);
-
-  // Specialized adapters
+  // Register built-in polling adapters for the provider types the AI SDK does not own.
   adapterRegistry.registerBuiltin('runway', new RunwayMediaAdapter());
   adapterRegistry.registerBuiltin('luma', new LumaMediaAdapter());
   adapterRegistry.registerBuiltin('minimax', new MiniMaxMediaAdapter());

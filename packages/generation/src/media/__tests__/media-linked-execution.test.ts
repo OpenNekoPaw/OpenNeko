@@ -145,6 +145,29 @@ describe('MediaGenerationExecutor linked execution', () => {
     expect(generateImage).toHaveBeenCalledTimes(1);
   });
 
+  it('never switches stacks after a terminal MediaAdapter failure', async () => {
+    const generateImage = vi.fn(async (): Promise<MediaAdapterResult> => ({
+      status: 'failed',
+      error: {
+        code: 'provider-rejected',
+        message: 'Provider rejected the request.',
+        retryable: false,
+      },
+    }));
+    getMediaAdapterRegistry().registerBuiltin('runway', createAdapter({ generateImage }));
+    const executor = new MediaGenerationExecutor(createConfig(), createProviderResolver());
+
+    await expect(
+      executor.executeLinked({
+        generationType: 'text-to-image',
+        providerId: provider.id,
+        modelId: model.id,
+        request: { prompt: 'cat' },
+      }),
+    ).rejects.toThrow(/Provider rejected the request/);
+    expect(generateImage).toHaveBeenCalledTimes(1);
+  });
+
   it('fails before provider execution when the exact credential disappears', async () => {
     const generateImage = vi.fn(async (): Promise<MediaAdapterResult> => ({
       status: 'completed',

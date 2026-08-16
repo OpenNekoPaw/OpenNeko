@@ -1,13 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  AgentCapabilityProvider,
-  PromptFragment,
-  ProviderCard,
-  Tool,
-} from '@neko/agent-contracts';
-import type { ArtifactProfileDescriptor } from '@neko/agent-contracts';
+import type { AgentCapabilityProvider, PromptFragment, Tool } from '@neko/agent-contracts';
 import { ToolRegistry } from '../../tools';
-import { ArtifactProfileRegistry, ProviderExpressionProfileRegistry } from '../../profile';
 import { CapabilityRegistryRuntime } from '../capability/capability-registry-runtime';
 
 function createTool(name: string): Tool {
@@ -177,58 +170,5 @@ describe('CapabilityRegistryRuntime', () => {
         }),
       ]),
     );
-  });
-
-  it('registers profile contributions through canonical profile registries', () => {
-    const toolRegistry = new ToolRegistry();
-    const artifactProfileRegistry = new ArtifactProfileRegistry();
-    const providerExpressionProfileRegistry = new ProviderExpressionProfileRegistry();
-    const runtime = new CapabilityRegistryRuntime({
-      toolRegistry,
-      artifactProfileRegistry,
-      providerExpressionProfileRegistry,
-    });
-    const artifactProfile: ArtifactProfileDescriptor = {
-      profileId: 'studio.shot-review',
-      kind: 'artifact',
-      protocol: 'GenericTable',
-      source: 'package',
-      columns: [{ columnId: 'shotId', cellType: 'string', required: true }],
-    };
-    const providerCard: ProviderCard = {
-      profileId: 'provider-expression:flux',
-      kind: 'provider-expression',
-      source: 'builtin',
-      providerId: 'flux',
-      displayName: 'Flux',
-      capabilities: ['image.generate'],
-      sourceLayer: 'builtin',
-      syntaxProfile: { notes: [] },
-      conceptCoverage: { entries: [] },
-      trainingProfile: { styleAffinities: { photorealistic: 3 }, antiBiasStrategies: [] },
-    };
-
-    runtime.registerProvider(
-      {
-        ...createProvider('neko.profiles', []),
-        getArtifactProfiles: () => [artifactProfile],
-        getProviderExpressionProfiles: () => [providerCard],
-      },
-      { hostContext: {} },
-    );
-
-    expect(artifactProfileRegistry.get('studio.shot-review')).toEqual(artifactProfile);
-    expect(providerExpressionProfileRegistry.get('provider-expression:flux')).toEqual(
-      expect.objectContaining({
-        profileId: 'provider-expression:flux',
-        kind: 'provider-expression',
-        source: 'builtin',
-      }),
-    );
-
-    runtime.unregisterProvider('neko.profiles');
-
-    expect(artifactProfileRegistry.get('studio.shot-review')).toBeUndefined();
-    expect(providerExpressionProfileRegistry.get('provider-expression:flux')).toBeUndefined();
   });
 });

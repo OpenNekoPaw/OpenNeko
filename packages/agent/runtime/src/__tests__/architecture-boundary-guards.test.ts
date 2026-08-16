@@ -317,7 +317,6 @@ describe('agent architecture boundary guards', () => {
 
   it('keeps domain validators and task-result projectors out of Agent core', () => {
     const coreProjectionFiles = [
-      join(agentSrc, 'validation/output-validator.ts'),
       join(agentTypesSrc, 'work-item.ts'),
       join(agentTypesSrc, 'work-item-projector.ts'),
     ];

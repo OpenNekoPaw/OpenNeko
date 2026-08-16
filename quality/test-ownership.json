@@ -134,13 +134,6 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/media-local-metadata",
-      "owner": "packages/media-local-metadata",
-      "mode": "self",
-      "sourceScope": "src/**/*.ts",
-      "testScope": "src/**/*.test.ts"
-    },
-    {
       "path": "packages/content",
       "owner": "packages/content",
       "mode": "self",

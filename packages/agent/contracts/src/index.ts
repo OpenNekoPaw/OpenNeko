@@ -4,7 +4,6 @@
  * Host-neutral contracts consumed by Agent runtimes, provider adapters, and Webviews.
  */
 
-export * from './agent-autoheal';
 export * from './agent-ai-source';
 export * from './agent-capability-activation';
 export * from './agent-context';
@@ -15,7 +14,6 @@ export * from './agent-interaction-binding';
 export * from './agent-launch';
 export * from './agent-launch-host';
 export * from './agent-model-catalog';
-export * from './agent-output-validation';
 export { parseAgentFlatPurposeModelRefs } from './agent-purpose-model';
 export * from './agent-conversation-context';
 export * from './assistant-resource-host';
@@ -24,7 +22,6 @@ export * from './agent-draft-mention-search';
 export * from './agent-entry-intent';
 export * from './agent-token-budget';
 export * from './agent-turn-capability';
-export * from './creative-ai-invocation';
 export * from './config';
 export * from './desktop-agent-connection';
 export * from './desktop-agent-facts';
@@ -287,73 +284,6 @@ export type {
   AgentInjectedCapabilitySet,
 } from './capability';
 export type {
-  ExternalProcessorCatalog,
-  ExternalProcessorDiagnostic,
-  ExternalProcessorDiagnosticCode,
-  ExternalProcessorDiagnosticSeverity,
-  ExternalProcessorDiscoveryResult,
-  ExternalProcessorEntry,
-  ExternalProcessorEnvProfile,
-  ExternalProcessorPluginContribution,
-  ExternalProcessorInputDeclaration,
-  ExternalProcessorInvocation,
-  ExternalProcessorInvocationInputBinding,
-  ExternalProcessorInvocationOutputBinding,
-  ExternalProcessorManifest,
-  ExternalProcessorManifestValidationOptions,
-  ExternalProcessorManifestValidationResult,
-  ExternalProcessorOutput,
-  ExternalProcessorOutputDeclaration,
-  ExternalProcessorOutputOwnership,
-  ExternalProcessorParamDeclaration,
-  ExternalProcessorParamType,
-  ExternalProcessorPersonalRegistry,
-  ExternalProcessorPersonalRegistryEntry,
-  ExternalProcessorPolicy,
-  ExternalProcessorProjectManifestFile,
-  ExternalProcessorRegistration,
-  ExternalProcessorRegistryChange,
-  ExternalProcessorRegistryChangeKind,
-  ExternalProcessorRegistry,
-  ExternalProcessorRegistryContext,
-  ExternalProcessorRegistrySubscription,
-  ExternalProcessorRegistryUpsertOptions,
-  ExternalProcessorRegistryChangeListener,
-  ExternalProcessorRootAlias,
-  ExternalProcessorRunIdentity,
-  ExternalProcessorSelector,
-  ExternalProcessorSource,
-  ExternalProcessorSourceScope,
-  ExternalProcessorResult,
-} from './external-processor';
-export {
-  createExternalProcessorRegistry,
-  EXTERNAL_PROCESSOR_REGISTRY_CHANGE_KINDS,
-  EXTERNAL_PROCESSOR_ROOT_ALIASES,
-  EXTERNAL_PROCESSOR_SCHEMA,
-  EXTERNAL_PROCESSOR_SOURCE_SCOPES,
-  isExternalProcessorRootAlias,
-  isExternalProcessorSourceScope,
-  matchesExternalProcessorSecretEnvPattern,
-  parseExternalProcessorManifestJson,
-  registerBuiltinExternalProcessors,
-  registerPluginExternalProcessorContributions,
-  registerPersonalExternalProcessorManifests,
-  registerProjectExternalProcessorManifests,
-  validateExternalProcessorManifest,
-} from './external-processor';
-export type {
-  GeneratedPromptBundle,
-  GeneratedPromptSection,
-  GeneratedSchemaBundle,
-  GeneratedSchemaPurpose,
-  GeneratedStructuredSchema,
-  PromptGenerationContext,
-  PromptGenerationProviderCapabilities,
-  PromptSchemaProviderToolMode,
-  PromptSchemaStructuredOutputMode,
-} from './prompt-schema';
-export type {
   AgentGeneratedArtifactProjection,
   AgentMediaMetadata,
   AgentMediaModality,
@@ -592,14 +522,6 @@ export { DEFAULT_SETTINGS } from './settings';
 
 // Agent phase
 export type { AgentPhase, AgentState } from './phase';
-
-// CapabilityKind — flat capability pool discriminant (ADR §5.1, §5.3)
-export type {
-  CapabilityKind,
-  CapabilityKindInput,
-  CapabilityKindSkillLike,
-  CapabilityKindToolLike,
-} from './capability-kind';
 
 // UI types
 export type {

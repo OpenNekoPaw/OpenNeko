@@ -1066,7 +1066,6 @@ function installBridge(
         resolveMaterialActions: vi.fn(),
         readTextFilePreview: vi.fn(),
         executeIntent: vi.fn(),
-        resolvePreviewVariant: vi.fn(),
         resolvePreviewResource: vi.fn(),
         releasePreviewResource: vi.fn(),
         subscribe: vi.fn(() => () => undefined),

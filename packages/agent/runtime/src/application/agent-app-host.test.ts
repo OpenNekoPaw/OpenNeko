@@ -99,10 +99,10 @@ describe('AgentAppHost', () => {
     await fixture.composition.dispose();
 
     expect(transport.list().map((entry) => entry.message)).toEqual([
-      'Provider "neko-content-read" registered: 2 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
-      'Provider "neko-image-understanding" registered: 1 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
-      'Provider "neko-canvas-project-authoring" registered: 7 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
-      'Provider "neko-cut-project-authoring" registered: 2 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
+      'Provider "neko-content-read" registered: 2 tools',
+      'Provider "neko-image-understanding" registered: 1 tools',
+      'Provider "neko-canvas-project-authoring" registered: 7 tools',
+      'Provider "neko-cut-project-authoring" registered: 2 tools',
       'Workspace runtime attached.',
       'Conversation created.',
       'Conversation deleted.',

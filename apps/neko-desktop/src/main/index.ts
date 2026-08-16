@@ -1187,7 +1187,7 @@ async function startDesktop(): Promise<void> {
   type CanvasPreviewProjectionOwner = {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly workspace: AssetWorkspaceResolution;
-    readonly purpose: 'inline-variant' | 'viewer-source';
+    readonly purpose: 'viewer-source';
   };
   const canvasPreviewResources =
     createPreviewResourceProjectionService<CanvasPreviewProjectionOwner>({

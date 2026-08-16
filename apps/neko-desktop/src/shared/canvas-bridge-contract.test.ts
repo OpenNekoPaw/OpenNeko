@@ -5,8 +5,6 @@ import {
   parseDesktopCanvasPreviewResourceReleaseRequest,
   parseDesktopCanvasPreviewResourceRequest,
   parseDesktopCanvasPreviewResourceResult,
-  parseDesktopCanvasPreviewVariantRequest,
-  parseDesktopCanvasPreviewVariantResult,
 } from './canvas-bridge-contract';
 
 const identity = {
@@ -42,60 +40,6 @@ describe('Desktop Canvas bridge contract', () => {
         viewInstanceId: 'view-instance-stale',
       }),
     ).toBe(false);
-  });
-
-  it('accepts owner-bound portable preview locators and opaque resource results', () => {
-    const request = {
-      identity,
-      requestId: 'preview-1',
-      sourceId: 'image-node-1',
-      locator: { kind: 'workspace-file', path: 'media/cat.png' },
-      role: 'thumbnail',
-      mediaType: 'image',
-    };
-    expect(parseDesktopCanvasPreviewVariantRequest(request)).toEqual(request);
-    expect(
-      parseDesktopCanvasPreviewVariantResult(
-        {
-          requestId: 'preview-1',
-          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
-        },
-        'preview-1',
-      ),
-    ).toEqual({
-      requestId: 'preview-1',
-      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
-    });
-
-    expect(
-      parseDesktopCanvasPreviewVariantRequest({
-        ...request,
-        locator: {
-          kind: 'document-entry',
-          source: { kind: 'workspace-file', path: 'books/story.epub' },
-          entryPath: 'OPS/images/cover.jpg',
-        },
-      }).locator.kind,
-    ).toBe('document-entry');
-
-    expect(() =>
-      parseDesktopCanvasPreviewVariantRequest({
-        ...request,
-        locator: { kind: 'workspace-file', path: '/private/cat.png' },
-      }),
-    ).toThrow('valid ContentLocator');
-    expect(() =>
-      parseDesktopCanvasPreviewVariantRequest({
-        ...request,
-        locator: { kind: 'workspace-file', path: '../cat.png' },
-      }),
-    ).toThrow('valid ContentLocator');
-    expect(() =>
-      parseDesktopCanvasPreviewVariantResult(
-        { requestId: 'preview-1', url: 'file:///private/cat.png' },
-        'preview-1',
-      ),
-    ).toThrow('preview result is invalid');
   });
 
   it('parses exact embedded Preview ownership and rejects non-opaque transport values', () => {

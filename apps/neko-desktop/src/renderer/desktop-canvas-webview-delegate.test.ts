@@ -19,45 +19,6 @@ describe('Desktop Canvas Webview delegate', () => {
     vi.unstubAllGlobals();
   });
 
-  it('resolves a package PreviewSurface request through the owner-bound Desktop bridge', async () => {
-    const resolvePreviewVariant = vi.fn(async () => ({
-      requestId: 'preview-1',
-      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
-    }));
-    vi.stubGlobal('openNekoDesktop', {
-      canvas: { resolvePreviewVariant },
-    });
-    const delegate = createDesktopCanvasWebviewDelegate(identity);
-    const message = vi.fn();
-    delegate.subscribe(message);
-    expect(delegate.supportsMessage('preview:resolveVariant')).toBe(true);
-    expect(delegate.supportsMessage('sendToAgent')).toBe(false);
-
-    delegate.postMessage({
-      type: 'preview:resolveVariant',
-      requestId: 'preview-1',
-      sourceId: 'image-node-1',
-      contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
-      role: 'thumbnail',
-      mediaType: 'image',
-    });
-
-    await vi.waitFor(() => expect(message).toHaveBeenCalled());
-    expect(resolvePreviewVariant).toHaveBeenCalledWith({
-      identity,
-      requestId: 'preview-1',
-      sourceId: 'image-node-1',
-      locator: { kind: 'workspace-file', path: 'media/cat.png' },
-      role: 'thumbnail',
-      mediaType: 'image',
-    });
-    expect(message.mock.calls.at(-1)?.[0]).toEqual({
-      type: 'preview:variantResolved',
-      requestId: 'preview-1',
-      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/preview',
-    });
-  });
-
   it('does not expose the retired Canvas media preparation protocol', () => {
     vi.stubGlobal('openNekoDesktop', { canvas: {} });
     const delegate = createDesktopCanvasWebviewDelegate(identity);
@@ -182,12 +143,13 @@ describe('Desktop Canvas Webview delegate', () => {
     });
   });
 
-  it('rejects unsupported messages and path-only sources instead of inferring locators', () => {
+  it('rejects unsupported messages including the retired variant protocol', () => {
     vi.stubGlobal('openNekoDesktop', {
-      canvas: { resolvePreviewVariant: vi.fn() },
+      canvas: { resolvePreviewResource: vi.fn() },
     });
     const delegate = createDesktopCanvasWebviewDelegate(identity);
 
+    expect(delegate.supportsMessage('preview:resolveVariant')).toBe(false);
     expect(() => delegate.postMessage({ type: 'desktop:unknown' })).toThrow('unsupported message');
     expect(() => delegate.postMessage({ type: 'media:probe' })).toThrow('unsupported message');
     expect(() =>
@@ -197,6 +159,6 @@ describe('Desktop Canvas Webview delegate', () => {
         assetPath: 'media/cat.png',
         role: 'thumbnail',
       }),
-    ).toThrow('preview message is invalid');
+    ).toThrow('unsupported message');
   });
 });

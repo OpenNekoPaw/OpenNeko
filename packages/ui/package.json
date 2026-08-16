@@ -15,7 +15,6 @@
     "./i18n": "./src/i18n/index.ts",
     "./theme": "./src/theme/index.ts",
     "./theme/tailwind-preset": "./src/theme/tailwind-preset.ts",
-    "./shared-primitives": "./src/shared-primitives/index.ts",
     "./error-boundary": "./src/error-boundary/index.tsx",
     "./foundation": "./src/foundation/index.tsx",
     "./keyboard": "./src/keyboard/index.ts",

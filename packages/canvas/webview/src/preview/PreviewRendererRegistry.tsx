@@ -9,7 +9,6 @@ import type { DelegateAction } from '@neko/canvas-domain';
 import type { ContentLocator } from '@neko/content';
 import { dispatchPreviewDelegate } from './previewDelegates';
 import type { PreviewPlaybackControl, PreviewSourceDescriptor } from './types';
-import type { PreviewRuntime } from './previewRuntime';
 import type { PlaybackSurfaceKind } from '../stores/playbackStore';
 import { useOptionalCanvasHost } from '../host-runtime';
 import { getLocale, t } from '../i18n';
@@ -20,7 +19,6 @@ import {
 
 export interface PreviewRendererProps {
   source: PreviewSourceDescriptor;
-  runtime?: PreviewRuntime;
   delegateActions?: DelegateAction[];
   surfaceKind?: PlaybackSurfaceKind;
   playbackControl?: PreviewPlaybackControl;
