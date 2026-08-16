@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 describe('ConversationTabRuntimeView', () => {
-  it('does not render non-Timeline active Markdown through an empty initial snapshot', () => {
+  it('does not render non-Timeline active Markdown through an empty initial snapshot', async () => {
     const runtime = createTabRenderRuntime({ tabId: 'tab-a', conversationId: 'conv-a' });
     runtime.attachProjection({
       attachmentId: 'attachment-a',
@@ -157,6 +157,9 @@ describe('ConversationTabRuntimeView', () => {
     });
 
     expect(runtime.markdownSessions.metrics().activeSessions).toBe(1);
+    await act(async () => {
+      await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 40));
+    });
     expect(chatWorkspaceSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({
         messages: [expect.objectContaining({ id: messageId, content: 'partial' })],

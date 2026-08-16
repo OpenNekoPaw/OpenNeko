@@ -85,9 +85,8 @@ export function applyConversationProjectionPatch(
     throw new Error('Conversation projection patch must contain operations or completion.');
   }
 
-  const turns = snapshot.turns.map(cloneConversationTurnProjection);
-  const turnIndex = turns.findIndex((turn) => turn.turnId === patch.turnId);
-  const current = turnIndex >= 0 ? turns[turnIndex] : undefined;
+  const turnIndex = snapshot.turns.findIndex((turn) => turn.turnId === patch.turnId);
+  const current = turnIndex >= 0 ? snapshot.turns[turnIndex] : undefined;
   if (current && (current.runId !== patch.runId || current.messageId !== patch.messageId)) {
     throw new Error(
       `Conversation projection turn ${patch.turnId} is owned by ${current.runId}/${current.messageId}, received ${patch.runId}/${patch.messageId}.`,
@@ -109,11 +108,10 @@ export function applyConversationProjectionPatch(
     items: Array.from(items.values()).sort((left, right) => left.sequence - right.sequence),
     ...(patch.completion ? { completion: structuredClone(patch.completion) } : {}),
   };
-  if (turnIndex >= 0) {
-    turns[turnIndex] = nextTurn;
-  } else {
-    turns.push(nextTurn);
-  }
+  const turns =
+    turnIndex >= 0
+      ? [...snapshot.turns.slice(0, turnIndex), nextTurn, ...snapshot.turns.slice(turnIndex + 1)]
+      : [...snapshot.turns, nextTurn];
 
   return freezeProjectionSnapshot({
     conversationId: snapshot.conversationId,
@@ -125,18 +123,6 @@ export function cloneConversationProjectionSnapshot(
   snapshot: ConversationProjectionSnapshot,
 ): ConversationProjectionSnapshot {
   return freezeProjectionSnapshot(structuredClone(snapshot));
-}
-
-function cloneConversationTurnProjection(
-  turn: ConversationTurnProjection,
-): ConversationTurnProjection {
-  return {
-    turnId: turn.turnId,
-    runId: turn.runId,
-    messageId: turn.messageId,
-    items: turn.items.map(cloneAgentTurnProjectionItem),
-    ...(turn.completion ? { completion: structuredClone(turn.completion) } : {}),
-  };
 }
 
 function assertProjectionOperationOwners(patch: ConversationProjectionPatch): void {
@@ -169,15 +155,20 @@ function freezeProjectionSnapshot(
   return snapshot;
 }
 
+const recursivelyFrozenValues = new WeakSet<object>();
+
 function freezeValue(value: unknown): void {
+  if (typeof value !== 'object' || value === null || recursivelyFrozenValues.has(value)) return;
   if (Array.isArray(value)) {
     for (const item of value) freezeValue(item);
     Object.freeze(value);
+    recursivelyFrozenValues.add(value);
     return;
   }
   if (!isPlainRecord(value)) return;
   for (const item of Object.values(value)) freezeValue(item);
   Object.freeze(value);
+  recursivelyFrozenValues.add(value);
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

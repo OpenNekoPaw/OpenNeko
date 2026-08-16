@@ -374,6 +374,126 @@ describe('TabRenderRuntimeRegistry', () => {
     expect(messagesB).toHaveLength(1);
   });
 
+  it('publishes streaming projection and Markdown as one coherent presentation batch', () => {
+    vi.useFakeTimers();
+    try {
+      const runtime = createTabRenderRuntime({
+        tabId: 'tab-a',
+        conversationId: 'conversation-shared',
+      });
+      const key = {
+        attachmentId: 'attachment-a',
+        tabId: 'tab-a',
+        conversationId: 'conversation-shared',
+      } as const;
+      runtime.attachProjection({
+        attachmentId: key.attachmentId,
+        send: vi.fn(),
+        reportError: vi.fn(),
+      });
+      runtime.acceptProjectionFrame({
+        type: 'projectionSnapshot',
+        key,
+        sequence: 0,
+        projection: {
+          conversationId: 'conversation-shared',
+          turns: [
+            {
+              turnId: 'turn-1',
+              runId: 'run-a',
+              messageId: 'message-1',
+              items: [projectionTextItem('initial', 1)],
+            },
+          ],
+        },
+      });
+
+      const markdownKey = createAgentMarkdownSessionKey({
+        conversationId: 'conversation-shared',
+        messageId: 'message-1',
+        itemId: 'text-1',
+      });
+      let renderedContent = 'initial';
+      const mismatches: string[] = [];
+      runtime.projectionReplica.subscribe(() => {
+        renderedContent = projectionTextContent(runtime);
+        const markdownSource = runtime.markdownSessions.getSnapshot(markdownKey)?.source;
+        if (markdownSource !== renderedContent) {
+          mismatches.push(`projection:${markdownSource ?? '<missing>'}/${renderedContent}`);
+        }
+      });
+      runtime.markdownSessions.subscribe(markdownKey, () => {
+        const markdownSource = runtime.markdownSessions.getSnapshot(markdownKey)?.source;
+        if (markdownSource !== renderedContent) {
+          mismatches.push(`markdown:${markdownSource ?? '<missing>'}/${renderedContent}`);
+        }
+      });
+
+      runtime.acceptProjectionFrame({
+        type: 'projectionPatch',
+        key,
+        sequence: 1,
+        patch: {
+          type: 'conversationProjectionPatch',
+          conversationId: 'conversation-shared',
+          turnId: 'turn-1',
+          runId: 'run-a',
+          messageId: 'message-1',
+          operations: [{ operation: 'append', item: projectionTextItem(' update', 2) }],
+        },
+      });
+
+      expect(renderedContent).toBe('initial');
+      expect(runtime.markdownSessions.getSnapshot(markdownKey)?.source).toBe('initial');
+      vi.advanceTimersByTime(32);
+
+      expect(renderedContent).toBe('initial update');
+      expect(runtime.markdownSessions.getSnapshot(markdownKey)?.source).toBe('initial update');
+      expect(mismatches).toEqual([]);
+
+      runtime.acceptProjectionFrame({
+        type: 'projectionPatch',
+        key,
+        sequence: 2,
+        patch: {
+          type: 'conversationProjectionPatch',
+          conversationId: 'conversation-shared',
+          turnId: 'turn-1',
+          runId: 'run-a',
+          messageId: 'message-1',
+          operations: [{ operation: 'append', item: projectionTextItem(' pending', 3) }],
+        },
+      });
+      runtime.acceptProjectionFrame({
+        type: 'projectionPatch',
+        key,
+        sequence: 3,
+        patch: {
+          type: 'conversationProjectionPatch',
+          conversationId: 'conversation-shared',
+          turnId: 'turn-1',
+          runId: 'run-a',
+          messageId: 'message-1',
+          operations: [
+            {
+              operation: 'replace',
+              item: { ...projectionTextItem('side item', 4), itemId: 'text-2', sequence: 2 },
+            },
+          ],
+        },
+      });
+
+      expect(renderedContent).toBe('initial update pending');
+      expect(runtime.markdownSessions.getSnapshot(markdownKey)?.source).toBe(
+        'initial update pending',
+      );
+      expect(mismatches).toEqual([]);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps projection and Markdown identities isolated during rapid visibility switching', async () => {
     const registry = createTabRenderRuntimeRegistry();
     const bindings = [
@@ -608,4 +728,12 @@ function projectionTextItem(content: string, updatedAt: number) {
     createdAt: 1,
     updatedAt,
   };
+}
+
+function projectionTextContent(runtime: ReturnType<typeof createTabRenderRuntime>): string {
+  const item = runtime.projectionReplica.getSnapshot().projection?.turns[0]?.items[0];
+  if (item?.kind !== 'assistant_text') {
+    throw new Error('Expected the Tab projection to expose assistant text.');
+  }
+  return item.payload.content;
 }

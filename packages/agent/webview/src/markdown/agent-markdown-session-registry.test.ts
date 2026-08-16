@@ -7,6 +7,7 @@ import type {
 import {
   createAgentMarkdownSessionKey,
   createAgentMarkdownSessionRegistry,
+  type AgentMarkdownSessionPublication,
 } from './agent-markdown-session-registry';
 
 describe('agent markdown session registry', () => {
@@ -228,11 +229,11 @@ describe('agent markdown session registry', () => {
 });
 
 function createManualScheduler(): {
-  readonly schedule: (callback: () => void) => () => void;
+  readonly schedule: (callback: () => AgentMarkdownSessionPublication | undefined) => () => void;
   readonly size: () => number;
   readonly flush: () => void;
 } {
-  const callbacks = new Set<() => void>();
+  const callbacks = new Set<() => AgentMarkdownSessionPublication | undefined>();
   return {
     schedule: (callback) => {
       callbacks.add(callback);
@@ -242,7 +243,7 @@ function createManualScheduler(): {
     flush: () => {
       const pending = [...callbacks];
       callbacks.clear();
-      for (const callback of pending) callback();
+      for (const callback of pending) callback()?.publish();
     },
   };
 }

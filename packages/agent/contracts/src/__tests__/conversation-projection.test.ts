@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { AgentTurnTimelineAssistantTextItem } from '../agent-turn-timeline';
+import type {
+  ConversationProjectionPatch,
+  ConversationProjectionSnapshot,
+} from '../conversation-projection';
 import {
   applyAgentTurnProjectionOperations,
   applyConversationProjectionPatch,
@@ -129,4 +133,98 @@ describe('conversation projection patch application', () => {
       }),
     ).toThrow(/owned by run-a\/message-a/);
   });
+
+  it('shares frozen sibling turns by reference and rebuilds only the target turn', () => {
+    const firstTurn = applyConversationProjectionPatch(
+      { conversationId: 'conversation-a', turns: [] },
+      patchFor('turn-a', 'message-a', 'text-a', 1, 'first', 1),
+    );
+    const twoTurns = applyConversationProjectionPatch(
+      firstTurn,
+      patchFor('turn-b', 'message-b', 'text-b', 2, 'other', 1),
+    );
+
+    expect(twoTurns.turns).toHaveLength(2);
+
+    const frozenSibling = twoTurns.turns[1]!;
+    const objectValuesSpy = vi.spyOn(Object, 'values');
+    try {
+      const next = applyConversationProjectionPatch(
+        twoTurns,
+        patchFor('turn-a', 'message-a', 'text-a', 1, '-second', 2),
+      );
+
+      expect(next.turns[1]).toBe(frozenSibling);
+      expect(next.turns[0]).not.toBe(twoTurns.turns[0]);
+      expect(twoTurns.turns[0]?.items[0]).toMatchObject({ payload: { content: 'first' } });
+      expect(next.turns[0]?.items[0]).toMatchObject({ payload: { content: 'first-second' } });
+      expect(Object.isFrozen(next)).toBe(true);
+      expect(Object.isFrozen(next.turns)).toBe(true);
+      expect(Object.isFrozen(next.turns[1])).toBe(true);
+      expect(objectValuesSpy.mock.calls.some(([value]) => value === frozenSibling)).toBe(false);
+    } finally {
+      objectValuesSpy.mockRestore();
+    }
+  });
+
+  it('deep-freezes shallow-frozen sibling input that did not come from the canonical freezer', () => {
+    const firstTurn = applyConversationProjectionPatch(
+      { conversationId: 'conversation-a', turns: [] },
+      patchFor('turn-a', 'message-a', 'text-a', 1, 'first', 1),
+    );
+    const siblingItems: AgentTurnTimelineAssistantTextItem[] = [];
+    const shallowFrozenSibling = Object.freeze({
+      turnId: 'turn-b',
+      runId: 'run-a',
+      messageId: 'message-b',
+      items: siblingItems,
+    });
+    const snapshot: ConversationProjectionSnapshot = {
+      conversationId: 'conversation-a',
+      turns: [firstTurn.turns[0]!, shallowFrozenSibling],
+    };
+
+    const next = applyConversationProjectionPatch(
+      snapshot,
+      patchFor('turn-a', 'message-a', 'text-a', 1, '-second', 2),
+    );
+
+    expect(next.turns[1]).toBe(shallowFrozenSibling);
+    expect(Object.isFrozen(siblingItems)).toBe(true);
+  });
 });
+
+function patchFor(
+  turnId: string,
+  messageId: string,
+  itemId: string,
+  sequence: number,
+  content: string,
+  updatedAt: number,
+): ConversationProjectionPatch {
+  return {
+    type: 'conversationProjectionPatch',
+    conversationId: 'conversation-a',
+    turnId,
+    runId: 'run-a',
+    messageId,
+    operations: [
+      {
+        operation: 'append',
+        item: {
+          conversationId: 'conversation-a',
+          turnId,
+          runId: 'run-a',
+          messageId,
+          itemId,
+          sequence,
+          kind: 'assistant_text',
+          status: 'streaming',
+          createdAt: 1,
+          updatedAt,
+          payload: { content },
+        },
+      },
+    ],
+  };
+}

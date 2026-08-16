@@ -19,7 +19,9 @@ export interface AgentMarkdownSessionRegistryMetrics {
   readonly activeSubscriptions: number;
 }
 
-export type AgentMarkdownStreamingUpdateScheduler = (callback: () => void) => () => void;
+export type AgentMarkdownStreamingUpdateScheduler = (
+  callback: () => AgentMarkdownSessionPublication | undefined,
+) => () => void;
 
 export interface AgentMarkdownSessionRegistryOptions {
   readonly scheduleStreamingUpdate?: AgentMarkdownStreamingUpdateScheduler;
@@ -101,13 +103,23 @@ export function createAgentMarkdownSessionRegistry(
     entry.cancelScheduledUpdate = undefined;
   };
 
-  const flushScheduledUpdate = (sessionKey: string, entry: RegistryEntry): void => {
-    if (entries.get(sessionKey) !== entry || !entry.cancelScheduledUpdate) return;
-    entry.cancelScheduledUpdate = undefined;
+  const commitTargetSource = (sessionKey: string, entry: RegistryEntry): boolean => {
+    if (entries.get(sessionKey) !== entry) return false;
     const result = entry.session.updateSource(entry.targetSource);
     entry.snapshot = requireReadySnapshot(result, sessionKey);
     renderUpdates += 1;
-    notify(sessionKey);
+    return true;
+  };
+
+  const flushScheduledUpdate = (
+    sessionKey: string,
+    entry: RegistryEntry,
+  ): AgentMarkdownSessionPublication | undefined => {
+    if (!entry.cancelScheduledUpdate) return undefined;
+    entry.cancelScheduledUpdate = undefined;
+    return commitTargetSource(sessionKey, entry)
+      ? createPublication(new Set([sessionKey]))
+      : undefined;
   };
 
   const replaceEntry = (mutation: PendingSessionMutation): void => {
@@ -133,14 +145,14 @@ export function createAgentMarkdownSessionRegistry(
     renderUpdates += 1;
   };
 
-  const appendEntry = (mutation: PendingSessionMutation): boolean => {
+  const appendEntry = (mutation: PendingSessionMutation, allowScheduling: boolean): boolean => {
     const entry = entries.get(mutation.sessionKey);
     if (!entry) {
       replaceEntry(mutation);
       return true;
     }
     entry.targetSource = `${entry.targetSource}${mutation.source}`;
-    if (!mutation.complete && options.scheduleStreamingUpdate) {
+    if (allowScheduling && !mutation.complete && options.scheduleStreamingUpdate) {
       entry.cancelScheduledUpdate ??= options.scheduleStreamingUpdate(() =>
         flushScheduledUpdate(mutation.sessionKey, entry),
       );
@@ -168,6 +180,24 @@ export function createAgentMarkdownSessionRegistry(
         for (const sessionKey of affectedSessionKeys) notify(sessionKey);
       },
     };
+  };
+
+  const flushPendingConversationUpdates = (
+    conversationId: string,
+    excludedSessionKeys: ReadonlySet<string>,
+    affectedSessionKeys: Set<string>,
+  ): void => {
+    for (const [sessionKey, entry] of entries) {
+      if (
+        entry.conversationId !== conversationId ||
+        excludedSessionKeys.has(sessionKey) ||
+        !entry.cancelScheduledUpdate
+      ) {
+        continue;
+      }
+      cancelScheduledUpdate(entry);
+      if (commitTargetSource(sessionKey, entry)) affectedSessionKeys.add(sessionKey);
+    }
   };
 
   const disposeMatching = (predicate: (sessionKey: string) => boolean): void => {
@@ -261,10 +291,18 @@ export function createAgentMarkdownSessionRegistry(
         operations: patch.operations,
       });
       const affectedSessionKeys = new Set<string>();
+      const coalesce = shouldCoalescePatch(patch);
+      if (!coalesce) {
+        flushPendingConversationUpdates(
+          patch.conversationId,
+          new Set(mutations.keys()),
+          affectedSessionKeys,
+        );
+      }
       for (const mutation of mutations.values()) {
         let updatedImmediately: boolean;
         if (mutation.mode === 'append') {
-          updatedImmediately = appendEntry(mutation);
+          updatedImmediately = appendEntry(mutation, coalesce);
         } else {
           replaceEntry(mutation);
           updatedImmediately = true;
@@ -435,6 +473,14 @@ function collectSnapshotMutations(
 
 function isMarkdownTimelineItem(item: AgentTurnTimelineItem): item is MarkdownTimelineItem {
   return item.kind === 'assistant_text' || item.kind === 'thinking';
+}
+
+function shouldCoalescePatch(patch: ConversationProjectionPatch): boolean {
+  if (patch.completion !== undefined) return false;
+  return (
+    patch.operations.length > 0 &&
+    patch.operations.every((operation) => operation.operation === 'append')
+  );
 }
 
 function requireReadySnapshot(
