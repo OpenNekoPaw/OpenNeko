@@ -1668,6 +1668,62 @@ describe('AgentAppHost', () => {
     expect(contexts[0]!.systemPrompt).toBe('Narrative fixture');
   });
 
+  it('routes selected Board and exact Canvas indexes into the executed turn prompt', async () => {
+    const fixture = await createFixture();
+    const contexts: Context[] = [];
+    const models = createFixtureModels((_model, context) => {
+      contexts.push(context);
+      return completedStream(assistant('canvas response'));
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-canvas-index-routing',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Canvas routing fixture',
+    });
+    const turnInput = {
+      conversationId: 'conversation-canvas-index-routing',
+      prompt: 'Analyze the current plan.',
+      modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    } as const;
+
+    await workspace.startTurn({
+      ...turnInput,
+      canvasTurnContext: {
+        target: { kind: 'workspace-board', workspaceId: fixture.workspace.workspaceId },
+      },
+    }).completion;
+    await workspace.startTurn({
+      ...turnInput,
+      canvasTurnContext: {
+        target: {
+          kind: 'exact-canvas',
+          workspaceId: fixture.workspace.workspaceId,
+          canvasId: 'neko/boards/plan.nkc',
+        },
+        summary: { canvasId: 'neko/boards/plan.nkc', name: 'Animation Plan' },
+      },
+    }).completion;
+
+    expect(contexts).toHaveLength(2);
+    expect(contexts[0]!.systemPrompt).toContain(
+      'canonical Workspace Board is the primary Canvas index for this turn',
+    );
+    expect(contexts[0]!.systemPrompt).toContain('neko/boards/workspace.nkc');
+    expect(contexts[1]!.systemPrompt).toContain(
+      'selected exact Canvas is the primary creative context for this turn',
+    );
+    expect(contexts[1]!.systemPrompt).toContain('neko/boards/plan.nkc');
+    expect(contexts[1]!.tools?.map((tool) => tool.name)).toContain(
+      TOOL_NAMES_CANVAS.CANVAS_LIST_NODES,
+    );
+  });
+
   it('releases only after queued and approval protection leases leave the invisible Conversation', async () => {
     const fixture = await createFixture();
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
