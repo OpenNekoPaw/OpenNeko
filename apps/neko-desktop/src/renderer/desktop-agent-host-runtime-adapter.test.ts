@@ -6,8 +6,17 @@ import {
 } from './desktop-agent-host-runtime-adapter';
 
 describe('Electron AgentHostRuntimeAdapter', () => {
-  it('delegates only the fixed Agent namespace and scopes presentation state by Workspace owner', () => {
+  it('delegates only the fixed Agent namespace and scopes presentation state by Workspace owner', async () => {
     const send = vi.fn();
+    const submitMessage = vi.fn(async () => ({
+      submissionId: 'submission-1',
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      queueItemId: 'queue-item-1',
+      message: 'hello',
+      createdAt: 1,
+      state: 'active' as const,
+    }));
     const subscribe = vi.fn(() => vi.fn());
     const storage = createStorage();
     const adapter = createElectronAgentHostRuntimeAdapter({
@@ -17,6 +26,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
           getAssistantBootstrap: vi.fn(),
           detach: vi.fn(),
           send,
+          submitMessage,
           subscribe,
         },
       },
@@ -25,11 +35,21 @@ describe('Electron AgentHostRuntimeAdapter', () => {
     });
 
     adapter.send({ type: 'newConversation' });
+    await adapter.submitMessage({
+      type: 'sendMessage',
+      conversationId: 'conversation-1',
+      message: 'hello',
+      sessionMode: 'agent',
+    });
     adapter.setState({ draft: 'hello' });
 
     expect(send).toHaveBeenCalledWith(bootstrap('view-1').connection, {
       type: 'newConversation',
     });
+    expect(submitMessage).toHaveBeenCalledWith(
+      bootstrap('view-1').connection,
+      expect.objectContaining({ type: 'sendMessage', conversationId: 'conversation-1' }),
+    );
     expect(adapter.getState()).toEqual({ draft: 'hello' });
     expect(storage.values).toEqual(
       new Map([['openneko:agent:presentation:workspace:workspace-1:view-1', '{"draft":"hello"}']]),
@@ -110,6 +130,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
           getAssistantBootstrap: vi.fn(),
           detach,
           send: vi.fn(),
+          submitMessage: vi.fn(),
           subscribe,
         },
       },
@@ -137,6 +158,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
         getAssistantBootstrap: vi.fn(),
         detach: vi.fn(),
         send,
+        submitMessage: vi.fn(),
         subscribe,
       },
     };
@@ -188,6 +210,7 @@ function bridge() {
       getAssistantBootstrap: vi.fn(),
       detach: vi.fn(),
       send: vi.fn(),
+      submitMessage: vi.fn(),
       subscribe: vi.fn(() => vi.fn()),
     },
   };

@@ -20,6 +20,7 @@ import {
 import {
   type AgentHostControllerEffectPorts,
   type AgentHostRouteEffectContext,
+  type AgentConversationTurnAcceptance,
   type AgentConversationControllerTurnRequest,
   createAgentContentEffects,
   type AgentWorkspaceLinkedMediaFileSearchInput,
@@ -39,6 +40,7 @@ import {
   buildHistoryClearedMessage,
   buildInjectContextMessage,
   buildMessageQueueSnapshotMessage,
+  buildQueuedMessageReleasedMessage,
   buildQueuedMessageEditRequestedMessage,
   buildTabStateMessage,
   type DesktopAgentNeutralFacts,
@@ -486,6 +488,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         bind,
         facts,
         visiblePresentation,
+        resourceDisplay,
         input.initialConversationId === undefined
           ? undefined
           : {
@@ -807,6 +810,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     bind: (context: AgentHostRouteEffectContext) => void,
     facts: DesktopAgentFactsProjector,
     visiblePresentation: AgentVisiblePresentationBinding,
+    resourceDisplay: AgentResourceDisplayProjector,
     initialConversation?: {
       readonly conversationId: string;
       readonly message?: Message;
@@ -857,8 +861,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         .find((candidate) => candidate.conversationId === conversationId);
       if (!record)
         throw new Error(`Desktop Agent conversation '${conversationId}' does not exist.`);
-      const projectedMessages = projectPiConversationEntries(
-        await workspace.readConversationEntries(conversationId),
+      const projectedMessages = await resourceDisplay.projectMessages(
+        conversationId,
+        projectPiConversationEntries(await workspace.readConversationEntries(conversationId)),
       );
       await context.post({
         type: 'activeConversation',
@@ -881,8 +886,16 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       context: AgentHostRouteEffectContext,
       skillName?: string,
       additionalInstructions?: string,
-    ): void => {
+    ): Promise<AgentConversationTurnAcceptance> => {
       bind(context);
+      let accepted = false;
+      let resolveAcceptance: (acceptance: AgentConversationTurnAcceptance) => void = () =>
+        undefined;
+      let rejectAcceptance: (error: unknown) => void = () => undefined;
+      const acceptance = new Promise<AgentConversationTurnAcceptance>((resolve, reject) => {
+        resolveAcceptance = resolve;
+        rejectAcceptance = reject;
+      });
       const operation = Promise.all([
         readConversationConfiguration(request.conversationId),
         readConversationContext(request.conversationId),
@@ -899,6 +912,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           conversationContext,
           entryTargetReceipt,
           capabilityConstraint,
+          onAccepted: (receipt) => {
+            accepted = true;
+            resolveAcceptance(receipt);
+          },
           ...(resolveConversationDomainTurnContext === undefined
             ? {}
             : { resolveConversationDomainTurnContext }),
@@ -911,9 +928,11 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           await context.post(
             buildAgentConversationTurnFailureMessage(request.conversationId, error),
           );
+          if (!accepted) rejectAcceptance(error);
           throw error;
         }),
       );
+      return acceptance;
     };
 
     return {
@@ -1019,8 +1038,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           conversation: {
             id: conversationId,
             title: record.title,
-            messages: projectPiConversationEntries(
-              await workspace.readConversationEntries(conversationId),
+            messages: await resourceDisplay.projectMessages(
+              conversationId,
+              projectPiConversationEntries(await workspace.readConversationEntries(conversationId)),
             ),
           },
         });
@@ -1468,6 +1488,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly additionalInstructions?: string;
     readonly capabilityConstraint?: AgentTurnCapabilityConstraint;
     readonly resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort;
+    readonly onAccepted?: (acceptance: AgentConversationTurnAcceptance) => void;
   }): Promise<AgentTurnResult | undefined> {
     if (input.request.sessionMode !== 'agent') {
       throw new Error(
@@ -1607,6 +1628,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const observedTurnInput: AgentTurnInput = {
       ...turnInput,
       events: factsEvents.events,
+      onQueuedMessageReleased: ({ item, snapshot }) => {
+        this.postReleasedMessageQueueSnapshot(input.context, item, snapshot);
+      },
     };
     const operation = input.workspace.startTurn(observedTurnInput);
     try {
@@ -1625,6 +1649,12 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       conversationId: input.request.conversationId,
       phase: 'thinking',
       startedAt: Date.now(),
+    });
+    input.onAccepted?.({
+      conversationId: input.request.conversationId,
+      turnId: operation.identity.turnId,
+      queueItem: operation.queueItem,
+      state: operation.state,
     });
     try {
       const turn = await operation.completion;
@@ -1905,9 +1935,21 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     snapshot: AgentMessageQueueSnapshot,
   ): void {
     this.track(
-      Promise.resolve(context.post(buildMessageQueueSnapshotMessage(snapshot))).then(
-        () => undefined,
-      ),
+      Promise.resolve()
+        .then(() => context.post(buildMessageQueueSnapshotMessage(snapshot)))
+        .then(() => undefined),
+    );
+  }
+
+  private postReleasedMessageQueueSnapshot(
+    context: AgentHostRouteEffectContext,
+    item: import('@neko/agent-contracts').AgentQueuedMessageItem,
+    snapshot: AgentMessageQueueSnapshot,
+  ): void {
+    this.track(
+      Promise.resolve()
+        .then(() => context.post(buildQueuedMessageReleasedMessage({ item, snapshot })))
+        .then(() => undefined),
     );
   }
 

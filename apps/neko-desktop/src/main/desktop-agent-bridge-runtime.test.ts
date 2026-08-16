@@ -149,6 +149,72 @@ describe('Desktop Agent bridge runtime', () => {
     ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
   });
 
+  it('returns exact authoritative submission identity and propagates preflight rejection', async () => {
+    const effects = createEffects();
+    vi.mocked(effects.conversation.submitTurn).mockResolvedValueOnce({
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      queueItem: {
+        id: 'queue-item-1',
+        conversationId: 'conversation-1',
+        content: 'keep this visible',
+        createdAt: 1_700_000_000_000,
+        source: 'composer',
+      },
+      state: 'queued',
+    });
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: createComposition(effects),
+      createIdentity: () => 'connection-submit',
+    });
+    const projection = runtime.createBootstrap({
+      requestId: 'bootstrap-submit',
+      grant: grant(),
+      workspace: workspace(),
+      publish: vi.fn(),
+    });
+    if (projection.status !== 'ready') throw new Error('Expected a ready Agent bootstrap.');
+
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('submission-1', projection.connection, {
+          type: 'sendMessage',
+          conversationId: 'conversation-1',
+          message: 'keep this visible',
+          sessionMode: 'agent',
+        }),
+        grant(),
+      ),
+    ).resolves.toEqual({
+      requestId: 'submission-1',
+      status: 'accepted',
+      submission: {
+        submissionId: 'submission-1',
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        queueItemId: 'queue-item-1',
+        message: 'keep this visible',
+        createdAt: 1_700_000_000_000,
+        state: 'queued',
+      },
+    });
+
+    vi.mocked(effects.conversation.submitTurn).mockRejectedValueOnce(
+      new Error('preflight rejected exact submission'),
+    );
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('submission-2', projection.connection, {
+          type: 'sendMessage',
+          conversationId: 'conversation-1',
+          message: 'preserve this draft',
+          sessionMode: 'agent',
+        }),
+        grant(),
+      ),
+    ).rejects.toThrow('preflight rejected exact submission');
+  });
+
   it('resolves only the exact live Session connection identity', () => {
     const runtime = createDesktopAgentBridgeRuntime({
       controllerComposition: createComposition(createEffects()),

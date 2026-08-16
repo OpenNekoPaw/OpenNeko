@@ -122,6 +122,85 @@ describe('message queue presenter', () => {
     ]);
   });
 
+  it('preserves queued attachments, Canvas context, and stable file references on release', () => {
+    expect(
+      projectReleasedQueuedMessageIntoTranscript({
+        messages: [],
+        item: {
+          id: 'runtime-resources',
+          conversationId: 'conv-1',
+          content: 'Use the attached reference on Canvas',
+          createdAt: 123,
+          source: 'composer',
+          draft: {
+            message: 'Use the attached reference on Canvas',
+            sessionMode: 'agent',
+            attachments: [
+              {
+                id: 'attachment-1',
+                name: 'hero.png',
+                type: 'image',
+                preview: 'neko-resource://preview/hero',
+              },
+            ],
+            contextPayloads: [
+              {
+                type: 'canvas-node',
+                id: 'canvas-node-1',
+                label: 'Opening shot',
+                summary: 'Opening shot',
+                data: {},
+              },
+            ],
+            fileReferences: [
+              {
+                id: 'file:hero.png',
+                label: 'hero.png',
+                mediaType: 'image',
+                source: 'workspace',
+                thumbnailUri: 'neko-resource://thumbnail/hero',
+                contentLocator: { kind: 'workspace-file', path: 'hero.png' },
+              },
+            ],
+          },
+        },
+      }),
+    ).toEqual([
+      message({
+        id: 'released:runtime-resources',
+        role: 'user',
+        content: 'Use the attached reference on Canvas',
+        timestamp: 123,
+        attachments: [
+          {
+            id: 'attachment-1',
+            name: 'hero.png',
+            type: 'image',
+            preview: 'neko-resource://preview/hero',
+          },
+        ],
+        contextReferences: [
+          {
+            type: 'canvas-node',
+            id: 'canvas-node-1',
+            label: 'Opening shot',
+            summary: 'Opening shot',
+            navigationData: { nodeId: 'canvas-node-1' },
+          },
+          {
+            type: 'image',
+            id: 'file:hero.png',
+            label: 'hero.png',
+            summary: 'hero.png',
+            thumbnailUri: 'neko-resource://thumbnail/hero',
+            mediaType: 'image',
+            contentLocator: { kind: 'workspace-file', path: 'hero.png' },
+          },
+        ],
+      }),
+    ]);
+  });
+
   it('does not duplicate an already released runtime queue item', () => {
     const releasedMessage = message({
       id: 'released:runtime-1',

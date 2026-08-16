@@ -163,6 +163,10 @@ export interface AgentTurnInput {
   readonly additionalInstructions?: string;
   readonly queueDraft?: AgentQueuedMessageDraft;
   readonly events?: PiProductEventSink;
+  readonly onQueuedMessageReleased?: (release: {
+    readonly item: AgentQueuedMessageItem;
+    readonly snapshot: AgentMessageQueueSnapshot;
+  }) => void;
   readonly capabilityConstraint?: AgentTurnCapabilityConstraint;
 }
 
@@ -196,6 +200,8 @@ export interface AgentTurnConfigurationSnapshot {
 
 export interface AgentTurnOperation {
   readonly identity: PiToolRunIdentity;
+  readonly queueItem: AgentQueuedMessageItem;
+  readonly state: 'active' | 'queued';
   readonly completion: Promise<AgentTurnResult>;
 }
 
@@ -1186,7 +1192,13 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     queue.operations.set(queueItem.id, pending);
     this.activeTurnOperations.set(completion, pending);
     this.startNextConversationTurn(input.conversationId);
-    return Object.freeze({ identity, completion });
+    return Object.freeze({
+      identity,
+      queueItem,
+      state:
+        this.activeConversationTurns.get(input.conversationId) === pending ? 'active' : 'queued',
+      completion,
+    });
   }
 
   executeTurn(input: AgentTurnInput): Promise<AgentTurnResult> {
@@ -1305,6 +1317,10 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     }
     queue.operations.delete(item.id);
     this.activeConversationTurns.set(conversationId, pending);
+    pending.input.onQueuedMessageReleased?.({
+      item,
+      snapshot: queue.messages.snapshot(),
+    });
     void this.runConversationTurn(pending);
   }
 

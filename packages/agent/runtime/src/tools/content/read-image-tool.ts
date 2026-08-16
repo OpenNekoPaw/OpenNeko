@@ -20,6 +20,7 @@ import {
   type ToolResult,
 } from '@neko/agent-contracts';
 import { type PerceptualAssetRef } from '@neko/media';
+import { hashStableValue } from '@neko/shared';
 import type { ImageMetadata } from '@neko/content/document';
 import {
   loadAgentImageAsset,
@@ -526,10 +527,14 @@ function createReadImageAssetId(
   resolvedPath: string,
   index: number,
 ): string {
-  const source = image.sourceDocumentId
-    ? `${image.sourceDocumentId}-${image.entryPath ?? image.alias ?? index + 1}`
-    : (image.alias ?? path.basename(resolvedPath) ?? `image-${index + 1}`);
-  return `read-image-${sanitizeAssetIdPart(source)}`;
+  const label =
+    image.label ??
+    image.entryPath ??
+    image.alias ??
+    path.basename(resolvedPath) ??
+    `image-${index + 1}`;
+  const identity = image.contentLocator ?? image.representationLocator ?? resolvedPath;
+  return `read-image-${sanitizeAssetIdPart(label)}-${hashStableValue(identity)}`;
 }
 
 function sanitizeAssetIdPart(value: string): string {

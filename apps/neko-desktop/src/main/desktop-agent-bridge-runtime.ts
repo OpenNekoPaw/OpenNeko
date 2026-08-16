@@ -354,11 +354,26 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
         `Electron Agent route '${request.message.type}' is classified implemented but has no shared controller handler.`,
       );
     }
-    await operation;
-    return {
-      requestId: request.requestId,
-      status: 'accepted',
-    };
+    const routeResult = await operation;
+    if (request.message.type === 'sendMessage') {
+      if (!routeResult) {
+        throw new Error('Desktop Agent sendMessage completed without an authoritative receipt.');
+      }
+      return {
+        requestId: request.requestId,
+        status: 'accepted',
+        submission: {
+          submissionId: request.requestId,
+          conversationId: routeResult.conversationId,
+          turnId: routeResult.turnId,
+          queueItemId: routeResult.queueItem.id,
+          message: routeResult.queueItem.content,
+          createdAt: routeResult.queueItem.createdAt,
+          state: routeResult.state,
+        },
+      };
+    }
+    return acceptedAgentMessageResult(request.requestId);
   }
 
   assertConnection(

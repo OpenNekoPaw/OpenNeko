@@ -2,6 +2,7 @@ import {
   AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES,
   type AgentHostToWebviewMessage,
   type AgentWebviewToHostMessage,
+  type SendMessageWebviewMessage,
 } from './webview-protocol';
 
 export type AgentHostKind = 'electron';
@@ -10,10 +11,26 @@ export interface AgentHostRuntimeSubscription {
   dispose(): void;
 }
 
+export interface AgentMessageSubmissionReceipt {
+  readonly submissionId: string;
+  readonly conversationId: string;
+  readonly turnId: string;
+  readonly queueItemId: string;
+  readonly message: string;
+  readonly createdAt: number;
+  readonly state: 'active' | 'queued';
+}
+
+export type AgentNonSubmissionWebviewMessage = Exclude<
+  AgentWebviewToHostMessage,
+  SendMessageWebviewMessage
+>;
+
 export interface AgentHostRuntimeAdapter {
   readonly hostKind: AgentHostKind;
   readonly runtimeId: string;
-  send(message: AgentWebviewToHostMessage): void;
+  send(message: AgentNonSubmissionWebviewMessage): void;
+  submitMessage(message: SendMessageWebviewMessage): Promise<AgentMessageSubmissionReceipt>;
   subscribe(listener: (message: AgentHostToWebviewMessage) => void): AgentHostRuntimeSubscription;
   getState(): unknown;
   setState(state: unknown): void;

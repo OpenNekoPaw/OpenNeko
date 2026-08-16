@@ -534,16 +534,25 @@ Cleanup SHALL NOT require the conversation's Project to remain registered or its
 
 ### Requirement: Composer consumes only accepted input
 
-The Agent composer SHALL clear its draft resources only after the canonical conversation, queue or exact input
-catalog path synchronously accepts the submit intent. A submit that cannot be accepted SHALL preserve the exact
-text, attachments, references and context in the owning composer and SHALL remain fail-visible.
+The Agent composer SHALL clear its draft resources only after an exact submission-scoped Host receipt confirms
+that preflight completed and the canonical Conversation runtime created the authoritative turn and queue item.
+The receipt SHALL identify the transport request, Conversation, turn and queue item, and SHALL NOT represent
+provider or turn completion. A submit that cannot be accepted SHALL preserve the exact text, attachments,
+references and context in the owning composer and SHALL remain fail-visible.
 
 #### Scenario: A running conversation receives another message
 
 - **WHEN** the user submits text while the exact Conversation turn is active
-- **THEN** Host accepts the message through the existing conversation queue path
+- **THEN** Host completes preflight and accepts the message through the existing conversation queue path
 - **AND** the composer clears only after that acceptance receipt
 - **AND** the queued text remains observable until runtime releases or cancels that exact queue item
+
+#### Scenario: Bridge, preflight or enqueue rejects the submit
+
+- **WHEN** the exact submission fails before the Conversation runtime creates its queue item
+- **THEN** Host rejects that submission receipt with an owning diagnostic
+- **AND** the composer preserves the exact text, attachments, references and context
+- **AND** no optimistic transcript message, dedup acceptance or pending-send consumption is committed
 
 #### Scenario: Submit is not accepted
 
@@ -558,6 +567,63 @@ text, attachments, references and context in the owning composer and SHALL remai
 - **WHEN** a tabless submit creates a Conversation and the owning Tab attempts the pending send
 - **THEN** the pending request is consumed only when the same canonical send contract returns accepted
 - **AND** a rejected attempt remains available for the owning Tab instead of disappearing
+
+### Requirement: Queued user messages remain visible while becoming active
+
+The Agent runtime SHALL project the exact composer queue item when it is released into an active turn. The release
+event SHALL carry the released item and the authoritative post-release queue snapshot so Webview can replace the
+queued mirror with one ordinary user transcript message without a visibility gap. The transcript projection SHALL
+preserve the released draft's attachments, Canvas/context payload references, and Host-authorized file references
+through their stable locator metadata.
+
+#### Scenario: Active turn completes and the next queued message starts
+
+- **WHEN** runtime releases the next composer queue item for the exact Conversation
+- **THEN** Host projects that exact item as `releasedItem` with the post-release queue snapshot
+- **AND** Webview removes only its queued mirror and retains one ordinary user transcript message
+- **AND** that message retains the released draft's attachments, Canvas/context references, thumbnails and stable content locators
+- **AND** a following empty queue snapshot does not remove the released user message
+
+#### Scenario: The first accepted turn starts immediately
+
+- **WHEN** an accepted queue item is released synchronously because the Conversation has no active turn
+- **THEN** the same release projection path is used
+- **AND** the user message remains visible before streaming, completion or persisted transcript projection
+- **AND** a later submission receipt cannot replace the released message with a resource-incomplete queued mirror
+
+#### Scenario: Another Conversation is visible when release occurs
+
+- **WHEN** runtime releases a queued item owned by a non-visible Conversation
+- **THEN** only that exact Conversation render coordinator is updated
+- **AND** switching back shows the released user message without using active or recent Conversation fallback
+
+### Requirement: Tool result resources survive live projection, persistence and terminal delivery
+
+Agent SHALL project the same canonical ToolResult shape from Pi live events and persisted Pi transcript entries.
+The projection SHALL preserve durable data, attachments, perception cards, backfill diagnostics and artifact
+transfers while excluding transient preview URLs from durable facts. Every ToolResult shown in Webview SHALL pass
+through the Host resource authorization boundary using its stable locator identity.
+
+#### Scenario: ReadImage completes during a live turn
+
+- **WHEN** `ReadImage` completes with locator-backed image data, attachments and perception cards
+- **THEN** Timeline retains those exact durable collections in the Tool Call result
+- **AND** Host adds only connection-scoped preview descriptors before Webview rendering
+- **AND** terminal artifact collection receives the same locator-backed resources
+
+#### Scenario: Persisted ReadImage history is reopened
+
+- **WHEN** a Conversation is restored from Pi transcript entries after runtime or application reopen
+- **THEN** history projection reconstructs the canonical ToolResult fields instead of nesting the result envelope in `data`
+- **AND** Desktop reauthorizes each exact locator for the current connection
+- **AND** Webview displays the image or an item-local authorization diagnostic, not an unexplained file placeholder
+
+#### Scenario: Different documents contain the same image filename
+
+- **WHEN** one completed turn contains locator-distinct images with the same basename or label
+- **THEN** their perceptual and Canvas source artifact identities remain distinct by canonical locator identity
+- **AND** Workspace Board delivery accepts the relation batch without filename-based identity collision
+- **AND** no active Workspace, raw path or first-compatible resource is used to disambiguate them
 
 ### Requirement: Pending Tool approvals are actionable above the composer
 

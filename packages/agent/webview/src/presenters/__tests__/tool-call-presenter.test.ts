@@ -548,11 +548,27 @@ describe('tool-call-presenter', () => {
     expect(projection.documentThumbnails[0]).not.toHaveProperty('src');
   });
 
-  it('uses a hydrated perception-card preview when retained history has no attachments', () => {
+  it('uses a Host-authorized perception-card preview when retained history has no attachments', () => {
     const contentLocator = {
       kind: 'document-entry' as const,
       source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
       entryPath: 'pages/003.png',
+    };
+    const thumbnailRef = {
+      assetId: 'page-3',
+      uri: 'content:page-3',
+      mimeType: 'image/png',
+      contentLocator,
+      previewDescriptor: {
+        descriptorId: 'agent-display:history:page-3',
+        sourceFingerprint: 'sha256:page-3',
+        contentLocator,
+        url: `openneko://resource/${'b'.repeat(32)}`,
+        contentKind: 'image' as const,
+        mediaType: 'image/png',
+        displayName: '003.png',
+        byteLength: 2048,
+      },
     };
     const projection = projectToolCallDisplayState({
       id: 'tool-hydrated-preview',
@@ -560,28 +576,19 @@ describe('tool-call-presenter', () => {
       arguments: {},
       result: {
         success: true,
-        data: {
-          success: true,
-          data: { images: [{ label: 'Page 3', contentLocator }] },
-          perceptionCards: [
-            {
-              assetId: 'page-3',
-              modality: 'image',
-              createdAt: 1,
-              layerStatus: { layer0: 'complete', layer1: 'skipped', layer2: 'complete' },
-              structural: { format: 'png', mimeType: 'image/png', byteSize: 2048 },
-              perceptual: {
-                thumbnailRef: {
-                  assetId: 'page-3',
-                  uri: 'content:page-3',
-                  mimeType: 'image/png',
-                  contentLocator,
-                  previewUri: 'data:image/webp;base64,aGlzdG9yeQ==',
-                },
-              },
+        data: { images: [{ label: 'Page 3', contentLocator }] },
+        perceptionCards: [
+          {
+            assetId: 'page-3',
+            modality: 'image',
+            createdAt: 1,
+            layerStatus: { layer0: 'complete', layer1: 'skipped', layer2: 'complete' },
+            structural: { format: 'png', mimeType: 'image/png', byteSize: 2048 },
+            perceptual: {
+              thumbnailRef,
             },
-          ],
-        },
+          },
+        ],
       },
     });
 
@@ -590,7 +597,7 @@ describe('tool-call-presenter', () => {
         index: 0,
         label: 'Page 3',
         contentLocator,
-        src: 'data:image/webp;base64,aGlzdG9yeQ==',
+        src: `openneko://resource/${'b'.repeat(32)}`,
       }),
     ]);
   });

@@ -238,6 +238,11 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
           });
       }
     },
+    submitMessage() {
+      return Promise.reject(
+        new Error('Agent message submit requires a committed Conversation session.'),
+      );
+    },
     subscribe(listener) {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
       listeners.add(listener);

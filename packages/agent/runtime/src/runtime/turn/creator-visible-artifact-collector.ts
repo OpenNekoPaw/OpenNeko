@@ -152,10 +152,11 @@ export function collectCreatorVisibleArtifacts(
       }
       const intrinsicDimensions = imageDimensions.get(contentLocatorKey(contentLocator));
       const generation = collectGenerationEvidence(result.data, contentLocator);
+      const role = nativeImageAnalysisKind || input.consumedContentSourceIds ? 'source' : 'output';
       const candidate: CreatorVisibleArtifactCandidate = {
-        artifactId: attachment.assetRef?.assetId ?? sourceId,
+        artifactId: role === 'source' ? sourceId : (attachment.assetRef?.assetId ?? sourceId),
         contentFingerprint: createContentFingerprint(contentLocator),
-        role: nativeImageAnalysisKind || input.consumedContentSourceIds ? 'source' : 'output',
+        role,
         kind: attachment.type,
         title: attachment.assetRef?.label ?? `${attachment.type} result`,
         sourceId,

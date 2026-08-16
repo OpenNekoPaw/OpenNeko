@@ -15,7 +15,6 @@ import {
 import {
   Message,
   type AgentInputCatalogMessage,
-  type MessageContextReference,
   type AgentFlatPurposeModelRefs,
   type AgentModelSlots,
   type MediaUnderstandingModelSelections,
@@ -36,8 +35,7 @@ import {
 } from '@neko/agent-contracts';
 import { resolveAgentInputInvocationIntent } from '../components/ChatView/InputArea/slash-command-catalog';
 import { projectMessageModelSelection } from '../presenters/config-message-presenter';
-import { projectContextReferencesFromPayloads } from '../presenters/context-reference-presenter';
-import { projectContentLocatorPath } from '../presenters/content-locator-presenter';
+import { projectMessageContextReferences } from '../presenters/context-reference-presenter';
 import { type ChatModelOption } from '@neko/ai-contracts';
 
 /** Per-category resolved media model for agent mode */
@@ -89,7 +87,10 @@ export interface UseChatActionsProps {
 }
 
 export interface UseChatActionsReturn {
-  handleSend: (input?: PendingSendInput, identity?: PendingSendIdentity) => boolean;
+  handleSend: (
+    input?: PendingSendInput,
+    identity?: PendingSendIdentity,
+  ) => boolean | Promise<boolean>;
   triggerSend: (messageText: string) => void;
   handleCancelMessage: () => void;
   copyLastResponse: () => void;
@@ -123,6 +124,7 @@ export function useChatActions({
   const agentHostMessages = useAgentHostMessages();
   // Lightweight dedup guard: prevent double-click within 1s
   const lastSentRef = useRef<{ hash: string; time: number }>();
+  const pendingSubmissionHashesRef = useRef(new Set<string>());
 
   const isDuplicate = useCallback((content: string): boolean => {
     const hash = content.trim().slice(0, 100);
@@ -147,9 +149,6 @@ export function useChatActions({
       const inputSessionMode = input?.sessionMode;
       const attachments = input?.attachments;
       const contextPayloads = input?.contextPayloads;
-      const fileReferenceContextReferences = projectFileReferenceContextReferences(
-        input?.fileReferences,
-      );
       const outboundAttachments = attachments ?? [];
       const outboundContextPayloads = contextPayloads ?? [];
       const trimmed = messageText.trim();
@@ -219,38 +218,10 @@ export function useChatActions({
         return false;
       }
 
-      // Clear stale streaming state only for a new foreground turn.
-      // Queueing while the current turn streams must preserve the active assistant message.
-      if (!isQueueingSend) {
-        setStreamingMessageId(null);
-        streamingMessageIdRef.current = null;
-      }
-
-      const contextReferences = mergeContextReferences(
-        projectContextReferencesFromPayloads(contextPayloads),
-        fileReferenceContextReferences,
-      );
-      const userMessage: Message = {
-        id: identity?.id ?? Date.now().toString(),
-        role: 'user',
-        content: displayMessageText.trim(),
-        timestamp: identity?.timestamp ?? Date.now(),
-        ...(isQueueingSend ? { isQueued: true } : {}),
-        ...(outboundAttachments.length > 0 ? { attachments: outboundAttachments } : {}),
-        ...(contextReferences ? { contextReferences } : {}),
-      };
-
-      if (!isQueueingSend) {
-        setMessages((prev) => [...prev, userMessage]);
-      }
-      onUserMessageSent?.({ conversationId, message: userMessage });
-      clearInput();
-      setAttachedFiles([]);
-      setSelectedFileReferences?.([]);
-      if (!isQueueingSend) {
-        setIsThinking(true);
-      }
-
+      const contextReferences = projectMessageContextReferences({
+        payloads: contextPayloads,
+        fileReferences: input?.fileReferences,
+      });
       const modelProjection = projectMessageModelSelection({
         selectedModel,
         chatModelOptions: availableModels,
@@ -261,25 +232,69 @@ export function useChatActions({
         modelProjection.purposeModels,
         input?.understandingModels ?? understandingModels,
       );
-      agentHostMessages.sendMessage({
-        conversationId,
-        message: trimmed,
-        sessionMode: effectiveSessionMode,
-        ...projectAgentModelSendProjection({
-          sessionMode: effectiveSessionMode,
-          modelProjection,
-          agentModels: input?.agentModels,
-        }),
-        ...(input?.agentModels ? { agentModels: input.agentModels } : {}),
-        ...(purposeModels ? { purposeModels } : {}),
-        ...(outboundAttachments.length > 0 ? { attachments: outboundAttachments } : {}),
-        ...(outboundContextPayloads.length > 0 ? { contextPayloads: outboundContextPayloads } : {}),
-        ...(input?.fileReferences && input.fileReferences.length > 0
-          ? { fileReferences: input.fileReferences }
-          : {}),
-      });
-      recordAcceptedSend(`${trimmed}:${attachments?.length ?? 0}:${contextPayloads?.length ?? 0}`);
-      return true;
+      const submissionHash = `${trimmed}:${attachments?.length ?? 0}:${contextPayloads?.length ?? 0}`;
+      if (pendingSubmissionHashesRef.current.has(submissionHash)) return false;
+      pendingSubmissionHashesRef.current.add(submissionHash);
+
+      return (async () => {
+        try {
+          const receipt = await agentHostMessages.sendMessage({
+            conversationId,
+            message: trimmed,
+            sessionMode: effectiveSessionMode,
+            ...projectAgentModelSendProjection({
+              sessionMode: effectiveSessionMode,
+              modelProjection,
+              agentModels: input?.agentModels,
+            }),
+            ...(input?.agentModels ? { agentModels: input.agentModels } : {}),
+            ...(purposeModels ? { purposeModels } : {}),
+            ...(outboundAttachments.length > 0 ? { attachments: outboundAttachments } : {}),
+            ...(outboundContextPayloads.length > 0
+              ? { contextPayloads: outboundContextPayloads }
+              : {}),
+            ...(input?.fileReferences && input.fileReferences.length > 0
+              ? { fileReferences: input.fileReferences }
+              : {}),
+          });
+          if (receipt.conversationId !== conversationId) {
+            throw new Error(
+              `Agent submission receipt belongs to Conversation '${receipt.conversationId}', expected '${conversationId}'.`,
+            );
+          }
+
+          // Clear stale streaming state only after Host acceptance for a new foreground turn.
+          if (receipt.state === 'active' && !isQueueingSend) {
+            setStreamingMessageId(null);
+            streamingMessageIdRef.current = null;
+          }
+          const userMessage: Message = {
+            id: `released:${receipt.queueItemId}`,
+            role: 'user',
+            content: displayMessageText.trim(),
+            timestamp: receipt.createdAt,
+            ...(receipt.state === 'queued' ? { isQueued: true } : {}),
+            ...(outboundAttachments.length > 0 ? { attachments: outboundAttachments } : {}),
+            ...(contextReferences ? { contextReferences } : {}),
+          };
+          if (receipt.state === 'active') {
+            setMessages((prev) =>
+              prev.some((message) => message.id === userMessage.id) ? prev : [...prev, userMessage],
+            );
+          }
+          onUserMessageSent?.({ conversationId, message: userMessage });
+          if (receipt.state === 'active' && !isQueueingSend) {
+            setIsThinking(true);
+          }
+          recordAcceptedSend(submissionHash);
+          return true;
+        } catch (error) {
+          reportInputDiagnostic?.(error instanceof Error ? error.message : String(error));
+          return false;
+        } finally {
+          pendingSubmissionHashesRef.current.delete(submissionHash);
+        }
+      })();
     },
     [
       inputValue,
@@ -325,26 +340,12 @@ export function useChatActions({
         return;
       }
 
-      if (!isQueueingSend) {
-        setStreamingMessageId(null);
-        streamingMessageIdRef.current = null;
-      }
-
       const userMessage: Message = {
         id: Date.now().toString(),
         role: 'user',
         content: trimmed,
         timestamp: Date.now(),
-        ...(isQueueingSend ? { isQueued: true } : {}),
       };
-
-      if (!isQueueingSend) {
-        setMessages((prev) => [...prev, userMessage]);
-      }
-      onUserMessageSent?.({ conversationId, message: userMessage });
-      if (!isQueueingSend) {
-        setIsThinking(true);
-      }
       setActiveTab('chat');
 
       const modelProjection = projectMessageModelSelection({
@@ -352,12 +353,37 @@ export function useChatActions({
         chatModelOptions: availableModels,
         sessionMode: 'agent',
       });
-      agentHostMessages.sendMessage({
-        conversationId,
-        message: trimmed,
-        sessionMode: 'agent',
-        ...modelProjection,
-      });
+      void agentHostMessages
+        .sendMessage({
+          conversationId,
+          message: trimmed,
+          sessionMode: 'agent',
+          ...modelProjection,
+        })
+        .then((receipt) => {
+          if (receipt.state === 'active' && !isQueueingSend) {
+            setStreamingMessageId(null);
+            streamingMessageIdRef.current = null;
+          }
+          const acceptedMessage: Message = {
+            ...userMessage,
+            id: `released:${receipt.queueItemId}`,
+            timestamp: receipt.createdAt,
+            ...(receipt.state === 'queued' ? { isQueued: true } : {}),
+          };
+          if (receipt.state === 'active') {
+            setMessages((prev) =>
+              prev.some((message) => message.id === acceptedMessage.id)
+                ? prev
+                : [...prev, acceptedMessage],
+            );
+          }
+          onUserMessageSent?.({ conversationId, message: acceptedMessage });
+          if (receipt.state === 'active') setIsThinking(true);
+        })
+        .catch((error: unknown) => {
+          reportInputDiagnostic?.(error instanceof Error ? error.message : String(error));
+        });
     },
     [
       isThinking,
@@ -373,6 +399,7 @@ export function useChatActions({
       ensureConversationForSend,
       onUserMessageSent,
       agentHostMessages,
+      reportInputDiagnostic,
     ],
   );
 
@@ -432,60 +459,4 @@ function projectAgentModelSendProjection(
 
   const { chatModel: _chatModel, ...rest } = input.modelProjection;
   return rest;
-}
-
-function projectFileReferenceContextReferences(
-  references: readonly SelectedFileReference[] | undefined,
-): MessageContextReference[] {
-  return (
-    references?.map((reference) => {
-      const path = projectContentLocatorPath(reference.contentLocator);
-      return {
-        type: fileReferenceContextType(reference),
-        id: reference.id,
-        label: reference.label,
-        summary: path,
-        ...(reference.thumbnailUri ? { thumbnailUri: reference.thumbnailUri } : {}),
-        ...(reference.mediaType ? { mediaType: reference.mediaType } : {}),
-        contentLocator: reference.contentLocator,
-      };
-    }) ?? []
-  );
-}
-
-function mergeContextReferences(
-  payloadReferences: MessageContextReference[] | undefined,
-  fileReferences: readonly MessageContextReference[],
-): MessageContextReference[] | undefined {
-  const merged: MessageContextReference[] = [];
-  const seenIds = new Set<string>();
-
-  for (const reference of payloadReferences ?? []) {
-    merged.push(reference);
-    seenIds.add(reference.id);
-  }
-
-  for (const reference of fileReferences) {
-    if (seenIds.has(reference.id)) continue;
-    merged.push(reference);
-    seenIds.add(reference.id);
-  }
-
-  return merged.length > 0 ? merged : undefined;
-}
-
-function fileReferenceContextType(
-  reference: SelectedFileReference,
-): MessageContextReference['type'] {
-  if (reference.mediaType === 'image') return 'image';
-  if (reference.mediaType === 'audio') return 'audio-clip';
-  if (
-    reference.mediaType === 'video' ||
-    reference.mediaType === 'sequence' ||
-    reference.source === 'media-library'
-  ) {
-    return 'media';
-  }
-  if (reference.source === 'entity-graph') return 'entity';
-  return 'file';
 }

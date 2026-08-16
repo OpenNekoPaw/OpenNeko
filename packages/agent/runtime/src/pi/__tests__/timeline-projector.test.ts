@@ -120,6 +120,16 @@ describe('Pi Timeline projector', () => {
                 },
               },
             ],
+            perceptionCards: [
+              {
+                assetId: 'generated-image',
+                modality: 'image',
+                createdAt: 30,
+                layerStatus: { layer0: 'complete', layer1: 'skipped', layer2: 'complete' },
+                structural: { format: 'png', mimeType: 'image/png', byteSize: 42 },
+              },
+            ],
+            backfillDiagnostics: [{ path: 'data.status', reason: 'conflict' }],
           },
         },
         isError: false,
@@ -162,6 +172,10 @@ describe('Pi Timeline projector', () => {
                 },
               },
             ],
+            perceptionCards: [
+              expect.objectContaining({ assetId: 'generated-image', modality: 'image' }),
+            ],
+            backfillDiagnostics: [{ path: 'data.status', reason: 'conflict' }],
           },
           pendingConfirmation: false,
         },

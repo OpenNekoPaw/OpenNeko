@@ -280,6 +280,81 @@ describe('projectPiConversationEntries', () => {
     });
   });
 
+  it('restores the canonical ReadImage ToolResult shape from durable Pi details', () => {
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
+      entryPath: 'images/cover.jpg',
+    };
+    const entries: PiConversationTranscriptEntry[] = [
+      messageEntry('assistant-entry', null, {
+        role: 'assistant',
+        content: [{ type: 'toolCall', id: 'tool-image', name: 'ReadImage', arguments: {} }],
+        api: 'openai-completions',
+        provider: 'fixture',
+        model: 'fixture-model',
+        usage: zeroUsage(),
+        stopReason: 'toolUse',
+        timestamp: 20,
+      }),
+      messageEntry('tool-entry', 'assistant-entry', {
+        role: 'toolResult',
+        toolCallId: 'tool-image',
+        toolName: 'ReadImage',
+        content: [{ type: 'text', text: '{"image_ref":"image-1"}' }],
+        details: {
+          success: true,
+          data: { images: [{ label: 'cover.jpg', contentLocator }] },
+          attachments: [
+            {
+              type: 'image',
+              path: 'content:cover',
+              assetRef: { assetId: 'cover', uri: 'content:cover', contentLocator },
+            },
+          ],
+          perceptionCards: [
+            {
+              assetId: 'cover',
+              modality: 'image',
+              createdAt: 20,
+              layerStatus: { layer0: 'complete', layer1: 'skipped', layer2: 'complete' },
+              structural: { format: 'jpeg', mimeType: 'image/jpeg', byteSize: 42 },
+            },
+          ],
+          backfillDiagnostics: [{ path: 'data.images', reason: 'conflict' }],
+        },
+        isError: false,
+        timestamp: 30,
+      }),
+    ];
+
+    const messages = projectPiConversationEntries(entries);
+    const block = messages[0]?.contentBlocks?.find((candidate) => candidate.type === 'tool_call');
+
+    expect(block?.toolCall?.result).toEqual({
+      success: true,
+      data: { images: [{ label: 'cover.jpg', contentLocator }] },
+      attachments: [
+        {
+          type: 'image',
+          path: 'content:cover',
+          assetRef: { assetId: 'cover', uri: 'content:cover', contentLocator },
+        },
+      ],
+      perceptionCards: [
+        {
+          assetId: 'cover',
+          modality: 'image',
+          createdAt: 20,
+          layerStatus: { layer0: 'complete', layer1: 'skipped', layer2: 'complete' },
+          structural: { format: 'jpeg', mimeType: 'image/jpeg', byteSize: 42 },
+        },
+      ],
+      backfillDiagnostics: [{ path: 'data.images', reason: 'conflict' }],
+    });
+    expect(block?.toolCall?.result?.data).not.toHaveProperty('success');
+  });
+
   it('fails visibly when a tool result has no originating Pi tool call', () => {
     expect(() =>
       projectPiConversationEntries([

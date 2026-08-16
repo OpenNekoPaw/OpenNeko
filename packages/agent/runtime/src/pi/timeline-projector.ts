@@ -7,11 +7,10 @@ import type {
   ConversationProjectionUpdate,
   ToolCall,
 } from '@neko/agent-contracts';
-import { isContentLocator } from '@neko/content';
-import { type ToolResultArtifactTransfer, type ToolResultAttachment } from '@neko/agent-contracts';
 
 import type { PiProductAgentEvent, PiProductEventSink } from './event-projector';
 import type { PiToolRunIdentity } from './capability-tool-bridge';
+import { projectPiToolResult } from './tool-result-projector';
 import type { ConversationProjectionStore } from '../runtime/projection/conversation-projection-store';
 
 type TimelineTextItem = Extract<
@@ -334,7 +333,7 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
     event: Extract<PiProductAgentEvent, { readonly type: 'tool.completed' }>,
   ): ConversationProjectionUpdate {
     const current = requireToolItem(state, event.toolCallId, 'completion');
-    const result = normalizeToolResult(event.result, event.isError);
+    const result = projectPiToolResult(event.result, event.isError);
     const item: AgentTurnTimelineToolCallItem = {
       ...current,
       status: result.success ? 'succeeded' : 'failed',
@@ -694,71 +693,6 @@ function normalizeToolProgress(value: unknown): {
   };
 }
 
-function normalizeToolResult(value: unknown, isError: boolean): NonNullable<ToolCall['result']> {
-  const record = asRecord(value);
-  const details = asRecord(record?.['details']);
-  if (details && typeof details['success'] === 'boolean') {
-    return {
-      success: details['success'],
-      data: structuredClone(details['data']),
-      ...(typeof details['error'] === 'string' ? { error: details['error'] } : {}),
-      ...readToolResultCollections(details),
-    };
-  }
-  return {
-    success: !isError,
-    data: structuredClone(details?.['data'] ?? record?.['details'] ?? value),
-    ...(isError
-      ? {
-          error:
-            readTextContent(record?.['content']) ??
-            'Pi tool execution failed without a diagnostic.',
-        }
-      : {}),
-    ...readToolResultCollections(details ?? record),
-  };
-}
-
-function readToolResultCollections(value: unknown): {
-  readonly attachments?: readonly ToolResultAttachment[];
-  readonly artifacts?: readonly ToolResultArtifactTransfer[];
-} {
-  const record = asRecord(value);
-  if (!record) return {};
-  const attachments = record['attachments'];
-  const artifacts = record['artifacts'];
-  return {
-    ...(Array.isArray(attachments)
-      ? { attachments: attachments.filter(isToolResultAttachment).map(cloneValue) }
-      : {}),
-    ...(Array.isArray(artifacts)
-      ? { artifacts: artifacts.filter(isToolResultArtifactTransfer).map(cloneValue) }
-      : {}),
-  };
-}
-
-function isToolResultAttachment(value: unknown): value is ToolResultAttachment {
-  const record = asRecord(value);
-  const type = record?.['type'];
-  const assetRef = asRecord(record?.['assetRef']);
-  return (
-    (type === 'image' || type === 'audio' || type === 'video') &&
-    (isContentLocator(record?.['contentLocator']) ||
-      isContentLocator(assetRef?.['contentLocator']) ||
-      typeof record?.['path'] === 'string')
-  );
-}
-
-function isToolResultArtifactTransfer(value: unknown): value is ToolResultArtifactTransfer {
-  const type = asRecord(value)?.['type'];
-  return (
-    type === 'artifactSnapshot' ||
-    type === 'artifactBackfill' ||
-    type === 'artifactBlockPage' ||
-    type === 'artifactExecutionSummary'
-  );
-}
-
 function readTextContent(value: unknown): string | undefined {
   if (!Array.isArray(value)) return undefined;
   const text = value
@@ -813,8 +747,4 @@ function cloneState(state: PiTimelineProjectorState): PiTimelineProjectorState {
     textItems: new Map([...state.textItems].map(([key, item]) => [key, structuredClone(item)])),
     toolItems: new Map([...state.toolItems].map(([key, item]) => [key, structuredClone(item)])),
   };
-}
-
-function cloneValue<T>(value: T): T {
-  return structuredClone(value);
 }

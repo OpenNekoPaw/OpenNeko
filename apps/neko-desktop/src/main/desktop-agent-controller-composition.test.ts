@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createOpenNekoPiModels } from '@neko/agent-runtime/pi';
+import { createOpenNekoPiModels, type PiConversationTranscriptEntry } from '@neko/agent-runtime/pi';
 import { createToolRegistry } from '@neko/agent-runtime/tool-registry';
 import type {
   AgentHostToWebviewMessage,
@@ -174,36 +174,38 @@ describe('Agent controller composition', () => {
     });
     const posted: AgentHostToWebviewMessage[] = [];
 
-    effects.conversation.submitTurn(
-      {
-        source: 'user-message',
-        conversationId: 'conversation-narrative',
-        messageText: 'Use this forbidden source.',
-        sessionMode: 'agent',
-        locale: 'en',
-        fileReferences: [
-          {
-            id: 'file:forbidden',
-            label: 'forbidden.md',
-            contentLocator: { kind: 'workspace-file', path: 'forbidden.md' },
-            mediaType: 'text',
+    await expect(
+      effects.conversation.submitTurn(
+        {
+          source: 'user-message',
+          conversationId: 'conversation-narrative',
+          messageText: 'Use this forbidden source.',
+          sessionMode: 'agent',
+          locale: 'en',
+          fileReferences: [
+            {
+              id: 'file:forbidden',
+              label: 'forbidden.md',
+              contentLocator: { kind: 'workspace-file', path: 'forbidden.md' },
+              mediaType: 'text',
+            },
+          ],
+        },
+        {
+          identity: {
+            hostKind: 'electron',
+            applicationId: 'neko-desktop',
+            windowId: 'window-1',
+            viewId: 'view-1',
+            workspaceId: workspace.workspaceId,
+            connectionId: 'connection-1',
           },
-        ],
-      },
-      {
-        identity: {
-          hostKind: 'electron',
-          applicationId: 'neko-desktop',
-          windowId: 'window-1',
-          viewId: 'view-1',
-          workspaceId: workspace.workspaceId,
-          connectionId: 'connection-1',
+          post: (message) => {
+            posted.push(message);
+          },
         },
-        post: (message) => {
-          posted.push(message);
-        },
-      },
-    );
+      ),
+    ).rejects.toThrow('forbids external references');
 
     await vi.waitFor(() =>
       expect(posted).toContainEqual(
@@ -480,6 +482,14 @@ describe('Agent controller composition', () => {
       };
       return {
         identity: turnIdentity,
+        queueItem: {
+          id: `queue-${turnId}`,
+          conversationId: input.conversationId,
+          content: input.presentationText ?? input.prompt,
+          createdAt: 1,
+          source: 'composer' as const,
+        },
+        state: 'active' as const,
         completion: Promise.resolve({
           identity: turnIdentity,
           durability: 'durable',
@@ -799,6 +809,118 @@ describe('Agent controller composition', () => {
     await composition.dispose?.();
   });
 
+  it('reauthorizes restored ReadImage previews for active and snapshot routes', async () => {
+    const workspace = createWorkspace();
+    await workspace.createConversation('conversation-image-history');
+    const locator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
+      entryPath: 'OPS/images/cover.png',
+    };
+    const bytes = new Uint8Array([137, 80, 78, 71]);
+    vi.mocked(workspace.readConversationEntries).mockResolvedValue(
+      restoredReadImageEntries(locator),
+    );
+    vi.mocked(workspace.loadDisplayAsset!).mockResolvedValue({
+      status: 'ready',
+      bytes,
+      mimeType: 'image/png',
+      sizeBytes: bytes.byteLength,
+      diagnostics: [],
+    });
+    const registerBytes = vi.fn(async () => ({
+      url: 'openneko://resource/ffffffffffffffffffffffffffffffff/content',
+      release: vi.fn(),
+    }));
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
+      resources: {
+        registerFile: vi.fn(async () => {
+          throw new Error('Restored document entries must register loaded bytes.');
+        }),
+        registerBytes,
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+    });
+    const effects = composition.createEffects({
+      readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-image-history',
+      },
+      initialConversationId: 'conversation-image-history',
+    });
+    const posted: AgentHostToWebviewMessage[] = [];
+    const context = {
+      identity: {
+        hostKind: 'electron' as const,
+        applicationId: 'neko-desktop',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        workspaceId: workspace.workspaceId,
+        connectionId: 'connection-image-history',
+      },
+      post: async (message: AgentHostToWebviewMessage) => {
+        posted.push(message);
+      },
+    };
+
+    await effects.conversation.readActiveConversation(context);
+    await effects.conversation.readConversationSnapshot('conversation-image-history', context);
+
+    const restoredMessages = posted.flatMap((message) =>
+      message.type === 'activeConversation' || message.type === 'conversationSnapshot'
+        ? (message.conversation?.messages ?? [])
+        : [],
+    );
+    expect(restoredMessages).toHaveLength(2);
+    for (const message of restoredMessages) {
+      const toolCall = message.contentBlocks?.[0]?.toolCall;
+      const image = (toolCall?.result?.data as { images?: unknown[] } | undefined)?.images?.[0];
+      const thumbnailRef = toolCall?.result?.perceptionCards?.[0]?.perceptual?.thumbnailRef;
+      expect(image).toMatchObject({
+        contentLocator: locator,
+        previewDescriptor: {
+          contentLocator: locator,
+          url: 'openneko://resource/ffffffffffffffffffffffffffffffff/content',
+        },
+      });
+      expect(thumbnailRef).toMatchObject({
+        contentLocator: locator,
+        previewDescriptor: {
+          contentLocator: locator,
+          url: 'openneko://resource/ffffffffffffffffffffffffffffffff/content',
+        },
+      });
+    }
+    expect(registerBytes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: 'connection-image-history',
+        sessionId: 'agent-display:conversation-image-history:history:conversation-image-history',
+      }),
+      expect.objectContaining({ bytes, mediaType: 'image/png' }),
+    );
+
+    effects.dispose();
+    await composition.dispose?.();
+  });
+
   it('projects completed initial Turn facts into the later exact Session connection', async () => {
     const root = await mkdtemp(join(tmpdir(), 'desktop-agent-initial-facts-'));
     temporaryRoots.push(root);
@@ -895,6 +1017,14 @@ describe('Agent controller composition', () => {
       });
       return {
         identity: turnIdentity,
+        queueItem: {
+          id: 'queue-initial-facts',
+          conversationId: input.conversationId,
+          content: input.presentationText ?? input.prompt,
+          createdAt: 1,
+          source: 'composer' as const,
+        },
+        state: 'active' as const,
         completion: Promise.resolve({
           identity: turnIdentity,
           durability: 'durable',
@@ -1060,6 +1190,14 @@ describe('Agent controller composition', () => {
     workspace.startTurn.mockImplementation(
       (input: Parameters<AgentWorkspaceRuntime['startTurn']>[0]) => ({
         identity: turnIdentity,
+        queueItem: {
+          id: 'queue-board-blocked',
+          conversationId: input.conversationId,
+          content: input.presentationText ?? input.prompt,
+          createdAt: 1,
+          source: 'composer' as const,
+        },
+        state: 'active' as const,
         completion: Promise.resolve({
           identity: turnIdentity,
           durability: 'durable',
@@ -1183,7 +1321,7 @@ describe('Agent controller composition', () => {
       },
     });
     const posted: AgentHostToWebviewMessage[] = [];
-    effects.conversation.submitTurn(
+    await effects.conversation.submitTurn(
       {
         source: 'user-message',
         conversationId: turnIdentity.conversationId,
@@ -1824,6 +1962,7 @@ function createWorkspace(
       delete: async () => undefined,
     }),
     tools: createToolRegistry(),
+    loadDisplayAsset: vi.fn(),
     createConversation,
     ensureConversation: vi.fn(async (conversationId: string, title: string) => {
       if (!records.some((record) => record.conversationId === conversationId)) {
@@ -1894,6 +2033,75 @@ function createWorkspace(
     })),
     dispose: vi.fn(),
   };
+}
+
+function restoredReadImageEntries(
+  contentLocator: Extract<
+    import('@neko/content').ContentLocator,
+    { readonly kind: 'document-entry' }
+  >,
+): PiConversationTranscriptEntry[] {
+  const assistantMessage: Extract<PiConversationTranscriptEntry, { type: 'message' }> = {
+    type: 'message',
+    id: 'assistant-image-history',
+    parentId: null,
+    timestamp: new Date(20).toISOString(),
+    message: {
+      role: 'assistant',
+      content: [{ type: 'toolCall', id: 'tool-image', name: 'ReadImage', arguments: {} }],
+      api: 'openai-completions',
+      provider: 'fixture',
+      model: 'fixture-model',
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: 'toolUse',
+      timestamp: 20,
+    },
+  };
+  const toolResultMessage: Extract<PiConversationTranscriptEntry, { type: 'message' }> = {
+    type: 'message',
+    id: 'tool-image-history',
+    parentId: assistantMessage.id,
+    timestamp: new Date(30).toISOString(),
+    message: {
+      role: 'toolResult',
+      toolCallId: 'tool-image',
+      toolName: 'ReadImage',
+      content: [{ type: 'text', text: '{"image_ref":"cover"}' }],
+      details: {
+        success: true,
+        data: {
+          images: [{ label: 'cover.png', mimeType: 'image/png', contentLocator }],
+        },
+        perceptionCards: [
+          {
+            assetId: 'cover',
+            modality: 'image',
+            createdAt: 20,
+            layerStatus: { layer0: 'complete', layer1: 'skipped', layer2: 'complete' },
+            structural: { format: 'png', mimeType: 'image/png', byteSize: 4 },
+            perceptual: {
+              thumbnailRef: {
+                assetId: 'cover',
+                uri: 'content:cover',
+                mimeType: 'image/png',
+                contentLocator,
+              },
+            },
+          },
+        ],
+      },
+      isError: false,
+      timestamp: 30,
+    },
+  };
+  return [assistantMessage, toolResultMessage];
 }
 
 function createLocatorBackedProjection(): ConversationProjectionSnapshot {

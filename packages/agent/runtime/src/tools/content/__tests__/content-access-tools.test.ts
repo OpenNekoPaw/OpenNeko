@@ -190,6 +190,34 @@ describe('content access tools', () => {
     });
   });
 
+  it('derives distinct perceptual asset identities for same-named images in different documents', async () => {
+    const runtime = createRuntime();
+    runtime.loadContentAsset.mockResolvedValue(readyPng());
+    const first = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/volume-1.epub' },
+      entryPath: 'images/cover.jpg',
+    };
+    const second = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/volume-2.epub' },
+      entryPath: 'images/cover.jpg',
+    };
+
+    const result = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
+      images: [
+        { label: 'cover.jpg', contentLocator: first },
+        { label: 'cover.jpg', contentLocator: second },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    const assetIds = result.attachments?.map((attachment) => attachment.assetRef?.assetId);
+    expect(assetIds).toHaveLength(2);
+    expect(new Set(assetIds).size).toBe(2);
+    expect(assetIds?.every((assetId) => assetId?.startsWith('read-image-cover.jpg-'))).toBe(true);
+  });
+
   it('loads derived document pages through the representation port', async () => {
     const runtime = createRuntime();
     runtime.loadRepresentationAsset.mockResolvedValueOnce(readyPng());

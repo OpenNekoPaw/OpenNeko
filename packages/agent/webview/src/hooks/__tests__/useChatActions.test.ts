@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRef } from 'react';
 import { type AgentInputCatalogMessage } from '@neko/agent-contracts';
@@ -34,6 +34,15 @@ function createSessionInputCatalog(
 describe('useChatActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    hostMocks.sendMessage.mockImplementation(async (message) => ({
+      submissionId: 'submission-1',
+      conversationId: message.conversationId,
+      turnId: 'turn-1',
+      queueItemId: 'queue-item-1',
+      message: message.message,
+      createdAt: 1_700_000_000_000,
+      state: message.conversationId.includes('queue') ? ('queued' as const) : ('active' as const),
+    }));
   });
 
   it('returns an acceptance receipt and does not consume a send while the Conversation switches', () => {
@@ -59,7 +68,7 @@ describe('useChatActions', () => {
       });
     });
 
-    let accepted = true;
+    let accepted: boolean | Promise<boolean> = true;
     act(() => {
       accepted = result.current.handleSend();
     });
@@ -93,7 +102,7 @@ describe('useChatActions', () => {
       });
     });
 
-    let accepted = true;
+    let accepted: boolean | Promise<boolean> = true;
     act(() => {
       accepted = result.current.handleSend();
     });
@@ -127,7 +136,7 @@ describe('useChatActions', () => {
       });
     });
 
-    let accepted = true;
+    let accepted: boolean | Promise<boolean> = true;
     act(() => {
       accepted = result.current.handleSend();
     });
@@ -138,7 +147,7 @@ describe('useChatActions', () => {
     );
   });
 
-  it('returns true for an active-run send accepted by the Host queue and rejects a duplicate', () => {
+  it('returns true for an active-run send accepted by the Host queue and rejects a duplicate', async () => {
     const clearInput = vi.fn();
     const { result } = renderHook(() => {
       const activeConversationIdRef = useRef<string | null>('conv-queue');
@@ -159,15 +168,15 @@ describe('useChatActions', () => {
       });
     });
 
-    let firstAccepted = false;
-    let duplicateAccepted = true;
+    let firstReceipt: boolean | Promise<boolean> = false;
+    let duplicateReceipt: boolean | Promise<boolean> = true;
     act(() => {
-      firstAccepted = result.current.handleSend();
-      duplicateAccepted = result.current.handleSend();
+      firstReceipt = result.current.handleSend();
+      duplicateReceipt = result.current.handleSend();
     });
 
-    expect(firstAccepted).toBe(true);
-    expect(duplicateAccepted).toBe(false);
+    await expect(firstReceipt).resolves.toBe(true);
+    expect(duplicateReceipt).toBe(false);
     expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1);
     expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -175,7 +184,7 @@ describe('useChatActions', () => {
         message: 'queue this message',
       }),
     );
-    expect(clearInput).toHaveBeenCalledTimes(1);
+    expect(clearInput).not.toHaveBeenCalled();
   });
 
   it('routes a direct command through the exact Session catalog identity', () => {
@@ -238,7 +247,7 @@ describe('useChatActions', () => {
     expect(setMessages).not.toHaveBeenCalled();
     expect(setIsThinking).not.toHaveBeenCalled();
     expect(setStreamingMessageId).not.toHaveBeenCalled();
-    expect(clearInput).toHaveBeenCalledTimes(1);
+    expect(clearInput).toHaveBeenCalledOnce();
     expect(setAttachedFiles).toHaveBeenCalledWith([]);
   });
 
@@ -791,7 +800,7 @@ describe('useChatActions', () => {
     expect(hostMocks.sendMessage.mock.calls[0]?.[0]).not.toHaveProperty('contextPayloads');
   });
 
-  it('projects selected file references once and sends them separately from message text', () => {
+  it('projects selected file references once and sends them separately from message text', async () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -817,8 +826,8 @@ describe('useChatActions', () => {
       });
     });
 
-    act(() => {
-      result.current.handleSend({
+    await act(async () => {
+      await result.current.handleSend({
         messageText: '参考',
         displayMessageText: '参考',
         fileReferences: [
@@ -864,10 +873,10 @@ describe('useChatActions', () => {
         ],
       }),
     );
-    expect(setSelectedFileReferences).toHaveBeenCalledWith([]);
+    expect(setSelectedFileReferences).not.toHaveBeenCalled();
   });
 
-  it('sends selected document references without file attachments or text rewriting', () => {
+  it('sends selected document references without file attachments or text rewriting', async () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -891,8 +900,8 @@ describe('useChatActions', () => {
       });
     });
 
-    act(() => {
-      result.current.handleSend({
+    await act(async () => {
+      await result.current.handleSend({
         messageText: '分析',
         displayMessageText: '分析',
         fileReferences: [
@@ -947,7 +956,7 @@ describe('useChatActions', () => {
     );
   });
 
-  it('sends selected document references even when the visible input is empty', () => {
+  it('sends selected document references even when the visible input is empty', async () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -971,8 +980,8 @@ describe('useChatActions', () => {
       });
     });
 
-    act(() => {
-      result.current.handleSend({
+    await act(async () => {
+      await result.current.handleSend({
         messageText: '',
         displayMessageText: '',
         fileReferences: [
@@ -1075,7 +1084,7 @@ describe('useChatActions', () => {
     expect(hostMocks.sendMessage.mock.calls[0]?.[0]).not.toHaveProperty('attachments');
   });
 
-  it('does not infer attachment semantics from a selected locator path', () => {
+  it('does not infer attachment semantics from a selected locator path', async () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -1099,8 +1108,8 @@ describe('useChatActions', () => {
       });
     });
 
-    act(() => {
-      result.current.handleSend({
+    await act(async () => {
+      await result.current.handleSend({
         messageText: '参考',
         displayMessageText: '参考',
         fileReferences: [
@@ -1127,7 +1136,7 @@ describe('useChatActions', () => {
     expect(hostMocks.sendMessage.mock.calls[0]?.[0]).not.toHaveProperty('attachments');
   });
 
-  it('notifies user message sent for externally triggered sends', () => {
+  it('notifies user message sent for externally triggered sends', async () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -1158,13 +1167,15 @@ describe('useChatActions', () => {
       result.current.triggerSend('Use this selected clip');
     });
 
-    expect(onUserMessageSent).toHaveBeenCalledWith({
-      conversationId: 'conv-trigger',
-      message: expect.objectContaining({
-        role: 'user',
-        content: 'Use this selected clip',
+    await waitFor(() =>
+      expect(onUserMessageSent).toHaveBeenCalledWith({
+        conversationId: 'conv-trigger',
+        message: expect.objectContaining({
+          role: 'user',
+          content: 'Use this selected clip',
+        }),
       }),
-    });
+    );
     expect(setActiveTab).toHaveBeenCalledWith('chat');
     expect(hostMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1174,7 +1185,7 @@ describe('useChatActions', () => {
     );
   });
 
-  it('queues text sends while preserving the active streaming assistant message', () => {
+  it('queues text sends while preserving the active streaming assistant message', async () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -1203,8 +1214,8 @@ describe('useChatActions', () => {
       });
     });
 
-    act(() => {
-      result.current.handleSend();
+    await act(async () => {
+      await result.current.handleSend();
     });
 
     expect(setMessages).not.toHaveBeenCalled();
@@ -1226,8 +1237,8 @@ describe('useChatActions', () => {
     expect(setStreamingMessageId).not.toHaveBeenCalled();
     expect(streamingMessageIdRef.current).toBe('assistant-streaming');
     expect(setIsThinking).not.toHaveBeenCalled();
-    expect(clearInput).toHaveBeenCalledTimes(1);
-    expect(setAttachedFiles).toHaveBeenCalledWith([]);
+    expect(clearInput).not.toHaveBeenCalled();
+    expect(setAttachedFiles).not.toHaveBeenCalled();
   });
 
   it('queues rich sends without dropping their attachments while the Agent turn is running', () => {
@@ -1268,7 +1279,7 @@ describe('useChatActions', () => {
     expect(setMessages).not.toHaveBeenCalled();
   });
 
-  it('queues externally triggered text sends without resetting the current stream', () => {
+  it('queues externally triggered text sends without resetting the current stream', async () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -1307,14 +1318,16 @@ describe('useChatActions', () => {
       }),
     );
     expect(setMessages).not.toHaveBeenCalled();
-    expect(onUserMessageSent).toHaveBeenCalledWith({
-      conversationId: 'conv-trigger-queue',
-      message: expect.objectContaining({
-        role: 'user',
-        content: 'Continue from selection',
-        isQueued: true,
+    await waitFor(() =>
+      expect(onUserMessageSent).toHaveBeenCalledWith({
+        conversationId: 'conv-trigger-queue',
+        message: expect.objectContaining({
+          role: 'user',
+          content: 'Continue from selection',
+          isQueued: true,
+        }),
       }),
-    });
+    );
     expect(setStreamingMessageId).not.toHaveBeenCalled();
     expect(streamingMessageIdRef.current).toBe('assistant-streaming');
     expect(setIsThinking).not.toHaveBeenCalled();

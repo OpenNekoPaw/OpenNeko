@@ -217,6 +217,7 @@ describe('Desktop Agent external driver adapter', () => {
             return () => {};
           }),
           send: vi.fn(),
+          submitMessage: vi.fn(async (_connection, message) => submissionReceipt(message)),
         },
       },
     };
@@ -288,6 +289,7 @@ describe('Desktop Agent external driver adapter', () => {
             return () => {};
           }),
           send: vi.fn(),
+          submitMessage: vi.fn(async (_connection, message) => submissionReceipt(message)),
           automation: { execute: vi.fn() },
         },
       },
@@ -336,6 +338,7 @@ describe('Desktop Agent external driver adapter', () => {
           })),
           subscribe: vi.fn(() => () => {}),
           send: vi.fn(),
+          submitMessage: vi.fn(async (_connection, message) => submissionReceipt(message)),
           automation,
         },
       },
@@ -375,6 +378,10 @@ describe('Desktop Agent external driver adapter', () => {
             return () => {};
           }),
           send: vi.fn((connection, message) => sent.push({ connection, message })),
+          submitMessage: vi.fn(async (connection, message) => {
+            sent.push({ connection, message });
+            return submissionReceipt(message);
+          }),
         },
       },
     };
@@ -468,6 +475,10 @@ describe('Desktop Agent external driver adapter', () => {
             return () => {};
           }),
           send: vi.fn((_connection, message) => sent.push(message)),
+          submitMessage: vi.fn(async (_connection, message) => {
+            sent.push(message);
+            return submissionReceipt(message, 'queued');
+          }),
         },
       },
     };
@@ -541,6 +552,7 @@ describe('Desktop Agent external driver adapter', () => {
             return () => {};
           }),
           send: vi.fn((_connection, message) => sent.push(message)),
+          submitMessage: vi.fn(async (_connection, message) => submissionReceipt(message)),
         },
       },
     };
@@ -675,5 +687,17 @@ function queueSnapshot(pendingCount, sequence, items = []) {
 }
 
 function queuedItem(id, content) {
-  return { id, conversationId: 'conversation-1', content, createdAt: 1, source: 'user' };
+  return { id, conversationId: 'conversation-1', content, createdAt: 1, source: 'composer' };
+}
+
+function submissionReceipt(message, state = 'active') {
+  return {
+    submissionId: 'submission-1',
+    conversationId: message.conversationId,
+    turnId: 'turn-1',
+    queueItemId: 'queue-1',
+    message: message.message,
+    createdAt: 1,
+    state,
+  };
 }

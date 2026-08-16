@@ -69,7 +69,7 @@ interface ChatViewProps {
     contextPayloads?: AgentContextPayload[];
     fileReferences?: SelectedFileReference[];
     agentModels?: AgentModelSlots;
-  }) => boolean;
+  }) => boolean | Promise<boolean>;
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;

@@ -100,7 +100,7 @@ interface InputAreaProps {
     contextPayloads?: AgentContextPayload[];
     fileReferences?: SelectedFileReference[];
     agentModels?: AgentModelSlots;
-  }) => boolean;
+  }) => boolean | Promise<boolean>;
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;
@@ -381,6 +381,14 @@ export function InputArea({
     SelectedFileReference[]
   >([]);
   const selectedFileReferences = externalSelectedFileReferences ?? internalSelectedFileReferences;
+  const inputValueRef = useRef(inputValue);
+  const attachedFilesRef = useRef(attachedFiles);
+  const selectedFileReferencesRef = useRef(selectedFileReferences);
+  const contextChipsRef = useRef(contextChips);
+  inputValueRef.current = inputValue;
+  attachedFilesRef.current = attachedFiles;
+  selectedFileReferencesRef.current = selectedFileReferences;
+  contextChipsRef.current = contextChips;
 
   // Create a unified setter that works with both internal state and external callback
   const updateAttachedFiles = useCallback(
@@ -811,7 +819,13 @@ export function InputArea({
     }
     const files = attachedFiles.length > 0 ? attachedFiles : undefined;
     const contextPayloads = contextChips.length > 0 ? contextChips : undefined;
-    const consumed = onSend({
+    const submittedInputValue = inputValue;
+    const submittedFileIds = new Set(attachedFiles.map((file) => file.id));
+    const submittedReferenceKeys = new Set(
+      selectedFileReferences.map((reference) => contentLocatorKey(reference.contentLocator)),
+    );
+    const submittedContextChipIds = new Set(contextChips.map((chip) => chip.id));
+    const receipt = onSend({
       messageText: inputValue,
       displayMessageText: inputValue,
       sessionMode,
@@ -820,14 +834,29 @@ export function InputArea({
       fileReferences: hasSelectedFileReferences ? selectedFileReferences : undefined,
       ...(sessionMode === 'agent' ? buildAgentModelSendConfig(selectedModel, availableModels) : {}),
     });
-    if (consumed === false) return;
-    if (inputValue.trim()) {
-      addToHistory(inputValue);
+    const consumeAcceptedDraft = (accepted: boolean): void => {
+      if (!accepted) return;
+      if (submittedInputValue.trim()) addToHistory(submittedInputValue);
+      if (inputValueRef.current === submittedInputValue) onInputChange('');
+      for (const chip of contextChipsRef.current) {
+        if (submittedContextChipIds.has(chip.id)) onRemoveContextChip(chip.id);
+      }
+      const remainingFiles = attachedFilesRef.current.filter(
+        (file) => !submittedFileIds.has(file.id),
+      );
+      if (onAttachedFilesChange) onAttachedFilesChange(remainingFiles);
+      else setInternalAttachedFiles(remainingFiles);
+      const remainingReferences = selectedFileReferencesRef.current.filter(
+        (reference) => !submittedReferenceKeys.has(contentLocatorKey(reference.contentLocator)),
+      );
+      if (onSelectedFileReferencesChange) onSelectedFileReferencesChange(remainingReferences);
+      else setInternalSelectedFileReferences(remainingReferences);
+    };
+    if (typeof receipt === 'boolean') {
+      consumeAcceptedDraft(receipt);
+      return;
     }
-    contextChips.forEach((c) => onRemoveContextChip(c.id));
-    onInputChange('');
-    updateAttachedFiles([]);
-    updateSelectedFileReferences([]);
+    void receipt.then(consumeAcceptedDraft);
   };
 
   const handleRemoveFile = (id: string) => {

@@ -1911,6 +1911,10 @@ describe('AgentAppHost', () => {
   it('queues a second turn under its Conversation and persists both turns in order', async () => {
     const fixture = await createFixture();
     const started: string[] = [];
+    const released: Array<{
+      readonly content: string;
+      readonly pendingCount: number;
+    }> = [];
     const finish = new Map<string, () => void>();
     const models = createFixtureModels((_model, context) => {
       const prompt = lastUserPrompt(context);
@@ -1943,6 +1947,9 @@ describe('AgentAppHost', () => {
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
+      onQueuedMessageReleased: ({ item, snapshot }) => {
+        released.push({ content: item.content, pendingCount: snapshot.pendingCount });
+      },
     });
     const second = workspace.startTurn({
       conversationId: 'conversation-turn-queue',
@@ -1952,9 +1959,15 @@ describe('AgentAppHost', () => {
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
+      onQueuedMessageReleased: ({ item, snapshot }) => {
+        released.push({ content: item.content, pendingCount: snapshot.pendingCount });
+      },
     });
 
     await vi.waitFor(() => expect(started).toEqual(['queued first']));
+    expect(first.state).toBe('active');
+    expect(second.state).toBe('queued');
+    expect(released).toEqual([{ content: 'queued first', pendingCount: 0 }]);
     expect(workspace.readRuntimeResidency().conversations[0]).toMatchObject({
       running: true,
       queued: true,
@@ -1962,6 +1975,10 @@ describe('AgentAppHost', () => {
     });
     finish.get('queued first')?.();
     await vi.waitFor(() => expect(started).toEqual(['queued first', 'queued second']));
+    expect(released).toEqual([
+      { content: 'queued first', pendingCount: 0 },
+      { content: 'queued second', pendingCount: 0 },
+    ]);
     finish.get('queued second')?.();
 
     await expect(Promise.all([first.completion, second.completion])).resolves.toHaveLength(2);

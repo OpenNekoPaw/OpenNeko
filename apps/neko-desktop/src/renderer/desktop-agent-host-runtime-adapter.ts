@@ -57,6 +57,10 @@ export function createElectronAgentHostRuntimeAdapter(input: {
       if (disposed) throw new Error('Desktop Agent session adapter is disposed.');
       input.bridge.agent.send(connection, message);
     },
+    submitMessage(message) {
+      if (disposed) return Promise.reject(new Error('Desktop Agent session adapter is disposed.'));
+      return input.bridge.agent.submitMessage(connection, message);
+    },
     subscribe(listener) {
       if (disposed) throw new Error('Desktop Agent session adapter is disposed.');
       const unsubscribe = input.bridge.agent.subscribe(connection, listener);

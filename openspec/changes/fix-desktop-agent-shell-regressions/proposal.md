@@ -44,9 +44,20 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - 将无法按当前 contract 解析的单条 Window presentation 局部隔离为本次启动 diagnostic，并在
   canonical Shell commit 中只保存有效 Window；不得把失效 Window 原始记录重新写回，导致每次启动
   重复提示。Project、Conversation、文件和合法 sibling Window 保持不变。
-- 让 Agent composer 的提交契约显式返回是否已由 canonical conversation/queue/input path 受理；
-  conversation 切换、重复提交、缺失 owner 或输入解析失败时保留原草稿和附件，禁止把未发送输入清空
-  成成功状态。新会话 pending send 也只在真实提交被受理后消费。
+- 让 Agent composer 的提交契约按 exact submission identity 等待 Host 完成 preflight，并仅在
+  `startTurn()` 已创建 authoritative queue/turn identity 后返回受理；bridge、preflight、enqueue、
+  conversation 切换、重复提交、缺失 owner 或输入解析失败时保留原草稿、附件、引用与 context，禁止
+  把未发送输入清空成成功状态。新会话 pending send 也只在真实提交被受理后消费。
+- 让 runtime 释放 queued composer item 进入 active turn 时投影 exact `releasedItem` 与同序 queue
+  snapshot，使同一用户消息及其附件、Canvas/context payload 与应用内 file reference 从排队态连续转为
+  transcript 消息；不得用空 snapshot、pending count、文本匹配或等待最终 transcript 回写填补可见性。
+- 让 Pi live Timeline 与持久 transcript 使用同一个 canonical ToolResult projection，完整保留 stable
+  `ContentLocator`、attachments、perception cards 和 artifact transfer；历史 Conversation 消息也必须经过
+  Host resource authorization 后再进入 Webview，授权失败显示 item-local diagnostic，禁止退回 raw path、
+  文件名猜测或无诊断占位。
+- 让 `ReadImage` 和 Workspace Board source artifact identity 从 canonical locator 派生，避免不同文档中的
+  同名图片产生重复 artifact identity 并阻断整个 turn 的 Canvas 交付；单个无效资源仍按 owning batch
+  fail-visible，不得伪装成同步成功。
 - 将待处理 Tool approval 从历史 Tool Call 的内联按钮提升为 composer 上方的 conversation-scoped
   审批面板；历史记录继续显示等待状态和 Tool 事实，但不保留第二套可操作审批入口。
 
@@ -78,3 +89,5 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - Desktop Shell Window presentation 的逐项隔离、canonical 持久化和应用重启验收。
 - Agent composer send-consumption contract、pending approval presenter、composer-adjacent approval surface
   及其 Webview/Electron 验收。
+- Agent ToolResult live/history projection、Desktop resource authorization、ReadImage perceptual identity 与
+  terminal Workspace Board artifact delivery。

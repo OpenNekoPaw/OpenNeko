@@ -150,6 +150,8 @@ export type {
   AgentDraftHostRuntimeAdapter,
   AgentHostRuntimeAdapter,
   AgentHostRuntimeSubscription,
+  AgentMessageSubmissionReceipt,
+  AgentNonSubmissionWebviewMessage,
   AgentWebviewToHostMessageType,
   AgentWebviewToHostMessageTypeCoverage,
 } from './agent-host-runtime-adapter';
@@ -553,6 +555,7 @@ export {
   buildInjectContextMessage,
   buildMessageQueueErrorMessage,
   buildMessageQueueSnapshotMessage,
+  buildQueuedMessageReleasedMessage,
   buildQueuedMessageEditRequestedMessage,
   buildCharacterDialogueSessionExitedMessage,
   buildCharacterDialogueSessionStartedMessage,

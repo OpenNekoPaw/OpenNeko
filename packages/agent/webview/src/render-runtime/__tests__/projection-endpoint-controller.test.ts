@@ -22,6 +22,9 @@ function createHost() {
       events.push(`send:${message.type}`);
       sent.push(message);
     },
+    async submitMessage() {
+      throw new Error('submitMessage is not used by this projection fixture.');
+    },
     subscribe(next) {
       events.push('subscribe');
       listener = next;

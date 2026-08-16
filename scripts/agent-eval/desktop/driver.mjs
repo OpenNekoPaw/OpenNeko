@@ -576,7 +576,7 @@ export function driverExpression(command) {
         const eventOffset = state.events.length;
         const submissionCount = state.submissionCount;
         state.submissionCount += 1;
-        bridge.send(state.connection, {
+        const receipt = await bridge.submitMessage(state.connection, {
           type: 'sendMessage',
           conversationId: requireText(command.conversationId, 'Conversation identity'),
           message: requireText(command.prompt, 'Agent prompt'),
@@ -587,7 +587,7 @@ export function driverExpression(command) {
           ...(command.chatModel ? { chatModel: command.chatModel } : {}),
           ...(command.llmConfig ? { llmConfig: command.llmConfig } : {}),
         });
-        return { accepted: true, eventOffset, submissionCount };
+        return { accepted: true, receipt, eventOffset, submissionCount };
       }
       case 'queue': {
         const state = requireState();
@@ -607,7 +607,7 @@ export function driverExpression(command) {
         const eventOffset = state.events.length;
         const submissionCount = state.submissionCount;
         state.submissionCount += 1;
-        bridge.send(state.connection, {
+        const receipt = await bridge.submitMessage(state.connection, {
           type: 'sendMessage',
           conversationId,
           message: requireText(command.prompt, 'Agent prompt'),
@@ -628,7 +628,7 @@ export function driverExpression(command) {
             if (!snapshot || !Array.isArray(snapshot.items)) return undefined;
             const added = snapshot.items.filter(
               (item) =>
-                item?.source === 'user' &&
+                item?.source === 'composer' &&
                 typeof item?.id === 'string' &&
                 !priorItemIds.has(item.id),
             );
@@ -638,6 +638,7 @@ export function driverExpression(command) {
         );
         return {
           accepted: true,
+          receipt,
           eventOffset,
           submissionCount,
           queueItemId: queued.item.id,

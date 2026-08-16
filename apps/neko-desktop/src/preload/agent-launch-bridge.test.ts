@@ -321,6 +321,78 @@ describe('Desktop Agent launch preload bridge', () => {
     );
   });
 
+  it('returns the exact Host submission receipt and rejects unavailable submit', async () => {
+    const connection = createSessionConnection();
+    electron.invoke.mockImplementation(
+      async (
+        channel: string,
+        request: { readonly requestId: string; readonly message?: unknown },
+      ) => {
+        if (channel === DESKTOP_AGENT_CHANNELS.bootstrapGet) {
+          return { requestId: request.requestId, status: 'ready', connection };
+        }
+        expect(channel).toBe(DESKTOP_AGENT_CHANNELS.messageSend);
+        expect(request).toMatchObject({
+          connection,
+          message: {
+            type: 'sendMessage',
+            conversationId: 'conversation-1',
+            message: 'authoritative submit',
+          },
+        });
+        return {
+          requestId: request.requestId,
+          status: 'accepted',
+          submission: {
+            submissionId: request.requestId,
+            conversationId: 'conversation-1',
+            turnId: 'turn-1',
+            queueItemId: 'queue-item-1',
+            message: 'authoritative submit',
+            createdAt: 1_700_000_000_000,
+            state: 'queued',
+          },
+        };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+    const bootstrap = await bridge.agent.getBootstrap(
+      'workbench-1',
+      'agent-surface-1',
+      'project-1',
+      'view-1',
+      'conversation-1',
+    );
+    if (bootstrap.status !== 'ready') throw new Error('Expected a ready Agent bootstrap.');
+
+    await expect(
+      bridge.agent.submitMessage(connection, {
+        type: 'sendMessage',
+        conversationId: 'conversation-1',
+        message: 'authoritative submit',
+        sessionMode: 'agent',
+      }),
+    ).resolves.toMatchObject({
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      queueItemId: 'queue-item-1',
+      state: 'queued',
+    });
+
+    electron.invoke.mockImplementationOnce(async () => {
+      throw new Error('submit unavailable');
+    });
+    await expect(
+      bridge.agent.submitMessage(connection, {
+        type: 'sendMessage',
+        conversationId: 'conversation-1',
+        message: 'preserve rejected draft',
+        sessionMode: 'agent',
+      }),
+    ).rejects.toThrow('submit unavailable');
+  });
+
   it('preserves an invalid persisted Conversation bootstrap as typed unavailable', async () => {
     electron.invoke.mockImplementation(
       async (channel: string, request: { readonly requestId: string }) => {

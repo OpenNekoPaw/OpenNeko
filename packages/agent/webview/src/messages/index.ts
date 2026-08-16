@@ -2,11 +2,11 @@
 import type {
   AgentDraftHostRuntimeAdapter,
   AgentHostRuntimeAdapter,
+  AgentNonSubmissionWebviewMessage,
   InvokeAgentCapabilityLifecycleWebviewMessage,
   RequestCanvasAuthoringHandoffWebviewMessage,
   PluginTransferPayload,
   SendMessageWebviewMessage,
-  AgentWebviewToHostMessage,
 } from '@neko/agent-contracts';
 import type { ContentLocator, DocumentLocator } from '@neko/content';
 import type { AgentContextType } from '@neko/agent-contracts';
@@ -25,12 +25,12 @@ function requireConversationId(messageType: string, conversationId: string): str
  * The returned sender is permanently bound to one Root-owned runtime adapter.
  */
 export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
-  const postWebviewMessage = (message: AgentWebviewToHostMessage): void => {
+  const postWebviewMessage = (message: AgentNonSubmissionWebviewMessage): void => {
     adapter.send(message);
   };
 
   const postConversationMessage = <
-    TMessage extends AgentWebviewToHostMessage & {
+    TMessage extends AgentNonSubmissionWebviewMessage & {
       readonly conversationId: string;
     },
   >(
@@ -46,7 +46,9 @@ export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
      * conversationId and model refs are explicit to avoid multi-tab leakage.
      */
     sendMessage: (payload: Omit<SendMessageWebviewMessage, 'type'>) => {
-      postConversationMessage({ type: 'sendMessage', ...payload });
+      const message: SendMessageWebviewMessage = { type: 'sendMessage', ...payload };
+      requireConversationId(message.type, message.conversationId);
+      return adapter.submitMessage(message);
     },
 
     /** Create a new conversation */

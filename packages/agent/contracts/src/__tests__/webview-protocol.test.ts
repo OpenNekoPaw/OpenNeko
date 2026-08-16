@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildInjectContextMessage,
+  buildQueuedMessageReleasedMessage,
   buildQueuedMessageEditRequestedMessage,
   parseAmbientCanvasUpdateNodes,
   parseSendMessageWebviewMessage,
@@ -402,6 +403,51 @@ describe('webview protocol parser', () => {
         },
       }),
     ).toThrow('queuedMessageEditRequested requires non-empty tabId');
+  });
+
+  it('binds an exact released queue item to its post-release snapshot', () => {
+    const item = {
+      id: 'queue-released-1',
+      conversationId: 'conv-1',
+      content: 'continue visibly',
+      createdAt: 1,
+      source: 'composer' as const,
+    };
+    expect(
+      buildQueuedMessageReleasedMessage({
+        item,
+        snapshot: {
+          conversationId: 'conv-1',
+          pendingCount: 0,
+          paused: false,
+          sequence: 2,
+          items: [],
+        },
+      }),
+    ).toEqual({
+      type: 'messageQueued',
+      conversationId: 'conv-1',
+      releasedItem: item,
+      snapshot: {
+        conversationId: 'conv-1',
+        pendingCount: 0,
+        paused: false,
+        sequence: 2,
+        items: [],
+      },
+    });
+    expect(() =>
+      buildQueuedMessageReleasedMessage({
+        item,
+        snapshot: {
+          conversationId: 'conv-1',
+          pendingCount: 1,
+          paused: false,
+          sequence: 1,
+          items: [item],
+        },
+      }),
+    ).toThrow('released item must not remain');
   });
 
   it('rejects message queue commands without required explicit scope', () => {

@@ -8,6 +8,7 @@ import {
   type PiTurnPresentationTiming,
   type PiUserMessagePresentation,
 } from '../../pi';
+import { projectPiToolResult } from '../../pi/tool-result-projector';
 
 export function projectPiConversationEntries(
   entries: readonly PiConversationTranscriptEntry[],
@@ -77,12 +78,7 @@ export function projectPiConversationEntries(
           `Pi transcript contains tool result ${source.toolCallId} without its assistant tool call.`,
         );
       }
-      const text = projectContent(source.content);
-      const result = {
-        success: !source.isError,
-        data: source.details ?? text,
-        ...(source.isError ? { error: text || `Tool ${source.toolName} failed.` } : {}),
-      };
+      const result = projectPiToolResult(source, source.isError);
       target.call.result = result;
       target.block.toolCall = { ...target.call, result };
       continue;
@@ -252,10 +248,4 @@ function projectUserContent(
   return content
     .map((part) => (part.type === 'text' ? part.text : `[Image: ${part.mimeType}]`))
     .join('\n');
-}
-
-function projectContent(
-  content: readonly { readonly type: string; readonly text?: string }[],
-): string {
-  return content.map((part) => (part.type === 'text' ? (part.text ?? '') : '[Image]')).join('\n');
 }

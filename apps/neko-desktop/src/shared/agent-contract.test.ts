@@ -154,6 +154,39 @@ describe('Desktop Agent contract', () => {
     });
   });
 
+  it('parses an exact authoritative submission receipt', () => {
+    expect(
+      parseDesktopAgentMessageResult(
+        {
+          requestId: 'submission-1',
+          status: 'accepted',
+          submission: {
+            submissionId: 'submission-1',
+            conversationId: 'conversation-1',
+            turnId: 'turn-1',
+            queueItemId: 'queue-item-1',
+            message: 'hello',
+            createdAt: 1_700_000_000_000,
+            state: 'active',
+          },
+        },
+        'submission-1',
+      ),
+    ).toEqual({
+      requestId: 'submission-1',
+      status: 'accepted',
+      submission: {
+        submissionId: 'submission-1',
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        queueItemId: 'queue-item-1',
+        message: 'hello',
+        createdAt: 1_700_000_000_000,
+        state: 'active',
+      },
+    });
+  });
+
   it('rejects an event with an unknown Host message type', () => {
     expect(() =>
       parseDesktopAgentEvent({

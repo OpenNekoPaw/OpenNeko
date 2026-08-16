@@ -80,7 +80,7 @@ describe('collectCreatorVisibleArtifacts', () => {
 
     expect(collected).toEqual([
       expect.objectContaining({
-        artifactId: 'brief-image',
+        artifactId: sourceId,
         role: 'source',
         sourceId,
         contentLocator: sourceLocator,
@@ -219,17 +219,77 @@ describe('collectCreatorVisibleArtifacts', () => {
       assistantMarkdown: '# 分镜分析\n\n第 1 页建立环境，第 2 页推进动作。',
     });
 
+    const firstSourceId = contentSourceId(firstPageLocator);
+    const secondSourceId = contentSourceId(secondPageLocator);
     expect(collected).toEqual([
-      expect.objectContaining({ artifactId: 'page-01', role: 'source', kind: 'image' }),
-      expect.objectContaining({ artifactId: 'page-02', role: 'source', kind: 'image' }),
+      expect.objectContaining({ artifactId: firstSourceId, role: 'source', kind: 'image' }),
+      expect.objectContaining({ artifactId: secondSourceId, role: 'source', kind: 'image' }),
       expect.objectContaining({
         role: 'analysis',
         kind: 'markdown',
         title: 'Storyboard Analysis',
         markdown: '# 分镜分析\n\n第 1 页建立环境，第 2 页推进动作。',
-        sourceArtifactIds: ['page-01', 'page-02'],
+        sourceArtifactIds: [firstSourceId, secondSourceId],
       }),
     ]);
+  });
+
+  it('uses locator-derived Canvas source identities for same-named images from different documents', () => {
+    const firstLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/volume-1.epub' },
+      entryPath: 'images/cover.jpg',
+    };
+    const secondLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/volume-2.epub' },
+      entryPath: 'images/cover.jpg',
+    };
+
+    const collected = collectCreatorVisibleArtifacts({
+      toolResults: [
+        {
+          name: 'ReadImage',
+          success: true,
+          data: {
+            analysis: 'storyboard',
+            images: [
+              { contentLocator: firstLocator, width: 1200, height: 1800 },
+              { contentLocator: secondLocator, width: 1200, height: 1800 },
+            ],
+          },
+          attachments: [
+            {
+              type: 'image',
+              assetRef: {
+                assetId: 'read-image-cover.jpg-null-null',
+                uri: 'content:first-cover',
+                contentLocator: firstLocator,
+              },
+            },
+            {
+              type: 'image',
+              assetRef: {
+                assetId: 'read-image-cover.jpg-null-null',
+                uri: 'content:second-cover',
+                contentLocator: secondLocator,
+              },
+            },
+          ],
+        },
+      ],
+      assistantMarkdown: '# Storyboard analysis\n\nThe covers establish distinct visual motifs.',
+    });
+
+    const sources = collected.filter((candidate) => candidate.role === 'source');
+    expect(sources).toHaveLength(2);
+    expect(new Set(sources.map((candidate) => candidate.artifactId)).size).toBe(2);
+    expect(sources.map((candidate) => candidate.artifactId)).not.toContain(
+      'read-image-cover.jpg-null-null',
+    );
+    expect(collected.find((candidate) => candidate.role === 'analysis')?.sourceArtifactIds).toEqual(
+      sources.map((candidate) => candidate.artifactId),
+    );
   });
 
   it('does not promote ordinary ReadImage replies without an explicit analysis declaration', () => {

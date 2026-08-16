@@ -1090,6 +1090,26 @@ export function buildMessageQueueSnapshotMessage(
   };
 }
 
+export function buildQueuedMessageReleasedMessage(input: {
+  readonly item: AgentQueuedMessageItem;
+  readonly snapshot: AgentMessageQueueSnapshot;
+}): MessageQueuedMessage {
+  const snapshot = cloneAgentMessageQueueSnapshot(input.snapshot, 'messageQueued');
+  const conversationId = requireBuilderConversationId(input.item.conversationId, 'messageQueued');
+  if (snapshot.conversationId !== conversationId) {
+    throw new Error('messageQueued released item and snapshot must own the same Conversation.');
+  }
+  if (snapshot.items.some((item) => item.id === input.item.id)) {
+    throw new Error('messageQueued released item must not remain in the post-release snapshot.');
+  }
+  return {
+    type: 'messageQueued',
+    conversationId,
+    releasedItem: cloneAgentQueuedMessageItem(input.item, conversationId, 'messageQueued'),
+    snapshot,
+  };
+}
+
 export function buildQueuedMessageEditRequestedMessage(input: {
   readonly tabId: string;
   readonly conversationId: string;

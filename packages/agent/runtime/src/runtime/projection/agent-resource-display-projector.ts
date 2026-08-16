@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
+  projectMessagesForResourceDisplay,
   projectConversationProjectionPatchForResourceDisplay,
   projectConversationProjectionSnapshotForResourceDisplay,
   messageResourceProjectionKey,
@@ -16,7 +17,7 @@ import {
   type ContentLocator,
   type ContentRepresentationLocator,
 } from '@neko/content';
-import type { AgentResourceDisplayProjectionFact } from '@neko/agent-contracts';
+import type { AgentResourceDisplayProjectionFact, Message } from '@neko/agent-contracts';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { PreviewMediaDescriptor } from '@neko/preview-domain';
 import {
@@ -61,6 +62,7 @@ export interface AgentResourceDisplayRegistrationPort {
 }
 
 export interface AgentResourceDisplayProjector {
+  projectMessages(conversationId: string, messages: readonly Message[]): Promise<Message[]>;
   project(
     frame: ConversationProjectionAttachmentHostFrame,
   ): Promise<ConversationProjectionAttachmentHostFrame>;
@@ -233,6 +235,13 @@ export function createAgentResourceDisplayProjector<
   };
 
   return {
+    projectMessages(conversationId, messages) {
+      const attachmentId = `history:${conversationId}`;
+      return projectMessagesForResourceDisplay(
+        messages,
+        projectionOptions(attachmentId, conversationId),
+      );
+    },
     async project(frame) {
       if (disposed) throw new Error('Desktop Agent resource display projector is disposed.');
       let projected: ConversationProjectionAttachmentHostFrame;

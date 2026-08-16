@@ -478,10 +478,17 @@ export function ChatWorkspace({
       return;
     }
 
-    const accepted = handleSend(pendingSendRequest.input, pendingSendIdentity);
-    if (!accepted) return;
-    consumedPendingSendRequestIdRef.current = pendingSendRequest.id;
-    onPendingSendRequestConsumed?.(pendingSendRequest.id);
+    const receipt = handleSend(pendingSendRequest.input, pendingSendIdentity);
+    const consumePendingSend = (accepted: boolean): void => {
+      if (!accepted) return;
+      consumedPendingSendRequestIdRef.current = pendingSendRequest.id;
+      onPendingSendRequestConsumed?.(pendingSendRequest.id);
+    };
+    if (typeof receipt === 'boolean') {
+      consumePendingSend(receipt);
+      return;
+    }
+    void receipt.then(consumePendingSend);
   }, [
     handleSend,
     isModelConfigurationReady,

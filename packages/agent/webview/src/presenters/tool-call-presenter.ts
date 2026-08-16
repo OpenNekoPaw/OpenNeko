@@ -718,26 +718,8 @@ function extractToolDocumentThumbnails(
     return extractDocumentImageThumbnails(resultData);
   }
   if (toolName === 'ReadImage') {
-    const resultRecord = asRecord(resultData);
-    const hydratedData = asRecord(resultRecord?.data);
-    // Older durable journal entries retain the Tool result envelope inside
-    // result.data. Normalize that display-only shape without changing runtime
-    // or provider contracts so existing user history keeps its visual evidence.
-    const isHydratedResultEnvelope =
-      typeof resultRecord?.success === 'boolean' && Array.isArray(hydratedData?.images);
-    const readImageData = isHydratedResultEnvelope ? hydratedData : resultData;
-    const readImageAttachments =
-      attachments ??
-      (isHydratedResultEnvelope && Array.isArray(resultRecord?.attachments)
-        ? resultRecord.attachments
-        : undefined);
-    const readImagePerceptionCards =
-      perceptionCards ??
-      (isHydratedResultEnvelope && Array.isArray(resultRecord?.perceptionCards)
-        ? resultRecord.perceptionCards
-        : undefined);
     const resultThumbnails = resultData
-      ? extractReadImageThumbnails(readImageData, readImageAttachments, readImagePerceptionCards)
+      ? extractReadImageThumbnails(resultData, attachments, perceptionCards)
       : [];
     return resultThumbnails.length > 0 ? resultThumbnails : extractReadImageThumbnails(args);
   }

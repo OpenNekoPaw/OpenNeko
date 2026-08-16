@@ -1,4 +1,5 @@
 import type { AgentQueuedMessageItem, Message } from '@neko/agent-contracts';
+import { projectMessageContextReferences } from './context-reference-presenter';
 
 const OPTIMISTIC_QUEUED_MESSAGE_ID_PREFIX = 'optimistic:';
 const QUEUE_MIRROR_MATCH_WINDOW_MS = 30_000;
@@ -85,17 +86,14 @@ function projectReleasedComposerMessage(
   item: AgentQueuedMessageItem,
 ): Message[] {
   const releasedMessageId = buildReleasedQueuedMessageId(item.id);
-  if (
-    messages.some(
-      (message) =>
-        message.id === releasedMessageId ||
-        (message.role === 'user' &&
-          message.content === item.content &&
-          message.timestamp === item.createdAt),
-    )
-  ) {
+  if (messages.some((message) => message.id === releasedMessageId)) {
     return [...messages];
   }
+
+  const contextReferences = projectMessageContextReferences({
+    payloads: item.draft?.contextPayloads,
+    fileReferences: item.draft?.fileReferences,
+  });
 
   return [
     ...messages,
@@ -104,6 +102,10 @@ function projectReleasedComposerMessage(
       role: 'user',
       content: item.content,
       timestamp: item.createdAt,
+      ...(item.draft?.attachments && item.draft.attachments.length > 0
+        ? { attachments: [...item.draft.attachments] }
+        : {}),
+      ...(contextReferences ? { contextReferences } : {}),
     },
   ];
 }

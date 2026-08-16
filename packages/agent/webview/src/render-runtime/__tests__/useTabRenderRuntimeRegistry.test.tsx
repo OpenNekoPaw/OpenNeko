@@ -14,6 +14,7 @@ describe('useTabRenderRuntimeRegistry', () => {
       hostKind: 'electron',
       runtimeId: 'desktop-runtime',
       send: vi.fn(),
+      submitMessage: vi.fn(),
       subscribe: vi.fn(() => ({ dispose: vi.fn() })),
       getState: vi.fn(() => undefined),
       setState: vi.fn(),

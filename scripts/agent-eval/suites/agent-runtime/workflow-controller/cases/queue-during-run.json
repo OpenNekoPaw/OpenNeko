@@ -7,7 +7,7 @@
   "evidenceContract": {
     "userBehavior": "Submit follow-up requests while an Agent turn is running and execute them in queue order.",
     "canonicalPath": [
-      "Desktop renderer/preload Agent bridge",
+      "Desktop renderer authoritative submitMessage receipt",
       "sender-bound Desktop Agent controller",
       "message.submit",
       "Desktop Agent input queue",
@@ -25,13 +25,9 @@
     "expectedResult": "The follow-up is queued during the active turn, drains in order, and the session reaches terminal idle.",
     "expectedFailure": "A non-queued follow-up, reordered turn, incomplete queue evidence, or non-idle terminal state fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "draft",
@@ -95,10 +91,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "workflow-facts"
     },
     {

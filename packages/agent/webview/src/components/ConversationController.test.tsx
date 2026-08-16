@@ -344,6 +344,18 @@ vi.mock('./ChatWorkspace', () => ({
         <span data-testid={testId('workspace-messages')}>
           {props.messages?.map((message) => message.content).join('|') ?? ''}
         </span>
+        <span data-testid={testId('workspace-message-attachments')}>
+          {props.messages
+            ?.flatMap((message) => message.attachments?.map((attachment) => attachment.id) ?? [])
+            .join('|') ?? ''}
+        </span>
+        <span data-testid={testId('workspace-message-context')}>
+          {props.messages
+            ?.flatMap(
+              (message) => message.contextReferences?.map((reference) => reference.label) ?? [],
+            )
+            .join('|') ?? ''}
+        </span>
         <button
           type="button"
           data-testid={testId('append-workspace-message')}
@@ -412,6 +424,22 @@ vi.mock('./ChatWorkspace', () => ({
                 role: 'user',
                 content: 'generate image',
                 timestamp: 1,
+              },
+            })
+          }
+        />
+        <button
+          type="button"
+          data-testid={testId('emit-released-queue-receipt')}
+          onClick={() =>
+            props.onUserMessageSent?.({
+              conversationId: tabRenderSnapshot.snapshot.conversationId,
+              message: {
+                id: 'released:queue-race',
+                role: 'user',
+                content: 'queued release wins the race',
+                timestamp: 1,
+                isQueued: true,
               },
             })
           }
@@ -2668,6 +2696,91 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('workspace-context-chips').textContent).toBe('');
     expect(screen.getByTestId('workspace-token-count').textContent).toBe('0');
     expect(screen.getByTestId('workspace-work-items').textContent).toBe('');
+  });
+
+  it('does not recreate an optimistic queue item when release arrives before the submit receipt', () => {
+    vi.clearAllMocks();
+    render(
+      <ConversationController
+        {...createProps({
+          history: [{ id: 'conv-a', title: 'Race chat', messageCount: 0, updatedAt: 1 }],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Race chat' }));
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'messageQueued',
+            conversationId: 'conv-a',
+            releasedItem: {
+              id: 'queue-race',
+              conversationId: 'conv-a',
+              content: 'queued release wins the race',
+              createdAt: 1,
+              source: 'composer',
+              draft: {
+                message: 'queued release wins the race',
+                sessionMode: 'agent',
+                attachments: [
+                  {
+                    id: 'release-image',
+                    name: 'release.png',
+                    type: 'image',
+                    preview: 'neko-resource://preview/release',
+                  },
+                ],
+                contextPayloads: [
+                  {
+                    type: 'canvas-node',
+                    id: 'canvas-node-release',
+                    label: 'Release Canvas node',
+                  },
+                ],
+                fileReferences: [
+                  {
+                    id: 'file:release.png',
+                    label: 'release.png',
+                    mediaType: 'image',
+                    thumbnailUri: 'neko-resource://thumbnail/release',
+                    contentLocator: { kind: 'workspace-file', path: 'release.png' },
+                  },
+                ],
+              },
+            },
+            snapshot: {
+              conversationId: 'conv-a',
+              items: [],
+              pendingCount: 0,
+              paused: false,
+              sequence: 1,
+            },
+          },
+        }),
+      );
+    });
+
+    expect(screen.getByTestId('workspace-messages').textContent).toBe(
+      'queued release wins the race',
+    );
+    expect(screen.getByTestId('workspace-queued-messages').textContent).toBe('');
+    expect(screen.getByTestId('workspace-message-attachments').textContent).toBe('release-image');
+    expect(screen.getByTestId('workspace-message-context').textContent).toBe(
+      'Release Canvas node|release.png',
+    );
+
+    fireEvent.click(screen.getByTestId('emit-released-queue-receipt'));
+
+    expect(screen.getByTestId('workspace-messages').textContent).toBe(
+      'queued release wins the race',
+    );
+    expect(screen.getByTestId('workspace-queued-messages').textContent).toBe('');
+    expect(screen.getByTestId('workspace-message-attachments').textContent).toBe('release-image');
+    expect(screen.getByTestId('workspace-message-context').textContent).toBe(
+      'Release Canvas node|release.png',
+    );
   });
 
   it('keeps Tab activation out of the conversation render coordinator', () => {

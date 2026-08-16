@@ -918,6 +918,7 @@ function installBridge(
         getAssistantBootstrap: launch?.getAssistantBootstrap ?? vi.fn(),
         detach: detachSession,
         send: vi.fn(),
+        submitMessage: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
       },
       bootstrap: { get: vi.fn() },

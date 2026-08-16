@@ -1130,7 +1130,14 @@ export function ConversationController({
   const handleUserMessageSent = useCallback(
     (event: { conversationId: string; message: Message }) => {
       const optimisticQueuedItem = projectOptimisticQueuedMessageItem(event);
+      let releaseAlreadyProjected = false;
       updateConversationRenderState(event.conversationId, (currentMessages, currentStreaming) => {
+        releaseAlreadyProjected = currentMessages.some(
+          (message) => message.id === event.message.id && message.isQueued !== true,
+        );
+        if (releaseAlreadyProjected) {
+          return { messages: currentMessages, streaming: currentStreaming };
+        }
         const nextMessages = currentMessages.some((message) => message.id === event.message.id)
           ? currentMessages
           : optimisticQueuedItem
@@ -1146,7 +1153,7 @@ export function ConversationController({
           messages: nextMessages,
           streaming: {
             ...currentStreaming,
-            streamingMessageId: event.message.isQueued
+            streamingMessageId: optimisticQueuedItem
               ? (currentStreaming.streamingMessageId ?? streamingMessageIdRef.current)
               : null,
             isThinking: true,
@@ -1158,7 +1165,7 @@ export function ConversationController({
         };
       });
 
-      if (!optimisticQueuedItem) {
+      if (!optimisticQueuedItem || releaseAlreadyProjected) {
         setOpenTabs((prev) =>
           applyUserMessageToOpenTabs({
             openTabs: prev,

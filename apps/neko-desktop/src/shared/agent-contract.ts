@@ -3,7 +3,10 @@ import {
   parseAgentWebviewToHostMessage,
   type AgentHostRouteUnavailableDiagnostic,
   type AgentHostToWebviewMessage,
+  type AgentMessageSubmissionReceipt,
+  type AgentNonSubmissionWebviewMessage,
   type AgentWebviewToHostMessage,
+  type SendMessageWebviewMessage,
   type DesktopAgentConnectionIdentity,
   type DesktopAssistantAgentViewIdentity,
   type DesktopAgentViewIdentity,
@@ -96,6 +99,7 @@ export interface DesktopAgentDetachResult {
 export interface DesktopAgentAcceptedMessageResult {
   readonly requestId: string;
   readonly status: 'accepted';
+  readonly submission?: AgentMessageSubmissionReceipt;
 }
 
 export interface DesktopAgentUnavailableMessageResult {
@@ -139,7 +143,14 @@ export interface OpenNekoDesktopAgentBridge {
       viewId: string,
     ): Promise<DesktopAgentBootstrapProjection>;
     detach(connection: DesktopAgentConnectionIdentity): Promise<void>;
-    send(connection: DesktopAgentConnectionIdentity, message: AgentWebviewToHostMessage): void;
+    send(
+      connection: DesktopAgentConnectionIdentity,
+      message: AgentNonSubmissionWebviewMessage,
+    ): void;
+    submitMessage(
+      connection: DesktopAgentConnectionIdentity,
+      message: SendMessageWebviewMessage,
+    ): Promise<AgentMessageSubmissionReceipt>;
     subscribe(
       connection: DesktopAgentConnectionIdentity,
       listener: (message: AgentHostToWebviewMessage) => void,
@@ -388,10 +399,17 @@ export function parseDesktopAgentMessageResult(
   const record = requireRecord(value, 'Desktop Agent message result must be an object.');
   const requestId = requireExpectedRequestId(record, expectedRequestId);
   if (record['status'] === 'accepted') {
-    requireExactKeys(record, ['requestId', 'status'], 'Desktop Agent accepted message result');
+    requireExactKeys(
+      record,
+      ['requestId', 'status', ...('submission' in record ? ['submission'] : [])],
+      'Desktop Agent accepted message result',
+    );
     return {
       requestId,
       status: 'accepted',
+      ...('submission' in record
+        ? { submission: parseAgentMessageSubmissionReceipt(record['submission'], requestId) }
+        : {}),
     };
   }
   if (record['status'] === 'unavailable') {
@@ -448,6 +466,61 @@ export function parseDesktopAgentMessageResult(
     };
   }
   throw invalidPayload('Desktop Agent message result status is invalid.');
+}
+
+function parseAgentMessageSubmissionReceipt(
+  value: unknown,
+  expectedSubmissionId: string,
+): AgentMessageSubmissionReceipt {
+  const record = requireRecord(value, 'Desktop Agent submission receipt must be an object.');
+  requireExactKeys(
+    record,
+    ['submissionId', 'conversationId', 'turnId', 'queueItemId', 'message', 'createdAt', 'state'],
+    'Desktop Agent submission receipt',
+  );
+  const submissionId = requireNonEmptyString(
+    record['submissionId'],
+    'Desktop Agent submission identity is required.',
+  );
+  if (submissionId !== expectedSubmissionId) {
+    throw new DesktopAgentContractError(
+      'desktop-agent-request-mismatch',
+      `Desktop Agent submission response '${submissionId}' does not match request '${expectedSubmissionId}'.`,
+    );
+  }
+  const conversationId = requireNonEmptyString(
+    record['conversationId'],
+    'Desktop Agent submission Conversation identity is required.',
+  );
+  const turnId = requireNonEmptyString(
+    record['turnId'],
+    'Desktop Agent submission turn identity is required.',
+  );
+  const queueItemId = requireNonEmptyString(
+    record['queueItemId'],
+    'Desktop Agent submission queue item identity is required.',
+  );
+  const message = requireNonEmptyString(
+    record['message'],
+    'Desktop Agent submission message is required.',
+  );
+  const createdAt = record['createdAt'];
+  if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) {
+    throw invalidPayload('Desktop Agent submission queue item createdAt is invalid.');
+  }
+  const state = record['state'];
+  if (state !== 'active' && state !== 'queued') {
+    throw invalidPayload('Desktop Agent submission state must be active or queued.');
+  }
+  return {
+    submissionId,
+    conversationId,
+    turnId,
+    queueItemId,
+    message,
+    createdAt,
+    state,
+  };
 }
 
 export function parseDesktopAgentEvent(value: unknown): DesktopAgentEvent {

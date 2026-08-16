@@ -13,6 +13,13 @@ import {
 import type { ContentLocator, DocumentLocator } from '@neko/content';
 import type { AgentMessageRuntimeRequest } from '../turn/message-runtime';
 
+export interface AgentConversationTurnAcceptance {
+  readonly conversationId: string;
+  readonly turnId: string;
+  readonly queueItem: import('@neko/agent-contracts').AgentQueuedMessageItem;
+  readonly state: 'active' | 'queued';
+}
+
 export interface AgentHostConnectionIdentity {
   readonly hostKind: 'electron';
   readonly applicationId: string;
@@ -52,7 +59,7 @@ export interface AgentConversationControllerEffectPort {
   submitTurn(
     request: AgentConversationControllerTurnRequest,
     context: AgentHostRouteEffectContext,
-  ): void | Promise<void>;
+  ): Promise<AgentConversationTurnAcceptance>;
   confirmTool(
     input: {
       readonly conversationId: string;

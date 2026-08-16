@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { projectContextReferencesFromPayloads } from '../context-reference-presenter';
+import {
+  projectContextReferencesFromFileReferences,
+  projectContextReferencesFromPayloads,
+  projectMessageContextReferences,
+} from '../context-reference-presenter';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 
 describe('context-reference-presenter', () => {
@@ -82,6 +86,83 @@ describe('context-reference-presenter', () => {
         summary: 'Workspace image',
         mediaType: 'image',
         contentLocator: { kind: 'workspace-file', path: 'test.png' },
+      },
+    ]);
+  });
+
+  it('projects file references through stable locators and preserves renderable metadata', () => {
+    expect(
+      projectContextReferencesFromFileReferences([
+        {
+          id: 'file:hero.png',
+          label: 'hero.png',
+          mediaType: 'image',
+          source: 'workspace',
+          thumbnailUri: 'neko-resource://thumbnail/hero',
+          contentLocator: {
+            kind: 'workspace-file',
+            path: 'neko/assets/References/hero.png',
+          },
+        },
+      ]),
+    ).toEqual([
+      {
+        type: 'image',
+        id: 'file:hero.png',
+        label: 'hero.png',
+        summary: 'neko/assets/References/hero.png',
+        thumbnailUri: 'neko-resource://thumbnail/hero',
+        mediaType: 'image',
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/assets/References/hero.png',
+        },
+      },
+    ]);
+  });
+
+  it('merges payload and file references once by exact reference identity', () => {
+    expect(
+      projectMessageContextReferences({
+        payloads: [
+          {
+            type: 'canvas-node',
+            id: 'canvas-node-1',
+            label: 'Opening shot',
+            summary: 'Opening shot',
+            data: {},
+          },
+        ],
+        fileReferences: [
+          {
+            id: 'canvas-node-1',
+            label: 'Duplicate opening shot',
+            source: 'canvas',
+            contentLocator: { kind: 'workspace-file', path: 'neko/boards/workspace.nkc' },
+          },
+          {
+            id: 'file:hero.png',
+            label: 'hero.png',
+            mediaType: 'image',
+            contentLocator: { kind: 'workspace-file', path: 'hero.png' },
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        type: 'canvas-node',
+        id: 'canvas-node-1',
+        label: 'Opening shot',
+        summary: 'Opening shot',
+        navigationData: { nodeId: 'canvas-node-1' },
+      },
+      {
+        type: 'image',
+        id: 'file:hero.png',
+        label: 'hero.png',
+        summary: 'hero.png',
+        mediaType: 'image',
+        contentLocator: { kind: 'workspace-file', path: 'hero.png' },
       },
     ]);
   });

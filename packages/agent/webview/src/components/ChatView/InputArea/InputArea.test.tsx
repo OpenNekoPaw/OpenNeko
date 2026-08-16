@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { cloneElement, isValidElement, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -554,7 +554,7 @@ describe('InputArea composer controls', () => {
 
   it('reports IME composition and blocks send while the Tab is composing', () => {
     const onCompositionChange = vi.fn();
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
     const { rerender } = render(
       <Harness>
         <InputArea
@@ -1099,7 +1099,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('sends the primary Agent model without composer LLM parameters', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn<React.ComponentProps<typeof InputArea>['onSend']>(() => true);
     render(
       <Harness>
         <InputArea
@@ -1130,7 +1130,7 @@ describe('InputArea composer controls', () => {
   }, 30_000);
 
   it('does not expose Agent parameters even when the model catalog declares controls', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn<React.ComponentProps<typeof InputArea>['onSend']>(() => true);
     const basicChatModels: ChatModelOption[] = [
       {
         id: 'ollama:llama3.2',
@@ -1180,7 +1180,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('omits Agent LLM config when the selected model has no parameter contract', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn<React.ComponentProps<typeof InputArea>['onSend']>(() => true);
 
     render(
       <Harness selectedModel="missing:model" availableModels={[]}>
@@ -1205,7 +1205,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('builds the primary Agent model from the selected catalog entry', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
     const catalogModels: ChatModelOption[] = [
       {
         id: 'catalog-model-key',
@@ -1473,7 +1473,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('submits direct skill arguments instead of replacing them with the selected menu item', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
     render(
       <Harness
         inputCatalog={[
@@ -1519,7 +1519,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('submits direct slash-command arguments without reopening completion', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
     render(
       <Harness
         inputCatalog={[
@@ -1949,7 +1949,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('moves completed @file mentions into reference tokens without rewriting the message', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
     render(
       <Harness
         mentionItems={[
@@ -1997,7 +1997,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('moves completed Media Library mentions into reference tokens', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
     render(
       <Harness
         mentionItems={[
@@ -2080,7 +2080,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('selects @ mention files with CJK and spaces as reference tokens and clears the trigger', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
     render(
       <Harness
         mentionItems={[
@@ -2125,7 +2125,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('sends selected @file references separately from unchanged message text', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
     render(
       <Harness
         selectedFileReferences={[
@@ -2155,7 +2155,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('queues plain text while a response is running and keeps stop available', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
     const onCancel = vi.fn();
     const onSendQueuedMessageNow = vi.fn();
     const onCancelQueuedMessage = vi.fn();
@@ -2222,7 +2222,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('uses the conversation run contract for queue and stop controls without thinking visuals', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
     const onCancel = vi.fn();
 
     render(
@@ -2468,7 +2468,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('queues rich context while a response is running', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
 
     render(
       <Harness
@@ -2506,7 +2506,7 @@ describe('InputArea composer controls', () => {
   });
 
   it('locks model configuration while background work is active without blocking send', () => {
-    const onSend = vi.fn();
+    const onSend = vi.fn(() => true as const);
 
     render(
       <Harness isBusy={true}>
@@ -2583,6 +2583,23 @@ describe('InputArea composer controls', () => {
       'value',
       '$skill-creator keep this complete request',
     );
+  });
+
+  it('preserves the controlled draft when Host asynchronously rejects the submission', async () => {
+    const onSend = vi.fn(async () => false as const);
+    render(
+      <Harness>
+        <InputAreaStatefulHarness
+          initialInputValue="keep the complete async draft"
+          onSend={onSend}
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledOnce());
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'keep the complete async draft');
   });
 });
 

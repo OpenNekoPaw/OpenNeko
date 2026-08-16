@@ -1000,6 +1000,9 @@ const bridge: OpenNekoDesktopBridge &
       agentEventCursors.release(connection);
     },
     send(connection, message) {
+      if ((message as { readonly type: string }).type === 'sendMessage') {
+        throw new Error('Desktop Agent sendMessage must use the authoritative submitMessage path.');
+      }
       const request = createDesktopAgentMessageRequest(
         nextRequestId('desktop-agent-message'),
         connection,
@@ -1022,6 +1025,27 @@ const bridge: OpenNekoDesktopBridge &
             projectDesktopAgentSendFailure(message, describeError(error)),
           );
         });
+    },
+    async submitMessage(connection, message) {
+      const request = createDesktopAgentMessageRequest(
+        nextRequestId('desktop-agent-message-submit'),
+        connection,
+        message,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AGENT_CHANNELS.messageSend,
+        request,
+      );
+      const result = parseDesktopAgentMessageResult(response, request.requestId);
+      if (result.status === 'unavailable') {
+        throw new Error(result.diagnostic.message);
+      }
+      if (!result.submission) {
+        throw new Error(
+          'Desktop Agent submitMessage returned no authoritative submission receipt.',
+        );
+      }
+      return result.submission;
     },
     subscribe(connection, listener) {
       const subscription = { connection, listener };

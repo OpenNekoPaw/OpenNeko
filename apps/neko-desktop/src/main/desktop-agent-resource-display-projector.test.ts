@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ConversationProjectionAttachmentHostFrame } from '@neko/agent-runtime/runtime/projection/conversation-projection-attachment-server';
-import type { AgentTurnTimelineItem, AgentTurnTimelineToolCallItem } from '@neko/agent-contracts';
+import type {
+  AgentTurnTimelineItem,
+  AgentTurnTimelineToolCallItem,
+  Message,
+} from '@neko/agent-contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createAgentResourceDisplayProjector,
@@ -236,6 +240,198 @@ describe('Desktop Agent resource display projector', () => {
     );
     projector.dispose();
     expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('reauthorizes persisted ReadImage messages through the same Host projector', async () => {
+    const root = await createTemporaryRoot();
+    const locator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
+      entryPath: 'OPS/images/cover.png',
+    };
+    const bytes = new Uint8Array([137, 80, 78, 71]);
+    const registerBytes = vi.fn(async () => ({
+      url: 'openneko://resource/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/content',
+      release: vi.fn(),
+    }));
+    const loadDisplayAsset = vi.fn(async () => ({
+      status: 'ready',
+      bytes,
+      mimeType: 'image/png',
+      sizeBytes: bytes.byteLength,
+    }));
+    const projector = createProjector(root, { registerBytes }, 'connection-history', undefined, {
+      loadDisplayAsset,
+    });
+    const messages: Message[] = [
+      {
+        id: 'assistant-history',
+        role: 'assistant',
+        content: '',
+        timestamp: 1,
+        contentBlocks: [
+          {
+            id: 'tool-block',
+            type: 'tool_call',
+            timestamp: 1,
+            toolCall: {
+              id: 'tool-image',
+              name: 'ReadImage',
+              arguments: {},
+              result: {
+                success: true,
+                data: {
+                  images: [{ label: 'cover.png', mimeType: 'image/png', contentLocator: locator }],
+                },
+                perceptionCards: [
+                  {
+                    assetId: 'cover',
+                    modality: 'image',
+                    createdAt: 1,
+                    layerStatus: { layer0: 'complete', layer1: 'skipped', layer2: 'complete' },
+                    structural: {
+                      format: 'png',
+                      mimeType: 'image/png',
+                      byteSize: bytes.byteLength,
+                    },
+                    perceptual: {
+                      thumbnailRef: {
+                        assetId: 'cover',
+                        uri: 'content:cover',
+                        mimeType: 'image/png',
+                        contentLocator: locator,
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ];
+
+    const projected = await projector.projectMessages('conversation-history', messages);
+    const toolCall = projected[0]?.contentBlocks?.[0]?.toolCall;
+    const image = (toolCall?.result?.data as { images?: unknown[] } | undefined)?.images?.[0];
+    const thumbnailRef = toolCall?.result?.perceptionCards?.[0]?.perceptual?.thumbnailRef;
+
+    expect(image).toMatchObject({
+      contentLocator: locator,
+      previewDescriptor: {
+        contentLocator: locator,
+        url: 'openneko://resource/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/content',
+      },
+    });
+    expect(thumbnailRef).toMatchObject({
+      contentLocator: locator,
+      previewDescriptor: {
+        contentLocator: locator,
+        url: 'openneko://resource/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/content',
+      },
+    });
+    expect(registerBytes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: 'connection-history',
+        sessionId: 'agent-display:conversation-history:history:conversation-history',
+      }),
+      expect.objectContaining({ bytes, mediaType: 'image/png' }),
+    );
+    expect(JSON.stringify(projected)).not.toContain('data:image');
+  });
+
+  it('keeps restored locators and exposes a diagnostic when Host preview loading fails', async () => {
+    const root = await createTemporaryRoot();
+    const locator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
+      entryPath: 'OPS/images/cover.png',
+    };
+    const projector = createProjector(root, {}, 'connection-history-failure', undefined, {
+      loadDisplayAsset: vi.fn(async () => ({ status: 'failed' })),
+    });
+    const messages: Message[] = [
+      {
+        id: 'assistant-history-failure',
+        role: 'assistant',
+        content: '',
+        timestamp: 1,
+        contentBlocks: [
+          {
+            id: 'tool-block',
+            type: 'tool_call',
+            timestamp: 1,
+            toolCall: {
+              id: 'tool-image',
+              name: 'ReadImage',
+              arguments: {},
+              result: {
+                success: true,
+                data: {
+                  images: [
+                    {
+                      label: 'cover.png',
+                      mimeType: 'image/png',
+                      contentLocator: locator,
+                      path: '/private/tmp/cover.png',
+                      src: 'data:image/png;base64,AA==',
+                      renderUri: 'file:///private/tmp/cover.png',
+                    },
+                  ],
+                },
+                perceptionCards: [
+                  {
+                    assetId: 'cover',
+                    modality: 'image',
+                    createdAt: 1,
+                    layerStatus: { layer0: 'complete', layer1: 'skipped', layer2: 'complete' },
+                    structural: { format: 'png', mimeType: 'image/png', byteSize: 1 },
+                    perceptual: {
+                      thumbnailRef: {
+                        assetId: 'cover',
+                        uri: 'content:cover',
+                        previewUri: 'data:image/png;base64,AA==',
+                        mimeType: 'image/png',
+                        contentLocator: locator,
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ];
+
+    const projected = await projector.projectMessages('conversation-history-failure', messages);
+    const toolCall = projected[0]?.contentBlocks?.[0]?.toolCall;
+    const image = (toolCall?.result?.data as { images?: unknown[] } | undefined)?.images?.[0];
+    const thumbnailRef = toolCall?.result?.perceptionCards?.[0]?.perceptual?.thumbnailRef;
+
+    expect(image).toMatchObject({
+      contentLocator: locator,
+      path: 'OPS/images/cover.png',
+      resourceProjectionDiagnostics: [
+        expect.objectContaining({
+          code: 'agent-preview-content-unavailable',
+          sourceKind: 'authorization-denied',
+        }),
+      ],
+    });
+    expect(image).not.toHaveProperty('previewDescriptor');
+    expect(thumbnailRef).toMatchObject({
+      contentLocator: locator,
+      uri: 'OPS/images/cover.png',
+      resourceProjectionDiagnostics: [
+        expect.objectContaining({
+          code: 'agent-preview-content-unavailable',
+          sourceKind: 'authorization-denied',
+        }),
+      ],
+    });
+    expect(thumbnailRef).not.toHaveProperty('previewDescriptor');
+    expect(JSON.stringify(projected)).not.toMatch(/(?:data|file|content):/u);
   });
 
   it('keeps representation identity and isolates an unreadable sibling', async () => {

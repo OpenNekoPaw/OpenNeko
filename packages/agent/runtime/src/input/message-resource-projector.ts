@@ -39,6 +39,7 @@ const MEDIA_FILE_EXTENSIONS = [
 
 const SINGLE_RESOURCE_KEYS = new Set([
   'path',
+  'src',
   'url',
   'uri',
   'previewUri',

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createRef, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentContextPayload } from '@neko/agent-contracts';
@@ -268,9 +268,18 @@ vi.mock('../hooks/useSlashCommands', () => ({
 describe('ChatWorkspace pending send', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    hostMocks.sendMessage.mockImplementation(async (message) => ({
+      submissionId: 'submission-workspace',
+      conversationId: message.conversationId,
+      turnId: 'turn-workspace',
+      queueItemId: 'queue-workspace',
+      message: message.message,
+      createdAt: 1_700_000_000_000,
+      state: 'active' as const,
+    }));
   });
 
-  it('replays a pending entry send through the newly bound Tab runtime', () => {
+  it('replays a pending entry send through the newly bound Tab runtime', async () => {
     const onPendingSendRequestConsumed = vi.fn();
     const runtime = createTabRenderRuntime({ tabId: 'tab-new', conversationId: 'conv-new' });
 
@@ -311,7 +320,7 @@ describe('ChatWorkspace pending send', () => {
         sessionMode: 'agent',
       }),
     );
-    expect(onPendingSendRequestConsumed).toHaveBeenCalledWith(1);
+    await waitFor(() => expect(onPendingSendRequestConsumed).toHaveBeenCalledWith(1));
     expect(screen.getByTestId('visible-messages').textContent).toBe(
       'user:hello from tabless state',
     );
@@ -421,7 +430,16 @@ describe('ChatWorkspace pending send', () => {
     );
   });
 
-  it('keeps running-turn queued sends out of transcript messages', () => {
+  it('keeps running-turn queued sends out of transcript messages', async () => {
+    hostMocks.sendMessage.mockImplementationOnce(async (message) => ({
+      submissionId: 'submission-queued',
+      conversationId: message.conversationId,
+      turnId: 'turn-queued',
+      queueItemId: 'queue-queued',
+      message: message.message,
+      createdAt: 1_700_000_000_001,
+      state: 'queued' as const,
+    }));
     const setMessages = vi.fn();
     const onUserMessageSent = vi.fn();
     const { getByTestId } = render(
@@ -444,17 +462,28 @@ describe('ChatWorkspace pending send', () => {
       }),
     );
     expect(setMessages).not.toHaveBeenCalled();
-    expect(onUserMessageSent).toHaveBeenCalledWith({
-      conversationId: 'conv-1',
-      message: expect.objectContaining({
-        role: 'user',
-        content: 'hello from tabless state',
-        isQueued: true,
+    await waitFor(() =>
+      expect(onUserMessageSent).toHaveBeenCalledWith({
+        conversationId: 'conv-1',
+        message: expect.objectContaining({
+          role: 'user',
+          content: 'hello from tabless state',
+          isQueued: true,
+        }),
       }),
-    });
+    );
   });
 
-  it('uses the authoritative Agent phase when a restored running Turn has no streaming flag', () => {
+  it('uses the authoritative Agent phase when a restored running Turn has no streaming flag', async () => {
+    hostMocks.sendMessage.mockImplementationOnce(async (message) => ({
+      submissionId: 'submission-restored-queued',
+      conversationId: message.conversationId,
+      turnId: 'turn-restored-queued',
+      queueItemId: 'queue-restored-queued',
+      message: message.message,
+      createdAt: 1_700_000_000_002,
+      state: 'queued' as const,
+    }));
     const setMessages = vi.fn();
     const onUserMessageSent = vi.fn();
     const { getByTestId } = render(
@@ -473,10 +502,12 @@ describe('ChatWorkspace pending send', () => {
     fireEvent.click(getByTestId('send'));
 
     expect(setMessages).not.toHaveBeenCalled();
-    expect(onUserMessageSent).toHaveBeenCalledWith({
-      conversationId: 'conv-1',
-      message: expect.objectContaining({ isQueued: true }),
-    });
+    await waitFor(() =>
+      expect(onUserMessageSent).toHaveBeenCalledWith({
+        conversationId: 'conv-1',
+        message: expect.objectContaining({ isQueued: true }),
+      }),
+    );
   });
 
   it('prefills entry text after a new conversation is activated', () => {

@@ -50,20 +50,59 @@ Agent Webview 同时渲染两份运行提示：MessageList 尾部的 thinking �
 
 ## Decisions
 
-### 0. Composer 只在 canonical input 被受理后消费草稿
+### 0. Composer 只在 authoritative submission 被受理后消费草稿
 
-`useChatActions.handleSend()` 返回显式 boolean receipt。只有 exact Conversation 的普通消息已经提交给
-Host、运行中消息已经进入同一 Host queue、tabless 首发已经交给 pending-send owner，或 command/Skill
-已经通过 exact input catalog 投递时才返回 `true`。conversation switching、重复点击、空输入、缺失
-conversation creator、command/Skill 解析失败均返回 `false`；`InputArea` 据此保留文本、附件、引用与
-context，既有 diagnostic 继续 fail-visible。
+普通 conversation submit 使用 submission-scoped 异步 receipt。Renderer 为 exact draft 发起一次提交，
+Desktop transport 等待 controller 完成 configuration/context/entry/capability preflight，并仅在
+`AgentWorkspaceRuntime.startTurn()` 已创建 exact turn 与 queue item 后返回 accepted receipt。receipt 携带
+transport request、Conversation、turn 与 queue item identity；它不表示 provider 或 turn 已成功完成。
 
-新 conversation 的 pending-send effect 使用同一 receipt，只有 `true` 才标记 request consumed。该
-receipt 是一次同步 Renderer-to-Host intent acceptance，不伪造 provider/turn 成功；后续 IPC/runtime
-拒绝仍按 conversation diagnostic 和 queue projection 处理。不增加 renderer-local retry、第二消息队列
-或失败后的替代发送路径。
+`useChatActions.handleSend()` 只有收到 owning submission 的 accepted receipt 后才提交 optimistic user
+message、清空文本、附件、引用与 context，并记录 dedup。bridge 断开、IPC 拒绝、preflight、附件处理或
+enqueue 失败都拒绝同一个 Promise，保留原 draft 并投影 owning diagnostic。conversation switching、重复
+点击、空输入、缺失 creator、command/Skill 解析失败同样不消费 draft。pending first submit 只有在 exact
+Tab/Conversation 的 accepted receipt 后标记 consumed；不增加 renderer-local retry、第二消息队列或
+queue snapshot 充当模糊 acknowledgement。
 
-### 0a. Pending Tool approval 是 conversation projection，操作面板属于 composer rail
+command/Skill invocation 继续使用其 exact input catalog contract；本次不把普通 conversation submit 的
+receipt 伪装成所有单向 Host message 的通用成功语义。
+
+### 0a. Queued composer item 释放时原子投影为 transcript user message
+
+`AgentWorkspaceRuntime` 在 queue item 从 pending 移入 active turn 的 owning boundary 发出 exact release
+observation。controller 将 `releasedItem` 与释放后的 authoritative queue snapshot 作为同一 Host event
+投影；Webview 以 queue item identity 将排队镜像替换为普通 user transcript message，并从该 item 的
+canonical draft 恢复附件、Canvas/context payload 与 file reference。file reference 继续携带 Host 授权的
+`ContentLocator`、media type 与 thumbnail projection，不从 raw path 或 active Workspace 推断资源。首个
+立即启动的 turn 和后续 drain 的 turn 使用同一 release 路径，conversation 切换后仍只更新 exact
+conversation 的 render coordinator。
+
+不以 pending count 差值、空 snapshot、文本相等、active/current Conversation 或最终 Pi transcript 回写
+推断释放或补齐资源。release event 丢失属于可见错误，不能由 renderer fallback 或第二事实来源掩盖。
+
+### 0b. ToolResult 资源事实跨 live、history 与 terminal delivery 保持单一 canonical shape
+
+Pi Tool adapter 的 `details` 保存 OpenNeko `ToolResult` 的 durable structured clone；给模型看的 `content`
+只负责 provider-visible text/image，不是产品展示或 Canvas 交付的事实来源。live Timeline 与持久 transcript
+history 必须通过同一个 ToolResult projector 解包 `success/data/error/attachments/perceptionCards/
+backfillDiagnostics/artifacts`，不得把整个 envelope 塞入 `result.data` 后交给 Webview 猜测，也不得只保留
+attachments 而丢失 perception cards。
+
+所有进入 Webview 的 ToolResult，无论来自 live projection attachment、`activeConversation` 还是
+`conversationSnapshot`，都通过同一个 Host resource display projector 使用 stable `ContentLocator` 或
+`ContentRepresentationLocator` 重新授权为短生命周期 preview descriptor。历史消息的授权 lease 绑定 exact
+connection 与 Conversation identity；授权失败在对应资源上附加 diagnostic，不回退 raw path、`content:` URI、
+文件名推断或静默文件占位。
+
+`ReadImage` 的 perceptual asset identity 从 canonical locator/representation identity 派生，可附加可读 label，
+但同名文件不得决定 identity。terminal creator-visible collector 对 source artifact 使用同一 locator-derived
+source identity，不信任 Tool-local display assetId 作为 Canvas relation identity；这样既保证新结果唯一，也让
+仍保留旧 display assetId 的 durable ToolResult 在再次进入 canonical collection 时不会制造同批冲突。
+
+不在 turn completion 后扫描 Pi history 自动重放旧交付，因为这会形成恢复/重导入平行路径并可能修改用户已编辑
+Board。交付仍只发生在 owning terminal turn；失败必须通过 conversation diagnostic 和 Host diagnostic 明确暴露。
+
+### 0c. Pending Tool approval 是 conversation projection，操作面板属于 composer rail
 
 `@neko/agent-webview` 从当前 conversation 的 canonical message/content-block projection 收集全部
 `pendingConfirmation` Tool Call，并保持 transcript 顺序。composer 上方渲染一个有界、可滚动的审批
