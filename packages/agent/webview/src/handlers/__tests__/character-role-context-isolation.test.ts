@@ -455,7 +455,6 @@ function createContextHarness(options: ContextHarnessOptions = {}): ContextHarne
     setAgentState: noopDispatch(),
     conversationAgentStateRef: ref(new Map()),
     forceAgentStateUpdate: () => undefined,
-    setActivationProgressByConversation: noopDispatch(),
     setGlobalError: createSetter(
       () => globalError,
       (next) => {

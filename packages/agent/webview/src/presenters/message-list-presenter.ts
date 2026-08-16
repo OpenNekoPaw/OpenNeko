@@ -1,7 +1,6 @@
 import type { AgentState, ContentBlock, Message, ToolCall } from '@neko/agent-contracts';
 import { deriveToolCallsFromContentBlocks, mergeToolCalls } from './content-block-presenter';
 import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
-import type { ActivationProgressTimeline } from './activation-progress-presenter';
 
 export type MessageListItemKind = 'message' | 'execution_activity';
 
@@ -31,7 +30,6 @@ export interface MessageListProjectionInput {
   agentState?: AgentState | null;
   streamingMessageId: string | null;
   plugins?: PluginsAvailable;
-  activationProgress?: readonly ActivationProgressTimeline[];
 }
 
 export interface MessageListProjection {

@@ -20,7 +20,6 @@ import type {
   AgentSessionDiagnosticMessage,
 } from '@neko/agent-contracts';
 import type { AgentMarkdownSessionRegistry } from '../markdown/agent-markdown-session-registry';
-import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
 import type { AgentWorkItemStore } from '../components/AgentWorkItem';
 import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
 import type { ProjectFileInfo } from '../hooks/useConfigState';
@@ -111,13 +110,10 @@ export interface AgentStateContext {
   forceAgentStateUpdate: () => void;
 }
 
-/** Pi Skill catalog plus independent capability activation progress. */
+/** Pi Skill catalog projection. */
 export interface SkillContext {
   setAgentInputCatalogByConversation?: React.Dispatch<
     React.SetStateAction<Map<string, AgentInputCatalogMessage>>
-  >;
-  setActivationProgressByConversation: React.Dispatch<
-    React.SetStateAction<Map<string, readonly ActivationProgressTimeline[]>>
   >;
 }
 

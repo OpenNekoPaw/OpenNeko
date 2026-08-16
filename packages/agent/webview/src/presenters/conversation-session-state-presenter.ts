@@ -6,15 +6,10 @@ import type {
   ConversationStreamingState,
   Message,
 } from '@neko/agent-contracts';
-import type { ActivationProgressTimeline } from './activation-progress-presenter';
 
 export type ConversationAmbientNode = AmbientCanvasNode;
 
 export type ConversationSessionStreamingState = ConversationStreamingState;
-
-export interface ConversationSessionSkillProjection {
-  readonly activationProgress: readonly ActivationProgressTimeline[];
-}
 
 export interface ConversationSessionContextProjection {
   readonly ambientNodes: readonly ConversationAmbientNode[];
@@ -26,7 +21,6 @@ export interface ConversationSessionState {
   readonly conversationId: string;
   readonly messages: readonly Message[];
   readonly streaming: ConversationSessionStreamingState;
-  readonly skill: ConversationSessionSkillProjection;
   readonly context: ConversationSessionContextProjection;
   readonly agentState: AgentState | null;
   readonly workItems: readonly AgentWorkItem[];
@@ -38,10 +32,6 @@ export interface ProjectConversationSessionStateInput {
   readonly conversationId: string;
   readonly messagesByConversation: ReadonlyMap<string, readonly Message[]>;
   readonly streamingByConversation: ReadonlyMap<string, ConversationSessionStreamingState>;
-  readonly activationProgressByConversation?: ReadonlyMap<
-    string,
-    readonly ActivationProgressTimeline[]
-  >;
   readonly ambientNodesByConversation?: ReadonlyMap<string, readonly ConversationAmbientNode[]>;
   readonly tokenCountByConversation?: ReadonlyMap<string, number>;
   readonly compressingByConversation?: ReadonlyMap<string, boolean>;
@@ -57,9 +47,6 @@ export function projectConversationSessionState(
     conversationId,
     messages: [...(input.messagesByConversation.get(conversationId) ?? [])],
     streaming: normalizeSessionStreamingState(input.streamingByConversation.get(conversationId)),
-    skill: {
-      activationProgress: [...(input.activationProgressByConversation?.get(conversationId) ?? [])],
-    },
     context: {
       ambientNodes: [...(input.ambientNodesByConversation?.get(conversationId) ?? [])],
       tokenCount: input.tokenCountByConversation?.get(conversationId) ?? 0,

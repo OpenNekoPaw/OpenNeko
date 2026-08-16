@@ -48,7 +48,6 @@ describe('command result presenter', () => {
             conversationCount: 2,
             messageCount: 5,
             tokenCount: 123,
-            activeSkill: 'review',
             executionMode: 'ask',
           },
         },

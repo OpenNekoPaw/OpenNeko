@@ -5,7 +5,6 @@
  */
 
 export * from './agent-ai-source';
-export * from './agent-capability-activation';
 export * from './agent-context';
 export * from './agent-home';
 export * from './agent-image-transport';
@@ -35,7 +34,6 @@ export * from './multimodal-context';
 export * from './perception-tool';
 export * from './recovery-guidance';
 export * from './resource-display-projection';
-export * from './tool-group';
 
 export type {
   ChildRunKind,
@@ -378,7 +376,6 @@ export type {
   AgentVerbosityPreset,
   ActiveConversationMessage,
   ConversationSnapshotMessage,
-  AgentCapabilityActivationProgressMessage,
   AgentSessionDiagnosticCode,
   AgentSessionDiagnosticMessage,
   AgentPhaseMessage,
@@ -473,7 +470,6 @@ export {
   parseAmbientCanvasUpdateNodes,
   buildAgentPhaseMessage,
   buildAgentStateSnapshotMessage,
-  buildAgentCapabilityActivationProgressMessage,
   buildAgentCapabilityLifecycleResultMessage,
   buildAgentInputCatalogMessage,
   buildAgentSessionDiagnosticMessage,
@@ -584,15 +580,12 @@ export * from './agent-runtime-scope';
 export * from './agent-trace';
 export * from './decision-rationale';
 export * from './domain-routing';
-export * from './loading-tier';
 export * from './perception-card';
 export * from './portable-skill';
 export * from './prompt-fragment';
 export * from './provider-card';
 export * from './reference-contributor';
 export * from './skill';
-export * from './tool-category';
-export * from './tool-injection';
 export * from './tool-names';
 export * from './tool-planning';
 export * from './tool';

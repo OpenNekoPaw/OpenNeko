@@ -564,30 +564,6 @@ const ZH_TOOL_DEFINITION_LOCALIZATIONS: Readonly<Record<string, ToolDefinitionLo
       context: '匹配行前后附带的上下文行数。',
     },
   },
-  GetContext: {
-    description:
-      '获取当前 Agent 上下文：已激活/已注册 Skill、注册的工具组目录，以及当前实际可调用 Tool 列表。注册目录不等于当前可调用或受支持。',
-    parameters: {
-      includeTools: '是否包含按运行时分类分组的当前可调用 Tool 名称。',
-    },
-  },
-  ActivateSkill: {
-    description:
-      '在普通 Agent 理解并确认当前任务需要领域 Skill 后激活。不要只靠关键词匹配；调用前先简要说明原因并显式选择 lifecycle slot。主任务或明确替换使用 domainSkill，补充指导使用 referenceSkill。',
-    parameters: {
-      skillName: '要激活的技能名称。',
-      reason: '基于当前对话和已收集上下文的简短原因，说明为什么现在需要该技能。',
-      slot: '必填 lifecycle slot；主任务或明确替换使用 domainSkill，补充指导使用 referenceSkill。',
-    },
-  },
-  DeactivateSkill: {
-    description: '停用当前激活技能，移除其专用指导。',
-    parameters: {
-      recordId: '可选的生命周期记录 ID。',
-      slot: '可选的生命周期槽位。',
-      skillName: '可选的技能名称；仅在不会歧义时使用。',
-    },
-  },
   GenerateImage: {
     description:
       '提交异步图片 Generation Job，只产出 generated 草稿；等待稳定结果并观察实际图片和 Quality 证据后再接受或修复，不代表项目或交付完成。',

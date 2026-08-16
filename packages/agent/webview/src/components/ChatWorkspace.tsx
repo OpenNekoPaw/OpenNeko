@@ -59,7 +59,6 @@ import {
 import type { ComposerMenuState, EntryPromptMenu, MentionItem } from './ChatView/InputArea/types';
 import type { PluginsAvailable } from './ChatView/SendToMenu';
 import type { AgentWorkItem } from './AgentWorkItem';
-import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
 import { projectTrailingMention } from './ChatView/InputArea/mention-input';
 import { useTranslation } from '../i18n/I18nContext';
 import {
@@ -123,7 +122,6 @@ export interface ChatWorkspaceProps {
   contextTokenCount: number;
   isCompressing: boolean;
   mediaModelCallCount: number;
-  activationProgress?: readonly ActivationProgressTimeline[];
   // Context chips
   ambientNodes: AmbientCanvasNode[];
   // Agent state
@@ -184,7 +182,6 @@ export function ChatWorkspace({
   contextTokenCount,
   isCompressing,
   mediaModelCallCount,
-  activationProgress = [],
   ambientNodes,
   agentState,
   setAmbientNodes,
@@ -996,7 +993,6 @@ export function ChatWorkspace({
         characterDialogueSession={characterDialogueSession}
         embodyCharacterSession={embodyCharacterSession}
         foregroundConversationAvailability={foregroundConversationAvailability}
-        activationProgress={!isCharacterRoleSession ? activationProgress : []}
         viewport={viewport}
         onViewportChange={setViewport}
         workItems={workItems}

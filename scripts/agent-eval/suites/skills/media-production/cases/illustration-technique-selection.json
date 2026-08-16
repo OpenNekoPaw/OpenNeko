@@ -9,33 +9,29 @@
     "canonicalPath": [
       "station-illustration.svg evidence",
       "builtin media-production Skill",
-      "GetContext",
-      "current Tool comparison",
+      "immutable Pi Tool snapshot",
+      "source Tool execution",
       "capability-aware technique decision"
     ],
     "observables": [
       {
         "ref": "selection-facts",
         "kind": "runtime-fact",
-        "description": "Source read, current context query, technique comparison, Tool absence, effective model, and usage/context estimate.",
+        "description": "Skill receipt, source read, technique comparison, forbidden Tool absence, effective model, and usage/context estimate.",
         "required": true
       }
     ],
     "expectedResult": "The Agent reads the layered SVG, checks current capabilities, compares generative video, layered 2D, frame animation, and compositing against the source and target, then selects only a declared path or reports the preferred path unavailable.",
-    "expectedFailure": "Calling video or image generation, inventing support, or omitting current context fails."
+    "expectedFailure": "Calling video or image generation, inventing support, or omitting source evidence fails."
   },
-  "fixtureRefs": [
-    "creative-planning-workspace"
-  ],
+  "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "ask-markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-production 读取 @station-illustration.svg\n\n这是一个可分层的静态车站插画。先检查当前会话实际可用的工具和 Skill 上下文，再比较生成式视频、分层 2D、逐帧动画与合成。目标是保留 Mara、红伞、无头灯列车和钟表的造型一致性，只让雨、伞和列车做克制运动。输出来源证据、各技术所需输入、当前 supported/degraded/unavailable 判断、选择或 blocked 结论及下一项可执行动作。不要假设未注册能力可用，不要生成图片或视频，不要预建节点图或固定工作流。"
+      "prompt": "$media-production 读取 @station-illustration.svg\n\n这是一个可分层的静态车站插画。以当前 turn 实际提供的工具和 Skill 目录为准，再比较生成式视频、分层 2D、逐帧动画与合成。目标是保留 Mara、红伞、无头灯列车和钟表的造型一致性，只让雨、伞和列车做克制运动。输出来源证据、各技术所需输入、当前 supported/degraded/unavailable 判断、选择或 blocked 结论及下一项可执行动作。不要假设未注册能力可用，不要生成图片或视频，不要预建节点图或固定工作流。"
     },
     {
       "id": "idle",
@@ -77,13 +73,6 @@
       "evidenceRef": "selection-facts"
     },
     {
-      "id": "context",
-      "kind": "tool-call",
-      "name": "GetContext",
-      "status": "success",
-      "evidenceRef": "selection-facts"
-    },
-    {
       "id": "output",
       "kind": "structured-output",
       "format": "markdown",
@@ -120,10 +109,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "selection-facts"
     }
   ],

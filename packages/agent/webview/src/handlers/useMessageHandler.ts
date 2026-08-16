@@ -27,7 +27,6 @@ import type { AgentWorkItemStore } from '../components/AgentWorkItem';
 import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
 import type { ProjectFileInfo } from '../hooks/useConfigState';
 import type { MentionItem, PluginSlashCommandDef } from '../components/ChatView/InputArea/types';
-import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
 import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
 import type { AgentHostToWebviewMessage } from './messages';
 import {
@@ -122,9 +121,6 @@ export interface UseMessageHandlerProps {
   forceAgentStateUpdate: () => void;
 
   setAgentInputCatalogByConversation?: MessageHandlerContext['setAgentInputCatalogByConversation'];
-  setActivationProgressByConversation: React.Dispatch<
-    React.SetStateAction<Map<string, readonly ActivationProgressTimeline[]>>
-  >;
 
   // State setters - SSO/Onboarding
   updateSettings: (partial: Partial<SettingsState>) => void;
@@ -204,7 +200,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
     conversationAgentStateRef,
     forceAgentStateUpdate,
     setAgentInputCatalogByConversation,
-    setActivationProgressByConversation,
     updateSettings,
     setShowOnboarding,
     setGlobalError,
@@ -262,7 +257,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
       conversationAgentStateRef,
       forceAgentStateUpdate,
       setAgentInputCatalogByConversation,
-      setActivationProgressByConversation,
       updateSettings,
       setShowOnboarding,
       setGlobalError,
@@ -315,7 +309,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
       conversationAgentStateRef,
       forceAgentStateUpdate,
       setAgentInputCatalogByConversation,
-      setActivationProgressByConversation,
       updateSettings,
       setShowOnboarding,
       setGlobalError,

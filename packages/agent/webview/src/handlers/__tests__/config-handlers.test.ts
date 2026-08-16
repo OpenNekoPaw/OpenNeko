@@ -275,7 +275,6 @@ function createContext(): MessageHandlerContext {
     setAgentState: vi.fn(),
     conversationAgentStateRef: { current: new Map() },
     forceAgentStateUpdate: vi.fn(),
-    setActivationProgressByConversation: vi.fn(),
     setGlobalError: vi.fn(),
     reportConversationDiagnostic: vi.fn(),
     conversationTokenCountRef: { current: new Map() },

@@ -11,7 +11,6 @@ import type { AgentState, Message } from '@neko/agent-contracts';
 import type { TabViewportSnapshot } from '../../render-runtime/tab-render-runtime';
 import { MessageItem } from './MessageItem';
 import { AgentExecutionActivity } from './AgentExecutionActivity';
-import type { ActivationProgressTimeline } from '../../presenters/activation-progress-presenter';
 import type { MessageIdentityMap } from './message-identity';
 import { useMessageActions } from './MessageActionsContext';
 import {
@@ -26,7 +25,6 @@ interface MessageListProps {
   streamingMessageId: string | null;
   activeConversationId: string | null;
   identities: MessageIdentityMap;
-  activationProgress?: readonly ActivationProgressTimeline[];
   viewport?: TabViewportSnapshot;
   onViewportChange?: (viewport: TabViewportSnapshot) => void;
 }
@@ -38,7 +36,6 @@ export function MessageList({
   streamingMessageId,
   activeConversationId,
   identities,
-  activationProgress = [],
   viewport = { followMode: 'follow-tail' },
   onViewportChange,
 }: MessageListProps) {
@@ -63,9 +60,8 @@ export function MessageList({
         agentState,
         streamingMessageId,
         plugins: pluginsAvailable,
-        activationProgress,
       }),
-    [messages, agentState, streamingMessageId, pluginsAvailable, activationProgress],
+    [messages, agentState, streamingMessageId, pluginsAvailable],
   );
 
   const flattenedItems = projection.items;

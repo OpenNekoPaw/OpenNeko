@@ -4,7 +4,6 @@
  * This module provides:
  * - BuiltinTool: Base class for implementing tools
  * - ToolRegistry: Registry for managing and executing tools
- * - ToolCategoryRegistry: Registry for tool categorization and layer management
  * - createTool: Factory function for creating simple tools
  *
  * Domain capability adapters live beside the Agent registry and delegate through
@@ -40,9 +39,6 @@ export {
 } from './content/read-image-tool';
 export { createCanvasProjectCapabilityProvider } from './canvas/canvas-project-capability-provider';
 export { createCutProjectCapabilityProvider } from './cut/cut-project-capability-provider';
-
-// Category registry
-export { ToolCategoryRegistry, createToolCategoryRegistry } from './tool-category-registry';
 
 export {
   // Core file/system tools
@@ -88,7 +84,6 @@ export {
   PerceptionImageUnderstandTool,
   createPerceptionTools,
   createImageUnderstandingCapabilityProvider,
-  perceptionToolGroup,
   type PerceptionAudioTranscribeToolConfig,
   type PerceptionVideoDetectShotsToolConfig,
   type PerceptionImageSimilarityToolConfig,
@@ -108,24 +103,6 @@ export type {
   ToolCallRequest,
   ToolExecutionConfig,
   IToolRegistry,
-  // Category types
-  ToolInjectionLayer,
-  ToolCategoryInfo,
-  CategorizedTool,
-  IToolCategoryRegistry,
-  // Injection types
-  ToolInjectionConfig,
-  ToolInjectionState,
-  LayerTokenUsage,
-  IToolInjectionManager,
-  InjectionEvent,
-  InjectionEventListener,
 } from '@neko/agent-contracts';
 
 export type { PerceptionToolMetadata, PerceptionToolResult } from '@neko/agent-contracts';
-
-// Tier resolver (tiered lazy loading)
-export { resolveToolGroupTier } from './tier-resolver';
-
-// Re-export injection constants
-export { DEFAULT_INJECTION_CONFIG, CORE_TOOLS } from '@neko/agent-contracts';

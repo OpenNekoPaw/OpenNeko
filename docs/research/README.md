@@ -9,6 +9,7 @@
 | 日期       | 文档                                                                                                                           | 范围                                                                          |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | 2026-08-08 | [`markdown-authoring-and-agent-rendering-options-2026-08-08.md`](markdown-authoring-and-agent-rendering-options-2026-08-08.md) | GFM、Milkdown、CodeMirror、Streamdown 及 Agent Webview Markdown renderer 对比 |
+| 2026-08-17 | [`agent-skill-prompt-migration-audit-2026-08-17.md`](agent-skill-prompt-migration-audit-2026-08-17.md)                         | Pi 迁移 owner 边界、当前 Prompt/Skill 清单、长素材与文档保存缺口及开源参考    |
 
 ## 写作要求
 

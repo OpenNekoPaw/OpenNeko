@@ -17,7 +17,6 @@ import type {
   Message,
   SettingsState,
 } from '@neko/agent-contracts';
-import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
 import {
   createAgentMarkdownSessionKey,
   getAgentMarkdownSessionRegistry,
@@ -267,8 +266,6 @@ vi.mock('./ChatWorkspace', () => ({
       diagnostic?: string;
     };
     queuedMessages?: readonly AgentQueuedMessageItem[];
-    activationProgress?: readonly ActivationProgressTimeline[];
-    activeSkill?: { skillName: string } | null;
     contextTokenCount?: number;
     workItems?: readonly AgentWorkItem[];
     handleMessage?: (event: MessageEvent) => void;
@@ -394,14 +391,8 @@ vi.mock('./ChatWorkspace', () => ({
             ? `${props.agentState.phase}:${props.agentState.startedAt}:${props.agentState.toolName ?? 'none'}`
             : 'none'}
         </span>
-        <span data-testid={testId('workspace-activation-progress')}>
-          {props.activationProgress?.map((timeline) => timeline.name).join(',') ?? 'none'}
-        </span>
         <span data-testid={testId('workspace-queued-messages')}>
           {props.queuedMessages?.map((item) => item.content).join('|') ?? ''}
-        </span>
-        <span data-testid={testId('workspace-active-skill')}>
-          {props.activeSkill?.skillName ?? 'none'}
         </span>
         <span data-testid={testId('workspace-context-chips')}>
           {tabRenderSnapshot.snapshot.state.contextReferences.map((chip) => chip.label).join('|')}
@@ -2624,55 +2615,6 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
   });
 
-  it('does not project activation progress from a different conversation into the active tab', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Start chat' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'activeConversation',
-            conversation: { id: 'conv-a', title: 'Skill chat', messages: [] },
-          },
-        }),
-      );
-    });
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'agentCapabilityActivationProgress',
-            conversationId: 'conv-a',
-            events: [createActivationEvent('conv-a', 'image')],
-          },
-        }),
-      );
-    });
-    expect(screen.getByTestId('workspace-activation-progress').textContent).toBe('image');
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'tabState',
-            tabState: {
-              openTabs: [
-                { id: 'tab-a', title: 'Skill chat', conversationId: 'conv-a' },
-                { id: 'tab-b', title: 'Clean chat', conversationId: 'conv-b' },
-              ],
-              activeTabId: 'tab-b',
-            },
-          },
-        }),
-      );
-    });
-
-    expect(screen.getByTestId('workspace-activation-progress').textContent).toBe('');
-  });
-
   it('projects session UI state from the visible conversation instead of stale conversation events', () => {
     vi.clearAllMocks();
     render(
@@ -2707,24 +2649,6 @@ describe('ConversationController entry state', () => {
       window.dispatchEvent(
         new MessageEvent('message', {
           data: {
-            type: 'skillInjection',
-            conversationId: 'conv-a',
-            skillName: 'storyboard',
-          },
-        }),
-      );
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'agentCapabilityActivationProgress',
-            conversationId: 'conv-a',
-            events: [createActivationEvent('conv-a', 'storyboard')],
-          },
-        }),
-      );
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
             type: 'contextTokenCount',
             conversationId: 'conv-a',
             tokenCount: 42,
@@ -2735,8 +2659,6 @@ describe('ConversationController entry state', () => {
     fireEvent.click(screen.getByTestId('add-context-chip'));
 
     expect(screen.getByTestId('workspace-queued-messages').textContent).toBe('queued for A');
-    expect(screen.getByTestId('workspace-active-skill').textContent).toBe('none');
-    expect(screen.getByTestId('workspace-activation-progress').textContent).toBe('storyboard');
     expect(screen.getByTestId('workspace-context-chips').textContent).toBe('A context');
     expect(screen.getByTestId('workspace-token-count').textContent).toBe('42');
     expect(screen.getByTestId('workspace-work-items').textContent).toBe('A render task');
@@ -2745,8 +2667,6 @@ describe('ConversationController entry state', () => {
 
     expect(screen.getByTestId('workspace-tab-conversation').textContent).toBe('conv-b');
     expect(screen.getByTestId('workspace-queued-messages').textContent).toBe('');
-    expect(screen.getByTestId('workspace-active-skill').textContent).toBe('none');
-    expect(screen.getByTestId('workspace-activation-progress').textContent).toBe('');
     expect(screen.getByTestId('workspace-context-chips').textContent).toBe('');
     expect(screen.getByTestId('workspace-token-count').textContent).toBe('0');
     expect(screen.getByTestId('workspace-work-items').textContent).toBe('');
@@ -2767,24 +2687,6 @@ describe('ConversationController entry state', () => {
       window.dispatchEvent(
         new MessageEvent('message', {
           data: {
-            type: 'skillInjection',
-            conversationId: 'conv-a',
-            skillName: 'late-storyboard',
-          },
-        }),
-      );
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'agentCapabilityActivationProgress',
-            conversationId: 'conv-a',
-            events: [createActivationEvent('conv-a', 'late-storyboard')],
-          },
-        }),
-      );
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
             type: 'contextTokenCount',
             conversationId: 'conv-a',
             tokenCount: 99,
@@ -2795,8 +2697,6 @@ describe('ConversationController entry state', () => {
 
     expect(screen.getByTestId('workspace-tab-conversation').textContent).toBe('conv-b');
     expect(screen.getByTestId('workspace-queued-messages').textContent).toBe('');
-    expect(screen.getByTestId('workspace-active-skill').textContent).toBe('none');
-    expect(screen.getByTestId('workspace-activation-progress').textContent).toBe('');
     expect(screen.getByTestId('workspace-context-chips').textContent).toBe('');
     expect(screen.getByTestId('workspace-token-count').textContent).toBe('0');
     expect(screen.getByTestId('workspace-work-items').textContent).toBe('');
@@ -3846,22 +3746,6 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('workspace-messages-tab-a').textContent).toBe('background A');
   });
 });
-
-function createActivationEvent(conversationId: string, name: string) {
-  return {
-    id: `${conversationId}-event-1`,
-    activationId: `${conversationId}-activation-1`,
-    conversationId,
-    target: 'skill',
-    action: 'activate',
-    name,
-    step: 'active',
-    status: 'succeeded',
-    source: 'agent-tool',
-    requestedBy: 'agent',
-    at: 1,
-  };
-}
 
 interface CreatePropsOptions {
   readonly history?: readonly ConversationSummary[];

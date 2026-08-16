@@ -9,7 +9,8 @@
     "canonicalPath": [
       "screenplay.fountain evidence",
       "builtin media-production Skill",
-      "GetContext",
+      "immutable Pi Tool snapshot",
+      "Read source Tool call",
       "terminal GenerateImage Tool call",
       "durable generated artifact",
       "Agent review"
@@ -18,25 +19,21 @@
       {
         "ref": "capability-facts",
         "kind": "runtime-fact",
-        "description": "Current context query, terminal GenerateImage Tool result, durable artifact, and effective model.",
+        "description": "Skill receipt, source Read, terminal GenerateImage Tool result, durable artifact, and effective model.",
         "required": true
       }
     ],
     "expectedResult": "The Agent uses current Tool and Skill context to select image generation for the approved Mara P0 reference, waits for the actual artifact, and reviews it before describing the next action.",
-    "expectedFailure": "Skipping current context, substituting video or text, or missing the terminal Tool result/artifact fails."
+    "expectedFailure": "Skipping source evidence, substituting video or text, or missing the terminal Tool result/artifact fails."
   },
-  "fixtureRefs": [
-    "creative-planning-workspace"
-  ],
+  "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "ask-markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-production 读取 @screenplay.fountain\n\n先检查当前会话实际可用的工具和 Skill 上下文，再从真实能力中选择一个可执行的低风险 P0 动作推进动画企划。已批准的范围仅为：根据剧本中 Mara、23:47、红伞和无头灯列车的证据，生成一张 Mara 角色视觉参考图到 generated；不得导入资产库、修改项目或改用视频。若当前图片生成不可用则明确 blocked。执行后等待真实结果，观察返回素材，再说明是否可接受以及下一步。不要预建节点图或固定工作流。"
+      "prompt": "$media-production 读取 @screenplay.fountain\n\n以当前 turn 实际提供的工具和 Skill 目录为准，再从真实能力中选择一个可执行的低风险 P0 动作推进动画企划。已批准的范围仅为：根据剧本中 Mara、23:47、红伞和无头灯列车的证据，生成一张 Mara 角色视觉参考图到 generated；不得导入资产库、修改项目或改用视频。若当前图片生成不可用则明确 blocked。执行后等待真实结果，观察返回素材，再说明是否可接受以及下一步。不要预建节点图或固定工作流。"
     },
     {
       "id": "idle",
@@ -71,9 +68,9 @@
       "evidenceRef": "capability-facts"
     },
     {
-      "id": "context",
+      "id": "read",
       "kind": "tool-call",
-      "name": "GetContext",
+      "name": "Read",
       "status": "success",
       "evidenceRef": "capability-facts"
     },
@@ -102,7 +99,7 @@
         },
         {
           "kind": "tool",
-          "name": "GetContext",
+          "name": "Read",
           "status": "success"
         },
         {
@@ -123,10 +120,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "capability-facts"
     }
   ],

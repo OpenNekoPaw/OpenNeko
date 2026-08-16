@@ -1,14 +1,4 @@
-/**
- * Core Tools Module
- *
- * Meta tools (always layer):
- * - GetContext: Get current context information (skills, tool categories)
- * - ActivateSkill: Activate a skill for domain-specific instructions
- * - DeactivateSkill: Clear the active skill
- *
- * Core file/system tools:
- * - Read, Write, Bash, ListDirectory, Grep
- */
+/** Core file and system tools. */
 
 // Core file/system tools
 export { ReadTool } from './read-tool';

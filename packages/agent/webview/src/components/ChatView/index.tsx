@@ -18,7 +18,6 @@ import type { AgentWorkItem, SubAgentWorkItem } from '../AgentWorkItem';
 import { selectConversationAttentionWorkItems } from '../../presenters/work-item-presenter';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 import type { AmbientCanvasNodeProjection } from '../../presenters/plugin-transfer-presenter';
-import type { ActivationProgressTimeline } from '../../presenters/activation-progress-presenter';
 import type { ForegroundConversationAvailability } from '../../render-lifecycle/conversation-render-contract';
 import type { TabViewportSnapshot } from '../../render-runtime/tab-render-runtime';
 import { CharacterDialogueHeader } from './CharacterDialogueHeader';
@@ -46,7 +45,6 @@ interface ChatViewProps {
   isConversationSwitching?: boolean;
   composerDisabled?: boolean;
   foregroundConversationAvailability?: ForegroundConversationAvailability;
-  activationProgress?: readonly ActivationProgressTimeline[];
   viewport?: TabViewportSnapshot;
   onViewportChange?: (viewport: TabViewportSnapshot) => void;
   // Unified work items
@@ -113,7 +111,6 @@ export function ChatView({
   isConversationSwitching = false,
   composerDisabled = false,
   foregroundConversationAvailability = { kind: 'ready' },
-  activationProgress = [],
   viewport,
   onViewportChange,
   workItems,
@@ -225,7 +222,6 @@ export function ChatView({
                 streamingMessageId={streamingMessageId}
                 activeConversationId={activeConversationId}
                 identities={messageIdentities}
-                activationProgress={activationProgress}
                 viewport={viewport}
                 onViewportChange={onViewportChange}
               />

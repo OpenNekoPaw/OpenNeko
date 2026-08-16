@@ -63,7 +63,6 @@ export {
   PerceptionDescribeInputTool,
   PerceptionVideoDetectShotsTool,
   createPerceptionTools,
-  perceptionToolGroup,
   type PerceptionAudioTranscribeToolConfig,
   type PerceptionImageSimilarityToolConfig,
   type PerceptionImageClassifyToolConfig,
@@ -77,8 +76,6 @@ export {
   createTool,
   ToolRegistry,
   createToolRegistry,
-  ToolCategoryRegistry,
-  createToolCategoryRegistry,
   // Core file/system tools
   ReadTool,
   WriteTool,
@@ -90,9 +87,6 @@ export {
   MemoryWriteTool,
   createCoreTools,
   type CoreToolsOptions,
-  // Injection constants
-  DEFAULT_INJECTION_CONFIG,
-  CORE_TOOLS,
   createContentReadCapabilityProvider,
   createImageUnderstandingCapabilityProvider,
 } from './tools';

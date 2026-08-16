@@ -652,7 +652,7 @@ function m3Facts() {
         kind: 'tool_call',
         sequence: 0,
         toolCallId: 'call-1',
-        toolName: 'GetContext',
+        toolName: 'Read',
       },
       { itemId: 'text-1-0', kind: 'assistant_text', sequence: 1 },
     ],
@@ -792,7 +792,7 @@ const M3_ASSERTIONS = [
     id: 'timeline-projection',
     kind: 'timeline-projection',
     terminalStatus: 'completed',
-    toolName: 'GetContext',
+    toolName: 'Read',
     evidenceRef: 'projection-facts',
   },
   {

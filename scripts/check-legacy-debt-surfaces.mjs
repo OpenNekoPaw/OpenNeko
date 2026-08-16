@@ -246,7 +246,6 @@ function buildQualityGate(nonTestMatches) {
     };
   }
 
-
   return {
     scope: 'all-production',
     excludedAgentOccurrences: 0,
@@ -654,7 +653,6 @@ function isRuntimeResilienceSurface(lowerFile, lowerLine) {
       'types.ts',
       'plan-parser',
       'stage-planner',
-      'tier-resolver',
       'agent-session',
       'media-routing-manager',
       'media-file-downloader',

@@ -52,6 +52,12 @@ describe('agent-runtime public surface convergence', () => {
     expect(runtime).not.toHaveProperty('runSwitchConversationRuntime');
     expect(runtime).not.toHaveProperty('runDeleteConversationRuntime');
     expect(runtime).not.toHaveProperty('buildConversationHistoryClearedMessage');
+    expect(runtime).not.toHaveProperty('ToolCategoryRegistry');
+    expect(runtime).not.toHaveProperty('createToolCategoryRegistry');
+    expect(runtime).not.toHaveProperty('resolveToolGroupTier');
+    expect(runtime).not.toHaveProperty('perceptionToolGroup');
+    expect(runtime).not.toHaveProperty('DEFAULT_INJECTION_CONFIG');
+    expect(runtime).not.toHaveProperty('CORE_TOOLS');
   });
 
   it('keeps the canonical Agent runtime root exports', () => {
@@ -93,6 +99,9 @@ describe('agent-runtime public surface convergence', () => {
       'src/perception/index.ts',
       'src/profile/index.ts',
       'src/provider/index.ts',
+      'src/tools/tool-category-registry.ts',
+      'src/tools/tier-resolver.ts',
+      'src/tools/perception/perception-tool-group.ts',
     ]) {
       expect(existsSync(join(PACKAGE_ROOT, deleted)), `${deleted} should not exist`).toBe(false);
     }

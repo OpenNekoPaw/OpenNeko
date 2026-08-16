@@ -5,7 +5,6 @@ import type {
   AgentWorkItem,
   Message,
 } from '@neko/agent-contracts';
-import type { ActivationProgressTimeline } from '../activation-progress-presenter';
 import {
   projectActiveConversation,
   projectConversationError,
@@ -156,8 +155,6 @@ describe('conversation UI presenter', () => {
     const messageB: Message = { id: 'message-b', role: 'assistant', content: 'B', timestamp: 2 };
     const queuedA = queuedMessage('queue-a', 'conv-a');
     const queuedB = queuedMessage('queue-b', 'conv-b');
-    const activationA = activationProgress('conv-a', 'activation-a');
-    const activationB = activationProgress('conv-b', 'activation-b');
     const agentStateB: AgentState = { phase: 'acting', toolName: 'ReadFile', startedAt: 20 };
     const workItemB = workItem('work-b', 'conv-b');
 
@@ -181,10 +178,6 @@ describe('conversation UI presenter', () => {
             queuedMessages: [queuedB],
           },
         ],
-      ]),
-      activationProgressByConversation: new Map([
-        ['conv-a', [activationA]],
-        ['conv-b', [activationB]],
       ]),
       ambientNodesByConversation: new Map([
         ['conv-a', [{ nodeId: 'node-a', type: 'markdown', summary: 'A note' }]],
@@ -218,9 +211,6 @@ describe('conversation UI presenter', () => {
         queuedMessages: [queuedB],
         queuePaused: false,
       },
-      skill: {
-        activationProgress: [activationB],
-      },
       context: {
         ambientNodes: [{ nodeId: 'node-b', type: 'media', summary: 'B image' }],
         tokenCount: 200,
@@ -239,23 +229,6 @@ function queuedMessage(id: string, conversationId: string): AgentQueuedMessageIt
     content: id,
     createdAt: 1,
     source: 'composer',
-  };
-}
-
-function activationProgress(
-  conversationId: string,
-  activationId: string,
-): ActivationProgressTimeline {
-  return {
-    conversationId,
-    activationId,
-    target: 'skill',
-    action: 'activate',
-    name: activationId,
-    source: 'agent-tool',
-    requestedBy: 'agent',
-    status: 'succeeded',
-    events: [],
   };
 }
 

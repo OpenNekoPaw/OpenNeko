@@ -320,44 +320,6 @@ describe('message-list-presenter', () => {
     expect(projection.items).toEqual([]);
   });
 
-  it('does not project activation progress as a standalone conversation-level list item', () => {
-    const projection = projectMessageList({
-      messages: [],
-      streamingMessageId: null,
-      activationProgress: [
-        {
-          conversationId: 'conv-1',
-          activationId: 'activation-1',
-          target: 'skill',
-          action: 'activate',
-          name: 'quality-review',
-          source: 'agent-tool',
-          requestedBy: 'agent',
-          reason: 'Agent selected review',
-          status: 'succeeded',
-          events: [
-            {
-              id: 'event-1',
-              activationId: 'activation-1',
-              conversationId: 'conv-1',
-              target: 'skill',
-              action: 'activate',
-              name: 'quality-review',
-              step: 'requested',
-              status: 'succeeded',
-              source: 'agent-tool',
-              requestedBy: 'agent',
-              reason: 'Agent selected review',
-              at: 1,
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(projection.items).toEqual([]);
-  });
-
   it('projects one durable message row for repeated assistant tool blocks', () => {
     const items = projectMessageListItems(
       [

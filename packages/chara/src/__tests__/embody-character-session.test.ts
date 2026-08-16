@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CreativeEntityRef } from '@neko/entity-domain';
 import type { NpcProfileSource } from '@neko/chara/contracts';
 import {
-  EMBODY_CHARACTER_BLOCKED_TOOL_NAMES,
   EmbodyCharacterSession,
   buildEmbodyCharacterTurnSystemPrompt,
   isToolAllowedForEmbodyCharacter,
@@ -126,9 +125,7 @@ describe('EmbodyCharacterSession', () => {
     await expect(session.sendUserMessage('after')).rejects.toThrow('disposed');
   });
 
-  it('blocks skill activation and creative authoring tools by policy', () => {
-    expect(EMBODY_CHARACTER_BLOCKED_TOOL_NAMES).toContain('ActivateSkill');
-    expect(isToolAllowedForEmbodyCharacter('ActivateSkill')).toBe(false);
+  it('blocks creative authoring tools by policy', () => {
     expect(isToolAllowedForEmbodyCharacter('GenerateImage')).toBe(false);
     expect(isToolAllowedForEmbodyCharacter('CreateTask')).toBe(false);
     expect(isToolAllowedForEmbodyCharacter('ReadCharacterEvidence')).toBe(true);
@@ -156,7 +153,7 @@ describe('EmbodyCharacterSession', () => {
     expect(prompt).toContain('Identity/current-role questions');
     expect(prompt).toContain('Character knowledge questions');
     expect(prompt).toContain('Roleplay consistency checks');
-    expect(prompt).toContain('Do not activate skills');
+    expect(prompt).toContain('Do not read additional Skill content');
     expect(prompt).toContain('Creative execution or project-state requests');
     expect(prompt).toContain('Confirmed facts:\n- none');
     expect(prompt).toContain('Relationships available: 0.');

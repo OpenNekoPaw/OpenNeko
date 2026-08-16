@@ -11,7 +11,6 @@
  */
 
 import type { Tool, ToolCategory } from './tool';
-import type { LoadingTier } from './loading-tier';
 import type { PromptFragment } from './prompt-fragment';
 import type { ProviderExpressionProfileDescriptor } from './provider-card';
 import type { ArtifactProfileDescriptor } from './composite-artifact';
@@ -100,9 +99,6 @@ export interface CapabilityDeclaration extends AgentCapabilityRuntimeRequirement
 
   /** Human-readable description */
   description: string;
-
-  /** Loading tier for tiered lazy loading */
-  loadingTier?: LoadingTier;
 }
 
 // =============================================================================

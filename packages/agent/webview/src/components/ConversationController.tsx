@@ -80,7 +80,6 @@ import {
 } from '../hooks';
 import { useMessageHandler, type PendingForegroundConversationActivation } from '../handlers';
 import type { ConversationSettingsSnapshot } from '../handlers/types';
-import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
 import { shouldActivateForegroundConversation } from '../handlers/foreground-activation';
 import { ConversationTabRuntimeView } from './ConversationTabRuntimeView';
 import { useRetainedTabComponents } from '../render-runtime/useRetainedTabComponents';
@@ -621,9 +620,6 @@ export function ConversationController({
   const [agentInputCatalogByConversation, setAgentInputCatalogByConversation] = useState<
     Map<string, AgentInputCatalogMessage>
   >(() => new Map());
-  const [activationProgressByConversation, setActivationProgressByConversation] = useState<
-    Map<string, readonly ActivationProgressTimeline[]>
-  >(() => new Map());
 
   // ---- Agent state ----
   const [, setAgentState] = useState<AgentState | null>(null);
@@ -878,12 +874,6 @@ export function ConversationController({
       conversationCompressingRef.current.delete(conversationId);
       conversationMediaCallCountRef.current.delete(conversationId);
       setWorkItemsByConversation((prev) => removeConversationWorkItems(prev, conversationId));
-      setActivationProgressByConversation((prev) => {
-        if (!prev.has(conversationId)) return prev;
-        const next = new Map(prev);
-        next.delete(conversationId);
-        return next;
-      });
       setAmbientNodesByConversation((prev) => {
         if (!prev.has(conversationId)) return prev;
         const next = new Map(prev);
@@ -995,7 +985,6 @@ export function ConversationController({
           conversationId,
           messagesByConversation,
           streamingByConversation,
-          activationProgressByConversation,
           ambientNodesByConversation,
           tokenCountByConversation: conversationTokenCountRef.current,
           compressingByConversation: conversationCompressingRef.current,
@@ -1006,7 +995,6 @@ export function ConversationController({
     }
     return states;
   }, [
-    activationProgressByConversation,
     ambientNodesByConversation,
     conversationRenderCoordinator,
     openTabs,
@@ -1424,7 +1412,6 @@ export function ConversationController({
     conversationAgentStateRef,
     forceAgentStateUpdate,
     setAgentInputCatalogByConversation,
-    setActivationProgressByConversation,
     updateSettings,
     setShowOnboarding,
     setGlobalError,
@@ -2472,7 +2459,6 @@ export function ConversationController({
             contextTokenCount={sessionState.context.tokenCount}
             isCompressing={sessionState.context.isCompressing}
             mediaModelCallCount={conversationMediaCallCountRef.current.get(tab.conversationId) ?? 0}
-            activationProgress={sessionState.skill.activationProgress}
             ambientNodes={[...sessionState.context.ambientNodes]}
             agentState={sessionState.agentState}
             setAmbientNodes={(value) => setAmbientNodesForConversation(tab.conversationId, value)}

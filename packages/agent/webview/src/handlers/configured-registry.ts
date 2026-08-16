@@ -1,4 +1,3 @@
-import { activationProgressHandlers } from './activation-progress-handlers';
 import { characterDialogueSessionHandlers } from './character-dialogue-session-handlers';
 import { commandHandlers } from './command-handlers';
 import { configHandlers } from './config-handlers';
@@ -23,6 +22,5 @@ export function createConfiguredRegistry(): MessageHandlerRegistry {
   registry.registerAll(subAgentHandlers);
   registry.registerAll(characterDialogueSessionHandlers);
   registry.registerAll(embodyCharacterSessionHandlers);
-  registry.registerAll(activationProgressHandlers);
   return registry;
 }

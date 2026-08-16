@@ -122,7 +122,7 @@ export const settings = {
     'Priority: Project (neko/AGENTS.md) > User (~/.neko/AGENTS.md)',
   'settings.prompts.skillsHintTitle': 'Use Skills to Customize AI Behavior',
   'settings.prompts.skillsHintDescription':
-    'Skills are a more powerful way to customize AI behavior. Create portable Skill packages in .agents/skills/ (project) or ~/.agents/skills/ (personal), then invoke them explicitly or let the Agent activate one after it explains why the Skill is needed.',
+    'Skills are a more powerful way to customize AI behavior. Create portable Skill packages in .agents/skills/ (project) or ~/.agents/skills/ (personal), then select one explicitly or let the Agent read a matching Skill from the current catalog when its methods are needed.',
 
   'settings.mcp.title': 'Configured MCP Servers',
   'settings.mcp.description':

@@ -19,7 +19,6 @@ export {
   type PerceptionTranscribeClient,
   type PerceptionDetectShotsClient,
 } from './perception-tools';
-export { perceptionToolGroup } from './perception-tool-group';
 export {
   PERCEPTION_IMAGE_UNDERSTAND_METADATA,
   PerceptionImageUnderstandTool,

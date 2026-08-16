@@ -120,7 +120,7 @@ export const settings = {
     '优先级：项目级 (neko/AGENTS.md) > 用户级 (~/.neko/AGENTS.md)',
   'settings.prompts.skillsHintTitle': '使用 Skills 自定义 AI 行为',
   'settings.prompts.skillsHintDescription':
-    'Skills 是更强大的方式来定制 AI 行为。在 .agents/skills/（项目）或 ~/.agents/skills/（个人）下创建 portable Skill package 后，可以显式调用，或由 Agent 先说明原因后再激活需要的 Skill。',
+    'Skills 是更强大的方式来定制 AI 行为。在 .agents/skills/（项目）或 ~/.agents/skills/（个人）下创建 portable Skill package 后，可以显式选择，或由 Agent 在确实需要其方法时从当前目录读取匹配的 Skill。',
 
   'settings.mcp.title': '已配置的 MCP 服务器',
   'settings.mcp.description': 'Model Context Protocol 服务器为 AI 提供外部工具扩展能力。',

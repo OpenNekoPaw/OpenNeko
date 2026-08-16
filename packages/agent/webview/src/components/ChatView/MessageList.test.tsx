@@ -795,43 +795,6 @@ describe('MessageList auto-scroll lifecycle', () => {
       expect(screen.getByRole('button', { name: 'Copy failed' })).toBeTruthy();
     });
   });
-
-  it('does not render activation progress as a standalone row above messages', () => {
-    virtualItems = [];
-
-    renderWithI18n(
-      <MessageActionsProvider>
-        <MessageList
-          messages={[]}
-          isThinking={false}
-          streamingMessageId={null}
-          activeConversationId="conv-1"
-          activationProgress={[
-            {
-              conversationId: 'conv-1',
-              activationId: 'activation-1',
-              target: 'skill',
-              action: 'activate',
-              name: 'quality-review',
-              source: 'agent-tool',
-              requestedBy: 'agent',
-              reason: 'Agent selected review',
-              status: 'succeeded',
-              events: [
-                activationEvent('event-1', 'requested', 'succeeded', 1),
-                activationEvent('event-2', 'validated', 'succeeded', 2),
-                activationEvent('event-3', 'active', 'succeeded', 3),
-              ],
-            },
-          ]}
-        />
-      </MessageActionsProvider>,
-    );
-
-    expect(screen.queryByRole('button', { name: /Skill succeeded/ })).toBeNull();
-    expect(screen.queryByText('quality-review')).toBeNull();
-    expect(screen.queryByText('requested')).toBeNull();
-  });
 });
 
 function flushLatestAnimationFrame(): void {
@@ -1166,35 +1129,5 @@ function toolBlock(id: string, name: string, filePath: string, duration: number)
         duration,
       },
     },
-  };
-}
-
-function activationEvent(
-  id: string,
-  step:
-    | 'requested'
-    | 'validated'
-    | 'loaded'
-    | 'prepared'
-    | 'record-created'
-    | 'projected'
-    | 'active'
-    | 'failed',
-  status: 'pending' | 'running' | 'succeeded' | 'failed',
-  at: number,
-) {
-  return {
-    id,
-    activationId: 'activation-1',
-    conversationId: 'conv-1',
-    target: 'skill' as const,
-    action: 'activate' as const,
-    name: 'quality-review',
-    step,
-    status,
-    source: 'agent-tool' as const,
-    requestedBy: 'agent' as const,
-    reason: 'Agent selected review',
-    at,
   };
 }

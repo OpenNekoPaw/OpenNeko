@@ -6,7 +6,6 @@ import type {
   AgentCapabilityManifest,
   AgentCapabilityProvider,
   AgentCapabilityTrustLevel,
-  IToolCategoryRegistry,
   IToolRegistry,
   PromptFragment,
   Tool,
@@ -28,9 +27,6 @@ interface RegisteredProvider {
 
 export interface CapabilityRegistryRuntimeDeps {
   toolRegistry: IToolRegistry;
-  toolCategoryRegistry?: Pick<IToolCategoryRegistry, 'categorizeTool'> & {
-    clearTools?(): void;
-  };
 }
 
 export type CapabilityDiscoveryDeps = CapabilityRegistryRuntimeDeps;
@@ -184,8 +180,6 @@ export class CapabilityRegistryRuntime {
     });
 
     this.logger.info(`Provider "${id}" registered: ${registeredTools.length} tools`);
-
-    this.syncToolCategories();
   }
 
   unregisterProvider(id: string): boolean {
@@ -206,7 +200,6 @@ export class CapabilityRegistryRuntime {
     entry.provider.dispose?.();
     this.providers.delete(id);
 
-    this.syncToolCategories();
     this.logger.info(`Provider "${id}" unregistered`);
     return true;
   }
@@ -214,21 +207,6 @@ export class CapabilityRegistryRuntime {
   dispose(): void {
     for (const id of this.getRegisteredProviderIds()) {
       this.unregisterProvider(id);
-    }
-  }
-
-  syncToolCategories(
-    targetRegistry: CapabilityRegistryRuntimeDeps['toolCategoryRegistry'] = this.deps
-      .toolCategoryRegistry,
-  ): void {
-    if (!targetRegistry) {
-      return;
-    }
-
-    targetRegistry.clearTools?.();
-
-    for (const tool of this.deps.toolRegistry.list()) {
-      targetRegistry.categorizeTool(tool.name, tool.category);
     }
   }
 

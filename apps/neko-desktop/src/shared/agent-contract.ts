@@ -796,7 +796,6 @@ const AGENT_HOST_TO_WEBVIEW_MESSAGE_TYPES = [
   'tabState',
   'slashCommandResult',
   'agentCapabilityLifecycleResult',
-  'agentCapabilityActivationProgress',
   'characterDialogueSessionStarted',
   'characterDialogueSessionExited',
   'embodyCharacterSessionStarted',

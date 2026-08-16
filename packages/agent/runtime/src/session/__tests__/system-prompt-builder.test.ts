@@ -121,16 +121,16 @@ describe('SystemPromptBuilder', () => {
       expect(prompt).toBe(BUILTIN_DEFAULT_PROMPT_ZH);
     });
 
-    it('should require agent-driven skill activation to follow content understanding', () => {
-      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain('Do not activate skills by keyword matching');
-      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain('Use ordinary Agent capabilities first');
-      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain('state the activation reason');
+    it('requires Skill selection to follow content understanding and the Pi catalog', () => {
+      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain('ordinary Agent reasoning');
+      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain('exact catalog entry');
+      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain('only through the runtime `read_skill` tool');
       expect(BUILTIN_DEFAULT_PROMPT_EN).toContain(
         'When a request mixes analysis and creative production',
       );
-      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('不要通过关键词匹配激活技能');
-      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('先使用普通 Agent 能力');
-      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('说明激活原因');
+      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('普通 Agent 推理');
+      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('目录中的同名项');
+      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('只能通过运行时 `read_skill` 工具读取');
       expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('当请求同时包含分析和创作产物');
     });
 
@@ -249,14 +249,14 @@ describe('Builtin Prompts', () => {
     expect(BUILTIN_PLAN_PROMPT_ZH.length).toBeGreaterThan(100);
   });
 
-  it('should contain key instructions in default prompts', () => {
-    // English
-    expect(BUILTIN_DEFAULT_PROMPT_EN).toContain('ActivateSkill');
-    expect(BUILTIN_DEFAULT_PROMPT_EN).toContain('GetContext');
-
-    // Chinese
-    expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('ActivateSkill');
-    expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('GetContext');
+  it('describes only the canonical Pi Skill protocol', () => {
+    for (const prompt of [BUILTIN_DEFAULT_PROMPT_EN, BUILTIN_DEFAULT_PROMPT_ZH]) {
+      expect(prompt).toContain('read_skill');
+      expect(prompt).toContain('$skill-name');
+      expect(prompt).not.toMatch(
+        /GetContext|ActivateSkill|DeactivateSkill|domainSkill|referenceSkill|lifecycle slot/,
+      );
+    }
   });
 
   it('keeps storyboard and Canvas profile contracts out of default prompts', () => {

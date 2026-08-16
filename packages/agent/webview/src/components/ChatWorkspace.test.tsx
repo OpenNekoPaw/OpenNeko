@@ -93,7 +93,6 @@ vi.mock('./ChatView', () => ({
     attachedFiles?: readonly unknown[];
     selectedFileReferences?: readonly unknown[];
     onSend: (input?: { messageText?: string; displayMessageText?: string }) => boolean;
-    onClearActiveSkill?: (recordId?: string) => void;
     onCancelTask?: (taskId: string) => void;
     onRetryTask?: (taskId: string) => void;
     onViewTaskResult?: (taskId: string, resultRef?: string) => void;
@@ -146,11 +145,6 @@ vi.mock('./ChatView', () => ({
         type="button"
         data-testid="entry-close"
         onClick={() => props.onEntryPromptMenuChange?.(null)}
-      />
-      <button
-        type="button"
-        data-testid="clear-active-skill"
-        onClick={() => props.onClearActiveSkill?.('record-1')}
       />
       <button
         type="button"

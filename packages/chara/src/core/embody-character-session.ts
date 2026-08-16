@@ -104,8 +104,6 @@ export const EMBODY_CHARACTER_DEFAULT_CONFIG: EmbodyCharacterSessionConfig = {
 };
 
 export const EMBODY_CHARACTER_BLOCKED_TOOL_NAMES = [
-  'ActivateSkill',
-  'DeactivateSkill',
   'Write',
   'Edit',
   'Bash',
@@ -336,8 +334,8 @@ export function projectEmbodyCharacterFeedbackPrompt(input: {
         '- 身份/当前角色问题：简要说明用户代入的角色，然后回答实际问题。',
         '- 角色知识问题：先根据已加载项目证据回答问题；可能或未确认细节放在主答案之后简短限定。',
         '- 扮演一致性检查：用对话方式说明哪些符合、哪些不符合，并给出一两个小调整建议。',
-        '- 创作执行或项目状态请求：不要写入、记录、创建、变更、生成媒体、激活技能、创建任务或保存日记。将请求重构为只读角色知识或一致性反馈。',
-        '不要激活技能、写文件、变更角色设置、创建任务、生成媒体或记录日记。',
+        '- 创作执行或项目状态请求：不要写入、记录、创建、变更、生成媒体、读取额外 Skill 正文、创建任务或保存日记。将请求重构为只读角色知识或一致性反馈。',
+        '不要读取额外 Skill 正文、写文件、变更角色设置、创建任务、生成媒体或记录日记。',
         '',
         '已确认事实：',
         ...formatFacts(
@@ -370,8 +368,8 @@ export function projectEmbodyCharacterFeedbackPrompt(input: {
         '- Identity/current-role questions: state the embodied character briefly, then answer the actual question.',
         '- Character knowledge questions: answer the question first from loaded project evidence; briefly qualify possible or unconfirmed details after the main answer.',
         '- Roleplay consistency checks: respond conversationally with what fits, what does not fit, and one or two small adjustment suggestions.',
-        '- Creative execution or project-state requests: do not write, record, create, mutate, generate media, activate skills, create tasks, or save diary entries. Reframe the request as read-only role-knowledge or consistency feedback.',
-        'Do not activate skills, write files, mutate character settings, create tasks, generate media, or record diary entries.',
+        '- Creative execution or project-state requests: do not write, record, create, mutate, generate media, read additional Skill content, create tasks, or save diary entries. Reframe the request as read-only role-knowledge or consistency feedback.',
+        'Do not read additional Skill content, write files, mutate character settings, create tasks, generate media, or record diary entries.',
         '',
         'Confirmed facts:',
         ...formatFacts(
@@ -407,8 +405,8 @@ export function buildEmbodyCharacterTurnSystemPrompt(input: {
   if (!input.turnEvidence) return input.baseSystemPrompt;
   const guidance =
     input.locale?.trim().toLowerCase().startsWith('zh') === true
-      ? '仅将这些证据用于当前用户角色扮演回合的只读反馈。不要激活技能、变更项目状态，或声称可以访问已加载证据之外的项目文件。'
-      : 'Use this evidence only for read-only feedback on the current user roleplay turn. Do not activate skills, mutate project state, or claim access to project files beyond the loaded evidence.';
+      ? '仅将这些证据用于当前用户角色扮演回合的只读反馈。不要读取额外 Skill 正文、变更项目状态，或声称可以访问已加载证据之外的项目文件。'
+      : 'Use this evidence only for read-only feedback on the current user roleplay turn. Do not read additional Skill content, mutate project state, or claim access to project files beyond the loaded evidence.';
   return [
     input.baseSystemPrompt,
     '',

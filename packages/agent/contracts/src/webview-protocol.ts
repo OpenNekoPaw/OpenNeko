@@ -14,7 +14,6 @@ import type {
   CanvasMarkdownCapabilityTarget,
   CanvasMarkdownContentBinding,
 } from '@neko/canvas-domain';
-import type { AgentCapabilityActivationProgressEvent } from './agent-capability-activation';
 import {
   isAgentCapabilityInvocationInput,
   type AgentCapabilityInvocationInput,
@@ -803,12 +802,6 @@ export interface AgentCapabilityLifecycleResultMessage {
   error?: string;
 }
 
-export interface AgentCapabilityActivationProgressMessage {
-  type: 'agentCapabilityActivationProgress';
-  conversationId: string;
-  events: readonly AgentCapabilityActivationProgressEvent[];
-}
-
 export interface CharacterDialogueSessionStartedMessage {
   type: 'characterDialogueSessionStarted';
   tab: OpenTab;
@@ -915,7 +908,6 @@ export type AgentHostToWebviewMessage =
   | TabStateMessage
   | SlashCommandResultMessage
   | AgentCapabilityLifecycleResultMessage
-  | AgentCapabilityActivationProgressMessage
   | CharacterDialogueSessionStartedMessage
   | CharacterDialogueSessionExitedMessage
   | EmbodyCharacterSessionStartedMessage
@@ -1249,20 +1241,6 @@ export function buildAgentCapabilityLifecycleResultMessage(input: {
     ...(input.lifecycleResult !== undefined ? { lifecycleResult: input.lifecycleResult } : {}),
     ...(input.result !== undefined ? { result: input.result } : {}),
     ...(input.error !== undefined ? { error: input.error } : {}),
-  };
-}
-
-export function buildAgentCapabilityActivationProgressMessage(input: {
-  readonly conversationId: string;
-  readonly events: readonly AgentCapabilityActivationProgressEvent[];
-}): AgentCapabilityActivationProgressMessage {
-  return {
-    type: 'agentCapabilityActivationProgress',
-    conversationId: requireBuilderConversationId(
-      input.conversationId,
-      'agentCapabilityActivationProgress',
-    ),
-    events: input.events,
   };
 }
 

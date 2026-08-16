@@ -25,18 +25,14 @@
     "expectedResult": "Opening text, Tool result, closing text, table, and final marker preserve canonical order and delivery.",
     "expectedFailure": "Missing Tool execution, reordered Timeline rows, invalid table, incomplete Markdown path, or changed marker fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "严格按以下顺序完成：先单独输出 STREAM_OPENING_MARKER；调用 GetContext 一次且不调用其他工具；工具结果后单独输出 STREAM_FINAL_MARKER；再输出至少 12 行的 GFM 表格，列名为 序号、镜头、动作、时长；最后单独输出 UNCHANGED_FINAL_ANSWER_MARKER。"
+      "prompt": "严格按以下顺序完成：先单独输出 STREAM_OPENING_MARKER；调用 ListDirectory 一次查看当前工作区且不调用其他工具；工具结果后单独输出 STREAM_FINAL_MARKER；再输出至少 12 行的 GFM 表格，列名为 序号、镜头、动作、时长；最后单独输出 UNCHANGED_FINAL_ANSWER_MARKER。"
     },
     {
       "id": "idle",
@@ -70,13 +66,13 @@
       "id": "projection",
       "kind": "timeline-projection",
       "terminalStatus": "completed",
-      "toolName": "GetContext",
+      "toolName": "ListDirectory",
       "evidenceRef": "stream-facts"
     },
     {
       "id": "tool",
       "kind": "tool-call",
-      "name": "GetContext",
+      "name": "ListDirectory",
       "status": "success",
       "evidenceRef": "stream-facts"
     },
@@ -92,7 +88,7 @@
         {
           "kind": "timeline",
           "eventKind": "tool",
-          "toolName": "GetContext",
+          "toolName": "ListDirectory",
           "status": "success"
         },
         {
@@ -107,15 +103,8 @@
       "id": "table",
       "kind": "structured-output",
       "format": "table",
-      "requiredFields": [
-        "序号",
-        "镜头",
-        "动作",
-        "时长"
-      ],
-      "requiredReferences": [
-        "UNCHANGED_FINAL_ANSWER_MARKER"
-      ],
+      "requiredFields": ["序号", "镜头", "动作", "时长"],
+      "requiredReferences": ["UNCHANGED_FINAL_ANSWER_MARKER"],
       "locale": "zh-cn",
       "evidenceRef": "stream-facts"
     },
