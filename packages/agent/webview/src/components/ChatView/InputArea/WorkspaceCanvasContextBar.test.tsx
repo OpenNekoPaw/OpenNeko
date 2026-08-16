@@ -41,7 +41,7 @@ describe('WorkspaceCanvasContextBar', () => {
       /\.agent-workspace-canvas-select-control\s*\{([^}]*)\}/u,
     )?.[1];
     expect(matchingRailRule).toContain('width: calc(100% - 24px)');
-    expect(matchingRailRule).toContain('border-radius: 0 0 12px 12px');
+    expect(matchingRailRule).toContain('border-radius: 12px');
     expect(workspaceRule).not.toContain('width: fit-content');
     expect(selectControlRule).toContain('width: fit-content');
   });
