@@ -889,6 +889,27 @@ export function ConversationController({
   }, []);
 
   useEffect(() => {
+    if (isDraftPresentation && composerWorkspace?.kind === 'workspace') {
+      const seq = entryCanvasRequestSeq.current + 1;
+      entryCanvasRequestSeq.current = seq;
+      setEntryCanvasLoading(true);
+      setEntryCanvasDiagnostic(undefined);
+      setEntryCanvasCatalog(undefined);
+      composerWorkspace
+        .loadCanvasCatalog()
+        .then((catalog) => {
+          if (entryCanvasRequestSeq.current !== seq) return;
+          setEntryCanvasCatalog(catalog);
+          setEntryCanvasSelectionId('workspace-board');
+          setEntryCanvasLoading(false);
+        })
+        .catch((error: unknown) => {
+          if (entryCanvasRequestSeq.current !== seq) return;
+          setEntryCanvasDiagnostic(error instanceof Error ? error.message : String(error));
+          setEntryCanvasLoading(false);
+        });
+      return;
+    }
     const target = entryWorkspaceTarget;
     if (
       target === undefined ||
@@ -919,11 +940,14 @@ export function ConversationController({
         setEntryCanvasDiagnostic(error instanceof Error ? error.message : String(error));
         setEntryCanvasLoading(false);
       });
-  }, [composerWorkspace, entryWorkspaceTarget]);
+  }, [composerWorkspace, entryWorkspaceTarget, isDraftPresentation]);
 
   const entryCanvasPresentation = useMemo(() => {
-    if (entryWorkspaceTarget === undefined) return undefined;
-    const workspaceId = entryWorkspaceTarget.context.workspaceId;
+    const workspaceId =
+      isDraftPresentation && composerWorkspace?.kind === 'workspace'
+        ? composerWorkspace.workspaceId
+        : entryWorkspaceTarget?.context.workspaceId;
+    if (workspaceId === undefined) return undefined;
     const boardTarget = { kind: 'workspace-board' as const, workspaceId };
     const boardOption = {
       id: 'workspace-board',
@@ -952,14 +976,29 @@ export function ConversationController({
       loading: entryCanvasLoading,
       ...(entryCanvasDiagnostic === undefined ? {} : { diagnostic: entryCanvasDiagnostic }),
       onSelect: handleEntryCanvasSelect,
+      ...(composerWorkspace?.kind === 'workspace'
+        ? { onOpen: composerWorkspace.openCanvasDocument }
+        : composerWorkspace?.openCanvasDocument && entryWorkspaceTarget
+          ? {
+              onOpen: (optionId: string) => {
+                const openCanvasDocument = composerWorkspace.openCanvasDocument;
+                if (openCanvasDocument === undefined) {
+                  throw new Error('Entry Canvas document opener is unavailable.');
+                }
+                return openCanvasDocument(entryWorkspaceTarget, optionId);
+              },
+            }
+          : {}),
     };
   }, [
+    composerWorkspace,
     entryCanvasCatalog,
     entryCanvasDiagnostic,
     entryCanvasLoading,
     entryCanvasSelectionId,
     entryWorkspaceTarget,
     handleEntryCanvasSelect,
+    isDraftPresentation,
     t,
   ]);
 
@@ -2250,13 +2289,18 @@ export function ConversationController({
                       : undefined
                   }
                   workspaceCanvas={
-                    entryWorkspaceTarget
+                    composerWorkspace?.kind === 'workspace'
                       ? {
-                          workspaceLabel: entryWorkspaceTarget.label,
-                          canvas: entryMode === 'authoring' ? undefined : entryCanvasPresentation,
-                          showCanvasIndex: entryMode !== 'authoring',
+                          workspaceLabel: composerWorkspace.label,
+                          canvas: entryCanvasPresentation,
                         }
-                      : undefined
+                      : entryWorkspaceTarget
+                        ? {
+                            workspaceLabel: entryWorkspaceTarget.label,
+                            canvas: entryMode === 'authoring' ? undefined : entryCanvasPresentation,
+                            showCanvasIndex: entryMode !== 'authoring',
+                          }
+                        : undefined
                   }
                   selectedCharacterLaunches={
                     composerWorkspace?.kind !== 'workspace' && entryMode !== 'authoring'

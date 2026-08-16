@@ -52,6 +52,9 @@ AgentWebview composer canvas selector
 5. 只有既有合格 creator-visible typed artifact 投递才由 Canvas owner lazy-create
    `workspace.nkc`；普通对话、推理、日志不写 Board。
 6. 单一 canonical contract，不引入版本字段、active/recent fallback、多路径或兼容分支。
+7. Rail 容器继续复用 `agent-composer-context-bar` 的整栏宽度，并采用完整圆角边界；只有 Canvas 选择控件按内容收缩，不把整条 Workspace rail 收缩成小胶囊，也不用下边圆角的贴边区域造型。
+8. Canvas catalog 的用户可见 label 是 exact workspace-relative 文件名（含 `.nkc` 后缀），文档内部 `name` 仍仅属于轻量 summary，不取代文件 identity。
+9. 双击打开仅适用于 exact Canvas；Agent Webview 只发出已选 exact identity，Desktop 使用现有 creative-document open/focus authority 授权并创建或聚焦 Workbench View。Board 默认项不因双击而提前创建文件。
 
 ## User-data impact
 

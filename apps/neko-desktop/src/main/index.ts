@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { watch } from 'node:fs';
 import { lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
@@ -24,8 +25,10 @@ import type { AgentAuthoringTargetRef, AgentBoundDomainBinding } from '@neko/age
 import { DESKTOP_BRIDGE_CHANNELS, type DesktopLifecycleEvent } from '../shared/bridge-contract';
 import {
   DESKTOP_SHELL_CHANNELS,
+  resolveDesktopWindowWorkspaceWorkbench,
   type DesktopShellProjectionEvent,
 } from '@neko/host/desktop-shell-contract';
+import { closeMainView } from '@neko/host/desktop-workbench-contract';
 import { DesktopAppHost } from './app-host';
 import {
   registerDesktopOpenNekoProtocol,
@@ -1310,9 +1313,38 @@ async function startDesktop(): Promise<void> {
       },
     });
   const canvasRuntime = new DesktopCanvasRuntime({
-    shell: shellService,
+    shell: {
+      resolveCanvasViewGrant: (windowId, identity) =>
+        shellService.resolveCanvasViewGrant(windowId, identity),
+      closeCanvasView: async (identity) => {
+        const projection = await shellService.getProjection(identity.windowId);
+        const owner = resolveDesktopWindowWorkspaceWorkbench(
+          projection.window,
+          identity.workspaceId,
+        );
+        const view = owner.layout.main.views.find(
+          (candidate) =>
+            candidate.kind === 'canvas' &&
+            candidate.viewId === identity.viewId &&
+            candidate.viewInstanceId === identity.viewInstanceId &&
+            candidate.documentId === identity.documentId,
+        );
+        if (!view) throw new Error('Desktop Canvas View is unavailable for clean deletion.');
+        await shellService.updateWorkbench(
+          identity.windowId,
+          projection.rendererSessionId,
+          owner.workbenchInstanceId,
+          closeMainView(owner.layout, identity.viewId),
+        );
+      },
+    },
     host,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
+    watchFile: (directory, fileName, onChange) =>
+      watch(directory, (_eventType, changedFileName) => {
+        if (changedFileName !== null && changedFileName.toString() !== fileName) return;
+        void onChange();
+      }),
     materialActionLabels: {
       preview: canvasUsesChineseLabels ? '主面板预览' : 'Open Main Preview',
       reveal: canvasUsesChineseLabels ? '在访达中显示' : 'Reveal in Finder',

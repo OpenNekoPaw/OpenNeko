@@ -29,6 +29,7 @@ export const DESKTOP_CANVAS_CHANNELS = {
   previewResourceResolve: 'open-neko:canvas:preview-resource-resolve',
   previewResourceRelease: 'open-neko:canvas:preview-resource-release',
   workspaceIndexCatalogRead: 'open-neko:canvas:workspace-index-catalog-read',
+  workspaceDocumentOpen: 'open-neko:canvas:workspace-document-open',
   projectionEvent: 'open-neko:canvas:projection-event',
 } as const;
 
@@ -49,6 +50,9 @@ export interface OpenNekoDesktopCanvasBridge {
     readWorkspaceIndexCatalog(
       request: DesktopCanvasWorkspaceIndexCatalogRequest,
     ): Promise<DesktopCanvasWorkspaceIndexCatalogResult>;
+    openWorkspaceDocument(
+      request: DesktopCanvasWorkspaceDocumentOpenRequest,
+    ): Promise<DesktopCanvasWorkspaceDocumentOpenResult>;
     subscribe(
       identity: CanvasHostRuntimeIdentity,
       listener: (event: CanvasHostProjectionEvent) => void,
@@ -65,6 +69,58 @@ export interface DesktopCanvasWorkspaceIndexCatalogRequest {
 export interface DesktopCanvasWorkspaceIndexCatalogResult {
   readonly requestId: string;
   readonly catalog: CanvasWorkspaceContextCatalog;
+}
+
+export interface DesktopCanvasWorkspaceDocumentOpenRequest {
+  readonly requestId: string;
+  readonly workspaceId: string;
+  readonly workspaceGrantId: string;
+  readonly canvasId: string;
+}
+
+export interface DesktopCanvasWorkspaceDocumentOpenResult {
+  readonly requestId: string;
+  readonly status: 'opened';
+}
+
+export function parseDesktopCanvasWorkspaceDocumentOpenRequest(
+  value: unknown,
+): DesktopCanvasWorkspaceDocumentOpenRequest {
+  if (isRecord(value) === false) {
+    throw new Error('Desktop Canvas workspace document open request must be an object.');
+  }
+  requireExactKeys(
+    value,
+    ['requestId', 'workspaceId', 'workspaceGrantId', 'canvasId'],
+    'Desktop Canvas workspace document open request',
+  );
+  const canvasId = requireString(value['canvasId'], 'canvasId');
+  const locator = validateContentLocator({ kind: 'workspace-file', path: canvasId });
+  if (!locator.ok || !canvasId.toLocaleLowerCase('en-US').endsWith('.nkc')) {
+    throw new Error(
+      'Desktop Canvas workspace document open requires a Workspace-file NKC identity.',
+    );
+  }
+  return {
+    requestId: requireString(value['requestId'], 'requestId'),
+    workspaceId: requireString(value['workspaceId'], 'workspaceId'),
+    workspaceGrantId: requireString(value['workspaceGrantId'], 'workspaceGrantId'),
+    canvasId,
+  };
+}
+
+export function parseDesktopCanvasWorkspaceDocumentOpenResult(
+  value: unknown,
+  requestId: string,
+): DesktopCanvasWorkspaceDocumentOpenResult {
+  if (isRecord(value) === false) {
+    throw new Error('Desktop Canvas workspace document open result must be an object.');
+  }
+  requireExactKeys(value, ['requestId', 'status'], 'Desktop Canvas workspace document open result');
+  if (value['requestId'] !== requestId || value['status'] !== 'opened') {
+    throw new Error('Desktop Canvas workspace document open result is invalid.');
+  }
+  return { requestId, status: 'opened' };
 }
 
 export function parseDesktopCanvasWorkspaceIndexCatalogRequest(

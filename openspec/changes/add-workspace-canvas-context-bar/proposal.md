@@ -18,6 +18,8 @@ proposal
 - Canvas selection 属于 Draft/Conversation composer presentation state 或精确 turn intent，不进入 `AgentDomainBinding`，也不变成消息引用；跨会话复用时通过选择同一 Canvas identity 复用。
 - 保持唯一 canonical contract/owner/handler/projection 路径，fail-visible、fail-local；不引入 active/recent fallback、隐式工作区、版本字段、多路径或兼容分支。
 - 复用现有组件与 i18n/theme；补足 owning package contract/service/组件/投递目标测试。
+- Workspace/Canvas rail 保持与 composer 输入框一致的栏宽，并使用完整圆角容器；只有 Canvas 选择控件按内容收缩，不呈现为整栏小胶囊或贴边长方形区域。
+- exact Canvas 选项显示带 `.nkc` 后缀的 workspace-relative 文件名；用户双击当前 exact Canvas 时，通过 Desktop 已有 creative-document authority 打开或聚焦该文件。
 
 ## Affected packages and ownership
 

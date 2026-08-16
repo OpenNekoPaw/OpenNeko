@@ -944,6 +944,57 @@ describe('ChatWorkspace pending send', () => {
     expect(runtimeA.store.getSnapshot().state.viewport.anchorMessageId).toBe('anchor-tab-a');
   });
 
+  it('returns a detached viewport to follow-tail only after Host accepts the send', async () => {
+    const runtime = createTabRenderRuntime({ tabId: 'tab-a', conversationId: 'conv-a' });
+    runtime.store.updateState({
+      modelConfigurationInitialized: true,
+      selectedModel: 'test-model',
+      viewport: { followMode: 'detached', anchorMessageId: 'old-message', anchorOffset: 25 },
+    });
+    let resolveSend:
+      ((value: Awaited<ReturnType<typeof hostMocks.sendMessage>>) => void) | undefined;
+    hostMocks.sendMessage.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSend = resolve;
+        }),
+    );
+    render(<ChatWorkspace {...createProps({ tabRenderStore: runtime.store })} />);
+
+    fireEvent.click(screen.getByTestId('send'));
+    expect(runtime.store.getSnapshot().state.viewport.followMode).toBe('detached');
+    resolveSend?.({
+      submissionId: 'submission-follow',
+      conversationId: 'conv-a',
+      turnId: 'turn-follow',
+      queueItemId: 'queue-follow',
+      message: 'hello from tabless state',
+      createdAt: 1_700_000_000_003,
+      state: 'active',
+    });
+
+    await waitFor(() =>
+      expect(runtime.store.getSnapshot().state.viewport).toEqual({ followMode: 'follow-tail' }),
+    );
+  });
+
+  it('keeps a detached viewport when Host rejects the send', async () => {
+    const runtime = createTabRenderRuntime({ tabId: 'tab-a', conversationId: 'conv-a' });
+    runtime.store.updateState({
+      modelConfigurationInitialized: true,
+      selectedModel: 'test-model',
+      viewport: { followMode: 'detached', anchorMessageId: 'old-message', anchorOffset: 25 },
+    });
+    hostMocks.sendMessage.mockRejectedValueOnce(new Error('rejected'));
+    render(<ChatWorkspace {...createProps({ tabRenderStore: runtime.store })} />);
+
+    fireEvent.click(screen.getByTestId('send'));
+
+    await waitFor(() => expect(chatViewMocks.onSendReceipt).toHaveBeenCalled());
+    await expect(chatViewMocks.onSendReceipt.mock.calls.at(-1)?.[0]).resolves.toBe(false);
+    expect(runtime.store.getSnapshot().state.viewport.followMode).toBe('detached');
+  });
+
   it('keeps composition and focus requests isolated by Tab store', () => {
     const runtimeA = createTabRenderRuntime({ tabId: 'tab-a', conversationId: 'conv-a' });
     const runtimeB = createTabRenderRuntime({ tabId: 'tab-b', conversationId: 'conv-b' });

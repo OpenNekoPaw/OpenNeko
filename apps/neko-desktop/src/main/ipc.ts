@@ -357,6 +357,11 @@ export function registerDesktopIpc(
       appHost.readCanvasWorkspaceIndexCatalog(requireSender(event), payload),
   );
   ipcMain.handle(
+    DESKTOP_CANVAS_CHANNELS.workspaceDocumentOpen,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.openCanvasWorkspaceDocument(requireSender(event), payload),
+  );
+  ipcMain.handle(
     DESKTOP_AGENT_CHANNELS.messageSend,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.sendAgentMessage(requireSender(event), payload),
@@ -520,6 +525,7 @@ export function registerDesktopIpc(
       DESKTOP_CANVAS_CHANNELS.previewResourceResolve,
       DESKTOP_CANVAS_CHANNELS.previewResourceRelease,
       DESKTOP_CANVAS_CHANNELS.workspaceIndexCatalogRead,
+      DESKTOP_CANVAS_CHANNELS.workspaceDocumentOpen,
       DESKTOP_CUT_CHANNELS.snapshotGet,
       DESKTOP_CUT_CHANNELS.requestExecute,
       DESKTOP_CUT_CHANNELS.draftCreate,

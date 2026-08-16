@@ -1648,7 +1648,11 @@ body {
 }
 
 .agent-workspace-canvas-context-bar {
+  min-height: 34px;
   gap: 8px;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
   color: var(--agent-fg);
 }
 

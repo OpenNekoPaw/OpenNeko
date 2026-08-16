@@ -561,6 +561,13 @@ export class DesktopTextEditorRuntime {
       if (binding.closed) return;
       const projection = await binding.session.observeExternalChange();
       if (!projection || binding.closed) return;
+      const unavailable = projection.diagnostics.some(
+        (diagnostic) => diagnostic.code === 'text-document-external-change-unavailable',
+      );
+      if (unavailable && !projection.dirty) {
+        await this.closeBinding(binding);
+        return;
+      }
       binding.eventSequence += 1;
       const event: TextEditorProjectionEvent = {
         sequence: binding.eventSequence,

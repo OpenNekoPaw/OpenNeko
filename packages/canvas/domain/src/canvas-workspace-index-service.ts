@@ -59,7 +59,7 @@ export function createCanvasWorkspaceIndexService(
           }
           optionsList.push({
             target: createExactCanvasTarget(workspaceId, identity),
-            label: summary.name,
+            label: canvasFileName(identity),
             summary,
           });
         } catch (error) {
@@ -92,6 +92,10 @@ export function createCanvasWorkspaceIndexService(
       return Object.freeze({ target, summary });
     },
   };
+}
+
+function canvasFileName(identity: string): string {
+  return identity.split('/').at(-1) ?? identity;
 }
 
 function describeError(error: unknown): string {

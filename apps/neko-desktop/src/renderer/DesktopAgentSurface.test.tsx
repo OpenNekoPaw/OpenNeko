@@ -1084,6 +1084,7 @@ function installBridge(
         resolvePreviewResource: vi.fn(),
         releasePreviewResource: vi.fn(),
         readWorkspaceIndexCatalog: vi.fn(),
+        openWorkspaceDocument: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
       },
       cut: {

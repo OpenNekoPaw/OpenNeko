@@ -47,6 +47,11 @@ export function WorkspaceCanvasContextBar({
             onChange={(event) => {
               void canvas.onSelect(event.target.value);
             }}
+            onDoubleClick={() => {
+              if (selectedOption?.target.kind === 'exact-canvas') {
+                void canvas.onOpen?.(selectedOption.id);
+              }
+            }}
           >
             {canvas.options.map((option) => (
               <option key={option.id} value={option.id} disabled={option.disabled}>

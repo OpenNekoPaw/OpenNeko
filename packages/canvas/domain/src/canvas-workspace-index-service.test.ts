@@ -54,11 +54,29 @@ describe('Canvas workspace index service', () => {
     expect(catalog.options[1]?.diagnostic).toBe('bad nkc');
     expect(catalog.options[2]).toMatchObject({
       target: createExactCanvasTarget('workspace-1', 'neko/boards/b.nkc'),
+      label: 'b.nkc',
       summary: {
         canvasId: 'neko/boards/b.nkc',
         name: 'B',
         nodeTypeSummary: { markdown: 2 },
       },
+    });
+  });
+
+  it('uses the workspace-relative file name instead of the internal Canvas name', async () => {
+    const read: CanvasWorkspaceIndexReadPort = {
+      listExactCanvasDocuments: vi.fn(async () => ['neko/boards/story.nkc']),
+      readExactCanvasSummary: vi.fn(async () => ({
+        canvasId: 'neko/boards/story.nkc',
+        name: 'Story Canvas',
+      })),
+    };
+
+    const catalog = await createCanvasWorkspaceIndexService({ read }).readCatalog('workspace-1');
+
+    expect(catalog.options[1]).toMatchObject({
+      label: 'story.nkc',
+      summary: { name: 'Story Canvas' },
     });
   });
 

@@ -78,7 +78,11 @@ import {
   DESKTOP_WORKBENCH_LIMITS,
   DesktopWorkbenchContractError,
 } from '@neko/host/desktop-workbench-contract';
-import type { AssetCenterNodeRuntime, ResourceBrowserNodeRuntime } from '@neko/assets-node';
+import {
+  resolveWorkspaceContentLocator,
+  type AssetCenterNodeRuntime,
+  type ResourceBrowserNodeRuntime,
+} from '@neko/assets-node';
 import {
   parseAssetCenterHostRequest,
   type AssetCenterHostResult,
@@ -108,9 +112,11 @@ import {
   type CanvasWorkspaceIndexService,
 } from '@neko/canvas-domain';
 import {
+  parseDesktopCanvasWorkspaceDocumentOpenRequest,
   parseDesktopCanvasWorkspaceIndexCatalogRequest,
   type DesktopCanvasPreviewResourceResult,
 } from '../shared/canvas-bridge-contract';
+import { openDesktopWorkspaceCanvasDocument } from './desktop-creative-document-runtime';
 import type { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import type {
   CutHostRuntimeProjectionEvent,
@@ -2812,6 +2818,41 @@ export class DesktopAppHost {
     }
     const catalog = await service.readCatalog(request.workspaceId);
     return { requestId: request.requestId, catalog };
+  }
+
+  async openCanvasWorkspaceDocument(
+    sender: Parameters<DesktopAppHost['executeCanvasIntent']>[0],
+    payload: unknown,
+  ): Promise<import('../shared/canvas-bridge-contract').DesktopCanvasWorkspaceDocumentOpenResult> {
+    this.requireActive();
+    const request = parseDesktopCanvasWorkspaceDocumentOpenRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    const resolution = await this.workspaceGrants.restore(
+      window.windowId,
+      request.workspaceGrantId,
+      request.workspaceId,
+    );
+    await resolveWorkspaceContentLocator(resolution.workspace, {
+      kind: 'workspace-file',
+      path: request.canvasId,
+    });
+    const projection = await this.shell.getProjection(window.windowId);
+    const project = projection.catalog.projects.find(
+      (candidate) => candidate.workspaceId === request.workspaceId,
+    );
+    if (!project) {
+      throw new Error(`Desktop Canvas Workspace '${request.workspaceId}' has no Project owner.`);
+    }
+    await openDesktopWorkspaceCanvasDocument({
+      shell: this.shell,
+      windowId: window.windowId,
+      rendererSessionId: projection.rendererSessionId,
+      projectId: project.projectId,
+      workspaceId: request.workspaceId,
+      documentId: request.canvasId,
+      displayLabel: request.canvasId.split('/').at(-1) ?? request.canvasId,
+    });
+    return { requestId: request.requestId, status: 'opened' };
   }
 
   async getCanvasSnapshot(

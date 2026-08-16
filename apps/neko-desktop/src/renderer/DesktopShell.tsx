@@ -2863,6 +2863,14 @@ export function createDesktopAgentSurfaceProps(input: {
               });
               return result.catalog;
             },
+            openCanvasDocument: async (canvasId) => {
+              await window.openNekoDesktop.canvas.openWorkspaceDocument({
+                requestId: crypto.randomUUID(),
+                workspaceId: scope.workspaceId,
+                workspaceGrantId: scope.workspaceGrantId,
+                canvasId,
+              });
+            },
           },
         };
       }
@@ -2901,6 +2909,14 @@ export function createDesktopAgentSurfaceProps(input: {
             workspaceGrantId: scope.workspaceGrantId,
           });
           return result.catalog;
+        },
+        openCanvasDocument: async (canvasId) => {
+          await window.openNekoDesktop.canvas.openWorkspaceDocument({
+            requestId: crypto.randomUUID(),
+            workspaceId: scope.workspaceId,
+            workspaceGrantId: scope.workspaceGrantId,
+            canvasId,
+          });
         },
       },
     };
@@ -2950,6 +2966,14 @@ export function createDesktopAgentSurfaceProps(input: {
                 workspaceGrantId: target.context.workspaceGrantId,
               });
               return result.catalog;
+            },
+            openCanvasDocument: async (target, canvasId) => {
+              await window.openNekoDesktop.canvas.openWorkspaceDocument({
+                requestId: crypto.randomUUID(),
+                workspaceId: target.context.workspaceId,
+                workspaceGrantId: target.context.workspaceGrantId,
+                canvasId,
+              });
             },
             ...(input.workspaceSelectionDisabled === undefined
               ? {}

@@ -57,7 +57,18 @@ export interface DesktopCanvasShellPort {
     windowId: string,
     identity: CanvasHostRuntimeIdentity,
   ): Promise<DesktopCanvasViewGrant>;
+  closeCanvasView?(identity: CanvasHostRuntimeIdentity): Promise<void>;
 }
+
+export interface DesktopCanvasFileWatcher {
+  close(): void;
+}
+
+export type DesktopCanvasWatchFile = (
+  directory: string,
+  fileName: string,
+  onChange: () => Promise<void>,
+) => DesktopCanvasFileWatcher;
 
 interface DesktopCanvasSessionEntry {
   readonly windowId: string;
@@ -65,6 +76,8 @@ interface DesktopCanvasSessionEntry {
   readonly documentPath: string;
   readonly workspace: DesktopCanvasViewGrant['workspace'];
   readonly session: CanvasHostRuntimeSession;
+  watcher?: DesktopCanvasFileWatcher;
+  externalChangeQueue: Promise<void>;
   generationReattachmentScheduled: boolean;
 }
 
@@ -117,6 +130,7 @@ export class DesktopCanvasRuntime {
       readonly shell: DesktopCanvasShellPort;
       readonly host: NekoHostPorts;
       readonly globalMediaLibraryRoot: string;
+      readonly watchFile?: DesktopCanvasWatchFile;
       readonly requestSource?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly sourceKind: 'image' | 'video' | 'audio' | 'model' | 'document' | 'canvas';
@@ -361,8 +375,7 @@ export class DesktopCanvasRuntime {
   detachWindow(windowId: string): void {
     for (const [key, entry] of this.sessions) {
       if (entry.windowId !== windowId) continue;
-      entry.session.dispose();
-      this.sessions.delete(key);
+      this.releaseSession(key, entry);
     }
     this.releasePreviewLeases((entry) => entry.windowId === windowId);
     this.presentationSnapshots.deleteWindow(windowId);
@@ -389,16 +402,14 @@ export class DesktopCanvasRuntime {
       ) {
         continue;
       }
-      entry.session.dispose();
-      this.sessions.delete(key);
-      this.releasePreviewLeases((lease) => lease.sessionKey === key);
+      this.releaseSession(key, entry);
     }
   }
 
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
-    for (const entry of this.sessions.values()) entry.session.dispose();
+    for (const [key, entry] of this.sessions) this.releaseSession(key, entry);
     this.sessions.clear();
     this.releasePreviewLeases(() => true);
     this.presentationSnapshots.clear();
@@ -819,10 +830,50 @@ export class DesktopCanvasRuntime {
       documentPath,
       workspace: grant.workspace,
       session,
+      externalChangeQueue: Promise.resolve(),
       generationReattachmentScheduled: false,
     };
+    if (identity.documentId !== CANVAS_WORKSPACE_BOARD_PATH) {
+      const watchFile = this.options.watchFile;
+      if (watchFile) {
+        entry.watcher = watchFile(
+          this.options.host.paths.dirname(documentPath),
+          documentPath.split(/[\\/]/u).at(-1) ?? identity.documentId,
+          () => this.queueExternalChange(entry),
+        );
+      }
+    }
     this.sessions.set(key, entry);
     return entry;
+  }
+
+  private queueExternalChange(entry: DesktopCanvasSessionEntry): Promise<void> {
+    entry.externalChangeQueue = entry.externalChangeQueue.then(async () => {
+      const key = sessionKey(entry.identity);
+      if (this.disposed || this.sessions.get(key) !== entry) return;
+      try {
+        const stat = await this.options.host.files.stat(entry.documentPath);
+        if (stat.type === 'file') return;
+      } catch (error: unknown) {
+        if (!isFileNotFound(error)) throw error;
+      }
+      const snapshot = await entry.session.getSnapshot();
+      if (snapshot.dirty) return;
+      const closeCanvasView = this.options.shell.closeCanvasView;
+      if (!closeCanvasView) {
+        throw new Error('Desktop Canvas clean deletion requires a View close capability.');
+      }
+      await closeCanvasView(entry.identity);
+      this.releaseSession(key, entry);
+    });
+    return entry.externalChangeQueue;
+  }
+
+  private releaseSession(key: string, entry: DesktopCanvasSessionEntry): void {
+    entry.watcher?.close();
+    entry.session.dispose();
+    this.sessions.delete(key);
+    this.releasePreviewLeases((lease) => lease.sessionKey === key);
   }
 
   private scheduleGenerationReattachment(entry: DesktopCanvasSessionEntry): void {

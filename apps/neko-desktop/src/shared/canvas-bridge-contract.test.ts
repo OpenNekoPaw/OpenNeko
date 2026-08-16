@@ -3,6 +3,8 @@ import { createCanvasHostSessionId, parseCanvasHostRuntimeIdentity } from '@neko
 import {
   parseDesktopCanvasWorkspaceIndexCatalogRequest,
   parseDesktopCanvasWorkspaceIndexCatalogResult,
+  parseDesktopCanvasWorkspaceDocumentOpenRequest,
+  parseDesktopCanvasWorkspaceDocumentOpenResult,
   isSameCanvasHostIdentity,
   parseDesktopCanvasPreviewResourceReleaseRequest,
   parseDesktopCanvasPreviewResourceRequest,
@@ -135,5 +137,29 @@ describe('Desktop Canvas workspace index catalog contract', () => {
         'ws1',
       ),
     ).toThrow('workspace mismatch');
+  });
+});
+
+describe('Desktop Canvas workspace document open contract', () => {
+  it('accepts only an exact Workspace NKC identity and correlated result', () => {
+    const request = {
+      requestId: 'open-1',
+      workspaceId: 'ws1',
+      workspaceGrantId: 'grant1',
+      canvasId: 'neko/boards/story.nkc',
+    };
+    expect(parseDesktopCanvasWorkspaceDocumentOpenRequest(request)).toEqual(request);
+    expect(
+      parseDesktopCanvasWorkspaceDocumentOpenResult(
+        { requestId: 'open-1', status: 'opened' },
+        'open-1',
+      ),
+    ).toEqual({ requestId: 'open-1', status: 'opened' });
+    expect(() =>
+      parseDesktopCanvasWorkspaceDocumentOpenRequest({ ...request, canvasId: 'notes/story.txt' }),
+    ).toThrow('NKC identity');
+    expect(() =>
+      parseDesktopCanvasWorkspaceDocumentOpenRequest({ ...request, extra: true }),
+    ).toThrow("unsupported field 'extra'");
   });
 });

@@ -535,6 +535,9 @@ export function ChatWorkspace({
         updateTabRenderState({ workspaceCanvasSelectionId: optionId });
         return Promise.resolve();
       },
+      ...(composerWorkspace.openCanvasDocument === undefined
+        ? {}
+        : { onOpen: composerWorkspace.openCanvasDocument }),
     };
   }, [
     composerWorkspace,
@@ -557,13 +560,24 @@ export function ChatWorkspace({
     ) => {
       try {
         const canvasTurnTarget = projectWorkspaceCanvasTurnTarget(effectiveCanvasPresentation);
-        return handleSendBase(canvasTurnTarget ? { ...input, canvasTurnTarget } : input, identity);
+        const result = handleSendBase(
+          canvasTurnTarget ? { ...input, canvasTurnTarget } : input,
+          identity,
+        );
+        if (typeof result === 'boolean') {
+          if (result) updateTabRenderState({ viewport: { followMode: 'follow-tail' } });
+          return result;
+        }
+        return result.then((accepted) => {
+          if (accepted) updateTabRenderState({ viewport: { followMode: 'follow-tail' } });
+          return accepted;
+        });
       } catch (error) {
         onInputDiagnostic?.(error instanceof Error ? error.message : String(error));
         return false;
       }
     },
-    [effectiveCanvasPresentation, handleSendBase, onInputDiagnostic],
+    [effectiveCanvasPresentation, handleSendBase, onInputDiagnostic, updateTabRenderState],
   );
   const pendingSendRequestId = pendingSendRequest?.id;
   const pendingSendIdentity = useMemo<PendingSendIdentity | undefined>(

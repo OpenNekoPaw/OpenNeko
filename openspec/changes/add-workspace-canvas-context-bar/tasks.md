@@ -28,6 +28,9 @@
 - [x] 4.3 Entry 选择 Workspace 后可选择 Canvas index；已有 Workspace Conversation 的 Workspace binding 固定，Canvas index 每次发送前可切换。
 - [x] 4.4 非法或缺失 Canvas 选择 fail-local：显示 diagnostic，不回退 Board/active/recent Canvas。
 - [x] 4.5 复用现有 i18n/theme 与组件；补齐 aria label、键盘可操作性。
+- [x] 4.6 将 Workspace/Canvas rail 收敛为与 composer 一致的整栏宽度和完整圆角，仅 Canvas 选择控件按内容收缩；exact 选项显示带 `.nkc` 后缀的文件名。
+- [x] 4.7 通过 Desktop 已有 creative-document authority 支持双击当前 exact Canvas 打开/聚焦，Board 不提前创建。
+- [x] 4.8 Workspace-bound draft 在首轮发送前显示上下文栏，并隔离 Workspace 胶囊与入口 binding rail 的样式规则。
 
 ## 5. Tests
 
@@ -35,6 +38,7 @@
 - [x] 5.2 补足投递目标测试：未选择 -> canonical Board；选择 -> selected Canvas；切换只影响后续 Turn；普通对话/推理/日志不写 Board。
 - [x] 5.3 补足组件测试：Entry 与 Workspace 栏在 composer shell 上方；引用仍在 shell 内；仅显示 Workspace label 与 Canvas index。
 - [x] 5.4 运行最小相关测试与 typecheck（package 级）。
+- [x] 5.5 补足 exact Canvas 文件名、双击 open/focus、Board no-op、rail 整栏宽度与圆角样式测试。
 
 ## 6. UI / Agent Evaluation
 

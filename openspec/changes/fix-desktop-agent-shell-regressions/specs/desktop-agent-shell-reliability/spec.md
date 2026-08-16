@@ -1,5 +1,40 @@
 ## ADDED Requirements
 
+### Requirement: New submissions resume follow-tail
+
+The active Conversation viewport SHALL return to `follow-tail` when the user submits a new message.
+
+- Streaming content and execution progress for that submitted turn SHALL remain visible as they grow.
+- A user scroll that occurs without a new submission SHALL retain detached history viewing.
+- Switching conversations SHALL continue restoring each exact Conversation viewport snapshot.
+
+#### Scenario: send from an old scroll position
+
+- **WHEN** the user is viewing older messages and submits a new message
+- **THEN** the active Conversation scrolls to the new message and follows subsequent progress
+- **AND** it does not continue presenting the stale detached position.
+
+### Requirement: Deleted Workspace documents reconcile open Views
+
+An owning document runtime SHALL reconcile external deletion with exact open Workbench Views.
+
+- A clean open document SHALL close its exact View after the authoritative file deletion is observed.
+- A dirty open document SHALL remain visible with a local unavailable/conflict diagnostic.
+- Closing one deleted document SHALL preserve sibling Views, Workspace records and unrelated runtimes.
+- The Renderer SHALL NOT infer deletion from an active tab or stale catalog snapshot.
+
+#### Scenario: clean deleted document closes
+
+- **WHEN** an externally deleted Workspace file owns a clean open Canvas or text-editor View
+- **THEN** the owning runtime closes that exact Workbench View
+- **AND** sibling Views remain open.
+
+#### Scenario: dirty deleted document remains recoverable
+
+- **WHEN** an externally deleted Workspace file owns a dirty open View
+- **THEN** the View remains open with a visible local diagnostic
+- **AND** the unsaved content is not discarded.
+
 ### Requirement: Desktop cold start projects persistent Agent conversations
 
 The Desktop AppHost SHALL project persisted Pi conversation catalog records for every workspace in the current Desktop Project catalog before the first Shell window snapshot, without opening a conversation runtime or acquiring an execution lease.

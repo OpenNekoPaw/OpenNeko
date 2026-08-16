@@ -80,6 +80,7 @@ export interface AgentComposerCanvasPresentation {
   readonly loading: boolean;
   readonly diagnostic?: string;
   readonly onSelect: (optionId: string) => Promise<void>;
+  readonly onOpen?: (optionId: string) => Promise<void>;
 }
 
 export type AgentComposerWorkspacePresentation =
@@ -101,6 +102,10 @@ export type AgentComposerWorkspacePresentation =
       readonly loadCanvasCatalog?: (
         target: AgentComposerWorkspaceTarget,
       ) => Promise<CanvasWorkspaceContextCatalog>;
+      readonly openCanvasDocument?: (
+        target: AgentComposerWorkspaceTarget,
+        canvasId: string,
+      ) => Promise<void>;
       readonly disabled?: boolean;
     }
   | {
@@ -108,6 +113,7 @@ export type AgentComposerWorkspacePresentation =
       readonly label: string;
       readonly workspaceId: string;
       readonly loadCanvasCatalog: () => Promise<CanvasWorkspaceContextCatalog>;
+      readonly openCanvasDocument?: (canvasId: string) => Promise<void>;
     };
 
 const ComposerWorkspaceContext = createContext<AgentComposerWorkspacePresentation | undefined>(

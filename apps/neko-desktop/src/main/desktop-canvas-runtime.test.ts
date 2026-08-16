@@ -2710,6 +2710,80 @@ describe('DesktopCanvasRuntime', () => {
     expect(resolveCanvasViewGrant).toHaveBeenCalledOnce();
     await runtime.dispose();
   });
+
+  it('closes a clean deleted exact Canvas and preserves a dirty deleted sibling', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-delete-'));
+    roots.push(workspacePath);
+    const cleanIdentity = { ...createIdentity(), documentId: 'boards/clean.nkc' };
+    const dirtyIdentity = {
+      ...createIdentity(),
+      viewId: 'canvas:view-dirty',
+      sessionId: 'canvas-session:canvas:view-dirty:view-instance-1',
+      documentId: 'boards/dirty.nkc',
+    };
+    const fixture = JSON.stringify({
+      name: 'Fixture',
+      viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+      nodes: [],
+      connections: [],
+    });
+    await writeFixtureFile(workspacePath, cleanIdentity.documentId, fixture);
+    await writeFixtureFile(workspacePath, dirtyIdentity.documentId, fixture);
+    const watchers = new Map<string, () => Promise<void>>();
+    const closeCanvasView = vi.fn(async () => undefined);
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (_windowId, identity) => ({
+          identity,
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath,
+            displayName: 'Fixture',
+            locator: { kind: 'relative' as const, value: '.' },
+          },
+        })),
+        closeCanvasView,
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasDeleteTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      watchFile: (_directory, fileName, onChange) => {
+        watchers.set(fileName, onChange);
+        return { close: () => undefined };
+      },
+    });
+    await runtime.getSnapshot('window-1', cleanIdentity);
+    const dirtySnapshot = await runtime.getSnapshot('window-1', dirtyIdentity);
+    await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'dirty-edit',
+        commandId: 'dirty-edit',
+        identity: dirtyIdentity,
+        intent: {
+          type: 'replace-document',
+          canvas: { ...dirtySnapshot.canvas, name: 'Unsaved dirty Canvas' },
+        },
+      }),
+    );
+
+    await rm(path.join(workspacePath, cleanIdentity.documentId));
+    await watchers.get('clean.nkc')?.();
+    expect(closeCanvasView).toHaveBeenCalledWith(cleanIdentity);
+
+    await rm(path.join(workspacePath, dirtyIdentity.documentId));
+    await watchers.get('dirty.nkc')?.();
+    expect(closeCanvasView).toHaveBeenCalledTimes(1);
+    await expect(runtime.getSnapshot('window-1', dirtyIdentity)).resolves.toMatchObject({
+      dirty: true,
+      canvas: { name: 'Unsaved dirty Canvas' },
+    });
+    await runtime.dispose();
+  });
 });
 
 function createIdentity(): CanvasHostRuntimeIdentity {

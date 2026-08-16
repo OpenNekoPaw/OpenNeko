@@ -5,6 +5,8 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 ## What Changes
 
 - 让 Desktop Agent Home 在窗口首次快照前读取所有已登记 Project workspace 的持久会话目录，不再依赖某个 Project 已经打开或 Agent runtime 已经 attach。
+- 用户提交新消息时，当前 Conversation viewport 回到 follow-tail，确保本轮用户消息、执行进度和流式输出持续可见；用户在无新提交时主动滚动到旧消息仍保留 detached 语义。
+- Workspace 文件被外部删除时，对应的干净 Workbench 文档 View 由 owning runtime 自动关闭；存在未保存内容时保留 View 并显示局部失效/冲突诊断，不静默丢弃用户数据。
 - 让 renderer 启动门禁预加载 Agent UI chunk，具体 Project/View bootstrap 仍按 owner 在
   Agent Surface 挂载时请求，并保证 Host 事件订阅先于子组件发出的初始化请求。
 - 为 Desktop portal surface 提供由 `@neko/ui` primitive 和 Desktop theme contract 共同拥有的稳定、不透明背景，并在生产 renderer 的 portal DOM 上验证最终 computed style。

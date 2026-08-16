@@ -29,6 +29,38 @@ Agent composer SHALL render Entry and Workspace Conversation context rails as a 
 - **THEN** they remain inside the composer shell
 - **AND** they are not merged into the Workspace Canvas context rail.
 
+#### Scenario: context rail reuses the Entry pill shape
+
+- **WHEN** the Workspace Canvas rail is visible
+- **THEN** it renders as a complete rounded pill matching the Entry context treatment
+- **AND** it does not render as a rectangular edge-attached region.
+
+#### Scenario: exact Canvas keeps its file extension
+
+- **WHEN** an exact Canvas appears in the selector
+- **THEN** its visible label is the workspace-relative file name including `.nkc`
+- **AND** its internal Canvas name remains summary metadata rather than replacing file identity.
+
+#### Scenario: double-click opens selected Canvas
+
+- **WHEN** the user double-clicks the currently selected exact Canvas
+- **THEN** Desktop opens or focuses the exact Canvas Workbench View through the existing creative-document authority
+- **AND** double-clicking the logical Board default does not eagerly create `workspace.nkc`.
+
+#### Scenario: Workspace-bound draft shows context before first turn
+
+- **WHEN** a Workspace-bound Agent interaction is still in its draft phase
+- **THEN** the composer shows the Workspace Canvas context rail before any Conversation exists
+- **AND** it loads the exact Workspace Canvas catalog through the same Workspace authority used after Conversation creation
+- **AND** the first submitted turn preserves the selected Canvas target.
+
+#### Scenario: Workspace rail width and radius do not change Entry binding rail
+
+- **WHEN** the Workspace Canvas rail adopts its full-width rounded presentation and the Canvas selector fits its content
+- **THEN** the Entry binding rail keeps its existing full-width presentation
+- **AND** the Workspace rail remains aligned to the composer width rather than shrinking to its content
+- **AND** Workspace-specific radius rules do not apply to the Entry rail.
+
 ### Requirement: Canvas selection is composer/turn state
 
 Canvas selection SHALL be composer presentation state or exact turn intent.
