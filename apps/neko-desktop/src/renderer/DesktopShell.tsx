@@ -2959,22 +2959,6 @@ export function createDesktopAgentSurfaceProps(input: {
             loadAuthoringCatalog: input.onLoadAuthoringTargets,
             onSelectAuthoringTarget: input.onSelectAuthoringTarget,
             onCreateAuthoringTarget: input.onCreateAuthoringTarget,
-            loadCanvasCatalog: async (target) => {
-              const result = await window.openNekoDesktop.canvas.readWorkspaceIndexCatalog({
-                requestId: crypto.randomUUID(),
-                workspaceId: target.context.workspaceId,
-                workspaceGrantId: target.context.workspaceGrantId,
-              });
-              return result.catalog;
-            },
-            openCanvasDocument: async (target, canvasId) => {
-              await window.openNekoDesktop.canvas.openWorkspaceDocument({
-                requestId: crypto.randomUUID(),
-                workspaceId: target.context.workspaceId,
-                workspaceGrantId: target.context.workspaceGrantId,
-                canvasId,
-              });
-            },
             ...(input.workspaceSelectionDisabled === undefined
               ? {}
               : { disabled: input.workspaceSelectionDisabled }),

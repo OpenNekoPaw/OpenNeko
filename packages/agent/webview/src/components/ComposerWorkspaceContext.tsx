@@ -99,13 +99,6 @@ export type AgentComposerWorkspacePresentation =
         context: AgentComposerAuthoringCreationContext,
         name: string,
       ) => Promise<AgentComposerAuthoringCreationResult | undefined>;
-      readonly loadCanvasCatalog?: (
-        target: AgentComposerWorkspaceTarget,
-      ) => Promise<CanvasWorkspaceContextCatalog>;
-      readonly openCanvasDocument?: (
-        target: AgentComposerWorkspaceTarget,
-        canvasId: string,
-      ) => Promise<void>;
       readonly disabled?: boolean;
     }
   | {

@@ -785,6 +785,90 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
+  it('submits the initial Workspace turn without reading or forwarding Entry state', async () => {
+    vi.clearAllMocks();
+    const launchCatalog = createDraftLaunchCatalog('draft-workspace-initial', {
+      kind: 'workspace',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    });
+    const foreignEntryReceipt = {
+      targetReceiptId: 'entry-target:foreign',
+      draftId: 'draft-entry-foreign',
+      connectionId: 'connection-entry-foreign',
+      mode: 'authoring' as const,
+      binding: {
+        kind: 'authoring' as const,
+        workspaceId: 'workspace-entry',
+        workspaceGrantId: 'workspace-grant-entry',
+        authority: { kind: 'project' as const, projectId: 'project-entry' },
+        target: null,
+      },
+    };
+    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    hostMocks.readEntryIntent.mockReturnValue({
+      mode: 'authoring',
+      targetReceipt: foreignEntryReceipt,
+    });
+    hostMocks.submitDraft.mockResolvedValueOnce({
+      session: {
+        phase: 'session',
+        conversationId: 'conversation-workspace-initial',
+        binding: launchCatalog.interaction.binding,
+      },
+      turnId: 'turn-workspace-initial',
+      turnStatus: 'running',
+    });
+
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'workspace',
+          label: 'OpenNeko',
+          workspaceId: 'workspace-1',
+          loadCanvasCatalog: async () => ({
+            workspaceId: 'workspace-1',
+            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+            options: [
+              {
+                target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                label: 'Workspace Board',
+              },
+            ],
+            diagnostics: [],
+          }),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={launchCatalog.interaction}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Continue in Workspace' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
+    expect(hostMocks.readEntryIntent).not.toHaveBeenCalled();
+    expect(hostMocks.configureEntryTarget).not.toHaveBeenCalled();
+    expect(hostRuntimeMocks.setState).not.toHaveBeenCalled();
+    expect(hostMocks.submitDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draft: expect.objectContaining({
+          binding: {
+            kind: 'workspace',
+            workspaceId: 'workspace-1',
+            workspaceGrantId: 'workspace-grant-1',
+          },
+        }),
+        entryTargetReceipt: null,
+        input: { kind: 'message', text: 'Continue in Workspace' },
+      }),
+    );
+  });
+
   it('projects the compact composer into Desktop dock conversation tabs', async () => {
     render(<ConversationController {...createProps()} emptyStatePresentation="desktop-dock" />);
 

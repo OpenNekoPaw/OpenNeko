@@ -882,7 +882,7 @@ describe('InputArea composer controls', () => {
     const button = screen.getByRole('button', { name: '选择项目' });
     const bar = screen.getByLabelText('当前上下文');
     expect(button.closest('.agent-entry-binding-bar')).toBe(bar);
-    expect(bar.classList.contains('agent-composer-context-bar')).toBe(true);
+    expect(bar.className).toBe('agent-entry-binding-bar');
     expect(button.closest('.agent-composer-toolbar')).toBeNull();
     fireEvent.click(button);
     expect(onChooseProject).toHaveBeenCalledOnce();

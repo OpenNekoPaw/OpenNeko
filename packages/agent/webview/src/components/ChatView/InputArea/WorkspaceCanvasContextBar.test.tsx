@@ -33,19 +33,25 @@ function renderBar(canvas?: AgentComposerCanvasPresentation) {
 describe('WorkspaceCanvasContextBar', () => {
   it('keeps the Workspace rail full-width while only its selector fits content', () => {
     const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
-    const composerRule = css.match(/\.agent-composer-context-bar\s*\{([^}]*)\}/u)?.[1];
+    const matchingRailRule = css.match(
+      /\.agent-entry-binding-bar,\s*\.agent-workspace-canvas-context-bar\s*\{([^}]*)\}/u,
+    )?.[1];
     const workspaceRule = css.match(/\.agent-workspace-canvas-context-bar\s*\{([^}]*)\}/u)?.[1];
     const selectControlRule = css.match(
       /\.agent-workspace-canvas-select-control\s*\{([^}]*)\}/u,
     )?.[1];
-    const entryRule = css.match(/\.agent-entry-binding-bar\s*\{([^}]*)\}/u)?.[1];
-
-    expect(composerRule).toContain('width: calc(100% - 24px)');
+    expect(matchingRailRule).toContain('width: calc(100% - 24px)');
+    expect(matchingRailRule).toContain('border-radius: 0 0 12px 12px');
     expect(workspaceRule).not.toContain('width: fit-content');
-    expect(workspaceRule).toContain('border-radius: 999px');
     expect(selectControlRule).toContain('width: fit-content');
-    expect(entryRule).not.toContain('width: fit-content');
-    expect(entryRule).not.toContain('border-radius: 999px');
+  });
+
+  it('matches the Entry rail styling without sharing its functional class', () => {
+    const { container } = renderBar();
+    const bar = container.querySelector('[data-workspace-canvas-context="true"]');
+
+    expect(bar?.className).toBe('agent-workspace-canvas-context-bar');
+    expect(bar?.classList.contains('agent-entry-binding-bar')).toBe(false);
   });
 
   it('does not claim Board when the selected Canvas id is unknown', () => {
@@ -94,7 +100,7 @@ describe('WorkspaceCanvasContextBar', () => {
       </I18nProvider>,
     );
     const bar = document.querySelector('[data-workspace-canvas-context="true"]');
-    expect(bar?.classList.contains('agent-composer-context-bar')).toBe(true);
+    expect(bar?.className).toBe('agent-workspace-canvas-context-bar');
     expect(screen.getByText('Workspace')).toBeTruthy();
     expect(document.querySelector('select')).toBeNull();
     expect(screen.queryByText('Workspace Board')).toBeNull();

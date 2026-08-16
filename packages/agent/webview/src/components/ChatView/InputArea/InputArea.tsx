@@ -79,7 +79,7 @@ import {
 import { formatMessageTime } from '../message-time';
 
 interface InputAreaProps {
-  presentation?: 'entry' | 'conversation';
+  presentation?: 'entry' | 'workspace' | 'conversation';
   composerPresentation?: 'default' | 'compact';
   approvalSurface?: ReactNode;
   inputValue: string;
@@ -247,7 +247,9 @@ export function InputArea({
   onAttachedFilesChange,
   onAuthorizeResource,
   entryContextActions = [],
+  entryWorkspaceTarget,
   workspaceCanvas,
+  onClearEntryWorkspaceTarget,
   selectedCharacterLaunches = [],
   selectedWorldLaunch,
   onAddCharacterLaunch,
@@ -1042,10 +1044,11 @@ export function InputArea({
 
         {presentation === 'entry' &&
         (entryContextActions.length > 0 ||
+          entryWorkspaceTarget ||
           selectedCharacterLaunches.length > 0 ||
           selectedWorldLaunch) ? (
           <div
-            className="agent-composer-context-bar agent-entry-binding-bar"
+            className="agent-entry-binding-bar"
             aria-label={t('chat.entryContext.bindingBar')}
             data-entry-binding-bar="true"
           >
@@ -1056,6 +1059,16 @@ export function InputArea({
                 composerDisabled={disabled}
               />
             ))}
+            {entryWorkspaceTarget ? (
+              <EntryBindingItem
+                kind={entryWorkspaceTarget.target?.kind ?? 'content-document'}
+                label={entryWorkspaceTarget.label}
+                removeLabel={t('chat.entryContext.clearTarget')}
+                onRemove={
+                  onClearEntryWorkspaceTarget ? () => void onClearEntryWorkspaceTarget() : undefined
+                }
+              />
+            ) : null}
             {selectedCharacterLaunches.map((selection) => (
               <EntryBindingItem
                 key={selection.characterVersionId}
@@ -1242,7 +1255,7 @@ export function InputArea({
             )}
 
             {/* Token usage pie */}
-            {presentation !== 'entry' ? (
+            {presentation === 'conversation' ? (
               <UsageIndicator
                 tokenCount={contextTokenCount}
                 maxTokens={maxContextTokens}

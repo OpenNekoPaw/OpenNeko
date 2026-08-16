@@ -28,7 +28,7 @@ export function WorkspaceCanvasContextBar({
 
   return (
     <div
-      className="agent-composer-context-bar agent-workspace-canvas-context-bar"
+      className="agent-workspace-canvas-context-bar"
       data-workspace-canvas-context="true"
       aria-label={t('chat.input.workspaceCanvas.label')}
     >

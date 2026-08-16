@@ -93,6 +93,34 @@ describe('Desktop scene Workbench', () => {
       }),
     ).not.toHaveProperty('characterDialogueHandoff');
   });
+
+  it('does not expose Workspace Canvas capabilities to the Entry composer', () => {
+    const projection = agentProjection();
+    const composition = resolveActiveDesktopWindowWorkbench(projection.window);
+    const interaction = composition.scene.slots.interaction;
+    if (!interaction || interaction.kind !== 'agent' || interaction.scope.kind === 'workspace') {
+      throw new Error('Agent projection requires an unbound interaction surface.');
+    }
+
+    const surface = createDesktopAgentSurfaceProps({
+      projection,
+      workbenchInstanceId: composition.workbenchInstanceId,
+      interaction,
+      onChooseWorkspaceTarget: vi.fn(async () => undefined),
+      onSelectWorkspaceProjectTarget: vi.fn(async () => undefined),
+      onLoadAuthoringTargets: vi.fn(async () => ({
+        targets: [],
+        creationContexts: [],
+        diagnostics: [],
+      })),
+      onSelectAuthoringTarget: vi.fn(async () => undefined),
+      onCreateAuthoringTarget: vi.fn(async () => undefined),
+    });
+
+    expect(surface?.composerWorkspace).toMatchObject({ kind: 'entry' });
+    expect(surface?.composerWorkspace).not.toHaveProperty('loadCanvasCatalog');
+    expect(surface?.composerWorkspace).not.toHaveProperty('openCanvasDocument');
+  });
   it('locks only controls owned by the pending Shell mutation scope', () => {
     const base = {
       scene: false,

@@ -240,6 +240,8 @@ export function ConversationController({
   const agentHostMessages = useAgentHostMessages();
   const composerWorkspace = useComposerWorkspacePresentation();
   const isDraftPresentation = agentPresentation?.phase === 'draft';
+  const isWorkspaceInitialPresentation =
+    isDraftPresentation && composerWorkspace?.kind === 'workspace';
   // ---- Conversation state ----
   const conversation = useConversationState();
   const {
@@ -318,13 +320,14 @@ export function ConversationController({
     targetReceipt: null,
   });
   const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
-  const [entryCanvasSelectionId, setEntryCanvasSelectionId] = useState<string>('workspace-board');
-  const [entryCanvasCatalog, setEntryCanvasCatalog] = useState<
+  const [workspaceCanvasSelectionId, setWorkspaceCanvasSelectionId] =
+    useState<string>('workspace-board');
+  const [workspaceCanvasCatalog, setWorkspaceCanvasCatalog] = useState<
     import('@neko/canvas-domain').CanvasWorkspaceContextCatalog | undefined
   >();
-  const [entryCanvasLoading, setEntryCanvasLoading] = useState(false);
-  const [entryCanvasDiagnostic, setEntryCanvasDiagnostic] = useState<string>();
-  const entryCanvasRequestSeq = useRef(0);
+  const [workspaceCanvasLoading, setWorkspaceCanvasLoading] = useState(false);
+  const [workspaceCanvasDiagnostic, setWorkspaceCanvasDiagnostic] = useState<string>();
+  const workspaceCanvasRequestSeq = useRef(0);
   const [isEntryBindingPending, setIsEntryBindingPending] = useState(false);
   const [entryQuickDetailOpen, setEntryQuickDetailOpen] = useState(true);
   const [entryConversationContextSelection, setEntryConversationContextSelection] = useState<
@@ -689,7 +692,9 @@ export function ConversationController({
     activeDraftIdRef.current = agentPresentation.draftId;
     committedEntryDraftIdRef.current = undefined;
     skipEntryDraftWriteRef.current = agentPresentation.draftId;
-    const restored = readAgentEntryDraftSnapshot(hostRuntimeAdapter, agentPresentation.draftId);
+    const restored = isWorkspaceInitialPresentation
+      ? { snapshot: undefined, diagnostics: [] }
+      : readAgentEntryDraftSnapshot(hostRuntimeAdapter, agentPresentation.draftId);
     const entryDraft = restored.snapshot;
 
     setOpenTabs([]);
@@ -699,7 +704,9 @@ export function ConversationController({
     setActiveTab('chat');
     const draftAdapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
     const launchCatalog = draftAdapter.readLaunchCatalog();
-    const authoritativeEntryIntent = draftAdapter.readEntryIntent();
+    const authoritativeEntryIntent: AgentEntryIntentProjection = isWorkspaceInitialPresentation
+      ? { mode: 'assistant', targetReceipt: null }
+      : draftAdapter.readEntryIntent();
     setEntryMode(authoritativeEntryIntent.mode);
     setEntryQuickDetailOpen(true);
     setEntryConversationContextSelection(
@@ -750,6 +757,7 @@ export function ConversationController({
     setOpenTabs,
     updateEntryInputValue,
     hostRuntimeAdapter,
+    isWorkspaceInitialPresentation,
     settings.executionMode,
   ]);
 
@@ -808,6 +816,7 @@ export function ConversationController({
 
   useEffect(() => {
     if (agentPresentation?.phase !== 'draft') return;
+    if (composerWorkspace?.kind === 'workspace') return;
     if (activeDraftIdRef.current !== agentPresentation.draftId) return;
     if (committedEntryDraftIdRef.current === agentPresentation.draftId) return;
     if (skipEntryDraftWriteRef.current === agentPresentation.draftId) {
@@ -828,6 +837,7 @@ export function ConversationController({
     });
   }, [
     agentPresentation,
+    composerWorkspace,
     entryContextReferences,
     entryCharacterLaunches,
     entryExecutionMode,
@@ -884,70 +894,43 @@ export function ConversationController({
     [setWorkItemsByConversation],
   );
 
-  const handleEntryCanvasSelect = useCallback(async (optionId: string) => {
-    setEntryCanvasSelectionId(optionId);
+  const handleWorkspaceCanvasSelect = useCallback(async (optionId: string) => {
+    setWorkspaceCanvasSelectionId(optionId);
   }, []);
 
   useEffect(() => {
     if (isDraftPresentation && composerWorkspace?.kind === 'workspace') {
-      const seq = entryCanvasRequestSeq.current + 1;
-      entryCanvasRequestSeq.current = seq;
-      setEntryCanvasLoading(true);
-      setEntryCanvasDiagnostic(undefined);
-      setEntryCanvasCatalog(undefined);
+      const seq = workspaceCanvasRequestSeq.current + 1;
+      workspaceCanvasRequestSeq.current = seq;
+      setWorkspaceCanvasLoading(true);
+      setWorkspaceCanvasDiagnostic(undefined);
+      setWorkspaceCanvasCatalog(undefined);
       composerWorkspace
         .loadCanvasCatalog()
         .then((catalog) => {
-          if (entryCanvasRequestSeq.current !== seq) return;
-          setEntryCanvasCatalog(catalog);
-          setEntryCanvasSelectionId('workspace-board');
-          setEntryCanvasLoading(false);
+          if (workspaceCanvasRequestSeq.current !== seq) return;
+          setWorkspaceCanvasCatalog(catalog);
+          setWorkspaceCanvasSelectionId('workspace-board');
+          setWorkspaceCanvasLoading(false);
         })
         .catch((error: unknown) => {
-          if (entryCanvasRequestSeq.current !== seq) return;
-          setEntryCanvasDiagnostic(error instanceof Error ? error.message : String(error));
-          setEntryCanvasLoading(false);
+          if (workspaceCanvasRequestSeq.current !== seq) return;
+          setWorkspaceCanvasDiagnostic(error instanceof Error ? error.message : String(error));
+          setWorkspaceCanvasLoading(false);
         });
       return;
     }
-    const target = entryWorkspaceTarget;
-    if (
-      target === undefined ||
-      composerWorkspace?.kind !== 'entry' ||
-      composerWorkspace.loadCanvasCatalog === undefined
-    ) {
-      setEntryCanvasCatalog(undefined);
-      setEntryCanvasLoading(false);
-      setEntryCanvasDiagnostic(undefined);
-      setEntryCanvasSelectionId('workspace-board');
-      return;
-    }
-    const seq = entryCanvasRequestSeq.current + 1;
-    entryCanvasRequestSeq.current = seq;
-    setEntryCanvasLoading(true);
-    setEntryCanvasDiagnostic(undefined);
-    setEntryCanvasCatalog(undefined);
-    composerWorkspace
-      .loadCanvasCatalog(target)
-      .then((catalog) => {
-        if (entryCanvasRequestSeq.current !== seq) return;
-        setEntryCanvasCatalog(catalog);
-        setEntryCanvasSelectionId('workspace-board');
-        setEntryCanvasLoading(false);
-      })
-      .catch((error: unknown) => {
-        if (entryCanvasRequestSeq.current !== seq) return;
-        setEntryCanvasDiagnostic(error instanceof Error ? error.message : String(error));
-        setEntryCanvasLoading(false);
-      });
-  }, [composerWorkspace, entryWorkspaceTarget, isDraftPresentation]);
+    workspaceCanvasRequestSeq.current += 1;
+    setWorkspaceCanvasCatalog(undefined);
+    setWorkspaceCanvasLoading(false);
+    setWorkspaceCanvasDiagnostic(undefined);
+    setWorkspaceCanvasSelectionId('workspace-board');
+  }, [composerWorkspace, isDraftPresentation]);
 
-  const entryCanvasPresentation = useMemo(() => {
-    const workspaceId =
-      isDraftPresentation && composerWorkspace?.kind === 'workspace'
-        ? composerWorkspace.workspaceId
-        : entryWorkspaceTarget?.context.workspaceId;
-    if (workspaceId === undefined) return undefined;
+  const workspaceCanvasPresentation = useMemo(() => {
+    if (!isWorkspaceInitialPresentation || composerWorkspace?.kind !== 'workspace')
+      return undefined;
+    const workspaceId = composerWorkspace.workspaceId;
     const boardTarget = { kind: 'workspace-board' as const, workspaceId };
     const boardOption = {
       id: 'workspace-board',
@@ -955,8 +938,8 @@ export function ConversationController({
       target: boardTarget,
       summary: undefined,
     };
-    const catalogOptions = entryCanvasCatalog
-      ? entryCanvasCatalog.options.map((option) => ({
+    const catalogOptions = workspaceCanvasCatalog
+      ? workspaceCanvasCatalog.options.map((option) => ({
           id: option.target.kind === 'workspace-board' ? 'workspace-board' : option.target.canvasId,
           label: option.label,
           target: option.target,
@@ -972,34 +955,23 @@ export function ConversationController({
       workspaceId,
       defaultTarget: boardTarget,
       options,
-      selectedId: entryCanvasSelectionId,
-      loading: entryCanvasLoading,
-      ...(entryCanvasDiagnostic === undefined ? {} : { diagnostic: entryCanvasDiagnostic }),
-      onSelect: handleEntryCanvasSelect,
-      ...(composerWorkspace?.kind === 'workspace'
+      selectedId: workspaceCanvasSelectionId,
+      loading: workspaceCanvasLoading,
+      ...(workspaceCanvasDiagnostic === undefined ? {} : { diagnostic: workspaceCanvasDiagnostic }),
+      onSelect: handleWorkspaceCanvasSelect,
+      ...(composerWorkspace.openCanvasDocument
         ? { onOpen: composerWorkspace.openCanvasDocument }
-        : composerWorkspace?.openCanvasDocument && entryWorkspaceTarget
-          ? {
-              onOpen: (optionId: string) => {
-                const openCanvasDocument = composerWorkspace.openCanvasDocument;
-                if (openCanvasDocument === undefined) {
-                  throw new Error('Entry Canvas document opener is unavailable.');
-                }
-                return openCanvasDocument(entryWorkspaceTarget, optionId);
-              },
-            }
-          : {}),
+        : {}),
     };
   }, [
     composerWorkspace,
-    entryCanvasCatalog,
-    entryCanvasDiagnostic,
-    entryCanvasLoading,
-    entryCanvasSelectionId,
-    entryWorkspaceTarget,
-    handleEntryCanvasSelect,
-    isDraftPresentation,
+    handleWorkspaceCanvasSelect,
+    isWorkspaceInitialPresentation,
     t,
+    workspaceCanvasCatalog,
+    workspaceCanvasDiagnostic,
+    workspaceCanvasLoading,
+    workspaceCanvasSelectionId,
   ]);
 
   // ---- Derived state for retained Tab conversations ----
@@ -1679,56 +1651,61 @@ export function ConversationController({
         setIsForegroundConversationActivationPending(true);
         void (async () => {
           const trigger = parseAgentInputTrigger(messageText);
-          let effectiveIntent = entryIntent;
-          let effectiveWorkspaceTarget = entryWorkspaceTarget;
+          let effectiveIntent = composerWorkspace?.kind === 'workspace' ? undefined : entryIntent;
+          let effectiveWorkspaceTarget =
+            composerWorkspace?.kind === 'workspace' ? undefined : entryWorkspaceTarget;
           const creatorTargetKind = builtinCreatorTargetKind(trigger);
-          const configuredCreatorTarget =
-            effectiveIntent.targetReceipt?.binding.kind === 'authoring'
-              ? effectiveIntent.targetReceipt.binding.target
-              : null;
           if (
+            composerWorkspace?.kind === 'entry' &&
             entryMode === 'authoring' &&
-            creatorTargetKind !== undefined &&
-            configuredCreatorTarget?.kind !== creatorTargetKind
+            creatorTargetKind !== undefined
           ) {
-            if (
-              composerWorkspace?.kind !== 'entry' ||
-              !entryWorkspaceTarget?.authority ||
-              !composerWorkspace.onCreateAuthoringTarget
-            ) {
-              throw new Error(t('chat.entryAuthoring.creatorProjectRequired'));
+            if (effectiveIntent === undefined) {
+              throw new Error('Agent Entry intent is unavailable.');
             }
-            const name = t(
-              creatorTargetKind === 'character-project'
-                ? 'chat.entryAuthoring.untitledCharacter'
-                : 'chat.entryAuthoring.untitledWorld',
-            );
-            const creation = await composerWorkspace.onCreateAuthoringTarget(
-              {
-                creationId: `${entryWorkspaceTarget.authority.projectId}:${creatorTargetKind}`,
-                label: name,
-                targetKind: creatorTargetKind,
-                placement: {
-                  kind: 'project',
-                  projectId: entryWorkspaceTarget.authority.projectId,
+            const configuredCreatorTarget =
+              effectiveIntent.targetReceipt?.binding.kind === 'authoring'
+                ? effectiveIntent.targetReceipt.binding.target
+                : null;
+            if (configuredCreatorTarget?.kind !== creatorTargetKind) {
+              if (!entryWorkspaceTarget?.authority || !composerWorkspace.onCreateAuthoringTarget) {
+                throw new Error(t('chat.entryAuthoring.creatorProjectRequired'));
+              }
+              const name = t(
+                creatorTargetKind === 'character-project'
+                  ? 'chat.entryAuthoring.untitledCharacter'
+                  : 'chat.entryAuthoring.untitledWorld',
+              );
+              const creation = await composerWorkspace.onCreateAuthoringTarget(
+                {
+                  creationId: `${entryWorkspaceTarget.authority.projectId}:${creatorTargetKind}`,
+                  label: name,
+                  targetKind: creatorTargetKind,
+                  placement: {
+                    kind: 'project',
+                    projectId: entryWorkspaceTarget.authority.projectId,
+                  },
                 },
-              },
-              name,
-            );
-            if (!creation) throw new Error(t('chat.entryAuthoring.creationUnavailable'));
-            if (
-              creation.target.target?.kind !== creatorTargetKind ||
-              creation.target.authority?.projectId !== entryWorkspaceTarget.authority.projectId
-            ) {
-              throw new Error('Creator target does not match its exact Project authority.');
+                name,
+              );
+              if (!creation) throw new Error(t('chat.entryAuthoring.creationUnavailable'));
+              if (
+                creation.target.target?.kind !== creatorTargetKind ||
+                creation.target.authority?.projectId !== entryWorkspaceTarget.authority.projectId
+              ) {
+                throw new Error('Creator target does not match its exact Project authority.');
+              }
+              effectiveWorkspaceTarget = creation.target;
+              effectiveIntent = await configureEntryAuthoringTarget(creation.target);
             }
-            effectiveWorkspaceTarget = creation.target;
-            effectiveIntent = await configureEntryAuthoringTarget(creation.target);
           }
 
           const launchCatalog = draftHostRuntimeAdapter.readLaunchCatalog();
           const authoritativeDraft = launchCatalog.interaction;
           if (composerWorkspace?.kind === 'entry') {
+            if (effectiveIntent === undefined) {
+              throw new Error('Agent Entry intent is unavailable.');
+            }
             const validation = projectHomeExperienceEntry({
               mode: entryMode,
               intent: effectiveIntent,
@@ -1777,10 +1754,13 @@ export function ConversationController({
             sessionMode: 'agent',
             agentMediaModels: entryModelState.agentMediaModels,
           }).purposeModels;
-          const canvasTurnTarget = projectWorkspaceCanvasTurnTarget(entryCanvasPresentation);
+          const canvasTurnTarget = projectWorkspaceCanvasTurnTarget(workspaceCanvasPresentation);
           const projection = await draftHostRuntimeAdapter.submitDraft({
             draft: authoritativeDraft,
-            entryTargetReceipt: effectiveIntent.targetReceipt,
+            entryTargetReceipt:
+              composerWorkspace?.kind === 'workspace'
+                ? null
+                : (effectiveIntent?.targetReceipt ?? null),
             input: inputIntent,
             references,
             resourceGrantIds,
@@ -1788,8 +1768,10 @@ export function ConversationController({
             ...(purposeModels && Object.keys(purposeModels).length > 0 ? { purposeModels } : {}),
             ...(canvasTurnTarget === undefined ? {} : { canvasTurnTarget }),
           });
-          committedEntryDraftIdRef.current = agentPresentation.draftId;
-          writeAgentEntryDraftSnapshot(hostRuntimeAdapter, undefined);
+          if (composerWorkspace?.kind !== 'workspace') {
+            committedEntryDraftIdRef.current = agentPresentation.draftId;
+            writeAgentEntryDraftSnapshot(hostRuntimeAdapter, undefined);
+          }
           setEntryInputValue((current) => (current === entryInputValue ? '' : current));
           setEntryContextReferences((current) =>
             current.filter((reference) => !submittedReferenceIds.has(reference.id)),
@@ -2165,7 +2147,11 @@ export function ConversationController({
         openTabs.length === 0 ? (
           <div
             className={`flex min-h-0 flex-1 flex-col ${
-              isDraftPresentation ? 'agent-entry-composition' : ''
+              isWorkspaceInitialPresentation
+                ? 'agent-workspace-initial-composition'
+                : isDraftPresentation
+                  ? 'agent-entry-composition'
+                  : ''
             }`}
           >
             {homeExperienceProjection ? (
@@ -2175,7 +2161,13 @@ export function ConversationController({
                 onChange={handleEntryModeChange}
               />
             ) : null}
-            <div className="agent-entry-center-group">
+            <div
+              className={
+                isWorkspaceInitialPresentation
+                  ? 'agent-workspace-initial-center-group'
+                  : 'agent-entry-center-group'
+              }
+            >
               <EmptyState
                 presentation={emptyStatePresentation}
                 draftScope={
@@ -2226,7 +2218,13 @@ export function ConversationController({
                 conversationKind="chat"
               >
                 <InputArea
-                  presentation={isDraftPresentation ? 'entry' : 'conversation'}
+                  presentation={
+                    isWorkspaceInitialPresentation
+                      ? 'workspace'
+                      : isDraftPresentation
+                        ? 'entry'
+                        : 'conversation'
+                  }
                   inputValue={entryInputValue}
                   isThinking={false}
                   onInputChange={updateEntryInputValue}
@@ -2292,15 +2290,9 @@ export function ConversationController({
                     composerWorkspace?.kind === 'workspace'
                       ? {
                           workspaceLabel: composerWorkspace.label,
-                          canvas: entryCanvasPresentation,
+                          canvas: workspaceCanvasPresentation,
                         }
-                      : entryWorkspaceTarget
-                        ? {
-                            workspaceLabel: entryWorkspaceTarget.label,
-                            canvas: entryMode === 'authoring' ? undefined : entryCanvasPresentation,
-                            showCanvasIndex: entryMode !== 'authoring',
-                          }
-                        : undefined
+                      : undefined
                   }
                   selectedCharacterLaunches={
                     composerWorkspace?.kind !== 'workspace' && entryMode !== 'authoring'

@@ -3,6 +3,27 @@ import type { AgentConfigurationPolicyProjection } from '@neko/agent-contracts';
 import { projectAmbientCanvasContext, projectInputAreaUi } from '../input-area-presenter';
 
 describe('input area presenter', () => {
+  it('keeps Workspace initial input separate from Conversation usage state', () => {
+    expect(
+      projectInputAreaUi({
+        presentation: 'workspace',
+        inputValue: '',
+        attachedFileCount: 0,
+        contextChipCount: 0,
+        ambientNodeCount: 0,
+        mediaModelCallCount: 0,
+        isThinking: false,
+        disabled: false,
+        sessionMode: 'agent',
+        conversationKind: 'chat',
+        currentSessionMediaModelCount: 0,
+      }),
+    ).toMatchObject({
+      inputPlaceholderKey: 'chat.input.entryPlaceholder',
+      canSend: false,
+    });
+  });
+
   it('shows execution mode on Entry while a local prerequisite blocks only send', () => {
     expect(
       projectInputAreaUi({
