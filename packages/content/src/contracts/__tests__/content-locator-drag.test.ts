@@ -11,18 +11,16 @@ describe('ContentLocator drag contract', () => {
     expect(
       createContentLocatorDragData({
         locator: {
-          kind: 'media-library',
-          libraryName: 'Reference',
-          relativePath: 'cat.png',
+          kind: 'workspace-file',
+          path: 'neko/assets/Reference/cat.png',
         },
         name: 'cat.png',
       }),
     ).toEqual({
       type: 'content-locator',
       locator: {
-        kind: 'media-library',
-        libraryName: 'Reference',
-        relativePath: 'cat.png',
+        kind: 'workspace-file',
+        path: 'neko/assets/Reference/cat.png',
       },
       name: 'cat.png',
     });

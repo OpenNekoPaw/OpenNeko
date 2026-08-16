@@ -75,9 +75,9 @@ describe('Node Text Editor Markdown reference catalog', () => {
         candidates: [
           {
             source: 'asset',
-            ref: { kind: 'media-library', namespace: 'Reference', id: 'cover.png' },
-            target: 'media-library:Reference/cover.png',
-            detail: 'Reference/cover.png',
+            ref: { kind: 'workspace-file', id: 'neko/assets/Reference/cover.png' },
+            target: 'neko/assets/Reference/cover.png',
+            detail: 'neko/assets/Reference/cover.png',
             embeddable: true,
           },
         ],
@@ -153,6 +153,9 @@ function mediaContentEntry(
 ) {
   return {
     ...contentEntry('unused', label, mediaType),
-    locator: { kind: 'media-library' as const, libraryName, relativePath },
+    locator: {
+      kind: 'workspace-file' as const,
+      path: `neko/assets/${libraryName}/${relativePath}`,
+    },
   };
 }

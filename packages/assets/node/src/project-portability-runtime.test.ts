@@ -216,9 +216,8 @@ async function writeBinding(workspacePath: string): Promise<void> {
               {
                 bindingId: 'binding-a',
                 target: {
-                  kind: 'media-library',
-                  libraryName: 'Footage',
-                  relativePath: 'shot.mov',
+                  kind: 'workspace-file',
+                  path: 'neko/assets/Footage/shot.mov',
                 },
                 role: 'portrait',
                 source: 'user',

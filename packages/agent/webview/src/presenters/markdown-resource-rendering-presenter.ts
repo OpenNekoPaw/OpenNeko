@@ -1115,9 +1115,7 @@ function contentLocatorLookupTokens(contentLocator: ContentLocator): readonly st
         ? [serializeContentReferenceTarget(contentLocator.source), contentLocator.entryPath]
         : contentLocator.kind === 'generated-output'
           ? [contentLocator.path, contentLocator.outputId]
-          : contentLocator.kind === 'media-library'
-            ? [contentLocator.libraryName, contentLocator.relativePath]
-            : [contentLocator.resourcePath, contentLocator.manifestPath];
+          : [contentLocator.resourcePath, contentLocator.manifestPath];
   return uniqueStrings(paths.filter(isNonEmptyString).flatMap(pathLookupTokens));
 }
 

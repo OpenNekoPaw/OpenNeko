@@ -9,7 +9,6 @@ import {
 
 const locators = [
   { kind: 'workspace-file', path: 'media/image.png' },
-  { kind: 'media-library', libraryName: 'Reference', relativePath: 'image.png' },
   {
     kind: 'document-entry',
     source: { kind: 'workspace-file', path: 'books/comic.epub' },
@@ -42,7 +41,6 @@ describe('ExplicitContentReadService', () => {
     }
     expect(calls).toEqual([
       'workspace-file',
-      'media-library',
       'document-entry',
       'generated-output',
       'package-resource',
@@ -111,7 +109,6 @@ describe('ExplicitContentReadService', () => {
 function createHandlers(onRead: (kind: ContentLocator['kind']) => void): ContentReadHandlers {
   return {
     workspaceFile: handlerFor('workspace-file', onRead),
-    mediaLibrary: handlerFor('media-library', onRead),
     documentEntry: handlerFor('document-entry', onRead),
     generatedOutput: handlerFor('generated-output', onRead),
     packageResource: handlerFor('package-resource', onRead),

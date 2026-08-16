@@ -649,3 +649,75 @@ NOT expose a second approval action path.
 - **WHEN** the user switches Conversation or a pending Tool Call receives a decision/result projection
 - **THEN** the composer-adjacent surface contains only pending approvals owned by the newly active Conversation
 - **AND** stale or hidden Conversation controls cannot submit a decision
+
+### Requirement: Canvas projection accepts the newest monotonic full snapshot
+
+Desktop preload SHALL accept a Canvas Host projection event for the exact current Canvas identity whenever its
+sequence is strictly greater than the last delivered sequence. Each event SHALL carry one complete authoritative
+snapshot; a sequence gap caused by a Main session advancing before preload registration, or by a skipped intermediate
+projection, SHALL NOT drop a later full snapshot. Stale or duplicate sequences and foreign identities SHALL remain
+rejected before any listener runs.
+
+#### Scenario: A sequence gap precedes the delivery
+
+- **WHEN** the open Canvas receives a terminal Agent delivery whose projection sequence is greater than the last
+  delivered sequence plus one
+- **THEN** the exact open Canvas still applies that complete snapshot without closing or reopening
+- **AND** the projection is not replayed or inferred from the active/current identity
+
+#### Scenario: A stale or duplicate sequence arrives
+
+- **WHEN** a Canvas projection event carries a sequence less than or equal to the last delivered sequence
+- **THEN** it is dropped without mutating the open Canvas snapshot
+
+#### Scenario: A foreign Canvas identity arrives
+
+- **WHEN** a Canvas projection event carries an identity that is not the exact current Canvas owner
+- **THEN** it is rejected before any Canvas listener receives it
+
+### Requirement: Canvas document refresh preserves the active viewport
+
+Canvas Webview SHALL keep its package-owned runtime viewport stable when an authoritative full snapshot changes
+document nodes or connections without changing presentation. The same document identity SHALL seed viewport only
+once, and document updates SHALL NOT recreate the viewport snapshot policy or flush it as though the View closed.
+An explicit newer Host presentation remains authoritative.
+
+#### Scenario: Terminal delivery updates an already-open document
+
+- **WHEN** a terminal Agent delivery adds or updates Canvas nodes while the user has an uncommitted local pan or zoom
+- **THEN** the document update is rendered without changing the visible viewport
+- **AND** the document snapshot does not trigger a viewport-policy `close` flush
+
+#### Scenario: Repeated full snapshots keep the same presentation
+
+- **WHEN** the same Canvas identity receives repeated newer full snapshots whose presentation is unchanged
+- **THEN** Webview applies the document facts without reseeding runtime viewport or replaying Host presentation
+
+#### Scenario: Host presentation changes explicitly
+
+- **WHEN** a newer authoritative snapshot contains a presentation different from the last accepted presentation
+- **THEN** Webview applies that exact viewport and selection once
+- **AND** it does not infer presentation from node count, layout, active identity or document viewport fields
+
+### Requirement: Mounted Media Library content uses one durable workspace-relative locator
+
+Desktop SHALL persist mounted Media Library content as the normalized workspace-relative
+`WorkspaceFileContentLocator` path `neko/assets/<libraryName>/<relativePath>`, the same durable identity used by
+ordinary workspace files. Consumers SHALL NOT receive, persist, or require a separate `MediaLibraryContentLocator`
+content identity for this flow. Mount association, validation, recovery and authorization SHALL stay in the mount
+manager and Host path guard, and arbitrary symlink escapes SHALL remain rejected.
+
+#### Scenario: A mounted Media Library file becomes a durable Canvas fact
+
+- **WHEN** a terminal Agent turn delivers a source document or image whose canonical content is a mounted Media
+  Library file
+- **THEN** the Workspace Board node persists a `workspace-file` locator with the `neko/assets/<libraryName>/<relativePath>`
+  path
+- **AND** reopening the Canvas renders and authorizes that node through the workspace mount path without a raw path,
+  active-workspace inference, or a second Media Library content authority
+
+#### Scenario: An escaped or broken mount fails locally
+
+- **WHEN** a mounted Media Library path resolves to a symlink escape or a missing/invalid mount
+- **THEN** Host authorization rejects only that resource with an owner-qualified diagnostic
+- **AND** valid sibling files and the rest of the Workspace remain usable

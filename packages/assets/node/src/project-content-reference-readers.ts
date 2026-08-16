@@ -10,7 +10,6 @@ import {
   parseContentReferenceTarget,
   validateContentLocator,
   type ContentLocator,
-  type MediaLibraryContentLocator,
   type WorkspaceFileContentLocator,
 } from '@neko/content';
 import {
@@ -19,6 +18,7 @@ import {
   type WorkspaceMediaLibraryRequirementSnapshot,
 } from '@neko/assets-domain/contracts';
 import { loadNkc, saveNkc } from '@neko/canvas-domain';
+import { parseWorkspaceMediaLibraryPath } from './project-media-library-content-handler';
 
 const PROJECT_DOCUMENT_EXTENSIONS = new Set(['.nkc', '.otio']);
 const EXCLUDED_DIRECTORIES = new Set([
@@ -211,9 +211,7 @@ async function rewriteCutReferences(
             item.media_reference.target_url,
             ownerId,
           );
-          const replacement = replacements.get(
-            source.kind === 'media-library' ? contentLocatorKey(source) : source.path,
-          );
+          const replacement = replacements.get(contentLocatorKey(source));
           if (!replacement) return item;
           rewrittenCount += 1;
           return {
@@ -236,9 +234,9 @@ function readCutContentLocator(
   documentDirectory: string,
   targetUrl: string,
   ownerId: string,
-): MediaLibraryContentLocator | WorkspaceFileContentLocator {
+): WorkspaceFileContentLocator {
   const portable = parseContentReferenceTarget(targetUrl);
-  if (portable?.kind === 'media-library') return portable;
+  if (portable && parseWorkspaceMediaLibraryPath(portable.path)) return portable;
   const targetPath = normalizeWorkspaceContentPath(
     path.posix.normalize(path.posix.join(documentDirectory, targetUrl)),
   );
@@ -339,19 +337,13 @@ function replaceContentLocator(
   locator: ContentLocator,
   replacements: ReadonlyMap<string, string>,
 ): ContentLocator {
-  if (locator.kind === 'media-library') {
-    const replacement = replacements.get(contentLocatorKey(locator));
-    return replacement ? { kind: 'workspace-file', path: replacement } : locator;
-  }
   if (locator.kind === 'workspace-file') {
-    const replacement = replacements.get(locator.path);
+    const replacement = replacements.get(contentLocatorKey(locator));
     return replacement ? { ...locator, path: replacement } : locator;
   }
   if (locator.kind === 'document-entry') {
     const source = replaceContentLocator(locator.source, replacements);
-    return source.kind === 'workspace-file' || source.kind === 'media-library'
-      ? { ...locator, source }
-      : locator;
+    return source.kind === 'workspace-file' ? { ...locator, source } : locator;
   }
   return locator;
 }

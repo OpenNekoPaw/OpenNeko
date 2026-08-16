@@ -174,6 +174,20 @@ describe('document reading contracts', () => {
         source: {
           filePath: '${BOOKS}/comic.cbz',
           format: 'cbz',
+          contentLocator: { kind: 'workspace-file', path: 'neko/assets/Books/comic.cbz' },
+        },
+        entryPath: 'page-1.png',
+      }),
+    ).toEqual({
+      kind: 'document-entry',
+      source: { kind: 'workspace-file', path: 'neko/assets/Books/comic.cbz' },
+      entryPath: 'page-1.png',
+    });
+    expect(
+      createDocumentEntryContentLocator({
+        source: {
+          filePath: '${BOOKS}/comic.cbz',
+          format: 'cbz',
           contentLocator: {
             kind: 'media-library',
             libraryName: 'Books',
@@ -182,15 +196,7 @@ describe('document reading contracts', () => {
         },
         entryPath: 'page-1.png',
       }),
-    ).toEqual({
-      kind: 'document-entry',
-      source: {
-        kind: 'media-library',
-        libraryName: 'Books',
-        relativePath: 'comics/comic.cbz',
-      },
-      entryPath: 'page-1.png',
-    });
+    ).toBeUndefined();
     expect(
       createDocumentEntryContentLocator({
         source: {

@@ -67,9 +67,8 @@ describe('NKC validator', () => {
             data: {
               assetPath: 'Characters/concept.png',
               contentLocator: {
-                kind: 'media-library',
-                libraryName: 'Characters',
-                relativePath: 'concept.png',
+                kind: 'workspace-file',
+                path: 'neko/assets/Characters/concept.png',
               },
               entityRepresentation: {
                 entityId: 'character-1',

@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import {
   contentLocatorKey,
   type ContentReadService,
-  type MediaLibraryContentLocator,
+  type WorkspaceFileContentLocator,
 } from '@neko/content';
 import { createCharacterAuthoringFileRepository } from '@neko/chara-node';
 import { createWorldAuthoringFileRepository } from '@neko/world-node';
@@ -59,7 +59,7 @@ const EXCLUDED_PROJECT_DIRECTORIES = new Set([
 interface PortableSnapshotEntry {
   readonly key: string;
   readonly libraryName: string;
-  readonly source: MediaLibraryContentLocator;
+  readonly source: WorkspaceFileContentLocator;
   readonly destinationPath: string;
   readonly byteLength: number;
   readonly fingerprint: string;
@@ -681,7 +681,7 @@ async function buildSnapshotEntries(input: {
 
 async function fingerprintSnapshotSource(
   reader: ContentReadService,
-  source: MediaLibraryContentLocator,
+  source: WorkspaceFileContentLocator,
 ): Promise<{
   readonly byteLength: number;
   readonly fingerprint: string;

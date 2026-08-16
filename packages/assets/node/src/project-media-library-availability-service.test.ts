@@ -126,9 +126,8 @@ function mediaOwner(
     ownerId,
     sourceFingerprint: `sha256:${ownerId.replaceAll('/', '-')}`,
     references: references.map(([libraryName, relativePath]) => ({
-      kind: 'media-library' as const,
-      libraryName,
-      relativePath,
+      kind: 'workspace-file' as const,
+      path: `neko/assets/${libraryName}/${relativePath}`,
     })),
   };
 }

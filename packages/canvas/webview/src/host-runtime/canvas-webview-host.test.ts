@@ -960,6 +960,60 @@ describe('createCanvasWebviewHost', () => {
     runtime.dispose();
   });
 
+  it('does not replay unchanged presentation for an external document-only snapshot', async () => {
+    const runtime = new CanvasHostRuntimeSession({
+      identity: {
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        viewInstanceId: 'view-instance-1',
+        documentId: 'neko/boards/workspace.nkc',
+        sessionId: 'session-1',
+        rendererSessionId: 'endpoint-1',
+      },
+      initialCanvas: DEFAULT_CANVAS_DATA,
+      effects: {},
+    });
+    const host = createCanvasWebviewHost(runtime);
+    const messages: unknown[] = [];
+    host.subscribe((message) => messages.push(message));
+    host.postMessage({ type: 'ready' });
+    await vi.waitFor(() => {
+      expect(messages.some((message) => isHostPresentationMessage(message))).toBe(true);
+    });
+    messages.length = 0;
+
+    await runtime.executeIntent(
+      createCanvasHostIntentRequest({
+        requestId: 'external-document-request',
+        commandId: 'external-document-command',
+        identity: runtime.identity,
+        intent: {
+          type: 'replace-document',
+          canvas: {
+            ...DEFAULT_CANVAS_DATA,
+            name: 'Terminal delivery',
+          },
+        },
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(messages).toContainEqual({
+        type: 'update',
+        data: {
+          ...DEFAULT_CANVAS_DATA,
+          name: 'Terminal delivery',
+        },
+      });
+    });
+    expect(messages.filter(isHostPresentationMessage)).toEqual([]);
+
+    host.dispose();
+    runtime.dispose();
+  });
+
   it('exposes delegate capabilities and forwards command-bearing Canvas actions only when supported', () => {
     const runtime = new CanvasHostRuntimeSession({
       identity: {

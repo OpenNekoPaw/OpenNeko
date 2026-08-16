@@ -58,8 +58,8 @@ import { initializeProjectMediaLibraryBindings } from './project-media-library-i
 import {
   resolveProjectMediaLibraryContentPath,
   resolveProjectMediaLibraryRootPath,
-  projectMediaLibraryWorkspaceLocator,
 } from './project-content-read-service';
+import { parseWorkspaceMediaLibraryPath } from './project-media-library-content-handler';
 import {
   CreativeDocumentCreationService,
   WorkspaceEntryCreationService,
@@ -73,7 +73,7 @@ import {
   isValidCanvasDocumentBytes,
 } from '@neko/canvas-domain/project-file-io';
 import { createEmptyCutDocumentBytes, isValidCutDocumentBytes } from '@neko/cut-domain';
-import type { MediaLibraryContentLocator, WorkspaceFileContentLocator } from '@neko/content';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 
 const FILE_SCAN_LIMIT = 5_000;
 const EXCLUDED_DIRECTORIES = new Set([
@@ -315,19 +315,6 @@ export function createResourceBrowserNodeReadSource(
   };
 }
 
-export async function searchProjectMediaLibraryContentLocators(input: {
-  readonly projectId: string;
-  readonly workspace: AssetWorkspaceResolution;
-  readonly globalMediaLibraryRoot: string;
-  readonly files: NekoHostPorts['files'];
-  readonly query: string;
-  readonly limit: number;
-}): Promise<readonly MediaLibraryContentLocator[]> {
-  return (await searchProjectMediaLibraryContentEntries(input)).flatMap((entry) =>
-    entry.role === 'content' && entry.locator.kind === 'media-library' ? [entry.locator] : [],
-  );
-}
-
 export async function searchProjectMediaLibraryWorkspaceLocators(input: {
   readonly projectId: string;
   readonly workspace: AssetWorkspaceResolution;
@@ -336,8 +323,8 @@ export async function searchProjectMediaLibraryWorkspaceLocators(input: {
   readonly query: string;
   readonly limit: number;
 }): Promise<readonly WorkspaceFileContentLocator[]> {
-  return (await searchProjectMediaLibraryContentLocators(input)).map(
-    projectMediaLibraryWorkspaceLocator,
+  return (await searchProjectMediaLibraryContentEntries(input)).flatMap((entry) =>
+    entry.role === 'content' && entry.locator.kind === 'workspace-file' ? [entry.locator] : [],
   );
 }
 
@@ -856,8 +843,8 @@ function requireBrowsableMediaLibraryName(
   if (
     item.role === 'directory' &&
     item.libraryName &&
-    item.locator.kind === 'media-library' &&
-    item.locator.libraryName === item.libraryName
+    item.locator.kind === 'workspace-file' &&
+    parseWorkspaceMediaLibraryPath(item.locator.path)?.libraryName === item.libraryName
   ) {
     return item.libraryName;
   }
@@ -944,8 +931,9 @@ async function readMediaLibraryChildren(
   const relativeDirectory =
     parent.role === 'library-root'
       ? undefined
-      : parent.locator.kind === 'media-library' && parent.locator.libraryName === libraryName
-        ? parent.locator.relativePath
+      : parent.locator.kind === 'workspace-file' &&
+          parseWorkspaceMediaLibraryPath(parent.locator.path)?.libraryName === libraryName
+        ? parseWorkspaceMediaLibraryPath(parent.locator.path)?.relativePath
         : failInvalidMediaParent();
   const context = {
     projectId: options.projectId,
@@ -956,9 +944,8 @@ async function readMediaLibraryChildren(
   let absoluteDirectory: string | undefined;
   if (relativeDirectory) {
     await resolveProjectMediaLibraryContentPath(context, {
-      kind: 'media-library',
-      libraryName,
-      relativePath: relativeDirectory,
+      kind: 'workspace-file',
+      path: `neko/assets/${libraryName}/${relativeDirectory}`,
     });
     absoluteDirectory = path.join(absoluteRoot, ...relativeDirectory.split('/'));
   }
@@ -1002,17 +989,15 @@ function projectBoundMediaEntry(
   const parentLocator =
     entry.parentLocator?.kind === 'workspace-file'
       ? {
-          kind: 'media-library' as const,
-          libraryName,
-          relativePath: entry.parentLocator.path,
+          kind: 'workspace-file' as const,
+          path: `neko/assets/${libraryName}/${entry.parentLocator.path}`,
         }
       : undefined;
   return {
     ...entry,
     locator: {
-      kind: 'media-library',
-      libraryName,
-      relativePath: entry.locator.path,
+      kind: 'workspace-file',
+      path: `neko/assets/${libraryName}/${entry.locator.path}`,
     },
     ...(parentLocator ? { parentLocator } : {}),
     description: entry.description === '.' ? libraryName : `${libraryName}/${entry.description}`,
@@ -1346,7 +1331,10 @@ export async function resolveResourceBrowserItemPath(input: {
   if (input.item.role === 'library-root') {
     throw new Error('Resource Browser Media Library root has no content path.');
   }
-  if (input.item.locator.kind === 'media-library') {
+  if (
+    input.item.locator.kind === 'workspace-file' &&
+    parseWorkspaceMediaLibraryPath(input.item.locator.path)
+  ) {
     return resolveProjectMediaLibraryContentPath(
       {
         projectId: input.projectId,

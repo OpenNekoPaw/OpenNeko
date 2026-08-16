@@ -184,6 +184,5 @@ function workspaceLocator(path: string): ContentLocator {
 function locatorPath(locator: ContentLocator): string {
   if (locator.kind === 'package-resource') return locator.resourcePath;
   if (locator.kind === 'document-entry') return serializeContentReferenceTarget(locator.source);
-  if (locator.kind === 'media-library') return locator.relativePath;
   return locator.path;
 }

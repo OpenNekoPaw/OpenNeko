@@ -2,27 +2,30 @@
 
 The accepted Media Library design separated four concerns:
 
-1. portable project content identity (`MediaLibraryContentLocator`);
+1. durable project content identity;
 2. target-free project-local authorization (`.neko/media-libraries` binding);
 3. reusable user-global directory registration (`~/.neko/media-libraries` connection);
 4. physical contained file access (the Assets/Content Host boundary).
 
-The current worktree replaced that chain with `workspace-file:neko/assets/...` plus a symlink as the only
-fact. This deleted binding, recovery and content-handler services and forced Canvas, Cut, Entity, Search,
-Text Editor, packaging and Agent onto a Workspace-path interpretation. The observed hierarchy and Agent
-failures are symptoms of the broken ownership chain, not isolated UI defects.
+The first pass replaced content identity and authorization with `workspace-file:neko/assets/...` plus a
+symlink as the only fact. The second pass overcorrected by restoring a second `MediaLibraryContentLocator`
+content identity while keeping the Workspace path for Agent. That split one logical fact into two durable
+identities and required producers to translate between them.
 
-The product requirement that Agent only sees Workspace files remains valid. It is implemented by adding a
-managed Workspace projection at the Agent boundary, not by changing every domain's durable identity.
+The resolution keeps the layered mount-management chain but collapses content identity to one path. The
+mount-management layer (global connection, project binding, managed link) stays distinct because it owns
+authorization and symlink escape protection; content consumers no longer branch on Media Library
+ownership because a mounted file is an ordinary Workspace file.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Preserve the original global catalog, project binding, media identity, availability, recovery and
-  portability design.
+- Preserve the global catalog, project binding, availability, recovery and portability mount-management
+  semantics.
 - Make every authorized project Media Library available through a managed link/junction below
-  `neko/assets/<libraryName>` for Workspace-restricted consumers.
+  `neko/assets/<libraryName>`.
+- Use one durable workspace-relative `workspace-file` path for mounted files across every consumer.
 - Simplify user decisions while retaining explicit internal ownership and validation.
 - Make missing `.neko` state reinitializable and keep invalid records/link conflicts fail-local.
 - Keep one successful physical read chain and reject direct target, active Workspace and name-based
@@ -30,7 +33,7 @@ managed Workspace projection at the Agent boundary, not by changing every domain
 
 **Non-Goals:**
 
-- Treating a symlink as a global registration, project fact or Media Library identity.
+- Treating a symlink as a global registration, project fact or content identity.
 - Letting a project directly authorize an unregistered directory.
 - Exposing global connection IDs, `.neko`, physical targets or native handles to Renderer or Agent.
 - Copying whole libraries during association or normal synchronization.
@@ -38,35 +41,34 @@ managed Workspace projection at the Agent boundary, not by changing every domain
 
 ## Decisions
 
-### 1. Restore the layered owner chain
+### 1. Keep the layered mount-management chain, collapse content identity
 
 The canonical model is:
 
 ```text
-Project fact
-  MediaLibraryContentLocator(libraryName, relativePath)
+Durable project fact (one content identity)
+  WorkspaceFileContentLocator(path: 'neko/assets/<libraryName>/<relativePath>')
         |
         v
-Project-local authorization
+Project-local authorization (mount management)
   .neko/media-libraries/<libraryName>.json
   { projectId, libraryName, connectionId, bindingFingerprint }
         |
         v
-User-global registration
+User-global registration (mount management)
   ~/.neko/media-libraries/<connection>
   { logical identity -> authorized physical directory }
         |
         v
-Workspace access projection
+Workspace access projection (mount management)
   neko/assets/<libraryName> -> exact registered target
         |
         v
 Contained physical descendant
 ```
 
-No layer substitutes for another. Project facts are synchronized and portable. Bindings and links are
-machine-local and reconstructible. The global connection owns the physical target authorization. The link
-is a Host-created access projection used by Workspace-restricted consumers.
+The mount-management layer owns authorization and escape protection; the content layer owns one portable
+identity. No mount layer substitutes for another, and no layer manufactures a second content identity.
 
 ### 2. Simplify user intent, not implementation ownership
 
@@ -109,36 +111,30 @@ This is a bounded reconstruction of non-authoritative local state, not a normal 
 multiple matches require explicit user association. A binding/link mismatch is an `entry-conflict`; the
 system does not select either side or overwrite a regular directory.
 
-### 4. Media identity remains canonical; managed links provide Agent projection
+### 4. One content identity; mount management stays a distinct authority
 
-Canvas, Cut, Entity representation, Search, Resource Browser, document-entry and portable snapshot keep
-`MediaLibraryContentLocator`. The locator contains only logical library name, portable relative path and an
-optional fingerprint.
+Canvas, Cut, Entity representation, Search, Resource Browser, document-entry, portable snapshot and Agent
+all persist the same `workspace-file` path `neko/assets/<libraryName>/<relativePath>`. There is no
+`MediaLibraryContentLocator` and no media-library branch in `ContentLocator`; `DocumentEntryContentLocator.source`
+is a `WorkspaceFileContentLocator`.
 
-Project-to-Agent attachment and mention producers map an already authorized media locator to:
-
-```ts
-{ kind: 'workspace-file', path: 'neko/assets/<libraryName>/<relativePath>' }
-```
-
-Agent receives only this Workspace locator and its exact sender-bound Workspace grant. It never receives a
-Media Library locator, binding, global identity or target. This projection is not persisted back into
-Canvas, Cut, Entity or package facts.
+The binding-backed workspace path authorizer is the only mount-aware boundary. When a `workspace-file` path
+falls under `neko/assets/<libraryName>`, it validates the exact binding → global connection → managed link
+before authorizing the descendant. Ordinary workspace files stay on the ordinary contained-path guard.
 
 ### 5. One physical read path uses the managed link
 
-The Media Library content handler does not read the global target directly. It:
+The shared content path does not read the global target directly. For a `neko/assets/<libraryName>` path it:
 
-1. validates the logical locator;
+1. validates the normalized workspace path;
 2. resolves the exact project binding;
 3. resolves the exact registered global connection;
 4. verifies the direct managed Workspace link exists and points to that target;
-5. authorizes the requested final path against the link target; and
+5. authorizes the requested final descendant against the link target; and
 6. delegates bytes/stat/range reads to the shared Content service through that resolved path.
 
-Agent begins at step 4 with a sender-bound Workspace locator and uses the same managed-link guard. Normal
-Workspace files remain inside the Workspace realpath. Unmanaged links, broken links, regular-directory
-conflicts, mismatched global targets and nested escapes reject only the current resource.
+Normal Workspace files remain inside the Workspace realpath. Unmanaged links, broken links,
+regular-directory conflicts, mismatched global targets and nested escapes reject only the current resource.
 
 There is no direct-target fallback, similarly named connection lookup, active/recent Workspace fallback,
 raw path bypass or try-next reader.
@@ -155,12 +151,13 @@ These filters do not merge their authorities. Media roots use stable library ide
 reference the included root, deeper children reference included directories, and query results are flat.
 Projection decoding validates unique IDs, parent closure and cycles before Renderer tree rendering. An
 invalid record or library contributes a local diagnostic while valid siblings and the surrounding Desktop
-panel remain usable.
+panel remain usable. Media rows surface as workspace-relative `neko/assets/<libraryName>/<relativePath>`
+locators, not as a separate Media Library identity.
 
 ### 7. Sync and portability preserve the original semantics
 
-Normal project sync includes authoritative project documents containing logical Media Library locators.
-It excludes root `.neko`, managed link entries and external target bytes. Git ignore/exclude is advisory;
+Normal project sync includes authoritative project documents containing workspace-relative locators. It
+excludes root `.neko`, managed link entries and external target bytes. Git ignore/exclude is advisory;
 product traversal rules are authoritative.
 
 On another machine, missing local authorization yields `required-unlinked` while the project remains open.
@@ -170,14 +167,14 @@ staged project facts to project-owned Workspace files and publishes atomically.
 
 ## Ownership map
 
-| Responsibility                  | Owner                                             | Persistent authority                          | Rebuildable projection             |
-| ------------------------------- | ------------------------------------------------- | --------------------------------------------- | ---------------------------------- |
-| Media file identity             | Project document owner + `@neko/content` contract | `MediaLibraryContentLocator` in project facts | Resource/Search rows               |
-| Project authorization           | `@neko/assets-domain` / `@neko/assets-node`       | target-free `.neko` binding                   | availability/recovery projection   |
-| Physical directory registration | user-global Assets runtime                        | global Media Library connection               | global catalog UI                  |
-| Workspace access                | Assets Node + Content Host guard                  | none                                          | `neko/assets/<name>` link/junction |
-| Agent handoff                   | Agent/Assets application boundary                 | conversation attachment locator only          | sender-bound Workspace locator     |
-| Native picker and sender trust  | Desktop Main                                      | none                                          | one request-scoped selection       |
+| Responsibility                  | Owner                                             | Persistent authority                        | Rebuildable projection             |
+| ------------------------------- | ------------------------------------------------- | ------------------------------------------- | ---------------------------------- |
+| Media file identity             | Project document owner + `@neko/content` contract | `workspace-file` `neko/assets/...` in facts | Resource/Search rows               |
+| Project authorization           | `@neko/assets-domain` / `@neko/assets-node`       | target-free `.neko` binding                 | availability/recovery projection   |
+| Physical directory registration | user-global Assets runtime                        | global Media Library connection             | global catalog UI                  |
+| Workspace access                | Assets Node + Content Host guard                  | none                                        | `neko/assets/<name>` link/junction |
+| Agent handoff                   | Agent/Assets application boundary                 | conversation attachment locator only        | sender-bound Workspace locator     |
+| Native picker and sender trust  | Desktop Main                                      | none                                        | one request-scoped selection       |
 
 ## Risks / Trade-offs
 
@@ -186,17 +183,19 @@ staged project facts to project-owned Workspace files and publishes atomically.
 - Binding and link can diverge after manual filesystem edits. The exact pair is checked on every dependent
   operation; mismatch is fail-local and requires repair.
 - Windows junction/UNC semantics need platform-specific integration evidence.
-- Restoring the old modules requires an atomic producer/consumer switch; partial restoration would create
-  dual successful paths and is prohibited.
+- A single content identity means mounted files and ordinary files share one path shape; the mount-aware
+  authorizer must remain the only place that interprets the `neko/assets/<libraryName>` prefix.
 
 ## Migration / Recovery Plan
 
-1. Restore the deleted contracts and services from the accepted baseline.
-2. Add link materialization/validation to binding lifecycle without changing durable media locators.
-3. Atomically restore all domain producers/consumers and remove symlink-only Workspace-path facts.
-4. Reconcile current local state: preserve records and files, adopt only exact registered links, diagnose
+1. Remove the `MediaLibraryContentLocator` contract, dispatch, handlers, serializers and path normalizers.
+2. Convert resource/search/portable/reference producers to emit normalized `neko/assets/<libraryName>/<relativePath>`.
+3. Keep the mount-management lifecycle (binding, global connection, managed link) and route mounted-file
+   authorization through the binding-backed workspace path authorizer.
+4. Atomically update all consumers (Canvas, Cut, Entity, Search, Text Editor, packaging, Agent) to the
+   single workspace-file path and delete the media-library branches.
+5. Reconcile current local state: preserve records and files, adopt only exact registered links, diagnose
    ambiguous/conflicting state, and never rewrite project facts silently.
-5. Restore Resource Browser operations and hierarchy contract.
 6. Run path-level, package, Desktop UI and Agent evaluation gates before treating prior evidence as valid.
 
 ## Open Questions

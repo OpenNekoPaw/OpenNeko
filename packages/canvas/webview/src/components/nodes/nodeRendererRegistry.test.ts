@@ -67,9 +67,8 @@ describe('nodeRendererRegistry', () => {
           path: 'Assets/epub/animation/Blame/volume-01.epub',
           title: 'ignored/path/title.epub',
           contentLocator: {
-            kind: 'media-library',
-            libraryName: 'Assets',
-            relativePath: 'epub/animation/Blame/volume-01.epub',
+            kind: 'workspace-file',
+            path: 'neko/assets/Assets/epub/animation/Blame/volume-01.epub',
           },
         },
         zIndex: 2,

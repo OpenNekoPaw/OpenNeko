@@ -271,8 +271,9 @@ describe('Desktop architecture boundaries', () => {
     expect(existsSync(path.join(assetsNodeRoot, 'project-media-library-content-handler.ts'))).toBe(
       true,
     );
-    expect(contentLocatorContract).toContain('interface MediaLibraryContentLocator');
-    expect(contentLocatorContract).toContain('| MediaLibraryContentLocator');
+    expect(contentLocatorContract).not.toContain('MediaLibraryContentLocator');
+    expect(contentLocatorContract).toContain('readonly source: WorkspaceFileContentLocator');
+    expect(contentLocatorContract).not.toContain('media-library');
     expect(bridgeContract).not.toContain('absolutePath');
     expect(bridgeContract).not.toContain('selectedDirectory');
   });
@@ -368,10 +369,14 @@ describe('Desktop architecture boundaries', () => {
     expect(canvasRuntime).not.toContain('resolvePreviewVariant');
     expect(canvasRuntime).not.toContain("'inline-variant'");
     expect(
-      existsSync(path.join(repositoryRoot, 'packages/canvas/webview/src/preview/previewResolver.ts')),
+      existsSync(
+        path.join(repositoryRoot, 'packages/canvas/webview/src/preview/previewResolver.ts'),
+      ),
     ).toBe(false);
     expect(
-      existsSync(path.join(repositoryRoot, 'packages/canvas/webview/src/preview/previewRuntime.ts')),
+      existsSync(
+        path.join(repositoryRoot, 'packages/canvas/webview/src/preview/previewRuntime.ts'),
+      ),
     ).toBe(false);
   });
 

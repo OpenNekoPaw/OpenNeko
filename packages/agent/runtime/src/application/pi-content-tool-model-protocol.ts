@@ -1124,8 +1124,6 @@ function contentLocatorLabel(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return portableBaseName(locator.path);
-    case 'media-library':
-      return portableBaseName(locator.relativePath);
     case 'document-entry':
       return portableBaseName(locator.entryPath);
     case 'package-resource':
@@ -1146,8 +1144,6 @@ function contentLocatorPortablePath(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return locator.path;
-    case 'media-library':
-      return locator.relativePath;
     case 'document-entry':
       return locator.entryPath;
     case 'package-resource':

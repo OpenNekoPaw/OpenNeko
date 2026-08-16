@@ -16,7 +16,6 @@ import {
   type ContentLocator,
   type DocumentEntryContentLocator,
   type GeneratedOutputContentLocator,
-  type MediaLibraryContentLocator,
   type PackageResourceContentLocator,
   type WorkspaceFileContentLocator,
 } from '../contracts';
@@ -28,7 +27,6 @@ export interface ContentReadHandler<TLocator extends ContentLocator> {
 
 export interface ContentReadHandlers {
   readonly workspaceFile: ContentReadHandler<WorkspaceFileContentLocator>;
-  readonly mediaLibrary: ContentReadHandler<MediaLibraryContentLocator>;
   readonly documentEntry: ContentReadHandler<DocumentEntryContentLocator>;
   readonly generatedOutput: ContentReadHandler<GeneratedOutputContentLocator>;
   readonly packageResource: ContentReadHandler<PackageResourceContentLocator>;
@@ -88,8 +86,6 @@ export class ExplicitContentReadService implements ContentReadService {
     switch (locator.kind) {
       case 'workspace-file':
         return this.handlers.workspaceFile.stat(locator, options);
-      case 'media-library':
-        return this.handlers.mediaLibrary.stat(locator, options);
       case 'document-entry':
         return this.handlers.documentEntry.stat(locator, options);
       case 'generated-output':
@@ -106,8 +102,6 @@ export class ExplicitContentReadService implements ContentReadService {
     switch (locator.kind) {
       case 'workspace-file':
         return this.handlers.workspaceFile.read(locator, options);
-      case 'media-library':
-        return this.handlers.mediaLibrary.read(locator, options);
       case 'document-entry':
         return this.handlers.documentEntry.read(locator, options);
       case 'generated-output':
@@ -140,8 +134,6 @@ function assertHandlerResult<T extends ContentStat | ContentBytes>(
 function locatorFingerprintPrecondition(locator: ContentLocator): ContentFingerprint | undefined {
   switch (locator.kind) {
     case 'workspace-file':
-      return locator.fingerprint;
-    case 'media-library':
       return locator.fingerprint;
     case 'document-entry':
       return locator.fingerprint;

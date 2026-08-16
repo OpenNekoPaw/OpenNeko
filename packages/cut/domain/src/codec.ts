@@ -1,5 +1,4 @@
 import { OtioValidationError, type OtioDiagnostic, type OtioParseResult } from './diagnostics';
-import { parseContentReferenceTarget } from '@neko/content';
 import { readClipIdentity, readTrackIdentity, validateOpenNekoMetadata } from './metadata';
 import type {
   OtioClip,
@@ -460,8 +459,6 @@ function readExternalReference(
 }
 
 function isCanonicalPersistentMediaTarget(value: string): boolean {
-  const portable = parseContentReferenceTarget(value);
-  if (portable?.kind === 'media-library') return true;
   if (
     value.length === 0 ||
     value.includes('\\') ||

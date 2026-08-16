@@ -45,9 +45,8 @@ describe('CanvasMediaLibraryCopyService', () => {
       destinationKind: 'project-media-library',
       source: { kind: 'workspace-file', path: 'source/shot.mp4' },
       destination: {
-        kind: 'media-library',
-        libraryName: 'Editorial',
-        relativePath: 'Sequences/shot.mp4',
+        kind: 'workspace-file',
+        path: 'neko/assets/Editorial/Sequences/shot.mp4',
       },
       byteLength: 12,
     });

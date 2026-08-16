@@ -527,7 +527,6 @@ function workspaceLocatorForRead(
         ? validation.locator.source
         : undefined;
     case 'generated-output':
-    case 'media-library':
     case 'package-resource':
       return undefined;
   }
@@ -605,11 +604,6 @@ function workspaceRelativePath(locatorValue: ContentLocator): string {
       throw new AgentContentEffectError(
         'desktop-agent-content-kind-unsupported',
         `Desktop package resource '${locator.packageId}/${locator.resourcePath}' requires its owning package resolver.`,
-      );
-    case 'media-library':
-      throw new AgentContentEffectError(
-        'desktop-agent-content-kind-unsupported',
-        'Desktop Agent content effects require the managed-link Workspace projection.',
       );
   }
 }

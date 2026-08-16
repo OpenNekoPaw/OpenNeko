@@ -11,9 +11,8 @@ import { createEmptyCanvasData } from '../canvasHeadlessAuthoring';
 import { planCanvasWorkspaceBoardProjection } from '../canvasWorkspaceBoardProjection';
 
 const sourceLocator: ContentLocator = {
-  kind: 'media-library',
-  libraryName: 'References',
-  relativePath: 'source-image.png',
+  kind: 'workspace-file',
+  path: 'neko/assets/References/source-image.png',
   fingerprint: { strategy: 'sha256', value: 'sha256:source-image' },
 };
 const generatedLocator = generatedOutputLocator('shot-1', 'sha256:shot-1');

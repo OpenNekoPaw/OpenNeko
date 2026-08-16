@@ -20,9 +20,9 @@ show the native/configured selector and delegate to Assets.
 
 ### Requirement: Agent receives only the Workspace access projection
 
-Project-to-Agent attachment, mention and context producers SHALL translate an authorized Media Library
-locator into its managed-link Workspace locator. Agent SHALL remain unaware of the Media Library domain,
-project binding, global connection and physical target.
+Project-to-Agent attachment, mention and context producers SHALL project an authorized mounted file as its
+workspace-relative `workspace-file` locator. Agent SHALL remain unaware of the project binding, global
+connection and physical target.
 
 #### Scenario: Send linked media to Agent
 
@@ -35,16 +35,16 @@ project binding, global connection and physical target.
 
 - **WHEN** a stale, unmanaged, nested-escaping or wrong-Workspace locator is sent
 - **THEN** only that Agent operation fails with a typed diagnostic
-- **AND** the runtime does not switch to a Media Library handler, global connection or active Workspace
+- **AND** the runtime does not switch to a global connection or active Workspace
 
-### Requirement: Other project consumers retain Media Library identity
+### Requirement: Other project consumers use the shared workspace-file path
 
-Canvas, Cut, Preview, Entity and package/export paths SHALL consume the canonical Media Library locator and
-shared project content service. Desktop MUST NOT rewrite their durable facts to Agent-oriented Workspace
-paths.
+Canvas, Cut, Preview, Entity and package/export paths SHALL consume the same workspace-relative
+`neko/assets/<libraryName>/<relativePath>` locator through the shared project content service. Desktop MUST NOT
+rewrite their durable facts into a different Media Library identity.
 
 #### Scenario: Canvas previews linked media
 
-- **WHEN** Canvas resolves a Media Library reference
+- **WHEN** Canvas resolves a mounted Media Library reference
 - **THEN** the canonical project content service validates binding, global connection and managed link
 - **AND** Canvas receives only the authorized bytes/descriptor required for presentation

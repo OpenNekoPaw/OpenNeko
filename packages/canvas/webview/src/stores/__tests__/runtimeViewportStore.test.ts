@@ -38,6 +38,34 @@ describe('runtime viewport store', () => {
     expect(useRuntimeViewportStore.getState().seededDocumentKey).toBe('doc-a');
   });
 
+  it('does not reseed an active viewport for another snapshot of the same document', () => {
+    useRuntimeViewportStore.getState().seedViewportFromDocument('doc-a', DOCUMENT_VIEWPORT);
+    useRuntimeViewportStore.getState().setViewport({
+      pan: { x: 480, y: 320 },
+      zoom: 0.9,
+    });
+
+    useRuntimeViewportStore.getState().seedViewportFromDocument('doc-a', {
+      pan: { x: 0, y: 0 },
+      zoom: 1,
+    });
+
+    expect(useRuntimeViewportStore.getState().viewport).toEqual({
+      pan: { x: 480, y: 320 },
+      zoom: 0.9,
+    });
+  });
+
+  it('seeds a different document identity from its presentation snapshot', () => {
+    useRuntimeViewportStore.getState().seedViewportFromDocument('doc-a', DOCUMENT_VIEWPORT);
+
+    const nextDocumentViewport = { pan: { x: -40, y: 80 }, zoom: 1.25 };
+    useRuntimeViewportStore.getState().seedViewportFromDocument('doc-b', nextDocumentViewport);
+
+    expect(useRuntimeViewportStore.getState().viewport).toEqual(nextDocumentViewport);
+    expect(useRuntimeViewportStore.getState().seededDocumentKey).toBe('doc-b');
+  });
+
   it('updates pan and zoom without mutating semantic canvas data', () => {
     const before = useCanvasStore.getState().canvasData;
 

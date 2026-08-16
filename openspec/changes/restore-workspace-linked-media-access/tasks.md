@@ -1,14 +1,14 @@
 ## 1. Correct the architecture contract
 
-- [x] 1.1 Restore the global Media Library, target-free project binding, Media Library locator and managed Workspace link as separate owners with one read chain.
+- [x] 1.1 Keep the global Media Library, target-free project binding and managed Workspace link as mount-management owners while collapsing content identity to one workspace-file path.
 - [x] 1.2 Specify deterministic `.neko` initialization/recovery, exact-link adoption, conflict diagnostics and no silent authorization.
-- [x] 1.3 Correct architecture/domain documents that currently describe the Workspace link as the only authority.
+- [x] 1.3 Correct architecture/domain documents that describe either the Workspace link or a second Media Library locator as the content authority.
 
-## 2. Restore canonical Media Library behavior
+## 2. Collapse content identity to one workspace-file path
 
-- [x] 2.1 Restore `MediaLibraryContentLocator`, project binding repository/service, recovery planning and global-connection validation.
-- [x] 2.2 Integrate managed-link create/validate/rebuild/remove into binding lifecycle without adding a direct-target read path.
-- [x] 2.3 Restore availability and portability projection states, preserving malformed local records and valid siblings.
+- [x] 2.1 Remove `MediaLibraryContentLocator` and media-library dispatch/handlers/serializers across Content, Canvas, Cut, Entity, Search, Resource Browser, Text Editor, packaging and Agent.
+- [x] 2.2 Convert resource/search/portable/reference producers to emit normalized `neko/assets/<libraryName>/<relativePath>` workspace-file paths.
+- [x] 2.3 Keep the binding-backed workspace path authorizer as the only mount-aware boundary, preserving symlink escape protection and fail-local diagnostics.
 
 ## 3. Restore user-facing resource operations
 
@@ -18,15 +18,15 @@
 
 ## 4. Restore consumer boundaries
 
-- [x] 4.1 Restore Media Library identity for Canvas, Cut, Entity, Search, Preview, document-entry and portable package consumers.
-- [x] 4.2 Add the single authorized media-to-managed-link read service and delete direct physical-target and workspace-prefix bypasses.
-- [x] 4.3 Keep Agent attachment/mention/tool inputs on sender-bound managed-link `workspace-file` locators and verify unmanaged/nested escapes remain denied.
+- [x] 4.1 Convert Canvas, Cut, Entity, Search, Preview, document-entry and portable package consumers to the single workspace-file path.
+- [x] 4.2 Add the single binding-backed workspace path authorizer and delete direct physical-target and media-library bypasses.
+- [x] 4.3 Keep Agent attachment/mention/tool inputs on sender-bound workspace-file locators and verify unmanaged/nested escapes remain denied.
 
 ## 5. Initialization, sync and packaging
 
 - [x] 5.1 Reinitialize missing `.neko` binding storage without modifying project facts; adopt an existing link only when it matches one exact global connection.
 - [x] 5.2 Ensure sync, hashing and normal packaging exclude `.neko`, link entries and external target bytes.
-- [x] 5.3 Restore explicit portable snapshot behavior using authoritative Media Library references and atomic staged rewriting.
+- [x] 5.3 Restore explicit portable snapshot behavior using workspace-relative references and atomic staged rewriting.
 
 ## 6. Verification
 

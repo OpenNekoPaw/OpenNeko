@@ -1,33 +1,35 @@
 ## MODIFIED Requirements
 
-### Requirement: Media Library remains the ordinary external-file owner
+### Requirement: Mounted Media Library files share the ordinary workspace-file identity
 
-The product SHALL retain `MediaLibraryContentLocator(libraryName, relativePath)` as the canonical portable
-identity for project-authorized external media. Canvas, Cut, Entity, Search, Resource Browser, document
-entry and packaging SHALL preserve this owner identity. Ordinary file discovery SHALL NOT create Asset or
-Entity identity.
+The product SHALL persist project-authorized external media as the normalized workspace-relative
+`WorkspaceFileContentLocator` path `neko/assets/<libraryName>/<relativePath>`, the same durable identity used
+by ordinary workspace files. There SHALL be no separate `MediaLibraryContentLocator` content identity.
+Canvas, Cut, Entity, Search, Resource Browser, document entry and packaging SHALL preserve this shared
+workspace-relative identity. Ordinary file discovery SHALL NOT create Asset or Entity identity.
 
 #### Scenario: Browse a project Media Library file
 
 - **WHEN** a user browses a file in an available project Media Library
-- **THEN** Resource Browser returns the exact Media Library locator and owner-preserving capabilities
+- **THEN** Resource Browser returns a `workspace-file` locator at `neko/assets/<libraryName>/<relativePath>`
+  with owner-preserving capabilities
 - **AND** Renderer receives no binding, global connection, Workspace target or physical path
 
 #### Scenario: Use media in another project domain
 
 - **WHEN** Canvas, Cut or Entity stores a reference to the selected external media
-- **THEN** it stores the logical Media Library locator
-- **AND** it does not persist `neko/assets`, `.neko`, a global connection identity or absolute target
+- **THEN** it stores the `workspace-file` locator at `neko/assets/<libraryName>/<relativePath>`
+- **AND** it does not persist a `.neko` binding, a global connection identity or an absolute target
 
 ### Requirement: Project access requires exact global registration and local binding
 
-Every successful Media Library operation SHALL resolve the exact project binding and exact registered
+Every successful mounted-file operation SHALL resolve the exact project binding and exact registered
 global connection before validating the matching managed Workspace link. The runtime MUST NOT resolve by
 library name alone, active Workspace, recent target, raw path or a direct-target fallback.
 
 #### Scenario: Binding is missing
 
-- **WHEN** a project fact references a logical Media Library with no reconstructed or confirmed local
+- **WHEN** a project fact references a mounted library path with no reconstructed or confirmed local
   binding
 - **THEN** the library remains visible as `required-unlinked` and dependent reads are disabled
 - **AND** Project open and unrelated resources remain available

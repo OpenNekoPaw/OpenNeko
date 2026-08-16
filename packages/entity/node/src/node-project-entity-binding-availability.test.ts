@@ -135,7 +135,6 @@ describe('refreshProjectEntityBindingAvailability', () => {
         }),
         availability: new ProjectEntityBindingAvailabilityService({
           workspaceFile: unavailable('content-missing'),
-          mediaLibrary: unavailable('content-missing'),
           documentEntry: unavailable('content-missing'),
           generatedOutput: unavailable('content-unauthorized'),
           packageResource: unavailable('content-missing'),

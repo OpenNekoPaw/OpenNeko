@@ -17,19 +17,16 @@ describe('Workspace Media Library sync contracts', () => {
           sourceFingerprint: 'sourceFingerprint-2',
           references: [
             {
-              kind: 'media-library',
-              libraryName: 'Footage',
-              relativePath: 'shots/a.mov',
+              kind: 'workspace-file',
+              path: 'neko/assets/Footage/shots/a.mov',
             },
             {
-              kind: 'media-library',
-              libraryName: 'Footage',
-              relativePath: 'shots/a.mov',
+              kind: 'workspace-file',
+              path: 'neko/assets/Footage/shots/a.mov',
             },
             {
-              kind: 'media-library',
-              libraryName: 'Documents',
-              relativePath: 'book.epub',
+              kind: 'workspace-file',
+              path: 'neko/assets/Documents/book.epub',
             },
             { kind: 'workspace-file', path: 'media/project-owned.png' },
           ],
@@ -40,9 +37,8 @@ describe('Workspace Media Library sync contracts', () => {
           sourceFingerprint: 'sourceFingerprint-1',
           references: [
             {
-              kind: 'media-library',
-              libraryName: 'Footage',
-              relativePath: 'audio/a.wav',
+              kind: 'workspace-file',
+              path: 'neko/assets/Footage/audio/a.wav',
             },
           ],
         },
@@ -86,7 +82,7 @@ describe('Workspace Media Library sync contracts', () => {
             ownerKind: 'canvas',
             ownerId: 'board-a',
             sourceFingerprint: 'sourceFingerprint-1',
-            references: [{ kind: 'media-library', libraryName: 'Footage', relativePath: '' }],
+            references: [{ kind: 'workspace-file', path: '/absolute/private.png' }],
           },
         ],
         coverage: { expectedOwnerKinds: ['canvas'], coveredOwnerKinds: ['canvas'] },

@@ -21,7 +21,7 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
     const before = await service.inspect();
     expect(before).toMatchObject({
       references: [
-        { kind: 'media-library', libraryName: 'Library', relativePath: 'rin.png' },
+        { kind: 'workspace-file', path: 'neko/assets/Library/rin.png' },
         { kind: 'generated-output', outputId: 'output-rin', digest: 'a'.repeat(64) },
       ],
     });
@@ -30,9 +30,8 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
       replacements: new Map([
         [
           contentLocatorKey({
-            kind: 'media-library',
-            libraryName: 'Library',
-            relativePath: 'rin.png',
+            kind: 'workspace-file',
+            path: 'neko/assets/Library/rin.png',
           }),
           'media/rin.png',
         ],
@@ -71,7 +70,7 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
 
     await expect(createService(workspacePath).inspect()).resolves.toMatchObject({
       references: [
-        { kind: 'media-library', libraryName: 'Library', relativePath: 'rin.png' },
+        { kind: 'workspace-file', path: 'neko/assets/Library/rin.png' },
         { kind: 'generated-output', outputId: 'output-rin' },
       ],
       diagnostics: [{ code: 'invalid-project-entity-document', entityId: 'character-invalid' }],
@@ -123,9 +122,8 @@ async function writeCanonicalDocument(workspacePath: string): Promise<void> {
             bindingId: 'workspace-binding',
             role: 'portrait',
             target: {
-              kind: 'media-library',
-              libraryName: 'Library',
-              relativePath: 'rin.png',
+              kind: 'workspace-file',
+              path: 'neko/assets/Library/rin.png',
             },
             source: 'user',
             acceptedAt: '2026-08-05T00:00:00.000Z',

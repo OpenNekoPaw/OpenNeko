@@ -5,7 +5,6 @@ import {
   type ContentStat,
   type DocumentEntryContentLocator,
   type GeneratedOutputContentLocator,
-  type MediaLibraryContentLocator,
   type PackageResourceContentLocator,
   type WorkspaceFileContentLocator,
 } from '@neko/content';
@@ -23,7 +22,6 @@ export interface ProjectEntityBindingResourcePort<TLocator> {
 
 export interface ProjectEntityBindingAvailabilityServiceOptions {
   readonly workspaceFile: ProjectEntityBindingResourcePort<WorkspaceFileContentLocator>;
-  readonly mediaLibrary: ProjectEntityBindingResourcePort<MediaLibraryContentLocator>;
   readonly documentEntry: ProjectEntityBindingResourcePort<DocumentEntryContentLocator>;
   readonly generatedOutput: ProjectEntityBindingResourcePort<GeneratedOutputContentLocator>;
   readonly packageResource: ProjectEntityBindingResourcePort<PackageResourceContentLocator>;
@@ -78,13 +76,11 @@ export class ProjectEntityBindingAvailabilityService {
     const target = binding.target;
     const result = await (target.kind === 'workspace-file'
       ? this.options.workspaceFile.stat(target, options)
-      : target.kind === 'media-library'
-        ? this.options.mediaLibrary.stat(target, options)
-        : target.kind === 'document-entry'
-          ? this.options.documentEntry.stat(target, options)
-          : target.kind === 'generated-output'
-            ? this.options.generatedOutput.stat(target, options)
-            : this.options.packageResource.stat(target, options));
+      : target.kind === 'document-entry'
+        ? this.options.documentEntry.stat(target, options)
+        : target.kind === 'generated-output'
+          ? this.options.generatedOutput.stat(target, options)
+          : this.options.packageResource.stat(target, options));
     if (!isContentStat(result) || !contentLocatorsEqual(result.locator, target)) {
       throw new ProjectEntityContractError([
         {
@@ -104,8 +100,6 @@ function bindingOwner(
   switch (binding.target.kind) {
     case 'workspace-file':
       return 'workspace-file';
-    case 'media-library':
-      return 'media-library';
     case 'document-entry':
       return 'document';
     case 'generated-output':

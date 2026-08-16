@@ -2766,10 +2766,7 @@ async function startDesktop(): Promise<void> {
         prepareWorkspaceCopy: (copy, signal) =>
           characterGlobalCatalogService.prepareWorkspaceCopy(copy, signal),
       },
-      commit: new ProjectLocalAuthoringCommitRepository(
-        input.workspace.workspacePath,
-        authority,
-      ),
+      commit: new ProjectLocalAuthoringCommitRepository(input.workspace.workspacePath, authority),
       entities: new NodeProjectEntityAuthoringService({
         workspace: {
           workspaceId: input.workspaceId,
@@ -3713,11 +3710,9 @@ function requireCanvasPreviewContentType(
   const sourcePath =
     locator.kind === 'document-entry'
       ? locator.entryPath
-      : locator.kind === 'media-library'
-        ? locator.relativePath
-        : locator.kind === 'package-resource'
-          ? locator.resourcePath
-          : locator.path;
+      : locator.kind === 'package-resource'
+        ? locator.resourcePath
+        : locator.path;
   switch (path.posix.extname(sourcePath).toLocaleLowerCase()) {
     case '.png':
       return 'image/png';
@@ -3773,8 +3768,6 @@ function canvasContentDisplayName(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return path.posix.basename(locator.path);
-    case 'media-library':
-      return path.posix.basename(locator.relativePath);
     case 'document-entry':
       return path.posix.basename(locator.entryPath);
     case 'package-resource':

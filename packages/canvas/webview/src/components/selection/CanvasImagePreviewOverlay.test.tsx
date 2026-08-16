@@ -92,7 +92,7 @@ describe('CanvasFullscreenPreviewOverlay', () => {
         ...mediaNode('invalid-node', 'video', 'Books/story.epub/video/preview.mp4').data,
         contentLocator: {
           kind: 'document-entry',
-          source: { kind: 'workspace-file', path: 'neko/assets/Books/story.epub' },
+          source: { kind: 'workspace-file', path: '/Users/example/private.epub' },
           entryPath: 'video/preview.mp4',
         },
       },

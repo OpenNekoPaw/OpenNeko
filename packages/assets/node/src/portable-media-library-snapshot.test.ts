@@ -698,9 +698,8 @@ async function writeBinding(
               {
                 bindingId: 'binding-a',
                 target: {
-                  kind: 'media-library',
-                  libraryName: 'Footage',
-                  relativePath: locatorPath,
+                  kind: 'workspace-file',
+                  path: `neko/assets/Footage/${locatorPath}`,
                 },
                 role: 'portrait',
                 source: 'user',

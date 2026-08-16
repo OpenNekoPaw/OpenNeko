@@ -5,7 +5,6 @@ export {
   UnavailableContentReadHandler,
   type CreateNodeHostContentReadServiceOptions,
   type NodeDocumentEntryReader,
-  type NodeDocumentEntryMediaSourcePathResolver,
 } from './content-read-service';
 export {
   NodeAuthorizedWorkspaceWriter,

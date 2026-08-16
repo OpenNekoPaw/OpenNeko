@@ -407,8 +407,6 @@ function projectableWorkspacePath(locator: ContentLocator): string | undefined {
       return locator.path;
     case 'generated-output':
       return locator.path;
-    case 'media-library':
-      return undefined;
     case 'document-entry':
     case 'package-resource':
       return undefined;
@@ -421,8 +419,6 @@ function displayLocatorPath(locator: ContentLocator | ContentRepresentationLocat
     case 'workspace-file':
     case 'generated-output':
       return content.path;
-    case 'media-library':
-      return content.relativePath;
     case 'document-entry':
       return content.entryPath;
     case 'package-resource':

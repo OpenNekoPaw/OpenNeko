@@ -60,7 +60,7 @@ describe('Project Entity document contract', () => {
     expect(decoded).toEqual({ ok: true, document, diagnostics: [] });
   });
 
-  it('persists Media Library identity instead of its managed Workspace projection', () => {
+  it('persists a mounted Media Library representation as its durable Workspace projection', () => {
     const entity = createEntity({ entityId: 'character-rin', kind: 'character', canonical: 'Rin' });
     const representation = {
       bindingId: 'binding-rin-portrait',
@@ -77,25 +77,6 @@ describe('Project Entity document contract', () => {
               {
                 ...representation,
                 target: {
-                  kind: 'media-library',
-                  libraryName: 'Characters',
-                  relativePath: 'portraits/rin.png',
-                },
-              },
-            ],
-          },
-        ]),
-      ),
-    ).toBeTruthy();
-    expect(() =>
-      assertProjectEntityDocument(
-        createDocument([
-          {
-            ...entity,
-            representations: [
-              {
-                ...representation,
-                target: {
                   kind: 'workspace-file',
                   path: 'neko/assets/Characters/portraits/rin.png',
                 },
@@ -104,7 +85,26 @@ describe('Project Entity document contract', () => {
           },
         ]),
       ),
-    ).toThrow(ProjectEntityContractError);
+    ).toBeTruthy();
+    const legacyDocument: unknown = {
+      ...createDocument([]),
+      entities: [
+        {
+          ...entity,
+          representations: [
+            {
+              ...representation,
+              target: {
+                kind: 'media-library',
+                libraryName: 'Characters',
+                relativePath: 'portraits/rin.png',
+              },
+            },
+          ],
+        },
+      ],
+    };
+    expect(() => assertProjectEntityDocument(legacyDocument)).toThrow(ProjectEntityContractError);
   });
 
   it('diagnoses unsupported document fields and rejects former facts and provenance authority', () => {

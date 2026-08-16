@@ -72,12 +72,13 @@ external target bytes. Explicit portable snapshot MAY copy only authoritative re
 #### Scenario: Sync a project with linked media
 
 - **WHEN** the project is synchronized to another machine
-- **THEN** logical Media Library references and project-owned files are transferred
+- **THEN** workspace-relative `neko/assets/<libraryName>/<relativePath>` references and project-owned files
+  are transferred
 - **AND** bindings, links, global identities and physical targets are not transferred
 
 #### Scenario: Publish a portable snapshot
 
 - **WHEN** the user explicitly builds a portable project
-- **THEN** the packager reads exact referenced bytes through the canonical Media Library handler, rewrites
+- **THEN** the packager reads exact referenced bytes through the canonical project content service, rewrites
   only staged facts and publishes atomically
 - **AND** the source project, global library and external target remain unchanged

@@ -66,9 +66,12 @@ const createRuntimeViewportState: StateCreator<RuntimeViewportState> = (set) => 
   },
 
   seedViewportFromDocument: (documentKey, viewport) => {
-    set({
-      viewport,
-      seededDocumentKey: documentKey,
+    set((state) => {
+      if (state.seededDocumentKey === documentKey) return state;
+      return {
+        viewport,
+        seededDocumentKey: documentKey,
+      };
     });
   },
 });

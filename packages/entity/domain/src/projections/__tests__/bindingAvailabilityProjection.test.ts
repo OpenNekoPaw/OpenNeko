@@ -10,16 +10,17 @@ describe('binding availability projection', () => {
         entityKind: 'character',
         role: 'portrait',
         representation: {
-          kind: 'media-library',
-          libraryName: 'Characters',
-          relativePath: 'missing-portrait.png',
+          kind: 'workspace-file',
+          path: 'neko/assets/Characters/missing-portrait.png',
         },
-        owner: 'media-library',
+        owner: 'workspace-file',
         availability: 'needs-attention',
         attention: { diagnostic: { code: 'content-missing' }, action: 'rebind' },
         isDefault: true,
         checkedAt: '2026-06-10T01:00:00.000Z',
       }),
-    ).toBe('portrait: Characters/missing-portrait.png · media-library · needs attention · default');
+    ).toBe(
+      'portrait: neko/assets/Characters/missing-portrait.png · workspace-file · needs attention · default',
+    );
   });
 });

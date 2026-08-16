@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -6,11 +6,9 @@ import {
   confirmProjectMediaLibraryRecovery,
   createProjectMediaLibraryRecoveryPlan,
 } from '@neko/assets-domain/contracts';
-import { createNodeHostContentReadService } from '@neko/content/node';
 import { encodeProjectEntityDocument } from '@neko/entity-domain';
 import { ProjectMediaLibraryBindingRepository } from './project-media-library-binding-repository';
 import { createProjectMediaLibraryBindingFingerprint } from './project-media-library-binding-repository';
-import { ProjectMediaLibraryContentReadHandler } from './project-media-library-content-handler';
 import { createProjectContentReadService } from './project-content-read-service';
 
 const PROJECT_ID = 'project-neko';
@@ -24,7 +22,7 @@ afterEach(async () => {
   );
 });
 
-describe('ProjectMediaLibraryContentReadHandler', () => {
+describe('project Media Library content authorization', () => {
   it('rejects a managed Workspace link that does not match the exact project binding', async () => {
     const fixture = await createFixture();
     const retiredRoot = path.join(fixture.outsideRoot, 'retired');
@@ -42,9 +40,8 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
       globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
     });
     const locator = {
-      kind: 'media-library' as const,
-      libraryName: 'Footage',
-      relativePath: 'shots/hero.txt',
+      kind: 'workspace-file' as const,
+      path: 'neko/assets/Footage/shots/hero.txt',
     };
 
     const result = await content.read(locator);
@@ -57,22 +54,14 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
 
   it('uses the exact binding and authorized global connection without projecting a physical path', async () => {
     const fixture = await createFixture();
-    const resolveAuthorizedTarget = vi.fn(async (connectionId: string) => {
-      if (connectionId !== fixture.connectionId) throw new Error('unexpected connection');
-      return fixture.libraryRoot;
-    });
-    const content = createNodeHostContentReadService({
+    const content = createProjectContentReadService({
+      projectId: PROJECT_ID,
       workspaceRoot: fixture.workspace,
-      mediaLibraryHandler: new ProjectMediaLibraryContentReadHandler({
-        bindings: fixture.bindings,
-        connections: { resolveAuthorizedTarget },
-        workspaceRoot: fixture.workspace,
-      }),
+      globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
     });
     const locator = {
-      kind: 'media-library' as const,
-      libraryName: 'Footage',
-      relativePath: 'shots/hero.txt',
+      kind: 'workspace-file' as const,
+      path: 'neko/assets/Footage/shots/hero.txt',
     };
 
     const result = await content.read(locator);
@@ -83,7 +72,6 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
       offset: 0,
     });
     if (result.status === 'ready') expect(new TextDecoder().decode(result.bytes)).toBe('hero');
-    expect(resolveAuthorizedTarget).toHaveBeenCalledExactlyOnceWith(fixture.connectionId);
     expect(JSON.stringify(result)).not.toContain(fixture.libraryRoot);
     expect(JSON.stringify(result)).not.toContain(fixture.connectionId);
   });
@@ -100,9 +88,8 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
     const locator = {
       kind: 'document-entry' as const,
       source: {
-        kind: 'media-library' as const,
-        libraryName: 'Footage',
-        relativePath: 'shots/hero.txt',
+        kind: 'workspace-file' as const,
+        path: 'neko/assets/Footage/shots/hero.txt',
       },
       entryPath: 'images/cover.jpg',
     };
@@ -111,7 +98,7 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
 
     expect(result).toMatchObject({ status: 'ready', locator });
     expect(readEntry).toHaveBeenCalledExactlyOnceWith(
-      await realpath(path.join(fixture.libraryRoot, 'shots', 'hero.txt')),
+      path.join(fixture.workspace, 'neko', 'assets', 'Footage', 'shots', 'hero.txt'),
       'images/cover.jpg',
     );
   });
@@ -127,9 +114,8 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
 
     await expect(
       content.read({
-        kind: 'media-library',
-        libraryName: 'Footage',
-        relativePath: 'shots/hero.txt',
+        kind: 'workspace-file',
+        path: 'neko/assets/Footage/shots/hero.txt',
       }),
     ).resolves.toMatchObject({ status: 'ready' });
   });
@@ -139,20 +125,16 @@ describe('ProjectMediaLibraryContentReadHandler', () => {
     const outsidePath = path.join(fixture.outsideRoot, 'private.txt');
     await writeFile(outsidePath, 'private', 'utf8');
     await symlink(outsidePath, path.join(fixture.libraryRoot, 'shots', 'escape.txt'));
-    const content = createNodeHostContentReadService({
+    const content = createProjectContentReadService({
+      projectId: PROJECT_ID,
       workspaceRoot: fixture.workspace,
-      mediaLibraryHandler: new ProjectMediaLibraryContentReadHandler({
-        bindings: fixture.bindings,
-        connections: { resolveAuthorizedTarget: async () => fixture.libraryRoot },
-        workspaceRoot: fixture.workspace,
-      }),
+      globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
     });
 
     await expect(
       content.read({
-        kind: 'media-library',
-        libraryName: 'Footage',
-        relativePath: 'shots/escape.txt',
+        kind: 'workspace-file',
+        path: 'neko/assets/Footage/shots/escape.txt',
       }),
     ).resolves.toMatchObject({
       status: 'unavailable',
@@ -189,9 +171,8 @@ async function createFixture() {
             {
               bindingId: 'binding-1',
               target: {
-                kind: 'media-library',
-                libraryName: 'Footage',
-                relativePath: 'shots/hero.txt',
+                kind: 'workspace-file',
+                path: 'neko/assets/Footage/shots/hero.txt',
               },
               role: 'portrait',
               source: 'user',

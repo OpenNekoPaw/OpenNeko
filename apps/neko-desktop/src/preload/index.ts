@@ -2100,7 +2100,7 @@ ipcRenderer.on(
       return;
     }
     const sequence = currentCanvasEventSequences.get(key) ?? 0;
-    if (event.sequence !== sequence + 1) {
+    if (event.sequence <= sequence) {
       return;
     }
     currentCanvasEventSequences.set(key, event.sequence);

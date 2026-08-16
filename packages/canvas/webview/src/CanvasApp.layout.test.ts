@@ -175,6 +175,9 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/createViewportSnapshotPolicy/);
     expect(appSource).toMatch(/writeCanvasViewportSnapshot/);
     expect(appSource).toMatch(/readCanvasViewportSnapshot/);
+    expect(appSource).toContain('const hasCanvasData = canvasData !== null;');
+    expect(appSource).toMatch(/\}, \[hasCanvasData, hostPort\]\);/);
+    expect(appSource).not.toMatch(/\}, \[canvasData, hostPort\]\);/);
   });
 
   it('queues whole-document synchronization before selected-node passive action resolution', () => {

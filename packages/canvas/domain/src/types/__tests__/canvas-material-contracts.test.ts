@@ -82,7 +82,7 @@ describe('Canvas material contracts', () => {
         locator: { kind: 'workspace-file', path: 'neko/assets/Characters/reference.png' },
         mediaKind: 'image',
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isCanvasMaterialAuthoringRequest({
         kind: 'external-import',
@@ -315,11 +315,7 @@ describe('Canvas material contracts', () => {
           entryPath: 'image/cover.jpg',
         },
       }),
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: 'canvas-material-content-locator-invalid' }),
-      ]),
-    );
+    ).toEqual([]);
     expect(
       validateCanvasMaterialNodePersistence('media', {
         assetPath: 'media/reference.png',

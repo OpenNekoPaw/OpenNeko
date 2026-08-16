@@ -805,8 +805,6 @@ function describeContentLocatorForDisplay(locator: ContentLocator): {
       return { filePath: locator.path, path: locator.path };
     case 'generated-output':
       return { filePath: locator.path, path: locator.path };
-    case 'media-library':
-      return { filePath: locator.libraryName, path: locator.relativePath };
     case 'package-resource':
       return {
         filePath: locator.manifestPath ?? `${locator.packageId}@${locator.revision}`,

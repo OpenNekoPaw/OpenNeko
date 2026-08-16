@@ -413,9 +413,9 @@ describe('Canvas material action catalog', () => {
     expect(resolveCanvasMaterialActionTargets([degraded], [degraded.id])).toEqual([]);
   });
 
-  it('projects no actions for a safe invalid locator while rejecting unsafe values', () => {
-    const unavailable = {
-      id: 'unavailable-media',
+  it('resolves a mounted Media Library locator as a durable referenced target while rejecting unsafe values', () => {
+    const mounted = {
+      id: 'mounted-media',
       type: 'media',
       position: { x: 40, y: 60 },
       size: { width: 300, height: 180 },
@@ -431,10 +431,10 @@ describe('Canvas material action catalog', () => {
       },
     } as unknown as CanvasNode;
     const unsafe = {
-      ...unavailable,
+      ...mounted,
       id: 'unsafe-media',
       data: {
-        ...unavailable.data,
+        ...mounted.data,
         contentLocator: {
           kind: 'workspace-file',
           path: '/Users/example/private.png',
@@ -442,7 +442,17 @@ describe('Canvas material action catalog', () => {
       },
     } as unknown as CanvasNode;
 
-    expect(resolveCanvasMaterialActionTargets([unavailable], [unavailable.id])).toEqual([]);
+    expect(resolveCanvasMaterialActionTargets([mounted], [mounted.id])).toEqual([
+      expect.objectContaining({
+        nodeId: 'mounted-media',
+        origin: 'referenced',
+        locator: {
+          kind: 'document-entry',
+          source: { kind: 'workspace-file', path: 'neko/assets/Books/story.epub' },
+          entryPath: 'image/cover.jpg',
+        },
+      }),
+    ]);
     expect(() => resolveCanvasMaterialActionTargets([unsafe], [unsafe.id])).toThrow(
       'valid canonical ContentLocator',
     );

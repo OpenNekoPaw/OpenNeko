@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import type {
@@ -12,9 +13,19 @@ import {
 } from './node-markdown-media-service';
 
 const roots: string[] = [];
+let globalMediaLibraryRoot: string | undefined;
+
+function mediaLibraryRoot(): string {
+  globalMediaLibraryRoot ??= mkdtempSync(path.join(tmpdir(), 'openneko-global-media-'));
+  return globalMediaLibraryRoot;
+}
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  if (globalMediaLibraryRoot) {
+    await rm(globalMediaLibraryRoot, { recursive: true, force: true });
+    globalMediaLibraryRoot = undefined;
+  }
 });
 
 describe('Node Text Editor Markdown media service', () => {
@@ -64,7 +75,7 @@ describe('Node Text Editor Markdown media service', () => {
     const resolveWorkspace = vi.fn(async () => workspace(workspacePath));
     const isolated = new NodeTextEditorMarkdownMediaService({
       resolveWorkspace,
-      globalMediaLibraryRoot: '/private/global-media-libraries',
+      globalMediaLibraryRoot: mediaLibraryRoot(),
       resources,
       createLeaseId: () => 'lease-1',
     });
@@ -105,7 +116,7 @@ describe('Node Text Editor Markdown media service', () => {
       }),
     ).resolves.toMatchObject({
       status: 'unavailable',
-      diagnostic: { code: 'text-editor-markdown-media-unauthorized' },
+      diagnostic: { code: 'text-editor-markdown-media-missing' },
     });
   });
 
@@ -179,7 +190,7 @@ describe('Node Text Editor Markdown media service', () => {
     const secondLease = lease(`openneko://resource/${'d'.repeat(32)}`);
     const service = new NodeTextEditorMarkdownMediaService({
       resolveWorkspace: async () => workspace(workspacePath),
-      globalMediaLibraryRoot: '/private/global-media-libraries',
+      globalMediaLibraryRoot: mediaLibraryRoot(),
       resources: {
         registerFile: vi.fn().mockResolvedValueOnce(firstLease).mockResolvedValueOnce(secondLease),
       },
@@ -248,7 +259,7 @@ function createService(
 ): NodeTextEditorMarkdownMediaService {
   return new NodeTextEditorMarkdownMediaService({
     resolveWorkspace: async () => workspace(workspacePath),
-    globalMediaLibraryRoot: '/private/global-media-libraries',
+    globalMediaLibraryRoot: mediaLibraryRoot(),
     resources,
     createLeaseId: () => 'lease-1',
   });

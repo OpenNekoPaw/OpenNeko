@@ -1552,9 +1552,8 @@ describe('ResourceBrowserRoot', () => {
           kind: 'directory',
           label: 'Media',
           locator: {
-            kind: 'media-library',
-            libraryName: 'Assets',
-            relativePath: 'Media',
+            kind: 'workspace-file',
+            path: 'neko/assets/Assets/Media',
           },
           capabilities: ['reveal'],
         },

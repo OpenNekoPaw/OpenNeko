@@ -974,8 +974,6 @@ function materialFileName(locator: ContentLocator): string {
     case 'workspace-file':
     case 'generated-output':
       return portableBaseName(locator.path);
-    case 'media-library':
-      return portableBaseName(locator.relativePath);
     case 'document-entry':
       return portableBaseName(locator.entryPath);
     case 'package-resource':

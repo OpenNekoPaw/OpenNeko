@@ -182,6 +182,7 @@ describe('Markdown authoring assistance', () => {
     '\\\\server\\image.png',
     'file:///tmp/image.png',
     'openneko://resource/0123456789abcdefghijklmnopqrstuv',
+    'media-library:library/clip.mp4',
     'assets/../secret.png',
     './assets/image.png',
     'assets//image.png',
@@ -222,7 +223,7 @@ describe('Markdown authoring assistance', () => {
 });
 
 describe('portable Markdown resource targets', () => {
-  it.each(['assets/cover.png', 'script/story.md#第二幕', 'media-library:library/clip.mp4'])(
+  it.each(['assets/cover.png', 'script/story.md#第二幕', 'neko/assets/Reference/shot.mp4'])(
     'accepts Workspace-relative target %s',
     (target) => expect(isPortableMarkdownResourceTarget(target)).toBe(true),
   );

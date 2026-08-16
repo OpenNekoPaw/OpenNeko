@@ -131,25 +131,22 @@ describe('Desktop project content reference readers', () => {
       replacements: new Map([
         [
           contentLocatorKey({
-            kind: 'media-library',
-            libraryName: 'References',
-            relativePath: 'board.png',
+            kind: 'workspace-file',
+            path: 'neko/assets/References/board.png',
           }),
           'media/collected/References/board.png',
         ],
         [
           contentLocatorKey({
-            kind: 'media-library',
-            libraryName: 'Shots',
-            relativePath: 'project-shot.mov',
+            kind: 'workspace-file',
+            path: 'neko/assets/Shots/project-shot.mov',
           }),
           'media/collected/Shots/project-shot.mov',
         ],
         [
           contentLocatorKey({
-            kind: 'media-library',
-            libraryName: 'Portraits',
-            relativePath: 'character-a.png',
+            kind: 'workspace-file',
+            path: 'neko/assets/Portraits/character-a.png',
           }),
           'media/collected/Portraits/character-a.png',
         ],
@@ -219,9 +216,8 @@ async function writeCanonicalEntities(workspacePath: string): Promise<void> {
               {
                 bindingId: 'binding-a',
                 target: {
-                  kind: 'media-library',
-                  libraryName: 'Portraits',
-                  relativePath: 'character-a.png',
+                  kind: 'workspace-file',
+                  path: 'neko/assets/Portraits/character-a.png',
                 },
                 role: 'portrait',
                 source: 'user',
@@ -254,9 +250,8 @@ function canvasFixture(): CanvasData {
         data: {
           assetPath: 'References/board.png',
           contentLocator: {
-            kind: 'media-library',
-            libraryName: 'References',
-            relativePath: 'board.png',
+            kind: 'workspace-file',
+            path: 'neko/assets/References/board.png',
           },
         },
       },
@@ -279,9 +274,8 @@ function cutFixture(): OtioTimeline {
     clipId: 'clip-a',
     name: 'Shot',
     targetUrl: serializeContentReferenceTarget({
-      kind: 'media-library',
-      libraryName: 'Shots',
-      relativePath: 'project-shot.mov',
+      kind: 'workspace-file',
+      path: 'neko/assets/Shots/project-shot.mov',
     }),
     durationFrames: 30,
     rate: 30,

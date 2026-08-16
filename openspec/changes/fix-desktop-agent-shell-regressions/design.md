@@ -350,3 +350,29 @@ owner-qualified diagnostic，不保留该记录的原始 payload，也不识别�
 handler。解析失败的非 authoritative presentation 被局部丢弃并进入当前 canonical fresh state；用户项目、
 会话、素材、设置和文件不修改。SQLite 集成测试必须关闭并重新打开 store，证明旧 Window 不再存在、合法
 sibling 仍可恢复且提示不会在第二次启动重复出现。
+
+## Follow-up decisions: Canvas full-snapshot sequence and mounted media locator
+
+Canvas projection events 携带完整 authoritative snapshot，不应被精确 `sequence + 1` 连续性要求丢弃。Main
+session 的 sequence 可能在 preload 注册前或两次投影之间提前推进（例如 generation reattachment、跨窗口协调
+或 terminal Agent 交付），因此 preload 在精确 identity 校验之后只接受严格单调递增的 sequence：`>` 已投递
+sequence 即应用最新完整 snapshot，`<=` 视为 stale/duplicate 丢弃，陌生 identity 拒绝。这不会形成
+active/current identity fallback 或 renderer 第二权威，也不会重放已完成 turn。
+
+已挂载 Media Library 内容不再用 `MediaLibraryContentLocator` 作为第二个内容路径。挂载文件与普通文件共享
+同一 `WorkspaceFileContentLocator`（路径 `neko/assets/<libraryName>/<relativePath>`）。全局目录注册与项目
+挂载（`neko/assets/<libraryName>` 下的 managed symlink/junction）的差异只属于 mount manager：关联、创建、
+校验、恢复和授权集中在 mount manager 与 Host path guard，`ContentReadService` 与普通 workspace 访问使用同一
+路径。`isProjectDurableContentLocator` 回到“合法 ContentLocator 即为 durable Project fact”，不再把
+`neko/assets/...` 判为非 durable；删除为该流程持久化 `MediaLibraryContentLocator` 的 producer/consumer
+转换，禁止双读、兼容 fallback 或静默迁移。既有合法 workspace-relative Canvas fact 必须原样重开；任意
+symlink escape、缺失或失效挂载仍按 owning resource fail-visible。
+
+Canvas document 与 presentation 具有不同更新频率。运行时完整 snapshot 仍是 document authority，但同一
+document identity 的加载回调只允许首次 seed package-owned runtime viewport；后续 document-only snapshot
+不得把 `CanvasData.viewport` 或尚未更新的 Host presentation 解释为重新定位命令。Webview Host 只有在
+authoritative presentation 相对上一条 accepted snapshot 真实变化时，才更新 Webview presentation state 并
+发布 `canvas.hostPresentation`。viewport snapshot policy 绑定 document lifecycle，而不是 `canvasData` 对象
+identity；节点、连接或 terminal delivery 更新不得触发 cleanup `close` flush。这样不引入第二事实来源：显式
+Host presentation 变化仍覆盖 runtime viewport，本地 viewport 在 bounded idle/blur/close 边界通过既有单一路径
+提交。

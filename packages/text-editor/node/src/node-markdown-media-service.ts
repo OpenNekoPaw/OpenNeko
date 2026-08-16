@@ -1,10 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
-import {
-  resolveProjectMediaLibraryContentPath,
-  resolveWorkspaceContentLocator,
-} from '@neko/assets-node';
+import { resolveProjectWorkspaceContentLocator } from '@neko/assets-node';
 import { isProjectDurableContentLocator, parseContentReferenceTarget } from '@neko/content';
 import { projectNekoMarkdownExtensions } from '@neko/markdown';
 import { detectPreviewContentKind, getPreviewMediaType } from '@neko/preview-domain';
@@ -101,17 +98,14 @@ export class NodeTextEditorMarkdownMediaService {
       if (!locator || !isProjectDurableContentLocator(locator)) {
         return unavailable(request, 'text-editor-markdown-media-unauthorized');
       }
-      absolutePath =
-        locator.kind === 'media-library'
-          ? await resolveProjectMediaLibraryContentPath(
-              {
-                projectId: request.identity.owner.projectId,
-                workspaceRoot: workspace.workspacePath,
-                globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
-              },
-              locator,
-            )
-          : await resolveWorkspaceContentLocator(workspace, locator);
+      absolutePath = await resolveProjectWorkspaceContentLocator(
+        {
+          projectId: request.identity.owner.projectId,
+          workspaceRoot: workspace.workspacePath,
+          globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+        },
+        locator,
+      );
     } catch (error) {
       return unavailable(request, diagnosticForResolutionError(error));
     }
@@ -236,7 +230,8 @@ function diagnosticForResolutionError(error: unknown): TextEditorMarkdownMediaDi
     isErrorCode(error, 'ENOTDIR') ||
     isErrorCode(error, 'workspace-path-unavailable') ||
     isErrorCode(error, 'library-link-broken') ||
-    isErrorCode(error, 'library-link-loop')
+    isErrorCode(error, 'library-link-loop') ||
+    isErrorCode(error, 'content-missing')
   ) {
     return 'text-editor-markdown-media-missing';
   }
@@ -247,7 +242,8 @@ function diagnosticForResolutionError(error: unknown): TextEditorMarkdownMediaDi
     isErrorCode(error, 'library-permission-denied') ||
     isErrorCode(error, 'library-entry-not-link') ||
     isErrorCode(error, 'unmanaged-symlink') ||
-    isErrorCode(error, 'nested-link-escape')
+    isErrorCode(error, 'nested-link-escape') ||
+    isErrorCode(error, 'content-unauthorized')
   ) {
     return 'text-editor-markdown-media-unauthorized';
   }

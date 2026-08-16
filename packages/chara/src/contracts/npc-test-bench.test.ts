@@ -72,9 +72,8 @@ const profile: NpcProfileSource = {
     {
       role: 'portrait',
       representation: {
-        kind: 'media-library',
-        libraryName: 'Characters',
-        relativePath: 'xiaoju-portrait.png',
+        kind: 'workspace-file',
+        path: 'neko/assets/Characters/xiaoju-portrait.png',
       },
       isDefault: true,
     },

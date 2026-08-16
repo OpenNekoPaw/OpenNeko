@@ -119,6 +119,7 @@ export function createCanvasWebviewHost(
   let initialSnapshotFailure: unknown;
   let runtimeEventObserved = false;
   let projectionSequence = 0;
+  let acceptedPresentation: CanvasHostPresentationState | undefined;
   let operationTail: Promise<void> = Promise.resolve();
   const localCommandIds = new Set<string>();
   const localCommandOrder: string[] = [];
@@ -146,9 +147,13 @@ export function createCanvasWebviewHost(
   const publishSnapshot = (next: CanvasHostSnapshot): void => {
     pendingRemovedNodeIds.clear();
     snapshot = next;
-    updatePresentationState(next);
+    const presentationChanged = !areJsonValuesEqual(acceptedPresentation, next.presentation);
+    acceptedPresentation = next.presentation;
+    if (presentationChanged) updatePresentationState(next);
     emit({ type: 'update', data: next.canvas });
-    emit({ type: 'canvas.hostPresentation', presentation: next.presentation });
+    if (presentationChanged) {
+      emit({ type: 'canvas.hostPresentation', presentation: next.presentation });
+    }
   };
 
   const replaySnapshot = (listener: (message: unknown) => void, next: CanvasHostSnapshot): void => {
@@ -170,6 +175,7 @@ export function createCanvasWebviewHost(
 
   const adoptLocalSnapshot = (next: CanvasHostSnapshot): void => {
     snapshot = next;
+    acceptedPresentation = next.presentation;
     updatePresentationState(next);
   };
 

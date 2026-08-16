@@ -98,9 +98,8 @@ describe('project cache/search contracts', () => {
         sourceKind: 'fountain',
         filePath: '/workspace/cases/test.fountain',
         contentLocator: {
-          kind: 'media-library',
-          libraryName: 'Characters',
-          relativePath: 'hero.png',
+          kind: 'workspace-file',
+          path: 'neko/assets/Characters/hero.png',
         },
       },
       projectRoot: '/workspace',
@@ -125,7 +124,7 @@ describe('project cache/search contracts', () => {
           contentLocator: { kind: 'workspace-file', path: 'neko/assets/Characters/hero.png' },
         },
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isProjectSearchItem({
         ...item,
@@ -140,7 +139,7 @@ describe('project cache/search contracts', () => {
           },
         },
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(isProjectSearchItem({ ...item, freshness: 'old' })).toBe(false);
     expect(
       isProjectSearchItem({

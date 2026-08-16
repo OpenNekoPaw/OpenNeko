@@ -116,9 +116,8 @@ describe('Desktop Resource Browser source', () => {
               {
                 bindingId: 'binding-footage',
                 target: {
-                  kind: 'media-library',
-                  libraryName: 'Footage',
-                  relativePath: 'shot.mov',
+                  kind: 'workspace-file',
+                  path: 'neko/assets/Footage/shot.mov',
                 },
                 role: 'portrait',
                 source: 'user',
@@ -413,9 +412,8 @@ describe('Desktop Resource Browser source', () => {
       expect.arrayContaining([
         expect.objectContaining({
           locator: {
-            kind: 'media-library',
-            libraryName: 'Voice',
-            relativePath: 'voice.wav',
+            kind: 'workspace-file',
+            path: 'neko/assets/Voice/voice.wav',
           },
         }),
       ]),
@@ -423,8 +421,8 @@ describe('Desktop Resource Browser source', () => {
     const voice = media.find(
       (entry) =>
         entry.role !== 'library-root' &&
-        entry.locator.kind === 'media-library' &&
-        entry.locator.relativePath === 'voice.wav',
+        entry.locator.kind === 'workspace-file' &&
+        entry.locator.path === 'neko/assets/Voice/voice.wav',
     );
     if (!voice || voice.role === 'library-root') {
       throw new Error('Missing external media fixture.');
@@ -570,9 +568,8 @@ describe('Desktop Resource Browser source', () => {
           kind: 'image',
           label: 'missing.png',
           locator: {
-            kind: 'media-library',
-            libraryName: 'Missing Library',
-            relativePath: 'missing.png',
+            kind: 'workspace-file',
+            path: 'neko/assets/Missing Library/missing.png',
           },
           capabilities: ['preview'],
         },
@@ -632,9 +629,8 @@ describe('Desktop Resource Browser source', () => {
     const cut = media.find(
       (entry) =>
         entry.role !== 'library-root' &&
-        entry.locator.kind === 'media-library' &&
-        entry.locator.libraryName === 'Editorial' &&
-        entry.locator.relativePath === 'story.otio',
+        entry.locator.kind === 'workspace-file' &&
+        entry.locator.path === 'neko/assets/Editorial/story.otio',
     );
 
     expect(cut).toMatchObject({
@@ -905,9 +901,8 @@ describe('Desktop Resource Browser source', () => {
         expect.objectContaining({
           label: 'test.glb',
           locator: {
-            kind: 'media-library',
-            libraryName: 'Models',
-            relativePath: 'test.glb',
+            kind: 'workspace-file',
+            path: 'neko/assets/Models/test.glb',
           },
           capabilities: expect.arrayContaining(['preview']),
           metadata: expect.objectContaining({ mediaType: 'model' }),
@@ -960,8 +955,8 @@ describe('Desktop Resource Browser source', () => {
     const mediaDirectory = rootChildren.find(
       (entry) =>
         entry.role === 'directory' &&
-        entry.locator.kind === 'media-library' &&
-        entry.locator.relativePath === 'Media',
+        entry.locator.kind === 'workspace-file' &&
+        entry.locator.path === 'neko/assets/Assets/Media',
     );
     if (!mediaDirectory || mediaDirectory.role !== 'directory') {
       throw new Error('Missing nested Media directory fixture.');
@@ -977,14 +972,12 @@ describe('Desktop Resource Browser source', () => {
       expect.objectContaining({
         label: 'clip.mp4',
         locator: {
-          kind: 'media-library',
-          libraryName: 'Assets',
-          relativePath: 'Media/clip.mp4',
+          kind: 'workspace-file',
+          path: 'neko/assets/Assets/Media/clip.mp4',
         },
         parentLocator: {
-          kind: 'media-library',
-          libraryName: 'Assets',
-          relativePath: 'Media',
+          kind: 'workspace-file',
+          path: 'neko/assets/Assets/Media',
         },
       }),
     ]);
@@ -1085,9 +1078,8 @@ async function writeMediaRequirement(
             {
               bindingId: `binding-${libraryName.toLocaleLowerCase().replaceAll(' ', '-')}`,
               target: {
-                kind: 'media-library',
-                libraryName,
-                relativePath,
+                kind: 'workspace-file',
+                path: `neko/assets/${libraryName}/${relativePath}`,
               },
               role: 'portrait',
               source: 'user',

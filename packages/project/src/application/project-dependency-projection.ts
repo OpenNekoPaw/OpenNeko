@@ -103,14 +103,15 @@ export function deriveProjectDependencySnapshot(input: {
 }
 
 function contentDependency(locator: ContentLocator): readonly ProjectPublicationDependencyRef[] {
-  if (locator.kind === 'media-library') {
-    return [
-      {
-        kind: 'media-library',
-        libraryName: locator.libraryName,
-        relativePath: locator.relativePath,
-      },
-    ];
+  if (locator.kind === 'workspace-file') {
+    const segments = locator.path.split('/');
+    if (segments[0] === 'neko' && segments[1] === 'assets' && segments.length >= 4) {
+      const libraryName = segments[2];
+      const relativePath = segments.slice(3).join('/');
+      if (libraryName && relativePath) {
+        return [{ kind: 'media-library', libraryName, relativePath }];
+      }
+    }
   }
   if (locator.kind === 'package-resource') {
     return [

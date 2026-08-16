@@ -96,7 +96,7 @@ describe('Canvas File node text preview', () => {
         ...fileNode('invalid-file', 'neko/assets/Books/story.epub', 'application/epub+zip').data,
         contentLocator: {
           kind: 'workspace-file',
-          path: 'neko/assets/Books/story.epub',
+          path: '/Users/example/private.epub',
         },
       },
     } as unknown as FileCanvasNode;

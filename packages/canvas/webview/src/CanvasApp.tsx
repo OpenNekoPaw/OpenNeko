@@ -167,6 +167,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   // Derive computed values from canvasData
   const nodes = canvasData?.nodes ?? [];
   const connections = canvasData?.connections ?? [];
+  const hasCanvasData = canvasData !== null;
   const selectedNodeIds = selection.nodeIds;
   const selectedConnectionIds = selection.connectionIds;
   const isPanMode = interactionTool === 'pan';
@@ -719,7 +720,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   keyboardActionRef.current = isFullscreenPreviewOpen ? () => undefined : handleKeyboardAction;
 
   useEffect(() => {
-    if (!hostPort || !canvasData) {
+    if (!hasCanvasData) {
       viewportSnapshotPolicyRef.current?.cancel();
       viewportSnapshotPolicyRef.current = null;
       return;
@@ -737,7 +738,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       viewportSnapshotPolicyRef.current?.flush('close');
       viewportSnapshotPolicyRef.current = null;
     };
-  }, [canvasData, hostPort]);
+  }, [hasCanvasData, hostPort]);
 
   useEffect(() => {
     viewportSnapshotPolicyRef.current?.schedule(viewport);

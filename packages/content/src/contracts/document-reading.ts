@@ -2,7 +2,6 @@ import type { ContentRepresentationLocator } from './content-representation';
 import {
   isContentLocator,
   type DocumentEntryContentLocator,
-  type MediaLibraryContentLocator,
   type WorkspaceFileContentLocator,
 } from './content-locator';
 
@@ -77,7 +76,7 @@ export interface DocumentSourceRef {
   readonly filePath: string;
   readonly format: DocumentFormat;
   /** Canonical container identity. Required before document entries can cross package boundaries. */
-  readonly contentLocator?: WorkspaceFileContentLocator | MediaLibraryContentLocator;
+  readonly contentLocator?: WorkspaceFileContentLocator;
   readonly fileId?: string;
   readonly identity?: DocumentFileIdentity;
   readonly uri?: string;
@@ -510,15 +509,12 @@ function readOptionalFileIdentityField(
 function readOptionalDocumentSourceContentLocator(
   record: Record<string, unknown>,
   key: string,
-): WorkspaceFileContentLocator | MediaLibraryContentLocator | undefined | null {
+): WorkspaceFileContentLocator | undefined | null {
   if (!(key in record)) {
     return undefined;
   }
   const value = record[key];
-  return isContentLocator(value) &&
-    (value.kind === 'workspace-file' || value.kind === 'media-library')
-    ? value
-    : null;
+  return isContentLocator(value) && value.kind === 'workspace-file' ? value : null;
 }
 
 function readOptionalStringField(

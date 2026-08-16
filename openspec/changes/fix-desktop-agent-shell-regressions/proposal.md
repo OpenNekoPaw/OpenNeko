@@ -60,6 +60,16 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
   fail-visible，不得伪装成同步成功。
 - 将待处理 Tool approval 从历史 Tool Call 的内联按钮提升为 composer 上方的 conversation-scoped
   审批面板；历史记录继续显示等待状态和 Tool 事实，但不保留第二套可操作审批入口。
+- 让 Desktop preload 对 Canvas projection event 采用单调递增的完整快照语义：精确 identity 校验后接受任何
+  `sequence` 严格大于已投递序列的事件，即使发生序列跳号；陈旧/重复序列和陌生 identity 仍被拒绝，避免
+  terminal Agent 交付在已打开 Canvas 上丢失。
+- 保持已打开 Canvas 的 package-owned viewport 在 document-only 完整快照期间稳定：同一文档只执行一次
+  viewport seed，未变化的 Host presentation 不重复覆盖本地 pan/zoom，viewport snapshot policy 也不得因节点
+  或连接更新重建并触发伪 `close` flush。
+- 将已挂载 Media Library 内容的 durable identity 统一为规范化 workspace-relative
+  `WorkspaceFileContentLocator`（`neko/assets/<libraryName>/<relativePath>`），删除把该投影路径判为非
+  durable 的规则及为此流程持久化 `MediaLibraryContentLocator` 的特殊转换；挂载关联、校验、恢复与授权收敛到
+  mount manager 和 Host path guard，普通文件与挂载文件共享同一内容读取路径。
 
 ## Capabilities
 

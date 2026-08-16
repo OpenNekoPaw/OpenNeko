@@ -19,4 +19,11 @@ describe('stable ContentLocator projection', () => {
     expect(readCanonicalContentLocatorKey(invalid)).toBeUndefined();
     expect(readCanonicalContentLocator(invalid)).toBeUndefined();
   });
+
+  it('projects a mounted Media Library workspace path as one canonical durable locator', () => {
+    const mounted = { kind: 'workspace-file', path: 'neko/assets/References/cover.png' };
+
+    expect(readCanonicalContentLocator(mounted)).toEqual(mounted);
+    expect(readCanonicalContentLocatorKey(mounted)).toBeDefined();
+  });
 });

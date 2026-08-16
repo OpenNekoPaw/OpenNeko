@@ -151,7 +151,6 @@ export class NodeProjectEntityProjectionRuntime {
       repository,
       availability: new ProjectEntityBindingAvailabilityService({
         workspaceFile: stat,
-        mediaLibrary: stat,
         documentEntry: stat,
         generatedOutput: stat,
         packageResource: stat,

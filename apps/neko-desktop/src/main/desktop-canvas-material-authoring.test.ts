@@ -19,7 +19,10 @@ import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { CanvasMaterialAuthoringService } from '@neko/canvas-node';
-import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
+import {
+  createGlobalMediaLibraryConnection,
+  ProjectMediaLibraryBindingRepository,
+} from '@neko/assets-node';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 
 const roots: string[] = [];
@@ -515,10 +518,23 @@ async function bindProjectMediaLibrary(
   sourceDirectory: string,
   libraryName: string,
 ): Promise<void> {
+  const { libraryId } = await createGlobalMediaLibraryConnection({
+    mediaLibraryRoot: fixture.globalMediaLibraryRoot,
+    sourceDirectory,
+    locationKind: 'local',
+  });
   await createWorkspaceLinkedMediaLibrary({
     workspaceRoot: fixture.workspace.workspacePath,
     name: libraryName,
     targetDirectory: sourceDirectory,
+  });
+  await new ProjectMediaLibraryBindingRepository(
+    fixture.workspace.workspacePath,
+    fixture.identity.projectId,
+  ).apply({
+    libraryName,
+    connectionId: libraryId,
+    expectedBindingFingerprint: null,
   });
 }
 

@@ -224,8 +224,6 @@ export function portableMaterialPath(locator: ContentLocator): string {
   switch (locator.kind) {
     case 'workspace-file':
       return locator.path;
-    case 'media-library':
-      return locator.relativePath;
     case 'document-entry':
       return locator.entryPath;
     case 'generated-output':

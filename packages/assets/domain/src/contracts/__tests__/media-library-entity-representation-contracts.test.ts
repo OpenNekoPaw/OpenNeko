@@ -8,9 +8,8 @@ import { decodeProjectEntityDocument, type ProjectEntityDocument } from '@neko/e
 
 const representations = [
   {
-    kind: 'media-library',
-    libraryName: 'Characters',
-    relativePath: 'alice.png',
+    kind: 'workspace-file',
+    path: 'neko/assets/Characters/alice.png',
     fingerprint: { strategy: 'sha256', value: 'sha256:alice' },
   },
   {

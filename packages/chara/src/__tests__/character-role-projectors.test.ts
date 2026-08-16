@@ -46,9 +46,8 @@ const richProfile: NpcProfileSource = {
     {
       role: 'portrait',
       representation: {
-        kind: 'media-library',
-        libraryName: 'Characters',
-        relativePath: 'xiaoju-portrait.png',
+        kind: 'workspace-file',
+        path: 'neko/assets/Characters/xiaoju-portrait.png',
       },
       isDefault: true,
     },
@@ -65,7 +64,7 @@ describe('character role prompt projectors', () => {
     expect(prompt).toContain('## Suggested / Uncertain Facts');
     expect(prompt).toContain('- speech.catchphrase: 我先看看 (confidence 72%) [agent-inferred]');
     expect(prompt).toContain('- 老张: mentor (strong)');
-    expect(prompt).toContain('- portrait: Characters/xiaoju-portrait.png (default)');
+    expect(prompt).toContain('- portrait: neko/assets/Characters/xiaoju-portrait.png (default)');
   });
 
   it('renders consult mode as in-character advice without pretending uncertainty is confirmed', () => {
@@ -88,7 +87,7 @@ describe('character role prompt projectors', () => {
     expect(prompt).toContain('## 已确认事实');
     expect(prompt).toContain('## 建议 / 不确定事实');
     expect(prompt).toContain('- speech.catchphrase: 我先看看 (置信度 72%) [agent-inferred]');
-    expect(prompt).toContain('- portrait: Characters/xiaoju-portrait.png (默认)');
+    expect(prompt).toContain('- portrait: neko/assets/Characters/xiaoju-portrait.png (默认)');
     expect(prompt).not.toContain('## Session Mode');
     expect(prompt).not.toContain('## Confirmed Facts');
     expect(prompt).not.toContain('Suggested facts are uncertain');

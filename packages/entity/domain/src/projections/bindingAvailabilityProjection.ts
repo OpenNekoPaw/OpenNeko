@@ -42,8 +42,6 @@ function representationLabel(
   switch (representation.kind) {
     case 'workspace-file':
       return representation.path;
-    case 'media-library':
-      return `${representation.libraryName}/${representation.relativePath}`;
     case 'document-entry':
       return `${serializeContentReferenceTarget(representation.source)}#${representation.entryPath}`;
     case 'generated-output':

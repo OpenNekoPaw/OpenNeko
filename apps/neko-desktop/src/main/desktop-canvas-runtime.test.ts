@@ -294,15 +294,15 @@ describe('DesktopCanvasRuntime', () => {
     await runtime.dispose();
   });
 
-  it('opens a project Canvas with one unavailable managed-link locator isolated to its node', async () => {
+  it('opens a project Canvas with one mounted Media Library locator isolated to its node', async () => {
     const workspacePath = await mkdtemp(
-      path.join(tmpdir(), 'openneko-canvas-invalid-material-isolation-'),
+      path.join(tmpdir(), 'openneko-canvas-mounted-material-isolation-'),
     );
     roots.push(workspacePath);
     const identity = createIdentity();
     const documentPath = path.join(workspacePath, identity.documentId);
     await mkdir(path.dirname(documentPath), { recursive: true });
-    const unavailableLocator = {
+    const mountedLocator = {
       kind: 'document-entry',
       source: {
         kind: 'workspace-file',
@@ -317,7 +317,7 @@ describe('DesktopCanvasRuntime', () => {
         viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
         nodes: [
           {
-            id: 'unavailable-cover',
+            id: 'mounted-cover',
             type: 'media',
             position: { x: 40, y: 60 },
             size: { width: 300, height: 180 },
@@ -325,7 +325,7 @@ describe('DesktopCanvasRuntime', () => {
             data: {
               assetPath: 'Books/story.epub/image/cover.jpg',
               mediaType: 'image',
-              contentLocator: unavailableLocator,
+              contentLocator: mountedLocator,
             },
           },
           {
@@ -365,17 +365,22 @@ describe('DesktopCanvasRuntime', () => {
 
     const snapshot = await runtime.getSnapshot('window-1', identity);
     expect(snapshot.canvas.nodes.map((node) => node.id)).toEqual([
-      'unavailable-cover',
+      'mounted-cover',
       'editable-sibling',
     ]);
     await expect(
       runtime.resolveMaterialActions('window-1', {
-        requestId: 'resolve-unavailable-cover',
+        requestId: 'resolve-mounted-cover',
         identity,
-        selectedNodeIds: ['unavailable-cover'],
+        selectedNodeIds: ['mounted-cover'],
       }),
     ).resolves.toMatchObject({
-      descriptors: [],
+      descriptors: [
+        expect.objectContaining({
+          id: 'preview:open',
+          ownerId: 'preview',
+        }),
+      ],
     });
     expect(previewResource).not.toHaveBeenCalled();
 
@@ -392,7 +397,7 @@ describe('DesktopCanvasRuntime', () => {
     const persisted = JSON.parse(await readFile(documentPath, 'utf8')) as {
       readonly nodes: readonly { readonly data: Readonly<Record<string, unknown>> }[];
     };
-    expect(persisted.nodes[0]?.data['contentLocator']).toEqual(unavailableLocator);
+    expect(persisted.nodes[0]?.data['contentLocator']).toEqual(mountedLocator);
     expect(persisted.nodes[1]?.data['content']).toBe('Sibling remains editable');
     await runtime.dispose();
   });
@@ -2243,9 +2248,8 @@ describe('DesktopCanvasRuntime', () => {
         kind: 'direct-reference',
         identity: materialIdentity(identity),
         locator: {
-          kind: 'media-library',
-          libraryName: 'linked-media',
-          relativePath: 'clips/linked.mp4',
+          kind: 'workspace-file',
+          path: 'neko/assets/linked-media/clips/linked.mp4',
         },
         mediaKind: 'video',
       },
@@ -2292,9 +2296,8 @@ describe('DesktopCanvasRuntime', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             contentLocator: {
-              kind: 'media-library',
-              libraryName: 'linked-media',
-              relativePath: 'clips/linked.mp4',
+              kind: 'workspace-file',
+              path: 'neko/assets/linked-media/clips/linked.mp4',
             },
           }),
         }),

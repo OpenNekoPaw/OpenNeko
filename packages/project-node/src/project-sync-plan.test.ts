@@ -34,9 +34,8 @@ describe('Project sync plan', () => {
       path.join(root, 'board.nkc'),
       JSON.stringify({
         contentLocator: {
-          kind: 'media-library',
-          libraryName: 'Footage',
-          relativePath: 'shots/a.mov',
+          kind: 'workspace-file',
+          path: 'neko/assets/Footage/shots/a.mov',
         },
       }),
     );

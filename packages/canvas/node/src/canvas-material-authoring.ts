@@ -24,7 +24,7 @@ import {
 } from '@neko/canvas-domain';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
-  resolveProjectMediaLibraryContentPath,
+  resolveProjectWorkspaceContentLocator,
   resolveWorkspaceContentLocator,
 } from '@neko/assets-node';
 import { resolveGlobalMediaLibraryTarget } from '@neko/assets-node';
@@ -247,33 +247,17 @@ export class CanvasMaterialAuthoringService {
     if (!result.ok || result.locator.kind === 'generated-output') {
       throw visible('Canvas requires a valid referenced ContentLocator.');
     }
+    const context = {
+      projectId,
+      workspaceRoot: workspace.workspacePath,
+      globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
+    };
     switch (result.locator.kind) {
       case 'workspace-file':
-        await resolveWorkspaceContentLocator(workspace, result.locator);
-        return;
-      case 'media-library':
-        await resolveProjectMediaLibraryContentPath(
-          {
-            projectId,
-            workspaceRoot: workspace.workspacePath,
-            globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
-          },
-          result.locator,
-        );
+        await resolveProjectWorkspaceContentLocator(context, result.locator);
         return;
       case 'document-entry':
-        if (result.locator.source.kind === 'workspace-file') {
-          await resolveWorkspaceContentLocator(workspace, result.locator.source);
-        } else {
-          await resolveProjectMediaLibraryContentPath(
-            {
-              projectId,
-              workspaceRoot: workspace.workspacePath,
-              globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
-            },
-            result.locator.source,
-          );
-        }
+        await resolveProjectWorkspaceContentLocator(context, result.locator.source);
         return;
       case 'package-resource': {
         const authorize = this.options.authorizePackageResource;
@@ -416,11 +400,9 @@ function titleForLocator(locator: ContentLocator): string {
       ? locator.path
       : locator.kind === 'document-entry'
         ? locator.entryPath
-        : locator.kind === 'media-library'
-          ? locator.relativePath
-          : locator.kind === 'package-resource'
-            ? locator.resourcePath
-            : locator.path;
+        : locator.kind === 'package-resource'
+          ? locator.resourcePath
+          : locator.path;
   return path.posix.basename(portablePath);
 }
 

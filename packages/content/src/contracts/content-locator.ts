@@ -1,5 +1,4 @@
 import { normalizeBundleEntryPath } from './bundle-locator';
-import { isPortablePathSegment } from '@neko/shared/path';
 
 export interface ContentFingerprint {
   readonly strategy: 'sha256' | 'mtime-size' | 'provider';
@@ -12,16 +11,9 @@ export interface WorkspaceFileContentLocator {
   readonly fingerprint?: ContentFingerprint;
 }
 
-export interface MediaLibraryContentLocator {
-  readonly kind: 'media-library';
-  readonly libraryName: string;
-  readonly relativePath: string;
-  readonly fingerprint?: ContentFingerprint;
-}
-
 export interface DocumentEntryContentLocator {
   readonly kind: 'document-entry';
-  readonly source: WorkspaceFileContentLocator | MediaLibraryContentLocator;
+  readonly source: WorkspaceFileContentLocator;
   readonly entryPath: string;
   readonly fingerprint?: ContentFingerprint;
 }
@@ -44,7 +36,6 @@ export interface PackageResourceContentLocator {
 
 export type ContentLocator =
   | WorkspaceFileContentLocator
-  | MediaLibraryContentLocator
   | DocumentEntryContentLocator
   | GeneratedOutputContentLocator
   | PackageResourceContentLocator;
@@ -54,8 +45,6 @@ export type ContentLocatorDiagnosticCode =
   | 'content-locator-invalid-fingerprint'
   | 'content-locator-invalid-identity'
   | 'content-locator-invalid-kind'
-  | 'content-locator-invalid-media-library-name'
-  | 'content-locator-invalid-media-library-path'
   | 'content-locator-invalid-workspace-path';
 
 export interface ContentLocatorDiagnostic {
@@ -75,8 +64,6 @@ export function validateContentLocator(value: unknown): ContentLocatorValidation
   switch (value['kind']) {
     case 'workspace-file':
       return validateWorkspaceFileLocator(value);
-    case 'media-library':
-      return validateMediaLibraryLocator(value);
     case 'document-entry':
       return validateDocumentEntryLocator(value);
     case 'generated-output':
@@ -99,13 +86,6 @@ export function contentLocatorsEqual(left: ContentLocator, right: ContentLocator
       return (
         right.kind === 'workspace-file' &&
         left.path === right.path &&
-        fingerprintsEqual(left.fingerprint, right.fingerprint)
-      );
-    case 'media-library':
-      return (
-        right.kind === 'media-library' &&
-        left.libraryName === right.libraryName &&
-        left.relativePath === right.relativePath &&
         fingerprintsEqual(left.fingerprint, right.fingerprint)
       );
     case 'document-entry':
@@ -143,14 +123,6 @@ export function contentLocatorKey(locator: ContentLocator): string {
         locator.fingerprint?.strategy,
         locator.fingerprint?.value,
       ]);
-    case 'media-library':
-      return JSON.stringify([
-        locator.kind,
-        locator.libraryName,
-        locator.relativePath,
-        locator.fingerprint?.strategy,
-        locator.fingerprint?.value,
-      ]);
     case 'document-entry':
       return JSON.stringify([
         locator.kind,
@@ -173,75 +145,17 @@ export function contentLocatorKey(locator: ContentLocator): string {
   }
 }
 
-const MEDIA_LIBRARY_CONTENT_REFERENCE_PREFIX = 'media-library:';
-
-export function serializeContentReferenceTarget(
-  locator: WorkspaceFileContentLocator | MediaLibraryContentLocator,
-): string {
-  if (locator.kind === 'workspace-file') return locator.path;
-  return `${MEDIA_LIBRARY_CONTENT_REFERENCE_PREFIX}${[
-    locator.libraryName,
-    ...locator.relativePath.split('/'),
-  ]
-    .map(encodeURIComponent)
-    .join('/')}`;
+export function serializeContentReferenceTarget(locator: WorkspaceFileContentLocator): string {
+  return locator.path;
 }
 
 export function parseContentReferenceTarget(
   target: string,
-): WorkspaceFileContentLocator | MediaLibraryContentLocator | undefined {
-  if (target.startsWith(MEDIA_LIBRARY_CONTENT_REFERENCE_PREFIX)) {
-    const encodedSegments = target.slice(MEDIA_LIBRARY_CONTENT_REFERENCE_PREFIX.length).split('/');
-    if (encodedSegments.length < 2 || encodedSegments.some((segment) => segment.length === 0)) {
-      return undefined;
-    }
-    let segments: string[];
-    try {
-      segments = encodedSegments.map(decodeURIComponent);
-    } catch {
-      return undefined;
-    }
-    const [libraryName, ...relativeSegments] = segments;
-    const candidate = {
-      kind: 'media-library',
-      libraryName,
-      relativePath: relativeSegments.join('/'),
-    };
-    const validation = validateContentLocator(candidate);
-    if (
-      !validation.ok ||
-      validation.locator.kind !== 'media-library' ||
-      serializeContentReferenceTarget(validation.locator) !== target
-    ) {
-      return undefined;
-    }
-    return validation.locator;
-  }
+): WorkspaceFileContentLocator | undefined {
   const validation = validateContentLocator({ kind: 'workspace-file', path: target });
   return validation.ok && validation.locator.kind === 'workspace-file'
     ? validation.locator
     : undefined;
-}
-
-export function normalizeMediaLibraryContentPath(value: string): string | undefined {
-  const nfc = value.normalize('NFC');
-  if (nfc !== value || nfc.includes('\0') || nfc.includes('${') || nfc.includes('\\')) {
-    return undefined;
-  }
-  const normalized = normalizeBundleEntryPath(nfc);
-  if (!normalized.ok || normalized.entryPath !== value) return undefined;
-
-  const lower = normalized.entryPath.toLocaleLowerCase('en-US');
-  const segments = normalized.entryPath.split('/');
-  if (
-    segments.some((segment) => segment.includes(':')) ||
-    segments.some((segment) => segment.toLocaleLowerCase('en-US') === '.neko') ||
-    lower === 'neko/assets' ||
-    lower.startsWith('neko/assets/')
-  ) {
-    return undefined;
-  }
-  return normalized.entryPath;
 }
 
 export function normalizeWorkspaceContentPath(value: string): string | undefined {
@@ -267,28 +181,15 @@ export function normalizeWorkspaceContentPath(value: string): string | undefined
 }
 
 /**
- * Identifies the workspace-relative projection used to expose associated Media
- * Libraries to sender-bound runtimes. The path is valid for runtime access but
- * must not replace the owning MediaLibraryContentLocator in durable facts.
- */
-export function isWorkspaceMediaLibraryProjectionPath(value: string): boolean {
-  const normalized = normalizeWorkspaceContentPath(value);
-  if (!normalized || normalized !== value) return false;
-  const lower = normalized.toLocaleLowerCase('en-US');
-  return lower === 'neko/assets' || lower.startsWith('neko/assets/');
-}
-
-/**
- * Validates a locator that will become a durable Project fact. Managed Media
- * Library workspace paths are runtime projections; their owning
- * MediaLibraryContentLocator must be persisted instead.
+ * Validates a locator that will become a durable Project fact. Workspace Media
+ * Library mounts are normalized workspace-relative paths, so a mounted file and
+ * an ordinary workspace file share one durable WorkspaceFileContentLocator
+ * identity. Mount association, validation, recovery and authorization stay in
+ * the mount manager and Host path guard; content consumers do not branch on
+ * Media Library ownership.
  */
 export function isProjectDurableContentLocator(value: unknown): value is ContentLocator {
-  const validation = validateContentLocator(value);
-  if (!validation.ok) return false;
-  const source =
-    validation.locator.kind === 'document-entry' ? validation.locator.source : validation.locator;
-  return source.kind !== 'workspace-file' || !isWorkspaceMediaLibraryProjectionPath(source.path);
+  return validateContentLocator(value).ok;
 }
 
 function validateWorkspaceFileLocator(
@@ -320,44 +221,6 @@ function validateWorkspaceFileLocator(
   };
 }
 
-function validateMediaLibraryLocator(
-  value: Record<string, unknown>,
-): ContentLocatorValidationResult {
-  if (!hasOnlyKeys(value, MEDIA_LIBRARY_KEYS)) {
-    return invalidLocator(
-      'content-locator-invalid-kind',
-      'Media Library locator contains unsupported fields.',
-    );
-  }
-  if (typeof value['libraryName'] !== 'string' || !isPortablePathSegment(value['libraryName'])) {
-    return invalidLocator(
-      'content-locator-invalid-media-library-name',
-      'Media Library locator name must be one portable logical segment.',
-    );
-  }
-  const relativePath =
-    typeof value['relativePath'] === 'string'
-      ? normalizeMediaLibraryContentPath(value['relativePath'])
-      : undefined;
-  if (!relativePath) {
-    return invalidLocator(
-      'content-locator-invalid-media-library-path',
-      'Media Library locator path must be normalized and relative to its logical library.',
-    );
-  }
-  const fingerprint = validateOptionalFingerprint(value['fingerprint']);
-  if (!fingerprint.ok) return fingerprint;
-  return {
-    ok: true,
-    locator: {
-      kind: 'media-library',
-      libraryName: value['libraryName'],
-      relativePath,
-      ...(fingerprint.fingerprint ? { fingerprint: fingerprint.fingerprint } : {}),
-    },
-  };
-}
-
 function validateDocumentEntryLocator(
   value: Record<string, unknown>,
 ): ContentLocatorValidationResult {
@@ -368,13 +231,10 @@ function validateDocumentEntryLocator(
     );
   }
   const source = validateContentLocator(value['source']);
-  if (
-    !source.ok ||
-    (source.locator.kind !== 'workspace-file' && source.locator.kind !== 'media-library')
-  ) {
+  if (!source.ok || source.locator.kind !== 'workspace-file') {
     return invalidLocator(
       'content-locator-invalid-kind',
-      'Document entry source must be a Workspace File or Media Library locator.',
+      'Document entry source must be a Workspace File locator.',
     );
   }
   if (typeof value['entryPath'] !== 'string') {
@@ -527,7 +387,6 @@ function fingerprintsEqual(
 }
 
 const WORKSPACE_FILE_KEYS = ['kind', 'path', 'fingerprint'] as const;
-const MEDIA_LIBRARY_KEYS = ['kind', 'libraryName', 'relativePath', 'fingerprint'] as const;
 const DOCUMENT_ENTRY_KEYS = ['kind', 'source', 'entryPath', 'fingerprint'] as const;
 const GENERATED_OUTPUT_KEYS = ['kind', 'outputId', 'digest', 'path'] as const;
 const PACKAGE_RESOURCE_KEYS = [

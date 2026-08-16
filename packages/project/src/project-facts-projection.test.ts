@@ -161,7 +161,7 @@ describe('Project fact projections', () => {
             ownerId: 'board.nkc',
             sourceFingerprint: 'sha256:board',
             references: [
-              { kind: 'media-library', libraryName: 'Footage', relativePath: 'shots/a.mov' },
+              { kind: 'workspace-file', path: 'neko/assets/Footage/shots/a.mov' },
               {
                 kind: 'package-resource',
                 packageId: 'asset-rin',
@@ -241,9 +241,7 @@ describe('Project application services', () => {
               ownerKind: 'canvas',
               ownerId: 'board.nkc',
               sourceFingerprint: 'sha256:board',
-              references: [
-                { kind: 'media-library', libraryName: 'Footage', relativePath: 'shots/a.mov' },
-              ],
+              references: [{ kind: 'workspace-file', path: 'neko/assets/Footage/shots/a.mov' }],
             },
           ],
           coveredOwnerKinds: ['canvas', 'cut', 'entity-representation'],
