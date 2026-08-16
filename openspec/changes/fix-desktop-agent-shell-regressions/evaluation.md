@@ -177,6 +177,41 @@ Date: 2026-08-03
 - The visible scenario uses a wide `1440px` Desktop viewport. Narrow-panel behavior is covered by
   CSS/DOM contract tests, not a second real-provider screenshot.
 
+## 2026-08-16 Active and queued user-message feedback
+
+### Evaluation Scope
+
+- Decision and owning suite: `reuse` `agent-runtime.workflow-controller/queue-during-run` for the
+  canonical submit/queue/drain path; `update` the existing visible `desktop-agent-provider-ui`
+  scenario for authoritative activity placement and computed-visible user-message time.
+- Canonical path: visible Composer → sender-bound controller → awaited `AgentStateRuntime`
+  publication → submission receipt → MessageList current-user projection. The forbidden fallback is
+  Renderer inference from optimistic `isThinking`, a duplicate queue transcript row, or a second
+  execution-status owner.
+
+### Verification
+
+- Key-free Agent Evaluation passed `45/45` files and `310/310` tests; all `27` suites / `80` cases
+  passed indexed dry-run. This proves harness readiness, not real provider behavior.
+- Deterministic runtime and Webview coverage proves ordered publication, publication failure,
+  latest-user selection, Tool/streaming suppression, default-visible time and queued row status/time.
+- Visible `desktop-agent-message-queue` execution was attempted through the isolated real Electron
+  fixture but blocked before application inspection because its CDP target never became ready
+  (`fetch failed`). No screenshot or visual pass is claimed.
+- Visible real-provider execution was not launched because explicit provider/model identities and
+  cost authorization were not supplied. The readable user TOML was not treated as implicit
+  authorization.
+
+### Foundational matrix and residual risk
+
+- Basic and multi-turn queue ordering remain owned by `queue-during-run`; deterministic projection
+  and identity-isolation tests cover the changed path.
+- Application reopen, compaction, generation restoration and cross-conversation switching do not
+  change contract or authority in this delta and retain their indexed suites.
+- Pixel acceptance for active, queued, narrow and dark-theme states remains blocked by the Desktop
+  launch environment; the existing real-provider scenario now rejects the former placement when
+  authorization and runtime become available.
+
 ## 2026-08-05 Agent diagnostic portal update
 
 ### Evaluation Scope

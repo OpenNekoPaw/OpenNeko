@@ -312,6 +312,7 @@ export const chat = {
   'chat.input.queuePlaceholder': '输入下一条消息 · {count} 条待处理',
   'chat.input.queuedMessages': '消息队列（{count} 条待处理）',
   'chat.input.queueItemLabel': '排队消息 {index}',
+  'chat.input.queueItemWaiting': '等待中',
   'chat.input.queueSendNow': '立即发送',
   'chat.input.queueCancel': '取消排队消息',
   'chat.input.queueEdit': '重新编辑排队消息',

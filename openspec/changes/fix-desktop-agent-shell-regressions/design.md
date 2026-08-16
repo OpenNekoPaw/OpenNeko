@@ -376,3 +376,16 @@ authoritative presentation 相对上一条 accepted snapshot 真实变化时，�
 identity；节点、连接或 terminal delivery 更新不得触发 cleanup `close` flush。这样不引入第二事实来源：显式
 Host presentation 变化仍覆盖 runtime viewport，本地 viewport 在 bounded idle/blur/close 边界通过既有单一路径
 提交。
+
+## Follow-up decisions: active and queued user-message feedback
+
+Agent state 仍由 package-owned `AgentStateRuntime` 唯一拥有。Desktop connection 对 state snapshot 使用同一
+有序 publication tail；active submission acceptance 必须等待本次 `thinking` snapshot 发布完成后才能返回，
+不得由 Renderer 根据 optimistic `isThinking` 推断或补造状态。queued acceptance 不重置当前运行 Turn 的
+`startedAt`，避免第二条排队消息改变第一条运行计时。
+
+Webview 只把非 idle 的权威 state 投影到最后一条非 queued 用户消息。该消息默认显示发送时间，并在气泡内
+复用现有 execution activity 的状态与 elapsed 表达；同一状态不再重复为独立 transcript row。canonical
+streaming、Tool 和 completed assistant record 继续按现有规则取代 generic activity。queued item 不进入
+transcript，composer queue 使用既有 `createdAt` 显示逐项“等待中”和时间，发送、重编辑、取消操作保持不变。
+消息与队列时间共用一个 package-local formatter，不新增状态 owner、contract 字段或 fallback。

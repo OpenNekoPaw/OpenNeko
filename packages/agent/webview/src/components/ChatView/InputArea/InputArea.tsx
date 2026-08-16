@@ -76,6 +76,7 @@ import {
   type AgentComposerCanvasPresentation,
   type AgentComposerWorkspaceTarget,
 } from '../../ComposerWorkspaceContext';
+import { formatMessageTime } from '../message-time';
 
 interface InputAreaProps {
   presentation?: 'entry' | 'conversation';
@@ -1591,8 +1592,13 @@ function QueuedMessageRow({
       <span className="agent-composer-queue-index" aria-hidden="true">
         {position}
       </span>
-      <span className="agent-composer-queue-text" title={item.content}>
-        {item.content}
+      <span className="agent-composer-queue-content">
+        <span className="agent-composer-queue-text" title={item.content}>
+          {item.content}
+        </span>
+        <span className="agent-composer-queue-meta" data-queued-message-status>
+          {t('chat.input.queueItemWaiting')} · {formatMessageTime(item.createdAt)}
+        </span>
       </span>
       <div className="agent-composer-queue-actions" aria-label={label}>
         <QueueActionButton

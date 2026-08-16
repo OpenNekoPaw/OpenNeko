@@ -1920,6 +1920,7 @@ body {
 }
 
 .agent-composer-queue-text {
+  display: block;
   min-width: 0;
   overflow: hidden;
   color: var(--agent-fg);
@@ -1928,6 +1929,19 @@ body {
   line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.agent-composer-queue-content {
+  display: block;
+  min-width: 0;
+}
+
+.agent-composer-queue-meta {
+  display: block;
+  color: var(--agent-fg-secondary);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 14px;
 }
 
 .agent-composer-queue-actions {

@@ -336,6 +336,7 @@ export const chat = {
   'chat.input.queuePlaceholder': 'Type the next message · {count} pending',
   'chat.input.queuedMessages': 'Message queue ({count} pending)',
   'chat.input.queueItemLabel': 'Queued message {index}',
+  'chat.input.queueItemWaiting': 'Waiting',
   'chat.input.queueSendNow': 'Send now',
   'chat.input.queueCancel': 'Cancel queued message',
   'chat.input.queueEdit': 'Re-edit queued message',

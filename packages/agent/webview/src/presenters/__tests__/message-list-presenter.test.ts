@@ -22,6 +22,64 @@ describe('message-list-presenter', () => {
     ]);
   });
 
+  it('binds execution activity to only the latest non-queued user message', () => {
+    const state = { phase: 'thinking' as const, startedAt: 2_000 };
+    const projection = projectMessageList({
+      messages: [
+        { id: 'user-old', role: 'user', content: 'Earlier', timestamp: 1_000 },
+        { id: 'assistant-old', role: 'assistant', content: 'Done', timestamp: 1_500 },
+        { id: 'user-current', role: 'user', content: 'Continue', timestamp: 2_000 },
+        {
+          id: 'user-queued',
+          role: 'user',
+          content: 'Wait behind it',
+          timestamp: 2_100,
+          isQueued: true,
+        },
+      ],
+      agentState: state,
+      streamingMessageId: null,
+    });
+
+    expect(projection.items).toHaveLength(3);
+    expect(projection.items[0]).not.toHaveProperty('agentState');
+    expect(projection.items[2]).toEqual(
+      expect.objectContaining({
+        kind: 'message',
+        ownerMessageId: 'user-current',
+        agentState: state,
+        isCurrentRunMessage: true,
+      }),
+    );
+    expect(projection.items.some((item) => item.kind === 'execution_activity')).toBe(false);
+  });
+
+  it('keeps the current user time visible when canonical records suppress generic activity', () => {
+    const projection = projectMessageList({
+      messages: [
+        { id: 'user-current', role: 'user', content: 'Continue', timestamp: 2_000 },
+        {
+          id: 'assistant-stream',
+          role: 'assistant',
+          content: 'Streaming response',
+          timestamp: 2_100,
+          isStreaming: true,
+        },
+      ],
+      agentState: { phase: 'streaming', startedAt: 2_000 },
+      streamingMessageId: 'assistant-stream',
+    });
+
+    expect(projection.showExecutionActivity).toBe(false);
+    expect(projection.items[0]).toEqual(
+      expect.objectContaining({
+        ownerMessageId: 'user-current',
+        isCurrentRunMessage: true,
+      }),
+    );
+    expect(projection.items[0]).not.toHaveProperty('agentState');
+  });
+
   it('lets canonical streaming and pending tool records replace generic activity', () => {
     const state = { phase: 'acting' as const, toolName: 'ReadDocument', startedAt: 1_000 };
     const pendingToolMessage = {

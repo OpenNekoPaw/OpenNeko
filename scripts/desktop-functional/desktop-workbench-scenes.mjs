@@ -1029,6 +1029,8 @@ export const desktopAgentMessageQueueScenario = Object.freeze({
             const firstRow = surface?.querySelector('.agent-composer-queue-row');
             return surface?.querySelector('.agent-composer-queue-title')
                 ?.textContent?.includes('3') === true &&
+              firstRow?.querySelector('[data-queued-message-status]')
+                ?.textContent?.includes('等待中') === true &&
               firstRow?.querySelectorAll('.agent-composer-queue-action:not(:disabled)').length === 3;
           })()`,
           'Explicit stop did not leave all pending queue items available.',
@@ -6377,6 +6379,7 @@ async function inspectMessageQueueUi(evaluate) {
       queueTitle: panel?.querySelector('.agent-composer-queue-title')?.textContent?.trim(),
       queueItems: rows.map((row) => ({
         text: row.querySelector('.agent-composer-queue-text')?.textContent?.trim() ?? '',
+        status: row.querySelector('[data-queued-message-status]')?.textContent?.trim() ?? '',
         actionCount: row.querySelectorAll('.agent-composer-queue-action').length,
         enabledActionCount: row.querySelectorAll('.agent-composer-queue-action:not(:disabled)').length,
         actions: [...row.querySelectorAll('.agent-composer-queue-action')].map((action) => ({

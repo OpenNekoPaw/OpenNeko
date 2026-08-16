@@ -264,6 +264,8 @@ export function MessageList({
                   ) : (
                     <MessageItem
                       message={item.message}
+                      agentState={item.agentState}
+                      isCurrentRunMessage={item.isCurrentRunMessage}
                       isGrouped={item.isGrouped}
                       conversationId={activeConversationId}
                       identities={identities}

@@ -395,11 +395,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const agentStates = this.getAgentStates(input.workspace.workspaceId);
     const unsubscribeAgentStates = agentStates.subscribe((snapshot) => {
       if (!post) return;
-      this.track(
-        Promise.resolve()
-          .then(() => post?.(buildAgentStateSnapshotMessage([...snapshot])))
-          .then(() => undefined),
-      );
+      return post(buildAgentStateSnapshotMessage([...snapshot]));
     });
     const initialFactsKey =
       input.initialConversationId === undefined
@@ -984,7 +980,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         bind(context);
         return enqueueTabOperation(state, async () => {
           await workspace.deleteConversation(conversationId);
-          this.getAgentStates(workspace.workspaceId).clear(conversationId);
+          await this.getAgentStates(workspace.workspaceId).clear(conversationId);
           this.confirmations.get(ownerKey(workspace.workspaceId, conversationId))?.cancelAll();
           this.confirmations.delete(ownerKey(workspace.workspaceId, conversationId));
           state.tabState = {
@@ -1060,7 +1056,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
             workspace.sendQueuedMessageNow(conversationId, queueItemId),
           ),
         );
-        this.getAgentStates(workspace.workspaceId).update({
+        await this.getAgentStates(workspace.workspaceId).update({
           conversationId,
           phase: 'thinking',
           startedAt: Date.now(),
@@ -1664,11 +1660,28 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       input.context,
       input.workspace.readMessageQueue(input.request.conversationId),
     );
-    this.getAgentStates(input.workspace.workspaceId).update({
-      conversationId: input.request.conversationId,
-      phase: 'thinking',
-      startedAt: Date.now(),
-    });
+    if (operation.state === 'active') {
+      const agentStates = this.getAgentStates(input.workspace.workspaceId);
+      try {
+        await agentStates.update({
+          conversationId: input.request.conversationId,
+          phase: 'thinking',
+          startedAt: Date.now(),
+        });
+      } catch (error) {
+        input.workspace.cancelTurn(input.request.conversationId, operation.identity);
+        await operation.completion.catch(() => undefined);
+        try {
+          await agentStates.clear(input.request.conversationId);
+        } catch (clearError) {
+          throw new AggregateError(
+            [error, clearError],
+            `Desktop Agent failed to publish and clear state for Conversation '${input.request.conversationId}'.`,
+          );
+        }
+        throw error;
+      }
+    }
     input.onAccepted?.({
       conversationId: input.request.conversationId,
       turnId: operation.identity.turnId,
@@ -1703,7 +1716,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         .conversations.find(
           (conversation) => conversation.conversationId === input.request.conversationId,
         );
-      this.getAgentStates(input.workspace.workspaceId).update({
+      await this.getAgentStates(input.workspace.workspaceId).update({
         conversationId: input.request.conversationId,
         phase:
           residency?.running === true || (residency?.queued === true && queue.paused !== true)

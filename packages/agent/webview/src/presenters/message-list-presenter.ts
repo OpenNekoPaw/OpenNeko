@@ -11,6 +11,8 @@ export type MessageListProjectionItem =
 export interface MessageListMessageItemProjection {
   kind: 'message';
   message: Message;
+  agentState?: AgentState;
+  isCurrentRunMessage?: true;
   ambientToolCalls: readonly ToolCall[];
   isGrouped: boolean;
   ownerMessageId: string;
@@ -44,8 +46,9 @@ const MESSAGE_LIST_ESTIMATED_CONTENT_BLOCK_HEIGHT = 60;
 const MESSAGE_LIST_EXECUTION_ACTIVITY_HEIGHT = 34;
 
 export function projectMessageList(input: MessageListProjectionInput): MessageListProjection {
-  const executionActivity = projectExecutionActivity(input);
-  const items = projectMessageListItems(input.messages, executionActivity);
+  const currentRunState = projectCurrentRunState(input);
+  const executionActivity = projectExecutionActivity(input, currentRunState);
+  const items = projectMessageListItems(input.messages, executionActivity, currentRunState);
 
   return {
     items,
@@ -58,11 +61,15 @@ export function projectMessageList(input: MessageListProjectionInput): MessageLi
 export function projectMessageListItems(
   messages: readonly Message[],
   executionActivity: AgentState | false,
+  currentRunState: AgentState | false = executionActivity,
 ): MessageListProjectionItem[] {
   const items: MessageListProjectionItem[] = [];
   let prevRole: Message['role'] | null = null;
   let prevTimestamp = 0;
   let ambientToolCalls: readonly ToolCall[] = [];
+  const activeUserMessageId = currentRunState
+    ? findLast(messages, (message) => message.role === 'user' && message.isQueued !== true)?.id
+    : undefined;
 
   for (const message of messages) {
     if (message.isQueued) {
@@ -76,6 +83,10 @@ export function projectMessageListItems(
     items.push({
       kind: 'message',
       message,
+      ...(message.id === activeUserMessageId && executionActivity
+        ? { agentState: executionActivity }
+        : {}),
+      ...(message.id === activeUserMessageId ? { isCurrentRunMessage: true as const } : {}),
       ambientToolCalls: mergeToolCalls(messageToolCalls, ambientToolCalls) ?? [],
       isGrouped,
       ownerMessageId: message.id,
@@ -91,7 +102,7 @@ export function projectMessageListItems(
     }
   }
 
-  if (executionActivity) {
+  if (executionActivity && activeUserMessageId === undefined) {
     items.push({
       kind: 'execution_activity',
       agentState: executionActivity,
@@ -103,12 +114,24 @@ export function projectMessageListItems(
   return items;
 }
 
-function projectExecutionActivity(input: MessageListProjectionInput): AgentState | false {
+function findLast<T>(items: readonly T[], predicate: (item: T) => boolean): T | undefined {
+  const index = findLastIndex(items, predicate);
+  return index === -1 ? undefined : items[index];
+}
+
+function projectCurrentRunState(input: MessageListProjectionInput): AgentState | false {
   const state = input.agentState;
   if (!state || state.phase === 'idle') return false;
-  if (hasLiveCanonicalExecutionRecord(input.messages)) return false;
   if (hasTerminalAssistantResponse(input.messages)) return false;
   return state;
+}
+
+function projectExecutionActivity(
+  input: MessageListProjectionInput,
+  currentRunState: AgentState | false,
+): AgentState | false {
+  if (!currentRunState || hasLiveCanonicalExecutionRecord(input.messages)) return false;
+  return currentRunState;
 }
 
 function hasLiveCanonicalExecutionRecord(messages: readonly Message[]): boolean {

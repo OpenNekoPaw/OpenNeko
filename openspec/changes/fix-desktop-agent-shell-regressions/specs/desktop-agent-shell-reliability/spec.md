@@ -721,3 +721,35 @@ manager and Host path guard, and arbitrary symlink escapes SHALL remain rejected
 - **WHEN** a mounted Media Library path resolves to a symlink escape or a missing/invalid mount
 - **THEN** Host authorization rejects only that resource with an owner-qualified diagnostic
 - **AND** valid sibling files and the rest of the Workspace remain usable
+
+### Requirement: Current user messages expose authoritative execution feedback
+
+Desktop SHALL publish the active Conversation's authoritative non-idle Agent state before the corresponding active
+submission receipt can be consumed. Webview SHALL bind that state to the latest non-queued user message, showing its
+send time, processing label and elapsed time without hover. Historical user messages SHALL NOT receive the current
+state, and canonical streaming, Tool or terminal assistant records SHALL continue to suppress duplicate generic
+activity. Renderer optimistic state SHALL NOT substitute for a missing Agent state snapshot.
+
+#### Scenario: A later active turn begins
+
+- **WHEN** a completed Conversation accepts another user message as the active Turn
+- **THEN** its authoritative state is observable before the acceptance resolves
+- **AND** only that latest user message shows default-visible time, processing state and elapsed time
+
+#### Scenario: Canonical execution records arrive or the turn becomes idle
+
+- **WHEN** streaming, Tool or terminal assistant records replace generic activity, or the Agent state becomes idle
+- **THEN** the user-message processing projection disappears without leaving a duplicate activity row
+- **AND** historical message presentation remains unchanged
+
+### Requirement: Queued messages expose item-local waiting feedback
+
+Each authoritative composer queue item SHALL display its existing creation time and an item-local waiting state while
+remaining outside the transcript. Queue actions and exact Conversation ownership SHALL remain unchanged, and adding
+a queued item SHALL NOT restart or replace the active Turn's elapsed-time baseline.
+
+#### Scenario: A second message queues behind an active turn
+
+- **WHEN** the active Conversation accepts a second message as queued
+- **THEN** its composer queue row shows “Waiting” and the formatted `createdAt` time
+- **AND** send-now, re-edit and cancel remain available without creating a transcript duplicate

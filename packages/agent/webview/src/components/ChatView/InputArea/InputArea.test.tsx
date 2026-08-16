@@ -53,6 +53,7 @@ const translations: Record<string, string> = {
   'chat.input.queuePlaceholder': '输入下一条消息 · {count} 条待处理',
   'chat.input.queuedMessages': '消息队列（{count} 条待处理）',
   'chat.input.queueItemLabel': '排队消息 {index}',
+  'chat.input.queueItemWaiting': '等待中',
   'chat.input.queueSendNow': '立即发送',
   'chat.input.queueCancel': '取消排队消息',
   'chat.input.queueEdit': '重新编辑排队消息',
@@ -2224,6 +2225,8 @@ describe('InputArea composer controls', () => {
     expect(queuePanel?.className).toContain('agent-composer-pending-panel');
     expect(queuePanel?.textContent).toContain('消息队列（2 条待处理）');
     expect(queuePanel?.textContent).toContain('消息队列功能是否完善');
+    expect(queuePanel?.textContent).toContain('等待中');
+    expect(queuePanel?.querySelector('[data-queued-message-status]')).not.toBeNull();
     expect(queuePanel?.querySelector('.agent-composer-queue-row')?.className).toContain(
       'agent-composer-popover-row',
     );

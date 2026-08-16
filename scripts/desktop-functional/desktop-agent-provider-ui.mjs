@@ -108,8 +108,13 @@ export const desktopAgentProviderUiScenario = Object.freeze({
     );
     await waitForCondition(
       evaluate,
-      `(() => window.__openNekoAgentProviderUiObservation?.sawTranscriptActivity === true)()`,
-      'Visible Desktop Agent did not project live execution activity into the transcript.',
+      `(() => {
+        const observation = window.__openNekoAgentProviderUiObservation;
+        return observation?.sawTranscriptActivity === true &&
+          observation?.sawUserMessageActivity === true &&
+          observation?.sawVisibleUserTimestamp === true;
+      })()`,
+      'Visible Desktop Agent did not bind live execution activity and time to the user message.',
     );
     checkpoint('visible-transcript-execution-activity', await inspectProviderWaitState(evaluate));
 
@@ -437,6 +442,8 @@ async function beginExecutionActivityObservation(evaluate) {
     window.__openNekoAgentProviderUiObservation?.observer?.disconnect();
     const observation = {
       sawTranscriptActivity: false,
+      sawUserMessageActivity: false,
+      sawVisibleUserTimestamp: false,
       observer: undefined,
     };
     const inspect = () => {
@@ -444,6 +451,14 @@ async function beginExecutionActivityObservation(evaluate) {
         '[data-owner-root="agent"] .agent-message-list .agent-execution-activity',
       );
       observation.sawTranscriptActivity ||= activity instanceof HTMLElement;
+      observation.sawUserMessageActivity ||=
+        activity?.getAttribute('data-placement') === 'user-message' &&
+        activity.closest('.agent-user-prompt') instanceof HTMLElement;
+      const timestamp = activity
+        ?.closest('.agent-message-row')
+        ?.querySelector('[data-message-timestamp]');
+      observation.sawVisibleUserTimestamp ||=
+        timestamp instanceof HTMLElement && getComputedStyle(timestamp).opacity === '1';
     };
     observation.observer = new MutationObserver(inspect);
     observation.observer.observe(document.body, {

@@ -19,10 +19,12 @@ export interface UpdateAgentStateRuntimeInput {
 }
 
 export interface AgentStateRuntime {
-  update(input: UpdateAgentStateRuntimeInput): void;
-  clear(conversationId: string): void;
+  update(input: UpdateAgentStateRuntimeInput): Promise<void>;
+  clear(conversationId: string): Promise<void>;
   snapshot(): AgentStateRuntimeEntry[];
-  subscribe(listener: (snapshot: readonly AgentStateRuntimeEntry[]) => void): () => void;
+  subscribe(
+    listener: (snapshot: readonly AgentStateRuntimeEntry[]) => void | Promise<void>,
+  ): () => void;
 }
 
 export function buildAgentRuntimeStateSnapshotMessage(
@@ -37,11 +39,14 @@ export function createAgentStateRuntime(): AgentStateRuntime {
 
 class DefaultAgentStateRuntime implements AgentStateRuntime {
   private readonly states = new Map<string, Omit<AgentStateRuntimeEntry, 'conversationId'>>();
-  private readonly listeners = new Set<(snapshot: readonly AgentStateRuntimeEntry[]) => void>();
+  private readonly listeners = new Set<
+    (snapshot: readonly AgentStateRuntimeEntry[]) => void | Promise<void>
+  >();
+  private publicationTail = Promise.resolve();
 
-  update(input: UpdateAgentStateRuntimeInput): void {
+  async update(input: UpdateAgentStateRuntimeInput): Promise<void> {
     if (input.phase === 'idle') {
-      this.clear(input.conversationId);
+      await this.clear(input.conversationId);
       return;
     }
 
@@ -50,12 +55,12 @@ class DefaultAgentStateRuntime implements AgentStateRuntime {
       ...(input.toolName !== undefined ? { toolName: input.toolName } : {}),
       startedAt: input.startedAt,
     });
-    this.publish();
+    await this.publish();
   }
 
-  clear(conversationId: string): void {
+  async clear(conversationId: string): Promise<void> {
     if (!this.states.delete(conversationId)) return;
-    this.publish();
+    await this.publish();
   }
 
   snapshot(): AgentStateRuntimeEntry[] {
@@ -67,13 +72,22 @@ class DefaultAgentStateRuntime implements AgentStateRuntime {
     }));
   }
 
-  subscribe(listener: (snapshot: readonly AgentStateRuntimeEntry[]) => void): () => void {
+  subscribe(
+    listener: (snapshot: readonly AgentStateRuntimeEntry[]) => void | Promise<void>,
+  ): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  private publish(): void {
+  private publish(): Promise<void> {
     const snapshot = this.snapshot();
-    for (const listener of this.listeners) listener(snapshot);
+    const publication = this.publicationTail.then(async () => {
+      await Promise.all(Array.from(this.listeners, (listener) => listener(snapshot)));
+    });
+    this.publicationTail = publication.then(
+      () => undefined,
+      () => undefined,
+    );
+    return publication;
   }
 }

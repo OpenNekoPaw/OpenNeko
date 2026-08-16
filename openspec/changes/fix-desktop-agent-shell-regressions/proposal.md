@@ -19,6 +19,7 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - 精简 Home 应用一级侧栏的品牌 chrome，使标题行只显示可交互的 `OpenNeko` 文字且不再渲染品牌或折叠图标；同时让右侧 Agent 创作入口在可用主区域中居中展示。
 - 收敛 Home Agent 入口标题 chrome，移除标题前重复的 Agent 图标，并让标题与副标题共享居中文本轴；任务与模板功能图标继续保留。
 - 将 Agent 运行状态投影到所属会话的 transcript 时间线，复用既有 thinking、Tool Call、Process Record 与 streaming message 展示；移除 composer 上方独立的“思考中/执行中”状态条。
+- 让 active Turn 的权威 Agent state snapshot 在 submission receipt 可消费前有序发布，并把当前处理状态、耗时和默认可见发送时间绑定到最新用户消息；排队消息继续只由 composer queue 展示，但逐项显示等待状态与创建时间。
 - 保证已提交的用户消息在 optimistic commit、Host/Timeline 投影、完成与恢复期间持续保留，并让全部 transcript 记录共享与 composer 对齐的居中最大宽度内容轨道。
 - Desktop 工作区 Agent 不再展示 package-owned 角色对话 Header 入口；角色会话的发起归属工作区资源管理中的实体管理动作。
 - 让只有 Pi catalog/context、尚无 first-submit lifecycle record 的既有会话按原 identity 恢复，

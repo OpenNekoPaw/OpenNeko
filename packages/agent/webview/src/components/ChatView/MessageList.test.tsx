@@ -566,8 +566,8 @@ describe('MessageList auto-scroll lifecycle', () => {
     expect(screen.queryByText('ReadDocument')).toBeNull();
   });
 
-  it('renders temporary execution activity inside the transcript and removes it at idle', () => {
-    virtualItems = [{ index: 1, key: 'execution-activity', start: 80 }];
+  it('renders temporary execution activity on the latest user message and removes it at idle', () => {
+    virtualItems = [{ index: 0, key: 'user-message', start: 0 }];
     const props = {
       messages: [{ ...createMessage('message-1'), role: 'user' as const }],
       isThinking: true,
@@ -583,6 +583,7 @@ describe('MessageList auto-scroll lifecycle', () => {
     const transcript = container.querySelector('.agent-message-list');
     const activity = screen.getByRole('status', { name: 'Agent execution in progress' });
     expect(transcript?.contains(activity)).toBe(true);
+    expect(activity.dataset.placement).toBe('user-message');
     expect(activity.textContent).toContain('Working');
     expect(activity.textContent).not.toContain('Thinking');
     expect(container.querySelector('.agent-run-status')).toBeNull();
@@ -593,6 +594,39 @@ describe('MessageList auto-scroll lifecycle', () => {
       </MessageActionsProvider>,
     );
     expect(screen.queryByRole('status', { name: 'Agent execution in progress' })).toBeNull();
+  });
+
+  it('marks only the latest user message with authoritative processing state and visible time', () => {
+    virtualItems = [
+      { index: 0, key: 'historical-user', start: 0 },
+      { index: 1, key: 'assistant', start: 80 },
+      { index: 2, key: 'current-user', start: 160 },
+    ];
+    const { container } = renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[
+            { ...createMessage('historical-user'), role: 'user', timestamp: 1_000 },
+            { ...createMessage('assistant'), timestamp: 2_000 },
+            { ...createMessage('current-user'), role: 'user', timestamp: 3_000 },
+          ]}
+          isThinking
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+          agentState={{ phase: 'thinking', startedAt: 3_000 }}
+        />
+      </MessageActionsProvider>,
+    );
+
+    const statuses = screen.getAllByRole('status', { name: 'Agent execution in progress' });
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0]?.closest('.agent-message-row')?.textContent).toContain(
+      createMessage('current-user').content,
+    );
+    const timestamps = [...container.querySelectorAll('[data-message-timestamp]')];
+    expect(timestamps).toHaveLength(2);
+    expect(timestamps[0]?.className).toContain('opacity-0');
+    expect(timestamps[1]?.className).toContain('opacity-100');
   });
 
   it('does not render execution activity after the final assistant response is visible', () => {
@@ -617,7 +651,7 @@ describe('MessageList auto-scroll lifecycle', () => {
   it('places every rendered transcript item inside the shared centered rail', () => {
     virtualItems = [
       { index: 0, key: 'message', start: 0 },
-      { index: 1, key: 'execution-activity', start: 80 },
+      { index: 1, key: 'assistant', start: 80 },
     ];
     const { container } = renderWithI18n(
       <MessageActionsProvider>
