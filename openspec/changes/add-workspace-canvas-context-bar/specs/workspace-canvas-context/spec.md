@@ -4,18 +4,12 @@
 
 ### Requirement: Workspace Canvas composer context bar
 
-Agent composer SHALL render Entry and Workspace Conversation context rails as a sibling rail above the composer shell.
+Workspace Agent composer SHALL render its own context rail as a sibling above the composer shell.
 
 - The rail SHALL display only the stable Workspace label and current Canvas index.
 - The rail SHALL NOT display read/write status, scope, or permission information.
 - File, material, Canvas node references, and attachments SHALL remain inside the composer shell.
 - The logical default Canvas option SHALL be the canonical Workspace Board.
-
-#### Scenario: Entry context rail above composer
-
-- **WHEN** an Entry draft has a Workspace binding
-- **THEN** its context rail appears above the composer shell
-- **AND** the rail shows Workspace label and current Canvas index (default Board).
 
 #### Scenario: Conversation context rail above composer
 
@@ -29,11 +23,12 @@ Agent composer SHALL render Entry and Workspace Conversation context rails as a 
 - **THEN** they remain inside the composer shell
 - **AND** they are not merged into the Workspace Canvas context rail.
 
-#### Scenario: context rail reuses the Entry pill shape
+#### Scenario: context rail matches the Entry visual treatment
 
 - **WHEN** the Workspace Canvas rail is visible
-- **THEN** it renders as a complete rounded pill matching the Entry context treatment
+- **THEN** it matches the established Entry context rail width, spacing, background, shadow, and radius
 - **AND** it does not render as a rectangular edge-attached region.
+- **AND** it does not share the Entry component, functional class, state, or event handlers.
 
 #### Scenario: exact Canvas keeps its file extension
 
@@ -47,17 +42,18 @@ Agent composer SHALL render Entry and Workspace Conversation context rails as a 
 - **THEN** Desktop opens or focuses the exact Canvas Workbench View through the existing creative-document authority
 - **AND** double-clicking the logical Board default does not eagerly create `workspace.nkc`.
 
-#### Scenario: Workspace-bound draft shows context before first turn
+#### Scenario: Workspace initial input shows context before first turn
 
-- **WHEN** a Workspace-bound Agent interaction is still in its draft phase
+- **WHEN** a Workspace-bound Agent interaction has not created its Conversation yet
 - **THEN** the composer shows the Workspace Canvas context rail before any Conversation exists
 - **AND** it loads the exact Workspace Canvas catalog through the same Workspace authority used after Conversation creation
 - **AND** the first submitted turn preserves the selected Canvas target.
+- **AND** it does not read, persist, configure, or submit Entry Draft state or an Entry target receipt.
 
 #### Scenario: Workspace rail width and radius do not change Entry binding rail
 
 - **WHEN** the Workspace Canvas rail adopts its full-width rounded presentation and the Canvas selector fits its content
-- **THEN** the Entry binding rail keeps its existing full-width presentation
+- **THEN** the Entry binding rail remains unchanged
 - **AND** the Workspace rail remains aligned to the composer width rather than shrinking to its content
 - **AND** Workspace-specific radius rules do not apply to the Entry rail.
 
@@ -69,12 +65,6 @@ Canvas selection SHALL be composer presentation state or exact turn intent.
 - Canvas selection SHALL NOT become a message reference.
 - Switching Canvas SHALL affect only subsequent turns.
 - Existing Workspace Conversation binding SHALL remain fixed when Canvas index changes.
-
-#### Scenario: Entry selects Workspace then Canvas
-
-- **WHEN** a user selects a Workspace in Entry
-- **THEN** the composer exposes Canvas index selection
-- **AND** the Workspace binding remains the selected Workspace.
 
 #### Scenario: Conversation Canvas switch does not change owner
 

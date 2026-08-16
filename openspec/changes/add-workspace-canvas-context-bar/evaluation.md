@@ -12,7 +12,7 @@ Update existing Agent Evaluation mappings:
 
 ## Canonical path
 
-Renderer composer selection -> SendMessage/AgentDraftSubmit canvasTurnTarget -> AgentControllerComposition.executeTurn required CanvasWorkspaceIndexService.resolveTurnContext -> immutable AgentTurnInput.canvasTurnContext -> terminal creator-visible artifact delivery -> DesktopWorkspaceBoardDelivery exact/Board target.
+Workspace Renderer composer selection -> initial/session submit canvasTurnTarget -> AgentControllerComposition.executeTurn required CanvasWorkspaceIndexService.resolveTurnContext -> immutable AgentTurnInput.canvasTurnContext -> terminal creator-visible artifact delivery -> DesktopWorkspaceBoardDelivery exact/Board target.
 
 ## Forbidden assertions
 
@@ -21,6 +21,7 @@ Renderer composer selection -> SendMessage/AgentDraftSubmit canvasTurnTarget -> 
 - exact selection invalid 时不回退 Board。
 - 无第二 bridge、无 Renderer 文件扫描、selection 不写入 binding/reference。
 - 默认 Board catalog 读取或选择不创建 `workspace.nkc`。
+- Workspace initial submit 不读取、配置或提交 Entry intent/receipt，不写 Entry snapshot。
 
 ## Evidence
 

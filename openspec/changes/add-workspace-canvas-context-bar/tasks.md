@@ -23,22 +23,23 @@
 
 ## 4. Composer UI
 
-- [x] 4.1 新增/复用 Canvas context bar 组件：Entry 与 Workspace Conversation 均在 composer shell 上方 sibling rail 显示；仅展示 Workspace label + 当前 Canvas index（Board 默认）。
-- [x] 4.2 移除/移动 Entry 下方 context bar 到上方；文件、素材、Canvas 节点引用与附件继续保留在 composer shell 内部。
-- [x] 4.3 Entry 选择 Workspace 后可选择 Canvas index；已有 Workspace Conversation 的 Workspace binding 固定，Canvas index 每次发送前可切换。
+- [x] 4.1 新增 Workspace Canvas context bar 独立组件，在 composer shell 上方 sibling rail 显示 Workspace label + 当前 Canvas index（Board 默认）。
+- [x] 4.2 入口界面内容与交互保持不变；文件、素材、Canvas 节点引用与附件继续保留在 composer shell 内部。
+- [x] 4.3 Workspace Conversation 的 Workspace binding 固定，Canvas index 每次发送前可切换。
 - [x] 4.4 非法或缺失 Canvas 选择 fail-local：显示 diagnostic，不回退 Board/active/recent Canvas。
 - [x] 4.5 复用现有 i18n/theme 与组件；补齐 aria label、键盘可操作性。
 - [x] 4.6 将 Workspace/Canvas rail 收敛为与 composer 一致的整栏宽度和完整圆角，仅 Canvas 选择控件按内容收缩；exact 选项显示带 `.nkc` 后缀的文件名。
 - [x] 4.7 通过 Desktop 已有 creative-document authority 支持双击当前 exact Canvas 打开/聚焦，Board 不提前创建。
-- [x] 4.8 Workspace-bound draft 在首轮发送前显示上下文栏，并隔离 Workspace 胶囊与入口 binding rail 的样式规则。
+- [x] 4.8 Workspace 首轮发送前显示独立上下文栏；视觉匹配入口，但组件、功能 class、状态和事件独立，且不接触 Entry Draft/intent/receipt。
 
 ## 5. Tests
 
 - [x] 5.1 补足 owning package contract/service 测试（domain/node 部分：默认 Board 不读/不创建、exact 成功、非法/缺失 fail-local 且 sibling 可用；lazy-create 与投递写入待 5.2）。
 - [x] 5.2 补足投递目标测试：未选择 -> canonical Board；选择 -> selected Canvas；切换只影响后续 Turn；普通对话/推理/日志不写 Board。
-- [x] 5.3 补足组件测试：Entry 与 Workspace 栏在 composer shell 上方；引用仍在 shell 内；仅显示 Workspace label 与 Canvas index。
+- [x] 5.3 补足组件测试：Workspace 栏在 composer shell 上方；引用仍在 shell 内；入口行为不变。
 - [x] 5.4 运行最小相关测试与 typecheck（package 级）。
 - [x] 5.5 补足 exact Canvas 文件名、双击 open/focus、Board no-op、rail 整栏宽度与圆角样式测试。
+- [x] 5.6 补足 Workspace 首轮不读取/配置/提交 Entry intent/receipt 且不写 Entry snapshot 的回归测试。
 
 ## 6. UI / Agent Evaluation
 

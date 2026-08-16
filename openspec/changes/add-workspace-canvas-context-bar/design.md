@@ -2,10 +2,9 @@
 
 ## Context
 
-Agent composer 当前已有 Workspace 绑定和 Entry 绑定 UI，但缺少精确的 Canvas index
-选择与 turn 级路由。现有 Board delivery 只覆盖 canonical Workspace Board；本变更在不改变
-Board authority 的前提下增加显式 Canvas selection，并把 composer 上下文栏统一为
-composer shell 上方的 sibling rail。
+Workspace Agent composer 当前已有 Workspace 绑定，但缺少精确的 Canvas index 选择与 turn 级
+路由。现有 Board delivery 只覆盖 canonical Workspace Board；本变更在不改变 Board authority
+和入口界面的前提下，为 Workspace 增加 composer shell 上方的独立上下文栏。
 
 ## Ownership and boundaries
 
@@ -22,7 +21,7 @@ composer shell 上方的 sibling rail。
 ```text
 AgentWebview composer canvas selector
   -> @neko/agent-contracts typed composer canvas catalog/turn intent
-  -> @neko/agent-runtime draft/session submit + turn context projection
+  -> @neko/agent-runtime initial/session submit + turn context projection
   -> @neko/canvas domain CanvasIndexCatalog/CanvasTurnTarget contract
   -> @neko/canvas-node workspace index/read/write adapter
   -> Desktop Main/preload typed IPC projection
@@ -40,19 +39,16 @@ AgentWebview composer canvas selector
 
 1. `AgentDomainBinding` 不变。Canvas selection 不进入 binding；已有 Workspace
    Conversation 的 Workspace binding 固定。
-2. Entry 与 Conversation 的 Canvas selector 复用同一 presentational rail，位于
-   `agent-composer-shell` 上方，与文件/素材/节点引用分离。Workspace/Canvas rail 与
-   Entry binding rail 共同复用唯一的 canonical composer context rail 基础样式；
-   Workspace/Canvas 组件只扩展 Workspace label、Canvas selector 与 diagnostic 的内部
-   布局和交互状态，不复制容器几何或视觉声明。入口创作模式复用同一 rail，但仅显示
-   Workspace label。
+2. Workspace Canvas context bar 位于 `agent-composer-shell` 上方，与文件、素材和节点引用
+   分离。它可以匹配入口上下文栏的视觉规范，但必须拥有独立组件、功能 class、状态和事件；
+   不读取、保存或提交 Entry Draft snapshot、Entry target intent 或 receipt，也不修改入口 DOM。
 3. Workspace context bar 仅显示 Workspace label + Canvas index（逻辑默认 Board 为
    可见选项）；不显示读写状态、范围或权限信息。
 4. Turn 边界只读取轻量 Canvas index/summary；完整 Canvas 内容仅由 Agent 任务按需访问。
 5. 只有既有合格 creator-visible typed artifact 投递才由 Canvas owner lazy-create
    `workspace.nkc`；普通对话、推理、日志不写 Board。
 6. 单一 canonical contract，不引入版本字段、active/recent fallback、多路径或兼容分支。
-7. Rail 容器继续复用 `agent-composer-context-bar` 的整栏宽度，并采用完整圆角边界；只有 Canvas 选择控件按内容收缩，不把整条 Workspace rail 收缩成小胶囊，也不用下边圆角的贴边区域造型。
+7. Workspace rail 与入口上下文栏保持一致的整栏宽度、间距、背景、阴影和圆角视觉；只有 Canvas 选择控件按内容收缩。视觉一致不构成功能 class、组件或状态复用。
 8. Canvas catalog 的用户可见 label 是 exact workspace-relative 文件名（含 `.nkc` 后缀），文档内部 `name` 仍仅属于轻量 summary，不取代文件 identity。
 9. 双击打开仅适用于 exact Canvas；Agent Webview 只发出已选 exact identity，Desktop 使用现有 creative-document open/focus authority 授权并创建或聚焦 Workbench View。Board 默认项不因双击而提前创建文件。
 
@@ -61,3 +57,4 @@ AgentWebview composer canvas selector
 - 不迁移、不重写、不删除既有 Canvas、Board、conversation 或 workspace 数据。
 - 用户未显式选择 Canvas 时，逻辑默认 Board 仍作为可见、可切换的选择项。
 - Canvas selection 属于可恢复 presentation/turn 状态；不持久化为 immutable binding。
+- Workspace 首轮尚未创建 Conversation 时只持有 Workspace presentation state；Host 的 technical draft phase 不授予 Entry 业务语义。
