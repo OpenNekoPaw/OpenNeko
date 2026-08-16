@@ -144,6 +144,237 @@ describe('DesktopWorkspaceBoardDelivery', () => {
     await metadataStore.dispose();
   });
 
+  it('routes an exact Canvas target to only that existing .nkc and never creates the Board', async () => {
+    const workspacePath = path.join(root, 'project');
+    const exactPath = path.join(workspacePath, 'neko', 'boards', 'story.nkc');
+    await fs.mkdir(path.dirname(exactPath), { recursive: true });
+    await fs.writeFile(
+      exactPath,
+      JSON.stringify({
+        name: 'Story',
+        nodes: [],
+        connections: [],
+      }),
+      'utf8',
+    );
+    const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: root });
+    await metadataStore.open({
+      databasePath: resolveGlobalStorageLayout(root).database,
+      busyTimeoutMs: 2_000,
+    });
+    await initializeCoreLocalMetadataTables(metadataStore);
+    await initializeAgentStateTables(metadataStore);
+    await metadataStore.repositories.workspaces.bind({
+      identity: { workspaceId: 'workspace-1' },
+      locator: { kind: 'variable', value: '${HOME}/project' },
+      seenAt: '2026-08-08T00:00:00.000Z',
+    });
+    const delivery = new DesktopWorkspaceBoardDelivery({
+      applicationInstanceId: 'desktop-instance',
+      metadataStore,
+      workspaceRegistry: {
+        restore: async (workspaceId) => ({
+          workspaceId,
+          workspacePath,
+          displayName: 'Project',
+          locator: { kind: 'variable', value: '${HOME}/project' },
+        }),
+      },
+      host: { files: createFilePort() },
+      coordinateCanvasMutation: (_workspaceId, operation) => operation(),
+    });
+    const input = {
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+      completedAt: 1_700_000_000_000,
+      canvasTurnTarget: {
+        workspaceId: 'workspace-1',
+        target: {
+          kind: 'exact-canvas' as const,
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/story.nkc',
+        },
+      },
+      artifacts: [
+        {
+          artifactId: 'output-1',
+          contentFingerprint: 'output-1',
+          role: 'output' as const,
+          kind: 'markdown' as const,
+          title: 'Output',
+          markdown: '# Output',
+          sourceId: 'output-1',
+        },
+      ],
+    };
+
+    await expect(delivery.deliver(input)).resolves.toEqual({ status: 'accepted' });
+    const exact = loadNkc(await fs.readFile(exactPath, 'utf8'));
+    expect(exact.validation.valid).toBe(true);
+    expect(exact.data.nodes).toHaveLength(1);
+    await expect(
+      fs.stat(path.join(workspacePath, ...CANVAS_WORKSPACE_BOARD_PATH.split('/'))),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await metadataStore.dispose();
+  });
+
+  it('blocks a missing exact Canvas target without creating the exact document or the Board', async () => {
+    const workspacePath = path.join(root, 'project');
+    await fs.mkdir(path.join(workspacePath, 'neko', 'boards'), { recursive: true });
+    const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: root });
+    await metadataStore.open({
+      databasePath: resolveGlobalStorageLayout(root).database,
+      busyTimeoutMs: 2_000,
+    });
+    await initializeCoreLocalMetadataTables(metadataStore);
+    await initializeAgentStateTables(metadataStore);
+    await metadataStore.repositories.workspaces.bind({
+      identity: { workspaceId: 'workspace-1' },
+      locator: { kind: 'variable', value: '${HOME}/project' },
+      seenAt: '2026-08-08T00:00:00.000Z',
+    });
+    const delivery = new DesktopWorkspaceBoardDelivery({
+      applicationInstanceId: 'desktop-instance',
+      metadataStore,
+      workspaceRegistry: {
+        restore: async (workspaceId) => ({
+          workspaceId,
+          workspacePath,
+          displayName: 'Project',
+          locator: { kind: 'variable', value: '${HOME}/project' },
+        }),
+      },
+      host: { files: createFilePort() },
+      coordinateCanvasMutation: (_workspaceId, operation) => operation(),
+    });
+    const input = {
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+      completedAt: 1_700_000_000_000,
+      canvasTurnTarget: {
+        workspaceId: 'workspace-1',
+        target: {
+          kind: 'exact-canvas' as const,
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/missing.nkc',
+        },
+      },
+      artifacts: [
+        {
+          artifactId: 'output-1',
+          contentFingerprint: 'output-1',
+          role: 'output' as const,
+          kind: 'markdown' as const,
+          title: 'Output',
+          markdown: '# Output',
+          sourceId: 'output-1',
+        },
+      ],
+    };
+
+    await expect(delivery.deliver(input)).resolves.toMatchObject({ status: 'blocked' });
+    await expect(
+      fs.stat(path.join(workspacePath, 'neko', 'boards', 'missing.nkc')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      fs.stat(path.join(workspacePath, ...CANVAS_WORKSPACE_BOARD_PATH.split('/'))),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await metadataStore.dispose();
+  });
+
+  it('keeps deliveries distinct when only the Canvas target differs', async () => {
+    const workspacePath = path.join(root, 'project');
+    await fs.mkdir(path.join(workspacePath, 'neko', 'boards'), { recursive: true });
+    const aPath = path.join(workspacePath, 'neko', 'boards', 'a.nkc');
+    const bPath = path.join(workspacePath, 'neko', 'boards', 'b.nkc');
+    await fs.writeFile(aPath, JSON.stringify({ name: 'A', nodes: [], connections: [] }), 'utf8');
+    await fs.writeFile(bPath, JSON.stringify({ name: 'B', nodes: [], connections: [] }), 'utf8');
+    const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: root });
+    await metadataStore.open({
+      databasePath: resolveGlobalStorageLayout(root).database,
+      busyTimeoutMs: 2_000,
+    });
+    await initializeCoreLocalMetadataTables(metadataStore);
+    await initializeAgentStateTables(metadataStore);
+    await metadataStore.repositories.workspaces.bind({
+      identity: { workspaceId: 'workspace-1' },
+      locator: { kind: 'variable', value: '${HOME}/project' },
+      seenAt: '2026-08-08T00:00:00.000Z',
+    });
+    const delivery = new DesktopWorkspaceBoardDelivery({
+      applicationInstanceId: 'desktop-instance',
+      metadataStore,
+      workspaceRegistry: {
+        restore: async (workspaceId) => ({
+          workspaceId,
+          workspacePath,
+          displayName: 'Project',
+          locator: { kind: 'variable', value: '${HOME}/project' },
+        }),
+      },
+      host: { files: createFilePort() },
+      coordinateCanvasMutation: (_workspaceId, operation) => operation(),
+    });
+    const baseInput = {
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+      completedAt: 1_700_000_000_000,
+      artifacts: [
+        {
+          artifactId: 'output-1',
+          contentFingerprint: 'output-1',
+          role: 'output' as const,
+          kind: 'markdown' as const,
+          title: 'Output',
+          markdown: '# Output',
+          sourceId: 'output-1',
+        },
+      ],
+    };
+
+    await expect(
+      delivery.deliver({
+        ...baseInput,
+        canvasTurnTarget: {
+          workspaceId: 'workspace-1',
+          target: {
+            kind: 'exact-canvas' as const,
+            workspaceId: 'workspace-1',
+            canvasId: 'neko/boards/a.nkc',
+          },
+        },
+      }),
+    ).resolves.toEqual({ status: 'accepted' });
+    await expect(
+      delivery.deliver({
+        ...baseInput,
+        canvasTurnTarget: {
+          workspaceId: 'workspace-1',
+          target: {
+            kind: 'exact-canvas' as const,
+            workspaceId: 'workspace-1',
+            canvasId: 'neko/boards/b.nkc',
+          },
+        },
+      }),
+    ).resolves.toEqual({ status: 'accepted' });
+
+    const a = loadNkc(await fs.readFile(aPath, 'utf8'));
+    const b = loadNkc(await fs.readFile(bPath, 'utf8'));
+    expect(a.data.nodes).toHaveLength(1);
+    expect(b.data.nodes).toHaveLength(1);
+    await expect(
+      fs.stat(path.join(workspacePath, ...CANVAS_WORKSPACE_BOARD_PATH.split('/'))),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await metadataStore.dispose();
+  });
+
   it('returns an explicit conflict before writing when the open Workspace Board is dirty', async () => {
     const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: root });
     await metadataStore.open({

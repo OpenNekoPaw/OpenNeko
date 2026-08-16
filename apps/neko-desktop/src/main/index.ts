@@ -79,6 +79,8 @@ import {
   projectAgentDraftInputText,
   type AgentDomainConversationService,
 } from '@neko/agent-runtime/application';
+import { createCanvasWorkspaceIndexService } from '@neko/canvas-domain';
+import { createCanvasWorkspaceIndexNodeAdapter } from '@neko/canvas-node';
 import { resolveAgentSkillsDir } from '@neko/agent-runtime/workspace';
 import { createCharacterAgentConversationAdapter } from './character-agent-conversation-adapter';
 import {
@@ -765,6 +767,38 @@ async function startDesktop(): Promise<void> {
     }
     return automationPluginToolAdapter;
   };
+  const canvasWorkspaceIndexService = createCanvasWorkspaceIndexService({
+    read: {
+      listExactCanvasDocuments: async (workspaceId) => {
+        const workspace = await requireWorkspaceForCanvasIndex(workspaceId);
+        return createCanvasWorkspaceIndexNodeAdapter({
+          workspaceRoot: workspace.workspacePath,
+          host,
+        }).listExactCanvasDocuments(workspaceId);
+      },
+      readExactCanvasSummary: async (workspaceId, canvasIdentity) => {
+        const workspace = await requireWorkspaceForCanvasIndex(workspaceId);
+        return createCanvasWorkspaceIndexNodeAdapter({
+          workspaceRoot: workspace.workspacePath,
+          host,
+        }).readExactCanvasSummary(workspaceId, canvasIdentity);
+      },
+    },
+  });
+
+  async function requireWorkspaceForCanvasIndex(workspaceId: string) {
+    if (boardRestoringWorkspaceRegistry.restore === undefined) {
+      throw new Error('Desktop Workspace registry cannot restore exact Canvas workspaces.');
+    }
+    const workspace = await boardRestoringWorkspaceRegistry.restore(workspaceId);
+    if (workspace.workspaceId !== workspaceId) {
+      throw new Error(
+        `Desktop Canvas index resolved '${workspace.workspaceId}' instead of '${workspaceId}'.`,
+      );
+    }
+    return workspace;
+  }
+
   const skillPackageCreationService = createNodeSkillPackageCreationService();
   const agentComposition = createAgentAppHost({
     userDataRoot: globalStorage.root,
@@ -1766,6 +1800,7 @@ async function startDesktop(): Promise<void> {
   });
   const agentControllerComposition = createAgentControllerComposition({
     host,
+    canvas: canvasWorkspaceIndexService,
     userHome: homedir,
     credentialRuntime,
     resolveWorkspaceConfig: ({ workspaceId, workspacePath }) =>
@@ -3043,6 +3078,7 @@ async function startDesktop(): Promise<void> {
     preview: previewRuntime,
     textEditor: textEditorRuntime,
     canvas: canvasRuntime,
+    canvasWorkspaceIndexService,
     cut: cutRuntime,
     settings: applicationSettings,
     extensionManager,

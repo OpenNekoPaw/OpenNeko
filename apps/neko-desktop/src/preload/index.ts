@@ -126,6 +126,8 @@ import {
   DESKTOP_CANVAS_CHANNELS,
   isSameCanvasHostIdentity,
   parseDesktopCanvasPreviewResourceReleaseRequest,
+  parseDesktopCanvasWorkspaceIndexCatalogRequest,
+  parseDesktopCanvasWorkspaceIndexCatalogResult,
   parseDesktopCanvasPreviewResourceRequest,
   parseDesktopCanvasPreviewResourceResult,
   type OpenNekoDesktopCanvasBridge,
@@ -1645,6 +1647,18 @@ const bridge: OpenNekoDesktopBridge &
         );
       }
       await ipcRenderer.invoke(DESKTOP_CANVAS_CHANNELS.previewResourceRelease, request);
+    },
+    async readWorkspaceIndexCatalog(request) {
+      const parsed = parseDesktopCanvasWorkspaceIndexCatalogRequest(request);
+      const response = await ipcRenderer.invoke(
+        DESKTOP_CANVAS_CHANNELS.workspaceIndexCatalogRead,
+        parsed,
+      );
+      return parseDesktopCanvasWorkspaceIndexCatalogResult(
+        response,
+        parsed.requestId,
+        parsed.workspaceId,
+      );
     },
     subscribe(identity, listener) {
       const entry = { identity: parseCanvasHostRuntimeIdentity(identity), listener };

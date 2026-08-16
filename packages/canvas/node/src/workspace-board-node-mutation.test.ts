@@ -67,15 +67,34 @@ describe('WorkspaceBoardNodeMutation', () => {
     await expect(fs.readFile(documentPath, 'utf8')).resolves.toBe('{invalid');
   });
 
-  it('rejects a document URI outside the exact Workspace Board target', async () => {
+  it('accepts an authorized in-workspace exact .nkc document', async () => {
+    const mutation = createMutation(root);
+    const exactPath = path.join(root, 'neko', 'boards', 'story.nkc');
+    const canvasData = createEmptyCanvasData('Story');
+    await fs.mkdir(path.dirname(exactPath), { recursive: true });
+    await fs.writeFile(exactPath, saveNkc(canvasData), 'utf8');
+
+    await expect(
+      mutation.loadLatest({
+        documentUri: pathToFileURL(exactPath).href,
+        createIfMissing: false,
+      }),
+    ).resolves.toEqual({
+      documentUri: pathToFileURL(exactPath).href,
+      canvasData,
+      exists: true,
+    });
+  });
+
+  it('rejects a document URI outside the authorized Workspace', async () => {
     const mutation = createMutation(root);
 
     await expect(
       mutation.loadLatest({
-        documentUri: pathToFileURL(path.join(root, 'other.nkc')).href,
+        documentUri: pathToFileURL(path.join(root, '..', 'outside.nkc')).href,
         createIfMissing: true,
       }),
-    ).rejects.toThrow(/does not match the exact Workspace/u);
+    ).rejects.toThrow(/escapes the authorized Workspace/u);
   });
 
   it('loads a Board through a directory symlink but keeps the linked directory read-only', async () => {

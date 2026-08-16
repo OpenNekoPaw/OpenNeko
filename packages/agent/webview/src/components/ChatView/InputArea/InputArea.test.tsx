@@ -825,7 +825,24 @@ describe('InputArea composer controls', () => {
 
   it('omits the locked Workspace label from the conversation composer', () => {
     render(
-      <Harness composerWorkspace={{ kind: 'workspace', label: 'OpenNeko' }}>
+      <Harness
+        composerWorkspace={{
+          kind: 'workspace',
+          label: 'OpenNeko',
+          workspaceId: 'workspace-1',
+          loadCanvasCatalog: async () => ({
+            workspaceId: 'workspace-1',
+            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+            options: [
+              {
+                target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                label: 'Workspace Board',
+              },
+            ],
+            diagnostics: [],
+          }),
+        }}
+      >
         <InputArea
           composerPresentation="compact"
           inputValue=""
@@ -864,6 +881,7 @@ describe('InputArea composer controls', () => {
     const button = screen.getByRole('button', { name: '选择项目' });
     const bar = screen.getByLabelText('当前上下文');
     expect(button.closest('.agent-entry-binding-bar')).toBe(bar);
+    expect(bar.classList.contains('agent-composer-context-bar')).toBe(true);
     expect(button.closest('.agent-composer-toolbar')).toBeNull();
     fireEvent.click(button);
     expect(onChooseProject).toHaveBeenCalledOnce();
@@ -907,8 +925,7 @@ describe('InputArea composer controls', () => {
     expect(worldAction.getAttribute('title')).toBe('世界模式尚不可用');
   });
 
-  it('consolidates the Entry authoring target and Character selections in one context bar', () => {
-    const onClearEntryWorkspaceTarget = vi.fn(async () => undefined);
+  it('keeps Workspace+Canvas in the Canvas rail and Characters in the Entry binding bar', () => {
     const onRemoveCharacterLaunch = vi.fn();
     render(
       <Harness>
@@ -918,6 +935,23 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
+          workspaceCanvas={{
+            workspaceLabel: 'Blame',
+            canvas: {
+              workspaceId: 'workspace-1',
+              defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+              selectedId: 'workspace-board',
+              loading: false,
+              options: [
+                {
+                  id: 'workspace-board',
+                  label: 'Workspace Board',
+                  target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                },
+              ],
+              onSelect: async () => undefined,
+            },
+          }}
           entryContextActions={[
             {
               kind: 'project',
@@ -925,17 +959,6 @@ describe('InputArea composer controls', () => {
               onInvoke: vi.fn(async () => undefined),
             },
           ]}
-          entryWorkspaceTarget={{
-            label: 'Blame',
-            context: {
-              kind: 'workspace',
-              workspaceId: 'workspace-1',
-              workspaceGrantId: 'grant-1',
-            },
-            target: { kind: 'content-document', documentId: 'documents/story.md' },
-            authority: { kind: 'project', projectId: 'project-1' },
-          }}
-          onClearEntryWorkspaceTarget={onClearEntryWorkspaceTarget}
           selectedCharacterLaunches={[
             {
               globalCharacterId: 'character-project-1',
@@ -948,18 +971,21 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
+    const canvasRail = document.querySelector('[data-workspace-canvas-context]') as HTMLElement;
+    expect(canvasRail).not.toBeNull();
+    expect(within(canvasRail).getByText('Blame')).toBeTruthy();
+    expect(within(canvasRail).getByText('Workspace Board')).toBeTruthy();
+    expect(within(canvasRail).queryByText('Aster')).toBeNull();
+
     const bar = screen.getByLabelText('当前上下文');
     expect(bar.getAttribute('data-entry-binding-bar')).toBe('true');
-    expect(within(bar).getByText('Blame')).toBeTruthy();
     expect(within(bar).getByText('Aster')).toBeTruthy();
+    expect(within(bar).queryByText('Blame')).toBeNull();
     expect(within(bar).getByRole('button', { name: '选择项目' })).toBeTruthy();
-    expect(bar.querySelector('[data-entry-binding-kind="content-document"]')).not.toBeNull();
     expect(bar.querySelector('[data-entry-binding-kind="character-dialogue"]')).not.toBeNull();
     expect(document.querySelector('[data-character-launch-selections]')).toBeNull();
 
-    fireEvent.click(within(bar).getByRole('button', { name: '清除: Blame' }));
     fireEvent.click(within(bar).getByRole('button', { name: '清除: Aster' }));
-    expect(onClearEntryWorkspaceTarget).toHaveBeenCalledOnce();
     expect(onRemoveCharacterLaunch).toHaveBeenCalledWith('character-version-1');
   });
 

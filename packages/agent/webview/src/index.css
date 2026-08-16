@@ -1619,7 +1619,7 @@ body {
   white-space: nowrap;
 }
 
-.agent-entry-binding-bar {
+.agent-composer-context-bar {
   position: relative;
   z-index: 0;
   display: flex;
@@ -1639,8 +1639,112 @@ body {
   scrollbar-width: none;
 }
 
-.agent-entry-binding-bar::-webkit-scrollbar {
+.agent-composer-context-bar::-webkit-scrollbar {
   display: none;
+}
+
+.agent-entry-binding-bar {
+  gap: 4px;
+}
+
+.agent-workspace-canvas-context-bar {
+  gap: 8px;
+  color: var(--agent-fg);
+}
+
+.agent-workspace-canvas-context-bar svg {
+  flex: none;
+  color: var(--agent-fg-secondary);
+}
+
+.agent-workspace-canvas-workspace-label {
+  max-width: min(240px, 45%);
+  min-width: 0;
+  flex: none;
+  overflow: hidden;
+  color: var(--agent-fg);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-workspace-canvas-select-control {
+  position: relative;
+  display: inline-flex;
+  width: fit-content;
+  flex: none;
+  max-width: min(240px, 55%);
+  min-width: 0;
+  align-items: center;
+}
+
+.agent-workspace-canvas-select {
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  appearance: none;
+  field-sizing: content;
+  padding: 0 22px 0 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--agent-fg);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-workspace-canvas-select:hover {
+  background: var(--agent-control-hover-bg);
+}
+
+.agent-workspace-canvas-select:focus-visible {
+  outline: none;
+  background: var(--agent-control-hover-bg);
+}
+
+.agent-workspace-canvas-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.agent-workspace-canvas-select-chevron {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  pointer-events: none;
+}
+
+.agent-workspace-canvas-board-default,
+.agent-workspace-canvas-diagnostic {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--agent-fg-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-workspace-canvas-diagnostic {
+  color: var(--agent-danger-fg, #f87171);
+}
+
+@media (max-width: 640px) {
+  .agent-workspace-canvas-context-bar {
+    gap: 6px;
+    padding-inline: 8px;
+  }
+
+  .agent-workspace-canvas-select {
+    padding-left: 5px;
+  }
 }
 
 .agent-entry-binding-item {

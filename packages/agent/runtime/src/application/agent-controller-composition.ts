@@ -65,6 +65,7 @@ import {
   parseAgentConfigurationRequest,
   type AgentConfigurationFieldProjection,
 } from '@neko/agent-contracts';
+import type { CanvasWorkspaceIndexService } from '@neko/canvas-domain';
 import type { ConfigManager } from '@neko/host/settings';
 import {
   buildAssistantSettingsDataMessage,
@@ -297,6 +298,7 @@ export interface CreateAgentControllerCompositionOptions {
     locator: import('@neko/content').WorkspaceFileContentLocator,
   ) => Promise<string>;
   readonly configInteraction: AgentConfigInteractionPort;
+  readonly canvas: CanvasWorkspaceIndexService;
   readonly conversationReferences?: AgentConversationReferenceResolutionPort;
   readonly resources: AgentResourceDisplayRegistrationPort;
   readonly reportError: (error: Error) => void;
@@ -1549,6 +1551,19 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     ]
       .filter(Boolean)
       .join('\n\n# User Instructions\n\n');
+    if (
+      input.request.canvasTurnTarget !== undefined &&
+      input.conversationContext.kind !== 'workspace'
+    ) {
+      throw new Error('Canvas turn target is only valid for Workspace owner turns.');
+    }
+    const canvasTurnContext =
+      input.request.canvasTurnTarget === undefined
+        ? undefined
+        : await this.options.canvas.resolveTurnContext(
+            input.request.canvasTurnTarget.workspaceId,
+            input.request.canvasTurnTarget.target,
+          );
     await input.workspace.openConversation({
       conversationId: input.request.conversationId,
       models: input.workspace.models,
@@ -1612,6 +1627,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         ...(input.request.fileReferences === undefined
           ? {}
           : { fileReferences: input.request.fileReferences }),
+        ...(input.request.canvasTurnTarget === undefined
+          ? {}
+          : { canvasTurnTarget: input.request.canvasTurnTarget }),
       },
       ...(contextPayloads.length ? { contextPayloads } : {}),
       entryTargetReceipt: input.entryTargetReceipt,
@@ -1623,6 +1641,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       ...(input.capabilityConstraint === undefined
         ? {}
         : { capabilityConstraint: input.capabilityConstraint }),
+      ...(canvasTurnContext === undefined ? {} : { canvasTurnContext }),
     };
     const factsEvents = createDeferredDesktopAgentFactsEvents();
     const observedTurnInput: AgentTurnInput = {

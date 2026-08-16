@@ -13,6 +13,11 @@ import {
   type AgentFlatPurposeModelRefs,
 } from './agent-purpose-model';
 import { parseAgentEntryTargetReceipt, type AgentEntryTargetReceipt } from './agent-entry-intent';
+import {
+  parseCanvasWorkspaceTurnContext,
+  type CanvasWorkspaceTurnSummary,
+  type CanvasWorkspaceTurnTarget,
+} from '@neko/canvas-domain';
 
 export type AgentDraftInputIntent =
   | { readonly kind: 'message'; readonly text: string }
@@ -52,6 +57,13 @@ export interface AgentInputReferenceReceipt {
   readonly bindingReceiptId?: string;
 }
 
+export interface AgentCanvasTurnIntent {
+  readonly workspaceId: string;
+  readonly target: CanvasWorkspaceTurnTarget;
+  /** Light summary only; full Canvas content must be requested on demand. */
+  readonly summary?: CanvasWorkspaceTurnSummary;
+}
+
 export interface AgentDraftSubmitInput {
   readonly draft: AgentDraftInteractionProjection;
   readonly entryTargetReceipt: AgentEntryTargetReceipt | null;
@@ -60,6 +72,7 @@ export interface AgentDraftSubmitInput {
   readonly resourceGrantIds: readonly string[];
   readonly configuration: AgentConfigurationRequest;
   readonly purposeModels?: AgentFlatPurposeModelRefs;
+  readonly canvasTurnTarget?: AgentCanvasTurnIntent;
 }
 
 export interface AgentDraftSubmitProjection {
@@ -81,6 +94,7 @@ export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInpu
       'resourceGrantIds',
       'configuration',
       'purposeModels',
+      'canvasTurnTarget',
     ],
     ['draft', 'entryTargetReceipt', 'input', 'references', 'resourceGrantIds', 'configuration'],
     'Agent Draft submit input',
@@ -102,6 +116,9 @@ export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInpu
     ...(record['purposeModels'] === undefined
       ? {}
       : { purposeModels: parseAgentFlatPurposeModelRefs(record['purposeModels']) }),
+    ...(record['canvasTurnTarget'] === undefined
+      ? {}
+      : { canvasTurnTarget: parseAgentCanvasTurnIntent(record['canvasTurnTarget']) }),
   };
 }
 
@@ -208,6 +225,29 @@ function parseReferenceOwnerKind(value: unknown): AgentInputReferenceReceipt['ow
     throw new Error(`Unknown Agent reference owner '${String(value)}'.`);
   }
   return value;
+}
+
+export function parseAgentCanvasTurnIntent(value: unknown): AgentCanvasTurnIntent {
+  const record = requireRecord(value, 'Agent Canvas turn intent must be an object.');
+  requireAllowedKeys(
+    record,
+    ['workspaceId', 'target', 'summary'],
+    ['workspaceId', 'target'],
+    'Agent Canvas turn intent',
+  );
+  const workspaceId = requireIdentity(record['workspaceId'], 'Workspace');
+  const context = parseCanvasWorkspaceTurnContext({
+    target: record['target'],
+    ...(record['summary'] === undefined ? {} : { summary: record['summary'] }),
+  });
+  if (context.target.workspaceId !== workspaceId) {
+    throw new Error('Agent Canvas turn intent Workspace does not match its target.');
+  }
+  return Object.freeze({
+    workspaceId,
+    target: context.target,
+    ...(context.summary === undefined ? {} : { summary: context.summary }),
+  });
 }
 
 function requireInvocationKeys(record: Record<string, unknown>, required: readonly string[]): void {

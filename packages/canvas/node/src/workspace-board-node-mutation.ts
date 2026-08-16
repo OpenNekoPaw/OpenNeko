@@ -4,7 +4,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
-  CANVAS_WORKSPACE_BOARD_PATH,
   createEmptyCanvasData,
   loadNkc,
   saveNkc,
@@ -94,14 +93,18 @@ export class WorkspaceBoardNodeMutation implements CanvasWorkspaceBoardMutationP
     } catch {
       throw new Error('Workspace Board mutation requires a local file document URI.');
     }
-    const expected = path.resolve(
-      this.options.workspace.workspacePath,
-      ...CANVAS_WORKSPACE_BOARD_PATH.split('/'),
-    );
-    if (path.resolve(candidate) !== expected) {
-      throw new Error('Workspace Board mutation target does not match the exact Workspace.');
+    const workspacePath = path.resolve(this.options.workspace.workspacePath);
+    const resolved = path.resolve(candidate);
+    const relative = path.relative(workspacePath, resolved);
+    if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error('Workspace Board mutation target escapes the authorized Workspace.');
     }
-    return expected;
+    if (relative.endsWith('.nkc') === false) {
+      throw new Error(
+        'Workspace Board mutation target must be a workspace-relative .nkc document.',
+      );
+    }
+    return resolved;
   }
 }
 

@@ -103,8 +103,14 @@ import type {
   CanvasMaterialActionResolution,
   CanvasTextFilePreviewResult,
 } from '@neko/canvas-domain';
-import { parseCanvasHostRuntimeIdentity } from '@neko/canvas-domain';
-import { type DesktopCanvasPreviewResourceResult } from '../shared/canvas-bridge-contract';
+import {
+  parseCanvasHostRuntimeIdentity,
+  type CanvasWorkspaceIndexService,
+} from '@neko/canvas-domain';
+import {
+  parseDesktopCanvasWorkspaceIndexCatalogRequest,
+  type DesktopCanvasPreviewResourceResult,
+} from '../shared/canvas-bridge-contract';
 import type { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import type {
   CutHostRuntimeProjectionEvent,
@@ -402,6 +408,7 @@ export interface DesktopAppHostOptions {
   readonly preview?: DesktopPreviewRuntime;
   readonly textEditor?: DesktopTextEditorRuntime;
   readonly canvas?: DesktopCanvasRuntime;
+  readonly canvasWorkspaceIndexService?: CanvasWorkspaceIndexService;
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
   readonly extensionManager: AgentExtensionManager;
@@ -450,6 +457,7 @@ export class DesktopAppHost {
   readonly preview: DesktopPreviewRuntime | undefined;
   readonly textEditor: DesktopTextEditorRuntime | undefined;
   readonly canvas: DesktopCanvasRuntime | undefined;
+  readonly canvasWorkspaceIndexService: CanvasWorkspaceIndexService | undefined;
   readonly cut: DesktopCutRuntime | undefined;
   readonly settings: DesktopApplicationSettingsService;
   private readonly resourceSubscriptions = new Map<number, () => void>();
@@ -496,6 +504,7 @@ export class DesktopAppHost {
     this.preview = options.preview;
     this.textEditor = options.textEditor;
     this.canvas = options.canvas;
+    this.canvasWorkspaceIndexService = options.canvasWorkspaceIndexService;
     this.cut = options.cut;
     this.settings = options.settings;
     this.shell.setAgentHomeProjectionSource(this.agent);
@@ -628,7 +637,6 @@ export class DesktopAppHost {
       throw new Error('World portable request belongs to another Window.');
     }
   }
-
 
   async executeWorldRuntimeRequest(
     sender: DesktopSenderIdentity,
@@ -913,7 +921,6 @@ export class DesktopAppHost {
       throw new Error('Character portable request belongs to another Window.');
     }
   }
-
 
   async executeWorldAuthoringRequest(
     sender: DesktopSenderIdentity,
@@ -2785,6 +2792,26 @@ export class DesktopAppHost {
       }
     }
     return result;
+  }
+
+  async readCanvasWorkspaceIndexCatalog(
+    sender: Parameters<DesktopAppHost['executeCanvasIntent']>[0],
+    payload: unknown,
+  ): Promise<import('../shared/canvas-bridge-contract').DesktopCanvasWorkspaceIndexCatalogResult> {
+    this.requireActive();
+    const request = parseDesktopCanvasWorkspaceIndexCatalogRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    await this.workspaceGrants.restore(
+      window.windowId,
+      request.workspaceGrantId,
+      request.workspaceId,
+    );
+    const service = this.canvasWorkspaceIndexService;
+    if (service === undefined) {
+      throw new Error('Desktop Canvas workspace index catalog is unavailable.');
+    }
+    const catalog = await service.readCatalog(request.workspaceId);
+    return { requestId: request.requestId, catalog };
   }
 
   async getCanvasSnapshot(

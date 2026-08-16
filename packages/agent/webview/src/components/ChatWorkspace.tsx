@@ -22,7 +22,11 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { AgentContextPayload } from '@neko/agent-contracts';
+import type { AgentCanvasTurnIntent, AgentContextPayload } from '@neko/agent-contracts';
+import {
+  useComposerWorkspacePresentation,
+  type AgentComposerCanvasPresentation,
+} from './ComposerWorkspaceContext';
 import type { ChatModelOption } from '@neko/ai-contracts';
 import {
   ShellExecutionMode,
@@ -57,6 +61,7 @@ import type { PluginsAvailable } from './ChatView/SendToMenu';
 import type { AgentWorkItem } from './AgentWorkItem';
 import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
 import { projectTrailingMention } from './ChatView/InputArea/mention-input';
+import { useTranslation } from '../i18n/I18nContext';
 import {
   useChatActions,
   type PendingSendIdentity,
@@ -133,6 +138,10 @@ export interface ChatWorkspaceProps {
   onInitialInputRequestConsumed?: (id: number) => void;
   initialSessionModeRequest?: { id: number; mode: SessionMode } | null;
   onInitialSessionModeRequestConsumed?: (id: number) => void;
+  workspaceCanvas?: {
+    readonly workspaceLabel: string;
+    readonly canvas?: AgentComposerCanvasPresentation;
+  };
   queuedEditDraftConflictMessage: string;
 }
 
@@ -189,11 +198,21 @@ export function ChatWorkspace({
   initialSessionModeRequest,
   onInitialSessionModeRequestConsumed,
   queuedEditDraftConflictMessage,
+  workspaceCanvas,
 }: ChatWorkspaceProps) {
   const agentHostMessages = useAgentHostMessages();
+  const { t } = useTranslation();
+  const composerWorkspace = useComposerWorkspacePresentation();
   const { snapshot: tabRenderSnapshot, updateState: updateTabRenderState } =
     useTabRenderStore(tabRenderStore);
   const tabState = tabRenderSnapshot.state;
+  const [workspaceCanvasCatalog, setWorkspaceCanvasCatalog] = useState<
+    import('@neko/canvas-domain').CanvasWorkspaceContextCatalog | undefined
+  >();
+  const [workspaceCanvasLoading, setWorkspaceCanvasLoading] = useState(false);
+  const [workspaceCanvasDiagnostic, setWorkspaceCanvasDiagnostic] = useState<string>();
+  const workspaceCanvasRequestSeq = useRef(0);
+  const previousWorkspaceIdRef = useRef<string | undefined>(undefined);
   const inputValue = tabState.inputValue;
   const selectedModel = tabState.selectedModel;
   const mediaModelSelection = tabState.mediaModelSelection;
@@ -411,7 +430,12 @@ export function ChatWorkspace({
     [onSendWithoutConversation, setVisibleSessionMode],
   );
 
-  const { handleSend, triggerSend, handleCancelMessage, copyLastResponse } = useChatActions({
+  const {
+    handleSend: handleSendBase,
+    triggerSend,
+    handleCancelMessage,
+    copyLastResponse,
+  } = useChatActions({
     inputValue,
     isThinking: isRunActive,
     inputCatalog,
@@ -438,6 +462,109 @@ export function ChatWorkspace({
     ensureConversationForSend: handleSendWithoutConversation,
     onUserMessageSent,
   });
+
+  const workspaceId =
+    composerWorkspace?.kind === 'workspace' ? composerWorkspace.workspaceId : undefined;
+  useEffect(() => {
+    if (workspaceId === undefined || composerWorkspace?.kind !== 'workspace') {
+      setWorkspaceCanvasCatalog(undefined);
+      setWorkspaceCanvasLoading(false);
+      setWorkspaceCanvasDiagnostic(undefined);
+      return;
+    }
+    const seq = workspaceCanvasRequestSeq.current + 1;
+    workspaceCanvasRequestSeq.current = seq;
+    setWorkspaceCanvasLoading(true);
+    setWorkspaceCanvasDiagnostic(undefined);
+    setWorkspaceCanvasCatalog(undefined);
+    composerWorkspace
+      .loadCanvasCatalog()
+      .then((catalog) => {
+        if (workspaceCanvasRequestSeq.current !== seq) return;
+        setWorkspaceCanvasCatalog(catalog);
+        setWorkspaceCanvasLoading(false);
+      })
+      .catch((error: unknown) => {
+        if (workspaceCanvasRequestSeq.current !== seq) return;
+        setWorkspaceCanvasDiagnostic(error instanceof Error ? error.message : String(error));
+        setWorkspaceCanvasLoading(false);
+      });
+  }, [composerWorkspace, workspaceId]);
+
+  useEffect(() => {
+    if (workspaceId === undefined) {
+      previousWorkspaceIdRef.current = undefined;
+      return;
+    }
+    if (shouldResetWorkspaceCanvasSelection(previousWorkspaceIdRef.current, workspaceId)) {
+      updateTabRenderState({ workspaceCanvasSelectionId: 'workspace-board' });
+    }
+    previousWorkspaceIdRef.current = workspaceId;
+  }, [updateTabRenderState, workspaceId]);
+
+  const workspaceCanvasPresentation = useMemo<AgentComposerCanvasPresentation | undefined>(() => {
+    if (workspaceId === undefined || composerWorkspace?.kind !== 'workspace') return undefined;
+    const boardTarget = { kind: 'workspace-board' as const, workspaceId };
+    const boardOption = {
+      id: 'workspace-board',
+      label: t('chat.input.workspaceCanvas.board'),
+      target: boardTarget,
+      summary: undefined,
+    };
+    const catalogOptions = workspaceCanvasCatalog
+      ? workspaceCanvasCatalog.options.map((option) => ({
+          id: option.target.kind === 'workspace-board' ? 'workspace-board' : option.target.canvasId,
+          label: option.label,
+          target: option.target,
+          ...(option.summary === undefined ? {} : { summary: option.summary }),
+          ...(option.disabled === undefined ? {} : { disabled: option.disabled }),
+          ...(option.diagnostic === undefined ? {} : { diagnostic: option.diagnostic }),
+        }))
+      : [];
+    const options = catalogOptions.some((option) => option.id === 'workspace-board')
+      ? catalogOptions
+      : [boardOption, ...catalogOptions];
+    return {
+      workspaceId,
+      defaultTarget: boardTarget,
+      options,
+      selectedId: tabState.workspaceCanvasSelectionId,
+      loading: workspaceCanvasLoading,
+      ...(workspaceCanvasDiagnostic === undefined ? {} : { diagnostic: workspaceCanvasDiagnostic }),
+      onSelect: (optionId) => {
+        updateTabRenderState({ workspaceCanvasSelectionId: optionId });
+        return Promise.resolve();
+      },
+    };
+  }, [
+    composerWorkspace,
+    tabState.workspaceCanvasSelectionId,
+    t,
+    updateTabRenderState,
+    workspaceCanvasCatalog,
+    workspaceCanvasDiagnostic,
+    workspaceCanvasLoading,
+    workspaceId,
+  ]);
+
+  const effectiveCanvasPresentation =
+    composerWorkspace?.kind === 'workspace' ? workspaceCanvasPresentation : workspaceCanvas?.canvas;
+
+  const handleSend = useCallback(
+    (
+      input?: import('../hooks').PendingSendInput,
+      identity?: import('../hooks').PendingSendIdentity,
+    ) => {
+      try {
+        const canvasTurnTarget = projectWorkspaceCanvasTurnTarget(effectiveCanvasPresentation);
+        return handleSendBase(canvasTurnTarget ? { ...input, canvasTurnTarget } : input, identity);
+      } catch (error) {
+        onInputDiagnostic?.(error instanceof Error ? error.message : String(error));
+        return false;
+      }
+    },
+    [effectiveCanvasPresentation, handleSendBase, onInputDiagnostic],
+  );
   const pendingSendRequestId = pendingSendRequest?.id;
   const pendingSendIdentity = useMemo<PendingSendIdentity | undefined>(
     () =>
@@ -879,6 +1006,11 @@ export function ChatWorkspace({
         isComposing={composition.isComposing}
         onCompositionChange={setComposition}
         focusRequestOwner={tabRenderSnapshot.tabId}
+        workspaceCanvas={
+          composerWorkspace?.kind === 'workspace'
+            ? { workspaceLabel: composerWorkspace.label, canvas: workspaceCanvasPresentation }
+            : workspaceCanvas
+        }
         focusRequestEnabled={tabRenderSnapshot.visibility === 'visible'}
         focusRequestTarget={focus.target}
         focusRequestId={focus.requestId}
@@ -886,6 +1018,50 @@ export function ChatWorkspace({
       />
     </InputAreaProvider>
   );
+}
+
+export function shouldResetWorkspaceCanvasSelection(
+  previousWorkspaceId: string | undefined,
+  nextWorkspaceId: string | undefined,
+): boolean {
+  return (
+    previousWorkspaceId !== undefined &&
+    previousWorkspaceId !== nextWorkspaceId &&
+    nextWorkspaceId !== undefined
+  );
+}
+
+export function projectWorkspaceCanvasTurnTarget(
+  canvas: AgentComposerCanvasPresentation | undefined,
+): AgentCanvasTurnIntent | undefined {
+  if (canvas === undefined) return undefined;
+  const selected = canvas.options.find((option) => option.id === canvas.selectedId);
+  if (selected === undefined) {
+    throw new Error('Workspace Canvas selection is unavailable.');
+  }
+  if (selected.target.kind === 'workspace-board') {
+    if (selected.disabled || selected.diagnostic) {
+      throw new Error(selected.diagnostic ?? 'Workspace Board selection is unavailable.');
+    }
+    return undefined;
+  }
+  if (canvas.loading) {
+    throw new Error('Workspace Canvas catalog is loading.');
+  }
+  if (canvas.diagnostic) {
+    throw new Error(canvas.diagnostic);
+  }
+  if (selected.disabled || selected.diagnostic) {
+    throw new Error(selected.diagnostic ?? 'Workspace Canvas selection is unavailable.');
+  }
+  if (selected.summary === undefined) {
+    throw new Error('Exact Canvas selection requires its light summary.');
+  }
+  return {
+    workspaceId: selected.target.workspaceId,
+    target: selected.target,
+    summary: selected.summary,
+  };
 }
 
 function resolveSetStateAction<T>(value: React.SetStateAction<T>, current: T): T {

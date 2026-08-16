@@ -4,6 +4,11 @@ import type {
   AgentAuthoringTargetRef,
   AgentBoundDomainBinding,
 } from '@neko/agent-contracts';
+import type {
+  CanvasWorkspaceContextCatalog,
+  CanvasWorkspaceTurnSummary,
+  CanvasWorkspaceTurnTarget,
+} from '@neko/canvas-domain';
 
 export type AgentComposerWorkspaceTarget =
   | {
@@ -58,6 +63,25 @@ export interface AgentComposerAuthoringCreationResult {
   readonly target: AgentComposerWorkspaceTarget;
 }
 
+export interface AgentComposerCanvasOption {
+  readonly id: string;
+  readonly label: string;
+  readonly target: CanvasWorkspaceTurnTarget;
+  readonly summary?: CanvasWorkspaceTurnSummary;
+  readonly disabled?: boolean;
+  readonly diagnostic?: string;
+}
+
+export interface AgentComposerCanvasPresentation {
+  readonly workspaceId: string;
+  readonly defaultTarget: Extract<CanvasWorkspaceTurnTarget, { readonly kind: 'workspace-board' }>;
+  readonly options: readonly AgentComposerCanvasOption[];
+  readonly selectedId: string;
+  readonly loading: boolean;
+  readonly diagnostic?: string;
+  readonly onSelect: (optionId: string) => Promise<void>;
+}
+
 export type AgentComposerWorkspacePresentation =
   | {
       readonly kind: 'entry';
@@ -74,11 +98,16 @@ export type AgentComposerWorkspacePresentation =
         context: AgentComposerAuthoringCreationContext,
         name: string,
       ) => Promise<AgentComposerAuthoringCreationResult | undefined>;
+      readonly loadCanvasCatalog?: (
+        target: AgentComposerWorkspaceTarget,
+      ) => Promise<CanvasWorkspaceContextCatalog>;
       readonly disabled?: boolean;
     }
   | {
       readonly kind: 'workspace';
       readonly label: string;
+      readonly workspaceId: string;
+      readonly loadCanvasCatalog: () => Promise<CanvasWorkspaceContextCatalog>;
     };
 
 const ComposerWorkspaceContext = createContext<AgentComposerWorkspacePresentation | undefined>(

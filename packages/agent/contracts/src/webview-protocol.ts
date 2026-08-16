@@ -42,6 +42,7 @@ import {
 } from '@neko/canvas-domain';
 import type { AgentPhase } from './phase';
 import type { AgentFileReference, Message } from './message';
+import { parseAgentCanvasTurnIntent, type AgentCanvasTurnIntent } from './agent-draft-submit';
 import type { ConfiguredProvider } from './provider';
 import type {
   ConversationSummary,
@@ -144,6 +145,7 @@ export interface SendMessageWebviewMessage {
   attachments?: MessageAttachment[];
   contextPayloads?: AgentContextPayload[];
   fileReferences?: AgentFileReference[];
+  canvasTurnTarget?: AgentCanvasTurnIntent;
   promptId?: string;
   messageTrackingId?: string;
 }
@@ -526,6 +528,7 @@ export interface AgentQueuedMessageDraft {
   readonly attachments?: readonly MessageAttachment[];
   readonly contextPayloads?: readonly AgentContextPayload[];
   readonly fileReferences?: readonly AgentFileReference[];
+  readonly canvasTurnTarget?: AgentCanvasTurnIntent;
 }
 
 export interface AgentContinuationMetadata {
@@ -1539,6 +1542,15 @@ export function parseSendMessageWebviewMessage(raw: unknown): SendMessageWebview
         : null;
   if (fileReferences === null) return null;
 
+  let canvasTurnTarget: AgentCanvasTurnIntent | undefined;
+  if (raw.canvasTurnTarget !== undefined) {
+    try {
+      canvasTurnTarget = parseAgentCanvasTurnIntent(raw.canvasTurnTarget);
+    } catch {
+      return null;
+    }
+  }
+
   const promptId = optionalString(raw.promptId);
   if (raw.promptId !== undefined && promptId === undefined) return null;
 
@@ -1560,6 +1572,7 @@ export function parseSendMessageWebviewMessage(raw: unknown): SendMessageWebview
     ...(attachments ? { attachments } : {}),
     ...(contextPayloads ? { contextPayloads } : {}),
     ...(fileReferences ? { fileReferences } : {}),
+    ...(canvasTurnTarget ? { canvasTurnTarget } : {}),
     ...(promptId ? { promptId } : {}),
     ...(messageTrackingId ? { messageTrackingId } : {}),
   };

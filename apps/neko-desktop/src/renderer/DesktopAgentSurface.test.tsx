@@ -105,7 +105,22 @@ describe('DesktopAgentSurface', () => {
     await act(async () => {
       root.render(
         <TestAgentSurface
-          composerWorkspace={{ kind: 'workspace', label: 'OpenNeko' }}
+          composerWorkspace={{
+            kind: 'workspace',
+            label: 'OpenNeko',
+            workspaceId: 'workspace-1',
+            loadCanvasCatalog: async () => ({
+              workspaceId: 'workspace-1',
+              defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+              options: [
+                {
+                  target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                  label: 'Workspace Board',
+                },
+              ],
+              diagnostics: [],
+            }),
+          }}
           initialConversation={{ id: 'conversation-1', title: 'Conversation one' }}
         />,
       );
@@ -1068,6 +1083,7 @@ function installBridge(
         executeIntent: vi.fn(),
         resolvePreviewResource: vi.fn(),
         releasePreviewResource: vi.fn(),
+        readWorkspaceIndexCatalog: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
       },
       cut: {

@@ -3,10 +3,12 @@ import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/
 import { type GeneratedAssetRevisionRef } from '@neko/generation';
 import {
   TOOL_NAMES_SYSTEM,
+  type AgentCanvasTurnIntent,
   type ToolResultArtifactTransfer,
   type ToolResultAttachment,
 } from '@neko/agent-contracts';
 import {
+  type CanvasWorkspaceTurnContext,
   type CanvasGenerationEvidence,
   type CanvasWorkspaceArtifactDimensions,
   type CanvasWorkspaceProjectionKind,
@@ -53,6 +55,7 @@ export interface AgentCreatorVisibleArtifactDeliveryInput {
   readonly runId: string;
   readonly completedAt: number;
   readonly artifacts: readonly CreatorVisibleArtifactCandidate[];
+  readonly canvasTurnTarget?: AgentCanvasTurnIntent;
 }
 
 export type AgentCreatorVisibleArtifactDeliveryOutcome =
@@ -78,6 +81,7 @@ export async function deliverCreatorVisibleArtifactsFromTurnProjection(input: {
   readonly turnId: string;
   readonly runId: string;
   readonly delivery?: AgentCreatorVisibleArtifactDeliveryPort;
+  readonly canvasTurnContext?: CanvasWorkspaceTurnContext;
 }): Promise<AgentCreatorVisibleArtifactDeliveryOutcome | undefined> {
   try {
     const artifacts = collectCreatorVisibleArtifactsFromTurnProjection(input.turn);
@@ -98,6 +102,15 @@ export async function deliverCreatorVisibleArtifactsFromTurnProjection(input: {
       runId: input.runId,
       completedAt: input.turn.completion?.completedAt ?? Date.now(),
       artifacts,
+      ...(input.canvasTurnContext === undefined ||
+      input.canvasTurnContext.target.kind === 'workspace-board'
+        ? {}
+        : {
+            canvasTurnTarget: {
+              workspaceId: input.workspaceId,
+              target: input.canvasTurnContext.target,
+            },
+          }),
     });
   } catch (error) {
     return {

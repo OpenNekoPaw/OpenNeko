@@ -2851,7 +2851,19 @@ export function createDesktopAgentSurfaceProps(input: {
             },
           }),
           onCharacterProductHandoff: input.onCharacterProductHandoff,
-          composerWorkspace: { kind: 'workspace', label: 'Workspace' },
+          composerWorkspace: {
+            kind: 'workspace',
+            label: 'Workspace',
+            workspaceId: scope.workspaceId,
+            loadCanvasCatalog: async () => {
+              const result = await window.openNekoDesktop.canvas.readWorkspaceIndexCatalog({
+                requestId: crypto.randomUUID(),
+                workspaceId: scope.workspaceId,
+                workspaceGrantId: scope.workspaceGrantId,
+              });
+              return result.catalog;
+            },
+          },
         };
       }
       if (hasProjectCatalogDiagnostic(input.projection)) return undefined;
@@ -2878,7 +2890,19 @@ export function createDesktopAgentSurfaceProps(input: {
       tab,
       agentPresentation,
       onCharacterProductHandoff: input.onCharacterProductHandoff,
-      composerWorkspace: { kind: 'workspace', label: project.displayName },
+      composerWorkspace: {
+        kind: 'workspace',
+        label: project.displayName,
+        workspaceId: scope.workspaceId,
+        loadCanvasCatalog: async () => {
+          const result = await window.openNekoDesktop.canvas.readWorkspaceIndexCatalog({
+            requestId: crypto.randomUUID(),
+            workspaceId: scope.workspaceId,
+            workspaceGrantId: scope.workspaceGrantId,
+          });
+          return result.catalog;
+        },
+      },
     };
   }
   if (
@@ -2919,6 +2943,14 @@ export function createDesktopAgentSurfaceProps(input: {
             loadAuthoringCatalog: input.onLoadAuthoringTargets,
             onSelectAuthoringTarget: input.onSelectAuthoringTarget,
             onCreateAuthoringTarget: input.onCreateAuthoringTarget,
+            loadCanvasCatalog: async (target) => {
+              const result = await window.openNekoDesktop.canvas.readWorkspaceIndexCatalog({
+                requestId: crypto.randomUUID(),
+                workspaceId: target.context.workspaceId,
+                workspaceGrantId: target.context.workspaceGrantId,
+              });
+              return result.catalog;
+            },
             ...(input.workspaceSelectionDisabled === undefined
               ? {}
               : { disabled: input.workspaceSelectionDisabled }),

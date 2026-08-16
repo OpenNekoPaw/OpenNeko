@@ -102,6 +102,8 @@ export type {
   AgentComposerAuthoringCreationContext,
   AgentComposerAuthoringCreationResult,
   AgentComposerAuthoringTargetOption,
+  AgentComposerCanvasOption,
+  AgentComposerCanvasPresentation,
   AgentComposerWorkspacePresentation,
   AgentComposerWorkspaceTarget,
 } from './components/ComposerWorkspaceContext';

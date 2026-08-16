@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { parseAgentDraftSubmitInput, parseAgentDraftSubmitProjection } from '../agent-draft-submit';
+import {
+  parseAgentCanvasTurnIntent,
+  parseAgentDraftSubmitInput,
+  parseAgentDraftSubmitProjection,
+} from '../agent-draft-submit';
 
 const configuration = {
   modelCatalogEntryId: 'openai:gpt-5',
@@ -28,6 +32,54 @@ describe('Agent Draft submit contract', () => {
       draft: { draftId: 'draft-entry-1', binding: { kind: 'unbound' } },
       input: { kind: 'message' },
     });
+  });
+
+  it('keeps an exact Canvas turn intent outside the domain binding and references', () => {
+    const canvasTurnTarget = {
+      workspaceId: 'workspace-1',
+      target: { kind: 'exact-canvas', workspaceId: 'workspace-1', canvasId: 'canvas-1' },
+      summary: { canvasId: 'canvas-1', name: 'Canvas 1' },
+    };
+    expect(parseAgentCanvasTurnIntent(canvasTurnTarget)).toEqual(canvasTurnTarget);
+    expect(
+      parseAgentDraftSubmitInput({
+        draft: {
+          phase: 'draft',
+          draftId: 'draft-workspace-1',
+          binding: {
+            kind: 'workspace',
+            workspaceId: 'workspace-1',
+            workspaceGrantId: 'workspace-grant-1',
+          },
+          bindingReceipt: {
+            bindingReceiptId: 'binding-1',
+            draftId: 'draft-workspace-1',
+            connectionId: 'connection-1',
+            binding: {
+              kind: 'workspace',
+              workspaceId: 'workspace-1',
+              workspaceGrantId: 'workspace-grant-1',
+            },
+          },
+        },
+        entryTargetReceipt: null,
+        input: { kind: 'message', text: 'Update canvas-1' },
+        references: [],
+        resourceGrantIds: [],
+        configuration,
+        canvasTurnTarget,
+      }).canvasTurnTarget,
+    ).toEqual(canvasTurnTarget);
+  });
+
+  it('rejects a Canvas turn intent whose workspace does not match its target', () => {
+    expect(() =>
+      parseAgentCanvasTurnIntent({
+        workspaceId: 'workspace-2',
+        target: { kind: 'exact-canvas', workspaceId: 'workspace-1', canvasId: 'canvas-1' },
+        summary: { canvasId: 'canvas-1', name: 'Canvas 1' },
+      }),
+    ).toThrow('does not match its target');
   });
 
   it('keeps an explicitly bound owner and receipt exact', () => {

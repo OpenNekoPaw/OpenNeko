@@ -90,6 +90,10 @@ interface ChatViewProps {
   focusRequestId?: string;
   /** Current agent execution state (null when idle) */
   agentState?: AgentState | null;
+  workspaceCanvas?: {
+    readonly workspaceLabel: string;
+    readonly canvas?: import('../ComposerWorkspaceContext').AgentComposerCanvasPresentation;
+  };
 }
 
 export function ChatView({
@@ -139,6 +143,7 @@ export function ChatView({
   focusRequestTarget,
   focusRequestId,
   agentState = null,
+  workspaceCanvas,
 }: ChatViewProps) {
   const { t } = useTranslation();
   const isEmpty = messages.length === 0 && !isThinking;
@@ -265,6 +270,7 @@ export function ChatView({
           focusRequestEnabled={focusRequestEnabled}
           focusRequestTarget={focusRequestTarget}
           focusRequestId={focusRequestId}
+          workspaceCanvas={workspaceCanvas}
         />
       </div>
     </DropZone>

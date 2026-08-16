@@ -19,6 +19,38 @@ const contentLocator = {
 };
 
 describe('webview protocol parser', () => {
+  it('parses sendMessage canvasTurnTarget exact and rejects invalid target', () => {
+    const target = {
+      workspaceId: 'workspace-1',
+      target: {
+        kind: 'exact-canvas' as const,
+        workspaceId: 'workspace-1',
+        canvasId: 'neko/boards/a.nkc',
+      },
+      summary: { canvasId: 'neko/boards/a.nkc', name: 'A' },
+    };
+    const message = parseSendMessageWebviewMessage({
+      type: 'sendMessage',
+      conversationId: 'conv-1',
+      message: 'hi',
+      sessionMode: 'agent',
+      canvasTurnTarget: target,
+    });
+    expect(message?.canvasTurnTarget).toEqual(target);
+    expect(
+      parseSendMessageWebviewMessage({
+        type: 'sendMessage',
+        conversationId: 'conv-1',
+        message: 'hi',
+        sessionMode: 'agent',
+        canvasTurnTarget: {
+          workspaceId: 'workspace-1',
+          target: { kind: 'exact-canvas', workspaceId: 'workspace-1', canvasId: 'x' },
+        },
+      }),
+    ).toBeNull();
+  });
+
   it('accepts canonical ambient Canvas nodes and rejects removed node types', () => {
     expect(
       parseAmbientCanvasUpdateNodes([

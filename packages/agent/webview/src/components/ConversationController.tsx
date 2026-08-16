@@ -60,6 +60,7 @@ import { CharacterDialogueTargetSelector } from './ChatView/CharacterDialogueTar
 import { WorldExperienceTargetSelector } from './ChatView/WorldExperienceTargetSelector';
 import { AuthoringTargetSelector } from './ChatView/AuthoringTargetSelector';
 import { InputArea } from './ChatView/InputArea';
+import { projectWorkspaceCanvasTurnTarget } from './ChatWorkspace';
 import { resolveAgentInputInvocationIntent } from './ChatView/InputArea/slash-command-catalog';
 import {
   InputAreaProvider,
@@ -317,6 +318,13 @@ export function ConversationController({
     targetReceipt: null,
   });
   const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
+  const [entryCanvasSelectionId, setEntryCanvasSelectionId] = useState<string>('workspace-board');
+  const [entryCanvasCatalog, setEntryCanvasCatalog] = useState<
+    import('@neko/canvas-domain').CanvasWorkspaceContextCatalog | undefined
+  >();
+  const [entryCanvasLoading, setEntryCanvasLoading] = useState(false);
+  const [entryCanvasDiagnostic, setEntryCanvasDiagnostic] = useState<string>();
+  const entryCanvasRequestSeq = useRef(0);
   const [isEntryBindingPending, setIsEntryBindingPending] = useState(false);
   const [entryQuickDetailOpen, setEntryQuickDetailOpen] = useState(true);
   const [entryConversationContextSelection, setEntryConversationContextSelection] = useState<
@@ -875,6 +883,85 @@ export function ConversationController({
     },
     [setWorkItemsByConversation],
   );
+
+  const handleEntryCanvasSelect = useCallback(async (optionId: string) => {
+    setEntryCanvasSelectionId(optionId);
+  }, []);
+
+  useEffect(() => {
+    const target = entryWorkspaceTarget;
+    if (
+      target === undefined ||
+      composerWorkspace?.kind !== 'entry' ||
+      composerWorkspace.loadCanvasCatalog === undefined
+    ) {
+      setEntryCanvasCatalog(undefined);
+      setEntryCanvasLoading(false);
+      setEntryCanvasDiagnostic(undefined);
+      setEntryCanvasSelectionId('workspace-board');
+      return;
+    }
+    const seq = entryCanvasRequestSeq.current + 1;
+    entryCanvasRequestSeq.current = seq;
+    setEntryCanvasLoading(true);
+    setEntryCanvasDiagnostic(undefined);
+    setEntryCanvasCatalog(undefined);
+    composerWorkspace
+      .loadCanvasCatalog(target)
+      .then((catalog) => {
+        if (entryCanvasRequestSeq.current !== seq) return;
+        setEntryCanvasCatalog(catalog);
+        setEntryCanvasSelectionId('workspace-board');
+        setEntryCanvasLoading(false);
+      })
+      .catch((error: unknown) => {
+        if (entryCanvasRequestSeq.current !== seq) return;
+        setEntryCanvasDiagnostic(error instanceof Error ? error.message : String(error));
+        setEntryCanvasLoading(false);
+      });
+  }, [composerWorkspace, entryWorkspaceTarget]);
+
+  const entryCanvasPresentation = useMemo(() => {
+    if (entryWorkspaceTarget === undefined) return undefined;
+    const workspaceId = entryWorkspaceTarget.context.workspaceId;
+    const boardTarget = { kind: 'workspace-board' as const, workspaceId };
+    const boardOption = {
+      id: 'workspace-board',
+      label: t('chat.input.workspaceCanvas.board'),
+      target: boardTarget,
+      summary: undefined,
+    };
+    const catalogOptions = entryCanvasCatalog
+      ? entryCanvasCatalog.options.map((option) => ({
+          id: option.target.kind === 'workspace-board' ? 'workspace-board' : option.target.canvasId,
+          label: option.label,
+          target: option.target,
+          ...(option.summary === undefined ? {} : { summary: option.summary }),
+          ...(option.disabled === undefined ? {} : { disabled: option.disabled }),
+          ...(option.diagnostic === undefined ? {} : { diagnostic: option.diagnostic }),
+        }))
+      : [];
+    const options = catalogOptions.some((option) => option.id === 'workspace-board')
+      ? catalogOptions
+      : [boardOption, ...catalogOptions];
+    return {
+      workspaceId,
+      defaultTarget: boardTarget,
+      options,
+      selectedId: entryCanvasSelectionId,
+      loading: entryCanvasLoading,
+      ...(entryCanvasDiagnostic === undefined ? {} : { diagnostic: entryCanvasDiagnostic }),
+      onSelect: handleEntryCanvasSelect,
+    };
+  }, [
+    entryCanvasCatalog,
+    entryCanvasDiagnostic,
+    entryCanvasLoading,
+    entryCanvasSelectionId,
+    entryWorkspaceTarget,
+    handleEntryCanvasSelect,
+    t,
+  ]);
 
   // ---- Derived state for retained Tab conversations ----
   const sessionStateByConversation = useMemo(() => {
@@ -1651,6 +1738,7 @@ export function ConversationController({
             sessionMode: 'agent',
             agentMediaModels: entryModelState.agentMediaModels,
           }).purposeModels;
+          const canvasTurnTarget = projectWorkspaceCanvasTurnTarget(entryCanvasPresentation);
           const projection = await draftHostRuntimeAdapter.submitDraft({
             draft: authoritativeDraft,
             entryTargetReceipt: effectiveIntent.targetReceipt,
@@ -1659,6 +1747,7 @@ export function ConversationController({
             resourceGrantIds,
             configuration,
             ...(purposeModels && Object.keys(purposeModels).length > 0 ? { purposeModels } : {}),
+            ...(canvasTurnTarget === undefined ? {} : { canvasTurnTarget }),
           });
           committedEntryDraftIdRef.current = agentPresentation.draftId;
           writeAgentEntryDraftSnapshot(hostRuntimeAdapter, undefined);
@@ -2160,6 +2249,15 @@ export function ConversationController({
                       ? clearEntryAuthoringTarget
                       : undefined
                   }
+                  workspaceCanvas={
+                    entryWorkspaceTarget
+                      ? {
+                          workspaceLabel: entryWorkspaceTarget.label,
+                          canvas: entryMode === 'authoring' ? undefined : entryCanvasPresentation,
+                          showCanvasIndex: entryMode !== 'authoring',
+                        }
+                      : undefined
+                  }
                   selectedCharacterLaunches={
                     composerWorkspace?.kind !== 'workspace' && entryMode !== 'authoring'
                       ? entryCharacterLaunches
@@ -2351,6 +2449,14 @@ export function ConversationController({
             onInitialInputRequestConsumed={handleInitialInputRequestConsumed}
             initialSessionModeRequest={visible ? initialSessionModeRequest : null}
             onInitialSessionModeRequestConsumed={handleInitialSessionModeRequestConsumed}
+            workspaceCanvas={
+              composerWorkspace?.kind === 'workspace'
+                ? {
+                    workspaceLabel: composerWorkspace.label,
+                    canvas: undefined,
+                  }
+                : undefined
+            }
             queuedEditDraftConflictMessage={t('chat.input.queueEditDraftConflict')}
           />
         );

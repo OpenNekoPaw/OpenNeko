@@ -96,6 +96,7 @@ export interface TabRenderState {
   readonly menus: TabRenderMenuState;
   readonly queuedEdit: TabQueuedEditState | null;
   readonly diagnostics: readonly AgentSessionDiagnosticMessage[];
+  readonly workspaceCanvasSelectionId: string;
 }
 
 export type TabRenderStateUpdate =
@@ -671,6 +672,7 @@ function createInitialTabRenderState(): TabRenderState {
     }),
     queuedEdit: null,
     diagnostics: Object.freeze([]),
+    workspaceCanvasSelectionId: 'workspace-board',
   });
 }
 

@@ -11,3 +11,7 @@ export {
 export * from './canvas-generation-node-runtime';
 export * from './canvas-text-file-preview-service';
 export * from './workspace-board-node-mutation';
+export {
+  createCanvasWorkspaceIndexNodeAdapter,
+  type CanvasWorkspaceIndexNodeAdapterOptions,
+} from './canvas-workspace-index-node-adapter';

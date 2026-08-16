@@ -20,6 +20,7 @@ import {
   projectAgentSecretSafeConfig,
   resolveAgentConversationTurnContext,
 } from '@neko/agent-runtime/application';
+import { createCanvasWorkspaceIndexService } from '@neko/canvas-domain';
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import {
   ConfigManager,
@@ -58,6 +59,7 @@ describe('Agent controller composition', () => {
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
     const effects = composition.createEffects({
       workspace,
@@ -141,6 +143,7 @@ describe('Agent controller composition', () => {
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
     const configuration = missingTurnConfiguration('conversation-narrative', 'turn-narrative');
     const effects = composition.createEffects({
@@ -298,6 +301,7 @@ describe('Agent controller composition', () => {
         openUserConfig: vi.fn(),
       },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
 
     await expect(
@@ -347,6 +351,7 @@ describe('Agent controller composition', () => {
         openUserConfig: vi.fn(),
       },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
     const startInitialTurn = composition.startInitialTurn;
     if (!startInitialTurn) throw new Error('Initial-turn application port is unavailable.');
@@ -573,6 +578,7 @@ describe('Agent controller composition', () => {
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
 
     await composition.startInitialTurn?.({
@@ -734,6 +740,7 @@ describe('Agent controller composition', () => {
         openUserConfig: vi.fn(),
       },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
     const effects = composition.createEffects({
       readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
@@ -850,6 +857,7 @@ describe('Agent controller composition', () => {
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
     const effects = composition.createEffects({
       readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
@@ -1075,6 +1083,7 @@ describe('Agent controller composition', () => {
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
 
     await composition.startInitialTurn?.({
@@ -1282,6 +1291,7 @@ describe('Agent controller composition', () => {
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
     const freezeDomainTurn = vi.fn(async () => undefined);
     const resolveConversationDomainTurnContext = vi.fn(async () => ({
@@ -1420,6 +1430,7 @@ describe('Agent controller composition', () => {
         openUserConfig: vi.fn(),
       },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
 
     expect(() =>
@@ -1466,6 +1477,7 @@ describe('Agent controller composition', () => {
         openUserConfig: vi.fn(),
       },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
     const effects = composition.createEffects({
       readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
@@ -1596,6 +1608,7 @@ describe('Agent controller composition', () => {
         openUserConfig: vi.fn(),
       },
       reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
     });
     const effects = composition.createEffects({
       readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
@@ -1819,6 +1832,7 @@ describe('Agent controller composition', () => {
         openUserConfig: vi.fn(),
       },
       reportError,
+      canvas: createCanvasIndexService(),
     });
     const identity = {
       applicationInstanceId: 'app-1',
@@ -1890,6 +1904,18 @@ function authoringReceipt(): AgentEntryTargetReceipt {
       target: { kind: 'content-document', documentId: 'document-1' },
     },
   };
+}
+
+function createCanvasIndexService() {
+  return createCanvasWorkspaceIndexService({
+    read: {
+      listExactCanvasDocuments: vi.fn(async () => []),
+      readExactCanvasSummary: vi.fn(async () => ({
+        canvasId: 'neko/boards/story.nkc',
+        name: 'Story',
+      })),
+    },
+  });
 }
 
 function createWorkspace(

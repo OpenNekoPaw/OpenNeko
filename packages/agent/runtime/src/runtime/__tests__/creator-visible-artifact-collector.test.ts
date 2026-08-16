@@ -576,6 +576,82 @@ describe('collectCreatorVisibleArtifacts', () => {
     expect(calls).toBe(1);
   });
 
+  it('never calls delivery for an ordinary text-only terminal turn', async () => {
+    const turn = createTextOnlyTurn();
+    let calls = 0;
+    const result = await deliverCreatorVisibleArtifactsFromTurnProjection({
+      turn,
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+      delivery: {
+        deliver: async () => {
+          calls += 1;
+          return { status: 'accepted' };
+        },
+      },
+    });
+    expect(result).toBeUndefined();
+    expect(calls).toBe(0);
+  });
+
+  it('passes exact Canvas target to delivery and leaves Board context target absent', async () => {
+    const turn = createTurn({
+      toolName: 'Write',
+      toolData: { contentLocator: { kind: 'workspace-file', path: 'docs/output.md' } },
+    });
+    let capturedExact: unknown = 'unset';
+    await deliverCreatorVisibleArtifactsFromTurnProjection({
+      turn,
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+      canvasTurnContext: {
+        target: {
+          kind: 'exact-canvas',
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/a.nkc',
+        },
+        summary: { canvasId: 'neko/boards/a.nkc', name: 'A' },
+      },
+      delivery: {
+        deliver: async (input) => {
+          capturedExact = input.canvasTurnTarget;
+          return { status: 'accepted' };
+        },
+      },
+    });
+    expect(capturedExact).toEqual({
+      workspaceId: 'workspace-1',
+      target: {
+        kind: 'exact-canvas',
+        workspaceId: 'workspace-1',
+        canvasId: 'neko/boards/a.nkc',
+      },
+    });
+
+    let capturedBoard: unknown = 'unset';
+    await deliverCreatorVisibleArtifactsFromTurnProjection({
+      turn,
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+      canvasTurnContext: {
+        target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+      },
+      delivery: {
+        deliver: async (input) => {
+          capturedBoard = input.canvasTurnTarget;
+          return { status: 'accepted' };
+        },
+      },
+    });
+    expect(capturedBoard).toBeUndefined();
+  });
+
   it('localizes invalid creator-visible Tool results after the Turn is terminal', async () => {
     const turn = createTurn({ toolName: 'ReadDocument', toolData: { title: 'Missing locator' } });
 
@@ -593,6 +669,30 @@ describe('collectCreatorVisibleArtifacts', () => {
     });
   });
 });
+
+function createTextOnlyTurn(): ConversationTurnProjection {
+  return {
+    turnId: 'turn-1',
+    runId: 'run-1',
+    messageId: 'message-1',
+    items: [
+      {
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        messageId: 'message-1',
+        itemId: 'assistant-1',
+        sequence: 0,
+        kind: 'assistant_text',
+        status: 'complete',
+        payload: { content: 'Hello', format: 'markdown' },
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ],
+    completion: { status: 'completed', completedAt: 4 },
+  };
+}
 
 function createTurn(input: {
   readonly toolName: string;

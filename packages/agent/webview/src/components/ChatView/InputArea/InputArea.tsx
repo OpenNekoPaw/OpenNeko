@@ -58,6 +58,7 @@ import { findTrailingMentionRange, projectTrailingMention } from './mention-inpu
 import { AgentContextChip } from './AgentContextChip';
 import { SuggestionChips } from './SuggestionChips';
 import { AmbientCanvasContextBar } from './AmbientCanvasContextBar';
+import { WorkspaceCanvasContextBar } from './WorkspaceCanvasContextBar';
 import { UsageIndicator } from './UsageIndicator';
 import { useTranslation } from '../../../i18n/I18nContext';
 import { useInputHistory } from '../../../hooks/useInputHistory';
@@ -72,7 +73,7 @@ import type { AgentContextPayload } from '@neko/agent-contracts';
 import { projectContentLocatorPath } from '../../../presenters/content-locator-presenter';
 import type { AgentModelSlots, AgentQueuedMessageItem, SessionMode } from '@neko/agent-contracts';
 import {
-  useComposerWorkspacePresentation,
+  type AgentComposerCanvasPresentation,
   type AgentComposerWorkspaceTarget,
 } from '../../ComposerWorkspaceContext';
 
@@ -122,6 +123,11 @@ interface InputAreaProps {
     readonly disabledReason?: string;
   }[];
   entryWorkspaceTarget?: AgentComposerWorkspaceTarget;
+  workspaceCanvas?: {
+    readonly workspaceLabel: string;
+    readonly canvas?: AgentComposerCanvasPresentation;
+    readonly showCanvasIndex?: boolean;
+  };
   onClearEntryWorkspaceTarget?: () => Promise<void>;
   selectedCharacterLaunches?: readonly SelectedCharacterLaunch[];
   selectedWorldLaunch?: SelectedWorldLaunch;
@@ -240,8 +246,7 @@ export function InputArea({
   onAttachedFilesChange,
   onAuthorizeResource,
   entryContextActions = [],
-  entryWorkspaceTarget,
-  onClearEntryWorkspaceTarget,
+  workspaceCanvas,
   selectedCharacterLaunches = [],
   selectedWorldLaunch,
   onAddCharacterLaunch,
@@ -259,7 +264,6 @@ export function InputArea({
   focusRequestTarget = 'none',
   focusRequestId,
 }: InputAreaProps) {
-  const composerWorkspace = useComposerWorkspacePresentation();
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
@@ -1026,6 +1030,55 @@ export function InputArea({
 
         {approvalSurface}
 
+        {workspaceCanvas ? (
+          <WorkspaceCanvasContextBar
+            workspaceLabel={workspaceCanvas.workspaceLabel}
+            canvas={workspaceCanvas.canvas}
+            disabled={disabled}
+            showCanvasIndex={workspaceCanvas.showCanvasIndex}
+          />
+        ) : null}
+
+        {presentation === 'entry' &&
+        (entryContextActions.length > 0 ||
+          selectedCharacterLaunches.length > 0 ||
+          selectedWorldLaunch) ? (
+          <div
+            className="agent-composer-context-bar agent-entry-binding-bar"
+            aria-label={t('chat.entryContext.bindingBar')}
+            data-entry-binding-bar="true"
+          >
+            {entryContextActions.map((action) => (
+              <EntryContextActionButton
+                key={action.kind}
+                action={action}
+                composerDisabled={disabled}
+              />
+            ))}
+            {selectedCharacterLaunches.map((selection) => (
+              <EntryBindingItem
+                key={selection.characterVersionId}
+                kind="character-dialogue"
+                label={selection.label}
+                removeLabel={t('chat.entryContext.clearTarget')}
+                onRemove={
+                  onRemoveCharacterLaunch
+                    ? () => onRemoveCharacterLaunch(selection.characterVersionId)
+                    : undefined
+                }
+              />
+            ))}
+            {selectedWorldLaunch ? (
+              <EntryBindingItem
+                kind="world-experience"
+                label={selectedWorldLaunch.label}
+                removeLabel={t('chat.entryContext.clearTarget')}
+                onRemove={onRemoveWorldLaunch}
+              />
+            ) : null}
+          </div>
+        ) : null}
+
         {/* ── Input container ── */}
         <div className="agent-composer-shell relative">
           {/* Slash command menu */}
@@ -1143,18 +1196,6 @@ export function InputArea({
               onChange={handleFileSelect}
               disabled={attachmentInputDisabled || onAuthorizeResource !== undefined}
             />
-
-            {composerWorkspace?.kind === 'workspace' && composerPresentation === 'default' ? (
-              <div
-                className="agent-composer-workspace"
-                aria-label={t('chat.input.workspace.label')}
-              >
-                <FolderIcon size={14} />
-                <span className="agent-composer-workspace-label" title={composerWorkspace.label}>
-                  {composerWorkspace.label}
-                </span>
-              </div>
-            ) : null}
 
             {inputAreaProjection.showModelConfig && (
               <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
@@ -1275,57 +1316,6 @@ export function InputArea({
             )}
           </div>
         </div>
-
-        {presentation === 'entry' &&
-        (entryContextActions.length > 0 ||
-          entryWorkspaceTarget ||
-          selectedCharacterLaunches.length > 0 ||
-          selectedWorldLaunch) ? (
-          <div
-            className="agent-entry-binding-bar"
-            aria-label={t('chat.entryContext.bindingBar')}
-            data-entry-binding-bar="true"
-          >
-            {entryContextActions.map((action) => (
-              <EntryContextActionButton
-                key={action.kind}
-                action={action}
-                composerDisabled={disabled}
-              />
-            ))}
-            {entryWorkspaceTarget ? (
-              <EntryBindingItem
-                kind={entryWorkspaceTarget.target?.kind ?? 'content-document'}
-                label={entryWorkspaceTarget.label}
-                removeLabel={t('chat.entryContext.clearTarget')}
-                onRemove={
-                  onClearEntryWorkspaceTarget ? () => void onClearEntryWorkspaceTarget() : undefined
-                }
-              />
-            ) : null}
-            {selectedCharacterLaunches.map((selection) => (
-              <EntryBindingItem
-                key={selection.characterVersionId}
-                kind="character-dialogue"
-                label={selection.label}
-                removeLabel={t('chat.entryContext.clearTarget')}
-                onRemove={
-                  onRemoveCharacterLaunch
-                    ? () => onRemoveCharacterLaunch(selection.characterVersionId)
-                    : undefined
-                }
-              />
-            ))}
-            {selectedWorldLaunch ? (
-              <EntryBindingItem
-                kind="world-experience"
-                label={selectedWorldLaunch.label}
-                removeLabel={t('chat.entryContext.clearTarget')}
-                onRemove={onRemoveWorldLaunch}
-              />
-            ) : null}
-          </div>
-        ) : null}
       </div>
     </div>
   );

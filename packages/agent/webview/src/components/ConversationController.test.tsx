@@ -509,6 +509,22 @@ vi.mock('./ChatWorkspace', () => ({
       </div>
     );
   },
+  projectWorkspaceCanvasTurnTarget: (
+    canvas: import('./ComposerWorkspaceContext').AgentComposerCanvasPresentation | undefined,
+  ) => {
+    if (canvas === undefined) return undefined;
+    const selected = canvas.options.find((option) => option.id === canvas.selectedId);
+    if (selected === undefined) throw new Error('Workspace Canvas selection is unavailable.');
+    if (selected.target.kind === 'workspace-board') return undefined;
+    if (selected.summary === undefined) {
+      throw new Error('Exact Canvas selection requires its light summary.');
+    }
+    return {
+      workspaceId: selected.target.workspaceId,
+      target: selected.target,
+      summary: selected.summary,
+    };
+  },
 }));
 
 vi.mock('./ChatView/InputArea', async () => {
@@ -530,8 +546,6 @@ vi.mock('./ChatView/InputArea', async () => {
         readonly disabled?: boolean;
         readonly disabledReason?: string;
       }[];
-      entryWorkspaceTarget?: import('./ComposerWorkspaceContext').AgentComposerWorkspaceTarget;
-      onClearEntryWorkspaceTarget?: () => Promise<void>;
       entryPromptMenu?: 'roleplay' | null;
       onEntryPromptMenuChange?: (menu: 'roleplay' | null) => void;
       selectedCharacterLaunches?: readonly import('./ChatView/InputArea/types').SelectedCharacterLaunch[];
@@ -602,14 +616,6 @@ vi.mock('./ChatView/InputArea', async () => {
               {action.label}
             </button>
           ))}
-          <span data-testid="entry-workspace-target">
-            {props.entryWorkspaceTarget?.label ?? 'none'}
-          </span>
-          {props.onClearEntryWorkspaceTarget ? (
-            <button type="button" onClick={() => void props.onClearEntryWorkspaceTarget?.()}>
-              Clear workspace target
-            </button>
-          ) : null}
           {props.submissionBlockedReason ? (
             <span data-testid="entry-submission-blocked">{props.submissionBlockedReason}</span>
           ) : null}
@@ -732,7 +738,24 @@ describe('ConversationController entry state', () => {
     };
     hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
     render(
-      <ComposerWorkspaceProvider value={{ kind: 'workspace', label: 'OpenNeko' }}>
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'workspace',
+          label: 'OpenNeko',
+          workspaceId: 'workspace-1',
+          loadCanvasCatalog: async () => ({
+            workspaceId: 'workspace-1',
+            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+            options: [
+              {
+                target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                label: 'Workspace Board',
+              },
+            ],
+            diagnostics: [],
+          }),
+        }}
+      >
         <ConversationController
           {...createProps()}
           agentPresentation={launchCatalog.interaction}
@@ -752,7 +775,6 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.getAgentStates).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'storyboard' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Choose Project' })).toBeNull();
-    expect(screen.getByTestId('entry-workspace-target').textContent).toBe('none');
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '@hero' } });
     expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('hero', undefined, {
@@ -874,7 +896,6 @@ describe('ConversationController entry state', () => {
       authority: { kind: 'project', projectId: 'project-1' },
       target: null,
     });
-    expect(screen.getByTestId('entry-workspace-target').textContent).toBe('OpenNeko');
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
@@ -1152,7 +1173,6 @@ describe('ConversationController entry state', () => {
 
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'restored entry text');
     expect(screen.getByTestId('entry-context-chips').textContent).toContain('brief.txt');
-    expect(screen.getByTestId('entry-workspace-target').textContent).toBe('none');
     expect(screen.getByTestId('entry-character-launches').textContent).toBe('');
     expect(screen.getByTestId('entry-selected-model').textContent).toBe('test-model');
     expect(screen.getByTestId('entry-media-models').textContent).toBe(

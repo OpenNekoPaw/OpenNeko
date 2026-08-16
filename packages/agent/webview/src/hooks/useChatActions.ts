@@ -15,6 +15,7 @@ import {
 import {
   Message,
   type AgentInputCatalogMessage,
+  type AgentCanvasTurnIntent,
   type AgentFlatPurposeModelRefs,
   type AgentModelSlots,
   type MediaUnderstandingModelSelections,
@@ -50,6 +51,7 @@ export interface PendingSendInput {
   fileReferences?: SelectedFileReference[];
   agentModels?: AgentModelSlots;
   understandingModels?: MediaUnderstandingModelSelections;
+  canvasTurnTarget?: AgentCanvasTurnIntent;
 }
 
 export interface PendingSendIdentity {
@@ -256,6 +258,7 @@ export function useChatActions({
             ...(input?.fileReferences && input.fileReferences.length > 0
               ? { fileReferences: input.fileReferences }
               : {}),
+            ...(input?.canvasTurnTarget ? { canvasTurnTarget: input.canvasTurnTarget } : {}),
           });
           if (receipt.conversationId !== conversationId) {
             throw new Error(

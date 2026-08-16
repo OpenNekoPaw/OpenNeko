@@ -32,6 +32,12 @@ export type {
   CanvasOperationSource,
 } from './edit-operations';
 export {
+  createCanvasWorkspaceIndexService,
+  type CanvasWorkspaceIndexReadPort,
+  type CanvasWorkspaceIndexService,
+  type CanvasWorkspaceIndexServiceOptions,
+} from './canvas-workspace-index-service';
+export {
   CANVAS_HOST_RUNTIME_ROUTES,
   CanvasHostRuntimeContractError,
   assertCanvasHostRuntimeIdentity,

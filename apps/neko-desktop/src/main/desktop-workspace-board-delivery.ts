@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { AgentCreatorVisibleArtifactDeliveryPort } from '@neko/agent-runtime/runtime';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
@@ -150,17 +151,29 @@ function createAgentBoardProjectionRequest(
   if (input.artifacts.length === 0) {
     throw new Error('Workspace Board delivery requires at least one creator-visible artifact.');
   }
+  const canvasTarget = input.canvasTurnTarget?.target;
+  const exactDocumentUri =
+    canvasTarget?.kind === 'exact-canvas'
+      ? pathToFileURL(
+          path.resolve(
+            workspace.workspacePath,
+            requireRelativeCanvasIdentity(canvasTarget.canvasId),
+          ),
+        ).href
+      : undefined;
   const deliveryId = `agent-turn:${hashStableValue({
     workspaceId: input.workspaceId,
     conversationId: input.conversationId,
     turnId: input.turnId,
     runId: input.runId,
+    canvasTarget: canvasTarget ?? { kind: 'workspace-board' },
   })}`;
   const createdAt = new Date(input.completedAt).toISOString();
   return {
     target: {
       workspaceId: workspace.workspaceId,
       workspaceUri: pathToFileURL(workspace.workspacePath).href,
+      ...(exactDocumentUri === undefined ? {} : { documentUri: exactDocumentUri }),
     },
     process: {
       deliveryId,
@@ -206,4 +219,20 @@ function createAgentBoardProjectionRequest(
       };
     }),
   };
+}
+
+function requireRelativeCanvasIdentity(identity: string): string {
+  const trimmed = identity.trim();
+  if (
+    trimmed.length === 0 ||
+    trimmed.startsWith('/') ||
+    trimmed.includes('..') ||
+    trimmed.includes('\\')
+  ) {
+    throw new Error('Exact Canvas target must be a safe workspace-relative .nkc identity.');
+  }
+  if (trimmed.endsWith('.nkc') === false) {
+    throw new Error('Exact Canvas target must reference a .nkc document.');
+  }
+  return trimmed;
 }
