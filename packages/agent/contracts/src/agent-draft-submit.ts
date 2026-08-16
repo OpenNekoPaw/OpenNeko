@@ -144,7 +144,7 @@ export function parseAgentDraftInputIntent(value: unknown): AgentDraftInputInten
       kind: 'skill',
       catalogEntryId: requireIdentity(record['catalogEntryId'], 'catalog entry'),
       skillName: requireIdentity(record['skillName'], 'Skill'),
-      activationId: requireIdentity(record['activationId'], 'Skill activation'),
+      activationId: requireIdentity(record['activationId'], 'Skill selection'),
       ...parseOptionalArgs(record['args']),
     };
   }

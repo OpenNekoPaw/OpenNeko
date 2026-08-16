@@ -127,6 +127,29 @@ describe('Agent Draft submit contract', () => {
     });
   });
 
+  it('describes a missing exact Skill identity as selection', () => {
+    expect(() =>
+      parseAgentDraftSubmitInput({
+        draft: {
+          phase: 'draft',
+          draftId: 'draft-entry-1',
+          binding: { kind: 'unbound' },
+          bindingReceipt: null,
+        },
+        entryTargetReceipt: null,
+        input: {
+          kind: 'skill',
+          catalogEntryId: 'skill:builtin:storyboard',
+          skillName: 'storyboard',
+          activationId: '',
+        },
+        references: [],
+        resourceGrantIds: [],
+        configuration,
+      }),
+    ).toThrow('Agent Draft Skill selection identity is required.');
+  });
+
   it('keeps exact generation purpose models on the first submitted Turn', () => {
     expect(
       parseAgentDraftSubmitInput({

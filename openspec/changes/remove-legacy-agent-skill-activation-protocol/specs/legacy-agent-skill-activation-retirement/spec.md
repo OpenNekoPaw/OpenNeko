@@ -49,12 +49,18 @@ The system MUST construct immutable turn Tool snapshots from `ToolRegistry` and 
 
 ### Requirement: Legacy names SHALL be rejected by verification
 
-The repository MUST maintain deterministic absence/poison checks for removed Tool names, activation messages, lifecycle slot terminology, dead public exports, and fake Evaluation Tool calls.
+The repository MUST maintain deterministic absence/poison checks for removed Tool names, activation messages, lifecycle slot terminology, dead public exports, fake Evaluation Tool calls, and stable architecture documents that prescribe the retired protocol. The canonical `activationId` contract field MAY remain as the exact immutable Skill selection identity, but user-facing diagnostics MUST describe selection or invocation rather than a mutable activation lifecycle.
 
 #### Scenario: Removed path is reintroduced
 
 - **WHEN** production Prompt, contracts, runtime, Webview, Chara policy, i18n, or Evaluation fixtures reintroduce a forbidden legacy symbol
 - **THEN** a focused test or repository gate MUST fail visibly
+
+#### Scenario: Stable architecture prescribes a removed Tool
+
+- **WHEN** a stable Agent architecture document instructs maintainers or Prompt authors to invoke `GetContext`, `ActivateSkill`, or `DeactivateSkill`
+- **THEN** the repository architecture gate MUST fail visibly
+- **AND** historical research, migration evidence, and poison tests MAY retain those names only as explicit retired-path evidence
 
 #### Scenario: Canonical owner is accidentally removed
 

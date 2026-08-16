@@ -371,7 +371,7 @@ export function createAgentConversationLifecycleService(options: {
     );
     if (capabilityConstraint.skills === 'none' && inputIntent.kind !== 'message') {
       throw new Error(
-        `Agent turn capability constraint '${capabilityConstraint.owner.kind}/${capabilityConstraint.owner.id}' forbids Skill or command activation.`,
+        `Agent turn capability constraint '${capabilityConstraint.owner.kind}/${capabilityConstraint.owner.id}' forbids Skill or command selection.`,
       );
     }
     const turnId = `turn:${options.createIdentity()}`;

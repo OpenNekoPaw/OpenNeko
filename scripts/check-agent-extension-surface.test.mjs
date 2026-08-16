@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   findForbiddenArchitectureClaims,
+  findRetiredAgentSkillToolClaims,
   validateSurfaceStructure,
 } from './check-agent-extension-surface.mjs';
 
@@ -30,4 +31,12 @@ test('rejects retired private Skill overlay claims', () => {
   assert.deepEqual(findForbiddenArchitectureClaims('Skill 使用 agents/neko.yaml。', 'adr.md'), [
     'adr.md: retired private Skill overlay',
   ]);
+});
+
+test('rejects retired Agent Skill Tool instructions in stable architecture', () => {
+  for (const toolName of ['GetContext', 'ActivateSkill', 'DeactivateSkill']) {
+    assert.deepEqual(findRetiredAgentSkillToolClaims(`必要时调用 ${toolName}。`, 'adr.md'), [
+      'adr.md: retired Agent Skill Tool protocol',
+    ]);
+  }
 });

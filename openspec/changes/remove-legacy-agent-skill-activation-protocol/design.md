@@ -64,6 +64,12 @@ Pi 的 canonical public path 是 `packages/agent/runtime/src/pi/skill-host.ts` �
 
 Evaluation case 中的 `GetContext` 改为当前完整 Desktop session 可执行的只读 Tool，fixture/hash/index 同步更新。key-free gate 只证明 schema/harness；若缺少明确 provider/model/cost authorization，真实 Agent 行为结果记录为 `infrastructure-blocked`，不得以 dry-run 代替。
 
+### 6. 稳定规范与诊断使用 selection/invocation 语义
+
+复审发现稳定 Prompt/Skill validator ADR 仍要求调用已删除的 `GetContext`，而现有 poison test 只覆盖 production system Prompt。architecture gate 必须同时拒绝稳定规范重新要求该 Tool，并允许 research、OpenSpec 和 poison test 以退役证据保留字面量。
+
+`activationId` 当前是 catalog snapshot 中精确 Skill source/fingerprint 的不可变选择 identity，参与 stale rejection 与 Pi receipt，继续保留 canonical shape；只把 parser、capability constraint 与 SkillHost diagnostic 的自然语言从 mutable activation lifecycle 收敛为 Skill selection/invocation identity。本次不重命名字段、不增加 alias，也不迁移 persisted contract。
+
 ## Risks / Trade-offs
 
 - [公共导出删除导致隐藏 consumer 编译失败] → 先精确扫描 repo producer/consumer，再运行 contracts/runtime/webview/chara typecheck 与 focused tests；失败必须显式修复，不增加 compatibility export。

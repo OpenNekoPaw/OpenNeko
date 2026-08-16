@@ -134,7 +134,7 @@ describe('PiSkillHost', () => {
     expect(invokeSelected(snapshot, 'ordinary')).toContain('Ordinary body');
   });
 
-  it('rejects stale or cross-entry activation identities without name fallback', async () => {
+  it('rejects stale or cross-entry selection identities without name fallback', async () => {
     const skillRoot = await createSkill(root, 'project', 'review', 'Version one');
     const host = new PiSkillHost(env, policy);
     const first = await host.discover(sourceRoots(root, ['project']));
@@ -143,7 +143,10 @@ describe('PiSkillHost', () => {
     const second = await host.discover(sourceRoots(root, ['project']));
 
     expect(() => second.invokeExact('review', buildSkillActivationId(firstRecord))).toThrowError(
-      expect.objectContaining<Partial<SkillHostError>>({ code: 'skill-not-found' }),
+      expect.objectContaining<Partial<SkillHostError>>({
+        code: 'skill-not-found',
+        message: expect.stringContaining('Skill selection'),
+      }),
     );
     expect(invokeSelected(second, 'review')).toContain('Version two');
   });

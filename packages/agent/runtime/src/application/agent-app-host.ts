@@ -1468,7 +1468,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       (input.skillName !== undefined || input.skillActivationId !== undefined)
     ) {
       throw new Error(
-        `Agent turn capability constraint '${capabilityConstraint.owner.kind}/${capabilityConstraint.owner.id}' forbids Skill activation.`,
+        `Agent turn capability constraint '${capabilityConstraint.owner.kind}/${capabilityConstraint.owner.id}' forbids Skill selection.`,
       );
     }
     const skills = await this.discoverSkills(

@@ -210,7 +210,7 @@ describe('Agent Conversation lifecycle service', () => {
     );
   });
 
-  it('freezes an empty domain capability constraint and rejects Skill activation before commit', async () => {
+  it('freezes an empty domain capability constraint and rejects Skill selection before commit', async () => {
     const capabilityConstraint = {
       owner: { kind: 'character' as const, id: 'character-run:1' },
       skills: 'none' as const,
@@ -256,7 +256,7 @@ describe('Agent Conversation lifecycle service', () => {
           activationId: 'skill:fixture',
         },
       }),
-    ).rejects.toThrow('forbids Skill or command activation');
+    ).rejects.toThrow('forbids Skill or command selection');
   });
 
   it('activates the committed session before provider context resolution completes', async () => {

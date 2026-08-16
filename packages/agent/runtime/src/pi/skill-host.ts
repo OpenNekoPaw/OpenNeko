@@ -234,7 +234,7 @@ export class PiSkillHostSnapshot {
     if (stored === undefined || stored.record.name !== skillName) {
       throw new SkillHostError(
         'skill-not-found',
-        `Skill activation ${activationId} for ${skillName} is not available in this turn snapshot.`,
+        `Skill selection ${activationId} for ${skillName} is not available in this turn snapshot.`,
       );
     }
     return Object.freeze({
@@ -252,7 +252,7 @@ export class PiSkillHostSnapshot {
     if (stored === undefined || stored.record.name !== skillName) {
       throw new SkillHostError(
         'skill-not-found',
-        `Skill activation ${activationId} for ${skillName} is not available in this turn snapshot.`,
+        `Skill selection ${activationId} for ${skillName} is not available in this turn snapshot.`,
       );
     }
     const normalized = validateRelativeResourcePath(relativePath);

@@ -90,3 +90,12 @@ Pi 是唯一 Agent loop、Session transcript/context、Skill discovery/format/re
 - Help/Settings 的真实 Desktop 可视检查未执行。
 - `activationId` 命名仍容易与已删除 lifecycle 混淆，但它当前有真实正确性消费者（同名 source/fingerprint 精确选择与 stale rejection）；本 change 保留其 canonical shape。若重命名，必须作为独立公共 contract 原子迁移，不能引入 alias/兼容读取。
 - 用户当前四个未提交 Agent launch/message queue 文件未纳入本 change；相关相邻 cleanup 保持 `deferred-overlap`。
+
+## Post-Commit Residual Review
+
+- 复审发现稳定 Prompt/Skill validator ADR 仍要求已删除的 `GetContext`；现已改为当前 turn Tool snapshot、Skill catalog 与 Pi `read_skill` 规则。
+- `activationId` 继续作为精确 Skill source/fingerprint 选择 identity 保留；parser、capability constraint 与 SkillHost 的用户可见 diagnostic 已改用 Skill selection/invocation 语义，不引入字段 alias 或兼容路径。
+- `check:agent-boundaries` 现在扫描全部 `docs/architecture/**/*.md`，稳定规范重新出现 `GetContext`、`ActivateSkill` 或 `DeactivateSkill` 时 fail-visible；research、OpenSpec 与 poison tests 仍可作为明确退役证据保留字面量。
+- Agent Evaluation disposition: `excluded`。本次不改变 production Prompt composition、Skill 路由、Tool snapshot 或模型行为；由 architecture poison、两条 parser diagnostic、stale Skill snapshot 与 capability constraint 的确定性测试覆盖。
+- UI Validation: `not-applicable`。未修改组件、布局、交互或展示状态；只改变非法/过期 Skill identity 的失败 diagnostic 文案。
+- 增量验证：Contracts focused 3 files/24 tests、Runtime focused 3 files/48 tests、contracts/runtime typecheck、`pnpm check:agent-boundaries`、`pnpm check:legacy-debt`、`pnpm check:unused`、OpenSpec strict、Prettier、生产残留 scan 与 `git diff --check` 均通过。

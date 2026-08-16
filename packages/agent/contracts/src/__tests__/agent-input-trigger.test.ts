@@ -146,6 +146,23 @@ describe('agent input triggers', () => {
     ).toThrow("unsupported field 'authoringTargetKind'");
   });
 
+  it('describes a missing exact Skill identity as selection', () => {
+    expect(() =>
+      parseAgentInputCatalogEntry({
+        id: 'skill:project:review',
+        name: 'review',
+        description: 'Review the current project.',
+        trigger: 'skill',
+        prefix: '$',
+        phaseRequirement: 'any',
+        bindingRequirement: 'workspace',
+        source: { kind: 'project', workspaceId: 'workspace-1', sourceId: 'skills/review' },
+        availability: { status: 'available' },
+        executable: { kind: 'skill', skillName: 'review', activationId: '' },
+      }),
+    ).toThrow('Agent Skill selection identity is required.');
+  });
+
   it('projects compact as Session-only and fail-visible in Draft', () => {
     const compact = parseAgentInputCatalogEntry({
       id: 'command:builtin:compact',

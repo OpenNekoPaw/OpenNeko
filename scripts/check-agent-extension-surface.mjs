@@ -72,11 +72,7 @@ export function validateSurfaceStructure(surface) {
   );
   expectEqual(composition?.mcpContributionOptional, true, 'MCP contribution optional', findings);
 
-  expectFalse(
-    pluginState?.packageBytesAuthority,
-    'pluginState.packageBytesAuthority',
-    findings,
-  );
+  expectFalse(pluginState?.packageBytesAuthority, 'pluginState.packageBytesAuthority', findings);
   expectFalse(
     pluginState?.requiredForPortableSkill,
     'pluginState.requiredForPortableSkill',
@@ -100,12 +96,7 @@ export function validateSurfaceStructure(surface) {
   }
   expectEqual(mcp?.connectionFailureIsolation, 'contribution', 'MCP failure isolation', findings);
   expectFalse(capability?.mcpRequired, 'hostCapability.mcpRequired', findings);
-  expectEqual(
-    standardsSupport?.agentSkills,
-    'core-supported',
-    'Agent Skills support',
-    findings,
-  );
+  expectEqual(standardsSupport?.agentSkills, 'core-supported', 'Agent Skills support', findings);
   expectEqual(
     standardsSupport?.agentPlugins,
     'not-conformant-host-extension-only',
@@ -131,6 +122,12 @@ export function findForbiddenArchitectureClaims(source, path = '<document>') {
     if (pattern.test(source)) findings.push(`${path}: ${diagnostic}`);
   }
   return findings;
+}
+
+export function findRetiredAgentSkillToolClaims(source, path = '<document>') {
+  return /\b(?:GetContext|ActivateSkill|DeactivateSkill)\b/u.test(source)
+    ? [`${path}: retired Agent Skill Tool protocol`]
+    : [];
 }
 
 export async function checkAgentExtensionSurface(root = repositoryRoot) {
@@ -163,6 +160,15 @@ export async function checkAgentExtensionSurface(root = repositoryRoot) {
     } catch {
       findings.push(`${path}: required architecture document is missing`);
     }
+  }
+
+  const stableArchitectureFiles = (await collectFiles(resolve(root, 'docs/architecture'))).filter(
+    (path) => path.endsWith('.md'),
+  );
+  for (const absolutePath of stableArchitectureFiles) {
+    const path = normalize(relative(root, absolutePath));
+    const source = await readFile(absolutePath, 'utf8');
+    findings.push(...findRetiredAgentSkillToolClaims(source, path));
   }
 
   await checkPortableSkillPackage(root, findings);

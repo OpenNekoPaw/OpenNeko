@@ -18,3 +18,8 @@
 - [x] 4.1 运行 OpenSpec strict validation、contracts/runtime/webview/chara focused tests 与 typecheck、public-surface/legacy/unused/diff gates，记录实际命令和失败分类。
 - [x] 4.2 尝试 owning suite 的真实 Desktop provider-backed Agent Evaluation；若缺少明确配置或成本授权，记录准确 `infrastructure-blocked`，不得用 key-free 结果代替。
 - [x] 4.3 写入 `implementation-evidence.md`，逐项记录 delete/preserve/rename-collapse/deferred-overlap 的 producer、consumer、替代路径、absence/poison 证据与剩余风险。
+
+## 5. 复审残留收敛
+
+- [x] 5.1 将稳定架构规范与用户可见 diagnostic 中的旧 `GetContext` / Skill activation lifecycle 术语收敛为 turn Tool snapshot、Skill selection/invocation identity 与 Pi `read_skill` 语义，同时保留 `activationId` canonical contract 字段。
+- [x] 5.2 扩展 repository architecture gate，阻止稳定规范重新要求已删除的 `GetContext`，并运行 focused contracts/runtime、Agent boundary、OpenSpec 与 diff 验证。
