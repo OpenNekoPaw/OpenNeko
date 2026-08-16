@@ -215,6 +215,40 @@ describe('AgentRuntimeSessionMessageQueuePort', () => {
     expect(port.require().snapshot().pendingCount).toBe(1);
   });
 
+  it('preserves draft.canvasTurnTarget through enqueue, snapshot, edit and release', () => {
+    const queue = createAgentConversationMessageQueue({
+      conversationId: 'conv-1',
+      createId: vi.fn().mockReturnValueOnce('queue-item-1').mockReturnValueOnce('queue-item-2'),
+    });
+    const target = {
+      workspaceId: 'workspace-1',
+      target: {
+        kind: 'exact-canvas' as const,
+        workspaceId: 'workspace-1',
+        canvasId: 'neko/boards/a.nkc',
+      },
+      summary: { canvasId: 'neko/boards/a.nkc', name: 'A' },
+    };
+    queue.enqueue({
+      content: 'first',
+      source: 'user',
+      draft: {
+        message: 'first',
+        sessionMode: 'agent',
+        canvasTurnTarget: target,
+      },
+    });
+    expect(queue.snapshot().items[0]?.draft?.canvasTurnTarget).toEqual(target);
+
+    const edit = queue.edit('queue-item-1', 'first edited');
+    expect(edit.draft?.canvasTurnTarget).toEqual(target);
+    expect(queue.snapshot().items[0]?.draft?.canvasTurnTarget).toEqual(target);
+
+    const released = queue.releaseNext();
+    expect(released?.draft?.canvasTurnTarget).toEqual(target);
+    expect(released?.content).toBe('first edited');
+  });
+
   it('fails visibly instead of dropping pending messages when switching conversations', () => {
     const port = createAgentRuntimeSessionMessageQueuePort('conv-1');
     const first = port.require();

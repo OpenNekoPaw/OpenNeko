@@ -8,6 +8,7 @@ import type {
   MessageAttachment,
   AgentModelSlots,
   AgentQueuedMessageSource,
+  AgentCanvasTurnIntent,
   ContentBlock,
   ErrorMessage,
   GlobalErrorMessage,
@@ -109,6 +110,7 @@ export interface AgentMessageRuntimeRequest {
   readonly attachments?: MessageAttachment[];
   readonly contextPayloads?: readonly AgentContextPayload[];
   readonly fileReferences?: readonly AgentFileReference[];
+  readonly canvasTurnTarget?: AgentCanvasTurnIntent;
   readonly promptId?: string;
   readonly executionOverrides?: AgentMessageExecutionOverrides;
   readonly locale?: AgentRuntimePromptLocale | string;
