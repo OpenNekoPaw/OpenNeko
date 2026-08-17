@@ -1,9 +1,9 @@
 ## Context
 
 The Text Editor now uses lazy Milkdown for Markdown Rich and CodeMirror for Source. The Agent Webview
-uses `@neko/markdown` `MarkdownStreamingSession` plus a package-local React renderer for GFM,
-Mermaid, resource references, semantic spans, creative tables and composite content. Streamdown
-2.5.0 is installed only as a dev spike and has no production registration.
+uses Streamdown 2.5.0 as its single streaming/final text renderer. Neko resource and mention syntax
+enters through `@neko/markdown/streamdown`; typed artifacts, tools, approvals, creative tables and
+domain results remain sibling presenters.
 
 The current Agent layout projects blocks rather than turns. Each Markdown block becomes a primary
 result, flushes an adjacent process group and receives a `Response` header. The process group then
@@ -25,7 +25,7 @@ owning surface.
   Content owns authorized Workspace bytes.
 - **Dependencies:** Markdown core remains host-neutral. Milkdown is isolated behind an explicit
   browser-only `@neko/markdown` entry consumed by Text Editor and Canvas; CodeMirror remains a
-  browser-only Text Editor dependency. Streamdown is a dev-only Agent Webview spike dependency.
+  browser-only Text Editor dependency. Streamdown is an Agent Webview production dependency.
   Desktop imports only package public Roots and typed ports.
 - **Interfaces:** one GFM profile and corpus constrain each surface. Rich and Source submit ordered
   changes to one exact Text Document session. Agent text, process evidence, deliverables, diagnostics
@@ -190,11 +190,10 @@ creative tables and typed sibling blocks. Passing parity would have required Nek
 through package-owned remark plugins/custom components or typed siblings, not ad hoc source
 preprocessing or a Streamdown fork.
 
-The candidate did not preserve incomplete emphasis and had no direct owner-aware path for Workspace
-resource references, semantic source spans, Canvas creative tables, current Mermaid feedback or
-structured artifacts. Its isolated core bundle was 507,659 bytes minified and 151,943 bytes gzip,
-before package adapters. That dated no-go remains evidence against assigning those business and
-extension responsibilities to Streamdown.
+The original candidate did not preserve the expected incomplete emphasis semantics and had no direct
+owner-aware path for the then-overloaded Workspace/structured responsibilities. That dated no-go
+remains evidence against assigning business authority to Streamdown, but no longer applies after typed
+siblings and `@neko/markdown/streamdown` narrowed the text-rendering contract.
 
 The renewed gate evaluates a smaller contract: portable GFM, bounded incomplete suffixes, CJK,
 hostile markup, stable completed blocks, safe external links, authorized image projection and
@@ -202,12 +201,10 @@ explicit Mermaid presentation. Tool, approval, evidence, deliverable, Diff, Arti
 and owning-domain results remain typed siblings. Streamdown default styles and permissive resource
 settings are not accepted; the package adapter supplies exact components, hardening and theme.
 
-The 2026-08-10 narrowed rerun passes portable GFM/CJK, incomplete-suffix visibility, stable completed
-blocks and hostile HTML/URL hardening. It still renders `[[resource]]` and `![[resource]]` as ordinary
-text and cannot consume the existing owner-aware authorized resource projection without a new
-package-owned source-range plugin. That required hard gate fails, so the current normalized presenter
-remains canonical and Streamdown stays dev-only. Evaluation creates no runtime fallback, feature flag,
-renderer priority or streaming/final switch.
+The 2026-08-17 implementation adds the package-owned Neko extension/resource projection and passes the
+narrowed gate. Streamdown is now canonical for streaming and final Agent text; the normalized
+streaming presenter was removed. There is no runtime fallback, feature flag, renderer priority or
+streaming/final renderer switch.
 
 ### 5. Project one readable Assistant turn
 
@@ -255,8 +252,8 @@ column; tables, Diff and media may enter a wider lane without expanding paragrap
 
 ### 6. File-native Agent output remains outside editor transactions
 
-Agent chat deltas are transient Timeline projections rendered by the package-local Agent presentation
-surface. When an Agent creates or changes `.md`, the canonical Workspace file Tool publishes through
+Agent chat deltas are transient Timeline projections rendered by the Streamdown Agent text surface.
+When an Agent creates or changes `.md`, the canonical Workspace file Tool publishes through
 the Content freshness/CAS boundary. An open clean Text Document session reloads from the file; a dirty
 session retains its source and shows an external-change conflict. Neither Agent presentation output
 nor Milkdown/CodeMirror view state is the successful artifact fact.
@@ -267,8 +264,8 @@ not promoted into the editor by copying renderer DOM or a Milkdown transaction.
 ### 7. Keep dependencies lazy and package-owned
 
 Milkdown enters only lazy Rich chunks in Text Editor and explicitly activated Canvas Markdown nodes.
-It is not part of the ordinary Canvas node-reading path. Streamdown is dev-only and enters no
-production chunk. CodeMirror remains absent from Canvas/Cut/Preview startup chunks;
+It is not part of the ordinary Canvas node-reading path. Streamdown enters only the Agent Webview
+production text-rendering chunk. CodeMirror remains absent from Canvas/Cut/Preview startup chunks;
 optional code highlighting and Mermaid dependencies must not be duplicated when an existing
 package-owned component can be reused without creating a second renderer path.
 

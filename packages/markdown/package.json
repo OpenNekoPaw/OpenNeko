@@ -4,7 +4,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./rich-surface": "./src/browser/milkdown-rich-surface.tsx",
-    "./testing": "./src/testing/index.ts"
+    "./testing": "./src/testing/index.ts",
+    "./streamdown": "./src/browser/streamdown-extensions.tsx"
   },
   "scripts": {
     "test": "vitest run",

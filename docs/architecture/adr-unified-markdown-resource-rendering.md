@@ -58,11 +58,11 @@ adapter 继续拥有 edit-sequence queue、外部冲突和授权媒体 lease；C
 Markdown node。Canvas 节点默认显示紧凑只读所见所得，普通选中不进入源码输入；只有显式双击激活才
 懒加载 Rich mutation，Escape 或离开选中态即释放该 Surface。
 
-Agent text content 从首个 partial delta 到 final state 只能使用同一个 Agent message renderer。
-Streamdown 2.5.0 已完成候选 spike：完成态 GFM、CJK、sanitize 和 stable block 通过，但 incomplete
-emphasis、资源引用、semantic span、creative table、Mermaid 与 structured artifact parity 未通过，
-因此不进入生产。当前 package-local normalized renderer 继续作为唯一 canonical path，不得并行注册、
-feature flag 或 fallback。
+Agent text content 从首个 partial delta 到 final state 只使用 Streamdown 2.5.0。Agent Webview
+拥有 streaming/static 模式选择和块级错误边界；`@neko/markdown/streamdown` 只提供 Neko mention、
+resource reference 与已授权媒体投影插件。Tool、Approval、Artifact、creative table 和领域结果保持
+typed sibling，不进入 Markdown 推断。已删除 package-local streaming session、stable-prefix identity
+算法和旧 React renderer，不保留并行注册、feature flag、static-final 替代路径或 fallback。
 
 Agent 创建或修改 `.md` 仍通过 Workspace-native file Tool 和 freshness/CAS；Agent renderer 不写
 文件，Agent 不提交 Milkdown/CodeMirror transaction。发布后 Text Editor 从 authoritative file
@@ -98,9 +98,9 @@ Text Editor 与 Canvas 通过各自 adapter 复用该 Surface，且保留各自 
 `.nkc`/`.otio` generic-file denial 和 Text Editor external-change watcher 已实施。Markdown Text
 Editor 已使用 lazy Milkdown `Rich | Source | Split`，CodeMirror 继续拥有完整 Source 和其他文本；
 Source 已组合 GFM snippet 与 Workspace mention/resource completion，Rich/Split 已从精确授权投影展示
-CommonMark/`![[...]]` image、audio 和 video，并在可见 surface 生命周期内释放 lease。Agent 继续使用
-`MarkdownStreamingSession` 与 package-local React renderer。Streamdown 仅为 dev spike，不是生产依赖
-路径。
+CommonMark/`![[...]]` image、audio 和 video，并在可见 surface 生命周期内释放 lease。Agent text
+已原子切换到 Streamdown；原 streaming session、Agent registry 与 package-local React renderer
+已删除。资源 URI 仍先经过 Workspace authority 投影，默认 sanitize/harden 与更严格 URL 规则保持启用。
 
 剩余可见 Desktop UI、Agent native-file 和 package gate 验收由
 [`../../openspec/changes/adopt-gfm-authoring-and-agent-rendering-surfaces/`](../../openspec/changes/adopt-gfm-authoring-and-agent-rendering-surfaces/)

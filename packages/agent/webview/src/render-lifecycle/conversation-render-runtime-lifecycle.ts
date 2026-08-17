@@ -1,4 +1,3 @@
-import type { AgentMarkdownSessionRegistry } from '../markdown/agent-markdown-session-registry';
 import type { ConversationRenderCoordinator } from './conversation-render-coordinator';
 
 export type WebviewRenderVisibility = 'hidden' | 'visible';
@@ -50,7 +49,6 @@ export function bindConversationRenderRuntimeLifecycle(
 
 export function createConversationRenderRuntimeLifecycle(input: {
   readonly coordinator: ConversationRenderCoordinator;
-  readonly markdown: AgentMarkdownSessionRegistry;
 }): ConversationRenderRuntimeLifecycle {
   let componentAttached = false;
   let realmDisposed = false;
@@ -77,7 +75,6 @@ export function createConversationRenderRuntimeLifecycle(input: {
       visibility = nextVisibility;
     },
     disposeConversation(conversationId, reason): void {
-      input.markdown.disposeConversation(conversationId);
       if (input.coordinator.isDisposed(conversationId)) return;
       if (input.coordinator.read(conversationId)) {
         input.coordinator.dispose({ kind: 'disposal', conversationId, reason });
@@ -85,7 +82,6 @@ export function createConversationRenderRuntimeLifecycle(input: {
     },
     disposeRealm(): void {
       if (realmDisposed) return;
-      input.markdown.disposeAll();
       componentAttached = false;
       realmDisposed = true;
     },

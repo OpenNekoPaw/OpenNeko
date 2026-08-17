@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createAgentMarkdownSessionKey } from '../../markdown/agent-markdown-session-registry';
 import { createTabRenderRuntime, createTabRenderRuntimeRegistry } from '../tab-render-runtime';
 
 describe('TabRenderRuntime', () => {
@@ -358,23 +357,14 @@ describe('TabRenderRuntimeRegistry', () => {
       },
     });
 
-    const markdownKey = createAgentMarkdownSessionKey({
-      conversationId: 'conversation-shared',
-      messageId: 'message-1',
-      itemId: 'text-1',
-    });
-    await waitForMarkdownPresentation();
     expect(runtimeA.projectionReplica).not.toBe(runtimeB.projectionReplica);
-    expect(runtimeA.markdownSessions).not.toBe(runtimeB.markdownSessions);
     expect(runtimeA.projectionReplica.getSnapshot().projection?.turns).toHaveLength(1);
     expect(runtimeB.projectionReplica.getSnapshot().projection).toBeNull();
-    expect(runtimeA.markdownSessions.getSnapshot(markdownKey)?.source).toBe('initial update');
-    expect(runtimeB.markdownSessions.getSnapshot(markdownKey)).toBeUndefined();
     expect(messagesA).toHaveLength(2);
     expect(messagesB).toHaveLength(1);
   });
 
-  it('publishes streaming projection and Markdown as one coherent presentation batch', () => {
+  it('publishes streaming projection as one coherent presentation batch', () => {
     vi.useFakeTimers();
     try {
       const runtime = createTabRenderRuntime({
@@ -408,25 +398,10 @@ describe('TabRenderRuntimeRegistry', () => {
         },
       });
 
-      const markdownKey = createAgentMarkdownSessionKey({
-        conversationId: 'conversation-shared',
-        messageId: 'message-1',
-        itemId: 'text-1',
-      });
       let renderedContent = 'initial';
       const mismatches: string[] = [];
       runtime.projectionReplica.subscribe(() => {
         renderedContent = projectionTextContent(runtime);
-        const markdownSource = runtime.markdownSessions.getSnapshot(markdownKey)?.source;
-        if (markdownSource !== renderedContent) {
-          mismatches.push(`projection:${markdownSource ?? '<missing>'}/${renderedContent}`);
-        }
-      });
-      runtime.markdownSessions.subscribe(markdownKey, () => {
-        const markdownSource = runtime.markdownSessions.getSnapshot(markdownKey)?.source;
-        if (markdownSource !== renderedContent) {
-          mismatches.push(`markdown:${markdownSource ?? '<missing>'}/${renderedContent}`);
-        }
       });
 
       runtime.acceptProjectionFrame({
@@ -444,11 +419,9 @@ describe('TabRenderRuntimeRegistry', () => {
       });
 
       expect(renderedContent).toBe('initial');
-      expect(runtime.markdownSessions.getSnapshot(markdownKey)?.source).toBe('initial');
       vi.advanceTimersByTime(32);
 
       expect(renderedContent).toBe('initial update');
-      expect(runtime.markdownSessions.getSnapshot(markdownKey)?.source).toBe('initial update');
       expect(mismatches).toEqual([]);
 
       runtime.acceptProjectionFrame({
@@ -484,9 +457,6 @@ describe('TabRenderRuntimeRegistry', () => {
       });
 
       expect(renderedContent).toBe('initial update pending');
-      expect(runtime.markdownSessions.getSnapshot(markdownKey)?.source).toBe(
-        'initial update pending',
-      );
       expect(mismatches).toEqual([]);
       expect(vi.getTimerCount()).toBe(0);
     } finally {
@@ -494,7 +464,7 @@ describe('TabRenderRuntimeRegistry', () => {
     }
   });
 
-  it('keeps projection and Markdown identities isolated during rapid visibility switching', async () => {
+  it('keeps projection identities isolated during rapid visibility switching', async () => {
     const registry = createTabRenderRuntimeRegistry();
     const bindings = [
       { tabId: 'tab-a', conversationId: 'conversation-shared' },
@@ -505,8 +475,6 @@ describe('TabRenderRuntimeRegistry', () => {
     const runtimeB = registry.require('tab-b');
     const replicaA = runtimeA.projectionReplica;
     const replicaB = runtimeB.projectionReplica;
-    const markdownA = runtimeA.markdownSessions;
-    const markdownB = runtimeB.markdownSessions;
     const keyA = {
       attachmentId: 'attachment-a',
       tabId: 'tab-a',
@@ -588,29 +556,15 @@ describe('TabRenderRuntimeRegistry', () => {
       }
     }
 
-    const markdownKey = createAgentMarkdownSessionKey({
-      conversationId: 'conversation-shared',
-      messageId: 'message-1',
-      itemId: 'text-1',
-    });
-    await waitForMarkdownPresentation();
     expect(registry.require('tab-a')).toBe(runtimeA);
     expect(registry.require('tab-b')).toBe(runtimeB);
     expect(runtimeA.projectionReplica).toBe(replicaA);
     expect(runtimeB.projectionReplica).toBe(replicaB);
-    expect(runtimeA.markdownSessions).toBe(markdownA);
-    expect(runtimeB.markdownSessions).toBe(markdownB);
-    expect(markdownA.getSnapshot(markdownKey)?.source).toBe(
-      `A0${Array.from({ length: 20 }, (_, index) => ` A${index + 1}`).join('')}`,
-    );
-    expect(markdownB.getSnapshot(markdownKey)?.source).toBe(
-      `B0${Array.from({ length: 20 }, (_, index) => ` B${index + 1}`).join('')}`,
-    );
     expect(runtimeA.store.getSnapshot().visibility).toBe('hidden');
     expect(runtimeB.store.getSnapshot().visibility).toBe('visible');
   });
 
-  it('does not mutate Tab Markdown when a projection patch fails validation', () => {
+  it('does not mutate the projection replica when a projection patch fails validation', () => {
     const runtime = createTabRenderRuntime({
       tabId: 'tab-a',
       conversationId: 'conversation-shared',
@@ -643,12 +597,6 @@ describe('TabRenderRuntimeRegistry', () => {
         ],
       },
     });
-    const markdownKey = createAgentMarkdownSessionKey({
-      conversationId: 'conversation-shared',
-      messageId: 'message-1',
-      itemId: 'text-1',
-    });
-
     expect(() =>
       runtime.acceptProjectionFrame({
         type: 'projectionPatch',
@@ -674,7 +622,6 @@ describe('TabRenderRuntimeRegistry', () => {
       }),
     ).toThrow(/rejected its live patch/);
 
-    expect(runtime.markdownSessions.getSnapshot(markdownKey)?.source).toBe('initial');
     expect(runtime.projectionReplica.getSnapshot().projection?.turns[0]?.items[0]).toMatchObject({
       payload: { content: 'initial' },
     });
@@ -708,10 +655,6 @@ describe('TabRenderRuntimeRegistry', () => {
     expect(runtimeB.projectionReplica.getSnapshot().projection).toBeNull();
   });
 });
-
-async function waitForMarkdownPresentation(): Promise<void> {
-  await new Promise<void>((resolve) => globalThis.setTimeout(resolve, 40));
-}
 
 function projectionTextItem(content: string, updatedAt: number) {
   return {

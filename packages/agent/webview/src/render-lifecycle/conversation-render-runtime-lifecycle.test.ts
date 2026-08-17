@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createAgentMarkdownSessionRegistry } from '../markdown/agent-markdown-session-registry';
 import { createIdleConversationStreamingSnapshot } from './conversation-render-contract';
 import { ConversationRenderCoordinator } from './conversation-render-coordinator';
 import {
@@ -9,9 +8,8 @@ import {
 
 describe('conversation render runtime lifecycle', () => {
   it('separates component detach, hide/reveal, and realm teardown without delivery scheduling', () => {
-    const markdown = createAgentMarkdownSessionRegistry();
     const coordinator = new ConversationRenderCoordinator();
-    const runtime = createConversationRenderRuntimeLifecycle({ coordinator, markdown });
+    const runtime = createConversationRenderRuntimeLifecycle({ coordinator });
     coordinator.ingest(hostSnapshot('conv-a'));
 
     runtime.attachComponent();
@@ -34,26 +32,21 @@ describe('conversation render runtime lifecycle', () => {
     expect(coordinator.read('conv-a')).toBeDefined();
   });
 
-  it('disposes only one conversation and preserves other Markdown sessions', () => {
-    const markdown = createAgentMarkdownSessionRegistry();
+  it('disposes only one conversation and preserves the other coordinator snapshot', () => {
     const coordinator = new ConversationRenderCoordinator();
-    const runtime = createConversationRenderRuntimeLifecycle({ coordinator, markdown });
+    const runtime = createConversationRenderRuntimeLifecycle({ coordinator });
     coordinator.ingest(hostSnapshot('conv-a'));
     coordinator.ingest(hostSnapshot('conv-b'));
-    markdown.commitProjectionSnapshot(projectionSnapshot('conv-a', 'message-a')).publish();
-    markdown.commitProjectionSnapshot(projectionSnapshot('conv-b', 'message-b')).publish();
 
     runtime.disposeConversation('conv-a', 'conversation-delete');
     expect(coordinator.read('conv-a')).toBeUndefined();
     expect(coordinator.isDisposed('conv-a')).toBe(true);
     expect(coordinator.read('conv-b')).toBeDefined();
-    expect(markdown.metrics().activeSessions).toBe(1);
   });
 
   it('stops projecting document visibility after the Webview realm is torn down', () => {
-    const markdown = createAgentMarkdownSessionRegistry();
     const coordinator = new ConversationRenderCoordinator();
-    const runtime = createConversationRenderRuntimeLifecycle({ coordinator, markdown });
+    const runtime = createConversationRenderRuntimeLifecycle({ coordinator });
     const setVisibility = vi.spyOn(runtime, 'setVisibility');
     const unbind = bindConversationRenderRuntimeLifecycle(runtime);
 
@@ -66,9 +59,8 @@ describe('conversation render runtime lifecycle', () => {
   });
 
   it('keeps the realm recoverable when pagehide enters the back-forward cache', () => {
-    const markdown = createAgentMarkdownSessionRegistry();
     const coordinator = new ConversationRenderCoordinator();
-    const runtime = createConversationRenderRuntimeLifecycle({ coordinator, markdown });
+    const runtime = createConversationRenderRuntimeLifecycle({ coordinator });
     const unbind = bindConversationRenderRuntimeLifecycle(runtime);
 
     window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
@@ -87,35 +79,5 @@ function hostSnapshot(conversationId: string) {
     conversationId,
     messages: [],
     streaming: createIdleConversationStreamingSnapshot(),
-  };
-}
-
-function projectionSnapshot(conversationId: string, messageId: string) {
-  return {
-    conversationId,
-    turns: [
-      {
-        turnId: `turn-${messageId}`,
-
-        runId: 'run-a',
-        messageId,
-        items: [
-          {
-            conversationId,
-            turnId: `turn-${messageId}`,
-
-            runId: 'run-a',
-            messageId,
-            itemId: 'text-1',
-            sequence: 1,
-            kind: 'assistant_text' as const,
-            status: 'streaming' as const,
-            payload: { content: conversationId, format: 'markdown' as const },
-            createdAt: 1,
-            updatedAt: 1,
-          },
-        ],
-      },
-    ],
   };
 }

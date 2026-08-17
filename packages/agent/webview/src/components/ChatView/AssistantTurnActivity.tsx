@@ -16,7 +16,6 @@ import {
   ToolLoadingSpinner,
   WarningIcon,
 } from './ToolCallDisplay/icons';
-import { createAgentMarkdownSessionKey } from '../../markdown/agent-markdown-session-registry';
 
 interface AssistantTurnActivityProps {
   readonly projections: readonly ContentBlockUiProjection[];
@@ -25,12 +24,7 @@ interface AssistantTurnActivityProps {
   readonly messageId: string;
 }
 
-function AssistantTurnActivityComponent({
-  projections,
-  summary,
-  conversationId,
-  messageId,
-}: AssistantTurnActivityProps) {
+function AssistantTurnActivityComponent({ projections, summary }: AssistantTurnActivityProps) {
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const toggleExpanded = useCallback(() => setIsExpanded((value) => !value), []);
@@ -106,12 +100,7 @@ function AssistantTurnActivityComponent({
         <div className="agent-turn-activity-list">
           <div className="agent-turn-activity-meta">{summaryParts.join(' · ')}</div>
           {projections.map((projection) => (
-            <ActivityProjection
-              key={projection.id}
-              projection={projection}
-              conversationId={conversationId}
-              messageId={messageId}
-            />
+            <ActivityProjection key={projection.id} projection={projection} />
           ))}
         </div>
       )}
@@ -130,15 +119,7 @@ function useElapsedClock(isRunning: boolean, startedAt: number | undefined): num
   return now;
 }
 
-function ActivityProjection({
-  projection,
-  conversationId,
-  messageId,
-}: {
-  readonly projection: ContentBlockUiProjection;
-  readonly conversationId: string | null;
-  readonly messageId: string;
-}) {
+function ActivityProjection({ projection }: { readonly projection: ContentBlockUiProjection }) {
   const { t } = useTranslation();
   switch (projection.renderKind) {
     case 'thinking':
@@ -152,11 +133,6 @@ function ActivityProjection({
             <MarkdownRenderer
               content={projection.thinking}
               isStreaming={projection.isThinkingComplete === false}
-              sessionKey={createAgentMarkdownSessionKey({
-                conversationId,
-                messageId,
-                itemId: projection.id,
-              })}
             />
           </div>
         </div>
@@ -168,11 +144,6 @@ function ActivityProjection({
             <MarkdownRenderer
               content={projection.content}
               isStreaming={projection.renderStreaming}
-              sessionKey={createAgentMarkdownSessionKey({
-                conversationId,
-                messageId,
-                itemId: projection.id,
-              })}
             />
           </div>
         </div>

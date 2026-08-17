@@ -29,6 +29,9 @@
 - [x] 3.3 Record the no-go decision: keep the current package-local renderer as the only production path; do not register Streamdown, a feature flag or a fallback.
 - [x] 3.4 Keep Streamdown dev-only for the executable spike and prove production exports/registrations remain unchanged.
 
+> Superseded on 2026-08-17 by `replace-agent-markdown-renderer-with-streamdown`; the historical spike
+> remains completed evidence, while Streamdown is now the atomic production Agent text renderer.
+
 ## 4. File And Semantic Projection Integration
 
 - [x] 4.1 Derive editor outline, references, diagnostics and extension source ranges from `@neko/markdown`, not Milkdown or Agent renderer DOM.

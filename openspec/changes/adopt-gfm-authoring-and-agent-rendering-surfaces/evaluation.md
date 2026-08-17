@@ -209,8 +209,9 @@ Date: 2026-08-10
 
 ## Residual Risk
 
-- Production Agent code intentionally retains the package-local renderer. Streamdown is a dev-only
-  rejected candidate and must not be described as delivered Agent UI.
+- Historical note: this evaluation intentionally retained the package-local renderer at the time.
+  `replace-agent-markdown-renderer-with-streamdown` supersedes that disposition on 2026-08-17 and
+  atomically makes Streamdown the delivered Agent text renderer.
 - Milkdown deterministic and visible Desktop evidence passes in light and dark themes, including
   compact-window, Chromium/Electron IME composition and external-change interaction. The native macOS
   IME candidate window and real provider-backed Agent file-publication path remain unverified.

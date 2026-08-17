@@ -19,7 +19,6 @@ import type {
   AgentQueuedMessageItem,
   AgentSessionDiagnosticMessage,
 } from '@neko/agent-contracts';
-import type { AgentMarkdownSessionRegistry } from '../markdown/agent-markdown-session-registry';
 import type { AgentWorkItemStore } from '../components/AgentWorkItem';
 import type { PluginsAvailable } from '../components/ChatView/SendToMenu';
 import type { ProjectFileInfo } from '../hooks/useConfigState';
@@ -144,8 +143,6 @@ export interface ContextManagementContext {
 
 /** Routing helpers for current/non-current conversation updates */
 export interface HelperContext {
-  /** Required canonical message/item-scoped normalized Markdown session owner. */
-  markdownSessionRegistry?: AgentMarkdownSessionRegistry;
   /** Canonical Webview-local owner for conversation render snapshots and activation. */
   conversationRenderCoordinator: ConversationRenderCoordinator;
   disposeConversationRendering?: (

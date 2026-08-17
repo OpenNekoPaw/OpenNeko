@@ -36,7 +36,6 @@ import {
   type AgentCapabilityInvocationResult,
 } from '@neko/agent-contracts';
 import { normalizeCanonicalStoryboardTable } from '@neko/canvas-domain';
-import { createAgentMarkdownSessionKey } from '../../markdown/agent-markdown-session-registry';
 
 interface ContentBlockItemProps {
   projection: ContentBlockUiProjection;
@@ -51,7 +50,6 @@ interface ContentBlockItemProps {
 export const ContentBlockItem = memo(function ContentBlockItem({
   projection,
   conversationId,
-  messageId,
   workItemIds,
 }: ContentBlockItemProps) {
   const { t } = useTranslation();
@@ -65,7 +63,7 @@ export const ContentBlockItem = memo(function ContentBlockItem({
           : 'agent-turn-wide-lane min-w-0'
       }
     >
-      {renderBlockContent(projection, conversationId, messageId, actions, t, workItemIds)}
+      {renderBlockContent(projection, conversationId, actions, t, workItemIds)}
     </div>
   );
 });
@@ -76,7 +74,6 @@ export const ContentBlockItem = memo(function ContentBlockItem({
 function renderBlockContent(
   projection: ContentBlockUiProjection,
   conversationId: string | null,
-  messageId: string,
   callbacks: Pick<
     import('./MessageActionsContext').MessageActionsContextValue,
     'onAcceptDiff' | 'onRejectDiff' | 'pluginsAvailable' | 'contextChips' | 'ambientNodes'
@@ -112,15 +109,6 @@ function renderBlockContent(
             content={projection.content}
             isStreaming={projection.renderStreaming}
             markdownResources={markdownResources}
-            contentBlockId={projection.id}
-            siblingBlocks={projection.siblingBlocks}
-            conversationId={conversationId}
-            plugins={callbacks.pluginsAvailable}
-            sessionKey={createAgentMarkdownSessionKey({
-              conversationId,
-              messageId,
-              itemId: projection.id,
-            })}
           />
           {canonicalStoryboardHandoff && callbacks.pluginsAvailable && (
             <div className="mt-1.5 flex flex-wrap gap-1.5 border-t border-[var(--agent-divider)] pt-1">

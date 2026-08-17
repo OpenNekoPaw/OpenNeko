@@ -23,11 +23,6 @@ import type {
   MediaUnderstandingSelection,
 } from '../components/ChatView/InputAreaContext';
 import {
-  createAgentMarkdownSessionRegistry,
-  type AgentMarkdownSessionPublication,
-  type AgentMarkdownSessionRegistry,
-} from '../markdown/agent-markdown-session-registry';
-import {
   createConversationProjectionReplica,
   type ConversationProjectionReplica,
 } from './conversation-projection-replica';
@@ -136,7 +131,6 @@ export interface TabProjectionAttachmentBinding extends Pick<
 export interface TabRenderRuntime extends TabRenderBinding {
   readonly store: TabRenderStore;
   readonly projectionReplica: ConversationProjectionReplica;
-  readonly markdownSessions: AgentMarkdownSessionRegistry;
   readonly projectionAttachment: ProjectionAttachmentClient | null;
   readonly lifecycle: TabRenderRuntimeLifecycle;
   getRetentionSnapshot(): TabRenderRuntimeRetentionSnapshot;
@@ -172,15 +166,11 @@ const AGENT_PRESENTATION_INTERVAL_MS = 32;
 
 interface AgentPresentationScheduler {
   readonly scheduleProjectionPublication: (callback: () => void) => () => void;
-  readonly scheduleMarkdownUpdate: (
-    callback: () => AgentMarkdownSessionPublication | undefined,
-  ) => () => void;
   dispose(): void;
 }
 
 function createAgentPresentationScheduler(): AgentPresentationScheduler {
   const projectionPublications = new Set<() => void>();
-  const markdownUpdates = new Set<() => AgentMarkdownSessionPublication | undefined>();
   let timeout: ReturnType<typeof globalThis.setTimeout> | undefined;
 
   const scheduleFlush = (): void => {
@@ -188,46 +178,35 @@ function createAgentPresentationScheduler(): AgentPresentationScheduler {
   };
 
   const cancelTimerWhenIdle = (): void => {
-    if (projectionPublications.size > 0 || markdownUpdates.size > 0 || timeout === undefined) {
+    if (projectionPublications.size > 0 || timeout === undefined) {
       return;
     }
     globalThis.clearTimeout(timeout);
     timeout = undefined;
   };
 
-  const schedule = <T extends () => unknown>(callbacks: Set<T>, callback: T): (() => void) => {
-    callbacks.add(callback);
+  const schedule = (callback: () => void): (() => void) => {
+    projectionPublications.add(callback);
     scheduleFlush();
     return () => {
-      callbacks.delete(callback);
+      projectionPublications.delete(callback);
       cancelTimerWhenIdle();
     };
   };
 
   function flush(): void {
     timeout = undefined;
-    const pendingMarkdownUpdates = [...markdownUpdates];
     const pendingProjectionPublications = [...projectionPublications];
-    markdownUpdates.clear();
     projectionPublications.clear();
-
-    const markdownPublications = pendingMarkdownUpdates
-      .map((update) => update())
-      .filter(
-        (publication): publication is AgentMarkdownSessionPublication => publication !== undefined,
-      );
     for (const publishProjection of pendingProjectionPublications) publishProjection();
-    for (const publication of markdownPublications) publication.publish();
   }
 
   return {
-    scheduleProjectionPublication: (callback) => schedule(projectionPublications, callback),
-    scheduleMarkdownUpdate: (callback) => schedule(markdownUpdates, callback),
+    scheduleProjectionPublication: schedule,
     dispose(): void {
       if (timeout !== undefined) globalThis.clearTimeout(timeout);
       timeout = undefined;
       projectionPublications.clear();
-      markdownUpdates.clear();
     },
   };
 }
@@ -320,7 +299,6 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
   readonly conversationId: string;
   readonly store: TabRenderStore;
   readonly projectionReplica: ConversationProjectionReplica;
-  readonly markdownSessions: AgentMarkdownSessionRegistry;
   private currentProjectionAttachment: ProjectionAttachmentClient | null = null;
   private readonly presentationScheduler = createAgentPresentationScheduler();
   private currentLifecycle: TabRenderRuntimeLifecycle = 'attaching';
@@ -334,9 +312,6 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
     this.conversationId = binding.conversationId;
     this.projectionReplica = createConversationProjectionReplica(binding.conversationId, {
       scheduleStreamingPublication: this.presentationScheduler.scheduleProjectionPublication,
-    });
-    this.markdownSessions = createAgentMarkdownSessionRegistry({
-      scheduleStreamingUpdate: this.presentationScheduler.scheduleMarkdownUpdate,
     });
     this.store = new DefaultTabRenderStore({
       tabId: binding.tabId,
@@ -410,16 +385,10 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
       conversationId: this.conversationId,
       replica: {
         installSnapshot: (snapshot) => {
-          const projectionPublication = this.projectionReplica.prepareSnapshot(snapshot);
-          const markdownPublication = this.markdownSessions.commitProjectionSnapshot(snapshot);
-          projectionPublication.publish();
-          markdownPublication.publish();
+          this.projectionReplica.prepareSnapshot(snapshot).publish();
         },
         applyPatch: (patch) => {
-          const projectionPublication = this.projectionReplica.preparePatch(patch);
-          const markdownPublication = this.markdownSessions.commitProjectionPatch(patch);
-          projectionPublication.publish();
-          markdownPublication.publish();
+          this.projectionReplica.preparePatch(patch).publish();
         },
       },
       send: binding.send,
@@ -486,7 +455,6 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
     this.currentProjectionAttachment?.dispose();
     this.currentProjectionAttachment = null;
     this.projectionReplica.dispose();
-    this.markdownSessions.disposeAll();
     this.presentationScheduler.dispose();
     this.store.dispose();
   }

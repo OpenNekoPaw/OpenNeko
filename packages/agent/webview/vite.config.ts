@@ -52,6 +52,6 @@ export default defineConfig({
     modulePreload: false,
   },
   optimizeDeps: {
-    include: ['@neko/shared', 'mermaid'],
+    include: ['@neko/shared'],
   },
 });

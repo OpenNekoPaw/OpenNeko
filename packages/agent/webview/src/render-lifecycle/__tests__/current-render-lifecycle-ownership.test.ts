@@ -9,7 +9,6 @@ interface RenderLifecycleOwnerInventoryItem {
     | 'foreground-refs'
     | 'conversation-cache'
     | 'projection-attachment'
-    | 'markdown-registry'
     | 'viewport-focus'
     | 'extension-activation';
   readonly currentOwner: string;
@@ -43,12 +42,6 @@ const currentRenderLifecycleOwners: readonly RenderLifecycleOwnerInventoryItem[]
     writableFromBackground: true,
   },
   {
-    concern: 'markdown-registry',
-    currentOwner: 'per-Tab AgentMarkdownSessionRegistry',
-    lifecycleScope: 'tab',
-    writableFromBackground: true,
-  },
-  {
     concern: 'viewport-focus',
     currentOwner: 'ConversationRenderSnapshot viewport intent',
     lifecycleScope: 'conversation',
@@ -72,7 +65,6 @@ describe('current conversation render lifecycle ownership', () => {
       'foreground-refs',
       'conversation-cache',
       'projection-attachment',
-      'markdown-registry',
       'viewport-focus',
       'extension-activation',
     ]);
@@ -83,7 +75,7 @@ describe('current conversation render lifecycle ownership', () => {
       currentRenderLifecycleOwners
         .filter(({ writableFromBackground }) => writableFromBackground)
         .map(({ concern }) => concern),
-    ).toEqual(['conversation-cache', 'projection-attachment', 'markdown-registry']);
+    ).toEqual(['conversation-cache', 'projection-attachment']);
   });
 
   it('forbids transitional conversation projection Map mutation', () => {

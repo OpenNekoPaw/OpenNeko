@@ -17,10 +17,6 @@ import type {
   Message,
   SettingsState,
 } from '@neko/agent-contracts';
-import {
-  createAgentMarkdownSessionKey,
-  getAgentMarkdownSessionRegistry,
-} from '../markdown/agent-markdown-session-registry';
 import { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
 import type { TabRenderStore } from '../render-runtime/tab-render-runtime';
 import { useTabRenderStore } from '../render-runtime/useTabRenderStore';
@@ -3230,31 +3226,9 @@ describe('ConversationController entry state', () => {
       />,
     );
 
-    const registry = getAgentMarkdownSessionRegistry();
-    registry
-      .commitProjectionSnapshot(projectionSnapshot('conv-a', 'message-a', 'markdown A'))
-      .publish();
-    registry
-      .commitProjectionSnapshot(projectionSnapshot('conv-b', 'message-b', 'markdown B'))
-      .publish();
-    const keyA = createAgentMarkdownSessionKey({
-      conversationId: 'conv-a',
-      messageId: 'message-a',
-      itemId: 'text-1',
-    });
-    const keyB = createAgentMarkdownSessionKey({
-      conversationId: 'conv-b',
-      messageId: 'message-b',
-      itemId: 'text-1',
-    });
-    expect(registry.getSnapshot(keyA)).toBeDefined();
-    expect(registry.getSnapshot(keyB)).toBeDefined();
-
     fireEvent.click(screen.getByRole('button', { name: 'Delete Chat A' }));
 
     expect(hostMocks.deleteConversation).toHaveBeenCalledWith('conv-a');
-    expect(registry.getSnapshot(keyA)).toBeUndefined();
-    expect(registry.getSnapshot(keyB)?.source).toBe('markdown B');
   });
 
   it('withholds cached non-Timeline Markdown when a character-role Tab becomes visible', () => {
@@ -3816,36 +3790,6 @@ function message(id: string, content: string): Message {
     role: 'user',
     content,
     timestamp: 1,
-  };
-}
-
-function projectionSnapshot(conversationId: string, messageId: string, content: string) {
-  return {
-    conversationId,
-    turns: [
-      {
-        turnId: `turn-${conversationId}`,
-
-        runId: 'run-a',
-        messageId,
-        items: [
-          {
-            conversationId,
-            turnId: `turn-${conversationId}`,
-
-            runId: 'run-a',
-            messageId,
-            itemId: 'text-1',
-            sequence: 1,
-            kind: 'assistant_text' as const,
-            status: 'streaming' as const,
-            payload: { content, format: 'markdown' as const },
-            createdAt: 1,
-            updatedAt: 1,
-          },
-        ],
-      },
-    ],
   };
 }
 

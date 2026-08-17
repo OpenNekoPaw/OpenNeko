@@ -34,7 +34,6 @@ import {
   createConversationRenderRuntimeLifecycle,
   type ConversationRenderRuntimeLifecycle,
 } from '../render-lifecycle/conversation-render-runtime-lifecycle';
-import { getAgentMarkdownSessionRegistry } from '../markdown/agent-markdown-session-registry';
 import type { AgentHostMessageSender } from '../messages';
 
 const logger = getLogger('MessageHandler');
@@ -149,11 +148,9 @@ export interface UseMessageHandlerReturn {
  * Custom hook for message handling
  */
 export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHandlerReturn {
-  const markdownSessionRegistry = getAgentMarkdownSessionRegistry();
   const renderRuntimeRef = useRef<ConversationRenderRuntimeLifecycle | null>(null);
   renderRuntimeRef.current ??= createConversationRenderRuntimeLifecycle({
     coordinator: props.conversationRenderCoordinator,
-    markdown: markdownSessionRegistry,
   });
   const renderRuntime = renderRuntimeRef.current;
   useEffect(() => bindConversationRenderRuntimeLifecycle(renderRuntime), [renderRuntime]);
@@ -266,7 +263,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
       forceUpdate: forceContextUpdate,
       isCurrentConversation,
       updateConversationRenderState,
-      markdownSessionRegistry,
       conversationRenderCoordinator,
       disposeConversationRendering: renderRuntime.disposeConversation,
       pendingForegroundConversationActivationRef,
@@ -318,7 +314,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
       forceContextUpdate,
       isCurrentConversation,
       updateConversationRenderState,
-      markdownSessionRegistry,
       conversationRenderCoordinator,
       renderRuntime,
       pendingForegroundConversationActivationRef,

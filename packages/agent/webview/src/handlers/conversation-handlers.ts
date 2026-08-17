@@ -74,7 +74,6 @@ const handleHistoryCleared: MessageHandler<'historyCleared'> = (
   const conversationId = message.conversationId;
   if (!conversationId) return;
 
-  context.markdownSessionRegistry?.disposeConversation(conversationId);
   const projection = projectHistoryClearedConversation();
   updateConversation(context, conversationId, () => ({
     messages: projection.messages,

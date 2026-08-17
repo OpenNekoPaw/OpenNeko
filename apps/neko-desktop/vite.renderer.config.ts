@@ -2,6 +2,7 @@ import react from '@vitejs/plugin-react';
 import { createEpubJsPatchPlugin } from '@neko/preview-webview/epubjs-vite-patch-plugin';
 import { defineConfig, type Plugin } from 'vite';
 import { readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { DESKTOP_RENDERER_CSP_NONCE } from './src/shared/vite-development-security';
 
@@ -71,6 +72,49 @@ export function createWorkspacePublicEntryCanonicalizationPlugin(): Plugin {
   };
 }
 
+const PARSE5_ENTITY_SUBPATHS = new Set(['entities/decode', 'entities/escape']);
+
+export function resolveParse5PackageOwnedEntity(
+  source: string,
+  importer: string | undefined,
+): string | null {
+  if (!importer || !PARSE5_ENTITY_SUBPATHS.has(source)) return null;
+  const importerPath = importer.split(/[?#]/u, 1)[0];
+  if (!importerPath) return null;
+  const realImporterPath = realpathSync(importerPath);
+  if (!realImporterPath.includes('/node_modules/parse5/')) return null;
+  return createRequire(realImporterPath).resolve(source);
+}
+
+export function createParse5PackageOwnedEntityResolutionPlugin(): Plugin {
+  return {
+    name: 'openneko:parse5-package-owned-entities-resolution',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      return resolveParse5PackageOwnedEntity(source, importer);
+    },
+  };
+}
+
+export function createParse5PackageOwnedEntityOptimizerPlugin() {
+  return {
+    name: 'openneko:parse5-package-owned-entities-optimizer-resolution',
+    setup(build: {
+      onResolve(
+        options: { readonly filter: RegExp },
+        callback: (args: { readonly path: string; readonly importer: string }) =>
+          | { readonly path: string }
+          | undefined,
+      ): void;
+    }) {
+      build.onResolve({ filter: /^entities\/(decode|escape)$/ }, (args) => {
+        const resolved = resolveParse5PackageOwnedEntity(args.path, args.importer);
+        return resolved ? { path: resolved } : undefined;
+      });
+    },
+  };
+}
+
 function findWorkspacePackageManifests(directory: string): readonly string[] {
   const manifests: string[] = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -120,7 +164,12 @@ function parseWorkspacePackageManifest(manifestPath: string): {
 }
 
 export default defineConfig({
-  plugins: [createWorkspacePublicEntryCanonicalizationPlugin(), react(), createEpubJsPatchPlugin()],
+  plugins: [
+    createWorkspacePublicEntryCanonicalizationPlugin(),
+    createParse5PackageOwnedEntityResolutionPlugin(),
+    react(),
+    createEpubJsPatchPlugin(),
+  ],
   ...(functionalFixtureHome
     ? { cacheDir: path.join(functionalFixtureHome, 'vite-renderer-cache') }
     : {}),
@@ -151,6 +200,9 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: [...DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES],
+    esbuildOptions: {
+      plugins: [createParse5PackageOwnedEntityOptimizerPlugin()],
+    },
     include: [
       '@codemirror/autocomplete',
       '@codemirror/commands',
@@ -176,9 +228,8 @@ export default defineConfig({
       'clsx',
       'docx-preview',
       'epubjs',
-      'mermaid',
       'pdfjs-dist',
-      'prism-react-renderer',
+      'streamdown',
       'three',
       'three/addons/controls/DragControls.js',
       'three/addons/controls/OrbitControls.js',
@@ -193,6 +244,7 @@ export default defineConfig({
       'zustand',
       'zustand/vanilla',
       'use-sync-external-store/shim/with-selector.js',
+      'yaml',
     ],
   },
   build: {

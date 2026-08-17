@@ -1,12 +1,16 @@
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import path from 'node:path';
+import { build } from 'esbuild';
 import { createServer } from 'vite';
 import { describe, expect, it } from 'vitest';
 import rendererConfig, {
   canonicalizeWorkspacePublicEntryId,
+  createParse5PackageOwnedEntityOptimizerPlugin,
   DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES,
   discoverWorkspacePublicEntries,
+  resolveParse5PackageOwnedEntity,
 } from '../vite.renderer.config';
 
 describe('Desktop renderer Vite workspace resolution', () => {
@@ -26,7 +30,36 @@ describe('Desktop renderer Vite workspace resolution', () => {
       rendererConfig.optimizeDeps?.include?.filter((entry) => entry.startsWith('@neko/')),
     ).toEqual([]);
     expect(rendererConfig.optimizeDeps?.include).toContain('@tanstack/react-virtual');
+    expect(rendererConfig.optimizeDeps?.include).toContain('streamdown');
     expect(rendererConfig.optimizeDeps?.include).toContain('zustand');
+    expect(rendererConfig.optimizeDeps?.include).toContain('yaml');
+    expect(rendererConfig.optimizeDeps?.include).not.toContain('mermaid');
+    expect(rendererConfig.optimizeDeps?.include).not.toContain('prism-react-renderer');
+  });
+
+  it('keeps parse5 on its package-owned entities dependency', async () => {
+    expect(rendererConfig.resolve?.dedupe).not.toContain('entities');
+    const parse5Entry = createRequire(import.meta.url).resolve('parse5');
+    const parse5Importer = path.resolve(path.dirname(parse5Entry), 'tokenizer/index.js');
+    const decodeEntry = resolveParse5PackageOwnedEntity('entities/decode', parse5Importer);
+    const escapeEntry = resolveParse5PackageOwnedEntity('entities/escape', parse5Importer);
+    expect(decodeEntry).toContain('/entities@6.0.1/');
+    expect(escapeEntry).toContain('/entities@6.0.1/');
+    expect(resolveParse5PackageOwnedEntity('entities/decode', import.meta.filename)).toBeNull();
+    expect(createParse5PackageOwnedEntityOptimizerPlugin().name).toBe(
+      'openneko:parse5-package-owned-entities-optimizer-resolution',
+    );
+    expect(rendererConfig.optimizeDeps?.esbuildOptions?.plugins).toHaveLength(1);
+    await expect(
+      build({
+        bundle: true,
+        entryPoints: [parse5Entry],
+        format: 'esm',
+        logLevel: 'silent',
+        plugins: [createParse5PackageOwnedEntityOptimizerPlugin()],
+        write: false,
+      }),
+    ).resolves.toMatchObject({ errors: [] });
   });
 
   it('does not manufacture undeclared package subpaths', () => {

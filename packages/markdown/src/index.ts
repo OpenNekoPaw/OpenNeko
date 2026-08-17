@@ -12,4 +12,3 @@ export * from './parser';
 export * from './resolution';
 export * from './rich-round-trip';
 export * from './source-range';
-export * from './streaming';

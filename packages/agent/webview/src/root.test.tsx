@@ -1,4 +1,6 @@
 import { render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { useEffect, useState, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { WebviewFoundationProvider, createWebviewFoundation } from '@neko/ui/foundation';
@@ -53,6 +55,13 @@ vi.mock('./components/AppShell', async () => {
 });
 
 describe('AgentWebviewRoot foundation wiring', () => {
+  it('loads both package-owned application styles and Streamdown presentation styles', () => {
+    const rootSource = readFileSync(resolve(process.cwd(), 'src/root.tsx'), 'utf8');
+
+    expect(rootSource).toContain("import './index.css';");
+    expect(rootSource).toContain("import 'streamdown/styles.css';");
+  });
+
   it('inherits an existing host foundation instead of creating a duplicate runtime', () => {
     const hostFoundation = createWebviewFoundation({
       hostKind: 'electron',

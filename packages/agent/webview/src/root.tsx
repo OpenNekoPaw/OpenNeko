@@ -1,4 +1,6 @@
 import { useEffect, useMemo, type ReactElement, type ReactNode } from 'react';
+import './index.css';
+import 'streamdown/styles.css';
 import { AppShell } from './components/AppShell';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { I18nProvider } from './i18n/I18nContext';
@@ -26,8 +28,6 @@ import {
   ToolCallAccessoryProvider,
   type AgentToolCallAccessoryRenderer,
 } from './components/ChatView/ToolCallAccessoryContext';
-import './index.css';
-
 registerDefaultRenderers();
 
 export interface AgentWebviewRootProps {

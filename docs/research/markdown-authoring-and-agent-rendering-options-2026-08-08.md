@@ -13,12 +13,12 @@ OpenNeko 应采用三个明确分工的浏览器表面，而不是一个组件�
 | ---------------------- | ----------------------------------------------------------------- | -------------------------------------------------- |
 | 内容编辑器 Rich        | Milkdown + `@milkdown/preset-commonmark` + `@milkdown/preset-gfm` | `.md` 的结构化、所见即所得编辑                     |
 | 内容编辑器 Source      | CodeMirror 6                                                      | Markdown 源码及其他普通文本格式编辑                |
-| Agent Webview 文本消息 | 现有 package-local normalized renderer                            | 同一消息从不完整 token 流到最终文本的连续 GFM 渲染 |
+| Agent Webview 文本消息 | Streamdown 2.5.0                                                   | 同一消息从不完整 token 流到最终文本的连续 GFM 渲染 |
 
 Workspace `.md` 文件保持唯一 authority。`@neko/markdown` 保留为 OpenNeko GFM profile、source
 range、outline/reference/diagnostic、扩展语义和跨表面 conformance owner，不成为用户可见的
 “Neko Markdown”方言。Tool、Approval、Artifact、媒体和领域结果继续使用 typed renderer，不进入
-Markdown text renderer。Streamdown 2.5.0 仅作为 dev-only 候选 spike 保留，不进入生产注册。
+Markdown text renderer。2026-08-17 的边界收窄与复核后，Streamdown 2.5.0 已原子成为唯一生产注册。
 
 ## 规范基线
 
@@ -67,7 +67,7 @@ Rich mutation 并显示局部 diagnostic，同时保留已解析内容和 Source
 
 | 方案                   | 流式不完整语法                                                 | GFM/插件                                      | React/安全                                        | 判断                                              |
 | ---------------------- | -------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------- | ------------------------------------------------- |
-| Streamdown 2.5.0       | 以 `remend` 处理未闭合块，面向 AI stream，支持 memoized blocks | 内置 remark-gfm，可扩展 code/Mermaid/Math/CJK | React；包含 sanitize/harden 能力                  | spike 未过 parity gate，不进入生产                |
+| Streamdown 2.5.0       | 以 `remend` 处理未闭合块，面向 AI stream，支持 memoized blocks | 内置 remark-gfm，可扩展 Neko text/media 语义  | React；包含 sanitize/harden 能力                  | Agent streaming/final 唯一生产 renderer           |
 | unified + remark-gfm   | 语义精确、AST 和插件生态强                                     | 最适合 canonical parse/profile                | 需要自行实现 React streaming UI、安全和增量稳定性 | `@neko/markdown` core 首选，不单独作为成品消息 UI |
 | react-markdown         | 静态 React Markdown 成熟，remark/rehype 可组合                 | GFM 需插件                                    | 默认不执行 raw HTML                               | 静态展示合适，但没有专门的不完整 stream 生命周期  |
 | markdown-it 15         | CommonMark、插件丰富、HTML string 输出直接                     | GFM 行为依赖插件组合                          | React 映射、sanitize 和增量稳定需另建             | 不选 Agent 主层                                   |
@@ -75,15 +75,16 @@ Rich mutation 并显示局部 diagnostic，同时保留已解析内容和 Source
 | micromark 4            | 低层 tokenizer 精确、适合构建 parser                           | 扩展可组合                                    | 不是现成 React streaming UI                       | 仅适合底层实现                                    |
 | streaming-markdown 0.2 | 轻量增量 DOM                                                   | 生态和复杂扩展覆盖较窄                        | 需要更多宿主集成验证                              | 适合 spike/demo，不作为首选                       |
 
-Streamdown 不是可以叠加在现有 Agent `MarkdownRenderer` 外层的装饰组件。若 spike 通过，必须在
-Agent 消息 owning boundary 内原子替换 parser/presenter/registration/fixtures；streaming 和 final
-始终命中同一 Streamdown surface。若 spike 不通过，则保留当前 `@neko/markdown` streaming core 和
-Agent renderer，不注册第二条成功路径。本次 spike 属于后一种结果。
+Streamdown 不是叠加在旧 Agent `MarkdownRenderer` 外层的装饰组件。2026-08-17 的实施在 Agent
+message owning boundary 内原子替换 parser/presenter/registration/fixtures；streaming 和 final
+始终命中同一 Streamdown surface，旧 streaming core 与 renderer 已删除。
 
 实测中，Streamdown 通过完成态 GFM、CJK、hostile HTML/URL sanitize 与 completed-block identity；
-但未闭合 emphasis 没有产生预期强调语义，且缺少 OpenNeko resource reference、semantic span、
-creative table、Mermaid 和 structured artifact parity。隔离 core bundle 为 507,659 bytes minified、
-151,943 bytes gzip（React external）。因此当前 package-local renderer 继续作为唯一生产路径。
+早期 spike 未闭合 emphasis 的即时语义与 OpenNeko resource/structured parity 未通过；这是当时
+反对把所有业务 presentation 压入 Markdown 的有效证据。新边界将 typed artifact、creative table、
+Tool、Approval 和领域结果移出 Markdown，并由 package-owned remark plugin/custom component 接入
+资源引用，因此原 no-go 不再阻止 Streamdown 承担纯 Agent text renderer。旧 bundle 测量仍仅作为
+2026-08-08 的历史数据，不代表当前构建预算。
 
 ## OpenNeko 适配风险
 

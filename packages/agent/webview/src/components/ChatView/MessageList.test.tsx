@@ -389,7 +389,7 @@ describe('MessageList auto-scroll lifecycle', () => {
     expect(screen.queryByRole('button', { name: /Canvas/ })).toBeNull();
   });
 
-  it('renders storyboard resources from prior assistant ReadImage context', () => {
+  it('does not infer storyboard media from plain Markdown table cells', () => {
     virtualItems = [
       { index: 0, key: 'read-image', start: 0 },
       { index: 1, key: 'storyboard', start: 80 },
@@ -406,11 +406,9 @@ describe('MessageList auto-scroll lifecycle', () => {
       </MessageActionsProvider>,
     );
 
-    expect(screen.getByAltText('Page 1').getAttribute('src')).toBe(
-      'http://127.0.0.1:43125/resources/page-1.jpg',
-    );
+    expect(screen.queryByAltText('Page 1')).toBeNull();
     expect(screen.queryByText(/no image resource context/)).toBeNull();
-    expect(screen.queryByText('P1')).toBeNull();
+    expect(screen.getByText('P1')).toBeTruthy();
   });
 
   it('renders one collapsed process disclosure before the final answer', () => {

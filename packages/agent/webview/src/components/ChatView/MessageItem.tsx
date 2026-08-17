@@ -24,7 +24,6 @@ import {
 import { useAgentHostMessages } from '../../host-runtime-context';
 import { selectMessageIdentity, type MessageIdentityMap } from './message-identity';
 import { ReferenceToken } from './InputArea/ReferenceToken';
-import { createAgentMarkdownSessionKey } from '../../markdown/agent-markdown-session-registry';
 import { AssistantTurnActivity } from './AssistantTurnActivity';
 import { useTranslation } from '../../i18n/I18nContext';
 import { ErrorIcon } from '@neko/ui/icons';
@@ -166,15 +165,7 @@ function AssistantContentBlocks({
     return (
       <div className="agent-assistant-turn">
         <div className="agent-turn-answer agent-turn-text-lane">
-          <MarkdownRenderer
-            content={message.content}
-            isStreaming={isStreaming ?? false}
-            sessionKey={createAgentMarkdownSessionKey({
-              conversationId,
-              messageId: message.id,
-              itemId: message.id,
-            })}
-          />
+          <MarkdownRenderer content={message.content} isStreaming={isStreaming ?? false} />
         </div>
       </div>
     );
