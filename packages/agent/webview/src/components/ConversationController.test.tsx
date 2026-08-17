@@ -269,7 +269,12 @@ vi.mock('./ChatWorkspace', () => ({
     onPendingSendRequestConsumed?: (id: number) => void;
     pendingSendRequest?: {
       id: number;
-      input: { messageText?: string; contextPayloads?: AgentContextPayload[] };
+      input: {
+        messageText?: string;
+        contextPayloads?: AgentContextPayload[];
+        attachments?: readonly import('./ChatView/InputArea/types').MessageAttachment[];
+        fileReferences?: readonly import('./ChatView/InputArea/types').SelectedFileReference[];
+      };
     } | null;
     initialInputRequest?: { id: number; messageText: string } | null;
     initialSessionModeRequest?: {
@@ -469,6 +474,16 @@ vi.mock('./ChatWorkspace', () => ({
             ?.map((payload) => payload.label)
             .join('|') ?? 'none'}
         </span>
+        <span data-testid={testId('pending-send-attachments')}>
+          {props.pendingSendRequest?.input.attachments
+            ?.map((attachment) => attachment.id)
+            .join('|') ?? 'none'}
+        </span>
+        <span data-testid={testId('pending-send-references')}>
+          {props.pendingSendRequest?.input.fileReferences
+            ?.map((reference) => reference.id)
+            .join('|') ?? 'none'}
+        </span>
         <button
           type="button"
           data-testid={testId('commit-pending-send')}
@@ -522,7 +537,13 @@ vi.mock('./ChatView/InputArea', async () => {
     InputArea: (props: {
       inputValue: string;
       onInputChange: (value: string) => void;
-      onSend: () => void;
+      onSend: (input?: {
+        messageText?: string;
+        displayMessageText?: string;
+        attachments?: readonly import('./ChatView/InputArea/types').MessageAttachment[];
+        fileReferences?: readonly import('./ChatView/InputArea/types').SelectedFileReference[];
+        sessionMode?: 'agent';
+      }) => void;
       disabled?: boolean;
       submissionBlocked?: boolean;
       submissionBlockedReason?: string;
@@ -590,6 +611,33 @@ vi.mock('./ChatView/InputArea', async () => {
             onClick={() => props.onSend()}
           >
             Send
+          </button>
+          <button
+            type="button"
+            data-testid="send-workspace-first-attachment"
+            disabled={
+              props.disabled ||
+              props.submissionBlocked ||
+              props.submissionBlockedReason !== undefined
+            }
+            onClick={() =>
+              props.onSend({
+                messageText: props.inputValue,
+                displayMessageText: props.inputValue,
+                sessionMode: 'agent',
+                attachments: [{ id: 'attachment-1', name: 'reference.png', type: 'image' }],
+                fileReferences: [
+                  {
+                    id: 'reference-1',
+                    label: 'reference.png',
+                    mediaType: 'image',
+                    contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+                  },
+                ],
+              })
+            }
+          >
+            Send workspace first attachment
           </button>
           {props.entryContextActions?.map((action) => (
             <button
@@ -758,21 +806,21 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.getConversations).not.toHaveBeenCalled();
     expect(hostMocks.getActiveConversation).not.toHaveBeenCalled();
     expect(hostMocks.getTabState).not.toHaveBeenCalled();
-    expect(hostMocks.refreshConfigSnapshot).toHaveBeenCalledTimes(1);
+    expect(hostMocks.refreshConfigSnapshot).toHaveBeenCalledTimes(2);
     expect(hostMocks.getAgentStates).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'storyboard' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Choose Project' })).toBeNull();
-
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '@hero' } });
     expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('hero', undefined, {
       purpose: 'entry',
     });
     fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
     expect(screen.getByTestId('entry-context-chips').textContent).toContain('小橘');
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
   });
 
-  it('submits the initial Workspace turn without reading or forwarding Entry state', async () => {
+  it('sends the first Workspace turn through canonical Conversation and preserves attachments', async () => {
     vi.clearAllMocks();
     const launchCatalog = createDraftLaunchCatalog('draft-workspace-initial', {
       kind: 'workspace',
@@ -796,15 +844,6 @@ describe('ConversationController entry state', () => {
     hostMocks.readEntryIntent.mockReturnValue({
       mode: 'authoring',
       targetReceipt: foreignEntryReceipt,
-    });
-    hostMocks.submitDraft.mockResolvedValueOnce({
-      session: {
-        phase: 'session',
-        conversationId: 'conversation-workspace-initial',
-        binding: launchCatalog.interaction.binding,
-      },
-      turnId: 'turn-workspace-initial',
-      turnStatus: 'running',
     });
 
     render(
@@ -834,26 +873,43 @@ describe('ConversationController entry state', () => {
       </ComposerWorkspaceProvider>,
     );
 
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Continue in Workspace' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
 
-    await waitFor(() => expect(hostMocks.submitDraft).toHaveBeenCalledOnce());
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Continue in Workspace' } });
+    fireEvent.click(screen.getByTestId('send-workspace-first-attachment'));
+
+    await waitFor(() => expect(hostMocks.newConversation).toHaveBeenCalledTimes(1));
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
     expect(hostMocks.readEntryIntent).not.toHaveBeenCalled();
     expect(hostMocks.configureEntryTarget).not.toHaveBeenCalled();
     expect(hostRuntimeMocks.setState).not.toHaveBeenCalled();
-    expect(hostMocks.submitDraft).toHaveBeenCalledWith(
-      expect.objectContaining({
-        draft: expect.objectContaining({
-          binding: {
-            kind: 'workspace',
-            workspaceId: 'workspace-1',
-            workspaceGrantId: 'workspace-grant-1',
-          },
-        }),
-        entryTargetReceipt: null,
-        input: { kind: 'message', text: 'Continue in Workspace' },
-      }),
+    expect(hostMocks.readLaunchCatalog).not.toHaveBeenCalled();
+
+    act(() => {
+      hostRuntimeMocks.listener?.({
+        type: 'tabState',
+        tabState: {
+          openTabs: [
+            {
+              id: 'tab-workspace-initial',
+              title: 'Workspace',
+              conversationId: 'conversation-workspace-initial',
+            },
+          ],
+          activeTabId: 'tab-workspace-initial',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(hostMocks.getSettings).toHaveBeenCalledWith('conversation-workspace-initial');
+      expect(hostMocks.getAgentInputCatalog).toHaveBeenCalledWith('conversation-workspace-initial');
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('pending-send').textContent).toBe('Continue in Workspace'),
     );
+    expect(screen.getByTestId('pending-send-attachments').textContent).toBe('attachment-1');
+    expect(screen.getByTestId('pending-send-references').textContent).toBe('reference-1');
   });
 
   it('projects the compact composer into Desktop dock conversation tabs', async () => {

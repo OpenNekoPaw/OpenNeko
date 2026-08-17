@@ -16,6 +16,8 @@
 
 Conversation identity、owner binding、首发和后续 turn 属于 `@neko/agent-runtime`，不得由 React state、Desktop Shell Draft 或 active Workspace fallback 决定。Host Scene 只投影 runtime 返回的精确 Conversation identity，不成为第二事实来源。
 
+Workspace Surface 使用 `runtimeId + draftId + workspaceId` 作为一次挂载创建请求的精确去重键。创建请求发出后，首发只进入待发送输入并等待该 Conversation 投影，不得再次调用 `newConversation`。Conversation 投影后，模型设置、输入目录和 Workspace mention 查询全部使用该精确 Conversation identity。
+
 ## User Data And Failure
 
 创建或首发失败只影响当前 Conversation 请求并返回明确 diagnostic；不得清空 sibling Conversation、Workspace catalog 或用户附件。失败不得重试到 Entry submit，也不得回退 active/recent Workspace。

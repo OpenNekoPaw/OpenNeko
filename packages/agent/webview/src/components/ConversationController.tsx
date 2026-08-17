@@ -343,6 +343,7 @@ export function ConversationController({
   const activeDraftIdRef = useRef<string>();
   const skipEntryDraftWriteRef = useRef<string>();
   const committedEntryDraftIdRef = useRef<string>();
+  const workspaceConversationCreationKeyRef = useRef<string>();
   const consumedCharacterDialogueHandoffIdsRef = useRef(new Set<string>());
   const pendingCharacterDialogueHandoffIdsRef = useRef(new Set<string>());
 
@@ -1573,6 +1574,24 @@ export function ConversationController({
     startNewForegroundConversation();
   }, [conversationKind, startNewForegroundConversation]);
 
+  useEffect(() => {
+    if (!isWorkspaceInitialPresentation) return;
+    if (agentPresentation?.phase !== 'draft' || composerWorkspace?.kind !== 'workspace') return;
+    const draftId = agentPresentation.draftId;
+    const workspaceId = composerWorkspace.workspaceId;
+    if (activeDraftIdRef.current !== draftId) return;
+    const creationKey = `${hostRuntimeAdapter.runtimeId}\u0000${draftId}\u0000${workspaceId}`;
+    if (workspaceConversationCreationKeyRef.current === creationKey) return;
+    workspaceConversationCreationKeyRef.current = creationKey;
+    startNewForegroundConversation();
+  }, [
+    agentPresentation,
+    composerWorkspace,
+    hostRuntimeAdapter.runtimeId,
+    isWorkspaceInitialPresentation,
+    startNewForegroundConversation,
+  ]);
+
   const handleEntryModeChange = useCallback(
     (mode: AgentEntryMode) => {
       if (mode === entryMode || isEntryBindingPending) return;
@@ -1647,10 +1666,27 @@ export function ConversationController({
       const id = nextPendingSendRequestIdRef.current + 1;
       nextPendingSendRequestIdRef.current = id;
       setPendingSendRequest({ id, input });
+      if (
+        isWorkspaceInitialPresentation &&
+        agentPresentation?.phase === 'draft' &&
+        composerWorkspace?.kind === 'workspace'
+      ) {
+        const creationKey = `${hostRuntimeAdapter.runtimeId}\u0000${agentPresentation.draftId}\u0000${composerWorkspace.workspaceId}`;
+        if (workspaceConversationCreationKeyRef.current === creationKey) {
+          return true;
+        }
+        workspaceConversationCreationKeyRef.current = creationKey;
+      }
       startNewForegroundConversation();
       return true;
     },
-    [startNewForegroundConversation],
+    [
+      agentPresentation,
+      composerWorkspace,
+      hostRuntimeAdapter.runtimeId,
+      isWorkspaceInitialPresentation,
+      startNewForegroundConversation,
+    ],
   );
 
   const handleEntryInputSend = useCallback(

@@ -1,6 +1,6 @@
 # Owner-bound Agent Conversation Entry
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Entry draft submission is surface-scoped
 
@@ -10,6 +10,8 @@ The system MUST expose `submitDraft` only to an Agent Director / Entry Surface. 
 
 - **WHEN** a user opens a new Agent conversation from an exact Workspace Surface
 - **THEN** the Surface uses the Conversation Host adapter
+- **AND** it immediately creates exactly one owner-bound Conversation before composer capability use
+- **AND** model settings, input catalog, and Workspace mention search bind to that exact Conversation
 - **AND** poisoned Agent Launch attach and draft submit operations are not invoked
 
 #### Scenario: Agent Entry composer
