@@ -18,8 +18,8 @@ export function tryHandleAgentConversationControllerRoute(
   context: AgentHostRouteEffectContext,
 ): AgentConversationControllerRouteOperation {
   switch (message.type) {
-    case 'newConversation':
-      return runAgentHostRouteEffect(() => effects.createConversation(context));
+    case 'createConversation':
+      return runAgentHostRouteEffect(() => effects.createConversation(message, context));
 
     case 'sendMessage':
       return runRequiredConversationRoute(message, 'send message', context, () =>

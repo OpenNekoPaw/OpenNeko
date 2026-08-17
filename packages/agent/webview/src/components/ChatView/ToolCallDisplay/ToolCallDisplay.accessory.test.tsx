@@ -51,6 +51,7 @@ function createAdapter(): AgentHostRuntimeAdapter {
     hostKind: 'electron',
     runtimeId: 'tool-call-accessory-test',
     send: vi.fn(),
+    createConversation: vi.fn(),
     submitMessage: vi.fn(),
     subscribe: vi.fn(() => ({ dispose: vi.fn() })),
     getState: vi.fn(),

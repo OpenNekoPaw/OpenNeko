@@ -23,9 +23,12 @@ Conversation identity、owner binding、首发和后续 turn 属于 `@neko/agent
 
 创建或首发失败只影响当前 Conversation 请求并返回明确 diagnostic；不得清空 sibling Conversation、Workspace catalog 或用户附件。失败不得重试到 Entry submit，也不得回退 active/recent Workspace。
 
+Owner-bound Composer 的首次输入必须在 Conversation lifecycle record 持久化的同一 canonical transaction 中被接受。Session tab、配置读取和 Session input catalog 只能在该事务成功后对 Renderer 可见；不得通过延迟、重试、空 lifecycle record 或读取 Composer 配置作为 Session 配置 fallback 绕过这一顺序。
+
 ## Verification
 
 - Producer test: Workspace composer 首发完整传递 attachments/fileReferences/context/canvas input。
 - Consumer test: owner-bound Conversation 创建和首发命中唯一 runtime owner。
 - Deletion/poison test: Workspace 不调用 Agent Launch attach/submitDraft；Entry 仍调用 submitDraft。
 - Runtime test: Desktop Scene 从精确 Workspace owner 创建并恢复 Conversation，不依赖 active identity fallback。
+- Ordering test: 首发 lifecycle record 提交后才发布 Session tab，并证明配置/catalog 读取不会观察到仅 reserve context 的 Conversation。

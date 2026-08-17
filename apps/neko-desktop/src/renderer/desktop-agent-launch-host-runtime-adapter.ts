@@ -238,6 +238,11 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
           });
       }
     },
+    createConversation() {
+      return Promise.reject(
+        new Error('Agent conversation creation requires an owner-bound Composer session.'),
+      );
+    },
     submitMessage() {
       return Promise.reject(
         new Error('Agent message submit requires a committed Conversation session.'),

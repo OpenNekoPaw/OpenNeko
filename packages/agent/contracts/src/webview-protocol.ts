@@ -64,6 +64,7 @@ import type {
 } from './plugin-transfer-contract';
 import type { AgentConfigDiagnostic } from './config-diagnostic';
 import {
+  parseAgentDraftInputIntent,
   parseAgentInputInvocationIntent,
   type AgentInputInvocationIntent,
 } from './agent-draft-submit';
@@ -148,6 +149,21 @@ export interface SendMessageWebviewMessage {
   messageTrackingId?: string;
 }
 
+export interface CreateConversationWebviewMessage {
+  type: 'createConversation';
+  input: import('./agent-draft-submit').AgentDraftInputIntent;
+  sessionMode: SessionMode;
+  chatModel?: ModelRef<'llm'>;
+  agentModels?: AgentModelSlots;
+  llmConfig?: AgentLlmConfig;
+  purposeModels?: AgentFlatPurposeModelRefs;
+  attachments?: MessageAttachment[];
+  contextPayloads?: AgentContextPayload[];
+  fileReferences?: AgentFileReference[];
+  canvasTurnTarget?: AgentCanvasTurnIntent;
+  messageTrackingId?: string;
+}
+
 export interface SearchProjectFilesWebviewMessage {
   type: 'searchProjectFiles';
   filter: string;
@@ -193,7 +209,6 @@ export interface DeleteConversationWebviewMessage {
 
 export interface EmptyWebviewMessage {
   type:
-    | 'newConversation'
     | 'clearAllConversations'
     | 'getConversations'
     | 'getActiveConversation'
@@ -404,6 +419,7 @@ export interface ProjectionEndpointReadyMessage {
 
 export type AgentWebviewToHostMessage =
   | SendMessageWebviewMessage
+  | CreateConversationWebviewMessage
   | SearchProjectFilesWebviewMessage
   | ConfirmToolWebviewMessage
   | ConversationOnlyWebviewMessage
@@ -960,7 +976,6 @@ const CONVERSATION_ONLY_MESSAGE_TYPES: readonly ConversationOnlyWebviewMessage['
   'compressContext',
 ];
 const EMPTY_MESSAGE_TYPES: readonly EmptyWebviewMessage['type'][] = [
-  'newConversation',
   'clearAllConversations',
   'getConversations',
   'getActiveConversation',
@@ -976,6 +991,7 @@ const QUEUED_MESSAGE_ACTION_TYPES: readonly QueuedMessageActionWebviewMessage['t
 ];
 export const AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES = [
   'sendMessage',
+  'createConversation',
   'searchProjectFiles',
   'confirmTool',
   ...CONVERSATION_ONLY_MESSAGE_TYPES,
@@ -1364,6 +1380,9 @@ export function parseAgentWebviewToHostMessage(raw: unknown): AgentWebviewToHost
   if (type === 'sendMessage') {
     return parseSendMessageWebviewMessage(raw);
   }
+  if (type === 'createConversation') {
+    return parseCreateConversationWebviewMessage(raw);
+  }
   if (type === 'activateConversation') {
     return parseActivateConversationMessage(raw);
   }
@@ -1547,6 +1566,39 @@ export function parseSendMessageWebviewMessage(raw: unknown): SendMessageWebview
     ...(canvasTurnTarget ? { canvasTurnTarget } : {}),
     ...(promptId ? { promptId } : {}),
     ...(messageTrackingId ? { messageTrackingId } : {}),
+  };
+}
+
+export function parseCreateConversationWebviewMessage(
+  raw: unknown,
+): CreateConversationWebviewMessage | null {
+  if (!isRecord(raw) || raw.type !== 'createConversation') return null;
+  let input: import('./agent-draft-submit').AgentDraftInputIntent;
+  try {
+    input = parseAgentDraftInputIntent(raw.input);
+  } catch {
+    return null;
+  }
+  const parsed = parseSendMessageWebviewMessage({
+    ...raw,
+    type: 'sendMessage',
+    conversationId: 'pending-conversation',
+    message: input.kind === 'message' ? input.text : (input.args ?? ''),
+  });
+  if (!parsed) return null;
+  return {
+    type: 'createConversation',
+    input,
+    sessionMode: parsed.sessionMode,
+    ...(parsed.chatModel ? { chatModel: parsed.chatModel } : {}),
+    ...(parsed.agentModels ? { agentModels: parsed.agentModels } : {}),
+    ...(parsed.llmConfig ? { llmConfig: parsed.llmConfig } : {}),
+    ...(parsed.purposeModels ? { purposeModels: parsed.purposeModels } : {}),
+    ...(parsed.attachments ? { attachments: parsed.attachments } : {}),
+    ...(parsed.contextPayloads ? { contextPayloads: parsed.contextPayloads } : {}),
+    ...(parsed.fileReferences ? { fileReferences: parsed.fileReferences } : {}),
+    ...(parsed.canvasTurnTarget ? { canvasTurnTarget: parsed.canvasTurnTarget } : {}),
+    ...(parsed.messageTrackingId ? { messageTrackingId: parsed.messageTrackingId } : {}),
   };
 }
 

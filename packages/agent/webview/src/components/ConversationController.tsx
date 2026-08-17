@@ -78,6 +78,8 @@ import {
   useTabManager,
   type PendingSendInput,
   type ConversationRenderStateUpdater,
+  projectAgentModelSendProjection,
+  projectAgentPurposeModels,
 } from '../hooks';
 import { useMessageHandler, type PendingForegroundConversationActivation } from '../handlers';
 import type { ConversationSettingsSnapshot } from '../handlers/types';
@@ -1560,9 +1562,8 @@ export function ConversationController({
     isTablessConversationViewRef.current = false;
     beginForegroundConversationActivation();
     requestConfigSnapshot();
-    agentHostMessages.newConversation();
     setActiveTab('chat');
-  }, [agentHostMessages, beginForegroundConversationActivation, requestConfigSnapshot]);
+  }, [beginForegroundConversationActivation, requestConfigSnapshot]);
 
   const handleNewChat = useCallback(() => {
     if (isCharacterRoleConversationKind(conversationKind)) {
@@ -1644,6 +1645,10 @@ export function ConversationController({
 
   const handleSendWithoutConversation = useCallback(
     (input: PendingSendInput) => {
+      if (agentPresentation?.phase !== 'composer') {
+        setGlobalError('Agent Composer presentation is unavailable.');
+        return false;
+      }
       setInitialInputRequest(null);
       setInitialSessionModeRequest(null);
       setEntryPromptMenu(null);
@@ -1651,9 +1656,73 @@ export function ConversationController({
       nextPendingSendRequestIdRef.current = id;
       setPendingSendRequest({ id, input });
       startNewForegroundConversation();
+      const messageText = (input.messageText ?? '').trim();
+      const trigger = parseAgentInputTrigger(messageText);
+      let intent: import('@neko/agent-contracts').AgentDraftInputIntent;
+      try {
+        intent =
+          trigger === null
+            ? { kind: 'message', text: messageText }
+            : projectDraftInputIntent({
+                messageText,
+                trigger,
+                catalog: composerInputCatalog?.entries ?? [],
+                bindingKind: composerInputCatalog?.bindingKind ?? agentPresentation.binding.kind,
+              });
+      } catch (error) {
+        setPendingSendRequest(null);
+        setGlobalError(describeError(error));
+        return false;
+      }
+      const sessionMode = input.sessionMode ?? 'agent';
+      const modelProjection = projectMessageModelSelection({
+        selectedModel: entrySelectedModel,
+        chatModelOptions: activeSettings.chatModelOptions,
+        sessionMode: 'agent',
+        agentMediaModels: entryModelState.agentMediaModels,
+      });
+      const purposeModels = projectAgentPurposeModels(
+        modelProjection.purposeModels,
+        input.understandingModels,
+      );
+      void agentHostMessages
+        .createConversation({
+          input: intent,
+          sessionMode,
+          ...projectAgentModelSendProjection({
+            sessionMode,
+            modelProjection,
+            agentModels: input.agentModels,
+          }),
+          ...(input.agentModels ? { agentModels: input.agentModels } : {}),
+          ...(purposeModels && Object.keys(purposeModels).length > 0 ? { purposeModels } : {}),
+          ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+          ...(input.contextPayloads?.length ? { contextPayloads: input.contextPayloads } : {}),
+          ...(input.fileReferences?.length ? { fileReferences: input.fileReferences } : {}),
+          ...(input.canvasTurnTarget ? { canvasTurnTarget: input.canvasTurnTarget } : {}),
+          messageTrackingId: `composer-first-send:${hostRuntimeAdapter.runtimeId}:${id}`,
+        })
+        .then((receipt) => {
+          setPendingSendRequest((current) => (current?.id === id ? null : current));
+          requestConversationResourceSnapshot(receipt.conversationId);
+        })
+        .catch((error: unknown) => {
+          setPendingSendRequest((current) => (current?.id === id ? null : current));
+          setGlobalError(describeError(error));
+        });
       return true;
     },
-    [startNewForegroundConversation],
+    [
+      activeSettings.chatModelOptions,
+      agentHostMessages,
+      agentPresentation,
+      composerInputCatalog,
+      entryModelState.agentMediaModels,
+      entrySelectedModel,
+      hostRuntimeAdapter.runtimeId,
+      requestConversationResourceSnapshot,
+      startNewForegroundConversation,
+    ],
   );
 
   const handleEntryInputSend = useCallback(
@@ -1843,10 +1912,6 @@ export function ConversationController({
       updateEntryInputValue,
     ],
   );
-
-  const handlePendingSendRequestConsumed = useCallback((id: number) => {
-    setPendingSendRequest((current) => (current?.id === id ? null : current));
-  }, []);
 
   const handleInitialInputRequestConsumed = useCallback((id: number) => {
     setInitialInputRequest((current) => (current?.id === id ? null : current));
@@ -2504,7 +2569,6 @@ export function ConversationController({
             onUserMessageSent={handleUserMessageSent}
             onSendWithoutConversation={visible ? handleSendWithoutConversation : undefined}
             pendingSendRequest={visible ? pendingSendRequest : null}
-            onPendingSendRequestConsumed={handlePendingSendRequestConsumed}
             initialInputRequest={visible ? initialInputRequest : null}
             onInitialInputRequestConsumed={handleInitialInputRequestConsumed}
             initialSessionModeRequest={visible ? initialSessionModeRequest : null}

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   AgentHostToWebviewMessage,
   DesktopAgentConnectionIdentity,
+  SendMessageWebviewMessage,
 } from '@neko/agent-contracts';
 import {
   createDesktopAgentBootstrapRequest,
@@ -1028,26 +1029,11 @@ const bridge: OpenNekoDesktopBridge &
           );
         });
     },
+    async createConversation(connection, message) {
+      return submitAgentMessage(connection, message, 'desktop-agent-conversation-create');
+    },
     async submitMessage(connection, message) {
-      const request = createDesktopAgentMessageRequest(
-        nextRequestId('desktop-agent-message-submit'),
-        connection,
-        message,
-      );
-      const response: unknown = await ipcRenderer.invoke(
-        DESKTOP_AGENT_CHANNELS.messageSend,
-        request,
-      );
-      const result = parseDesktopAgentMessageResult(response, request.requestId);
-      if (result.status === 'unavailable') {
-        throw new Error(result.diagnostic.message);
-      }
-      if (!result.submission) {
-        throw new Error(
-          'Desktop Agent submitMessage returned no authoritative submission receipt.',
-        );
-      }
-      return result.submission;
+      return submitAgentMessage(connection, message, 'desktop-agent-message-submit');
     },
     subscribe(connection, listener) {
       const subscription = { connection, listener };
@@ -2149,6 +2135,25 @@ function textEditorIdentityKey(identity: TextEditorRuntimeIdentity): string {
 function nextRequestId(prefix: string): string {
   requestSequence += 1;
   return `${prefix}-${Date.now()}-${requestSequence}`;
+}
+
+async function submitAgentMessage(
+  connection: DesktopAgentConnectionIdentity,
+  message: import('@neko/agent-contracts').CreateConversationWebviewMessage | SendMessageWebviewMessage,
+  requestPrefix: string,
+): Promise<import('@neko/agent-contracts').AgentMessageSubmissionReceipt> {
+  const request = createDesktopAgentMessageRequest(
+    nextRequestId(requestPrefix),
+    connection,
+    message,
+  );
+  const response: unknown = await ipcRenderer.invoke(DESKTOP_AGENT_CHANNELS.messageSend, request);
+  const result = parseDesktopAgentMessageResult(response, request.requestId);
+  if (result.status === 'unavailable') throw new Error(result.diagnostic.message);
+  if (!result.submission) {
+    throw new Error(`Desktop Agent ${message.type} returned no authoritative submission receipt.`);
+  }
+  return result.submission;
 }
 
 function rememberShellProjection<

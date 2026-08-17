@@ -434,7 +434,7 @@ export function useChatActions({
   return { handleSend, triggerSend, handleCancelMessage, copyLastResponse };
 }
 
-function projectAgentPurposeModels(
+export function projectAgentPurposeModels(
   generation: AgentFlatPurposeModelRefs | undefined,
   understanding: MediaUnderstandingModelSelections | undefined,
 ): AgentFlatPurposeModelRefs | undefined {
@@ -453,7 +453,7 @@ interface AgentModelSendProjectionInput {
   readonly agentModels?: AgentModelSlots;
 }
 
-function projectAgentModelSendProjection(
+export function projectAgentModelSendProjection(
   input: AgentModelSendProjectionInput,
 ): MessageModelProjection {
   if (!input.agentModels?.primary) {

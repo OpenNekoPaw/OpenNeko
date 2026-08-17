@@ -54,21 +54,33 @@ async function dispatch(
 }
 
 describe('Agent conversation controller', () => {
-  it('routes newConversation through the canonical Conversation effect', async () => {
+  it('routes createConversation with the complete initial input', async () => {
     const effects = createEffects();
     const context = createContext();
-    vi.mocked(effects.createConversation).mockResolvedValue({
+    const receipt = {
       conversationId: 'conversation-new',
-    });
+      turnId: 'turn-new',
+      queueItem: {
+        id: 'queue-new',
+        conversationId: 'conversation-new',
+        content: 'hello',
+        createdAt: 1,
+        source: 'composer' as const,
+      },
+      state: 'active' as const,
+    };
+    vi.mocked(effects.createConversation).mockResolvedValue(receipt);
+    const message = {
+      type: 'createConversation' as const,
+      input: { kind: 'message' as const, text: 'hello' },
+      sessionMode: 'agent' as const,
+      attachments: [{ id: 'attachment-1', name: 'reference.png', type: 'image' as const }],
+    };
 
-    const operation = tryHandleAgentConversationControllerRoute(
-      { type: 'newConversation' },
-      effects,
-      context,
-    );
+    const operation = tryHandleAgentConversationControllerRoute(message, effects, context);
 
-    await expect(operation).resolves.toEqual({ conversationId: 'conversation-new' });
-    expect(effects.createConversation).toHaveBeenCalledWith(context);
+    await expect(operation).resolves.toEqual(receipt);
+    expect(effects.createConversation).toHaveBeenCalledWith(message, context);
   });
 
   it('projects user messages into canonical turn requests', async () => {

@@ -1000,6 +1000,7 @@ function installBridge(
         getAssistantBootstrap: launch?.getAssistantBootstrap ?? vi.fn(),
         detach: detachSession,
         send: vi.fn(),
+        createConversation: vi.fn(),
         submitMessage: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
       },

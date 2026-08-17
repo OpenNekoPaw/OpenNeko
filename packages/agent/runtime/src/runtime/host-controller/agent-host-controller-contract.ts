@@ -20,10 +20,6 @@ export interface AgentConversationTurnAcceptance {
   readonly state: 'active' | 'queued';
 }
 
-export interface AgentConversationCreationAcceptance {
-  readonly conversationId: string;
-}
-
 export interface AgentHostConnectionIdentity {
   readonly hostKind: 'electron';
   readonly applicationId: string;
@@ -62,8 +58,9 @@ export interface AgentConversationControllerTurnRequest extends AgentMessageRunt
 
 export interface AgentConversationControllerEffectPort {
   createConversation(
+    message: Extract<AgentWebviewToHostMessage, { type: 'createConversation' }>,
     context: AgentHostRouteEffectContext,
-  ): Promise<AgentConversationCreationAcceptance>;
+  ): Promise<AgentConversationTurnAcceptance>;
   submitTurn(
     request: AgentConversationControllerTurnRequest,
     context: AgentHostRouteEffectContext,
@@ -228,7 +225,7 @@ export const AGENT_CONVERSATION_CONTROLLER_ROUTE_TYPES = [
   'sendMessage',
   'confirmTool',
   'cancelMessage',
-  'newConversation',
+  'createConversation',
   'activateConversation',
   'deleteConversation',
   'getConversations',

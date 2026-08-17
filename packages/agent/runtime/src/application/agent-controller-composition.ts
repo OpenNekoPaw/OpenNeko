@@ -21,7 +21,6 @@ import {
   type AgentHostControllerEffectPorts,
   type AgentHostRouteEffectContext,
   type AgentConversationTurnAcceptance,
-  type AgentConversationCreationAcceptance,
   type AgentConversationControllerTurnRequest,
   createAgentContentEffects,
   type AgentWorkspaceLinkedMediaFileSearchInput,
@@ -202,11 +201,18 @@ export interface AgentControllerComposition {
     }) => Promise<AgentConversationConfiguration>;
     readonly readGlobalSkillCatalog?: () => Promise<import('./agent-app-host').AgentSkillCatalog>;
     readonly personalSkillOwnerId?: string;
-    readonly commitConversationCreation?: (input: {
+    readonly reserveConversationCreation?: (input: {
+      readonly conversationId: string;
+    }) => Promise<void>;
+    readonly rollbackConversationCreation?: (input: {
+      readonly conversationId: string;
+    }) => Promise<void>;
+    readonly publishConversationCreation?: (input: {
       readonly conversationId: string;
     }) => Promise<void>;
     readonly prepareInitialConversationTurn?: (
       request: AgentConversationControllerTurnRequest,
+      input: import('@neko/agent-contracts').AgentDraftInputIntent,
     ) => Promise<{ readonly turnId: string } | undefined>;
     readonly settleInitialConversationTurn?: (input: {
       readonly conversationId: string;
@@ -366,11 +372,18 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     }) => Promise<AgentConversationConfiguration>;
     readonly readGlobalSkillCatalog?: () => Promise<import('./agent-app-host').AgentSkillCatalog>;
     readonly personalSkillOwnerId?: string;
-    readonly commitConversationCreation?: (input: {
+    readonly reserveConversationCreation?: (input: {
+      readonly conversationId: string;
+    }) => Promise<void>;
+    readonly rollbackConversationCreation?: (input: {
+      readonly conversationId: string;
+    }) => Promise<void>;
+    readonly publishConversationCreation?: (input: {
       readonly conversationId: string;
     }) => Promise<void>;
     readonly prepareInitialConversationTurn?: (
       request: AgentConversationControllerTurnRequest,
+      input: import('@neko/agent-contracts').AgentDraftInputIntent,
     ) => Promise<{ readonly turnId: string } | undefined>;
     readonly settleInitialConversationTurn?: (input: {
       readonly conversationId: string;
@@ -528,7 +541,12 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         input.readConversationCapabilityConstraint ??
           missingConversationCapabilityConstraintDependency,
         input.resolveConversationDomainTurnContext,
-        input.commitConversationCreation ?? missingConversationCreationCommitDependency,
+        input.composer,
+        input.readGlobalSkillCatalog ?? missingGlobalSkillCatalogDependency,
+        input.personalSkillOwnerId ?? '',
+        input.reserveConversationCreation ?? missingConversationCreationReserveDependency,
+        input.rollbackConversationCreation ?? missingConversationCreationRollbackDependency,
+        input.publishConversationCreation ?? missingConversationCreationPublishDependency,
         input.prepareInitialConversationTurn ?? readNoInitialConversationTurn,
         input.settleInitialConversationTurn ?? missingInitialConversationTurnSettlementDependency,
       ),
@@ -859,11 +877,23 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       conversationId: string,
     ) => Promise<AgentTurnCapabilityConstraint> = missingConversationCapabilityConstraintDependency,
     resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort,
-    commitConversationCreation: (input: {
+    composer?: import('@neko/agent-contracts').AgentComposerInteractionProjection,
+    readGlobalSkillCatalog: () => Promise<
+      import('./agent-app-host').AgentSkillCatalog
+    > = missingGlobalSkillCatalogDependency,
+    personalSkillOwnerId = '',
+    reserveConversationCreation: (input: {
       readonly conversationId: string;
-    }) => Promise<void> = missingConversationCreationCommitDependency,
+    }) => Promise<void> = missingConversationCreationReserveDependency,
+    rollbackConversationCreation: (input: {
+      readonly conversationId: string;
+    }) => Promise<void> = missingConversationCreationRollbackDependency,
+    publishConversationCreation: (input: {
+      readonly conversationId: string;
+    }) => Promise<void> = missingConversationCreationPublishDependency,
     prepareInitialConversationTurn: (
       request: AgentConversationControllerTurnRequest,
+      input: import('@neko/agent-contracts').AgentDraftInputIntent,
     ) => Promise<{ readonly turnId: string } | undefined> = readNoInitialConversationTurn,
     settleInitialConversationTurn: (input: {
       readonly conversationId: string;
@@ -927,8 +957,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const submit = (
       request: AgentConversationControllerTurnRequest,
       context: AgentHostRouteEffectContext,
-      skillName?: string,
-      additionalInstructions?: string,
+      invocation?: AgentInputInvocationIntent,
     ): Promise<AgentConversationTurnAcceptance> => {
       bind(context);
       let accepted = false;
@@ -939,22 +968,35 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         resolveAcceptance = resolve;
         rejectAcceptance = reject;
       });
-      let initialTurnId: string | undefined;
-      const execution = prepareInitialConversationTurn(request)
-        .then((prepared) => {
-          initialTurnId = prepared?.turnId;
-          return Promise.all([
-            readConversationConfiguration(request.conversationId),
-            readConversationContext(request.conversationId),
-            readConversationEntryTargetReceipt(request.conversationId),
-            readConversationCapabilityConstraint(request.conversationId),
-          ]);
-        })
-        .then(([configuration, conversationContext, entryTargetReceipt, capabilityConstraint]) =>
+      const initialTurnId = request.turnId;
+      const execution = Promise.all([
+        readConversationConfiguration(request.conversationId),
+        readConversationContext(request.conversationId),
+        readConversationEntryTargetReceipt(request.conversationId),
+        readConversationCapabilityConstraint(request.conversationId),
+        invocation?.kind === 'command'
+          ? workspace.invokeCommand(
+              invocation.commandId,
+              parseCommandActivationId(invocation.handlerId),
+              invocation.args,
+            )
+          : Promise.resolve(undefined),
+      ]).then(
+        ([
+          configuration,
+          conversationContext,
+          entryTargetReceipt,
+          capabilityConstraint,
+          commandPrompt,
+        ]) =>
           this.executeTurn({
             workspace,
             config,
-            request: initialTurnId === undefined ? request : { ...request, turnId: initialTurnId },
+            request: {
+              ...request,
+              ...(initialTurnId === undefined ? {} : { turnId: initialTurnId }),
+              ...(commandPrompt === undefined ? {} : { messageText: commandPrompt }),
+            },
             context,
             facts,
             configuration,
@@ -968,10 +1010,21 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
             ...(resolveConversationDomainTurnContext === undefined
               ? {}
               : { resolveConversationDomainTurnContext }),
-            ...(skillName ? { skillName } : {}),
-            ...(additionalInstructions ? { additionalInstructions } : {}),
+            ...(invocation === undefined
+              ? {}
+              : {
+                  presentationText: `${invocation.kind === 'skill' ? '$' : '/'}${invocation.kind === 'skill' ? invocation.skillName : invocation.commandId}${invocation.args ? ` ${invocation.args}` : ''}`,
+                  queueInput: invocation,
+                }),
+            ...(invocation?.kind === 'skill'
+              ? {
+                  skillName: invocation.skillName,
+                  skillActivationId: invocation.activationId,
+                  ...(invocation.args ? { additionalInstructions: invocation.args } : {}),
+                }
+              : {}),
           }),
-        );
+      );
       const operation = execution.then(
         async (result) => {
           if (initialTurnId === undefined) return result;
@@ -1009,17 +1062,61 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     };
 
     return {
-      createConversation: (context): Promise<AgentConversationCreationAcceptance> => {
+      createConversation: (message, context): Promise<AgentConversationTurnAcceptance> => {
         bind(context);
         return enqueueTabOperation(state, async () => {
+          if (!composer) throw new Error('Agent Conversation creation requires an exact Composer.');
           const conversationId = createConversationId(workspace.workspace.workspacePath);
+          const input = message.input;
+          const catalog = projectAgentInputCatalog({
+            skills:
+              composer.binding.kind === 'assistant'
+                ? await readGlobalSkillCatalog()
+                : await workspace.readSkillCatalog(true),
+            phase: 'composer',
+            binding: composer.binding,
+            personalSkillOwnerId,
+            commandHandlerIds: SESSION_COMMAND_HANDLER_IDS,
+          });
+          const invocation = input.kind === 'message' ? undefined : input;
+          if (invocation !== undefined) {
+            const entry = catalog.find((candidate) => candidate.id === invocation.catalogEntryId);
+            const matches =
+              invocation.kind === 'skill'
+                ? entry?.trigger === 'skill' &&
+                  entry.executable.skillName === invocation.skillName &&
+                  entry.executable.activationId === invocation.activationId
+                : entry?.trigger === 'command' &&
+                  entry.executable.commandId === invocation.commandId &&
+                  entry.executable.handlerId === invocation.handlerId;
+            if (!matches) {
+              throw new Error(
+                `Agent Composer ${invocation.kind} catalog entry '${invocation.catalogEntryId}' is stale or unavailable.`,
+              );
+            }
+          }
           await workspace.createConversation(conversationId);
           try {
-            await commitConversationCreation({ conversationId });
+            await reserveConversationCreation({ conversationId });
           } catch (error) {
             await workspace.deleteConversation(conversationId);
             throw error;
           }
+          const turnRequest = projectCreateConversationTurnRequest(message, conversationId);
+          let initialTurn: { readonly turnId: string } | undefined;
+          try {
+            initialTurn = await prepareInitialConversationTurn(turnRequest, input);
+          } catch (error) {
+            await rollbackConversationCreation({ conversationId });
+            await workspace.deleteConversation(conversationId);
+            throw error;
+          }
+          if (!initialTurn) {
+            await rollbackConversationCreation({ conversationId });
+            await workspace.deleteConversation(conversationId);
+            throw new Error('Agent Composer creation did not commit an initial lifecycle Turn.');
+          }
+          await publishConversationCreation({ conversationId });
           state.activeConversationId = conversationId;
           await visiblePresentation.updateConversation(conversationId);
           const tab: OpenTab = {
@@ -1034,7 +1131,14 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           await postConversationList(context);
           await context.post(buildTabStateMessage(state.tabState));
           await postConversation(conversationId, context);
-          return { conversationId };
+          return submit(
+            {
+              ...turnRequest,
+              turnId: initialTurn.turnId,
+            },
+            context,
+            invocation,
+          );
         });
       },
       submitTurn: (request, context) => submit(request, context),
@@ -2672,6 +2776,30 @@ function createDeferredDesktopAgentFactsEvents(): {
   };
 }
 
+function projectCreateConversationTurnRequest(
+  message: Extract<
+    import('@neko/agent-contracts').AgentWebviewToHostMessage,
+    { type: 'createConversation' }
+  >,
+  conversationId: string,
+): AgentConversationControllerTurnRequest {
+  return {
+    source: 'user-message',
+    conversationId,
+    messageText: message.input.kind === 'message' ? message.input.text : (message.input.args ?? ''),
+    sessionMode: message.sessionMode,
+    ...(message.chatModel ? { chatModel: message.chatModel } : {}),
+    ...(message.agentModels ? { agentModels: message.agentModels } : {}),
+    ...(message.llmConfig ? { llmConfig: message.llmConfig } : {}),
+    ...(message.purposeModels ? { purposeModels: message.purposeModels } : {}),
+    ...(message.attachments ? { attachments: message.attachments } : {}),
+    ...(message.contextPayloads ? { contextPayloads: message.contextPayloads } : {}),
+    ...(message.fileReferences ? { fileReferences: message.fileReferences } : {}),
+    ...(message.canvasTurnTarget ? { canvasTurnTarget: message.canvasTurnTarget } : {}),
+    ...(message.messageTrackingId ? { messageTrackingId: message.messageTrackingId } : {}),
+  };
+}
+
 function waitForFactsPoll(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 25));
 }
@@ -2711,8 +2839,16 @@ async function missingConversationContextDependency(): Promise<AgentBoundDomainB
   throw new Error('Agent Session input catalog has no Conversation context dependency.');
 }
 
-async function missingConversationCreationCommitDependency(): Promise<never> {
-  throw new Error('Agent Session has no Conversation creation commit dependency.');
+async function missingConversationCreationReserveDependency(): Promise<never> {
+  throw new Error('Agent Composer has no Conversation owner reservation dependency.');
+}
+
+async function missingConversationCreationRollbackDependency(): Promise<never> {
+  throw new Error('Agent Composer has no Conversation owner rollback dependency.');
+}
+
+async function missingConversationCreationPublishDependency(): Promise<never> {
+  throw new Error('Agent Composer has no Conversation Session publication dependency.');
 }
 
 async function readNoInitialConversationTurn(): Promise<undefined> {

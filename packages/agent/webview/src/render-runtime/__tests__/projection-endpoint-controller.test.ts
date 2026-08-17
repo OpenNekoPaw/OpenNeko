@@ -25,6 +25,9 @@ function createHost() {
     async submitMessage() {
       throw new Error('submitMessage is not used by this projection fixture.');
     },
+    async createConversation() {
+      throw new Error('createConversation is not used by this projection fixture.');
+    },
     subscribe(next) {
       events.push('subscribe');
       listener = next;

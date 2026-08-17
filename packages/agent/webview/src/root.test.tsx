@@ -173,6 +173,7 @@ function createAdapter(runtimeId: string): AgentHostRuntimeAdapter {
     hostKind: 'electron',
     runtimeId,
     send: vi.fn(),
+    createConversation: vi.fn(),
     submitMessage: vi.fn(),
     subscribe: vi.fn(() => ({ dispose: vi.fn() })),
     getState: vi.fn(),

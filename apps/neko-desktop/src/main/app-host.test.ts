@@ -1286,26 +1286,42 @@ describe('DesktopAppHost', () => {
       },
     });
     expect(providerStart).toHaveBeenCalledOnce();
-    const sendAgentMessage = vi
-      .spyOn(fixture.appHost.agentBridge, 'send')
-      .mockResolvedValue({
-        requestId: 'assistant-new-conversation',
-        status: 'accepted',
-        conversation: { conversationId: 'conversation:assistant-next' },
-      });
+    const sendAgentMessage = vi.spyOn(fixture.appHost.agentBridge, 'send').mockResolvedValue({
+      requestId: 'assistant-new-conversation',
+      status: 'accepted',
+      submission: {
+        submissionId: 'assistant-new-conversation',
+        conversationId: 'conversation:assistant-next',
+        turnId: 'turn:assistant-next',
+        queueItemId: 'queue:assistant-next',
+        message: 'Continue with a new Assistant Conversation',
+        createdAt: 1,
+        state: 'active',
+      },
+    });
     const assistantConversationCount = (await fixture.appHost.shell.getProjection(fixture.windowId))
       .agentHome.conversations.length;
     await expect(
       fixture.appHost.sendAgentMessage(
         fixture.sender,
         createDesktopAgentMessageRequest('assistant-new-conversation', bootstrap.connection, {
-          type: 'newConversation',
+          type: 'createConversation',
+          input: { kind: 'message', text: 'Continue with a new Assistant Conversation' },
+          sessionMode: 'agent',
         }),
       ),
     ).resolves.toEqual({
       requestId: 'assistant-new-conversation',
       status: 'accepted',
-      conversation: { conversationId: 'conversation:assistant-next' },
+      submission: {
+        submissionId: 'assistant-new-conversation',
+        conversationId: 'conversation:assistant-next',
+        turnId: 'turn:assistant-next',
+        queueItemId: 'queue:assistant-next',
+        message: 'Continue with a new Assistant Conversation',
+        createdAt: 1,
+        state: 'active',
+      },
     });
     expect(sendAgentMessage).toHaveBeenCalledOnce();
     const unchangedProjection = await fixture.appHost.shell.getProjection(fixture.windowId);

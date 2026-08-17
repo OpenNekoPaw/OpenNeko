@@ -358,13 +358,14 @@ describe('Electron Agent launch Host runtime adapter', () => {
     const messages: AgentHostToWebviewMessage[] = [];
     adapter.subscribe((message) => messages.push(message));
 
-    adapter.send({ type: 'newConversation' });
-    expect(messages).toEqual([
-      {
-        type: 'globalError',
-        message: "Agent route 'newConversation' requires a committed conversation session.",
-      },
-    ]);
+    await expect(
+      adapter.createConversation({
+        type: 'createConversation',
+        input: { kind: 'message', text: 'hello' },
+        sessionMode: 'agent',
+      }),
+    ).rejects.toThrow('Agent conversation creation requires an owner-bound Composer session.');
+    expect(messages).toEqual([]);
     await adapter.dispose();
     await adapter.dispose();
     expect(bridge.agentLaunch.detach).toHaveBeenCalledOnce();

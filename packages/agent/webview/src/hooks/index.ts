@@ -39,6 +39,8 @@ export {
 
 export {
   useChatActions,
+  projectAgentModelSendProjection,
+  projectAgentPurposeModels,
   type PendingSendIdentity,
   type PendingSendInput,
   type UseChatActionsProps,

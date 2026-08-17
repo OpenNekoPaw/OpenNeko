@@ -1276,14 +1276,21 @@ export class DesktopAppHost {
         ) => this.conversationLifecycle.updateConfiguration(input),
         readGlobalSkillCatalog: () => this.agent.readGlobalSkillCatalog(),
         personalSkillOwnerId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
-        commitConversationCreation: ({ conversationId }) =>
-          this.commitOwnerBoundAgentConversation({
+        reserveConversationCreation: ({ conversationId }) =>
+          this.reserveOwnerBoundAgentConversation({
+            windowId: window.windowId,
+            conversationId,
+          }),
+        rollbackConversationCreation: ({ conversationId }) =>
+          this.conversationLifecycle.releaseConversationContext(conversationId),
+        publishConversationCreation: ({ conversationId }) =>
+          this.publishOwnerBoundAgentConversation({
             windowId: window.windowId,
             agentViewId: request.viewId,
             conversationId,
           }),
-        prepareInitialConversationTurn: (turnRequest) =>
-          this.prepareInitialConversationTurn(workspace, turnRequest),
+        prepareInitialConversationTurn: (turnRequest, input) =>
+          this.prepareInitialConversationTurn(workspace, turnRequest, input),
         settleInitialConversationTurn: (turn) => this.settleInitialConversationTurn(turn),
       });
     }
@@ -1376,16 +1383,24 @@ export class DesktopAppHost {
         this.conversationLifecycle.updateConfiguration(input),
       readGlobalSkillCatalog: () => this.agent.readGlobalSkillCatalog(),
       personalSkillOwnerId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
-      commitConversationCreation: ({ conversationId }) =>
-        this.commitOwnerBoundAgentConversation({
+      reserveConversationCreation: ({ conversationId }) =>
+        this.reserveOwnerBoundAgentConversation({
+          windowId: window.windowId,
+          conversationId,
+        }),
+      rollbackConversationCreation: ({ conversationId }) =>
+        this.conversationLifecycle.releaseConversationContext(conversationId),
+      publishConversationCreation: ({ conversationId }) =>
+        this.publishOwnerBoundAgentConversation({
           windowId: window.windowId,
           agentViewId: view.viewId,
           conversationId,
         }),
-      prepareInitialConversationTurn: (turnRequest) =>
+      prepareInitialConversationTurn: (turnRequest, input) =>
         this.prepareInitialConversationTurn(
           requireAgentWorkspaceRuntime(workspace, grant.workspaceId),
           turnRequest,
+          input,
         ),
       settleInitialConversationTurn: (turn) => this.settleInitialConversationTurn(turn),
     });
@@ -3230,27 +3245,30 @@ export class DesktopAppHost {
       );
   }
 
-  private async commitOwnerBoundAgentConversation(input: {
+  private async reserveOwnerBoundAgentConversation(input: {
     readonly windowId: string;
-    readonly agentViewId: string;
     readonly conversationId: string;
   }): Promise<void> {
     const projection = await this.shell.getProjection(input.windowId);
     const scene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
     const context = await this.resolveOwnerBoundConversationContext(scene);
     await this.conversationLifecycle.reserveConversationContext(input.conversationId, context);
-    try {
-      await this.shell.projectOwnerBoundAgentConversation({
-        windowId: input.windowId,
-        rendererSessionId: projection.rendererSessionId,
-        agentViewId: input.agentViewId,
-        context,
-        conversationId: input.conversationId,
-      });
-    } catch (error) {
-      await this.conversationLifecycle.releaseConversationContext(input.conversationId);
-      throw error;
-    }
+  }
+
+  private async publishOwnerBoundAgentConversation(input: {
+    readonly windowId: string;
+    readonly agentViewId: string;
+    readonly conversationId: string;
+  }): Promise<void> {
+    const projection = await this.shell.getProjection(input.windowId);
+    const context = await this.conversationLifecycle.readConversationContext(input.conversationId);
+    await this.shell.projectOwnerBoundAgentConversation({
+      windowId: input.windowId,
+      rendererSessionId: projection.rendererSessionId,
+      agentViewId: input.agentViewId,
+      context,
+      conversationId: input.conversationId,
+    });
   }
 
   private async resolveOwnerBoundConversationContext(
@@ -3287,6 +3305,7 @@ export class DesktopAppHost {
   private async prepareInitialConversationTurn(
     workspace: AgentWorkspaceRuntime,
     request: AgentConversationControllerTurnRequest,
+    input: import('@neko/agent-contracts').AgentDraftInputIntent,
   ): Promise<{ readonly turnId: string } | undefined> {
     if (await this.conversationLifecycle.readFirstSubmitRecord(request.conversationId)) {
       return undefined;
@@ -3303,7 +3322,7 @@ export class DesktopAppHost {
       requestId: request.messageTrackingId ?? `first-turn:${request.conversationId}`,
       conversationId: request.conversationId,
       context,
-      input: { kind: 'message', text: request.messageText },
+      input,
       entryTargetReceipt: null,
       references: [],
       contextReferences: projectInitialTurnContextReferences(

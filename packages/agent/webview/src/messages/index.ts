@@ -7,6 +7,7 @@ import type {
   RequestCanvasAuthoringHandoffWebviewMessage,
   PluginTransferPayload,
   SendMessageWebviewMessage,
+  CreateConversationWebviewMessage,
 } from '@neko/agent-contracts';
 import type { ContentLocator, DocumentLocator } from '@neko/content';
 import type { AgentContextType } from '@neko/agent-contracts';
@@ -51,9 +52,10 @@ export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
       return adapter.submitMessage(message);
     },
 
-    /** Create a new conversation */
-    newConversation: () => {
-      postWebviewMessage({ type: 'newConversation' });
+    /** Atomically create a Conversation and submit its first input. */
+    createConversation: (payload: Omit<CreateConversationWebviewMessage, 'type'>) => {
+      const message: CreateConversationWebviewMessage = { type: 'createConversation', ...payload };
+      return adapter.createConversation(message);
     },
 
     /** Activate an ordinary conversation and its Tab projection atomically. */

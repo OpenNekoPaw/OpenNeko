@@ -2,6 +2,7 @@ import {
   AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES,
   type AgentHostToWebviewMessage,
   type AgentWebviewToHostMessage,
+  type CreateConversationWebviewMessage,
   type SendMessageWebviewMessage,
 } from './webview-protocol';
 
@@ -23,13 +24,16 @@ export interface AgentMessageSubmissionReceipt {
 
 export type AgentNonSubmissionWebviewMessage = Exclude<
   AgentWebviewToHostMessage,
-  SendMessageWebviewMessage
+  SendMessageWebviewMessage | CreateConversationWebviewMessage
 >;
 
 export interface AgentHostRuntimeAdapter {
   readonly hostKind: AgentHostKind;
   readonly runtimeId: string;
   send(message: AgentNonSubmissionWebviewMessage): void;
+  createConversation(
+    message: CreateConversationWebviewMessage,
+  ): Promise<AgentMessageSubmissionReceipt>;
   submitMessage(message: SendMessageWebviewMessage): Promise<AgentMessageSubmissionReceipt>;
   subscribe(listener: (message: AgentHostToWebviewMessage) => void): AgentHostRuntimeSubscription;
   getState(): unknown;
@@ -161,7 +165,7 @@ export const ELECTRON_AGENT_HOST_ROUTE_COVERAGE = {
   cancelQueuedMessage: 'implemented',
   editQueuedMessage: 'implemented',
   deleteConversation: 'implemented',
-  newConversation: 'implemented',
+  createConversation: 'implemented',
   clearAllConversations: 'implemented',
   getConversations: 'implemented',
   getActiveConversation: 'implemented',
@@ -214,7 +218,7 @@ export const AGENT_HOST_ROUTE_AUTHORITY = {
   cancelQueuedMessage: SESSION_ANY,
   editQueuedMessage: SESSION_ANY,
   deleteConversation: SESSION_ANY,
-  newConversation: SESSION_ANY,
+  createConversation: LAUNCH_ANY,
   clearAllConversations: SESSION_ANY,
   getConversations: SESSION_ANY,
   getActiveConversation: SESSION_ANY,

@@ -36,7 +36,7 @@ const hostMocks = vi.hoisted(() => ({
   getAgentInputCatalog: vi.fn(),
   getTabState: vi.fn(),
   updateTabState: vi.fn(),
-  newConversation: vi.fn(),
+  createConversation: vi.fn(),
   activateConversation: vi.fn(),
   deleteConversation: vi.fn(),
   searchProjectFiles: vi.fn(),
@@ -71,6 +71,8 @@ vi.mock('../host-runtime-context', () => ({
     }),
     getState: hostRuntimeMocks.getState,
     setState: hostRuntimeMocks.setState,
+    createConversation: hostMocks.createConversation,
+    submitMessage: vi.fn(),
     readLaunchCatalog: hostMocks.readLaunchCatalog,
     readEntryIntent: hostMocks.readEntryIntent,
     loadCharacterDialogueTargets: hostMocks.loadCharacterDialogueTargets,
@@ -88,10 +90,21 @@ vi.mock('../host-runtime-context', () => ({
     subscribe: vi.fn(() => ({ dispose: vi.fn() })),
     getState: hostRuntimeMocks.getState,
     setState: hostRuntimeMocks.setState,
+    createConversation: hostMocks.createConversation,
+    submitMessage: vi.fn(),
   }),
 }));
 
 beforeEach(() => {
+  hostMocks.createConversation.mockResolvedValue({
+    submissionId: 'submission-create',
+    conversationId: 'conversation-created',
+    turnId: 'turn-created',
+    queueItemId: 'queue-created',
+    message: 'first input',
+    createdAt: 1,
+    state: 'active',
+  });
   hostRuntimeMocks.getState.mockReturnValue(undefined);
   hostMocks.readLaunchCatalog.mockReturnValue(createBoundAssistantLaunchCatalog('draft-default'));
   hostMocks.readEntryIntent.mockReturnValue({ mode: 'assistant', targetReceipt: null });
@@ -811,7 +824,7 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.refreshConfigSnapshot).toHaveBeenCalledTimes(1);
     expect(hostMocks.getAgentComposerInputCatalog).toHaveBeenCalledTimes(1);
     expect(hostMocks.getAgentStates).toHaveBeenCalledTimes(1);
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'storyboard' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Choose Project' })).toBeNull();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '@hero' } });
@@ -820,7 +833,7 @@ describe('ConversationController entry state', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
     expect(screen.getByTestId('entry-context-chips').textContent).toContain('小橘');
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
   });
 
   it('accepts only the exact Composer catalog identity for `$` and `/` input', () => {
@@ -923,12 +936,30 @@ describe('ConversationController entry state', () => {
       </ComposerWorkspaceProvider>,
     );
 
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Continue in Workspace' } });
     fireEvent.click(screen.getByTestId('send-workspace-first-attachment'));
 
-    await waitFor(() => expect(hostMocks.newConversation).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(hostMocks.createConversation).toHaveBeenCalledTimes(1));
+    expect(hostMocks.createConversation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: { kind: 'message', text: 'Continue in Workspace' },
+        sessionMode: 'agent',
+        chatModel: {
+          providerId: 'test',
+          modelId: 'test-model',
+          category: 'llm',
+        },
+        attachments: [{ id: 'attachment-1', name: 'reference.png', type: 'image' }],
+        fileReferences: [
+          expect.objectContaining({
+            id: 'reference-1',
+            contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+          }),
+        ],
+      }),
+    );
     expect(hostMocks.submitDraft).not.toHaveBeenCalled();
     expect(hostMocks.readEntryIntent).not.toHaveBeenCalled();
     expect(hostMocks.configureEntryTarget).not.toHaveBeenCalled();
@@ -955,27 +986,54 @@ describe('ConversationController entry state', () => {
       expect(hostMocks.getSettings).toHaveBeenCalledWith('conversation-workspace-initial');
       expect(hostMocks.getAgentInputCatalog).toHaveBeenCalledWith('conversation-workspace-initial');
     });
-    await waitFor(() =>
-      expect(screen.getByTestId('pending-send').textContent).toBe('Continue in Workspace'),
-    );
-    expect(screen.getByTestId('pending-send-attachments').textContent).toBe('attachment-1');
-    expect(screen.getByTestId('pending-send-references').textContent).toBe('reference-1');
+    expect(hostMocks.createConversation).toHaveBeenCalledTimes(1);
   });
 
   it('projects the compact composer into Desktop dock conversation tabs', async () => {
-    render(<ConversationController {...createProps()} emptyStatePresentation="desktop-dock" />);
+    vi.clearAllMocks();
+    const composer = createComposerProjection('composer-workspace-compact', {
+      kind: 'workspace',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    });
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'workspace',
+          label: 'OpenNeko',
+          workspaceId: 'workspace-1',
+          loadCanvasCatalog: async () => ({
+            workspaceId: 'workspace-1',
+            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+            options: [],
+            diagnostics: [],
+          }),
+        }}
+      >
+        <ConversationController
+          {...createProps()}
+          agentPresentation={composer}
+          emptyStatePresentation="desktop-dock"
+        />
+      </ComposerWorkspaceProvider>,
+    );
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Start chat' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'activeConversation',
-            conversation: { id: 'conversation-desktop', title: 'Desktop Chat', messages: [] },
-          },
-        }),
-      );
+      hostRuntimeMocks.listener?.({
+        type: 'tabState',
+        tabState: {
+          openTabs: [
+            {
+              id: 'tab-desktop',
+              title: 'Desktop Chat',
+              conversationId: 'conversation-desktop',
+            },
+          ],
+          activeTabId: 'tab-desktop',
+        },
+      });
     });
 
     await waitFor(() =>
@@ -985,6 +1043,8 @@ describe('ConversationController entry state', () => {
           ?.getAttribute('data-composer-presentation'),
       ).toBe('compact'),
     );
+    expect(hostMocks.createConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
   });
 
   it('submits an unbound Entry Draft without an explicit Assistant selection', async () => {
@@ -1018,7 +1078,7 @@ describe('ConversationController entry state', () => {
         input: { kind: 'message', text: 'Start directly' },
       }),
     );
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
   });
 
   it('adds one exact Workspace Project to Creation context and preserves the draft text', async () => {
@@ -1073,7 +1133,7 @@ describe('ConversationController entry state', () => {
       authority: { kind: 'project', projectId: 'project-1' },
       target: null,
     });
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
   });
 
   it('keeps Draft input editable while configuration blocks only submit', () => {
@@ -1479,7 +1539,7 @@ describe('ConversationController entry state', () => {
     });
     await waitFor(() => expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({ drafts: [] }));
     expect(screen.getByRole('textbox')).toHaveProperty('value', '');
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
   });
 
   it('submits the exact configured Authoring target receipt', async () => {
@@ -1662,7 +1722,7 @@ describe('ConversationController entry state', () => {
       ),
     );
     expect(hostMocks.submitDraft).not.toHaveBeenCalled();
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
     expect(screen.getByRole('textbox')).toHaveProperty('value', '/compact');
   });
 
@@ -1715,7 +1775,7 @@ describe('ConversationController entry state', () => {
     expect(screen.queryByRole('button', { name: 'Character / Room' })).toBeNull();
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
     expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
   });
 
   it('keeps Character Dialogue out of the visible Entry choices', () => {
@@ -1748,7 +1808,7 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.configureEntryTarget).not.toHaveBeenCalled();
     expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
   });
 
   it('removes Entry Draft owner choices after Workspace activation', () => {
@@ -1841,7 +1901,7 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('entry-context-chips').textContent).toBe('');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByTestId('entry-selected-model').textContent).toBe(retainedModel);
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
   });
 
   it('keeps explicit Desktop Skill invocation in the Composer instead of rendering Skill cards', () => {
@@ -1872,7 +1932,7 @@ describe('ConversationController entry state', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '$storyboard ' } });
 
     expect(screen.getByRole('textbox')).toHaveProperty('value', '$storyboard ');
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
   });
 
   it('does not render builtin Skill descriptions as entry cards', () => {
@@ -2227,7 +2287,7 @@ describe('ConversationController entry state', () => {
       },
     });
     expect(hostMocks.configureEntryTarget).not.toHaveBeenCalled();
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
   });
 
   it('prefills a host handoff exactly once without creating or sending a conversation', () => {
@@ -2240,7 +2300,7 @@ describe('ConversationController entry state', () => {
     );
 
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'Plan a short film');
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Edited plan' } });
     view.rerender(
@@ -2251,7 +2311,7 @@ describe('ConversationController entry state', () => {
     );
 
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'Edited plan');
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
   });
 
   it('activates an explicit host navigation target only after catalog and tab state hydrate', () => {
@@ -2512,209 +2572,6 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('entry-media-understanding').textContent).toBe(
       'nekoapi-chat:gpt-5.5',
     );
-  });
-
-  it('opens a new chat tab through the canonical entry submit path', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Start chat' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'activeConversation',
-            conversation: { id: 'conv-new', title: 'New Chat', messages: [] },
-          },
-        }),
-      );
-    });
-
-    expect(screen.queryByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeNull();
-    expect(screen.getByTestId('entry-menu').textContent).toBe('none');
-    expect(screen.getByTestId('pending-send').textContent).toBe('Start chat');
-    expect(screen.getByTestId('initial-input').textContent).toBe('none');
-    expect(hostMocks.getSettings).toHaveBeenCalledWith('conv-new');
-  });
-
-  it('starts a new tab and sends entry text in chat mode', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    fireEvent.change(screen.getByPlaceholderText('Type anything...'), {
-      target: { value: 'develop the city mood' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'activeConversation',
-            conversation: { id: 'conv-new', title: 'New Chat', messages: [] },
-          },
-        }),
-      );
-    });
-
-    expect(screen.getByTestId('pending-send').textContent).toBe('develop the city mood');
-    expect(screen.getByTestId('initial-input').textContent).toBe('none');
-  });
-
-  it('keeps the owning optimistic text visible across Host-created Tab and empty projections', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    fireEvent.change(screen.getByPlaceholderText('Type anything...'), {
-      target: { value: 'keep this visible' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'tabState',
-            tabState: {
-              openTabs: [
-                {
-                  id: 'tab-conv-new',
-                  title: 'New conversation',
-                  conversationId: 'conv-new',
-                },
-              ],
-              activeTabId: 'tab-conv-new',
-            },
-          },
-        }),
-      );
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'activeConversation',
-            conversation: { id: 'conv-new', title: 'New conversation', messages: [] },
-          },
-        }),
-      );
-    });
-
-    expect(screen.getByTestId('pending-send').textContent).toBe('keep this visible');
-    fireEvent.click(screen.getByTestId('commit-pending-send'));
-    expect(screen.getByTestId('workspace-messages').textContent).toBe('keep this visible');
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'conversationSnapshot',
-            conversation: { id: 'conv-new', title: 'New conversation', messages: [] },
-          },
-        }),
-      );
-    });
-
-    expect(screen.getByTestId('workspace-conversation').textContent).toBe('conv-new');
-    expect(screen.getByTestId('workspace-messages').textContent).toBe('keep this visible');
-    expect(screen.getByTestId('pending-send').textContent).toBe('none');
-  });
-
-  it('keeps unbound entry-page mention discovery local without opening a chat tab', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    fireEvent.change(screen.getByPlaceholderText('Type anything...'), {
-      target: { value: '@hero' },
-    });
-
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
-    expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
-    expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'activeConversation',
-            conversation: { id: 'conv-new', title: 'New Chat', messages: [] },
-          },
-        }),
-      );
-    });
-
-    expect(screen.getByTestId('pending-send').textContent).toBe('@hero');
-    expect(screen.getByTestId('initial-input').textContent).toBe('none');
-  });
-
-  it('attaches a selected Entity mention in the tabless composer and carries it into send', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
-
-    expect(screen.getByTestId('entry-context-chips').textContent).toBe('小橘');
-
-    fireEvent.change(screen.getByPlaceholderText('Type anything...'), {
-      target: { value: 'continue with this character' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'activeConversation',
-            conversation: { id: 'conv-new', title: 'New Chat', messages: [] },
-          },
-        }),
-      );
-    });
-
-    expect(screen.getByTestId('pending-send-context').textContent).toBe('小橘');
-  });
-
-  it('returns to the unbound entry page without issuing Workspace mention search', () => {
-    vi.clearAllMocks();
-    render(<ConversationController {...createProps()} />);
-
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Start chat' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'activeConversation',
-            conversation: { id: 'conv-new', title: 'Draft Chat', messages: [] },
-          },
-        }),
-      );
-    });
-
-    expect(screen.queryByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeNull();
-    expect(screen.getByTestId('chat-workspace')).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close Draft Chat' }));
-
-    expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
-
-    fireEvent.change(screen.getByPlaceholderText('Type anything...'), {
-      target: { value: '@hero' },
-    });
-
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
-    expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
   });
 
   it('projects session UI state from the visible conversation instead of stale conversation events', () => {
@@ -3416,7 +3273,7 @@ describe('ConversationController entry state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
 
-    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).toContain(
       'Character and Room new conversations are not available',
     );

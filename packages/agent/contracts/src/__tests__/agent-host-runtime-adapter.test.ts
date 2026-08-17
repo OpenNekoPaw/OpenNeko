@@ -48,6 +48,8 @@ describe('Agent host runtime adapter contracts', () => {
       AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES.length,
     );
     expect(AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES).toContain('sendMessage');
+    expect(AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES).toContain('createConversation');
+    expect(AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES).not.toContain('newConversation');
     expect(AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES).toContain('refreshConfigSnapshot');
     expect(AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES).toContain('webviewKeyboardEditable');
     expect(AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES).toContain('projectionEndpointDiscover');

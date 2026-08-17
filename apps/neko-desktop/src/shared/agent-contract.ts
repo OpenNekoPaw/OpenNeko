@@ -6,6 +6,7 @@ import {
   type AgentMessageSubmissionReceipt,
   type AgentNonSubmissionWebviewMessage,
   type AgentWebviewToHostMessage,
+  type CreateConversationWebviewMessage,
   type SendMessageWebviewMessage,
   type DesktopAgentConnectionIdentity,
   type DesktopAssistantAgentViewIdentity,
@@ -153,6 +154,10 @@ export interface OpenNekoDesktopAgentBridge {
     submitMessage(
       connection: DesktopAgentConnectionIdentity,
       message: SendMessageWebviewMessage,
+    ): Promise<AgentMessageSubmissionReceipt>;
+    createConversation(
+      connection: DesktopAgentConnectionIdentity,
+      message: CreateConversationWebviewMessage,
     ): Promise<AgentMessageSubmissionReceipt>;
     subscribe(
       connection: DesktopAgentConnectionIdentity,

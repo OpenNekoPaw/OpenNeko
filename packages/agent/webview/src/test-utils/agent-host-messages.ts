@@ -12,6 +12,15 @@ export function createTestAgentHostMessageSender(
     hostKind: 'electron',
     runtimeId: 'agent-webview-test-runtime',
     send: vi.fn(),
+    createConversation: vi.fn(async (message) => ({
+      submissionId: 'agent-webview-test-first-submission',
+      conversationId: 'agent-webview-test-conversation',
+      turnId: 'agent-webview-test-first-turn',
+      queueItemId: 'agent-webview-test-first-queue-item',
+      message: message.input.kind === 'message' ? message.input.text : (message.input.args ?? ''),
+      createdAt: Date.now(),
+      state: 'active' as const,
+    })),
     submitMessage: vi.fn(async (message) => ({
       submissionId: 'agent-webview-test-submission',
       conversationId: message.conversationId,

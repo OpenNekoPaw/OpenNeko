@@ -4,6 +4,7 @@ import {
   buildQueuedMessageReleasedMessage,
   buildQueuedMessageEditRequestedMessage,
   parseAmbientCanvasUpdateNodes,
+  parseCreateConversationWebviewMessage,
   parseSendMessageWebviewMessage,
   parseAgentWebviewToHostMessage,
 } from '../webview-protocol';
@@ -19,6 +20,63 @@ const contentLocator = {
 };
 
 describe('webview protocol parser', () => {
+  it('parses atomic Conversation creation with the complete first input', () => {
+    expect(
+      parseCreateConversationWebviewMessage({
+        type: 'createConversation',
+        input: {
+          kind: 'skill',
+          catalogEntryId: 'skill:project:review',
+          skillName: 'review',
+          activationId: 'skill:project:review',
+          args: 'check this',
+        },
+        sessionMode: 'agent',
+        chatModel: { providerId: 'openai', modelId: 'gpt-5', category: 'llm' },
+        attachments: [{ id: 'attachment-1', name: 'reference.png', type: 'image' }],
+        fileReferences: [
+          {
+            id: 'file-1',
+            label: 'reference.png',
+            mediaType: 'image',
+            contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+          },
+        ],
+      }),
+    ).toEqual({
+      type: 'createConversation',
+      input: {
+        kind: 'skill',
+        catalogEntryId: 'skill:project:review',
+        skillName: 'review',
+        activationId: 'skill:project:review',
+        args: 'check this',
+      },
+      sessionMode: 'agent',
+      chatModel: { providerId: 'openai', modelId: 'gpt-5', category: 'llm' },
+      attachments: [{ id: 'attachment-1', name: 'reference.png', type: 'image' }],
+      fileReferences: [
+        {
+          id: 'file-1',
+          label: 'reference.png',
+          mediaType: 'image',
+          contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+        },
+      ],
+    });
+  });
+
+  it('rejects invalid atomic creation input and the removed empty newConversation route', () => {
+    expect(
+      parseCreateConversationWebviewMessage({
+        type: 'createConversation',
+        input: { kind: 'message', text: '' },
+        sessionMode: 'agent',
+      }),
+    ).toBeNull();
+    expect(parseAgentWebviewToHostMessage({ type: 'newConversation' })).toBeNull();
+  });
+
   it('rejects removed Mermaid feedback and SVG download messages', () => {
     expect(
       parseAgentWebviewToHostMessage({

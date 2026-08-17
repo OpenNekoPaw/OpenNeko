@@ -437,6 +437,7 @@ export type {
   ProtocolModelCategory,
   RuntimeMediaModelSelections,
   SearchProjectFilesWebviewMessage,
+  CreateConversationWebviewMessage,
   SendMessageWebviewMessage,
   SendToPluginWebviewMessage,
   RevealDocumentLocatorWebviewMessage,
@@ -484,6 +485,7 @@ export {
   buildSubAgentEventMessage,
   buildTabStateMessage,
   isSessionMode,
+  parseCreateConversationWebviewMessage,
   parseSendMessageWebviewMessage,
   parseAgentWebviewToHostMessage,
 } from './webview-protocol';

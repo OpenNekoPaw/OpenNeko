@@ -8,6 +8,15 @@ import {
 describe('Electron AgentHostRuntimeAdapter', () => {
   it('delegates only the fixed Agent namespace and scopes presentation state by Workspace owner', async () => {
     const send = vi.fn();
+    const createConversation = vi.fn(async () => ({
+      submissionId: 'submission-create',
+      conversationId: 'conversation-created',
+      turnId: 'turn-created',
+      queueItemId: 'queue-created',
+      message: 'first',
+      createdAt: 1,
+      state: 'active' as const,
+    }));
     const submitMessage = vi.fn(async () => ({
       submissionId: 'submission-1',
       conversationId: 'conversation-1',
@@ -26,6 +35,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
           getAssistantBootstrap: vi.fn(),
           detach: vi.fn(),
           send,
+          createConversation,
           submitMessage,
           subscribe,
         },
@@ -34,7 +44,11 @@ describe('Electron AgentHostRuntimeAdapter', () => {
       storage,
     });
 
-    adapter.send({ type: 'newConversation' });
+    await adapter.createConversation({
+      type: 'createConversation',
+      input: { kind: 'message', text: 'first' },
+      sessionMode: 'agent',
+    });
     await adapter.submitMessage({
       type: 'sendMessage',
       conversationId: 'conversation-1',
@@ -43,9 +57,13 @@ describe('Electron AgentHostRuntimeAdapter', () => {
     });
     adapter.setState({ draft: 'hello' });
 
-    expect(send).toHaveBeenCalledWith(bootstrap('view-1').connection, {
-      type: 'newConversation',
-    });
+    expect(createConversation).toHaveBeenCalledWith(
+      bootstrap('view-1').connection,
+      expect.objectContaining({
+        type: 'createConversation',
+        input: { kind: 'message', text: 'first' },
+      }),
+    );
     expect(submitMessage).toHaveBeenCalledWith(
       bootstrap('view-1').connection,
       expect.objectContaining({ type: 'sendMessage', conversationId: 'conversation-1' }),
@@ -130,6 +148,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
           getAssistantBootstrap: vi.fn(),
           detach,
           send: vi.fn(),
+          createConversation: vi.fn(),
           submitMessage: vi.fn(),
           subscribe,
         },
@@ -158,6 +177,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
         getAssistantBootstrap: vi.fn(),
         detach: vi.fn(),
         send,
+        createConversation: vi.fn(),
         submitMessage: vi.fn(),
         subscribe,
       },
@@ -210,6 +230,7 @@ function bridge() {
       getAssistantBootstrap: vi.fn(),
       detach: vi.fn(),
       send: vi.fn(),
+      createConversation: vi.fn(),
       submitMessage: vi.fn(),
       subscribe: vi.fn(() => vi.fn()),
     },

@@ -215,10 +215,19 @@ describe('Desktop Agent bridge runtime', () => {
     ).rejects.toThrow('preflight rejected exact submission');
   });
 
-  it('returns the exact authoritative Conversation creation identity', async () => {
+  it('returns the authoritative receipt for atomic Conversation creation and first input', async () => {
     const effects = createEffects();
     vi.mocked(effects.conversation.createConversation).mockResolvedValue({
       conversationId: 'conversation-created',
+      turnId: 'turn-created',
+      queueItem: {
+        id: 'queue-created',
+        conversationId: 'conversation-created',
+        content: 'hello',
+        createdAt: 1_700_000_000_001,
+        source: 'composer',
+      },
+      state: 'active',
     });
     const runtime = createDesktopAgentBridgeRuntime({
       controllerComposition: createComposition(effects),
@@ -235,14 +244,24 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('create-1', projection.connection, {
-          type: 'newConversation',
+          type: 'createConversation',
+          input: { kind: 'message', text: 'hello' },
+          sessionMode: 'agent',
         }),
         grant(),
       ),
     ).resolves.toEqual({
       requestId: 'create-1',
       status: 'accepted',
-      conversation: { conversationId: 'conversation-created' },
+      submission: {
+        submissionId: 'create-1',
+        conversationId: 'conversation-created',
+        turnId: 'turn-created',
+        queueItemId: 'queue-created',
+        message: 'hello',
+        createdAt: 1_700_000_000_001,
+        state: 'active',
+      },
     });
   });
 

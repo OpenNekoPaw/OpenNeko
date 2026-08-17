@@ -131,7 +131,6 @@ export interface ChatWorkspaceProps {
   onUserMessageSent?: (event: { conversationId: string; message: Message }) => void;
   onSendWithoutConversation?: (input: PendingSendInput) => boolean;
   pendingSendRequest?: { id: number; input: PendingSendInput } | null;
-  onPendingSendRequestConsumed?: (id: number) => void;
   initialInputRequest?: { id: number; messageText: string } | null;
   onInitialInputRequestConsumed?: (id: number) => void;
   initialSessionModeRequest?: { id: number; mode: SessionMode } | null;
@@ -189,7 +188,6 @@ export function ChatWorkspace({
   onUserMessageSent,
   onSendWithoutConversation,
   pendingSendRequest,
-  onPendingSendRequestConsumed,
   initialInputRequest,
   onInitialInputRequestConsumed,
   initialSessionModeRequest,
@@ -395,7 +393,6 @@ export function ChatWorkspace({
   const consumedInitialInputRequestIdRef = useRef<number | null>(null);
   const consumedInitialSessionModeRequestIdRef = useRef<number | null>(null);
   const inputValueRef = useRef(inputValue);
-  const consumedPendingSendRequestIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     inputValueRef.current = inputValue;
@@ -604,39 +601,6 @@ export function ChatWorkspace({
       },
     ];
   }, [messages, pendingSendIdentity, pendingSendRequest]);
-
-  useEffect(() => {
-    if (!pendingSendRequest || !sessionMutationConversationId || !isModelConfigurationReady) return;
-    if (consumedPendingSendRequestIdRef.current === pendingSendRequest.id) return;
-    if (
-      pendingSendRequest.input.sessionMode &&
-      pendingSendRequest.input.sessionMode !== sessionMode
-    ) {
-      setVisibleSessionMode(pendingSendRequest.input.sessionMode);
-      return;
-    }
-
-    const receipt = handleSend(pendingSendRequest.input, pendingSendIdentity);
-    const consumePendingSend = (accepted: boolean): void => {
-      if (!accepted) return;
-      consumedPendingSendRequestIdRef.current = pendingSendRequest.id;
-      onPendingSendRequestConsumed?.(pendingSendRequest.id);
-    };
-    if (typeof receipt === 'boolean') {
-      consumePendingSend(receipt);
-      return;
-    }
-    void receipt.then(consumePendingSend);
-  }, [
-    handleSend,
-    isModelConfigurationReady,
-    onPendingSendRequestConsumed,
-    pendingSendRequest,
-    pendingSendIdentity,
-    sessionMode,
-    sessionMutationConversationId,
-    setVisibleSessionMode,
-  ]);
 
   useEffect(() => {
     if (!initialInputRequest || !sessionMutationConversationId) return;

@@ -273,73 +273,7 @@ describe('ChatWorkspace pending send', () => {
     }));
   });
 
-  it('replays a pending entry send through the newly bound Tab runtime', async () => {
-    const onPendingSendRequestConsumed = vi.fn();
-    const runtime = createTabRenderRuntime({ tabId: 'tab-new', conversationId: 'conv-new' });
-
-    const { rerender } = render(
-      <ChatWorkspace
-        {...createProps({
-          tabRenderStore: runtime.store,
-          pendingSendRequest: {
-            id: 1,
-            input: {
-              messageText: 'hello from tabless state',
-              displayMessageText: 'hello from tabless state',
-            },
-          },
-          onPendingSendRequestConsumed,
-        })}
-      />,
-    );
-
-    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
-    expect(onPendingSendRequestConsumed).not.toHaveBeenCalled();
-    expect(screen.getByTestId('visible-messages').textContent).toBe(
-      'user:hello from tabless state',
-    );
-
-    act(() => {
-      runtime.store.updateState({
-        modelConfigurationInitialized: true,
-        selectedModel: 'test-model',
-      });
-    });
-
-    expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1);
-    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conv-new',
-        message: 'hello from tabless state',
-        sessionMode: 'agent',
-      }),
-    );
-    await waitFor(() => expect(onPendingSendRequestConsumed).toHaveBeenCalledWith(1));
-    expect(screen.getByTestId('visible-messages').textContent).toBe(
-      'user:hello from tabless state',
-    );
-
-    rerender(
-      <ChatWorkspace
-        {...createProps({
-          tabRenderStore: runtime.store,
-          pendingSendRequest: {
-            id: 1,
-            input: {
-              messageText: 'hello from tabless state',
-              displayMessageText: 'hello from tabless state',
-            },
-          },
-          onPendingSendRequestConsumed,
-        })}
-      />,
-    );
-
-    expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1);
-  });
-
-  it('replays a pending Workspace first send with attachments and file references through sendMessage', async () => {
-    const onPendingSendRequestConsumed = vi.fn();
+  it('renders a pending first send without replaying it through the Session runtime', () => {
     const runtime = createTabRenderRuntime({ tabId: 'tab-new', conversationId: 'conv-new' });
     runtime.store.updateState({
       modelConfigurationInitialized: true,
@@ -351,10 +285,14 @@ describe('ChatWorkspace pending send', () => {
         {...createProps({
           tabRenderStore: runtime.store,
           pendingSendRequest: {
-            id: 2,
+            id: 1,
             input: {
-              messageText: 'attach to workspace',
-              displayMessageText: 'attach to workspace',
+              messageText: 'hello from tabless state',
+              displayMessageText: 'hello from tabless state',
+              canvasTurnTarget: {
+                workspaceId: 'workspace-1',
+                target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+              },
               attachments: [{ id: 'attachment-workspace', name: 'reference.png', type: 'image' }],
               fileReferences: [
                 {
@@ -366,29 +304,14 @@ describe('ChatWorkspace pending send', () => {
               ],
             },
           },
-          onPendingSendRequestConsumed,
         })}
       />,
     );
 
-    await waitFor(() => expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1));
-    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conv-new',
-        message: 'attach to workspace',
-        sessionMode: 'agent',
-        attachments: [{ id: 'attachment-workspace', name: 'reference.png', type: 'image' }],
-        fileReferences: [
-          {
-            id: 'reference-workspace',
-            label: 'reference.png',
-            mediaType: 'image',
-            contentLocator: { kind: 'workspace-file', path: 'reference.png' },
-          },
-        ],
-      }),
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
+    expect(screen.getByTestId('visible-messages').textContent).toBe(
+      'user:hello from tabless state',
     );
-    await waitFor(() => expect(onPendingSendRequestConsumed).toHaveBeenCalledWith(2));
   });
 
   it('propagates the exact Conversation creator rejection receipt', () => {
@@ -418,7 +341,7 @@ describe('ChatWorkspace pending send', () => {
     expect(hostMocks.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('projects hydrated Agent media defaults into the pending send turn policy', () => {
+  it('does not replay a pending first send when Session model defaults hydrate', () => {
     const runtime = createTabRenderRuntime({ tabId: 'tab-new', conversationId: 'conv-new' });
     const settings = createSettingsWithAgentMediaModels();
 
@@ -452,28 +375,9 @@ describe('ChatWorkspace pending send', () => {
       });
     });
 
-    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        conversationId: 'conv-new',
-        sessionMode: 'agent',
-        purposeModels: {
-          'image.generate': {
-            providerId: 'image-provider',
-            modelId: 'image-model',
-            category: 'image',
-          },
-          'video.generate': {
-            providerId: 'video-provider',
-            modelId: 'video-model',
-            category: 'video',
-          },
-          'audio.generate': {
-            providerId: 'audio-provider',
-            modelId: 'audio-model',
-            category: 'audio',
-          },
-        },
-      }),
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
+    expect(screen.getByTestId('visible-messages').textContent).toBe(
+      'user:submit one detached image generation',
     );
   });
 

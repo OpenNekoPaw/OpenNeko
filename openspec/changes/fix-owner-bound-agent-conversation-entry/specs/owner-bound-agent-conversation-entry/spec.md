@@ -36,6 +36,19 @@ The system MUST create an exact owner-bound Conversation before accepting its fi
 - **THEN** the accepted Conversation message preserves those inputs
 - **AND** the same Conversation identity owns the first and subsequent turns
 
+#### Scenario: First message lifecycle ordering
+
+- **WHEN** an owner-bound Composer accepts its first input
+- **THEN** the Conversation lifecycle record is durably committed before a Session tab is published
+- **AND** Session configuration and input catalog reads cannot observe a context-only reservation
+- **AND** the system does not use delay, retry, or an empty lifecycle record to manufacture readiness
+
+#### Scenario: First Skill or Command input
+
+- **WHEN** the first owner-bound input is a valid `$` Skill or `/` Command from the Composer catalog
+- **THEN** Conversation creation and that exact input are accepted through one canonical transaction
+- **AND** execution is validated against the committed Session catalog before it runs
+
 ### Requirement: Presentation phases preserve ownership
 
 The system MUST distinguish Entry Draft, owner-bound Composer, and Conversation Session as separate canonical presentation phases.
