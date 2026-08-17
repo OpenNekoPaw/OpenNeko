@@ -239,6 +239,8 @@ export function ConversationController({
   const agentHostMessages = useAgentHostMessages();
   const composerWorkspace = useComposerWorkspacePresentation();
   const isDraftPresentation = agentPresentation?.phase === 'draft';
+  const isOwnerBoundDraft = isDraftPresentation && composerWorkspace?.kind === 'workspace';
+  const isEntryDraftPresentation = isDraftPresentation && !isOwnerBoundDraft;
   const isWorkspaceInitialPresentation =
     isDraftPresentation && composerWorkspace?.kind === 'workspace';
   // ---- Conversation state ----
@@ -698,11 +700,13 @@ export function ConversationController({
     setActiveConversationId(null);
     clearVisibleState();
     setActiveTab('chat');
-    const draftAdapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
-    const launchCatalog = draftAdapter.readLaunchCatalog();
-    const authoritativeEntryIntent: AgentEntryIntentProjection = isWorkspaceInitialPresentation
+    const draftAdapter = isOwnerBoundDraft
+      ? undefined
+      : requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
+    const launchCatalog = draftAdapter?.readLaunchCatalog();
+    const authoritativeEntryIntent: AgentEntryIntentProjection = isOwnerBoundDraft
       ? { mode: 'assistant', targetReceipt: null }
-      : draftAdapter.readEntryIntent();
+      : draftAdapter!.readEntryIntent();
     setEntryMode(authoritativeEntryIntent.mode);
     setEntryQuickDetailOpen(true);
     setEntryConversationContextSelection(
@@ -729,13 +733,18 @@ export function ConversationController({
         ? { ...entryDraft.mediaModelSelection }
         : { image: 'none', video: 'none', audio: 'none' },
     );
-    const launchConfiguration = launchCatalog.configuration;
-    setEntrySelectedModel(
-      launchConfiguration.fields.model.effectiveValue?.modelCatalogEntryId ?? '',
-    );
-    setEntryExecutionMode(
-      launchConfiguration.fields.executionMode.effectiveValue ?? settings.executionMode,
-    );
+    if (launchCatalog) {
+      const launchConfiguration = launchCatalog.configuration;
+      setEntrySelectedModel(
+        launchConfiguration.fields.model.effectiveValue?.modelCatalogEntryId ?? '',
+      );
+      setEntryExecutionMode(
+        launchConfiguration.fields.executionMode.effectiveValue ?? settings.executionMode,
+      );
+    } else {
+      setEntrySelectedModel(settings.selectedModelId ?? '');
+      setEntryExecutionMode(settings.executionMode);
+    }
     setGlobalError(restored.diagnostics[0]?.message ?? null);
     setPendingSendRequest(null);
     setInitialInputRequest(null);
@@ -753,8 +762,10 @@ export function ConversationController({
     setOpenTabs,
     updateEntryInputValue,
     hostRuntimeAdapter,
+    isOwnerBoundDraft,
     isWorkspaceInitialPresentation,
     settings.executionMode,
+    settings.selectedModelId,
   ]);
 
   useEffect(() => {
@@ -1019,11 +1030,11 @@ export function ConversationController({
     [sessionStateByConversation, visibleConversationId],
   );
   const activeSettings = settings;
-  const draftLaunchCatalog = isDraftPresentation
+  const draftLaunchCatalog = isEntryDraftPresentation
     ? requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).readLaunchCatalog()
     : undefined;
   const worldExperienceTargetsAvailable =
-    isDraftPresentation &&
+    isEntryDraftPresentation &&
     typeof requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).loadWorldExperienceTargets ===
       'function';
   const entryCharacterActionDisabled =
@@ -1088,13 +1099,14 @@ export function ConversationController({
     ],
   );
   useEffect(() => {
-    const availableModelIds = new Set(
-      (draftLaunchCatalog?.models ?? [])
-        .filter((option) => option.availability.status === 'available')
-        .map((option) => option.id),
-    );
-    const configuredModelId =
-      draftLaunchCatalog?.configuration.fields.model.effectiveValue?.modelCatalogEntryId ?? '';
+    const catalogModelIds = (draftLaunchCatalog?.models ?? [])
+      .filter((option) => option.availability.status === 'available')
+      .map((option) => option.id);
+    const settingsModelIds = activeSettings.chatModelOptions.map((option) => option.id);
+    const availableModelIds = new Set(draftLaunchCatalog ? catalogModelIds : settingsModelIds);
+    const configuredModelId = draftLaunchCatalog
+      ? (draftLaunchCatalog.configuration.fields.model.effectiveValue?.modelCatalogEntryId ?? '')
+      : (activeSettings.selectedModelId ?? '');
     setEntrySelectedModel((current) =>
       availableModelIds.has(current)
         ? current
@@ -1123,6 +1135,7 @@ export function ConversationController({
     });
   }, [
     draftLaunchCatalog,
+    activeSettings.chatModelOptions,
     activeSettings.defaultMediaModels,
     activeSettings.selectedModelId,
     activeSettings.selectedProviderId,
@@ -1151,6 +1164,10 @@ export function ConversationController({
   );
   const handleEntryModelSelect = useCallback(
     (modelId: string) => {
+      if (!draftLaunchCatalog) {
+        setEntrySelectedModel(modelId);
+        return;
+      }
       const adapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
       const catalog = adapter.readLaunchCatalog();
       const selected = catalog.models.find(
@@ -1174,10 +1191,20 @@ export function ConversationController({
         .then(() => setEntrySelectedModel(modelId))
         .catch((error: unknown) => setGlobalError(describeError(error)));
     },
-    [activeSettings.maxTokens, activeSettings.temperature, entryExecutionMode, hostRuntimeAdapter],
+    [
+      activeSettings.maxTokens,
+      activeSettings.temperature,
+      draftLaunchCatalog,
+      entryExecutionMode,
+      hostRuntimeAdapter,
+    ],
   );
   const handleEntryExecutionModeChange = useCallback(
     (executionMode: SettingsState['executionMode']) => {
+      if (!draftLaunchCatalog) {
+        setEntryExecutionMode(executionMode);
+        return;
+      }
       const adapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
       const request = adapter.readLaunchCatalog().configuration.request;
       if (!request) {
@@ -1189,7 +1216,7 @@ export function ConversationController({
         .then(() => setEntryExecutionMode(executionMode))
         .catch((error: unknown) => setGlobalError(describeError(error)));
     },
-    [hostRuntimeAdapter],
+    [draftLaunchCatalog, hostRuntimeAdapter],
   );
   const conversationKind = activeOpenTab?.kind ?? 'chat';
 
@@ -1632,7 +1659,7 @@ export function ConversationController({
       if (!messageText) return false;
       const contextPayloads = input?.contextPayloads ?? entryContextReferences;
 
-      if (isDraftPresentation) {
+      if (isEntryDraftPresentation) {
         const draftHostRuntimeAdapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
         if (!agentPresentation) throw new Error('Agent Draft presentation is unavailable.');
         setIsForegroundConversationActivationPending(true);
@@ -1809,7 +1836,7 @@ export function ConversationController({
       entryWorldLaunch,
       hostRuntimeAdapter,
       isEntryBindingPending,
-      isDraftPresentation,
+      isEntryDraftPresentation,
       t,
       updateEntryInputValue,
     ],
@@ -2189,7 +2216,12 @@ export function ConversationController({
                 mentionItems={mentionItems}
                 onRequestFiles={(filter) => {
                   updateMentionSearchFilter(filter);
-                  if (draftLaunchCatalog?.interaction.binding.kind !== 'workspace') return;
+                  if (
+                    !isWorkspaceInitialPresentation &&
+                    draftLaunchCatalog?.interaction.binding.kind !== 'workspace'
+                  ) {
+                    return;
+                  }
                   agentHostMessages.searchProjectFiles(filter, undefined, { purpose: 'entry' });
                 }}
                 genCategory={entryGenCategory}
@@ -2218,7 +2250,7 @@ export function ConversationController({
                   onSend={handleEntryInputSend}
                   submissionBlocked={draftSubmissionBlockedReason !== undefined}
                   onAuthorizeResource={
-                    isDraftPresentation
+                    isEntryDraftPresentation
                       ? async () => {
                           try {
                             return await requireAgentDraftHostRuntimeAdapter(

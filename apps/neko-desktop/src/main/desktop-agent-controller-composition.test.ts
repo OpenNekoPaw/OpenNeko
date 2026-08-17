@@ -712,6 +712,128 @@ describe('Agent controller composition', () => {
     await composition.dispose?.();
   });
 
+  it('commits a new Conversation owner before publishing its active Tab', async () => {
+    const workspace = createWorkspace();
+    const commitConversationCreation = vi.fn(async () => undefined);
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: { openContent: vi.fn(), revealDocument: vi.fn() },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
+    });
+    const effects = composition.createEffects({
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-1',
+      },
+      commitConversationCreation,
+    });
+    const post = vi.fn();
+
+    const receipt = await effects.conversation.createConversation({
+      identity: {
+        hostKind: 'electron',
+        applicationId: 'neko-desktop',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        workspaceId: workspace.workspaceId,
+        connectionId: 'connection-1',
+      },
+      post,
+    });
+
+    expect(receipt.conversationId).toMatch(/^[0-9a-z]{8}-[0-9A-HJKMNP-TV-Z]{26}$/u);
+    expect(commitConversationCreation).toHaveBeenCalledWith({
+      conversationId: receipt.conversationId,
+    });
+    expect(post.mock.calls.map(([message]) => message.type)).toEqual([
+      'conversationList',
+      'tabState',
+      'activeConversation',
+    ]);
+    expect(commitConversationCreation.mock.invocationCallOrder[0]).toBeLessThan(
+      post.mock.invocationCallOrder[0]!,
+    );
+
+    effects.dispose();
+    await composition.dispose?.();
+  });
+
+  it('deletes a newly created runtime Conversation when owner commit fails', async () => {
+    const workspace = createWorkspace();
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: { openContent: vi.fn(), revealDocument: vi.fn() },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
+    });
+    const effects = composition.createEffects({
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-1',
+      },
+      commitConversationCreation: async () => {
+        throw new Error('owner commit failed');
+      },
+    });
+    const post = vi.fn();
+
+    await expect(
+      effects.conversation.createConversation({
+        identity: {
+          hostKind: 'electron',
+          applicationId: 'neko-desktop',
+          windowId: 'window-1',
+          viewId: 'view-1',
+          workspaceId: workspace.workspaceId,
+          connectionId: 'connection-1',
+        },
+        post,
+      }),
+    ).rejects.toThrow('owner commit failed');
+    expect(workspace.deleteConversation).toHaveBeenCalledWith(
+      vi.mocked(workspace.createConversation).mock.calls[0]?.[0],
+    );
+    expect(post).not.toHaveBeenCalled();
+
+    effects.dispose();
+    await composition.dispose?.();
+  });
+
   it('bootstraps the exact persisted Conversation as the active Tab', async () => {
     const workspace = createWorkspace();
     await workspace.createConversation('conversation-1');

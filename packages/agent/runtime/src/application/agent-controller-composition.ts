@@ -21,6 +21,7 @@ import {
   type AgentHostControllerEffectPorts,
   type AgentHostRouteEffectContext,
   type AgentConversationTurnAcceptance,
+  type AgentConversationCreationAcceptance,
   type AgentConversationControllerTurnRequest,
   createAgentContentEffects,
   type AgentWorkspaceLinkedMediaFileSearchInput,
@@ -90,6 +91,7 @@ import {
   type AgentVisiblePresentationBinding,
   type AgentWorkspaceRuntime,
 } from './agent-app-host';
+import { createConversationId } from '../session';
 import type { AgentProviderExecutionResult } from './agent-conversation-lifecycle-service';
 import type { AgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import type { DesktopAgentConnectionIdentity } from '@neko/agent-contracts';
@@ -198,6 +200,18 @@ export interface AgentControllerComposition {
     }) => Promise<AgentConversationConfiguration>;
     readonly readGlobalSkillCatalog?: () => Promise<import('./agent-app-host').AgentSkillCatalog>;
     readonly personalSkillOwnerId?: string;
+    readonly commitConversationCreation?: (input: {
+      readonly conversationId: string;
+    }) => Promise<void>;
+    readonly prepareInitialConversationTurn?: (
+      request: AgentConversationControllerTurnRequest,
+    ) => Promise<{ readonly turnId: string } | undefined>;
+    readonly settleInitialConversationTurn?: (input: {
+      readonly conversationId: string;
+      readonly turnId: string;
+      readonly status: 'completed' | 'failed';
+      readonly diagnostic?: string;
+    }) => Promise<void>;
   }): AgentControllerEffects;
   readonly startInitialTurn?: (input: {
     readonly workspace: AgentWorkspaceRuntime;
@@ -349,6 +363,18 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     }) => Promise<AgentConversationConfiguration>;
     readonly readGlobalSkillCatalog?: () => Promise<import('./agent-app-host').AgentSkillCatalog>;
     readonly personalSkillOwnerId?: string;
+    readonly commitConversationCreation?: (input: {
+      readonly conversationId: string;
+    }) => Promise<void>;
+    readonly prepareInitialConversationTurn?: (
+      request: AgentConversationControllerTurnRequest,
+    ) => Promise<{ readonly turnId: string } | undefined>;
+    readonly settleInitialConversationTurn?: (input: {
+      readonly conversationId: string;
+      readonly turnId: string;
+      readonly status: 'completed' | 'failed';
+      readonly diagnostic?: string;
+    }) => Promise<void>;
   }): AgentControllerEffects {
     const config = this.getConfig(input.workspace);
     const initialConversation =
@@ -499,6 +525,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         input.readConversationCapabilityConstraint ??
           missingConversationCapabilityConstraintDependency,
         input.resolveConversationDomainTurnContext,
+        input.commitConversationCreation ?? missingConversationCreationCommitDependency,
+        input.prepareInitialConversationTurn ?? readNoInitialConversationTurn,
+        input.settleInitialConversationTurn ?? missingInitialConversationTurnSettlementDependency,
       ),
       config: this.createConfigEffects(
         input.workspace,
@@ -826,6 +855,18 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       conversationId: string,
     ) => Promise<AgentTurnCapabilityConstraint> = missingConversationCapabilityConstraintDependency,
     resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort,
+    commitConversationCreation: (input: {
+      readonly conversationId: string;
+    }) => Promise<void> = missingConversationCreationCommitDependency,
+    prepareInitialConversationTurn: (
+      request: AgentConversationControllerTurnRequest,
+    ) => Promise<{ readonly turnId: string } | undefined> = readNoInitialConversationTurn,
+    settleInitialConversationTurn: (input: {
+      readonly conversationId: string;
+      readonly turnId: string;
+      readonly status: 'completed' | 'failed';
+      readonly diagnostic?: string;
+    }) => Promise<void> = missingInitialConversationTurnSettlementDependency,
   ): AgentControllerEffects['conversation'] {
     const postConversationList = async (context: AgentHostRouteEffectContext): Promise<void> => {
       bind(context);
@@ -894,32 +935,62 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         resolveAcceptance = resolve;
         rejectAcceptance = reject;
       });
-      const operation = Promise.all([
-        readConversationConfiguration(request.conversationId),
-        readConversationContext(request.conversationId),
-        readConversationEntryTargetReceipt(request.conversationId),
-        readConversationCapabilityConstraint(request.conversationId),
-      ]).then(([configuration, conversationContext, entryTargetReceipt, capabilityConstraint]) =>
-        this.executeTurn({
-          workspace,
-          config,
-          request,
-          context,
-          facts,
-          configuration,
-          conversationContext,
-          entryTargetReceipt,
-          capabilityConstraint,
-          onAccepted: (receipt) => {
-            accepted = true;
-            resolveAcceptance(receipt);
-          },
-          ...(resolveConversationDomainTurnContext === undefined
-            ? {}
-            : { resolveConversationDomainTurnContext }),
-          ...(skillName ? { skillName } : {}),
-          ...(additionalInstructions ? { additionalInstructions } : {}),
-        }),
+      let initialTurnId: string | undefined;
+      const execution = prepareInitialConversationTurn(request)
+        .then((prepared) => {
+          initialTurnId = prepared?.turnId;
+          return Promise.all([
+            readConversationConfiguration(request.conversationId),
+            readConversationContext(request.conversationId),
+            readConversationEntryTargetReceipt(request.conversationId),
+            readConversationCapabilityConstraint(request.conversationId),
+          ]);
+        })
+        .then(([configuration, conversationContext, entryTargetReceipt, capabilityConstraint]) =>
+          this.executeTurn({
+            workspace,
+            config,
+            request: initialTurnId === undefined ? request : { ...request, turnId: initialTurnId },
+            context,
+            facts,
+            configuration,
+            conversationContext,
+            entryTargetReceipt,
+            capabilityConstraint,
+            onAccepted: (receipt) => {
+              accepted = true;
+              resolveAcceptance(receipt);
+            },
+            ...(resolveConversationDomainTurnContext === undefined
+              ? {}
+              : { resolveConversationDomainTurnContext }),
+            ...(skillName ? { skillName } : {}),
+            ...(additionalInstructions ? { additionalInstructions } : {}),
+          }),
+        );
+      const operation = execution.then(
+        async (result) => {
+          if (initialTurnId === undefined) return result;
+          await settleInitialConversationTurn({
+            conversationId: request.conversationId,
+            turnId: initialTurnId,
+            ...(result === undefined
+              ? { status: 'failed', diagnostic: 'Agent provider execution was cancelled.' }
+              : { status: 'completed' }),
+          });
+          return result;
+        },
+        async (error: unknown) => {
+          if (initialTurnId !== undefined) {
+            await settleInitialConversationTurn({
+              conversationId: request.conversationId,
+              turnId: initialTurnId,
+              status: 'failed',
+              diagnostic: describeError(error),
+            });
+          }
+          throw error;
+        },
       );
       this.track(
         operation.catch(async (error: unknown) => {
@@ -934,6 +1005,34 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     };
 
     return {
+      createConversation: (context): Promise<AgentConversationCreationAcceptance> => {
+        bind(context);
+        return enqueueTabOperation(state, async () => {
+          const conversationId = createConversationId(workspace.workspace.workspacePath);
+          await workspace.createConversation(conversationId);
+          try {
+            await commitConversationCreation({ conversationId });
+          } catch (error) {
+            await workspace.deleteConversation(conversationId);
+            throw error;
+          }
+          state.activeConversationId = conversationId;
+          await visiblePresentation.updateConversation(conversationId);
+          const tab: OpenTab = {
+            id: `tab-${conversationId}`,
+            title: 'New conversation',
+            conversationId,
+          };
+          state.tabState = {
+            openTabs: [...state.tabState.openTabs, tab],
+            activeTabId: tab.id,
+          };
+          await postConversationList(context);
+          await context.post(buildTabStateMessage(state.tabState));
+          await postConversation(conversationId, context);
+          return { conversationId };
+        });
+      },
       submitTurn: (request, context) => submit(request, context),
       confirmTool: ({ conversationId, toolCallId, approved }, context) => {
         bind(context);
@@ -2584,6 +2683,18 @@ function parseCommandActivationId(handlerId: string): string {
 
 async function missingConversationContextDependency(): Promise<AgentBoundDomainBinding> {
   throw new Error('Agent Session input catalog has no Conversation context dependency.');
+}
+
+async function missingConversationCreationCommitDependency(): Promise<never> {
+  throw new Error('Agent Session has no Conversation creation commit dependency.');
+}
+
+async function readNoInitialConversationTurn(): Promise<undefined> {
+  return undefined;
+}
+
+async function missingInitialConversationTurnSettlementDependency(): Promise<never> {
+  throw new Error('Agent Session has no initial Conversation Turn settlement dependency.');
 }
 
 async function readNoConversationEntryTargetReceipt(): Promise<null> {

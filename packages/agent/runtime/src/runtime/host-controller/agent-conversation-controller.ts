@@ -18,6 +18,9 @@ export function tryHandleAgentConversationControllerRoute(
   context: AgentHostRouteEffectContext,
 ): AgentConversationControllerRouteOperation {
   switch (message.type) {
+    case 'newConversation':
+      return runAgentHostRouteEffect(() => effects.createConversation(context));
+
     case 'sendMessage':
       return runRequiredConversationRoute(message, 'send message', context, () =>
         effects.submitTurn(projectSendMessageTurnRequest(message), context),
@@ -152,5 +155,7 @@ function projectSendMessageTurnRequest(
     ...(message.contextPayloads ? { contextPayloads: message.contextPayloads } : {}),
     ...(message.fileReferences ? { fileReferences: message.fileReferences } : {}),
     ...(message.promptId ? { promptId: message.promptId } : {}),
+    ...(message.messageTrackingId ? { messageTrackingId: message.messageTrackingId } : {}),
+    ...(message.canvasTurnTarget ? { canvasTurnTarget: message.canvasTurnTarget } : {}),
   };
 }

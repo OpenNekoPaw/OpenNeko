@@ -176,17 +176,7 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
       | DesktopAgentBootstrapProjection
       | Extract<AgentLaunchHostResult, { readonly status: 'ready' | 'unavailable' }>
     >;
-    if (agentPresentation?.phase === 'draft') {
-      bootstrapOperation = Promise.all([
-        loadDesktopAgentWebviewRootModule(),
-        window.openNekoDesktop.agentLaunch.attach(
-          props.workbenchInstanceId,
-          props.agentSurfaceId,
-          viewId,
-          agentPresentation,
-        ),
-      ]).then(([, result]) => result);
-    } else if (binding === 'workspace') {
+    if (binding === 'workspace') {
       if (projectId === undefined) {
         throw new Error('Workspace-bound Agent requires a Project identity.');
       }
@@ -203,6 +193,16 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
               : props.initialConversation?.id,
           ),
       });
+    } else if (agentPresentation?.phase === 'draft') {
+      bootstrapOperation = Promise.all([
+        loadDesktopAgentWebviewRootModule(),
+        window.openNekoDesktop.agentLaunch.attach(
+          props.workbenchInstanceId,
+          props.agentSurfaceId,
+          viewId,
+          agentPresentation,
+        ),
+      ]).then(([, result]) => result);
     } else if (agentPresentation === undefined) {
       throw new Error('Launch-bound Agent requires an explicit presentation.');
     } else if (agentPresentation.phase === 'session') {

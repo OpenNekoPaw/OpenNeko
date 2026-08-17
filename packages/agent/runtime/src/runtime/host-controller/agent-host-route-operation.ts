@@ -1,10 +1,12 @@
 import { resolveRequiredConversationRoute } from '../conversation-route-runtime';
 import type {
+  AgentConversationCreationAcceptance,
   AgentConversationTurnAcceptance,
   AgentHostRouteEffectContext,
 } from './agent-host-controller-contract';
 
-export type AgentHostControllerRouteResult = void | AgentConversationTurnAcceptance;
+export type AgentHostControllerRouteResult =
+  void | AgentConversationCreationAcceptance | AgentConversationTurnAcceptance;
 export type AgentHostControllerRouteOperation = Promise<AgentHostControllerRouteResult> | null;
 
 export function runRequiredConversationRoute(

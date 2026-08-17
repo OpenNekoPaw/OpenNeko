@@ -215,6 +215,37 @@ describe('Desktop Agent bridge runtime', () => {
     ).rejects.toThrow('preflight rejected exact submission');
   });
 
+  it('returns the exact authoritative Conversation creation identity', async () => {
+    const effects = createEffects();
+    vi.mocked(effects.conversation.createConversation).mockResolvedValue({
+      conversationId: 'conversation-created',
+    });
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: createComposition(effects),
+      createIdentity: () => 'connection-create',
+    });
+    const projection = runtime.createBootstrap({
+      requestId: 'bootstrap-create',
+      grant: grant(),
+      workspace: workspace(),
+      publish: vi.fn(),
+    });
+    if (projection.status !== 'ready') throw new Error('Expected a ready Agent bootstrap.');
+
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('create-1', projection.connection, {
+          type: 'newConversation',
+        }),
+        grant(),
+      ),
+    ).resolves.toEqual({
+      requestId: 'create-1',
+      status: 'accepted',
+      conversation: { conversationId: 'conversation-created' },
+    });
+  });
+
   it('resolves only the exact live Session connection identity', () => {
     const runtime = createDesktopAgentBridgeRuntime({
       controllerComposition: createComposition(createEffects()),
@@ -822,6 +853,7 @@ function createEffects(
     injectContext: vi.fn(),
     ...(automation === undefined ? {} : { automation }),
     conversation: {
+      createConversation: vi.fn(),
       submitTurn: vi.fn(),
       confirmTool: vi.fn(),
       cancelTurn: vi.fn(),

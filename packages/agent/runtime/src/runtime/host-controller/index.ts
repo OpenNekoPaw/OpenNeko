@@ -12,6 +12,7 @@ export {
   type AgentContentControllerMessage,
   type AgentContentControllerEffectPort,
   type AgentConversationControllerMessage,
+  type AgentConversationCreationAcceptance,
   type AgentConversationTurnAcceptance,
   type AgentConversationControllerTurnRequest,
   type AgentHostConnectionIdentity,

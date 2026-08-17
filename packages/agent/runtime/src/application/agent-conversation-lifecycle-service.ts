@@ -111,6 +111,11 @@ export function projectAgentConversationInitialMessage(
 }
 
 export interface AgentConversationLifecycleRepositoryPort {
+  reserveConversationContext(
+    conversationId: string,
+    context: AgentBoundDomainBinding,
+  ): Promise<void>;
+  releaseConversationContext(conversationId: string): Promise<void>;
   commitFirstSubmit(
     record: AgentConversationLifecycleRecord,
   ): Promise<{ readonly record: AgentConversationLifecycleRecord; readonly created: boolean }>;
@@ -218,7 +223,19 @@ export interface AgentConversationSessionMaterializationPort {
 }
 
 export interface AgentConversationLifecycleService {
+  reserveConversationContext(
+    conversationId: string,
+    context: AgentBoundDomainBinding,
+  ): Promise<void>;
+  releaseConversationContext(conversationId: string): Promise<void>;
   firstSubmit(input: AgentFirstSubmitInput): Promise<AgentConversationLifecycleRecord>;
+  claimProviderTurn(conversationId: string): Promise<AgentConversationLifecycleRecord>;
+  settleProviderTurn(input: {
+    readonly conversationId: string;
+    readonly turnId: string;
+    readonly status: 'completed' | 'failed';
+    readonly diagnostic?: string;
+  }): Promise<AgentConversationLifecycleRecord>;
   startProviderExecution(conversationId: string): Promise<AgentConversationLifecycleRecord>;
   executeProviderTurn(conversationId: string): Promise<AgentProviderExecutionResult>;
   waitForProviderIdle(): Promise<void>;
@@ -585,7 +602,65 @@ export function createAgentConversationLifecycleService(options: {
   };
 
   return {
+    async reserveConversationContext(conversationIdValue, contextValue) {
+      const conversationId = requireIdentity(conversationIdValue, 'Agent Conversation');
+      if (await options.repository.readConversation(conversationId)) {
+        throw new Error(`Agent Conversation '${conversationId}' is already committed.`);
+      }
+      await options.repository.reserveConversationContext(
+        conversationId,
+        parseAgentBoundDomainBinding(contextValue),
+      );
+    },
+    async releaseConversationContext(conversationIdValue) {
+      const conversationId = requireIdentity(conversationIdValue, 'Agent Conversation');
+      if (await options.repository.readConversation(conversationId)) {
+        throw new Error(`Committed Agent Conversation '${conversationId}' cannot be released.`);
+      }
+      await options.repository.releaseConversationContext(conversationId);
+    },
     firstSubmit,
+    async claimProviderTurn(conversationIdValue) {
+      const conversationId = requireIdentity(conversationIdValue, 'Agent Conversation');
+      const exact = await readConversation(conversationId);
+      if (exact.pendingTurn.status !== 'pending') {
+        throw new Error(
+          `Agent Conversation '${conversationId}' pending Turn is '${exact.pendingTurn.status}', not pending.`,
+        );
+      }
+      if (!(await options.repository.claimProviderExecution(exact.pendingTurn.turnId))) {
+        throw new Error(
+          `Agent Turn '${exact.pendingTurn.turnId}' has already been claimed for execution.`,
+        );
+      }
+      return options.repository.updatePendingTurn(conversationId, {
+        ...exact.pendingTurn,
+        status: 'running',
+      });
+    },
+    async settleProviderTurn(input) {
+      const conversationId = requireIdentity(input.conversationId, 'Agent Conversation');
+      const turnId = requireIdentity(input.turnId, 'Agent Turn');
+      const exact = await readConversation(conversationId);
+      if (exact.pendingTurn.turnId !== turnId) {
+        throw new Error(
+          `Agent Turn '${turnId}' does not match Conversation '${conversationId}' pending Turn.`,
+        );
+      }
+      if (exact.pendingTurn.status !== 'running') {
+        throw new Error(`Agent Turn '${turnId}' cannot settle from '${exact.pendingTurn.status}'.`);
+      }
+      if (input.status === 'completed' && input.diagnostic !== undefined) {
+        throw new Error(`Completed Agent Turn '${turnId}' cannot include a diagnostic.`);
+      }
+      return options.repository.updatePendingTurn(conversationId, {
+        ...exact.pendingTurn,
+        status: input.status,
+        ...(input.status === 'failed'
+          ? { diagnostic: input.diagnostic ?? 'Agent provider execution failed.' }
+          : {}),
+      });
+    },
     startProviderExecution,
     async executeProviderTurn(conversationId) {
       const started = await beginProviderExecution(conversationId);
@@ -701,6 +776,18 @@ export function createInMemoryAgentConversationLifecycleRepository(): AgentConve
   const conversationByRequest = new Map<string, string>();
   const claimedTurns = new Set<string>();
   return {
+    async reserveConversationContext(conversationId, context) {
+      const existing = contextsByConversation.get(conversationId);
+      if (existing && JSON.stringify(existing) !== JSON.stringify(context)) {
+        throw new Error(`Agent Conversation '${conversationId}' context changed.`);
+      }
+      contextsByConversation.set(conversationId, cloneContext(context));
+    },
+    async releaseConversationContext(conversationId) {
+      if (!contextsByConversation.delete(conversationId)) {
+        throw new Error(`Agent Conversation '${conversationId}' context is not present.`);
+      }
+    },
     async commitFirstSubmit(record) {
       const existingId = conversationByRequest.get(record.pendingTurn.requestId);
       if (existingId) {

@@ -9,6 +9,7 @@ import {
 function createEffects(): AgentHostControllerEffectPorts {
   return {
     conversation: {
+      createConversation: vi.fn(),
       submitTurn: vi.fn(),
       confirmTool: vi.fn(),
       cancelTurn: vi.fn(),
@@ -78,7 +79,7 @@ describe('Agent Host message controller', () => {
     const controller = createAgentHostMessageController(effects, context);
 
     expect(controller.identity).toBe(context.identity);
-    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(36);
+    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(37);
 
     await controller.tryHandle({ type: 'getConversations' });
     await controller.tryHandle({ type: 'getConfig' });

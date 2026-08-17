@@ -10,6 +10,50 @@ import {
 import { projectAgentConfigurationPolicy } from './agent-launch-service';
 
 describe('Agent Conversation lifecycle service', () => {
+  it('reserves an owner before first submit and settles the canonical runtime Turn', async () => {
+    const fixture = createFixture();
+    const context = {
+      kind: 'workspace' as const,
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant:1',
+    };
+    await fixture.service.reserveConversationContext('conversation-reserved', context);
+    await expect(fixture.service.readConversationContext('conversation-reserved')).resolves.toEqual(
+      context,
+    );
+    const committed = await fixture.service.firstSubmit({
+      ...assistantInput('request-reserved'),
+      conversationId: 'conversation-reserved',
+      context,
+      contextReferences: [
+        {
+          type: 'file',
+          id: 'file:first',
+          label: 'first.md',
+          contentLocator: { kind: 'workspace-file', path: 'first.md' },
+        },
+      ],
+    });
+
+    const running = await fixture.service.claimProviderTurn(committed.conversationId);
+    expect(running.pendingTurn).toMatchObject({
+      turnId: committed.pendingTurn.turnId,
+      status: 'running',
+    });
+    await fixture.service.settleProviderTurn({
+      conversationId: committed.conversationId,
+      turnId: committed.pendingTurn.turnId,
+      status: 'completed',
+    });
+    await expect(fixture.service.readConversation(committed.conversationId)).resolves.toMatchObject(
+      {
+        initialInput: { contextReferences: [expect.objectContaining({ id: 'file:first' })] },
+        pendingTurn: { turnId: committed.pendingTurn.turnId, status: 'completed' },
+      },
+    );
+    expect(fixture.provider.start).not.toHaveBeenCalled();
+  });
+
   it('commits Workspace context and the initial turn once before provider execution', async () => {
     const fixture = createFixture();
     const entryTargetReceipt = authoringReceipt();

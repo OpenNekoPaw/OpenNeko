@@ -22,6 +22,7 @@ function createContext(): AgentHostRouteEffectContext {
 
 function createEffects(): AgentConversationControllerEffectPort {
   return {
+    createConversation: vi.fn(),
     submitTurn: vi.fn(),
     confirmTool: vi.fn(),
     cancelTurn: vi.fn(),
@@ -53,6 +54,23 @@ async function dispatch(
 }
 
 describe('Agent conversation controller', () => {
+  it('routes newConversation through the canonical Conversation effect', async () => {
+    const effects = createEffects();
+    const context = createContext();
+    vi.mocked(effects.createConversation).mockResolvedValue({
+      conversationId: 'conversation-new',
+    });
+
+    const operation = tryHandleAgentConversationControllerRoute(
+      { type: 'newConversation' },
+      effects,
+      context,
+    );
+
+    await expect(operation).resolves.toEqual({ conversationId: 'conversation-new' });
+    expect(effects.createConversation).toHaveBeenCalledWith(context);
+  });
+
   it('projects user messages into canonical turn requests', async () => {
     const effects = createEffects();
     const context = createContext();
@@ -73,6 +91,15 @@ describe('Agent conversation controller', () => {
             data: { selectedText: 'hello' },
           },
         ],
+        messageTrackingId: 'message-tracking-1',
+        fileReferences: [
+          {
+            id: 'file-1',
+            label: 'notes.md',
+            contentLocator: { kind: 'workspace-file', path: 'notes.md' },
+            mediaType: 'text',
+          },
+        ],
       },
       effects,
       context,
@@ -91,6 +118,15 @@ describe('Agent conversation controller', () => {
             label: 'Selection',
             summary: 'Selected text',
             data: { selectedText: 'hello' },
+          },
+        ],
+        messageTrackingId: 'message-tracking-1',
+        fileReferences: [
+          {
+            id: 'file-1',
+            label: 'notes.md',
+            contentLocator: { kind: 'workspace-file', path: 'notes.md' },
+            mediaType: 'text',
           },
         ],
       },

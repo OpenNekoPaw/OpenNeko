@@ -99,6 +99,9 @@ export interface DesktopAgentDetachResult {
 export interface DesktopAgentAcceptedMessageResult {
   readonly requestId: string;
   readonly status: 'accepted';
+  readonly conversation?: {
+    readonly conversationId: string;
+  };
   readonly submission?: AgentMessageSubmissionReceipt;
 }
 
@@ -401,12 +404,20 @@ export function parseDesktopAgentMessageResult(
   if (record['status'] === 'accepted') {
     requireExactKeys(
       record,
-      ['requestId', 'status', ...('submission' in record ? ['submission'] : [])],
+      [
+        'requestId',
+        'status',
+        ...('conversation' in record ? ['conversation'] : []),
+        ...('submission' in record ? ['submission'] : []),
+      ],
       'Desktop Agent accepted message result',
     );
     return {
       requestId,
       status: 'accepted',
+      ...('conversation' in record
+        ? { conversation: parseDesktopAgentConversationReceipt(record['conversation']) }
+        : {}),
       ...('submission' in record
         ? { submission: parseAgentMessageSubmissionReceipt(record['submission'], requestId) }
         : {}),
@@ -466,6 +477,17 @@ export function parseDesktopAgentMessageResult(
     };
   }
   throw invalidPayload('Desktop Agent message result status is invalid.');
+}
+
+function parseDesktopAgentConversationReceipt(value: unknown): { readonly conversationId: string } {
+  const record = requireRecord(value, 'Desktop Agent Conversation receipt must be an object.');
+  requireExactKeys(record, ['conversationId'], 'Desktop Agent Conversation receipt');
+  return {
+    conversationId: requireNonEmptyString(
+      record['conversationId'],
+      'Desktop Agent Conversation receipt identity is required.',
+    ),
+  };
 }
 
 function parseAgentMessageSubmissionReceipt(

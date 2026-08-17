@@ -151,6 +151,42 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
     );
 
   const repository: AgentConversationLifecycleRepositoryPort = {
+    reserveConversationContext: (conversationId, context) =>
+      options.metadataStore.transaction(
+        {
+          mode: 'state-write',
+          ownership: 'state',
+          operation: 'reserve-agent-conversation-context',
+        },
+        async ({ sql }) => {
+          await commitContext(
+            sql,
+            requireContextIdentity(conversationId),
+            parseAgentBoundDomainBinding(context),
+            'reserve-agent-conversation-context',
+          );
+        },
+      ),
+    releaseConversationContext: (conversationId) =>
+      options.metadataStore.transaction(
+        {
+          mode: 'state-write',
+          ownership: 'state',
+          operation: 'release-agent-conversation-context',
+        },
+        async ({ sql }) => {
+          const result = await sql.run(
+            `DELETE FROM agent_conversation_authority WHERE conversation_id = ?`,
+            [requireContextIdentity(conversationId)],
+          );
+          if (result.changes !== 1) {
+            throw persistenceError(
+              'release-agent-conversation-context',
+              `Agent Conversation '${conversationId}' context is not present.`,
+            );
+          }
+        },
+      ),
     commitFirstSubmit: (record) =>
       options.metadataStore.transaction(
         { mode: 'state-write', ownership: 'state', operation: 'commit-agent-first-submit' },

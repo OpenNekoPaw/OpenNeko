@@ -750,6 +750,92 @@ export class DesktopShellService {
     });
   }
 
+  async projectOwnerBoundAgentConversation(input: {
+    readonly windowId: string;
+    readonly rendererSessionId: string;
+    readonly agentViewId: string;
+    readonly context: AgentBoundDomainBinding;
+    readonly conversationId: string;
+  }): Promise<DesktopWorkbenchSceneProjection> {
+    return this.enqueue(async () => {
+      this.requireActive();
+      this.assertMutationContext(input.windowId, input.rendererSessionId);
+      const state = await this.options.stateRepository.read();
+      const window = requireStoredWindow(state, input.windowId);
+      const current = activeDesktopWorkbench(window).scene;
+      const interaction = current.slots.interaction;
+      if (
+        !interaction ||
+        interaction.kind !== 'agent' ||
+        interaction.agentViewId !== input.agentViewId
+      ) {
+        throw new DesktopSceneContractError(
+          'desktop-scene-scope-mismatch',
+          'Owner-bound Agent Conversation does not match the exact active Agent Surface.',
+        );
+      }
+      let scene: DesktopWorkbenchSceneProjection;
+      if (current.context.kind === 'character-interaction') {
+        if (
+          (input.context.kind !== 'character' && input.context.kind !== 'room') ||
+          !isSameAgentConversationOwner(
+            current.context.owner,
+            conversationOwnerFromContext(input.context),
+          ) ||
+          interaction.phase !== 'session' ||
+          interaction.scope.kind !== 'assistant'
+        ) {
+          throw new DesktopSceneContractError(
+            'desktop-scene-scope-mismatch',
+            'Owner-bound Character Conversation does not match its exact active owner.',
+          );
+        }
+        const scope = { ...current.context.scope, conversationId: input.conversationId };
+        scene = parseDesktopWorkbenchSceneProjection({
+          ...current,
+          context: { ...current.context, scope },
+          slots: {
+            ...current.slots,
+            interaction: { ...interaction, phase: 'session', scope },
+          },
+        });
+      } else {
+        if (
+          current.context.kind !== 'agent' ||
+          current.context.agentViewId !== input.agentViewId ||
+          current.context.scope.kind === 'unbound' ||
+          !conversationContextMatchesSceneScope(input.context, current.context.scope) ||
+          interaction.scope.draftId !== current.context.scope.draftId
+        ) {
+          throw new DesktopSceneContractError(
+            'desktop-scene-scope-mismatch',
+            'Owner-bound Agent Conversation does not match its exact active owner.',
+          );
+        }
+        const scope = { ...current.context.scope, conversationId: input.conversationId };
+        scene = parseDesktopWorkbenchSceneProjection({
+          ...current,
+          context: { ...current.context, scope },
+          slots: {
+            ...current.slots,
+            interaction: { ...interaction, phase: 'session', scope },
+          },
+        });
+      }
+      this.assertMutationContext(input.windowId, input.rendererSessionId);
+      const committed = await this.options.stateRepository.commit({
+        ...state,
+        windows: state.windows.map((candidate) =>
+          candidate.windowId === input.windowId
+            ? putSceneWorkbench({ window: candidate, scene })
+            : candidate,
+        ),
+      });
+      await this.emitAll(committed);
+      return scene;
+    });
+  }
+
   async restoreAgentConversation(input: {
     readonly request: DesktopSceneTransitionRequest;
     readonly context: AgentBoundDomainBinding;
@@ -3299,21 +3385,6 @@ function createTransitionedScene(
   const windowId = current.windowId;
   if (intent.kind === 'open-agent-entry') {
     return createDefaultDesktopAgentScene(windowId, `draft:${createIdentity()}`);
-  }
-  if (intent.kind === 'new-agent-conversation') {
-    if (
-      current.context.kind !== 'agent' ||
-      current.context.scope.kind === 'unbound' ||
-      current.context.scope.conversationId === undefined ||
-      current.slots.interaction?.kind !== 'agent' ||
-      current.slots.interaction?.phase !== 'session'
-    ) {
-      throw new DesktopSceneContractError(
-        'desktop-scene-scope-mismatch',
-        'A new owner-bound Agent Draft requires the exact active Conversation Scene.',
-      );
-    }
-    return createReplacementAgentDraftScene(current, `draft:${createIdentity()}`);
   }
   if (intent.kind === 'open-asset-center') {
     const assetCenterSessionId = `asset-center:${createIdentity()}`;

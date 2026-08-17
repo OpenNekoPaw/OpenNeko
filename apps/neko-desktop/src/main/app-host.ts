@@ -45,6 +45,10 @@ import type {
   AgentWorkspaceRuntime,
 } from '@neko/agent-runtime/application';
 import {
+  projectContextReferences,
+  type AgentConversationControllerTurnRequest,
+} from '@neko/agent-runtime/runtime';
+import {
   createDesktopAgentBridgeRuntime,
   type DesktopAgentBridgeRuntime,
   type DesktopAnyAgentConnectionGrant,
@@ -145,6 +149,8 @@ import {
   type AgentBoundDomainBinding,
   type AgentContextPayload,
   type AgentDomainBinding,
+  type AgentFileReference,
+  type MessageContextReference,
 } from '@neko/agent-contracts';
 import {
   parseAgentExtensionManagementHostRequest,
@@ -1252,6 +1258,15 @@ export class DesktopAppHost {
           : {}),
         readGlobalSkillCatalog: () => this.agent.readGlobalSkillCatalog(),
         personalSkillOwnerId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+        commitConversationCreation: ({ conversationId }) =>
+          this.commitOwnerBoundAgentConversation({
+            windowId: window.windowId,
+            agentViewId: request.viewId,
+            conversationId,
+          }),
+        prepareInitialConversationTurn: (turnRequest) =>
+          this.prepareInitialConversationTurn(workspace, turnRequest),
+        settleInitialConversationTurn: (turn) => this.settleInitialConversationTurn(turn),
       });
     }
     const view = await this.shell.resolveAgentViewGrant(window.windowId, request);
@@ -1330,6 +1345,18 @@ export class DesktopAppHost {
         this.conversationLifecycle.updateConfiguration(input),
       readGlobalSkillCatalog: () => this.agent.readGlobalSkillCatalog(),
       personalSkillOwnerId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+      commitConversationCreation: ({ conversationId }) =>
+        this.commitOwnerBoundAgentConversation({
+          windowId: window.windowId,
+          agentViewId: view.viewId,
+          conversationId,
+        }),
+      prepareInitialConversationTurn: (turnRequest) =>
+        this.prepareInitialConversationTurn(
+          requireAgentWorkspaceRuntime(workspace, grant.workspaceId),
+          turnRequest,
+        ),
+      settleInitialConversationTurn: (turn) => this.settleInitialConversationTurn(turn),
     });
   }
 
@@ -1701,20 +1728,6 @@ export class DesktopAppHost {
           }
           return { requestId: request.requestId, status: 'accepted' };
         }
-      }
-      if (request.message.type === 'newConversation') {
-        const projection = await this.shell.getProjection(window.windowId);
-        const scene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
-        await this.shell.transitionScene(
-          createDesktopSceneTransitionRequest({
-            requestId: request.requestId,
-            rendererSessionId: projection.rendererSessionId,
-            windowId: window.windowId,
-            sceneId: scene.sceneId,
-            intent: { kind: 'new-agent-conversation' },
-          }),
-        );
-        return { requestId: request.requestId, status: 'accepted' };
       }
       return await this.agentBridge.send(request, grant);
     } catch (error) {
@@ -3170,7 +3183,12 @@ export class DesktopAppHost {
 
   private startCommittedAgentProviderExecution(conversationId: string): void {
     void this.conversationLifecycle
-      .startProviderExecution(conversationId)
+      .readFirstSubmitRecord(conversationId)
+      .then((record) =>
+        record === undefined
+          ? undefined
+          : this.conversationLifecycle.startProviderExecution(conversationId),
+      )
       .catch((error: unknown) =>
         this.reportError(
           'desktop-agent-provider-execution-start-failed',
@@ -3178,6 +3196,94 @@ export class DesktopAppHost {
           error,
         ),
       );
+  }
+
+  private async commitOwnerBoundAgentConversation(input: {
+    readonly windowId: string;
+    readonly agentViewId: string;
+    readonly conversationId: string;
+  }): Promise<void> {
+    const projection = await this.shell.getProjection(input.windowId);
+    const scene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
+    const context = await this.resolveOwnerBoundConversationContext(scene);
+    await this.conversationLifecycle.reserveConversationContext(input.conversationId, context);
+    try {
+      await this.shell.projectOwnerBoundAgentConversation({
+        windowId: input.windowId,
+        rendererSessionId: projection.rendererSessionId,
+        agentViewId: input.agentViewId,
+        context,
+        conversationId: input.conversationId,
+      });
+    } catch (error) {
+      await this.conversationLifecycle.releaseConversationContext(input.conversationId);
+      throw error;
+    }
+  }
+
+  private async resolveOwnerBoundConversationContext(
+    scene: DesktopWorkbenchSceneProjection,
+  ): Promise<AgentBoundDomainBinding> {
+    if (scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace') {
+      return {
+        kind: 'workspace',
+        workspaceId: scene.context.scope.workspaceId,
+        workspaceGrantId: scene.context.scope.workspaceGrantId,
+      };
+    }
+    const conversationId =
+      scene.context.kind === 'character-interaction'
+        ? scene.context.scope.conversationId
+        : scene.context.kind === 'agent' && scene.context.scope.kind === 'assistant'
+          ? scene.context.scope.conversationId
+          : undefined;
+    if (!conversationId) {
+      throw new Error('Agent Entry Draft cannot create an owner-bound Conversation.');
+    }
+    return this.conversationLifecycle.readConversationContext(conversationId);
+  }
+
+  private async prepareInitialConversationTurn(
+    workspace: AgentWorkspaceRuntime,
+    request: AgentConversationControllerTurnRequest,
+  ): Promise<{ readonly turnId: string } | undefined> {
+    if (await this.conversationLifecycle.readFirstSubmitRecord(request.conversationId)) {
+      return undefined;
+    }
+    const context = await this.conversationLifecycle.readConversationContext(
+      request.conversationId,
+    );
+    const composition = this.options.agentControllerComposition;
+    if (!composition) {
+      throw new Error('Desktop Agent initial Conversation configuration is unavailable.');
+    }
+    const configuration = await composition.createInitialConversationConfiguration({ workspace });
+    const record = await this.conversationLifecycle.firstSubmit({
+      requestId: request.messageTrackingId ?? `first-turn:${request.conversationId}`,
+      conversationId: request.conversationId,
+      context,
+      input: { kind: 'message', text: request.messageText },
+      entryTargetReceipt: null,
+      references: [],
+      contextReferences: projectInitialTurnContextReferences(
+        request.contextPayloads,
+        request.fileReferences,
+      ),
+      resourceGrantIds: [],
+      ...(request.purposeModels === undefined ? {} : { purposeModels: request.purposeModels }),
+      configuration,
+    });
+    const claimed = await this.conversationLifecycle.claimProviderTurn(record.conversationId);
+    return { turnId: claimed.pendingTurn.turnId };
+  }
+
+  private async settleInitialConversationTurn(input: {
+    readonly conversationId: string;
+    readonly turnId: string;
+    readonly status: 'completed' | 'failed';
+    readonly diagnostic?: string;
+  }): Promise<void> {
+    await this.conversationLifecycle.settleProviderTurn(input);
   }
 
   private async resolveAgentConnectionGrant(
@@ -3535,6 +3641,50 @@ function isAgentProjectionControlMessage(type: string): boolean {
     type === 'projectionSnapshotAck' ||
     type === 'projectionDetach'
   );
+}
+
+function projectInitialTurnContextReferences(
+  contextPayloads: readonly AgentContextPayload[] | undefined,
+  fileReferences: readonly AgentFileReference[] | undefined,
+): readonly MessageContextReference[] {
+  const projected = [...(projectContextReferences(contextPayloads) ?? [])];
+  const seenIds = new Set(projected.map((reference) => reference.id));
+  for (const reference of fileReferences ?? []) {
+    if (seenIds.has(reference.id)) continue;
+    projected.push({
+      type:
+        reference.mediaType === 'image'
+          ? 'image'
+          : reference.mediaType === 'audio'
+            ? 'audio-clip'
+            : reference.mediaType === 'video' ||
+                reference.mediaType === 'sequence' ||
+                reference.source === 'media-library'
+              ? 'media'
+              : reference.source === 'entity-graph'
+                ? 'entity'
+                : 'file',
+      id: reference.id,
+      label: reference.label,
+      ...(reference.thumbnailUri === undefined
+        ? {}
+        : { thumbnailUri: reference.thumbnailUri }),
+      ...(reference.mediaType === undefined ? {} : { mediaType: reference.mediaType }),
+      contentLocator: reference.contentLocator,
+    });
+    seenIds.add(reference.id);
+  }
+  return projected;
+}
+
+function requireAgentWorkspaceRuntime(
+  workspace: AgentWorkspaceRuntime | undefined,
+  workspaceId: string,
+): AgentWorkspaceRuntime {
+  if (!workspace) {
+    throw new Error(`Desktop Agent Workspace '${workspaceId}' is unavailable.`);
+  }
+  return workspace;
 }
 
 function conversationOwnerFromContext(context: AgentBoundDomainBinding): AgentConversationOwnerRef {

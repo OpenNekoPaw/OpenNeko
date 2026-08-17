@@ -576,18 +576,11 @@ describe('DesktopAgentSurface', () => {
     await act(async () => root.unmount());
   });
 
-  it('renders a typed Workspace attach failure as a local translated diagnostic', async () => {
+  it('bootstraps a Workspace draft through canonical Conversation without agentLaunch', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
-    const attach = vi.fn(async () => ({
-      requestId: 'attach-workspace-unavailable',
-      status: 'unavailable' as const,
-      diagnostic: {
-        code: 'agent-workspace-binding-unavailable',
-        owner: 'workspace',
-        message: "Workspace grant 'workspace-grant:private' is not present.",
-      },
-    }));
-    installBridge(getBootstrap, { attach, detach: vi.fn(async () => undefined) });
+    const attach = vi.fn();
+    const detach = vi.fn(async () => undefined);
+    installBridge(getBootstrap, { attach, detach });
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
@@ -595,13 +588,29 @@ describe('DesktopAgentSurface', () => {
     await act(async () =>
       root.render(
         <TestAgentSurface
+          composerWorkspace={{
+            kind: 'workspace',
+            label: 'OpenNeko',
+            workspaceId: 'workspace-1',
+            loadCanvasCatalog: async () => ({
+              workspaceId: 'workspace-1',
+              defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+              options: [
+                {
+                  target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                  label: 'Workspace Board',
+                },
+              ],
+              diagnostics: [],
+            }),
+          }}
           agentPresentation={{
             phase: 'draft',
-            draftId: 'draft-workspace-unavailable',
+            draftId: 'draft-workspace-initial',
             binding: {
               kind: 'workspace',
               workspaceId: 'workspace-1',
-              workspaceGrantId: 'workspace-grant:private',
+              workspaceGrantId: 'workspace-grant-1',
             },
             bindingReceipt: null,
           }}
@@ -610,14 +619,21 @@ describe('DesktopAgentSurface', () => {
     );
     await act(async () => undefined);
 
-    const alert = container.querySelector('[role="alert"]');
-    expect(alert?.textContent).toContain(
-      'Workspace access for this Agent panel is currently unavailable.',
+    expect(getBootstrap).toHaveBeenCalledWith(
+      'workbench-1',
+      'agent-surface-1',
+      'project-1',
+      'view-1',
+      undefined,
     );
-    expect(alert?.textContent).not.toContain('workspace-grant:private');
-    expect(container.querySelector('.desktop-agent-failure__retry')).not.toBeNull();
-    expect(container.querySelector('[data-testid="agent-root"]')).toBeNull();
+    expect(attach).not.toHaveBeenCalled();
+    expect(window.openNekoDesktop.agentLaunch.submitDraft).not.toHaveBeenCalled();
+    const rootNode = container.querySelector('[data-testid="agent-root"]');
+    expect(rootNode?.getAttribute('data-agent-presentation')).toBe('draft');
+    expect(rootNode?.getAttribute('data-composer-workspace')).toBe('OpenNeko');
+    expect(container.textContent).toContain('neko.agent.webview.electron:connection-1:en');
     await act(async () => root.unmount());
+    expect(window.openNekoDesktop.agent.detach).toHaveBeenCalledWith(readyBootstrap().connection);
   });
 
   it('mounts Assistant draft through the same Root and detaches its exact launch identity', async () => {

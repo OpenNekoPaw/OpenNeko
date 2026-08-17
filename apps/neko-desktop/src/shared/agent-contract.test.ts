@@ -187,6 +187,30 @@ describe('Desktop Agent contract', () => {
     });
   });
 
+  it('parses an exact authoritative Conversation creation receipt', () => {
+    expect(
+      parseDesktopAgentMessageResult(
+        {
+          requestId: 'conversation-create-1',
+          status: 'accepted',
+          conversation: { conversationId: 'conversation-1' },
+        },
+        'conversation-create-1',
+      ),
+    ).toEqual({
+      requestId: 'conversation-create-1',
+      status: 'accepted',
+      conversation: { conversationId: 'conversation-1' },
+    });
+    expect(() =>
+      parseDesktopAgentMessageResult({
+        requestId: 'conversation-create-1',
+        status: 'accepted',
+        conversation: { conversationId: '', legacyDraftId: 'draft-1' },
+      }),
+    ).toThrowError(DesktopAgentContractError);
+  });
+
   it('rejects an event with an unknown Host message type', () => {
     expect(() =>
       parseDesktopAgentEvent({

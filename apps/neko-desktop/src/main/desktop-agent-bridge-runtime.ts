@@ -95,6 +95,15 @@ export interface DesktopAgentBridgeRuntime {
     }) => Promise<AgentConversationConfiguration>;
     readonly readGlobalSkillCatalog?: () => Promise<AgentSkillCatalog>;
     readonly personalSkillOwnerId?: string;
+    readonly commitConversationCreation?: (input: {
+      readonly conversationId: string;
+    }) => Promise<void>;
+    readonly prepareInitialConversationTurn?: Parameters<
+      AgentControllerComposition['createEffects']
+    >[0]['prepareInitialConversationTurn'];
+    readonly settleInitialConversationTurn?: Parameters<
+      AgentControllerComposition['createEffects']
+    >[0]['settleInitialConversationTurn'];
     readonly publish: (event: DesktopAgentEvent) => void;
   }): DesktopAgentBootstrapProjection;
   send(
@@ -237,6 +246,15 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     }) => Promise<AgentConversationConfiguration>;
     readonly readGlobalSkillCatalog?: () => Promise<AgentSkillCatalog>;
     readonly personalSkillOwnerId?: string;
+    readonly commitConversationCreation?: (input: {
+      readonly conversationId: string;
+    }) => Promise<void>;
+    readonly prepareInitialConversationTurn?: Parameters<
+      AgentControllerComposition['createEffects']
+    >[0]['prepareInitialConversationTurn'];
+    readonly settleInitialConversationTurn?: Parameters<
+      AgentControllerComposition['createEffects']
+    >[0]['settleInitialConversationTurn'];
     readonly publish: (event: DesktopAgentEvent) => void;
   }): DesktopAgentBootstrapProjection {
     this.requireActive();
@@ -294,6 +312,15 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       updateConversationConfiguration: input.updateConversationConfiguration,
       readGlobalSkillCatalog: input.readGlobalSkillCatalog ?? missingGlobalSkillCatalogDependency,
       personalSkillOwnerId: input.personalSkillOwnerId ?? '',
+      ...(input.commitConversationCreation === undefined
+        ? {}
+        : { commitConversationCreation: input.commitConversationCreation }),
+      ...(input.prepareInitialConversationTurn === undefined
+        ? {}
+        : { prepareInitialConversationTurn: input.prepareInitialConversationTurn }),
+      ...(input.settleInitialConversationTurn === undefined
+        ? {}
+        : { settleInitialConversationTurn: input.settleInitialConversationTurn }),
     });
     const connection: DesktopAgentConnection = {
       identity,
@@ -356,7 +383,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     }
     const routeResult = await operation;
     if (request.message.type === 'sendMessage') {
-      if (!routeResult) {
+      if (!routeResult || !('turnId' in routeResult)) {
         throw new Error('Desktop Agent sendMessage completed without an authoritative receipt.');
       }
       return {
@@ -371,6 +398,18 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
           createdAt: routeResult.queueItem.createdAt,
           state: routeResult.state,
         },
+      };
+    }
+    if (request.message.type === 'newConversation') {
+      if (!routeResult || !('conversationId' in routeResult) || 'turnId' in routeResult) {
+        throw new Error(
+          'Desktop Agent newConversation completed without an authoritative Conversation receipt.',
+        );
+      }
+      return {
+        requestId: request.requestId,
+        status: 'accepted',
+        conversation: { conversationId: routeResult.conversationId },
       };
     }
     return acceptedAgentMessageResult(request.requestId);

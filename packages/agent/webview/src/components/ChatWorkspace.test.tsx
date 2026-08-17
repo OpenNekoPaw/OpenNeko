@@ -338,6 +338,59 @@ describe('ChatWorkspace pending send', () => {
     expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('replays a pending Workspace first send with attachments and file references through sendMessage', async () => {
+    const onPendingSendRequestConsumed = vi.fn();
+    const runtime = createTabRenderRuntime({ tabId: 'tab-new', conversationId: 'conv-new' });
+    runtime.store.updateState({
+      modelConfigurationInitialized: true,
+      selectedModel: 'test-model',
+    });
+
+    render(
+      <ChatWorkspace
+        {...createProps({
+          tabRenderStore: runtime.store,
+          pendingSendRequest: {
+            id: 2,
+            input: {
+              messageText: 'attach to workspace',
+              displayMessageText: 'attach to workspace',
+              attachments: [{ id: 'attachment-workspace', name: 'reference.png', type: 'image' }],
+              fileReferences: [
+                {
+                  id: 'reference-workspace',
+                  label: 'reference.png',
+                  mediaType: 'image',
+                  contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+                },
+              ],
+            },
+          },
+          onPendingSendRequestConsumed,
+        })}
+      />,
+    );
+
+    await waitFor(() => expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1));
+    expect(hostMocks.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-new',
+        message: 'attach to workspace',
+        sessionMode: 'agent',
+        attachments: [{ id: 'attachment-workspace', name: 'reference.png', type: 'image' }],
+        fileReferences: [
+          {
+            id: 'reference-workspace',
+            label: 'reference.png',
+            mediaType: 'image',
+            contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+          },
+        ],
+      }),
+    );
+    await waitFor(() => expect(onPendingSendRequestConsumed).toHaveBeenCalledWith(2));
+  });
+
   it('propagates the exact Conversation creator rejection receipt', () => {
     const runtime = createTabRenderRuntime({ tabId: 'tab-new', conversationId: 'conv-new' });
     runtime.store.updateState({

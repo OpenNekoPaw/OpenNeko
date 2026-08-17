@@ -210,7 +210,6 @@ export interface DesktopApplicationSidebarProjection {
 
 export type DesktopSceneTransitionIntent =
   | { readonly kind: 'open-agent-entry' }
-  | { readonly kind: 'new-agent-conversation' }
   | { readonly kind: 'open-workspace'; readonly workspaceGrantId: string }
   | { readonly kind: 'open-project-workspace'; readonly projectId: string }
   | {
@@ -1110,12 +1109,7 @@ function parseWorldRuntimeSurfaceIdentity(
 function parseSceneTransitionIntent(value: unknown): DesktopSceneTransitionIntent {
   const record = requireRecord(value, 'Desktop Scene transition intent must be an object.');
   const kind = record['kind'];
-  if (
-    kind === 'open-agent-entry' ||
-    kind === 'new-agent-conversation' ||
-    kind === 'open-asset-center' ||
-    kind === 'open-extensions'
-  ) {
+  if (kind === 'open-agent-entry' || kind === 'open-asset-center' || kind === 'open-extensions') {
     requireExactKeys(record, ['kind'], 'Desktop Scene transition intent');
     return { kind };
   }

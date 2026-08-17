@@ -20,6 +20,10 @@ export interface AgentConversationTurnAcceptance {
   readonly state: 'active' | 'queued';
 }
 
+export interface AgentConversationCreationAcceptance {
+  readonly conversationId: string;
+}
+
 export interface AgentHostConnectionIdentity {
   readonly hostKind: 'electron';
   readonly applicationId: string;
@@ -53,9 +57,13 @@ export interface AgentHostRouteEffectPort<Message extends AgentWebviewToHostMess
 export interface AgentConversationControllerTurnRequest extends AgentMessageRuntimeRequest {
   readonly source: 'user-message';
   readonly turnId?: string;
+  readonly messageTrackingId?: string;
 }
 
 export interface AgentConversationControllerEffectPort {
+  createConversation(
+    context: AgentHostRouteEffectContext,
+  ): Promise<AgentConversationCreationAcceptance>;
   submitTurn(
     request: AgentConversationControllerTurnRequest,
     context: AgentHostRouteEffectContext,
@@ -219,6 +227,7 @@ export const AGENT_CONVERSATION_CONTROLLER_ROUTE_TYPES = [
   'sendMessage',
   'confirmTool',
   'cancelMessage',
+  'newConversation',
   'activateConversation',
   'deleteConversation',
   'getConversations',
@@ -233,9 +242,8 @@ export const AGENT_CONVERSATION_CONTROLLER_ROUTE_TYPES = [
   'clearAllConversations',
 ] as const satisfies readonly AgentWebviewToHostMessage['type'][];
 
-export const AGENT_WINDOW_NAVIGATION_ROUTE_TYPES = [
-  'newConversation',
-] as const satisfies readonly AgentWebviewToHostMessage['type'][];
+export const AGENT_WINDOW_NAVIGATION_ROUTE_TYPES =
+  [] as const satisfies readonly AgentWebviewToHostMessage['type'][];
 
 export const AGENT_CONFIG_CONTROLLER_ROUTE_TYPES = [
   'getSettings',

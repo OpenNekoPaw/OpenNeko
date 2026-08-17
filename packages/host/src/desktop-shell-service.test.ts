@@ -1761,6 +1761,85 @@ describe('DesktopShellService', () => {
     expect(await fixture.service.getSceneProjection(windowId)).toEqual(attached);
   });
 
+  it('projects Workspace conversations directly into the same owner-bound Scene', async () => {
+    const workspace: AssetWorkspaceResolution = {
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath: '/workspace/demo',
+      displayName: 'Demo',
+      locator: { kind: 'variable', value: '${HOME}/workspace/demo' },
+    };
+    const authority = new DesktopWorkspaceGrantAuthority({
+      resolver: { resolve: vi.fn(async () => workspace) },
+      createIdentity: () => 'workspace-owner-grant',
+    });
+    const fixture = createFixture(undefined, authority);
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await fixture.service.getProjection(windowId);
+    const grant = authority.authorize({
+      windowId,
+      label: workspace.displayName,
+      hostResource: workspace.workspacePath,
+    });
+    const opened = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'open-workspace-owner',
+        rendererSessionId: initial.rendererSessionId,
+        windowId,
+        sceneId: activeScene(initial.window).sceneId,
+        intent: { kind: 'open-workspace', workspaceGrantId: grant.workspaceGrantId },
+      }),
+    );
+    if (opened.status !== 'transitioned' || opened.scene.context.kind !== 'agent') {
+      throw new Error('Workspace owner fixture did not create an Agent Scene.');
+    }
+    const context = {
+      kind: 'workspace' as const,
+      workspaceId: workspace.workspaceId,
+      workspaceGrantId: grant.workspaceGrantId,
+    };
+    const draftId = opened.scene.context.scope.draftId;
+    const first = await fixture.service.projectOwnerBoundAgentConversation({
+      windowId,
+      rendererSessionId: initial.rendererSessionId,
+      agentViewId: opened.scene.context.agentViewId,
+      context,
+      conversationId: 'conversation:workspace-1',
+    });
+    const second = await fixture.service.projectOwnerBoundAgentConversation({
+      windowId,
+      rendererSessionId: initial.rendererSessionId,
+      agentViewId: opened.scene.context.agentViewId,
+      context,
+      conversationId: 'conversation:workspace-2',
+    });
+
+    expect(first).toMatchObject({
+      context: {
+        kind: 'agent',
+        scope: { draftId, conversationId: 'conversation:workspace-1' },
+      },
+      slots: { interaction: { phase: 'session' } },
+    });
+    expect(second).toMatchObject({
+      context: {
+        kind: 'agent',
+        scope: { draftId, conversationId: 'conversation:workspace-2' },
+      },
+      slots: { interaction: { phase: 'session' } },
+    });
+    await expect(
+      fixture.service.projectOwnerBoundAgentConversation({
+        windowId,
+        rendererSessionId: initial.rendererSessionId,
+        agentViewId: opened.scene.context.agentViewId,
+        context: { ...context, workspaceId: 'workspace:other' },
+        conversationId: 'conversation:wrong-owner',
+      }),
+    ).rejects.toMatchObject({ code: 'desktop-scene-scope-mismatch' });
+    expect(await fixture.service.getSceneProjection(windowId)).toEqual(second);
+  });
+
   it('commits an unbound Entry Draft into the exact Character Interaction scene', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();

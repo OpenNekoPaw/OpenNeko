@@ -607,35 +607,6 @@ describe('DesktopAppHost', () => {
     expect(replayedProjection.catalog.projects).toHaveLength(1);
     expect(replayedProjection.window.tabs).toHaveLength(1);
     expect(activeScene(replayedProjection)).toEqual(activeScene(workspaceSessionProjection));
-    const workspaceConversationCount = workspaceSessionProjection.agentHome.conversations.length;
-    const workspaceDraft = await fixture.appHost.transitionScene(
-      fixture.sender,
-      createDesktopSceneTransitionRequest({
-        requestId: 'workspace-new-conversation',
-        rendererSessionId: workspaceSessionProjection.rendererSessionId,
-        windowId: fixture.windowId,
-        sceneId: activeScene(workspaceSessionProjection).sceneId,
-        intent: { kind: 'new-agent-conversation' },
-      }),
-    );
-    expect(workspaceDraft).toMatchObject({
-      status: 'transitioned',
-      scene: {
-        context: {
-          kind: 'agent',
-          scope: {
-            kind: 'workspace',
-            workspaceId: 'workspace-explicit',
-            workspaceGrantId: selected.grant.workspaceGrantId,
-            draftId: expect.stringMatching(/^draft:/u),
-          },
-        },
-        slots: { interaction: { phase: 'draft' } },
-      },
-    });
-    expect(
-      (await fixture.appHost.shell.getProjection(fixture.windowId)).agentHome.conversations,
-    ).toHaveLength(workspaceConversationCount);
   });
 
   it('registers Entry Content targets without navigation', async () => {
@@ -1361,7 +1332,13 @@ describe('DesktopAppHost', () => {
       },
     });
     expect(providerStart).toHaveBeenCalledOnce();
-    const sendAgentMessage = vi.spyOn(fixture.appHost.agentBridge, 'send');
+    const sendAgentMessage = vi
+      .spyOn(fixture.appHost.agentBridge, 'send')
+      .mockResolvedValue({
+        requestId: 'assistant-new-conversation',
+        status: 'accepted',
+        conversation: { conversationId: 'conversation:assistant-next' },
+      });
     const assistantConversationCount = (await fixture.appHost.shell.getProjection(fixture.windowId))
       .agentHome.conversations.length;
     await expect(
@@ -1371,21 +1348,15 @@ describe('DesktopAppHost', () => {
           type: 'newConversation',
         }),
       ),
-    ).resolves.toEqual({ requestId: 'assistant-new-conversation', status: 'accepted' });
-    expect(sendAgentMessage).not.toHaveBeenCalled();
-    const assistantDraftProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
-    expect(activeScene(assistantDraftProjection)).toMatchObject({
-      context: {
-        kind: 'agent',
-        scope: {
-          kind: 'assistant',
-          assistantSpaceId: 'assistant-space:local-user',
-          draftId: expect.stringMatching(/^draft:/u),
-        },
-      },
-      slots: { interaction: { phase: 'draft' } },
+    ).resolves.toEqual({
+      requestId: 'assistant-new-conversation',
+      status: 'accepted',
+      conversation: { conversationId: 'conversation:assistant-next' },
     });
-    expect(assistantDraftProjection.agentHome.conversations).toHaveLength(
+    expect(sendAgentMessage).toHaveBeenCalledOnce();
+    const unchangedProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    expect(activeScene(unchangedProjection)).toEqual(committedScene);
+    expect(unchangedProjection.agentHome.conversations).toHaveLength(
       assistantConversationCount,
     );
     await fixture.appHost.dispose();
