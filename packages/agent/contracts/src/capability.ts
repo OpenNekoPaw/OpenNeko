@@ -267,8 +267,7 @@ export type AgentCapabilityTelemetryEventKind =
   | 'skill-remove'
   | 'prompt-fragment-change'
   | 'schema-change'
-  | 'prompt-chain-fragment-change'
-  | 'provider-card-change';
+  | 'prompt-chain-fragment-change';
 
 export interface AgentCapabilityTelemetryEvent {
   readonly id: string;

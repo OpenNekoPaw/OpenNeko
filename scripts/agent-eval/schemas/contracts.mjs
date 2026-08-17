@@ -178,10 +178,7 @@ const RUNTIME_PROFILE_SCHEMA = s.object({
   configurationHash: HASH,
 });
 
-const MODEL_BINDING_SCHEMA = s.object(
-  { providerId: ID, modelId: EXTERNAL_ID },
-  { providerExpressionProfileId: ID },
-);
+const MODEL_BINDING_SCHEMA = s.object({ providerId: ID, modelId: EXTERNAL_ID });
 const MODEL_PURPOSES_SCHEMA = s.object(
   {},
   {

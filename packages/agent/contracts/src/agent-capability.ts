@@ -12,7 +12,6 @@
 
 import type { Tool, ToolCategory } from './tool';
 import type { PromptFragment } from './prompt-fragment';
-import type { ProviderExpressionProfileDescriptor } from './provider-card';
 import type { ArtifactProfileDescriptor } from './composite-artifact';
 import type { PerceptionCapabilityFacet } from './comic-animation-indexing';
 import type { AgentCapabilityLifecycleDescriptor } from './agent-capability-lifecycle';
@@ -89,7 +88,7 @@ export interface AgentCapabilityManifest extends AgentCapabilityProtocolMetadata
  */
 export interface CapabilityDeclaration extends AgentCapabilityRuntimeRequirementDescriptor {
   /** Capability type */
-  type: 'tool' | 'artifactProfile' | 'providerExpressionProfile';
+  type: 'tool' | 'artifactProfile';
 
   /** Name (must match the runtime contribution name). */
   name: string;
@@ -241,14 +240,6 @@ export interface AgentCapabilityProvider extends AgentCapabilityProtocolMetadata
    * activate any Skill or inject prompt content.
    */
   getArtifactProfiles?(context: AgentCapabilityContext): ArtifactProfileDescriptor[];
-
-  /**
-   * Optional: Return provider/model expression profiles contributed by this
-   * provider/package.
-   */
-  getProviderExpressionProfiles?(
-    context: AgentCapabilityContext,
-  ): ProviderExpressionProfileDescriptor[];
 
   /**
    * Optional: Return artifact protocol/profile/renderer/projector/capability

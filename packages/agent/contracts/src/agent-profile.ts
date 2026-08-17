@@ -1,4 +1,4 @@
-export const AGENT_PROFILE_KINDS = ['artifact', 'provider-expression'] as const;
+export const AGENT_PROFILE_KINDS = ['artifact'] as const;
 
 export const AGENT_PROFILE_SOURCES = [
   'builtin',
@@ -43,8 +43,7 @@ export type AgentProfileDiagnosticCode =
   | 'incompatible-profile-kind'
   | 'skill-local-profile-persisted'
   | 'profile-trust-failed'
-  | 'profile-host-not-supported'
-  | 'provider-expression-secrets-forbidden';
+  | 'profile-host-not-supported';
 
 export interface AgentProfileIdentity<TKind extends AgentProfileKind = AgentProfileKind> {
   readonly profileId: string;

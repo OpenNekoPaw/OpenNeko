@@ -246,24 +246,18 @@ export interface ProviderSignature {
   readonly publicKeyId?: string;
 }
 
-export type ProviderCardSignature = ProviderSignature;
-
 export interface ProviderMetadata {
   providerId: string;
   capabilities: ('image.generate' | 'video.generate' | 'audio.generate' | string)[];
   modelIds?: string[];
-  cardSchemaVersion?: string;
   trustLevel?: AssetProviderTrustLevel;
   signature?: ProviderSignature;
 }
 
-export type ProfilePackageKind = 'artifact' | 'provider-expression';
+export type ProfilePackageKind = 'artifact';
 export type ProfilePackageHost = 'desktop';
 
-export const PROFILE_PACKAGE_KINDS: readonly ProfilePackageKind[] = [
-  'artifact',
-  'provider-expression',
-] as const;
+export const PROFILE_PACKAGE_KINDS: readonly ProfilePackageKind[] = ['artifact'] as const;
 
 export const PROFILE_PACKAGE_HOSTS: readonly ProfilePackageHost[] = ['desktop'] as const;
 

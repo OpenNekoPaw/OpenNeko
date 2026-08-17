@@ -70,9 +70,6 @@ export class ChatModelService implements IChatModelService {
         ...(provider.supportLevel ? { supportLevel: provider.supportLevel } : {}),
         capabilities: capabilities as ModelCapability[],
         category,
-        ...(model.providerExpressionProfileId
-          ? { providerExpressionProfileId: model.providerExpressionProfileId }
-          : {}),
         ...(isPositiveInteger(model.contextWindow) ? { contextWindow: model.contextWindow } : {}),
         ...(isPositiveInteger(model.maxOutputTokens)
           ? { maxOutputTokens: model.maxOutputTokens }

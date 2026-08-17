@@ -13,9 +13,7 @@ export const singleImageObservationFixture: AgentObservation = {
   createdAt: 1_771_718_400_000,
   providerContext: {
     providerId: 'agent-default',
-    providerCardId: 'default-vision',
     trustLevel: 'core',
-    adaptationHash: 'fixture-adaptation',
   },
 };
 

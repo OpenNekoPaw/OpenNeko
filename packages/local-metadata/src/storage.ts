@@ -531,7 +531,6 @@ export interface IGlobalStorageLayout {
   readonly marketCache: string;
   readonly marketInstalled: string;
   readonly conversations: string;
-  readonly providerCards: string;
   readonly profiles: string;
   readonly processors: string;
   readonly agentsMd: string;
@@ -543,7 +542,6 @@ export interface IProjectFactsLayout {
   readonly root: string;
   readonly identity: string;
   readonly settings: string;
-  readonly providerCards: string;
   readonly entityBindings: string;
 }
 
@@ -591,7 +589,6 @@ export function resolveGlobalStorageLayout(homedir: string): IGlobalStorageLayou
     marketCache: join(root, 'market-cache'),
     marketInstalled: join(root, 'market-installed.json'),
     conversations: join(root, 'conversations'),
-    providerCards: join(root, 'providers'),
     profiles: join(root, 'profiles'),
     processors: join(root, 'processors'),
   };
@@ -605,7 +602,6 @@ export function resolveStorageLayout(workspaceRoot: string, homedir: string): IS
     root: factsRoot,
     identity: join(factsRoot, 'project.json'),
     settings: join(factsRoot, 'settings.json'),
-    providerCards: join(factsRoot, 'providers'),
     entityBindings: join(factsRoot, 'entity-bindings.json'),
   };
 

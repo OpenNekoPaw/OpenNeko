@@ -16,11 +16,9 @@ export type AgentObservationStatus = 'active' | 'expired';
 
 export type ProviderTrustLevel = 'core' | 'community' | 'untrusted' | 'unknown';
 
-export interface ProviderAdaptationContext {
+export interface ProviderExecutionContext {
   readonly providerId?: string;
-  readonly providerCardId?: string;
   readonly trustLevel: ProviderTrustLevel;
-  readonly adaptationHash?: string;
 }
 
 export interface ModelExecutionContext {
@@ -35,7 +33,7 @@ export interface PerceptionEvidence {
   readonly confidence?: number;
   readonly toolName?: string;
   readonly observationId?: string;
-  readonly providerContext?: ProviderAdaptationContext;
+  readonly providerContext?: ProviderExecutionContext;
   readonly modelContext?: ModelExecutionContext;
   readonly data?: unknown;
   readonly createdAt: number;
@@ -51,7 +49,7 @@ export interface AgentObservation {
   readonly evidenceIds: readonly string[];
   readonly detectedEntities?: readonly string[];
   readonly issues?: readonly string[];
-  readonly providerContext?: ProviderAdaptationContext;
+  readonly providerContext?: ProviderExecutionContext;
   readonly createdAt: number;
   readonly status?: AgentObservationStatus;
   readonly contextPacketId?: string;

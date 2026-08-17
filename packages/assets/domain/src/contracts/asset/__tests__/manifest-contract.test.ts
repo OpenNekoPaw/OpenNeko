@@ -93,7 +93,7 @@ describe('AssetManifest v4 contract', () => {
       typeMetadata: {
         type: 'profile',
         data: {
-          profileKinds: ['artifact', 'provider-expression'],
+          profileKinds: ['artifact'],
           trustLevel: 'community',
           hostRequirements: [{ host: 'desktop' }],
           profiles: [
@@ -102,11 +102,6 @@ describe('AssetManifest v4 contract', () => {
               kind: 'artifact',
               version: 1,
               descriptorPath: 'profiles/storyboard.profile.json',
-            },
-            {
-              profileId: 'provider-expression:studio',
-              kind: 'provider-expression',
-              version: '1.0.0',
             },
           ],
         },
@@ -128,7 +123,7 @@ describe('AssetManifest v4 contract', () => {
             profiles: [
               {
                 profileId: 'studio.invalid',
-                kind: 'workflow' as never,
+                kind: 'provider-expression' as never,
                 version: '',
                 descriptorPath: '../escape.json',
               },

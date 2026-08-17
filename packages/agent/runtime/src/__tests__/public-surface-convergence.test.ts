@@ -5,6 +5,7 @@ import * as runtime from '../index';
 import * as runtimeSubpath from '../runtime/index';
 
 const PACKAGE_ROOT = join(__dirname, '..', '..');
+const REPOSITORY_ROOT = join(PACKAGE_ROOT, '..', '..', '..');
 
 /**
  * Public-surface convergence guard for the agent-runtime package.
@@ -104,6 +105,25 @@ describe('agent-runtime public surface convergence', () => {
       'src/tools/perception/perception-tool-group.ts',
     ]) {
       expect(existsSync(join(PACKAGE_ROOT, deleted)), `${deleted} should not exist`).toBe(false);
+    }
+  });
+
+  it('keeps the retired provider-expression contract and configuration path absent', () => {
+    expect(existsSync(join(REPOSITORY_ROOT, 'packages/agent/contracts/src/provider-card.ts'))).toBe(
+      false,
+    );
+
+    for (const relativePath of [
+      'packages/agent/contracts/src/index.ts',
+      'packages/agent/contracts/src/agent-capability.ts',
+      'packages/ai/contracts/src/config.ts',
+      'packages/host/src/settings/chat-model-service.ts',
+      'scripts/agent-eval/schemas/contracts.mjs',
+    ]) {
+      const source = readFileSync(join(REPOSITORY_ROOT, relativePath), 'utf8');
+      expect(source, relativePath).not.toMatch(
+        /ProviderCard|providerExpressionProfileId|provider-expression/u,
+      );
     }
   });
 });

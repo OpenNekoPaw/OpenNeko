@@ -18,9 +18,6 @@ export interface MultimodalMessageProjectionOptions {
 export interface ProviderInputModalityResolverInput {
   readonly providerId?: string;
   readonly runtime?: Partial<ProviderInputModalities>;
-  readonly providerCard?: {
-    readonly inputModalities?: Partial<ProviderInputModalities>;
-  };
 }
 
 export interface ProjectionDiagnostic {
@@ -132,7 +129,6 @@ export function resolveProviderInputModalities(
   return {
     ...TEXT_ONLY_MODALITIES,
     ...(input.providerId ? BUILT_IN_PROVIDER_MODALITIES[input.providerId] : undefined),
-    ...input.providerCard?.inputModalities,
     ...input.runtime,
   };
 }

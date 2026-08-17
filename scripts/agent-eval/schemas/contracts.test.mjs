@@ -391,6 +391,15 @@ describe('agent evaluation suite and scenario contracts', () => {
     expect(() => validateScenario(invalid)).toThrow('does not match any supported variant');
   });
 
+  it('rejects the retired expression profile field in model bindings', () => {
+    const invalid = suite();
+    invalid.modelProfiles[0].chat.providerExpressionProfileId = 'retired-expression-profile';
+
+    expect(() => validateSuite(invalid)).toThrow(
+      'unknown field(s): providerExpressionProfileId',
+    );
+  });
+
   it('rejects the committed unsupported-field pilot as configuration invalid', async () => {
     const fixture = JSON.parse(
       await fs.readFile(

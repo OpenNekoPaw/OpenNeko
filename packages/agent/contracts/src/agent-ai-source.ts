@@ -29,7 +29,6 @@ export interface SecretSafeModelProjection {
   readonly type?: ModelType;
   readonly protocolProfile?: ModelConfig['protocolProfile'];
   readonly capabilities: readonly string[];
-  readonly providerExpressionProfileId?: string;
   readonly contextWindow?: number;
   readonly maxOutputTokens?: number;
   readonly enabled: boolean;

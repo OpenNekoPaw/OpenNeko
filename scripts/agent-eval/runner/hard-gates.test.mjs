@@ -147,7 +147,6 @@ function m2Facts() {
   facts.model = {
     providerId: 'openai',
     modelId: 'gpt-5',
-    providerExpressionProfileId: 'creative-review',
   };
   facts.configuration = {
     digest: HASH,
@@ -252,7 +251,6 @@ const M2_CONTEXT = {
       chat: {
         providerId: 'openai',
         modelId: 'gpt-5',
-        providerExpressionProfileId: 'creative-review',
       },
     },
   ],

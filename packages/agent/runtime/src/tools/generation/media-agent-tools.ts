@@ -11,10 +11,7 @@ import { isContentLocator, type ContentLocator } from '@neko/content';
 import { isVideoOperationId } from '@neko/generation';
 import { requireToolExecutionRunScope } from '@neko/agent-contracts';
 import type {
-  GenerationIntent,
   IToolRegistry,
-  ProviderAdaptationMode,
-  ProviderGenerationCapability,
   ToolExecuteOptions,
   ToolResultAttachment,
 } from '@neko/agent-contracts';
@@ -27,6 +24,39 @@ import type {
   VideoGenerationRequest,
 } from '@neko/generation';
 import { resolveImageGenerationType, resolveVideoGenerationType } from '@neko/generation/media';
+
+type MediaGenerationCapability = 'image.generate' | 'video.generate' | 'audio.generate';
+
+type GenerationStyleFamily =
+  | 'photorealistic'
+  | 'anime'
+  | 'illustration'
+  | 'concept-art'
+  | 'pixel-art'
+  | 'painting'
+  | '3d-render';
+
+interface GenerationIntent {
+  readonly source: {
+    readonly kind: 'inline-prompt' | 'task-markdown' | 'plan-markdown';
+    readonly uri?: string;
+    readonly contentHash?: string;
+  };
+  readonly originalPrompt?: string;
+  readonly capability: MediaGenerationCapability;
+  readonly subject?: string;
+  readonly styleFamily?: GenerationStyleFamily;
+  readonly style?: readonly string[];
+  readonly mood?: readonly string[];
+  readonly quality?: readonly string[];
+  readonly composition?: string;
+  readonly avoid?: readonly string[];
+  readonly mustInclude?: readonly string[];
+  readonly output?: {
+    readonly duration?: number;
+    readonly resolution?: string;
+  };
+}
 
 interface AgentMediaExecutionIdentity {
   readonly conversationId: string;
@@ -65,14 +95,13 @@ interface ResolvedToolMediaTarget {
 
 async function resolveGenerationPrompt(
   args: Record<string, unknown>,
-  capability: ProviderGenerationCapability,
+  capability: MediaGenerationCapability,
   defaultProviderId?: string,
 ): Promise<ResolvedGenerationPrompt> {
   const explicitProviderId = readOptionalString(args.providerId) ?? defaultProviderId;
   const prompt = typeof args.prompt === 'string' ? args.prompt : '';
   const negativePrompt = readOptionalString(args.negativePrompt);
   const intent = readMarkdownGenerationIntent(args, capability, prompt);
-  const adaptationMode = readProviderAdaptationMode(args);
 
   if (!intent) {
     if (!prompt.trim()) {
@@ -84,70 +113,48 @@ async function resolveGenerationPrompt(
       prompt,
       ...(negativePrompt ? { negativePrompt } : {}),
       ...(explicitProviderId ? { providerId: explicitProviderId } : {}),
-      metadata: buildProviderAdaptationMetadata({
-        mode: 'native',
+      metadata: buildGenerationIntentMetadata({
         source: { kind: 'inline-prompt' },
         originalPrompt: prompt,
-        providerPrompt: prompt,
-        riskFlags: ['no-structured-intent'],
+        prompt,
       }),
     };
   }
 
-  if (adaptationMode === 'native') {
-    return resolveNativeGenerationIntent(intent, explicitProviderId, negativePrompt, {
-      reason: 'provider-adaptation-bypassed',
-    });
-  }
-
-  return resolveNativeGenerationIntent(intent, explicitProviderId, negativePrompt, {
-    mode: 'agentic',
-    reason: 'agent-expression-context-only',
-  });
+  return resolveGenerationIntent(intent, explicitProviderId, negativePrompt);
 }
 
-function resolveNativeGenerationIntent(
+function resolveGenerationIntent(
   intent: GenerationIntent,
   providerId: string | undefined,
   negativePrompt: string | undefined,
-  details: Record<string, unknown>,
 ): ResolvedGenerationPrompt {
-  const defaultPrompt = composeGenerationIntentPrompt(intent);
+  const prompt = composeGenerationIntentPrompt(intent);
   return {
-    prompt: defaultPrompt,
+    prompt,
     ...(negativePrompt ? { negativePrompt } : {}),
     ...(providerId ? { providerId } : {}),
-    metadata: buildProviderAdaptationMetadata({
-      mode: details.mode === 'agentic' ? 'agentic' : 'native',
+    metadata: buildGenerationIntentMetadata({
       source: intent.source,
       extractedIntent: intent,
-      providerPrompt: defaultPrompt,
-      riskFlags: typeof details.reason === 'string' ? [details.reason] : [],
+      prompt,
     }),
   };
 }
 
-function readProviderAdaptationMode(args: Record<string, unknown>): ProviderAdaptationMode {
-  const value = args.providerAdaptationMode;
-  return value === 'native' || value === 'agentic' ? value : 'auto';
-}
-
-function buildProviderAdaptationMetadata(input: {
-  readonly mode: ProviderAdaptationMode;
+function buildGenerationIntentMetadata(input: {
   readonly source: GenerationIntent['source'];
   readonly originalPrompt?: string;
   readonly extractedIntent?: GenerationIntent;
-  readonly providerPrompt: string;
-  readonly riskFlags: readonly string[];
+  readonly prompt: string;
   readonly target?: GenerationTargetMetadata;
 }): Record<string, unknown> {
   return {
-    providerAdaptation: {
-      mode: input.mode,
+    generationIntent: {
       source: input.source,
       ...(input.originalPrompt ? { originalPrompt: input.originalPrompt } : {}),
       ...(input.extractedIntent ? { extractedIntent: input.extractedIntent } : {}),
-      providerPrompt: input.providerPrompt,
+      prompt: input.prompt,
       ...(input.target?.requestedProviderId
         ? { providerId: input.target.requestedProviderId }
         : {}),
@@ -162,9 +169,6 @@ function buildProviderAdaptationMetadata(input: {
             },
           }
         : {}),
-      adaptationMetadata: {
-        riskFlags: input.riskFlags,
-      },
     },
   };
 }
@@ -173,29 +177,19 @@ function withGenerationTargetMetadata(
   metadata: Record<string, unknown> | undefined,
   target: GenerationTargetMetadata,
 ): Record<string, unknown> | undefined {
-  const providerAdaptation = metadata?.providerAdaptation;
-  if (!isRecord(providerAdaptation)) return metadata;
-  return buildProviderAdaptationMetadata({
-    mode: providerAdaptation.mode === 'agentic' ? 'agentic' : 'native',
-    source: readGenerationIntentSource(providerAdaptation.source),
-    ...(typeof providerAdaptation.originalPrompt === 'string'
-      ? { originalPrompt: providerAdaptation.originalPrompt }
+  const generationIntent = metadata?.generationIntent;
+  if (!isRecord(generationIntent)) return metadata;
+  return buildGenerationIntentMetadata({
+    source: readGenerationIntentSource(generationIntent.source),
+    ...(typeof generationIntent.originalPrompt === 'string'
+      ? { originalPrompt: generationIntent.originalPrompt }
       : {}),
-    ...(isGenerationIntent(providerAdaptation.extractedIntent)
-      ? { extractedIntent: providerAdaptation.extractedIntent }
+    ...(isGenerationIntent(generationIntent.extractedIntent)
+      ? { extractedIntent: generationIntent.extractedIntent }
       : {}),
-    providerPrompt:
-      typeof providerAdaptation.providerPrompt === 'string'
-        ? providerAdaptation.providerPrompt
-        : '',
-    riskFlags: readRiskFlags(providerAdaptation.adaptationMetadata),
+    prompt: typeof generationIntent.prompt === 'string' ? generationIntent.prompt : '',
     target,
   });
-}
-
-function readRiskFlags(value: unknown): readonly string[] {
-  if (!isRecord(value) || !Array.isArray(value.riskFlags)) return [];
-  return value.riskFlags.filter((entry): entry is string => typeof entry === 'string');
 }
 
 function isGenerationIntent(value: unknown): value is GenerationIntent {
@@ -758,7 +752,7 @@ function readRuntimeMediaModel(
 
 function readMarkdownGenerationIntent(
   args: Record<string, unknown>,
-  capability: ProviderGenerationCapability,
+  capability: MediaGenerationCapability,
   originalPrompt: string,
 ): GenerationIntent | null {
   const markdown =
@@ -890,8 +884,6 @@ const MEDIA_TOOL_LOCALIZATION = {
         planRef: '可选 Plan markdown URI/path，作为生成意图来源。',
         taskMarkdown: '可选内联 Task markdown 内容，用于提取生成意图。',
         planMarkdown: '可选内联 Plan markdown 内容，用于提取生成意图。',
-        providerAdaptationMode:
-          'Provider 表达适配模式。auto/agentic 使用 Agent prompt 上下文；native 直接发送提示词。',
         size: '图像尺寸，默认 1024x1024。',
         quality: '图像质量，默认 standard。',
         style: '图像风格，默认 vivid。',
@@ -954,8 +946,6 @@ const MEDIA_TOOL_LOCALIZATION = {
         planRef: '可选 Plan markdown URI/path，作为生成意图来源。',
         taskMarkdown: '可选内联 Task markdown 内容，用于提取生成意图。',
         planMarkdown: '可选内联 Plan markdown 内容，用于提取生成意图。',
-        providerAdaptationMode:
-          'Provider 表达适配模式。auto/agentic 使用 Agent prompt 上下文；native 直接发送提示词。',
         operation: '可选规范化单片段视频操作。',
         duration: '视频时长，单位秒，范围 1 到 30，默认 4。',
         resolution: '视频分辨率，默认 720p。',
@@ -1055,13 +1045,6 @@ export function registerMediaAgentTools(
             type: 'string',
             description: 'Optional inline plan markdown content for extracting generation intent',
           },
-          providerAdaptationMode: {
-            type: 'string',
-            enum: ['auto', 'agentic', 'native'],
-            description:
-              'Provider expression adaptation mode. auto/agentic rely on the agent prompt context; native sends the prompt directly.',
-          },
-
           size: {
             type: 'string',
             enum: ['256x256', '512x512', '1024x1024', '1792x1024', '1024x1792'],
@@ -1205,12 +1188,12 @@ export function registerMediaAgentTools(
               },
               ...(resolved.metadata
                 ? {
-                    providerAdaptation: withGenerationTargetMetadata(resolved.metadata, {
+                    generationIntent: withGenerationTargetMetadata(resolved.metadata, {
                       ...(resolved.providerId ? { requestedProviderId: resolved.providerId } : {}),
                       ...(target.modelId ? { requestedModelId: target.modelId } : {}),
                       actualProviderId: result.providerId,
                       actualModelId: result.modelId,
-                    })?.providerAdaptation,
+                    })?.generationIntent,
                   }
                 : {}),
             },
@@ -1465,11 +1448,11 @@ export function registerMediaAgentTools(
               transformImage: transformMetadata,
               ...(resolved.metadata
                 ? {
-                    providerAdaptation: withGenerationTargetMetadata(resolved.metadata, {
+                    generationIntent: withGenerationTargetMetadata(resolved.metadata, {
                       ...requestTarget,
                       actualProviderId: result.providerId,
                       actualModelId: result.modelId,
-                    })?.providerAdaptation,
+                    })?.generationIntent,
                   }
                 : {}),
             },
@@ -1525,13 +1508,6 @@ export function registerMediaAgentTools(
             type: 'string',
             description: 'Optional inline plan markdown content for extracting generation intent',
           },
-          providerAdaptationMode: {
-            type: 'string',
-            enum: ['auto', 'agentic', 'native'],
-            description:
-              'Provider expression adaptation mode. auto/agentic rely on the agent prompt context; native sends the prompt directly.',
-          },
-
           operation: {
             type: 'string',
             enum: [
@@ -1689,11 +1665,11 @@ export function registerMediaAgentTools(
               },
               ...(resolved.metadata
                 ? {
-                    providerAdaptation: withGenerationTargetMetadata(resolved.metadata, {
+                    generationIntent: withGenerationTargetMetadata(resolved.metadata, {
                       ...toGenerationTargetMetadata(resolvedTarget),
                       actualProviderId: result.providerId,
                       actualModelId: result.modelId,
-                    })?.providerAdaptation,
+                    })?.generationIntent,
                   }
                 : {}),
             },

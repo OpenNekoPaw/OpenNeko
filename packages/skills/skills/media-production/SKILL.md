@@ -15,6 +15,8 @@ Coordinate an Agent-directed, recoverable source-to-deliverable production. Sele
 
 Ground each source in its own evidence: comics use actual page, panel, reading-order, dialogue, and character appearance evidence; screenplays use scene headings, action, dialogue, location, and timing intent; novels use chapter or scene boundaries, point of view, narration, dialogue, and adaptation omissions; illustrations use visible composition, subjects, layers when available, palette, and spatial relationships. Existing Storyboards and projects use their current revision, owned shots or timeline state, referenced assets, and validation evidence. When those existing facts already satisfy a work unit, mark it skipped or reused rather than rebuilding it.
 
+For each generated media work unit, express the creative target as provider-neutral constraints without provider-specific syntax: intended operation; stable references and their roles; subject or character appearance; scene or location; composition, camera, action or motion; style, light and palette; audio or dialogue when relevant; duration or pacing; preservation constraints; and unwanted changes. Source observations remain evidence, not instructions for what the result should depict.
+
 ## Actionable plan
 
 Use an optional living `plan.md` only when it improves review or coordination. For every applicable work unit state: the object to change or create; trigger and skip conditions; stable inputs; capability intent; creative and technical constraints; expected output kind; acceptance evidence; failure or degraded branch; dependencies; and approval requirement. Broad phase lists are not execution-ready.

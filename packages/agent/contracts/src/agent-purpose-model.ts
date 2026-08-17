@@ -4,7 +4,6 @@ export interface AgentPurposeModelRef<Category extends ModelType = ModelType> {
   readonly providerId: string;
   readonly modelId: string;
   readonly category: Category;
-  readonly providerExpressionProfileId?: string;
 }
 
 export interface AgentFlatPurposeModelRefMap {
@@ -76,15 +75,10 @@ function parsePurposeModelRef(value: unknown, expectedCategory: ModelType): Agen
       `Agent purpose model category must be '${expectedCategory}', received '${String(record['category'])}'.`,
     );
   }
-  const expressionProfile = record['providerExpressionProfileId'];
-  if (expressionProfile !== undefined && !isNonEmptyString(expressionProfile)) {
-    throw new Error('Agent purpose model expression profile identity must be non-empty.');
-  }
   return {
     providerId: record['providerId'],
     modelId: record['modelId'],
     category: expectedCategory,
-    ...(expressionProfile === undefined ? {} : { providerExpressionProfileId: expressionProfile }),
   };
 }
 

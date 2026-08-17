@@ -125,9 +125,6 @@ function toSecretSafeModel(model: Model): SecretSafeModelProjection {
     ...(model.type ? { type: model.type } : {}),
     ...(model.protocolProfile ? { protocolProfile: model.protocolProfile } : {}),
     capabilities: [...model.capabilities],
-    ...(model.providerExpressionProfileId
-      ? { providerExpressionProfileId: model.providerExpressionProfileId }
-      : {}),
     ...(isPositiveInteger(model.contextWindow) ? { contextWindow: model.contextWindow } : {}),
     ...(isPositiveInteger(model.maxOutputTokens) ? { maxOutputTokens: model.maxOutputTokens } : {}),
     enabled: model.enabled !== false,

@@ -572,7 +572,6 @@ export * from './domain-routing';
 export * from './perception-card';
 export * from './portable-skill';
 export * from './prompt-fragment';
-export * from './provider-card';
 export * from './reference-contributor';
 export * from './skill';
 export * from './tool-names';

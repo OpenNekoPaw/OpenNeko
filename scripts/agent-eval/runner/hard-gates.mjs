@@ -386,19 +386,13 @@ function assertModel(assertion, facts, context) {
   if (!hasModelIdentity(observed) || !hasModelIdentity(effective)) {
     throw new Error('actual provider/model identity is unavailable from session facts');
   }
-  if (
-    observed.providerId !== effective.providerId ||
-    observed.modelId !== effective.modelId ||
-    observed.providerExpressionProfileId !== effective.providerExpressionProfileId
-  ) {
+  if (observed.providerId !== effective.providerId || observed.modelId !== effective.modelId) {
     throw new Error('model identity and effective configuration disagree');
   }
   if (profile.selection === 'explicit') {
     const expected = profile.chat;
     const mismatch =
-      observed.providerId !== expected.providerId ||
-      observed.modelId !== expected.modelId ||
-      observed.providerExpressionProfileId !== expected.providerExpressionProfileId;
+      observed.providerId !== expected.providerId || observed.modelId !== expected.modelId;
     if (mismatch) {
       throw new Error(
         `model profile mismatch: expected ${formatModel(expected)}, observed ${formatModel(observed)}`,
@@ -409,9 +403,6 @@ function assertModel(assertion, facts, context) {
     profileId: profile.id,
     providerId: observed.providerId,
     modelId: observed.modelId,
-    ...(observed.providerExpressionProfileId
-      ? { providerExpressionProfileId: observed.providerExpressionProfileId }
-      : {}),
   };
 }
 
@@ -1088,7 +1079,7 @@ function isSha256(value) {
 }
 
 function formatModel(value) {
-  return `${value?.providerId ?? 'unavailable'}/${value?.modelId ?? 'unavailable'}${value?.providerExpressionProfileId ? `#${value.providerExpressionProfileId}` : ''}`;
+  return `${value?.providerId ?? 'unavailable'}/${value?.modelId ?? 'unavailable'}`;
 }
 
 function matchesToolStatus(actual, expected) {

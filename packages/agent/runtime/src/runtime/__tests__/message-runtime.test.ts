@@ -17,7 +17,6 @@ import {
   buildAgentTurnExecutionMetadata,
   buildAgentTurnRuntimePlan,
   buildEnhancedAgentMessage,
-  buildProviderExpressionTargets,
   buildRuntimeMediaModelSelections,
   createAgentMessageId,
   executeAgentProjectFileSearch,
@@ -44,32 +43,6 @@ describe('message runtime helpers', () => {
         randomSuffix: () => 'abc123456',
       }),
     ).toBe('1000-abc123456');
-  });
-
-  it('maps agent media models to capability-specific provider expression targets', () => {
-    expect(
-      buildProviderExpressionTargets({
-        image: { providerId: 'flux', modelId: 'flux-pro-1.1', category: 'image' },
-        video: { providerId: 'runway', modelId: 'gen-4', category: 'video' },
-      }),
-    ).toEqual([
-      { capability: 'image.generate', providerId: 'flux', modelId: 'flux-pro-1.1' },
-      { capability: 'video.generate', providerId: 'runway', modelId: 'gen-4' },
-    ]);
-  });
-
-  it('maps a non-agent media model to all generation capabilities', () => {
-    expect(
-      buildProviderExpressionTargets(undefined, {
-        providerId: 'openai',
-        modelId: 'gpt-image-1',
-        category: 'image',
-      }),
-    ).toEqual([
-      { capability: 'image.generate', providerId: 'openai', modelId: 'gpt-image-1' },
-      { capability: 'video.generate', providerId: 'openai', modelId: 'gpt-image-1' },
-      { capability: 'audio.generate', providerId: 'openai', modelId: 'gpt-image-1' },
-    ]);
   });
 
   it('projects music-capable audio models through the audio runtime slot', () => {
@@ -1437,9 +1410,6 @@ describe('message runtime helpers', () => {
         },
       }),
     ).toEqual({
-      providerExpressionTargets: [
-        { capability: 'video.generate', providerId: 'runway', modelId: 'gen-4' },
-      ],
       runtimeMediaModels: {
         video: { providerId: 'runway', modelId: 'gen-4', category: 'video' },
       },
@@ -1680,9 +1650,6 @@ describe('message runtime helpers', () => {
         topP: 0.9,
         workspaceRoot: '/repo',
         maxIterations: 200,
-        providerExpressionTargets: [
-          { capability: 'image.generate', providerId: 'flux', modelId: 'flux-pro' },
-        ],
         executionMetadata: expect.objectContaining({
           traceId: 'trace-1',
           mediaModels: {

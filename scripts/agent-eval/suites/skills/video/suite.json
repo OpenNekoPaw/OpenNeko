@@ -2,7 +2,7 @@
   "schema": "neko.agent-eval.suite",
   "id": "skill.video",
   "owner": { "kind": "skill", "id": "video" },
-  "target": { "kind": "skill", "identity": { "name": "video", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "video", "fingerprint": "sha256:a3a1cbc151f1db6078d42901a62265cc7b65a309673fb19de16611248a81e684" } },
+  "target": { "kind": "skill", "identity": { "name": "video", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "video", "fingerprint": "sha256:33f8e72b15cdd1888fe4a3631c5a1e421bd909593af2e10b9b0aa01148df0482" } },
   "runtimeProfiles": [{ "id": "canonical-default", "settings": {}, "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a" }],
   "modelProfiles": [{ "id": "configured-default", "selection": "configured-default", "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915" }],
   "judgeProfiles": [],

@@ -377,8 +377,6 @@ export interface ModelConfig {
   type?: ModelType;
   /** Model capabilities */
   capabilities: ModelCapability[] | string[];
-  /** Optional contributed provider/model expression profile id for this model. */
-  providerExpressionProfileId?: string;
   /** Total context window size in tokens */
   contextWindow?: number;
   /** Maximum output generation tokens supported by the model */
@@ -429,8 +427,6 @@ export const MEDIA_MODEL_TYPES = [
 export interface ModelRefConfig {
   providerId: string;
   modelId: string;
-  /** Optional contributed provider/model expression profile id for this model binding. */
-  providerExpressionProfileId?: string;
 }
 
 export type TypeDefaultModels = Partial<Record<ModelType, ModelRefConfig>>;
@@ -477,8 +473,6 @@ export interface ChatModelOption {
   supportLevel?: ProviderSupportLevel;
   /** Model capabilities (optional, for filtering) */
   capabilities?: readonly string[];
-  /** Optional contributed provider/model expression profile id for this model. */
-  providerExpressionProfileId?: string;
   /** Model type for UI grouping */
   category?: ModelType;
   /** Total context window size in tokens, when known */

@@ -9,7 +9,7 @@ describe('multimodal perception architecture boundary guard', () => {
     const files = [
       join(REPO_ROOT, 'packages/agent/contracts/src/perception-card.ts'),
       join(REPO_ROOT, 'packages/agent/contracts/src/tool.ts'),
-      join(REPO_ROOT, 'packages/agent/contracts/src/provider-card.ts'),
+      join(REPO_ROOT, 'packages/agent/contracts/src/multimodal-context.ts'),
       join(REPO_ROOT, 'packages/agent/contracts/src/message.ts'),
     ];
 

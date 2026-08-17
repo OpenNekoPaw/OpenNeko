@@ -101,7 +101,6 @@ export interface ModelRef<Category extends ProtocolModelCategory = ProtocolModel
   providerId: string;
   modelId: string;
   category: Category;
-  providerExpressionProfileId?: string;
 }
 
 export type AgentMediaModelSelections = Partial<{
@@ -2849,9 +2848,6 @@ function parseModelRef<Category extends ProtocolModelCategory>(
     providerId: value.providerId,
     modelId: value.modelId,
     category: value.category as Category,
-    ...(isNonEmptyString(value.providerExpressionProfileId)
-      ? { providerExpressionProfileId: value.providerExpressionProfileId }
-      : {}),
   };
 }
 

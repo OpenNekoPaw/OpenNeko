@@ -162,27 +162,6 @@ describe('ChatModelService', () => {
     );
   });
 
-  it('projects provider expression profile ids into selector options', () => {
-    const service = new ChatModelService();
-
-    expect(
-      service.getChatModelOptions(
-        [provider],
-        [
-          {
-            ...model,
-            providerExpressionProfileId: 'provider-expression:anthropic:claude-sonnet-4',
-          },
-        ],
-      ),
-    ).toContainEqual(
-      expect.objectContaining({
-        id: 'anthropic:claude-sonnet-4',
-        providerExpressionProfileId: 'provider-expression:anthropic:claude-sonnet-4',
-      }),
-    );
-  });
-
   it('keeps generic OpenAI-chat models conservative for provider-specific controls', () => {
     const service = new ChatModelService();
     const deepseekProvider: Provider = {

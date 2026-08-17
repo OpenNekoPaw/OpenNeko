@@ -103,7 +103,7 @@ describe('multimodal-message-projection', () => {
     });
   });
 
-  it('resolves provider input modalities by runtime, card, defaults, then text fallback', () => {
+  it('resolves provider input modalities by runtime, defaults, then text fallback', () => {
     expect(resolveProviderInputModalities({ providerId: 'openai' })).toMatchObject({
       text: true,
       image: true,
@@ -118,8 +118,7 @@ describe('multimodal-message-projection', () => {
     expect(
       resolveProviderInputModalities({
         providerId: 'unknown',
-        providerCard: { inputModalities: { video: true } },
-        runtime: { image: true },
+        runtime: { image: true, video: true },
       }),
     ).toEqual({ text: true, image: true, video: true, audio: false });
     expect(resolveProviderInputModalities({ providerId: 'unknown' })).toEqual({

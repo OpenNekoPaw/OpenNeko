@@ -4,11 +4,9 @@ import {
   validateAgentProfileDescriptorSet,
   validateArtifactProfileDescriptor,
   validateGenericTable,
-  validateProviderExpressionProfileDescriptor,
   type AgentProfileIdentity,
   type ArtifactProfileDescriptor,
   type GenericTable,
-  type ProviderCard,
 } from '..';
 
 describe('Agent profile shared contracts', () => {
@@ -94,45 +92,6 @@ describe('Agent profile shared contracts', () => {
     );
   });
 
-  it('validates the canonical ProviderCard profile without compatibility conversion', () => {
-    const card: ProviderCard = {
-      profileId: 'provider-expression:flux:flux-pro',
-      kind: 'provider-expression',
-      source: 'builtin',
-      providerId: 'flux',
-      modelId: 'flux-pro',
-      displayName: 'Flux Pro',
-      capabilities: ['image.generate'],
-      sourceLayer: 'builtin',
-      syntaxProfile: { supportsNegativePrompt: false, notes: [] },
-      conceptCoverage: { entries: [] },
-      trainingProfile: { styleAffinities: { photorealistic: 3 }, antiBiasStrategies: [] },
-    };
-
-    expect(card).toMatchObject({
-      profileId: 'provider-expression:flux:flux-pro',
-      kind: 'provider-expression',
-      source: 'builtin',
-    });
-    expect(validateProviderExpressionProfileDescriptor(card).ok).toBe(true);
-    expect(
-      validateProviderExpressionProfileDescriptor({
-        ...card,
-        profileId: undefined,
-      }).ok,
-    ).toBe(false);
-    expect(
-      validateProviderExpressionProfileDescriptor({
-        ...card,
-        apiKey: 'secret',
-      }).diagnostics,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: 'provider-expression-secrets-forbidden' }),
-      ]),
-    );
-  });
-
   it('projects profile-only packages into a non-runnable profile catalog entry', () => {
     const entry = toAgentProfileCatalogPackage({
       id: '@studio/storyboard-profiles',
@@ -142,16 +101,12 @@ describe('Agent profile shared contracts', () => {
       typeMetadata: {
         type: 'profile',
         data: {
-          profileKinds: ['artifact', 'provider-expression'],
+          profileKinds: ['artifact'],
           profiles: [
             {
               profileId: 'studio.storyboard',
               kind: 'artifact',
               displayName: 'Studio Storyboard',
-            },
-            {
-              profileId: 'provider-expression:studio',
-              kind: 'provider-expression',
             },
           ],
         },
@@ -162,16 +117,12 @@ describe('Agent profile shared contracts', () => {
       packageId: '@studio/storyboard-profiles',
       name: 'storyboard-profiles',
       version: '1.0.0',
-      profileKinds: ['artifact', 'provider-expression'],
+      profileKinds: ['artifact'],
       profiles: [
         {
           profileId: 'studio.storyboard',
           kind: 'artifact',
           displayName: 'Studio Storyboard',
-        },
-        {
-          profileId: 'provider-expression:studio',
-          kind: 'provider-expression',
         },
       ],
       runnable: false,

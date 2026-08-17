@@ -40,7 +40,6 @@ import {
   type ThreeReferencePurpose,
 } from '@neko/preview-domain';
 import type { ContentLocator, DocumentContextData, DocumentLocator } from '@neko/content';
-import type { ProviderGenerationCapability } from '@neko/agent-contracts';
 import type { CanvasNodeType } from '@neko/canvas-domain';
 import { isDocumentFile } from '@neko/media';
 import {
@@ -114,13 +113,6 @@ export interface AgentMessageRuntimeRequest {
   readonly promptId?: string;
   readonly executionOverrides?: AgentMessageExecutionOverrides;
   readonly locale?: AgentRuntimePromptLocale | string;
-}
-
-export interface ProviderExpressionTargetConfig {
-  readonly capability: ProviderGenerationCapability;
-  readonly providerId: string;
-  readonly modelId: string;
-  readonly providerExpressionProfileId?: string;
 }
 
 export interface AgentExecutionMetadataInput {
@@ -507,7 +499,6 @@ export interface AgentTurnRuntimePlanInput {
 }
 
 export interface AgentTurnRuntimePlan {
-  readonly providerExpressionTargets?: ProviderExpressionTargetConfig[];
   readonly runtimeMediaModels?: RuntimeMediaModelSelections;
   readonly executionMetadata?: Record<string, unknown>;
 }
@@ -542,7 +533,6 @@ export interface AgentTurnConfigurationPlan {
   readonly maxTokens?: number;
   readonly providerId?: string;
   readonly modelId?: string;
-  readonly providerExpressionTargets?: ProviderExpressionTargetConfig[];
   readonly executionMode: 'auto' | 'ask' | 'plan';
   readonly thinkingBudget?: number;
   readonly providerOptions?: Record<string, unknown>;
@@ -550,12 +540,6 @@ export interface AgentTurnConfigurationPlan {
   readonly conversationId: string;
   readonly executionMetadata?: Record<string, unknown>;
 }
-
-const MEDIA_GENERATION_CAPABILITIES: readonly ProviderGenerationCapability[] = [
-  'image.generate',
-  'video.generate',
-  'audio.generate',
-];
 
 export type AgentMessageTurnPreconditionReason =
   | 'missing-platform'
@@ -1784,7 +1768,6 @@ export function buildAgentTurnConfigurationPlan(
     maxTokens: input.maxTokens,
     providerId: input.chatModel?.providerId,
     modelId: input.chatModel?.modelId,
-    providerExpressionTargets: turnRuntime.providerExpressionTargets,
     executionMode: effectiveExecutionMode,
     thinkingBudget: input.thinkingBudget,
     providerOptions: input.providerOptions,
@@ -1804,61 +1787,9 @@ export function buildAgentTurnRuntimePlan(input: AgentTurnRuntimePlanInput): Age
   );
 
   return {
-    providerExpressionTargets: buildProviderExpressionTargets(input.mediaModels, input.mediaModel),
     ...(runtimeMediaModels ? { runtimeMediaModels } : {}),
     ...(executionMetadata ? { executionMetadata } : {}),
   };
-}
-
-export function buildProviderExpressionTargets(
-  agentMediaModels: AgentMediaModelSelections | undefined,
-  mediaModel?: ModelRef<MediaModelCategory>,
-): ProviderExpressionTargetConfig[] | undefined {
-  if (agentMediaModels && Object.keys(agentMediaModels).length > 0) {
-    const targets: ProviderExpressionTargetConfig[] = [];
-    if (agentMediaModels.image) {
-      targets.push({
-        capability: 'image.generate',
-        providerId: agentMediaModels.image.providerId,
-        modelId: agentMediaModels.image.modelId,
-        ...(agentMediaModels.image.providerExpressionProfileId
-          ? { providerExpressionProfileId: agentMediaModels.image.providerExpressionProfileId }
-          : {}),
-      });
-    }
-    if (agentMediaModels.video) {
-      targets.push({
-        capability: 'video.generate',
-        providerId: agentMediaModels.video.providerId,
-        modelId: agentMediaModels.video.modelId,
-        ...(agentMediaModels.video.providerExpressionProfileId
-          ? { providerExpressionProfileId: agentMediaModels.video.providerExpressionProfileId }
-          : {}),
-      });
-    }
-    if (agentMediaModels.audio) {
-      targets.push({
-        capability: 'audio.generate',
-        providerId: agentMediaModels.audio.providerId,
-        modelId: agentMediaModels.audio.modelId,
-        ...(agentMediaModels.audio.providerExpressionProfileId
-          ? { providerExpressionProfileId: agentMediaModels.audio.providerExpressionProfileId }
-          : {}),
-      });
-    }
-    return targets;
-  }
-
-  if (!mediaModel) return undefined;
-
-  return MEDIA_GENERATION_CAPABILITIES.map((capability) => ({
-    capability,
-    providerId: mediaModel.providerId,
-    modelId: mediaModel.modelId,
-    ...(mediaModel.providerExpressionProfileId
-      ? { providerExpressionProfileId: mediaModel.providerExpressionProfileId }
-      : {}),
-  }));
 }
 
 export function buildRuntimeMediaModelSelections(

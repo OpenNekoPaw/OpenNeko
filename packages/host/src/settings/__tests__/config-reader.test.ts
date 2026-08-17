@@ -373,31 +373,39 @@ describe('config-reader typed results', () => {
     );
   });
 
-  it('preserves model provider expression profile references from TOML metadata', () => {
+  it('rejects an obsolete expression profile field locally without rewriting user TOML', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
-    fs.writeFileSync(
-      filePath,
-      [
-        '[[models]]',
-        'id = "flux-pro"',
-        'name = "flux-pro"',
-        'provider_id = "flux"',
-        'type = "image"',
-        'capabilities = ["image.generate"]',
-        'provider_expression_profile_id = "provider-expression:flux:flux-pro"',
-      ].join('\n'),
-      'utf-8',
-    );
+    const source = [
+      '[[models]]',
+      'id = "flux-pro"',
+      'name = "flux-pro"',
+      'provider_id = "flux"',
+      'type = "image"',
+      'capabilities = ["image.generate"]',
+      'provider_expression_profile_id = "retired-expression-profile"',
+      '',
+      '[[models]]',
+      'id = "valid-image"',
+      'name = "valid-image"',
+      'provider_id = "image-provider"',
+      'type = "image"',
+      'capabilities = ["image.generate"]',
+    ].join('\n');
+    fs.writeFileSync(filePath, source, 'utf-8');
 
     const result = readConfigFileResult(filePath);
 
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') throw new Error('Expected ok result');
-    expect(result.config.models?.[0]).toEqual(
+    expect(result.config.models?.map((model) => model.id)).toEqual(['valid-image']);
+    expect(result.diagnostics).toEqual([
       expect.objectContaining({
-        providerExpressionProfileId: 'provider-expression:flux:flux-pro',
+        code: 'invalidConfigField',
+        path: 'models.flux-pro.provider_expression_profile_id',
+        detail: expect.stringContaining('obsolete'),
       }),
-    );
+    ]);
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe(source);
   });
 
   it('ignores unsupported fields including internal version metadata', () => {

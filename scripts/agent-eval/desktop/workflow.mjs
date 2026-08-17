@@ -191,9 +191,6 @@ function resolveModelOverride(step, profiles) {
       providerId: profile.chat.providerId,
       modelId: profile.chat.modelId,
       category: 'llm',
-      ...(profile.chat.providerExpressionProfileId === undefined
-        ? {}
-        : { providerExpressionProfileId: profile.chat.providerExpressionProfileId }),
     },
   };
 }

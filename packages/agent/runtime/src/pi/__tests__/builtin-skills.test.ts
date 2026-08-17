@@ -67,6 +67,20 @@ describe('Pi builtin Skill packages', () => {
     expect(storyboard).not.toContain('QuerySemanticCoverage');
   });
 
+  it('activates provider-neutral media expression guidance through ordinary Skills', async () => {
+    const snapshot = await discoverBuiltins(env);
+
+    for (const skillName of ['image', 'video', 'media-production']) {
+      const content = invokeSelected(snapshot, skillName);
+      expect(content).toContain('provider-neutral');
+      expect(content).toContain('preservation constraints');
+      expect(content).not.toMatch(/providerExpression|provider_expression|ProviderCard/u);
+      expect(content).not.toMatch(
+        /select (?:a )?(?:provider|model)|model override|routing algorithm/iu,
+      );
+    }
+  });
+
   it('keeps the full builtin catalog free of OpenNeko runtime protocols', async () => {
     const snapshot = await discoverBuiltins(env);
     const forbidden = [

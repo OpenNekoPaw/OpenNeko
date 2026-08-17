@@ -219,7 +219,6 @@ export {
   buildAgentTurnContextPatch,
   buildAgentTurnRuntimePlan,
   buildAgentTurnExecutionMetadata,
-  buildProviderExpressionTargets,
   buildRuntimeMediaModelSelections,
   buildEnhancedAgentMessage,
   createAgentMessageId,
@@ -276,7 +275,6 @@ export {
   type PreparedAgentMessageFileReferences,
   type PrepareAgentMessageDispatchInput,
   type PrepareAgentMessageFileReferencesInput,
-  type ProviderExpressionTargetConfig,
   type RunAgentMessageTurnRuntimeInput,
   type RunAgentMessageTurnRuntimeResult,
 } from './turn/message-runtime';

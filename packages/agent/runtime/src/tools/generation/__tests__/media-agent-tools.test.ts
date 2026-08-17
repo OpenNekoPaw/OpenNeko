@@ -443,7 +443,7 @@ describe('registerMediaAgentTools', () => {
         width: 512,
         height: 512,
         metadata: expect.objectContaining({
-          providerAdaptation: expect.objectContaining({
+          generationIntent: expect.objectContaining({
             providerId: 'openai-provider',
             modelId: 'dalle-model',
           }),
@@ -459,7 +459,7 @@ describe('registerMediaAgentTools', () => {
           provider: 'openai-provider',
           model: 'dalle-model',
         }),
-        providerAdaptation: expect.objectContaining({
+        generationIntent: expect.objectContaining({
           providerId: 'openai-provider',
           modelId: 'dalle-model',
           resolvedTarget: { providerId: 'openai-provider', modelId: 'dalle-model' },
@@ -709,7 +709,7 @@ describe('registerMediaAgentTools', () => {
     );
   });
 
-  it('extracts generation intent from task markdown and records providerAdaptation metadata', async () => {
+  it('extracts provider-neutral generation intent from task markdown', async () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
     registerMediaAgentTools(registry, media as never);
@@ -748,8 +748,7 @@ describe('registerMediaAgentTools', () => {
         providerId: 'new-video-model',
         modelId: 'new-video-model-current',
         metadata: expect.objectContaining({
-          providerAdaptation: expect.objectContaining({
-            mode: 'agentic',
+          generationIntent: expect.objectContaining({
             source: expect.objectContaining({
               kind: 'task-markdown',
               uri: 'docs/tasks/cat-detective.md',
@@ -766,15 +765,14 @@ describe('registerMediaAgentTools', () => {
     );
     expect(result.data).toEqual(
       expect.objectContaining({
-        providerAdaptation: expect.objectContaining({
-          mode: 'agentic',
+        generationIntent: expect.objectContaining({
           source: expect.objectContaining({ kind: 'task-markdown' }),
         }),
       }),
     );
   });
 
-  it('honors native provider adaptation mode for structured task markdown', async () => {
+  it('does not expose a provider adaptation mode for structured task markdown', async () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
     registerMediaAgentTools(registry, media as never);
@@ -782,7 +780,6 @@ describe('registerMediaAgentTools', () => {
     const result = await executeAgentTool(registry, 'GenerateImage', {
       taskRef: 'docs/tasks/native-image.md',
       taskMarkdown: ['# Task', '', '## Goal', 'A quiet forest shrine'].join('\n'),
-      providerAdaptationMode: 'native',
       providerId: 'image-provider',
       modelId: 'image-model',
     });
@@ -792,11 +789,9 @@ describe('registerMediaAgentTools', () => {
       expect.objectContaining({
         prompt: 'A quiet forest shrine',
         metadata: expect.objectContaining({
-          providerAdaptation: expect.objectContaining({
-            mode: 'native',
-            adaptationMetadata: expect.objectContaining({
-              riskFlags: ['provider-adaptation-bypassed'],
-            }),
+          generationIntent: expect.objectContaining({
+            source: expect.objectContaining({ kind: 'task-markdown' }),
+            prompt: 'A quiet forest shrine',
           }),
         }),
       }),

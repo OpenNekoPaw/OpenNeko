@@ -57,6 +57,13 @@ export type PerceptionInputKind =
   | 'motion-segment'
   | 'structured-data';
 
+export interface ProviderInputModalities {
+  readonly text: boolean;
+  readonly image: boolean;
+  readonly video: boolean;
+  readonly audio: boolean | 'realtime-only';
+}
+
 export interface TimelineContextSnapshot {
   readonly playheadMs?: number;
   readonly rangeStartMs?: number;

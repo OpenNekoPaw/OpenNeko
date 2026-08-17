@@ -761,6 +761,23 @@ describe('agent architecture boundary guards', () => {
     expect([...existingFiles, ...sourceViolations]).toEqual([]);
   });
 
+  it('keeps the retired provider-expression contract and configuration path absent', () => {
+    expect(existsSync(join(repoRoot, 'packages/agent/contracts/src/provider-card.ts'))).toBe(false);
+
+    for (const relativePath of [
+      'packages/agent/contracts/src/index.ts',
+      'packages/agent/contracts/src/agent-capability.ts',
+      'packages/ai/contracts/src/config.ts',
+      'packages/host/src/settings/chat-model-service.ts',
+      'scripts/agent-eval/schemas/contracts.mjs',
+    ]) {
+      const source = readFileSync(join(repoRoot, relativePath), 'utf8');
+      expect(source, relativePath).not.toMatch(
+        /ProviderCard|providerExpressionProfileId|provider-expression/u,
+      );
+    }
+  });
+
   it('keeps optional Autoheal strategy packs and chain implementation out of Agent core', () => {
     const forbiddenFiles = [
       join(agentSrc, 'autoheal/autoheal-chain.ts'),

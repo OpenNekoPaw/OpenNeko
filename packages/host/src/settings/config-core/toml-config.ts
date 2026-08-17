@@ -110,7 +110,6 @@ export interface TomlModelConfig {
   readonly output_cost_per_1k?: number;
   readonly enabled?: boolean;
   readonly options?: Record<string, unknown>;
-  readonly provider_expression_profile_id?: string;
 }
 
 export interface TomlMcpServerConfig {
@@ -482,12 +481,14 @@ function decodeModels(value: unknown, issues: TomlConfigValidationIssue[]): Toml
     const outputCost = readOptionalFiniteNumber(record, 'output_cost_per_1k', path, issues);
     const enabled = readOptionalBoolean(record, 'enabled', path, issues);
     const options = readOptionalRecord(record, 'options', path, issues);
-    const expressionProfileId = readOptionalString(
-      record,
-      'provider_expression_profile_id',
-      path,
-      issues,
-    );
+    if (Object.hasOwn(record, 'provider_expression_profile_id')) {
+      issues.push(
+        invalidField(
+          `${path}.provider_expression_profile_id`,
+          'provider_expression_profile_id is obsolete; use ordinary Skills for provider-neutral expression guidance.',
+        ),
+      );
+    }
     if (!id || !name || !providerId || !capabilities || issues.length > startIssueCount) continue;
     decoded.push({
       id,
@@ -505,9 +506,6 @@ function decodeModels(value: unknown, issues: TomlConfigValidationIssue[]): Toml
       ...(outputCost === undefined ? {} : { output_cost_per_1k: outputCost }),
       ...(enabled === undefined ? {} : { enabled }),
       ...(options === undefined ? {} : { options }),
-      ...(expressionProfileId === undefined
-        ? {}
-        : { provider_expression_profile_id: expressionProfileId }),
     });
   }
   const duplicateIds = collectDuplicateIds(decoded, 'models', 'duplicateModelId', issues);
@@ -1282,7 +1280,6 @@ function tomlModelToRuntime(model: TomlModelConfig): ModelConfig {
     maxOutputTokens: model.max_output_tokens,
     inputCostPer1k: model.input_cost_per_1k,
     outputCostPer1k: model.output_cost_per_1k,
-    providerExpressionProfileId: model.provider_expression_profile_id,
     enabled: model.enabled ?? true,
     options: model.options,
   }) as ModelConfig;
@@ -1303,7 +1300,6 @@ function runtimeModelToToml(model: ModelConfig): TomlModelConfig {
     max_output_tokens: model.maxOutputTokens,
     input_cost_per_1k: model.inputCostPer1k,
     output_cost_per_1k: model.outputCostPer1k,
-    provider_expression_profile_id: model.providerExpressionProfileId,
     enabled: model.enabled,
     options: model.options,
   }) as TomlModelConfig;
