@@ -1889,40 +1889,6 @@ async function startDesktop(): Promise<void> {
         requireOwnerWindow(identity.windowId);
         await openHostPath(absolutePath);
       },
-      selectWorkspaceWriteTarget: async ({ identity, workspaceId, suggestedLocator }) => {
-        const owner = requireOwnerWindow(identity.windowId);
-        const workspace = agentComposition.getWorkspace(workspaceId);
-        if (!workspace) {
-          throw new Error(`Desktop Agent Workspace '${workspaceId}' is not attached.`);
-        }
-        const result = await dialog.showSaveDialog(owner, {
-          title: 'Save SVG',
-          defaultPath: path.join(workspace.workspace.workspacePath, suggestedLocator.path),
-          filters: [{ name: 'SVG image', extensions: ['svg'] }],
-        });
-        if (result.canceled || !result.filePath) return undefined;
-        const relativePath = path.relative(workspace.workspace.workspacePath, result.filePath);
-        if (
-          relativePath.length === 0 ||
-          path.isAbsolute(relativePath) ||
-          relativePath === '..' ||
-          relativePath.startsWith(`..${path.sep}`)
-        ) {
-          throw new Error('Desktop Agent SVG target must remain inside the granted workspace.');
-        }
-        return {
-          kind: 'workspace-file',
-          path: relativePath.split(path.sep).join('/'),
-        };
-      },
-      didWriteWorkspaceContent: async ({ identity, contentLocator }) => {
-        requireOwnerWindow(identity.windowId);
-        const workspace = agentComposition.getWorkspace(identity.workspaceId);
-        if (!workspace) {
-          throw new Error(`Desktop Agent Workspace '${identity.workspaceId}' is not attached.`);
-        }
-        shell.showItemInFolder(path.join(workspace.workspace.workspacePath, contentLocator.path));
-      },
     },
     searchWorkspaceLinkedMediaFiles: (projectId, workspace, input) =>
       searchProjectMediaLibraryWorkspaceLocators({

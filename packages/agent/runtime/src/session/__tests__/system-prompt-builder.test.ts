@@ -271,6 +271,15 @@ describe('Builtin Prompts', () => {
     }
   });
 
+  it('does not advertise retired Mermaid or fenced JSON transports', () => {
+    for (const prompt of [BUILTIN_DEFAULT_PROMPT_EN, BUILTIN_DEFAULT_PROMPT_ZH]) {
+      expect(prompt).not.toMatch(/mermaid/iu);
+      expect(prompt).not.toContain('NEKO fenced JSON');
+      expect(prompt).not.toContain('neko-composite');
+      expect(prompt).not.toContain('kind "composite-artifact"');
+    }
+  });
+
   it('should contain planning instructions in plan prompts', () => {
     expect(BUILTIN_PLAN_PROMPT_EN).toContain('PLANNING MODE');
     expect(BUILTIN_PLAN_PROMPT_EN).toContain('actual authorized source documents');

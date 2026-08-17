@@ -51,7 +51,7 @@ export interface AgentHostRouteEffectPort<Message extends AgentWebviewToHostMess
 }
 
 export interface AgentConversationControllerTurnRequest extends AgentMessageRuntimeRequest {
-  readonly source: 'user-message' | 'mermaid-feedback';
+  readonly source: 'user-message';
   readonly turnId?: string;
 }
 
@@ -194,10 +194,6 @@ export interface AgentContentControllerEffectPort {
     message: Extract<AgentWebviewToHostMessage, { type: 'revealContextSource' }>,
     context: AgentHostRouteEffectContext,
   ): void | Promise<void>;
-  downloadSvg(
-    input: { readonly svg: string; readonly filename: string },
-    context: AgentHostRouteEffectContext,
-  ): void | Promise<void>;
 }
 
 export interface AgentProjectionControllerEffectPort {
@@ -221,7 +217,6 @@ export interface AgentProjectionControllerEffectPort {
 
 export const AGENT_CONVERSATION_CONTROLLER_ROUTE_TYPES = [
   'sendMessage',
-  'mermaidError',
   'confirmTool',
   'cancelMessage',
   'activateConversation',
@@ -266,7 +261,6 @@ export const AGENT_CONTENT_CONTROLLER_ROUTE_TYPES = [
   'revealFile',
   'openUrl',
   'revealContextSource',
-  'downloadSvg',
 ] as const satisfies readonly AgentWebviewToHostMessage['type'][];
 
 export const AGENT_PROJECTION_CONTROLLER_ROUTE_TYPES = [

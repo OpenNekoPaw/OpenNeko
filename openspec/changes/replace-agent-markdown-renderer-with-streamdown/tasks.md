@@ -58,6 +58,26 @@
 - [x] 6.2 Verify a cold Desktop Vite start loads the Agent Webview without flattening parse5 to an
       incompatible root `entities` package; remove stale Mermaid/Prism optimizer entries.
 
+## 7. Remove residual replaced paths
+
+- [x] 7.1 Delete Mermaid error feedback and SVG-download Webview messages, runtime routes/effects,
+      message helpers, base-prompt Mermaid authoring guidance, and their obsolete tests. Keep Mermaid
+      fences only as standard code blocks in the shared GFM profile.
+- [x] 7.2 Delete NEKO/JSON fenced composite extraction from Agent contracts, runtime turn collection,
+      Webview presentation, base prompts, exports, and tests. Keep typed composite artifact validation,
+      Tool JSON Schema validation, sanitize/harden, authorized URI projection, and block-local error
+      isolation.
+- [x] 7.3 Add path-level regression coverage proving Mermaid feedback/SVG protocol and Markdown fenced
+      artifact inference are absent while typed artifact and Tool schema validation remain canonical.
+- [x] 7.4 Update `agent-runtime.prompt-composition` with a named-Markdown regression case and record the
+      real-provider authorization requirement; leave the target hash to the concurrent prompt/Skill
+      composition change that owns the full composition snapshot.
+
+## 8. Residual cleanup verification
+
+- [x] 8.1 Run focused contracts/runtime/webview/markdown tests and typechecks, strict OpenSpec
+      validation, legacy/unused scans, and `git diff --check`; record the results and residual risks.
+
 ## Verification evidence (2026-08-17)
 
 - `pnpm --dir packages/markdown run test`: 9 files, 74 tests passed.
@@ -69,6 +89,24 @@
   Mermaid/Prism dependencies were removed.
 - `openspec validate replace-agent-markdown-renderer-with-streamdown --strict`: passed.
 - `git diff --check`: passed.
+- Residual Mermaid/JSON scan: production code has no `mermaidError`, `downloadSvg`,
+  `MarkdownDerivedCompositeSource`, `compositeSource`, or fenced-composite extractor references;
+  removed message names remain only in decoder rejection tests.
+- Residual cleanup focused tests: Agent Contracts 4 files / 60 tests, Agent Runtime 6 files / 85 tests,
+  Agent Webview 105 files / 784 tests, and Markdown 9 files / 74 tests passed. Focused prompt,
+  artifact-collector, Pi conversation and Markdown presenter runs also passed.
+- Agent Webview TypeScript build passed. Agent Contracts and Runtime typechecks remain blocked by the
+  concurrent `retire-provider-expression-dsl` working-tree change: stale tests/fixtures still import
+  removed `ProviderCard`, `ProviderInputModalities`, `validateProviderExpressionProfileDescriptor`,
+  and `adaptationHash` contracts. No reported type error is in the Mermaid/JSON cleanup path.
+- `agent-runtime.prompt-composition / named-markdown-without-fenced-transport` strict dry-run passed.
+  Full `pnpm test:agent:eval` validates the new 81-case count but remains blocked by a concurrent edit
+  to builtin `image/SKILL.md` whose suite fingerprint has not yet been refreshed.
+- Desktop focused Main tests passed 37/40; three existing `desktop-agent-controller-composition` cases
+  remain blocked by the concurrent facts lifecycle failure `Desktop Agent facts do not own turn`.
+- UI validation is advisory-blocked for a new Mermaid/JSON-specific screenshot: functional Webview,
+  Streamdown, presenter, hostile-content and sibling-failure coverage passed, while the prior visible
+  Electron validation already covered the shared Streamdown surface. No new control or layout was added.
 - Cold-cache `pnpm dev:desktop`: passed. Desktop Vite resolved parse5's `entities/decode` and
   `entities/escape` from package-owned `entities@6`, pre-optimized `streamdown` and its lazy `yaml`
   dependency before the Agent Webview loaded, and returned HTTP 200 for both `root.tsx` and
@@ -84,10 +122,11 @@
   dependencies, the `@neko/markdown/streamdown` browser extension/tests/package surface, removal of the
   old shared streaming implementation, the lockfile, and the Markdown ADR/research/active OpenSpec
   records listed by `git diff --name-status` at completion.
-- Agent Evaluation disposition: excluded because this deterministic presentation replacement does not
-  alter Prompt, Skill, Tool/capability routing, provider/model selection, AgentSession, queue, or task
-  behavior; package renderer/path tests are authoritative for this scope.
+- Agent Evaluation disposition: the renderer replacement remains deterministically covered, while the
+  later base-prompt cleanup is an `update` to `agent-runtime.prompt-composition`; the focused real case
+  requires explicit provider/model identity and cost authorization.
 - Remaining advisory risk: the visible Electron pass covered cold-start layout/theme plus an existing
   dense long-Markdown conversation with headings, tables, and lists. Streaming caret presentation and
   authorized audio/video projection were not manually exercised in this pass; focused renderer tests
-  cover those contracts. No code, contract, security, or package gate is blocked.
+  cover those contracts. No Mermaid/JSON cleanup regression was found; broader working-tree gate
+  blockers are recorded above and belong to concurrent changes.

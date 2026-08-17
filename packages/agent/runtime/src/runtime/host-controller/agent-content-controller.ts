@@ -65,11 +65,6 @@ export function tryHandleAgentContentControllerRoute(
     case 'revealContextSource':
       return runAgentHostRouteEffect(() => effects.revealContextSource(message, context));
 
-    case 'downloadSvg':
-      return runAgentHostRouteEffect(() =>
-        effects.downloadSvg({ svg: message.svg, filename: message.filename }, context),
-      );
-
     default:
       return null;
   }

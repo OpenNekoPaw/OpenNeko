@@ -19,6 +19,25 @@ const contentLocator = {
 };
 
 describe('webview protocol parser', () => {
+  it('rejects removed Mermaid feedback and SVG download messages', () => {
+    expect(
+      parseAgentWebviewToHostMessage({
+        type: 'mermaidError',
+        conversationId: 'conversation-1',
+        error: 'Parse error',
+        code: 'graph TD',
+        feedbackMessage: 'Repair the diagram.',
+      }),
+    ).toBeNull();
+    expect(
+      parseAgentWebviewToHostMessage({
+        type: 'downloadSvg',
+        svg: '<svg />',
+        filename: 'diagram.svg',
+      }),
+    ).toBeNull();
+  });
+
   it('parses sendMessage canvasTurnTarget exact and rejects invalid target', () => {
     const target = {
       workspaceId: 'workspace-1',

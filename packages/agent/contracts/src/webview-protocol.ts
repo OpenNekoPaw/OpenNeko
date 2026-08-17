@@ -345,20 +345,6 @@ export interface DragStartWebviewMessage {
   asset: { path: string; mediaType: 'image' | 'video' | 'audio'; name: string };
 }
 
-export interface MermaidErrorWebviewMessage {
-  type: 'mermaidError';
-  error: string;
-  code: string;
-  feedbackMessage: string;
-  conversationId: string;
-}
-
-export interface DownloadSvgWebviewMessage {
-  type: 'downloadSvg';
-  svg: string;
-  filename: string;
-}
-
 export interface GetAgentInputCatalogWebviewMessage {
   type: 'getAgentInputCatalog';
   conversationId: string;
@@ -436,8 +422,6 @@ export type AgentWebviewToHostMessage =
   | InvokeAgentCapabilityLifecycleWebviewMessage
   | RequestCanvasAuthoringHandoffWebviewMessage
   | DragStartWebviewMessage
-  | MermaidErrorWebviewMessage
-  | DownloadSvgWebviewMessage
   | GetAgentInputCatalogWebviewMessage
   | InvokeAgentInputWebviewMessage
   | ExitCharacterDialogueSessionWebviewMessage
@@ -1000,8 +984,6 @@ export const AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES = [
   'invokeAgentCapabilityLifecycle',
   'requestCanvasAuthoringHandoff',
   'dnd:start',
-  'mermaidError',
-  'downloadSvg',
   'getAgentInputCatalog',
   'invokeAgentInput',
   'exitCharacterDialogueSession',
@@ -1423,10 +1405,6 @@ export function parseAgentWebviewToHostMessage(raw: unknown): AgentWebviewToHost
       return parseRequestCanvasAuthoringHandoffMessage(raw);
     case 'dnd:start':
       return parseDragStartMessage(raw);
-    case 'mermaidError':
-      return parseMermaidErrorMessage(raw);
-    case 'downloadSvg':
-      return parseDownloadSvgMessage(raw);
     case 'getAgentInputCatalog':
       return parseGetAgentInputCatalogMessage(raw);
     case 'invokeAgentInput':
@@ -2624,32 +2602,6 @@ function parseDragStartMessage(raw: Record<string, unknown>): DragStartWebviewMe
   const name = requiredString(raw.asset.name);
   if (!path || !name || !isDragMediaType(raw.asset.mediaType)) return null;
   return { type: 'dnd:start', asset: { path, mediaType: raw.asset.mediaType, name } };
-}
-
-function parseMermaidErrorMessage(raw: Record<string, unknown>): MermaidErrorWebviewMessage | null {
-  const conversationId = requiredString(raw.conversationId);
-  const feedbackMessage = requiredString(raw.feedbackMessage);
-  if (
-    !conversationId ||
-    !feedbackMessage ||
-    typeof raw.error !== 'string' ||
-    typeof raw.code !== 'string'
-  ) {
-    return null;
-  }
-  return {
-    type: 'mermaidError',
-    error: raw.error,
-    code: raw.code,
-    feedbackMessage,
-    conversationId,
-  };
-}
-
-function parseDownloadSvgMessage(raw: Record<string, unknown>): DownloadSvgWebviewMessage | null {
-  const filename = requiredString(raw.filename);
-  if (!filename || typeof raw.svg !== 'string') return null;
-  return { type: 'downloadSvg', svg: raw.svg, filename };
 }
 
 function parseGetAgentInputCatalogMessage(

@@ -96,7 +96,7 @@ describe('collectCreatorVisibleArtifacts', () => {
     expect(collected.some((candidate) => candidate.artifactId === 'failed.png')).toBe(false);
   });
 
-  it('collects an accessed document only with an explicit fenced reviewable artifact', () => {
+  it('does not infer a reviewable artifact from fenced assistant Markdown', () => {
     const assistantMarkdown = `Review complete.\n\n~~~NEKO\n${JSON.stringify({
       kind: 'composite-artifact',
       artifactId: 'material-analysis',
@@ -111,20 +111,7 @@ describe('collectCreatorVisibleArtifacts', () => {
       },
     ];
 
-    expect(collectCreatorVisibleArtifacts({ toolResults, assistantMarkdown })).toEqual([
-      expect.objectContaining({ role: 'source', contentLocator: sourceLocator }),
-      expect.objectContaining({
-        artifactId: 'material-analysis',
-        role: 'analysis',
-        markdown: '# Material Analysis\n\nSelected findings.',
-      }),
-    ]);
-    expect(
-      collectCreatorVisibleArtifacts({
-        toolResults,
-        assistantMarkdown: '# Material Analysis\n\nOrdinary reply only.',
-      }),
-    ).toEqual([]);
+    expect(collectCreatorVisibleArtifacts({ toolResults, assistantMarkdown })).toEqual([]);
   });
 
   it('keeps ReadImage intrinsic dimensions with a document-entry attachment', () => {
@@ -331,7 +318,7 @@ describe('collectCreatorVisibleArtifacts', () => {
     expect(collected.some((candidate) => candidate.kind === 'markdown')).toBe(false);
   });
 
-  it('does not duplicate an explicit composite artifact after ReadImage analysis', () => {
+  it('collects a typed composite artifact once after ReadImage analysis', () => {
     const assistantMarkdown = `~~~NEKO\n${JSON.stringify({
       kind: 'composite-artifact',
       artifactId: 'declared-storyboard-analysis',
@@ -366,7 +353,7 @@ describe('collectCreatorVisibleArtifacts', () => {
     expect(collected[0]).toMatchObject({ artifactId: 'declared-storyboard-analysis' });
   });
 
-  it('uses locator content fingerprints for source candidates', () => {
+  it('does not retain source candidates only because Markdown resembles an artifact', () => {
     const portablePath = 'epub/animation/Blame/volume-01.epub';
     const unversionedLocator = {
       kind: 'workspace-file' as const,
@@ -398,13 +385,7 @@ describe('collectCreatorVisibleArtifacts', () => {
       })}\n~~~`,
     });
 
-    expect(collected.filter((candidate) => candidate.role === 'source')).toEqual([
-      expect.objectContaining({ contentLocator: unversionedLocator }),
-      expect.objectContaining({
-        contentFingerprint: 'sha256:volume-01',
-        contentLocator: fingerprintedLocator,
-      }),
-    ]);
+    expect(collected).toEqual([]);
   });
 
   it('fails visibly when a creator-visible Tool result omits required content locators', () => {
@@ -477,13 +458,7 @@ describe('collectCreatorVisibleArtifacts', () => {
     ).toEqual([]);
   });
 
-  it('keeps Read source provenance when the completed turn declares an analysis', () => {
-    const analysis = {
-      kind: 'composite-artifact',
-      artifactId: 'analysis-from-read',
-      title: 'Source Review',
-      blocks: [{ blockId: 'findings', kind: 'text', text: 'Reviewed.' }],
-    };
+  it('does not infer analysis provenance from completed-turn Markdown', () => {
     const collected = collectCreatorVisibleArtifactsFromTurnProjection(
       createTurn({
         toolName: 'Read',
@@ -491,11 +466,11 @@ describe('collectCreatorVisibleArtifacts', () => {
           contentLocator: { kind: 'workspace-file', path: 'docs/source.md' },
           content: '1\tsource',
         },
-        assistantMarkdown: `~~~NEKO\n${JSON.stringify(analysis)}\n~~~`,
+        assistantMarkdown: `~~~NEKO\n{"kind":"composite-artifact"}\n~~~`,
       }),
     );
 
-    expect(collected.map((candidate) => candidate.role)).toEqual(['source', 'analysis']);
+    expect(collected).toEqual([]);
   });
 
   it('does not collect artifacts from failed or non-terminal turns', () => {

@@ -55,7 +55,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
@@ -139,7 +138,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
@@ -295,7 +293,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: {
         openUserConfig: vi.fn(),
@@ -345,7 +342,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: {
         openUserConfig: vi.fn(),
@@ -574,7 +570,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
@@ -734,7 +729,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: {
         openUserConfig: vi.fn(),
@@ -853,7 +847,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
@@ -1079,7 +1072,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
@@ -1287,7 +1279,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: { openUserConfig: vi.fn() },
       reportError: vi.fn(),
@@ -1424,7 +1415,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: {
         openUserConfig: vi.fn(),
@@ -1471,7 +1461,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: {
         openUserConfig: vi.fn(),
@@ -1602,7 +1591,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: {
         openUserConfig: vi.fn(),
@@ -1826,7 +1814,6 @@ describe('Agent controller composition', () => {
       contentInteraction: {
         openContent: vi.fn(),
         revealDocument: vi.fn(),
-        selectWorkspaceWriteTarget: vi.fn(),
       },
       configInteraction: {
         openUserConfig: vi.fn(),

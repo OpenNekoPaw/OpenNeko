@@ -32,7 +32,6 @@ function createEffects(): AgentContentControllerEffectPort {
     revealFile: vi.fn(),
     openExternalUrl: vi.fn(),
     revealContextSource: vi.fn(),
-    downloadSvg: vi.fn(),
   };
 }
 
@@ -239,11 +238,6 @@ describe('Agent content controller', () => {
     await dispatch({ type: 'revealFile', contentLocator }, effects, context);
     await dispatch({ type: 'openUrl', url: 'https://example.com' }, effects, context);
     await dispatch(contextSource, effects, context);
-    await dispatch(
-      { type: 'downloadSvg', svg: '<svg />', filename: 'diagram.svg' },
-      effects,
-      context,
-    );
 
     expect(effects.searchProjectFiles).toHaveBeenCalledWith(
       { filter: 'guide', conversationId: 'conversation-1' },
@@ -263,10 +257,6 @@ describe('Agent content controller', () => {
     expect(effects.revealFile).toHaveBeenCalledWith(contentLocator, context);
     expect(effects.openExternalUrl).toHaveBeenCalledWith('https://example.com', context);
     expect(effects.revealContextSource).toHaveBeenCalledWith(contextSource, context);
-    expect(effects.downloadSvg).toHaveBeenCalledWith(
-      { svg: '<svg />', filename: 'diagram.svg' },
-      context,
-    );
   });
 
   it('allows roleplay and entry searches without an ordinary conversation', async () => {

@@ -23,23 +23,6 @@ export function tryHandleAgentConversationControllerRoute(
         effects.submitTurn(projectSendMessageTurnRequest(message), context),
       );
 
-    case 'mermaidError':
-      return runRequiredConversationRoute(
-        message,
-        'report Mermaid error',
-        context,
-        (conversationId) =>
-          effects.submitTurn(
-            {
-              source: 'mermaid-feedback',
-              conversationId,
-              messageText: message.feedbackMessage,
-              sessionMode: 'agent',
-            },
-            context,
-          ),
-      );
-
     case 'confirmTool':
       return runRequiredConversationRoute(message, 'confirm Tool Call', context, (conversationId) =>
         effects.confirmTool(

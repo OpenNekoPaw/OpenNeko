@@ -14,7 +14,6 @@ import {
   type CanvasWorkspaceProjectionKind,
 } from '@neko/canvas-domain';
 import { validateCompositeArtifact } from '@neko/agent-contracts';
-import { extractCompositeContentFenceCandidates } from '@neko/agent-contracts';
 import type { ConversationTurnProjection } from '@neko/agent-contracts';
 
 export interface CreatorVisibleArtifactCandidate {
@@ -30,7 +29,7 @@ export interface CreatorVisibleArtifactCandidate {
   readonly mimeType?: string;
   readonly generation?: CanvasGenerationEvidence;
   readonly intrinsicDimensions?: CanvasWorkspaceArtifactDimensions;
-  readonly provenanceSource?: 'tool-result' | 'assistant-declared' | 'native-image-analysis';
+  readonly provenanceSource?: 'tool-result' | 'native-image-analysis';
 }
 
 export interface CreatorVisibleArtifactCollectionInput {
@@ -202,14 +201,8 @@ export function collectCreatorVisibleArtifacts(
       ...(generation ? { generation } : {}),
     });
   }
-  const fencedCandidates = extractCompositeContentFenceCandidates(input.assistantMarkdown ?? '');
-  for (const fenced of fencedCandidates) {
-    const candidate = collectCompositeMarkdownArtifact(fenced.value);
-    if (candidate) candidates.push(candidate);
-  }
   if (
     nativeImageSourceArtifactIds.length > 0 &&
-    fencedCandidates.length === 0 &&
     !candidates.some((candidate) => candidate.role === 'analysis')
   ) {
     const analysis = collectNativeImageAnalysisArtifact({
@@ -383,12 +376,11 @@ function collectMarkdownArtifact(
   if (transfer.type !== 'artifactSnapshot' && transfer.type !== 'artifactBackfill')
     return undefined;
   if (transfer.type === 'artifactSnapshot' && transfer.complete === false) return undefined;
-  return collectCompositeMarkdownArtifact(transfer.artifact, 'tool-result');
+  return collectCompositeMarkdownArtifact(transfer.artifact);
 }
 
 function collectCompositeMarkdownArtifact(
   value: unknown,
-  provenanceSource: CreatorVisibleArtifactCandidate['provenanceSource'] = 'assistant-declared',
 ): CreatorVisibleArtifactCandidate | undefined {
   if (!validateCompositeArtifact(value).ok || !isRecord(value)) return undefined;
   const artifactId = readNonEmptyString(value['artifactId']);
@@ -406,7 +398,7 @@ function collectCompositeMarkdownArtifact(
     sourceId: `artifact:${artifactId}`,
     ...(sourceArtifactIds ? { sourceArtifactIds } : {}),
     markdown,
-    provenanceSource,
+    provenanceSource: 'tool-result',
   };
 }
 

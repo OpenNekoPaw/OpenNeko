@@ -53,7 +53,7 @@ async function dispatch(
 }
 
 describe('Agent conversation controller', () => {
-  it('projects user and Mermaid messages into canonical turn requests', async () => {
+  it('projects user messages into canonical turn requests', async () => {
     const effects = createEffects();
     const context = createContext();
 
@@ -77,20 +77,7 @@ describe('Agent conversation controller', () => {
       effects,
       context,
     );
-    await dispatch(
-      {
-        type: 'mermaidError',
-        conversationId: 'conversation-1',
-        error: 'Parse error',
-        code: 'graph TD',
-        feedbackMessage: 'Repair the Mermaid diagram.',
-      },
-      effects,
-      context,
-    );
-
-    expect(effects.submitTurn).toHaveBeenNthCalledWith(
-      1,
+    expect(effects.submitTurn).toHaveBeenCalledWith(
       {
         source: 'user-message',
         conversationId: 'conversation-1',
@@ -106,16 +93,6 @@ describe('Agent conversation controller', () => {
             data: { selectedText: 'hello' },
           },
         ],
-      },
-      context,
-    );
-    expect(effects.submitTurn).toHaveBeenNthCalledWith(
-      2,
-      {
-        source: 'mermaid-feedback',
-        conversationId: 'conversation-1',
-        messageText: 'Repair the Mermaid diagram.',
-        sessionMode: 'agent',
       },
       context,
     );

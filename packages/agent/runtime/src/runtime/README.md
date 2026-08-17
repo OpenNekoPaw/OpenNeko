@@ -17,7 +17,7 @@ System contracts are defined by:
 - `capability/`: consumption of `AgentCapabilityProvider` contributions and Host-injected content/external
   processor/research ports.
 - `host-controller/`: Host-neutral Agent message connection identity, typed transport, shared
-  conversation/turn/queue/Tool/Mermaid/config/settings/Skill/context/content/projection routing
+  conversation/turn/queue/Tool/config/settings/Skill/context/content/projection routing
   and responsibility-specific effect ports. It cannot import VS Code, Electron, Pi instances,
   projection owners or concrete Host effects.
 - `stream/`: reserved owner for host-neutral Pi event-stream state and background observation when those

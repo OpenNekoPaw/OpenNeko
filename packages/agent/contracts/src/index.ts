@@ -97,20 +97,11 @@ export type {
   CodeDiff,
   CanvasLifecycleBlockData,
   CompositeBlockData,
-  MarkdownDerivedCompositeSource,
   CompositeSection,
   CompositeTemplate,
   MediaRef,
 } from './message';
 export { parseMessageContextReference } from './message';
-export {
-  COMPOSITE_CONTENT_FENCE_LANGUAGES,
-  extractCompositeContentFenceCandidates,
-  isCompositeContentFenceLanguage,
-  parseCompositeContentJsonCandidates,
-  parseCompositeContentJson,
-  type CompositeContentFenceCandidate,
-} from './composite-content-contract';
 export {
   AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND,
   isAgentAuthorizedContentReferenceContextData,
@@ -392,7 +383,6 @@ export type {
   ConversationOnlyWebviewMessage,
   ConversationProjectionAttachmentHostFrame,
   DeleteConversationWebviewMessage,
-  DownloadSvgWebviewMessage,
   DragStartWebviewMessage,
   EmptyWebviewMessage,
   ErrorMessage,
@@ -417,7 +407,6 @@ export type {
   ExitCharacterDialogueSessionWebviewMessage,
   ExitEmbodyCharacterSessionWebviewMessage,
   MediaModelCategory,
-  MermaidErrorWebviewMessage,
   MessageQueueErrorMessage,
   MessageQueueSnapshotMessage,
   MessageQueuedMessage,

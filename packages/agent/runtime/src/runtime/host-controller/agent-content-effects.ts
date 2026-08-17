@@ -29,8 +29,6 @@ import {
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { readProjectEntityResources } from '@neko/entity-node';
 
-const MAX_SVG_BYTES = 10 * 1024 * 1024;
-
 type CanonicalWorkspaceProjectFileCandidate = AgentProjectFileCandidate & {
   readonly contentLocator: WorkspaceFileContentLocator;
 };
@@ -43,10 +41,7 @@ type AgentContentEffectErrorCode =
   | 'desktop-agent-content-outside-workspace'
   | 'desktop-agent-content-presentation-unavailable'
   | 'desktop-agent-context-locator-required'
-  | 'desktop-agent-svg-invalid'
-  | 'desktop-agent-svg-too-large'
-  | 'desktop-agent-workspace-grant-mismatch'
-  | 'desktop-agent-workspace-write-target-invalid';
+  | 'desktop-agent-workspace-grant-mismatch';
 
 class AgentContentEffectError extends Error {
   constructor(
@@ -77,18 +72,6 @@ export interface AgentContentInteractionPort {
     readonly absolutePath: string;
     readonly locator: DocumentLocator;
   }): Promise<void>;
-  selectWorkspaceWriteTarget(input: {
-    readonly identity: AgentHostConnectionIdentity;
-    readonly workspaceId: string;
-    readonly suggestedLocator: WorkspaceFileContentLocator;
-    readonly mediaType: 'image/svg+xml';
-  }): Promise<WorkspaceFileContentLocator | undefined>;
-  didWriteWorkspaceContent?(input: {
-    readonly identity: AgentHostConnectionIdentity;
-    readonly workspaceId: string;
-    readonly contentLocator: WorkspaceFileContentLocator;
-    readonly byteLength: number;
-  }): void | Promise<void>;
 }
 
 export interface CreateAgentContentEffectsOptions {
@@ -241,32 +224,6 @@ export function createAgentContentEffects(
         workspaceId: options.workspace.workspaceId,
         contentLocator: message.contentLocator,
         absolutePath,
-      });
-    },
-
-    async downloadSvg(input, context): Promise<void> {
-      assertWorkspaceGrant(options.workspace, context);
-      assertSvg(input.svg);
-      const suggestedLocator: WorkspaceFileContentLocator = {
-        kind: 'workspace-file',
-        path: normalizeSvgFileName(input.filename),
-      };
-      const selected = await options.interaction.selectWorkspaceWriteTarget({
-        identity: context.identity,
-        workspaceId: options.workspace.workspaceId,
-        suggestedLocator,
-        mediaType: 'image/svg+xml',
-      });
-      if (!selected) return;
-      const contentLocator = requireWorkspaceWriteLocator(selected);
-      const absolutePath = await resolveWorkspaceWritePath(contentLocator, options);
-      await assertHostAccess(options.host, 'write', absolutePath);
-      await options.host.files.writeText(absolutePath, input.svg);
-      await options.interaction.didWriteWorkspaceContent?.({
-        identity: context.identity,
-        workspaceId: options.workspace.workspaceId,
-        contentLocator,
-        byteLength: Buffer.byteLength(input.svg, 'utf8'),
       });
     },
   };
@@ -532,23 +489,6 @@ function workspaceLocatorForRead(
   }
 }
 
-async function resolveWorkspaceWritePath(
-  locator: WorkspaceFileContentLocator,
-  options: CreateAgentContentEffectsOptions,
-): Promise<string> {
-  const candidate = resolveLexicalWorkspacePath(
-    options.workspace.workspacePath,
-    locator.path,
-    options.host,
-  );
-  const [canonicalWorkspace, canonicalParent] = await Promise.all([
-    realpath(options.workspace.workspacePath),
-    realpath(path.dirname(candidate)),
-  ]);
-  assertInsideWorkspace(canonicalParent, canonicalWorkspace, options.host);
-  return path.join(canonicalParent, path.basename(candidate));
-}
-
 function resolveLexicalWorkspacePath(
   workspacePath: string,
   relativePath: string,
@@ -608,25 +548,6 @@ function workspaceRelativePath(locatorValue: ContentLocator): string {
   }
 }
 
-function requireWorkspaceWriteLocator(
-  locatorValue: WorkspaceFileContentLocator,
-): WorkspaceFileContentLocator {
-  const validation = validateContentLocator(locatorValue);
-  if (!validation.ok || validation.locator.kind !== 'workspace-file') {
-    throw new AgentContentEffectError(
-      'desktop-agent-workspace-write-target-invalid',
-      'Desktop Host selected an invalid workspace write target.',
-    );
-  }
-  if (validation.locator.fingerprint !== undefined) {
-    throw new AgentContentEffectError(
-      'desktop-agent-workspace-write-target-invalid',
-      'Desktop Host write targets cannot silently ignore a content fingerprint precondition.',
-    );
-  }
-  return validation.locator;
-}
-
 function assertWorkspaceGrant(
   workspace: AssetWorkspaceResolution,
   context: AgentHostRouteEffectContext,
@@ -644,7 +565,7 @@ function assertWorkspaceGrant(
 
 async function assertHostAccess(
   host: CreateAgentContentEffectsOptions['host'],
-  operation: 'list' | 'project' | 'write',
+  operation: 'list' | 'project',
   targetPath: string,
 ): Promise<void> {
   const decision = await host.accessPolicy?.decide({
@@ -658,36 +579,6 @@ async function assertHostAccess(
     throw new AgentContentEffectError(
       'desktop-agent-content-access-denied',
       decision.diagnostic?.message ?? 'Desktop Host denied the Agent content effect.',
-    );
-  }
-}
-
-function normalizeSvgFileName(value: string): string {
-  const baseName = path.posix.basename(value.replace(/\\/g, '/').trim());
-  const withoutControlCharacters = baseName.replace(/[\u0000-\u001f\u007f]/g, '');
-  if (
-    !withoutControlCharacters ||
-    withoutControlCharacters === '.' ||
-    withoutControlCharacters === '..'
-  ) {
-    return 'diagram.svg';
-  }
-  return withoutControlCharacters.toLocaleLowerCase().endsWith('.svg')
-    ? withoutControlCharacters
-    : `${withoutControlCharacters}.svg`;
-}
-
-function assertSvg(svg: string): void {
-  if (!/<svg(?:\s|>)/i.test(svg)) {
-    throw new AgentContentEffectError(
-      'desktop-agent-svg-invalid',
-      'Desktop SVG write requires an SVG document.',
-    );
-  }
-  if (Buffer.byteLength(svg, 'utf8') > MAX_SVG_BYTES) {
-    throw new AgentContentEffectError(
-      'desktop-agent-svg-too-large',
-      `Desktop SVG write exceeds the ${MAX_SVG_BYTES}-byte limit.`,
     );
   }
 }

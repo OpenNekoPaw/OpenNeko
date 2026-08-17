@@ -1,0 +1,72 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "named-markdown-without-fenced-transport",
+  "suiteId": "agent-runtime.prompt-composition",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Return a named reviewable Markdown document as ordinary Markdown without the retired fenced JSON composite transport.",
+    "canonicalPath": [
+      "Desktop Agent session assembly",
+      "canonical base prompt fragment",
+      "ordinary assistant Markdown output"
+    ],
+    "observables": [
+      {
+        "ref": "prompt-facts",
+        "kind": "runtime-fact",
+        "description": "Base prompt composition and the final assistant Markdown answer.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The answer contains the requested Markdown title and marker without NEKO, neko-composite, or composite-artifact fenced transport.",
+    "expectedFailure": "Missing base composition, empty output, or any retired fenced transport marker fails visibly."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "请直接在回复中写一份具名 Markdown 文档，标题必须是《雨夜车站镜头备注》，正文只需两条简短要点，末尾单独写 MARKDOWN_DOCUMENT_OK。不要使用 JSON 或代码块，也不要声称已经保存到工作区。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "prompt-facts"
+    },
+    {
+      "id": "composition",
+      "kind": "prompt-composition",
+      "requiredFragments": [{ "id": "base", "source": "base" }],
+      "evidenceRef": "prompt-facts"
+    },
+    {
+      "id": "answer-content",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["雨夜车站镜头备注", "MARKDOWN_DOCUMENT_OK"],
+      "evidenceRef": "prompt-facts"
+    },
+    {
+      "id": "retired-transport-absent",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["~~~NEKO", "```NEKO", "~~~json", "```json", "```neko-composite", "composite-artifact"],
+      "evidenceRef": "prompt-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
+}

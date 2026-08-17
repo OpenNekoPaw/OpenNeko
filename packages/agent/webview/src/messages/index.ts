@@ -339,27 +339,6 @@ export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
       postConversationMessage({ type: 'requestCanvasAuthoringHandoff', ...payload });
     },
 
-    /** Download a Mermaid diagram as SVG file */
-    downloadSvg: (svg: string, filename: string) => {
-      postWebviewMessage({ type: 'downloadSvg', svg, filename });
-    },
-
-    /** Report a Mermaid rendering error — sends feedback as user message to AI */
-    mermaidError: (
-      error: string,
-      code: string,
-      feedbackMessage: string,
-      conversationId: string,
-    ) => {
-      postConversationMessage({
-        type: 'mermaidError',
-        error,
-        code,
-        feedbackMessage,
-        conversationId,
-      });
-    },
-
     /** Reveal a file in the OS file manager */
     revealFile: (contentLocator: ContentLocator) => {
       postWebviewMessage({ type: 'revealFile', contentLocator });

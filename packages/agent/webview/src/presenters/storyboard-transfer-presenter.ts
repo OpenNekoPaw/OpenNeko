@@ -21,7 +21,7 @@ type StoryboardCanvasAuthoringHandoff = Omit<
   'type' | 'requestId' | 'conversationId'
 >;
 
-export function projectCanonicalStoryboardCanvasAuthoringHandoff(
+function projectCanonicalStoryboardCanvasAuthoringHandoff(
   storyboard: StoryboardTable,
 ): StoryboardCanvasAuthoringHandoff | null {
   if (!validateCanonicalStoryboardTable(storyboard).ok) return null;

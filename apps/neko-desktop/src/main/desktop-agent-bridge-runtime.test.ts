@@ -860,7 +860,6 @@ function createEffects(
       revealFile: vi.fn(),
       openExternalUrl: vi.fn(),
       revealContextSource: vi.fn(),
-      downloadSvg: vi.fn(),
     },
     projection: {
       discoverEndpoint: vi.fn(),

@@ -80,6 +80,9 @@ renderer, retrying, or falling back to raw text.
 Typed artifacts, tools, approvals, creative tables when typed, and domain results SHALL remain typed
 sibling Timeline blocks rendered by their owning presenters. The Markdown renderer SHALL NOT infer
 structured composite fences, Mermaid diagrams, or creative table semantics from Markdown text.
+Agent contracts and runtime collection SHALL NOT infer typed artifacts from NEKO or JSON fenced blocks
+inside assistant Markdown. Mermaid fences SHALL remain ordinary code blocks and SHALL NOT activate a
+Mermaid feedback, retry, or SVG-download protocol.
 
 #### Scenario: Structured content arrives as a typed sibling
 
@@ -87,3 +90,17 @@ structured composite fences, Mermaid diagrams, or creative table semantics from 
   table in addition to Markdown text
 - **THEN** the typed block renders through its typed sibling presenter
 - **AND** the Markdown renderer does not parse or project that typed content from the Markdown source.
+
+#### Scenario: Fenced JSON remains ordinary Markdown
+
+- **WHEN** assistant Markdown contains a NEKO or JSON fenced block resembling a composite artifact
+- **THEN** it remains ordinary Markdown code content
+- **AND** neither runtime collection nor Webview presentation promotes it into a typed artifact
+- **AND** typed artifact validators continue to validate only artifacts received through the typed
+  contract.
+
+#### Scenario: Mermaid fence has no hidden protocol
+
+- **WHEN** assistant Markdown contains a Mermaid fenced block
+- **THEN** Streamdown presents it as a standard fenced code block
+- **AND** no Mermaid error feedback, retry turn, or SVG-download message can be sent or handled.

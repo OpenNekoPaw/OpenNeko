@@ -144,6 +144,26 @@ block-local boundary displays a diagnostic. The renderer has no alternate render
 and no automatic reprocess. Removing or repairing the block is done by the Agent/user producing new
 content.
 
+### 8. Remove residual Mermaid and Markdown-JSON success paths
+
+Mermaid fences remain ordinary fenced code under the shared GFM profile. Agent Webview and runtime no
+longer expose Mermaid render-error feedback or SVG download messages, because no production renderer
+owns or sends those messages after the Streamdown replacement. The base prompt does not teach Mermaid
+authoring as a renderer capability.
+
+Structured artifacts arrive only through typed artifact/capability contracts. Contracts, runtime turn
+collection, and Webview presentation do not scan assistant Markdown for NEKO or JSON fenced composite
+payloads. The base prompt does not request that transport. Typed composite artifact validation, Tool
+JSON Schema validation, IPC decoding, persistence decoding, Streamdown sanitize/harden, authorized
+Workspace URI projection, and block-local presentation isolation remain unchanged because they protect
+real contract, trust, or presentation boundaries.
+
+Because this cleanup changes the canonical base prompt, the existing
+`agent-runtime.prompt-composition` Evaluation suite owns the behavior delta. Its regression case asks
+for a named Markdown document and rejects the retired fenced transport. Deterministic prompt, protocol,
+artifact-collection, and presenter tests remain authoritative for the deleted code paths; a real
+provider run is still required to claim model adherence.
+
 ## Risks / Trade-offs
 
 - [Streamdown owns block splitting and incomplete-suffix behavior] -> We rely on pinned Streamdown 2.5.0
@@ -172,6 +192,7 @@ content.
    lifecycle dependency.
 6. Add focused tests listed in tasks and remove obsolete renderer/session tests.
 7. Update contradictory docs/OpenSpec statements.
-8. Run focused tests, typechecks, and OpenSpec validation.
+8. Remove residual Mermaid feedback/SVG-download protocol and Markdown fenced-JSON artifact inference.
+9. Run focused tests, typechecks, and OpenSpec validation.
 
 Rollback is an atomic revert of this change; no persisted schema or user data migration exists.

@@ -2,7 +2,7 @@
   "schema": "neko.agent-eval.suite",
   "id": "agent-runtime.prompt-composition",
   "owner": { "kind": "agent-runtime", "id": "prompt-composition" },
-  "target": { "kind": "prompt", "id": "system-prompt-composition", "contractHash": "sha256:d388519962bae4102874ce71834d32367b27e13dbbc22f7cfd18d7c0e9971d20" },
+  "target": { "kind": "prompt", "id": "system-prompt-composition", "contractHash": "sha256:6dee5265175c96db243a6b00ddd5a744fd1cfe0b1cddbaff758d8b0d698f05e0" },
   "runtimeProfiles": [{ "id": "markdown", "settings": { "outputFormat": "markdown" }, "configurationHash": "sha256:f949e317ef6531bd9fa4f15b04f4cc038036365bc0a8a8f97dcb229049f0baac" }],
   "modelProfiles": [{ "id": "configured-default", "selection": "configured-default", "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915" }],
   "judgeProfiles": [],
@@ -12,7 +12,8 @@
   ],
   "cases": [
     { "id": "base-and-skill-fragments", "file": "cases/base-and-skill-fragments.json", "group": "canonical", "visibility": "public" },
-    { "id": "agents-md-environment-fragment", "file": "cases/agents-md-environment-fragment.json", "group": "boundary", "visibility": "public" }
+    { "id": "agents-md-environment-fragment", "file": "cases/agents-md-environment-fragment.json", "group": "boundary", "visibility": "public" },
+    { "id": "named-markdown-without-fenced-transport", "file": "cases/named-markdown-without-fenced-transport.json", "group": "regression", "visibility": "public" }
   ],
   "rubricRefs": [],
   "baselinePolicy": { "mode": "none" },

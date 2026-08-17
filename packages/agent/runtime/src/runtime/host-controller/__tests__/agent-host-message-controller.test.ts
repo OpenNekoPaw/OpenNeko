@@ -47,7 +47,6 @@ function createEffects(): AgentHostControllerEffectPorts {
       revealFile: vi.fn(),
       openExternalUrl: vi.fn(),
       revealContextSource: vi.fn(),
-      downloadSvg: vi.fn(),
     },
     projection: {
       discoverEndpoint: vi.fn(),
@@ -79,7 +78,7 @@ describe('Agent Host message controller', () => {
     const controller = createAgentHostMessageController(effects, context);
 
     expect(controller.identity).toBe(context.identity);
-    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(38);
+    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(36);
 
     await controller.tryHandle({ type: 'getConversations' });
     await controller.tryHandle({ type: 'getConfig' });

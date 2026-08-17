@@ -25,6 +25,10 @@ renderer for both streaming and final Agent text.
 - Keep typed artifacts, tools, approvals, creative tables when typed, and domain results as typed
   siblings. The Markdown renderer no longer infers structured composite fences, Mermaid blocks, or
   creative tables from Markdown text.
+- Remove the obsolete Mermaid feedback/SVG-download Webview protocol and the base-prompt Mermaid
+  authoring tutorial. Remove Markdown fenced-JSON composite inference from contracts, runtime artifact
+  collection, Webview presentation, and base prompts. Typed artifact and Tool schema validation remain
+  the only structured-content validation paths.
 - Preserve exact source bytes and the existing authorized Workspace resource projections. Renderer
   failures are block-local and preserve sibling Timeline blocks and conversations; a Markdown
   presentation failure is never converted into projection attachment protocol fatal.
@@ -66,5 +70,8 @@ renderer for both streaming and final Agent text.
 - Replaced path: `MarkdownRenderer` using `MarkdownStreamingSession` +
   `AgentMarkdownSessionRegistry` + normalized node renderer is replaced by one Streamdown component
   with narrow custom plugins/components. The old registry/context and its tests are deleted.
+- Residual replaced paths: Mermaid presentation feedback and SVG download messages, plus NEKO/JSON
+  fenced composite extraction from assistant Markdown, are deleted together with their handlers,
+  exports, prompts, fixtures, and tests.
 - User-data impact: no persisted user data or Workspace files are migrated. Authoritative Markdown
   source bytes are rendered as-is; no renderer writes back to files.

@@ -25,8 +25,8 @@ describe('Agent Host controller contract', () => {
       .map(([route]) => route)
       .sort();
 
-    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(38);
-    expect(new Set(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).size).toBe(38);
+    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(36);
+    expect(new Set(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).size).toBe(36);
     expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).not.toContain('getSkills');
     expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).not.toContain('invokeSlashCommand');
     expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).not.toContain('invokeSkill');

@@ -306,60 +306,6 @@ describe('Desktop Agent content effects', () => {
     expect(fixture.interaction.openContent).not.toHaveBeenCalled();
   });
 
-  it('writes SVG only to a Host-selected stable workspace locator', async () => {
-    const fixture = await createFixture({
-      selectWorkspaceWriteTarget: vi.fn(async () => ({
-        kind: 'workspace-file' as const,
-        path: 'exports/diagram.svg',
-      })),
-    });
-    await mkdir(path.join(fixture.workspace.workspacePath, 'exports'));
-
-    await fixture.effects.downloadSvg(
-      { svg: '<svg><path /></svg>', filename: '../diagram.svg' },
-      fixture.context,
-    );
-
-    await expect(
-      fixture.host.files.readText(
-        path.join(fixture.workspace.workspacePath, 'exports/diagram.svg'),
-      ),
-    ).resolves.toBe('<svg><path /></svg>');
-    expect(fixture.interaction.selectWorkspaceWriteTarget).toHaveBeenCalledWith({
-      identity: fixture.context.identity,
-      workspaceId: fixture.workspace.workspaceId,
-      suggestedLocator: { kind: 'workspace-file', path: 'diagram.svg' },
-      mediaType: 'image/svg+xml',
-    });
-    expect(fixture.interaction.didWriteWorkspaceContent).toHaveBeenCalledWith({
-      identity: fixture.context.identity,
-      workspaceId: fixture.workspace.workspaceId,
-      contentLocator: { kind: 'workspace-file', path: 'exports/diagram.svg' },
-      byteLength: Buffer.byteLength('<svg><path /></svg>', 'utf8'),
-    });
-  });
-
-  it('rejects a Host-selected SVG target whose parent symlink escapes the grant', async () => {
-    const outside = await createTemporaryDirectory();
-    const fixture = await createFixture({
-      selectWorkspaceWriteTarget: vi.fn(async () => ({
-        kind: 'workspace-file' as const,
-        path: 'linked-outside/diagram.svg',
-      })),
-    });
-    await symlink(outside, path.join(fixture.workspace.workspacePath, 'linked-outside'));
-
-    await expect(
-      fixture.effects.downloadSvg(
-        { svg: '<svg><path /></svg>', filename: 'diagram.svg' },
-        fixture.context,
-      ),
-    ).rejects.toMatchObject({ code: 'desktop-agent-content-outside-workspace' });
-    await expect(
-      fixture.host.files.readText(path.join(outside, 'diagram.svg')),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
-  });
-
   it('fails visibly when context reveal has no stable locator', async () => {
     const fixture = await createFixture();
 
@@ -402,8 +348,6 @@ async function createFixture(interactionOverrides: Partial<AgentContentInteracti
   const interaction: AgentContentInteractionPort = {
     openContent: vi.fn(async () => undefined),
     revealDocument: vi.fn(async () => undefined),
-    selectWorkspaceWriteTarget: vi.fn(async () => undefined),
-    didWriteWorkspaceContent: vi.fn(),
     ...interactionOverrides,
   };
   return {

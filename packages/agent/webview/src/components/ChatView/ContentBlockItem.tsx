@@ -1,20 +1,13 @@
 /** Renders one typed block body inside the owning Assistant turn. */
 
 import { memo } from 'react';
-import {
-  extractCompositeContentFenceCandidates,
-  parseCompositeContentJson,
-  type ContentBlock,
-} from '@neko/agent-contracts';
 import { ToolCallDisplay, ToolCallGroupDisplay } from './ToolCallDisplay';
 import { DiffBlock } from './DiffBlock';
 import { RichContentRenderer } from './RichContent';
 import { MarkdownRenderer } from './MessageContent';
 import { useMessageActions } from './MessageActionsContext';
-import { SendToMenu } from './SendToMenu';
 import { useTranslation } from '../../i18n/I18nContext';
 import { useAgentHostMessages } from '../../host-runtime-context';
-import { projectCanonicalStoryboardCanvasAuthoringHandoff } from '../../presenters/storyboard-transfer-presenter';
 import { projectMarkdownResourceRendering } from '../../presenters/markdown-resource-rendering-presenter';
 import {
   formatCanvasLifecycleActionLabel,
@@ -35,7 +28,6 @@ import {
   type AgentCapabilityInvocationInput,
   type AgentCapabilityInvocationResult,
 } from '@neko/agent-contracts';
-import { normalizeCanonicalStoryboardTable } from '@neko/canvas-domain';
 
 interface ContentBlockItemProps {
   projection: ContentBlockUiProjection;
@@ -95,14 +87,6 @@ function renderBlockContent(
             ambientNodes: callbacks.ambientNodes,
           })
         : undefined;
-      const canonicalStoryboardHandoff =
-        !projection.renderStreaming && callbacks.pluginsAvailable?.canvas
-          ? projectEmbeddedCanonicalStoryboardHandoff({
-              markdown: projection.content,
-              contentBlockId: projection.id,
-              siblingBlocks: projection.siblingBlocks,
-            })
-          : null;
       return (
         <div className="agent-assistant-document min-w-0 text-[13px] leading-relaxed">
           <MarkdownRenderer
@@ -110,17 +94,6 @@ function renderBlockContent(
             isStreaming={projection.renderStreaming}
             markdownResources={markdownResources}
           />
-          {canonicalStoryboardHandoff && callbacks.pluginsAvailable && (
-            <div className="mt-1.5 flex flex-wrap gap-1.5 border-t border-[var(--agent-divider)] pt-1">
-              <SendToMenu
-                canvasAuthoringHandoff={canonicalStoryboardHandoff ?? undefined}
-                conversationId={conversationId}
-                mediaType="image"
-                plugins={callbacks.pluginsAvailable}
-                allowedTargets={['canvas']}
-              />
-            </div>
-          )}
         </div>
       );
     }
@@ -185,38 +158,6 @@ function renderBlockContent(
     case 'empty':
       return null;
   }
-}
-
-function projectEmbeddedCanonicalStoryboardHandoff(input: {
-  readonly markdown: string;
-  readonly contentBlockId: string;
-  readonly siblingBlocks?: readonly ContentBlock[];
-}) {
-  const derivedComposites = (input.siblingBlocks ?? [])
-    .filter((block) => {
-      const source = block.compositeSource;
-      return (
-        block.type === 'composite' &&
-        block.composite !== undefined &&
-        source !== undefined &&
-        source.sourceBlockId === input.contentBlockId
-      );
-    })
-    .flatMap((block) => (block.composite ? [block.composite] : []));
-  const composites =
-    derivedComposites.length > 0
-      ? derivedComposites
-      : extractCompositeContentFenceCandidates(input.markdown).flatMap((candidate) =>
-          parseCompositeContentJson(candidate.rawJson),
-        );
-
-  for (const composite of composites) {
-    if (composite.template !== 'storyboard-table' || !composite.storyboardTable) continue;
-    const normalized = normalizeCanonicalStoryboardTable({ value: composite.storyboardTable });
-    if (!normalized.table) return null;
-    return projectCanonicalStoryboardCanvasAuthoringHandoff(normalized.table);
-  }
-  return null;
 }
 
 function CanvasLifecycleResultCard({

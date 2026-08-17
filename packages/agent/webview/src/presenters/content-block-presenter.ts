@@ -201,18 +201,16 @@ export function projectContentBlocksUi(
 ): ContentBlockUiProjection[] {
   if (!blocks || blocks.length === 0) return [];
 
-  const projections = blocks
-    .filter((block) => block.compositeSource === undefined)
-    .map((block) =>
-      projectContentBlockUi({
-        block,
-        siblingBlocks,
-        toolCalls,
-        ambientToolCalls,
-        parentIsStreaming,
-        plugins,
-      }),
-    );
+  const projections = blocks.map((block) =>
+    projectContentBlockUi({
+      block,
+      siblingBlocks,
+      toolCalls,
+      ambientToolCalls,
+      parentIsStreaming,
+      plugins,
+    }),
+  );
 
   return aggregateConsecutiveToolProjections(projections);
 }
