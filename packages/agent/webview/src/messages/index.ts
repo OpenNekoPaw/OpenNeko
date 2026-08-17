@@ -202,6 +202,11 @@ export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
       postConversationMessage({ type: 'getAgentInputCatalog', conversationId });
     },
 
+    /** Request the canonical input catalog for the exact owner-bound Composer. */
+    getAgentComposerInputCatalog: () => {
+      postWebviewMessage({ type: 'getAgentComposerInputCatalog' });
+    },
+
     /** Open the raw user config in the Desktop editor. */
     openUserConfigFile: () => {
       postWebviewMessage({ type: 'openUserConfigFile' });

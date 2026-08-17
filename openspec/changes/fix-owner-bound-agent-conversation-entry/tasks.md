@@ -1,12 +1,10 @@
 # Tasks
 
-- [x] Add producer and poison tests for Entry-only `submitDraft` reachability.
-- [x] Restore owner-bound Conversation creation under Agent runtime ownership.
-- [x] Route Workspace first-send inputs through the canonical Conversation message contract.
-- [x] Create Workspace owner-bound Conversations immediately and idempotently on Surface mount.
-- [x] Keep first Workspace send pending-only while auto-creation is in flight to avoid duplicate `newConversation`.
-- [x] Add regression tests for mount-time creation and canonical `$`/`/` input catalog hydration.
-- [x] Update Desktop Scene wiring to project the exact created Conversation without Draft fallback.
+- [x] Add canonical Entry Draft / owner-bound Composer / Conversation Session contracts and poison tests.
+- [x] Update Desktop Scene producers so bound scopes without Conversation project `composer`, never `draft`.
+- [x] Expose owner-scoped Composer model and `$`/`/` input catalogs without creating an empty Conversation.
+- [x] Route Workspace first-send inputs through the canonical Conversation message contract and preserve files/context.
+- [x] Extend exact-owner tests for Workspace, Assistant, Character, Room, and World composer boundaries.
 - [x] Run focused contract, runtime, renderer, Desktop, typecheck, UI, and Agent Evaluation checks; record residual risk.
 
 ## Verification

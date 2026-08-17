@@ -119,6 +119,7 @@ export interface UseMessageHandlerProps {
   // Force re-render when agent state changes (for useMemo recalculation)
   forceAgentStateUpdate: () => void;
 
+  setAgentComposerInputCatalog?: MessageHandlerContext['setAgentComposerInputCatalog'];
   setAgentInputCatalogByConversation?: MessageHandlerContext['setAgentInputCatalogByConversation'];
 
   // State setters - SSO/Onboarding
@@ -196,6 +197,7 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
     setAgentState,
     conversationAgentStateRef,
     forceAgentStateUpdate,
+    setAgentComposerInputCatalog,
     setAgentInputCatalogByConversation,
     updateSettings,
     setShowOnboarding,
@@ -253,6 +255,7 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
       setAgentState,
       conversationAgentStateRef,
       forceAgentStateUpdate,
+      setAgentComposerInputCatalog,
       setAgentInputCatalogByConversation,
       updateSettings,
       setShowOnboarding,
@@ -304,6 +307,7 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
       setAgentState,
       conversationAgentStateRef,
       forceAgentStateUpdate,
+      setAgentComposerInputCatalog,
       setAgentInputCatalogByConversation,
       updateSettings,
       setShowOnboarding,

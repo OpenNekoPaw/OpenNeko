@@ -145,6 +145,7 @@ export interface AgentConfigControllerEffectPort {
 }
 
 export interface AgentSkillControllerEffectPort {
+  readComposerInputCatalog(context: AgentHostRouteEffectContext): void | Promise<void>;
   readInputCatalog(
     conversationId: string,
     context: AgentHostRouteEffectContext,
@@ -256,6 +257,7 @@ export const AGENT_CONFIG_CONTROLLER_ROUTE_TYPES = [
 ] as const satisfies readonly AgentWebviewToHostMessage['type'][];
 
 export const AGENT_SKILL_CONTROLLER_ROUTE_TYPES = [
+  'getAgentComposerInputCatalog',
   'getAgentInputCatalog',
   'invokeAgentInput',
   'getContextTokenCount',

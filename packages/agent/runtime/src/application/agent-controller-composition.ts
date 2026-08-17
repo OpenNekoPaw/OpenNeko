@@ -33,6 +33,7 @@ import {
 } from '@neko/agent-runtime/runtime/projection/conversation-projection-attachment-server';
 import { projectPiConversationEntries } from '@neko/agent-runtime/runtime/projection/pi-conversation-history-projector';
 import {
+  buildAgentComposerInputCatalogMessage,
   buildAgentInputCatalogMessage,
   buildErrorMessage,
   buildAgentSessionDiagnosticMessage,
@@ -182,6 +183,7 @@ export interface AgentControllerComposition {
     readonly identity: DesktopAgentConnectionIdentity;
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
+    readonly composer?: import('@neko/agent-contracts').AgentComposerInteractionProjection;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
     readonly readConversationCapabilityConstraint?: (
       conversationId: string,
@@ -345,6 +347,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly identity: DesktopAgentConnectionIdentity;
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
+    readonly composer?: import('@neko/agent-contracts').AgentComposerInteractionProjection;
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
     readonly readConversationCapabilityConstraint?: (
       conversationId: string,
@@ -549,6 +552,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         input.readConversationConfiguration ?? missingConversationConfigurationDependency,
         input.readConversationCapabilityConstraint ??
           missingConversationCapabilityConstraintDependency,
+        input.composer,
         input.resolveConversationDomainTurnContext,
       ),
       content: createAgentContentEffects({
@@ -1329,6 +1333,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readConversationCapabilityConstraint: (
       conversationId: string,
     ) => Promise<AgentTurnCapabilityConstraint>,
+    composer?: import('@neko/agent-contracts').AgentComposerInteractionProjection,
     resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort,
   ): AgentControllerEffects['skill'] {
     const readCatalog = async (conversationId: string) => {
@@ -1430,6 +1435,27 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       this.track(operation);
     };
     return {
+      readComposerInputCatalog: async (context) => {
+        bind(context);
+        if (!composer) throw new Error('Agent Composer input catalog requires an exact owner.');
+        const skills =
+          composer.binding.kind === 'assistant'
+            ? await readGlobalSkillCatalog()
+            : await workspace.readSkillCatalog(true);
+        await context.post(
+          buildAgentComposerInputCatalogMessage({
+            composerId: composer.composerId,
+            bindingKind: composer.binding.kind,
+            entries: projectAgentInputCatalog({
+              skills,
+              phase: 'composer',
+              binding: composer.binding,
+              personalSkillOwnerId,
+              commandHandlerIds: SESSION_COMMAND_HANDLER_IDS,
+            }),
+          }),
+        );
+      },
       readInputCatalog: async (conversationId, context) => {
         bind(context);
         const catalog = await readCatalog(conversationId);

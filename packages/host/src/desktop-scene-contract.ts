@@ -14,13 +14,13 @@ export type DesktopAgentScopeProjection =
   | { readonly kind: 'unbound'; readonly draftId: string }
   | {
       readonly kind: 'assistant';
-      readonly draftId: string;
+      readonly composerId: string;
       readonly assistantSpaceId: string;
       readonly conversationId?: string;
     }
   | {
       readonly kind: 'workspace';
-      readonly draftId: string;
+      readonly composerId: string;
       readonly workspaceId: string;
       readonly workspaceGrantId: string;
       readonly conversationId?: string;
@@ -54,7 +54,7 @@ export interface DesktopAgentInteractionSurfaceRef {
   readonly kind: 'agent';
   readonly agentSurfaceId: string;
   readonly agentViewId: string;
-  readonly phase: 'draft' | 'session';
+  readonly phase: 'draft' | 'composer' | 'session';
   readonly scope: DesktopAgentScopeProjection;
 }
 
@@ -707,13 +707,13 @@ export function parseDesktopAgentScopeProjection(value: unknown): DesktopAgentSc
   if (kind === 'assistant') {
     requireExactKeys(
       record,
-      ['kind', 'draftId', 'assistantSpaceId', 'conversationId'],
+      ['kind', 'composerId', 'assistantSpaceId', 'conversationId'],
       'Assistant scope',
       ['conversationId'],
     );
     return {
       kind,
-      draftId: requireIdentity(record['draftId'], 'Agent Draft'),
+      composerId: requireIdentity(record['composerId'], 'Agent Composer'),
       assistantSpaceId: requireIdentity(record['assistantSpaceId'], 'Assistant Space'),
       ...readConversationId(record),
     };
@@ -721,13 +721,13 @@ export function parseDesktopAgentScopeProjection(value: unknown): DesktopAgentSc
   if (kind === 'workspace') {
     requireExactKeys(
       record,
-      ['kind', 'draftId', 'workspaceId', 'workspaceGrantId', 'conversationId'],
+      ['kind', 'composerId', 'workspaceId', 'workspaceGrantId', 'conversationId'],
       'Workspace scope',
       ['conversationId'],
     );
     return {
       kind,
-      draftId: requireIdentity(record['draftId'], 'Agent Draft'),
+      composerId: requireIdentity(record['composerId'], 'Agent Composer'),
       workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
       workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace Grant'),
       ...readConversationId(record),
@@ -780,8 +780,8 @@ function parseInteractionSurface(value: unknown): DesktopWorkbenchInteractionSur
   );
   if (record['kind'] !== 'agent') throw unsupported('Interaction slot only accepts Agent Surface.');
   const phase = record['phase'];
-  if (phase !== 'draft' && phase !== 'session') {
-    throw invalid('Agent Interaction phase must be draft or session.');
+  if (phase !== 'draft' && phase !== 'composer' && phase !== 'session') {
+    throw invalid('Agent Interaction phase must be draft, composer, or session.');
   }
   return {
     kind: 'agent',
@@ -1202,9 +1202,13 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
     if (!equalAgentScope(slots.interaction.scope, context.scope)) {
       throw mismatch('Agent Interaction scope does not match Scene context.');
     }
-    const expectsSession =
-      context.scope.kind !== 'unbound' && context.scope.conversationId !== undefined;
-    if ((slots.interaction.phase === 'session') !== expectsSession) {
+    const expectedPhase =
+      context.scope.kind === 'unbound'
+        ? 'draft'
+        : context.scope.conversationId === undefined
+          ? 'composer'
+          : 'session';
+    if (slots.interaction.phase !== expectedPhase) {
       throw mismatch('Agent presentation phase does not match Conversation binding.');
     }
     validateAgentMain(context.scope, slots.main);
@@ -1529,13 +1533,13 @@ function equalAgentScope(
     return (
       left.kind === 'assistant' &&
       right.kind === 'assistant' &&
-      left.draftId === right.draftId &&
+      left.composerId === right.composerId &&
       left.conversationId === right.conversationId &&
       left.assistantSpaceId === right.assistantSpaceId
     );
   }
   return (
-    left.draftId === right.draftId &&
+    left.composerId === right.composerId &&
     left.conversationId === right.conversationId &&
     left.workspaceId === right.workspaceId &&
     left.workspaceGrantId === right.workspaceGrantId

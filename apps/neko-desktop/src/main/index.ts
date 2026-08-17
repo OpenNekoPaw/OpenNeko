@@ -2648,12 +2648,14 @@ async function startDesktop(): Promise<void> {
           connection,
         );
         if (
-          surface.interaction.scope.draftId !== draftId ||
           (conversationId === undefined
-            ? surface.interaction.phase !== 'draft' ||
+            ? surface.interaction.scope.kind !== 'unbound' ||
+              surface.interaction.scope.draftId !== draftId ||
+              surface.interaction.phase !== 'draft' ||
               surface.interaction.agentViewId !== connection.viewId
             : surface.interaction.phase !== 'session' ||
               surface.interaction.scope.kind === 'unbound' ||
+              surface.interaction.scope.composerId !== draftId ||
               surface.interaction.scope.conversationId !== conversationId)
         ) {
           throw new Error('Agent Draft submit is not the exact active Draft presentation.');

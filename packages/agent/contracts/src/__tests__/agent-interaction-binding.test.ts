@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createAgentDraftInteraction,
+  createAgentComposerInteraction,
   createAgentSessionInteraction,
   parseAgentDraftInteractionProjection,
   parseAgentDomainBinding,
@@ -16,6 +17,33 @@ describe('Agent interaction binding contract', () => {
       binding: { kind: 'unbound' },
       bindingReceipt: null,
     });
+  });
+
+  it('models an exact owner without persisting an empty Conversation', () => {
+    expect(
+      createAgentComposerInteraction({
+        composerId: 'composer:workspace-1',
+        binding: {
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'workspace-grant-1',
+        },
+      }),
+    ).toEqual({
+      phase: 'composer',
+      composerId: 'composer:workspace-1',
+      binding: {
+        kind: 'workspace',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      },
+    });
+    expect(() =>
+      createAgentComposerInteraction({
+        composerId: 'composer:unbound',
+        binding: { kind: 'unbound' } as never,
+      }),
+    ).toThrow('requires a bound domain binding');
   });
 
   it('preserves legitimate Character and World domain version identities', () => {

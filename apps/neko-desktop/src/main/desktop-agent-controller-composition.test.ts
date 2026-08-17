@@ -39,6 +39,77 @@ afterEach(async () => {
 });
 
 describe('Agent controller composition', () => {
+  it('projects the exact owner-bound Composer catalog without a Conversation lookup', async () => {
+    const workspace = createWorkspace();
+    const readConversationContext = vi.fn();
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: { openContent: vi.fn(), revealDocument: vi.fn() },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
+    });
+    const effects = composition.createEffects({
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-1',
+      },
+      composer: {
+        phase: 'composer',
+        composerId: 'composer-workspace-1',
+        binding: {
+          kind: 'workspace',
+          workspaceId: workspace.workspaceId,
+          workspaceGrantId: 'workspace-grant-1',
+        },
+      },
+      readConversationContext,
+      personalSkillOwnerId: 'assistant-space-1',
+    });
+    const posted: AgentHostToWebviewMessage[] = [];
+
+    await effects.skill.readComposerInputCatalog({
+      identity: {
+        hostKind: 'electron',
+        applicationId: 'neko-desktop',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        workspaceId: workspace.workspaceId,
+        connectionId: 'connection-1',
+      },
+      post: (message) => {
+        posted.push(message);
+      },
+    });
+
+    expect(readConversationContext).not.toHaveBeenCalled();
+    expect(workspace.readSkillCatalog).toHaveBeenCalledWith(true);
+    expect(posted).toEqual([
+      expect.objectContaining({
+        type: 'agentComposerInputCatalog',
+        composerId: 'composer-workspace-1',
+        phase: 'composer',
+        bindingKind: 'workspace',
+      }),
+    ]);
+  });
+
   it('projects no Skill activation entries for a persisted Narrative capability constraint', async () => {
     const workspace = createWorkspace();
     const composition = createAgentControllerComposition({

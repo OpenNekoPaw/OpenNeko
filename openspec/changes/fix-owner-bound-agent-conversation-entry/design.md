@@ -4,6 +4,7 @@
 
 - Canonical public path: owner-bound Surface 使用 Agent Host Runtime adapter，Conversation 创建后所有用户消息均通过 `sendMessage`/Conversation controller。
 - Entry-only path: Agent Director / Entry 使用 Agent Launch adapter，并可调用 `submitDraft` 将未绑定入口意图提交为 Conversation。
+- Presentation state: Entry 使用 `draft`；精确 owner 已绑定但尚无 Conversation 时使用 `composer`；创建成功后使用 `session`。`composer` 必须携带完整 owner binding，且不得携带或创建空 Conversation。
 - Producer: Agent Webview composer and Conversation controller.
 - Consumer: Agent runtime Conversation application service and Desktop typed bridge.
 - Runtime boundary: Renderer 只传递 typed input；Desktop Main 验证 sender、Window、Surface 和 owner identity；Agent runtime 持有 Conversation durable/runtime 生命周期。
@@ -16,7 +17,7 @@
 
 Conversation identity、owner binding、首发和后续 turn 属于 `@neko/agent-runtime`，不得由 React state、Desktop Shell Draft 或 active Workspace fallback 决定。Host Scene 只投影 runtime 返回的精确 Conversation identity，不成为第二事实来源。
 
-Workspace Surface 使用 `runtimeId + draftId + workspaceId` 作为一次挂载创建请求的精确去重键。创建请求发出后，首发只进入待发送输入并等待该 Conversation 投影，不得再次调用 `newConversation`。Conversation 投影后，模型设置、输入目录和 Workspace mention 查询全部使用该精确 Conversation identity。
+首发前模型配置与输入目录由同一个 Agent runtime 基于 Composer 的精确 owner 投影。该目录只用于展示和构造待发送输入；Conversation 创建后，执行前仍通过 canonical Session catalog 对 `$` Skill 与 `/` Command 做最终校验，不形成第二条执行路径。
 
 ## User Data And Failure
 

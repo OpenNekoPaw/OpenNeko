@@ -205,14 +205,17 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
       ]).then(([, result]) => result);
     } else if (agentPresentation === undefined) {
       throw new Error('Launch-bound Agent requires an explicit presentation.');
-    } else if (agentPresentation.phase === 'session') {
-      const sessionPresentation = agentPresentation;
-      if (sessionPresentation.binding.kind !== 'assistant') {
+    } else if (
+      agentPresentation.phase === 'composer' ||
+      agentPresentation.phase === 'session'
+    ) {
+      const boundPresentation = agentPresentation;
+      if (boundPresentation.binding.kind !== 'assistant') {
         bootstrapOperation = Promise.reject(
-          new Error('Launch-bound Agent session requires Assistant scope.'),
+          new Error('Launch-bound Agent Composer or Session requires Assistant scope.'),
         );
       } else {
-        const assistantSpaceId = sessionPresentation.binding.assistantSpaceId;
+        const assistantSpaceId = boundPresentation.binding.assistantSpaceId;
         bootstrapOperation = prepareDesktopAgentSurfaceResources({
           loadModule: loadDesktopAgentWebviewRootModule,
           getBootstrap: () =>
@@ -220,13 +223,15 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
               props.workbenchInstanceId,
               props.agentSurfaceId,
               assistantSpaceId,
-              sessionPresentation.conversationId,
+              boundPresentation.phase === 'session'
+                ? boundPresentation.conversationId
+                : undefined,
               viewId,
             ),
         });
       }
     } else {
-      throw new Error('Launch-bound Agent requires a Draft or Assistant session presentation.');
+      throw new Error('Launch-bound Agent requires a Draft or Assistant-bound presentation.');
     }
     void bootstrapOperation
       .then((bootstrap) => {
@@ -580,7 +585,11 @@ function createDesktopAgentSurfaceKey(props: DesktopAgentSurfaceProps): string {
     props.binding,
     viewId,
     presentation.phase,
-    presentation.phase === 'session' ? presentation.conversationId : presentation.draftId,
+    presentation.phase === 'session'
+      ? presentation.conversationId
+      : presentation.phase === 'composer'
+        ? presentation.composerId
+        : presentation.draftId,
     ...scope,
   ].join(':');
 }

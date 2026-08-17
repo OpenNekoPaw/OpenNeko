@@ -41,7 +41,7 @@ export interface DesktopAssistantAgentBootstrapRequest extends DesktopAssistantA
   readonly requestId: string;
   readonly workbenchInstanceId: string;
   readonly agentSurfaceId: string;
-  readonly conversationId: string;
+  readonly conversationId?: string;
 }
 
 export type DesktopAgentBootstrapRequest =
@@ -142,7 +142,7 @@ export interface OpenNekoDesktopAgentBridge {
       workbenchInstanceId: string,
       agentSurfaceId: string,
       assistantSpaceId: string,
-      conversationId: string,
+      conversationId: string | undefined,
       viewId: string,
     ): Promise<DesktopAgentBootstrapProjection>;
     detach(connection: DesktopAgentConnectionIdentity): Promise<void>;
@@ -210,7 +210,7 @@ export function createDesktopAssistantAgentBootstrapRequest(
   workbenchInstanceId: string,
   agentSurfaceId: string,
   assistantSpaceId: string,
-  conversationId: string,
+  conversationId: string | undefined,
   viewId: string,
 ): DesktopAssistantAgentBootstrapRequest {
   return {
@@ -227,10 +227,14 @@ export function createDesktopAssistantAgentBootstrapRequest(
       assistantSpaceId,
       'Desktop Agent Assistant Space identity is required.',
     ),
-    conversationId: requireNonEmptyString(
-      conversationId,
-      'Desktop Agent Conversation identity is required.',
-    ),
+    ...(conversationId === undefined
+      ? {}
+      : {
+          conversationId: requireNonEmptyString(
+            conversationId,
+            'Desktop Agent Conversation identity is required.',
+          ),
+        }),
     viewId: requireNonEmptyString(viewId, 'Desktop Agent View identity is required.'),
   };
 }
@@ -245,7 +249,7 @@ export function parseDesktopAgentBootstrapRequest(value: unknown): DesktopAgentB
         'workbenchInstanceId',
         'agentSurfaceId',
         'assistantSpaceId',
-        'conversationId',
+        ...('conversationId' in record ? ['conversationId'] : []),
         'viewId',
       ],
       'Desktop Assistant Agent bootstrap request',
@@ -264,10 +268,12 @@ export function parseDesktopAgentBootstrapRequest(value: unknown): DesktopAgentB
         record['assistantSpaceId'],
         'Desktop Agent Assistant Space identity is required.',
       ),
-      requireNonEmptyString(
-        record['conversationId'],
-        'Desktop Agent Conversation identity is required.',
-      ),
+      'conversationId' in record
+        ? requireNonEmptyString(
+            record['conversationId'],
+            'Desktop Agent Conversation identity is required.',
+          )
+        : undefined,
       requireNonEmptyString(record['viewId'], 'Desktop Agent bootstrap View identity is required.'),
     );
   }
@@ -822,6 +828,7 @@ const AGENT_HOST_TO_WEBVIEW_MESSAGE_TYPES = [
   'characterDialogueSessionExited',
   'embodyCharacterSessionStarted',
   'embodyCharacterSessionExited',
+  'agentComposerInputCatalog',
   'agentInputCatalog',
   'contextTokenCount',
   'compressionResult',

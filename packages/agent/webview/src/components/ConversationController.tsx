@@ -25,6 +25,7 @@ import {
 } from 'react';
 import {
   type AgentHostToWebviewMessage,
+  type AgentComposerInputCatalogMessage,
   type AgentInputCatalogMessage,
   SettingsState,
   AgentState,
@@ -239,10 +240,12 @@ export function ConversationController({
   const agentHostMessages = useAgentHostMessages();
   const composerWorkspace = useComposerWorkspacePresentation();
   const isDraftPresentation = agentPresentation?.phase === 'draft';
-  const isOwnerBoundDraft = isDraftPresentation && composerWorkspace?.kind === 'workspace';
-  const isEntryDraftPresentation = isDraftPresentation && !isOwnerBoundDraft;
+  const isEntryDraftPresentation = isDraftPresentation;
+  const isOwnerBoundComposer = agentPresentation?.phase === 'composer';
   const isWorkspaceInitialPresentation =
-    isDraftPresentation && composerWorkspace?.kind === 'workspace';
+    isOwnerBoundComposer &&
+    agentPresentation.binding.kind === 'workspace' &&
+    composerWorkspace?.kind === 'workspace';
   // ---- Conversation state ----
   const conversation = useConversationState();
   const {
@@ -343,7 +346,6 @@ export function ConversationController({
   const activeDraftIdRef = useRef<string>();
   const skipEntryDraftWriteRef = useRef<string>();
   const committedEntryDraftIdRef = useRef<string>();
-  const workspaceConversationCreationKeyRef = useRef<string>();
   const consumedCharacterDialogueHandoffIdsRef = useRef(new Set<string>());
   const pendingCharacterDialogueHandoffIdsRef = useRef(new Set<string>());
 
@@ -623,6 +625,9 @@ export function ConversationController({
   const [agentInputCatalogByConversation, setAgentInputCatalogByConversation] = useState<
     Map<string, AgentInputCatalogMessage>
   >(() => new Map());
+  const [agentComposerInputCatalog, setAgentComposerInputCatalog] = useState<
+    AgentComposerInputCatalogMessage | undefined
+  >();
 
   // ---- Agent state ----
   const [, setAgentState] = useState<AgentState | null>(null);
@@ -691,9 +696,7 @@ export function ConversationController({
     activeDraftIdRef.current = agentPresentation.draftId;
     committedEntryDraftIdRef.current = undefined;
     skipEntryDraftWriteRef.current = agentPresentation.draftId;
-    const restored = isWorkspaceInitialPresentation
-      ? { snapshot: undefined, diagnostics: [] }
-      : readAgentEntryDraftSnapshot(hostRuntimeAdapter, agentPresentation.draftId);
+    const restored = readAgentEntryDraftSnapshot(hostRuntimeAdapter, agentPresentation.draftId);
     const entryDraft = restored.snapshot;
 
     setOpenTabs([]);
@@ -701,13 +704,9 @@ export function ConversationController({
     setActiveConversationId(null);
     clearVisibleState();
     setActiveTab('chat');
-    const draftAdapter = isOwnerBoundDraft
-      ? undefined
-      : requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
-    const launchCatalog = draftAdapter?.readLaunchCatalog();
-    const authoritativeEntryIntent: AgentEntryIntentProjection = isOwnerBoundDraft
-      ? { mode: 'assistant', targetReceipt: null }
-      : draftAdapter!.readEntryIntent();
+    const draftAdapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
+    const launchCatalog = draftAdapter.readLaunchCatalog();
+    const authoritativeEntryIntent: AgentEntryIntentProjection = draftAdapter.readEntryIntent();
     setEntryMode(authoritativeEntryIntent.mode);
     setEntryQuickDetailOpen(true);
     setEntryConversationContextSelection(
@@ -734,18 +733,13 @@ export function ConversationController({
         ? { ...entryDraft.mediaModelSelection }
         : { image: 'none', video: 'none', audio: 'none' },
     );
-    if (launchCatalog) {
-      const launchConfiguration = launchCatalog.configuration;
-      setEntrySelectedModel(
-        launchConfiguration.fields.model.effectiveValue?.modelCatalogEntryId ?? '',
-      );
-      setEntryExecutionMode(
-        launchConfiguration.fields.executionMode.effectiveValue ?? settings.executionMode,
-      );
-    } else {
-      setEntrySelectedModel(settings.selectedModelId ?? '');
-      setEntryExecutionMode(settings.executionMode);
-    }
+    const launchConfiguration = launchCatalog.configuration;
+    setEntrySelectedModel(
+      launchConfiguration.fields.model.effectiveValue?.modelCatalogEntryId ?? '',
+    );
+    setEntryExecutionMode(
+      launchConfiguration.fields.executionMode.effectiveValue ?? settings.executionMode,
+    );
     setGlobalError(restored.diagnostics[0]?.message ?? null);
     setPendingSendRequest(null);
     setInitialInputRequest(null);
@@ -763,8 +757,6 @@ export function ConversationController({
     setOpenTabs,
     updateEntryInputValue,
     hostRuntimeAdapter,
-    isOwnerBoundDraft,
-    isWorkspaceInitialPresentation,
     settings.executionMode,
     settings.selectedModelId,
   ]);
@@ -1034,6 +1026,12 @@ export function ConversationController({
   const draftLaunchCatalog = isEntryDraftPresentation
     ? requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).readLaunchCatalog()
     : undefined;
+  const composerInputCatalog =
+    agentPresentation?.phase === 'composer' &&
+    agentComposerInputCatalog?.composerId === agentPresentation.composerId &&
+    agentComposerInputCatalog.bindingKind === agentPresentation.binding.kind
+      ? agentComposerInputCatalog
+      : undefined;
   const worldExperienceTargetsAvailable =
     isEntryDraftPresentation &&
     typeof requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter).loadWorldExperienceTargets ===
@@ -1439,6 +1437,7 @@ export function ConversationController({
     setAgentState,
     conversationAgentStateRef,
     forceAgentStateUpdate,
+    setAgentComposerInputCatalog,
     setAgentInputCatalogByConversation,
     updateSettings,
     setShowOnboarding,
@@ -1527,8 +1526,11 @@ export function ConversationController({
       agentHostMessages.getTabState();
     }
     requestConfigSnapshot();
+    if (isOwnerBoundComposer) {
+      agentHostMessages.getAgentComposerInputCatalog();
+    }
     agentHostMessages.getAgentStates();
-  }, [agentHostMessages, isDraftPresentation, requestConfigSnapshot]);
+  }, [agentHostMessages, isDraftPresentation, isOwnerBoundComposer, requestConfigSnapshot]);
 
   // ---- Context token count on conversation change ----
   useEffect(() => {
@@ -1573,24 +1575,6 @@ export function ConversationController({
     setEntryPromptMenu(null);
     startNewForegroundConversation();
   }, [conversationKind, startNewForegroundConversation]);
-
-  useEffect(() => {
-    if (!isWorkspaceInitialPresentation) return;
-    if (agentPresentation?.phase !== 'draft' || composerWorkspace?.kind !== 'workspace') return;
-    const draftId = agentPresentation.draftId;
-    const workspaceId = composerWorkspace.workspaceId;
-    if (activeDraftIdRef.current !== draftId) return;
-    const creationKey = `${hostRuntimeAdapter.runtimeId}\u0000${draftId}\u0000${workspaceId}`;
-    if (workspaceConversationCreationKeyRef.current === creationKey) return;
-    workspaceConversationCreationKeyRef.current = creationKey;
-    startNewForegroundConversation();
-  }, [
-    agentPresentation,
-    composerWorkspace,
-    hostRuntimeAdapter.runtimeId,
-    isWorkspaceInitialPresentation,
-    startNewForegroundConversation,
-  ]);
 
   const handleEntryModeChange = useCallback(
     (mode: AgentEntryMode) => {
@@ -1666,27 +1650,10 @@ export function ConversationController({
       const id = nextPendingSendRequestIdRef.current + 1;
       nextPendingSendRequestIdRef.current = id;
       setPendingSendRequest({ id, input });
-      if (
-        isWorkspaceInitialPresentation &&
-        agentPresentation?.phase === 'draft' &&
-        composerWorkspace?.kind === 'workspace'
-      ) {
-        const creationKey = `${hostRuntimeAdapter.runtimeId}\u0000${agentPresentation.draftId}\u0000${composerWorkspace.workspaceId}`;
-        if (workspaceConversationCreationKeyRef.current === creationKey) {
-          return true;
-        }
-        workspaceConversationCreationKeyRef.current = creationKey;
-      }
       startNewForegroundConversation();
       return true;
     },
-    [
-      agentPresentation,
-      composerWorkspace,
-      hostRuntimeAdapter.runtimeId,
-      isWorkspaceInitialPresentation,
-      startNewForegroundConversation,
-    ],
+    [startNewForegroundConversation],
   );
 
   const handleEntryInputSend = useCallback(
@@ -1701,9 +1668,8 @@ export function ConversationController({
         setIsForegroundConversationActivationPending(true);
         void (async () => {
           const trigger = parseAgentInputTrigger(messageText);
-          let effectiveIntent = composerWorkspace?.kind === 'workspace' ? undefined : entryIntent;
-          let effectiveWorkspaceTarget =
-            composerWorkspace?.kind === 'workspace' ? undefined : entryWorkspaceTarget;
+          let effectiveIntent = entryIntent;
+          let effectiveWorkspaceTarget = entryWorkspaceTarget;
           const creatorTargetKind = builtinCreatorTargetKind(trigger);
           if (
             composerWorkspace?.kind === 'entry' &&
@@ -2245,10 +2211,14 @@ export function ConversationController({
                 outputTokenCap={entryModelState.selectedOutputTokenCap}
                 modelMaxOutputTokens={entryModelState.selectedMaxOutputTokens}
                 mediaModelCallCount={0}
-                inputCatalog={draftLaunchCatalog?.inputs}
+                inputCatalog={draftLaunchCatalog?.inputs ?? composerInputCatalog?.entries}
                 configurationPolicy={draftLaunchCatalog?.configuration}
-                inputCatalogPhase={draftLaunchCatalog?.interaction.phase}
-                inputCatalogBindingKind={draftLaunchCatalog?.interaction.binding.kind}
+                inputCatalogPhase={
+                  draftLaunchCatalog?.interaction.phase ?? composerInputCatalog?.phase
+                }
+                inputCatalogBindingKind={
+                  draftLaunchCatalog?.interaction.binding.kind ?? composerInputCatalog?.bindingKind
+                }
                 mentionItems={mentionItems}
                 onRequestFiles={(filter) => {
                   updateMentionSearchFilter(filter);

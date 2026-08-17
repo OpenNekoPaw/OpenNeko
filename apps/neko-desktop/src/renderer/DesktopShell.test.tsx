@@ -79,6 +79,7 @@ describe('Desktop scene Workbench', () => {
       onSelectAuthoringTarget: vi.fn(async () => undefined),
       onCreateAuthoringTarget: vi.fn(async () => undefined),
     };
+    if (interaction.scope.kind !== 'unbound') throw new Error('Expected Entry Draft scope.');
 
     expect(
       createDesktopAgentSurfaceProps({
@@ -1125,7 +1126,7 @@ function withWorkbench(
 function workspaceScene(): DesktopWorkbenchSceneProjection {
   const scope = {
     kind: 'workspace' as const,
-    draftId: 'draft-workspace-1',
+    composerId: 'composer-workspace-1',
     workspaceId: 'workspace-1',
     workspaceGrantId: 'workspace-grant-1',
   };
@@ -1138,7 +1139,7 @@ function workspaceScene(): DesktopWorkbenchSceneProjection {
         kind: 'agent',
         agentSurfaceId: 'agent-surface:workspace-1',
         agentViewId: 'view-1',
-        phase: 'draft',
+        phase: 'composer',
         scope,
       },
       main: {
@@ -1183,7 +1184,7 @@ function assistantPreviewScene(): DesktopWorkbenchSceneProjection {
   const draft = createDefaultDesktopAgentScene('window-1', 'draft-assistant-1');
   const scope = {
     kind: 'assistant' as const,
-    draftId: 'draft-assistant-1',
+    composerId: 'composer-assistant-1',
     assistantSpaceId: 'assistant-space:test',
     conversationId: 'conversation-1',
   };

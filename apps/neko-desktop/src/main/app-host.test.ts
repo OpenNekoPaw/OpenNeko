@@ -590,7 +590,7 @@ describe('DesktopAppHost', () => {
         kind: 'agent',
         scope: {
           kind: 'workspace',
-          draftId: initialScene.context.scope.draftId,
+          composerId: initialScene.context.scope.draftId,
           workspaceId: 'workspace-explicit',
           workspaceGrantId: selected.grant.workspaceGrantId,
           conversationId: expect.stringMatching(/^conversation:/),
@@ -690,7 +690,7 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
-  it('restores the exact Workspace grant on Draft attach after the process authority is rebuilt', async () => {
+  it('rejects Agent Launch attach for an owner-bound Workspace Composer', async () => {
     const agentLaunch = createAgentLaunchRuntime();
     const fixture = await createShellAppHost({ agentLaunch });
     const workspace = createWorkspaceResolution();
@@ -719,11 +719,11 @@ describe('DesktopAppHost', () => {
     const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
     const scene = activeScene(projection);
     if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
-      throw new Error('Workspace grant restart fixture requires a Workspace Draft.');
+      throw new Error('Workspace fixture requires an owner-bound Composer.');
     }
     const draft = {
       phase: 'draft' as const,
-      draftId: scene.context.scope.draftId,
+      draftId: scene.context.scope.composerId,
       binding: {
         kind: 'workspace' as const,
         workspaceId: scene.context.scope.workspaceId,
@@ -732,19 +732,6 @@ describe('DesktopAppHost', () => {
       bindingReceipt: null,
     };
     const workbench = activeWorkbench(projection);
-    const catalog = createLaunchCatalog({
-      applicationInstanceId: 'app-1',
-      windowId: fixture.windowId,
-      workbenchInstanceId: workbench.workbenchInstanceId,
-      agentSurfaceId: currentAgentSurfaceId(projection),
-      viewId: scene.context.agentViewId,
-      connectionId: 'launch-workspace-restart',
-      draftId: draft.draftId,
-      binding: draft.binding,
-    });
-    vi.spyOn(agentLaunch, 'attach').mockResolvedValue(catalog);
-    fixture.appHost.workspaceGrants.releaseWindow(fixture.windowId);
-    const restore = vi.spyOn(fixture.appHost.workspaceGrants, 'restore');
     const request = {
       operation: 'attach' as const,
       workbenchInstanceId: workbench.workbenchInstanceId,
@@ -755,48 +742,11 @@ describe('DesktopAppHost', () => {
 
     await expect(
       fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
-        requestId: 'launch-workspace-after-restart',
+        requestId: 'launch-workspace-composer',
         ...request,
       }),
-    ).resolves.toEqual({
-      requestId: 'launch-workspace-after-restart',
-      status: 'ready' as const,
-      catalog,
-    });
-    expect(restore).toHaveBeenCalledWith(
-      fixture.windowId,
-      selected.grant.workspaceGrantId,
-      workspace.workspaceId,
-    );
-    await expect(
-      fixture.appHost.workspaceGrants.resolveAuthorizedWorkspace(
-        selected.grant.workspaceGrantId,
-        workspace.workspaceId,
-      ),
-    ).resolves.toMatchObject({ workspaceGrantId: selected.grant.workspaceGrantId });
-
-    fixture.appHost.workspaceGrants.releaseWindow(fixture.windowId);
-    fixture.registry.resolve.mockRejectedValueOnce(
-      new Error(`/private/workspaces/${workspace.workspaceId} is unavailable`),
-    );
-    await expect(
-      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
-        requestId: 'launch-workspace-restore-unavailable',
-        ...request,
-      }),
-    ).resolves.toEqual({
-      requestId: 'launch-workspace-restore-unavailable',
-      status: 'unavailable',
-      diagnostic: {
-        code: 'agent-workspace-binding-unavailable',
-        owner: 'workspace',
-        message: 'The exact Workspace access for this Agent draft is unavailable.',
-      },
-    });
-    expect(agentLaunch.attach).toHaveBeenCalledTimes(1);
-    await expect(fixture.appHost.shell.getProjection(fixture.windowId)).resolves.toMatchObject({
-      window: expect.any(Object),
-    });
+    ).rejects.toThrow('exact Agent Surface');
+    expect(agentLaunch.attach).not.toHaveBeenCalled();
     await fixture.appHost.dispose();
   });
 
@@ -841,7 +791,9 @@ describe('DesktopAppHost', () => {
     const agentLaunch = createAgentLaunchRuntime();
     const fixture = await createShellAppHost({ agentLaunch });
     const scene = activeScene(fixture.projection);
-    if (scene.context.kind !== 'agent') throw new Error('Expected an Agent Scene.');
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
+      throw new Error('Expected an Entry Draft Scene.');
+    }
     const catalog = createLaunchCatalog({
       applicationInstanceId: 'app-1',
       windowId: fixture.windowId,
@@ -908,7 +860,9 @@ describe('DesktopAppHost', () => {
     const agentLaunch = createAgentLaunchRuntime();
     const fixture = await createShellAppHost({ agentLaunch });
     const scene = activeScene(fixture.projection);
-    if (scene.context.kind !== 'agent') throw new Error('Expected an Agent Scene.');
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
+      throw new Error('Expected an Entry Draft Scene.');
+    }
     const catalog = createLaunchCatalog({
       applicationInstanceId: 'app-1',
       windowId: fixture.windowId,
@@ -2483,7 +2437,7 @@ describe('DesktopAppHost', () => {
         },
       },
       slots: {
-        interaction: { kind: 'agent', phase: 'draft' },
+        interaction: { kind: 'agent', phase: 'composer' },
         main: { kind: 'workspace-main', workspaceId: resolution.workspaceId },
         rightManager: { kind: 'workspace-resources', workspaceId: resolution.workspaceId },
       },
@@ -3284,7 +3238,7 @@ describe('DesktopAppHost', () => {
         },
       },
       slots: {
-        interaction: { kind: 'agent', phase: 'draft' },
+        interaction: { kind: 'agent', phase: 'composer' },
         main: { kind: 'workspace-main', workspaceId: resolution.workspaceId },
         rightManager: {
           kind: 'workspace-resources',
@@ -3868,7 +3822,7 @@ describe('DesktopAppHost', () => {
       phase: 'session' as const,
       scope: {
         kind: 'workspace' as const,
-        draftId: 'draft-1',
+        composerId: 'composer-1',
         workspaceId: 'workspace-1',
         workspaceGrantId: 'workspace-grant-1',
         conversationId: 'conversation-1',
@@ -4718,12 +4672,14 @@ async function createShellAppHost(options?: {
           connection,
         );
         if (
-          surface.interaction.scope.draftId !== draftId ||
           (conversationId === undefined
-            ? surface.interaction.phase !== 'draft' ||
+            ? surface.interaction.scope.kind !== 'unbound' ||
+              surface.interaction.scope.draftId !== draftId ||
+              surface.interaction.phase !== 'draft' ||
               surface.interaction.agentViewId !== connection.viewId
             : surface.interaction.phase !== 'session' ||
               surface.interaction.scope.kind === 'unbound' ||
+              surface.interaction.scope.composerId !== draftId ||
               surface.interaction.scope.conversationId !== conversationId)
         ) {
           throw new Error('Agent Draft submit is not the exact active Draft presentation.');

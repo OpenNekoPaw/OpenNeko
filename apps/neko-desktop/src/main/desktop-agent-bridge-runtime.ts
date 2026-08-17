@@ -77,6 +77,7 @@ export interface DesktopAgentBridgeRuntime {
     readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
+    readonly composer?: Parameters<AgentControllerComposition['createEffects']>[0]['composer'];
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
     readonly readConversationCapabilityConstraint?: (
       conversationId: string,
@@ -228,6 +229,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
+    readonly composer?: Parameters<AgentControllerComposition['createEffects']>[0]['composer'];
     readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
     readonly readConversationCapabilityConstraint?: (
       conversationId: string,
@@ -303,6 +305,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       ...(input.initialConversationMessage === undefined
         ? {}
         : { initialConversationMessage: input.initialConversationMessage }),
+      ...(input.composer === undefined ? {} : { composer: input.composer }),
       readConversationContext:
         input.readConversationContext ?? missingConversationContextDependency,
       readConversationCapabilityConstraint: input.readConversationCapabilityConstraint,

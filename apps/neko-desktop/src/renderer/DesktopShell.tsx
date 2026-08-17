@@ -117,6 +117,7 @@ import {
 } from './DesktopApplicationSidebar';
 import {
   createCharacterDialogueHandoffIntent,
+  createAgentComposerInteraction,
   createAgentDraftInteraction,
   createAgentSessionInteraction,
   type AgentInteractionProjection,
@@ -2789,7 +2790,7 @@ function createLaunchAgentPresentation(
   };
   return scope.conversationId
     ? createAgentSessionInteraction({ binding, conversationId: scope.conversationId })
-    : createAgentDraftInteraction({ draftId: scope.draftId, binding });
+    : createAgentComposerInteraction({ composerId: scope.composerId, binding });
 }
 
 export function createDesktopAgentSurfaceProps(input: {
@@ -2842,8 +2843,8 @@ export function createDesktopAgentSurfaceProps(input: {
           workbenchInstanceId: input.workbenchInstanceId,
           agentSurfaceId: interaction.agentSurfaceId,
           viewId: interaction.agentViewId,
-          agentPresentation: createAgentDraftInteraction({
-            draftId: scope.draftId,
+          agentPresentation: createAgentComposerInteraction({
+            composerId: scope.composerId,
             binding: {
               kind: 'workspace',
               workspaceId: scope.workspaceId,
@@ -2890,7 +2891,7 @@ export function createDesktopAgentSurfaceProps(input: {
     };
     const agentPresentation = scope.conversationId
       ? createAgentSessionInteraction({ binding, conversationId: scope.conversationId })
-      : createAgentDraftInteraction({ draftId: scope.draftId, binding });
+      : createAgentComposerInteraction({ composerId: scope.composerId, binding });
     return {
       binding: 'workspace',
       workbenchInstanceId: input.workbenchInstanceId,

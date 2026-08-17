@@ -492,7 +492,7 @@ export class DesktopShellService {
           activeScene.context.scope.workspaceId === targetStoredProject.workspaceId &&
           activeScene.context.scope.conversationId === undefined &&
           activeScene.slots.interaction?.kind === 'agent' &&
-          activeScene.slots.interaction.phase === 'draft'
+          activeScene.slots.interaction.phase === 'composer'
         ) {
           return {
             status: 'transitioned',
@@ -645,12 +645,12 @@ export class DesktopShellService {
       if (
         current.context.kind === 'agent' &&
         current.context.scope.kind !== 'unbound' &&
-        current.context.scope.draftId === input.draftId &&
+        agentScopePresentationId(current.context.scope) === input.draftId &&
         current.context.scope.conversationId === input.conversationId &&
         conversationContextMatchesSceneScope(input.context, current.context.scope) &&
         interaction?.kind === 'agent' &&
         interaction.scope.kind !== 'unbound' &&
-        interaction.scope.draftId === input.draftId &&
+        agentScopePresentationId(interaction.scope) === input.draftId &&
         interaction.phase === 'session' &&
         interaction.scope.conversationId === input.conversationId
       ) {
@@ -659,12 +659,12 @@ export class DesktopShellService {
       if (
         current.context.kind !== 'agent' ||
         current.context.agentViewId !== input.agentViewId ||
-        current.context.scope.draftId !== input.draftId ||
+        agentScopePresentationId(current.context.scope) !== input.draftId ||
         !interaction ||
         interaction.kind !== 'agent' ||
         interaction.agentViewId !== input.agentViewId ||
-        interaction.scope.draftId !== input.draftId ||
-        interaction.phase !== 'draft' ||
+        agentScopePresentationId(interaction.scope) !== input.draftId ||
+        interaction.phase !== (current.context.scope.kind === 'unbound' ? 'draft' : 'composer') ||
         (current.context.scope.kind !== 'unbound' &&
           current.context.scope.conversationId !== undefined) ||
         (current.context.scope.kind !== 'unbound' &&
@@ -805,7 +805,8 @@ export class DesktopShellService {
           current.context.agentViewId !== input.agentViewId ||
           current.context.scope.kind === 'unbound' ||
           !conversationContextMatchesSceneScope(input.context, current.context.scope) ||
-          interaction.scope.draftId !== current.context.scope.draftId
+          interaction.scope.kind === 'unbound' ||
+          interaction.scope.composerId !== current.context.scope.composerId
         ) {
           throw new DesktopSceneContractError(
             'desktop-scene-scope-mismatch',
@@ -1946,7 +1947,7 @@ function createReplacementAgentDraftScene(
     );
   }
   const { conversationId: _conversationId, ...persistedScope } = current.context.scope;
-  const scope = { ...persistedScope, draftId };
+  const scope = { ...persistedScope, composerId: draftId };
   return parseDesktopWorkbenchSceneProjection({
     ...current,
     context: { ...current.context, scope },
@@ -1954,7 +1955,7 @@ function createReplacementAgentDraftScene(
       ...current.slots,
       interaction: {
         ...current.slots.interaction,
-        phase: 'draft',
+        phase: 'composer',
         scope,
       },
     },
@@ -2623,13 +2624,14 @@ function putSceneWorkbench(input: {
   const current = activeDesktopWorkbench(input.window);
   const currentInteraction = current.scene.slots.interaction;
   const nextInteraction = input.scene.slots.interaction;
-  const preservesDraftSurface =
+  const preservesPendingSurface =
     currentInteraction?.kind === 'agent' &&
     nextInteraction?.kind === 'agent' &&
-    currentInteraction?.phase === 'draft' &&
-    nextInteraction?.phase === 'draft' &&
-    currentInteraction.scope.draftId === nextInteraction.scope.draftId;
-  const scene = preservesDraftSurface
+    currentInteraction.phase !== 'session' &&
+    nextInteraction.phase === currentInteraction.phase &&
+    agentScopePresentationId(currentInteraction.scope) ===
+      agentScopePresentationId(nextInteraction.scope);
+  const scene = preservesPendingSurface
     ? parseDesktopWorkbenchSceneProjection({
         ...input.scene,
         slots: {
@@ -2831,7 +2833,7 @@ function createCharacterInteractionConversationScene(input: {
   }
   const scope = {
     kind: 'assistant' as const,
-    draftId: input.current.context.scope.draftId,
+    composerId: input.current.context.scope.draftId,
     assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
     conversationId: input.conversationId,
   };
@@ -2893,7 +2895,7 @@ function createAssistantConversationScope(
   }
   return {
     kind: 'assistant',
-    draftId,
+    composerId: draftId,
     assistantSpaceId: context.assistantSpaceId,
     conversationId,
   };
@@ -2908,7 +2910,8 @@ function attachConversationToDraftScene(
     draft.context.kind !== 'agent' ||
     !conversationContextMatchesSceneScope(context, draft.context.scope) ||
     draft.slots.interaction?.kind !== 'agent' ||
-    draft.slots.interaction.phase !== 'draft'
+    draft.slots.interaction.phase !==
+      (draft.context.scope.kind === 'unbound' ? 'draft' : 'composer')
   ) {
     throw new DesktopSceneContractError(
       'desktop-scene-scope-mismatch',
@@ -2933,12 +2936,13 @@ function createAssistantAgentScene(input: {
 }): DesktopWorkbenchSceneProjection {
   const sceneId = `scene:${input.current.windowId}:agent:${input.draftId}`;
   const agentViewId =
-    input.current.context.kind === 'agent' && input.current.context.scope.draftId === input.draftId
+    input.current.context.kind === 'agent' &&
+    agentScopePresentationId(input.current.context.scope) === input.draftId
       ? input.current.context.agentViewId
       : `agent-view:${input.current.windowId}:${input.draftId}`;
   const scope = {
     kind: 'assistant' as const,
-    draftId: input.draftId,
+    composerId: input.draftId,
     assistantSpaceId: input.assistantSpaceId,
   };
   return parseDesktopWorkbenchSceneProjection({
@@ -2954,7 +2958,7 @@ function createAssistantAgentScene(input: {
         kind: 'agent',
         agentSurfaceId: `agent-surface:${input.current.windowId}:${input.draftId}`,
         agentViewId,
-        phase: 'draft',
+        phase: 'composer',
         scope,
       },
       status: { kind: 'scene-status', sceneId },
@@ -2973,7 +2977,7 @@ function createWorkspaceAgentScene(input: {
   const sceneId = `scene:${input.current.windowId}:${input.workspaceId}`;
   const scope = {
     kind: 'workspace' as const,
-    draftId: input.draftId,
+    composerId: input.draftId,
     workspaceId: input.workspaceId,
     workspaceGrantId: input.workspaceGrantId,
   };
@@ -2986,7 +2990,7 @@ function createWorkspaceAgentScene(input: {
         kind: 'agent',
         agentSurfaceId: `agent-surface:${input.current.windowId}:${input.draftId}`,
         agentViewId: input.tab.viewId,
-        phase: 'draft',
+        phase: 'composer',
         scope,
       },
       rightManager: { kind: 'workspace-resources', workspaceId: input.workspaceId },
@@ -3027,7 +3031,7 @@ function createStandaloneCharacterAuthoringScene(input: {
   const agentViewId = `agent-view:${input.current.windowId}:${input.draftId}`;
   const scope = {
     kind: 'workspace' as const,
-    draftId: input.draftId,
+    composerId: input.draftId,
     workspaceId: input.workspaceId,
     workspaceGrantId: input.workspaceGrantId,
   };
@@ -3040,7 +3044,7 @@ function createStandaloneCharacterAuthoringScene(input: {
         kind: 'agent',
         agentSurfaceId: `agent-surface:${input.current.windowId}:${input.draftId}`,
         agentViewId,
-        phase: 'draft',
+        phase: 'composer',
         scope,
       },
       status: { kind: 'scene-status', sceneId },
@@ -3080,7 +3084,7 @@ function createStandaloneWorldAuthoringScene(input: {
   const agentViewId = `agent-view:${input.current.windowId}:${input.draftId}`;
   const scope = {
     kind: 'workspace' as const,
-    draftId: input.draftId,
+    composerId: input.draftId,
     workspaceId: input.workspaceId,
     workspaceGrantId: input.workspaceGrantId,
   };
@@ -3093,7 +3097,7 @@ function createStandaloneWorldAuthoringScene(input: {
         kind: 'agent',
         agentSurfaceId: `agent-surface:${input.current.windowId}:${input.draftId}`,
         agentViewId,
-        phase: 'draft',
+        phase: 'composer',
         scope,
       },
       status: { kind: 'scene-status', sceneId },
@@ -3512,4 +3516,8 @@ function createTransitionedScene(
 
 function requireIdentity(value: string, label: string): void {
   if (value.trim().length === 0) throw new Error(`${label} is required.`);
+}
+
+function agentScopePresentationId(scope: DesktopAgentScopeProjection): string {
+  return scope.kind === 'unbound' ? scope.draftId : scope.composerId;
 }

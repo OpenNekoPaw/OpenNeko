@@ -576,7 +576,7 @@ describe('DesktopAgentSurface', () => {
     await act(async () => root.unmount());
   });
 
-  it('bootstraps a Workspace draft through canonical Conversation without agentLaunch', async () => {
+  it('bootstraps a Workspace Composer through canonical Conversation without agentLaunch', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
     const attach = vi.fn();
     const detach = vi.fn(async () => undefined);
@@ -605,14 +605,13 @@ describe('DesktopAgentSurface', () => {
             }),
           }}
           agentPresentation={{
-            phase: 'draft',
-            draftId: 'draft-workspace-initial',
+            phase: 'composer',
+            composerId: 'composer-workspace-initial',
             binding: {
               kind: 'workspace',
               workspaceId: 'workspace-1',
               workspaceGrantId: 'workspace-grant-1',
             },
-            bindingReceipt: null,
           }}
         />,
       ),
@@ -629,11 +628,44 @@ describe('DesktopAgentSurface', () => {
     expect(attach).not.toHaveBeenCalled();
     expect(window.openNekoDesktop.agentLaunch.submitDraft).not.toHaveBeenCalled();
     const rootNode = container.querySelector('[data-testid="agent-root"]');
-    expect(rootNode?.getAttribute('data-agent-presentation')).toBe('draft');
+    expect(rootNode?.getAttribute('data-agent-presentation')).toBe('composer');
     expect(rootNode?.getAttribute('data-composer-workspace')).toBe('OpenNeko');
     expect(container.textContent).toContain('neko.agent.webview.electron:connection-1:en');
     await act(async () => root.unmount());
     expect(window.openNekoDesktop.agent.detach).toHaveBeenCalledWith(readyBootstrap().connection);
+  });
+
+  it('bootstraps an Assistant Composer without attaching Agent Launch', async () => {
+    const getBootstrap = vi.fn(async () => readyBootstrap());
+    const getAssistantBootstrap = vi.fn(async () => readyAssistantBootstrap());
+    const attach = vi.fn();
+    installBridge(getBootstrap, {
+      attach,
+      detach: vi.fn(async () => undefined),
+      getAssistantBootstrap,
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () =>
+      root.render(<TestAssistantComposerSurface assistantSpaceId="assistant:1" />),
+    );
+    await act(async () => undefined);
+
+    expect(getAssistantBootstrap).toHaveBeenCalledWith(
+      'workbench-assistant-1',
+      'agent-surface-assistant-1',
+      'assistant:1',
+      undefined,
+      'agent-view:window-1',
+    );
+    expect(attach).not.toHaveBeenCalled();
+    expect(window.openNekoDesktop.agentLaunch.submitDraft).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="agent-root"]')?.getAttribute(
+      'data-agent-presentation',
+    )).toBe('composer');
+    await act(async () => root.unmount());
   });
 
   it('mounts Assistant draft through the same Root and detaches its exact launch identity', async () => {
@@ -891,6 +923,25 @@ function TestLaunchAgentSurface({
                 bindingReceipt: null,
               }
         }
+      />
+    </I18nProvider>
+  );
+}
+
+function TestAssistantComposerSurface({ assistantSpaceId }: { readonly assistantSpaceId: string }) {
+  const i18n = createDesktopI18n('en');
+  return (
+    <I18nProvider service={i18n.i18nService}>
+      <DesktopAgentSurface
+        binding="launch"
+        workbenchInstanceId="workbench-assistant-1"
+        agentSurfaceId="agent-surface-assistant-1"
+        viewId="agent-view:window-1"
+        agentPresentation={{
+          phase: 'composer',
+          composerId: 'composer-assistant-1',
+          binding: { kind: 'assistant', assistantSpaceId, baseGrantIds: [] },
+        }}
       />
     </I18nProvider>
   );

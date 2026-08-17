@@ -17,6 +17,17 @@ const handleAgentInputCatalog: MessageHandler<'agentInputCatalog'> = (message, c
   });
 };
 
+const handleAgentComposerInputCatalog: MessageHandler<'agentComposerInputCatalog'> = (
+  message,
+  context,
+) => {
+  if (!context.setAgentComposerInputCatalog) {
+    throw new Error('Agent Composer input catalog handler has no catalog store.');
+  }
+  context.setAgentComposerInputCatalog(message);
+};
+
 export const skillHandlers: HandlerRegistration[] = [
+  defineHandler('agentComposerInputCatalog', handleAgentComposerInputCatalog),
   defineHandler('agentInputCatalog', handleAgentInputCatalog),
 ];

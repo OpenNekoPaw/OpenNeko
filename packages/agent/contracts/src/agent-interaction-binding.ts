@@ -1,4 +1,4 @@
-export type AgentInteractionPhase = 'draft' | 'session';
+export type AgentInteractionPhase = 'draft' | 'composer' | 'session';
 export type AgentBindingKind =
   'unbound' | 'assistant' | 'workspace' | 'character' | 'room' | 'world';
 
@@ -65,6 +65,12 @@ export interface AgentDraftInteractionProjection {
   readonly bindingReceipt: AgentDraftBindingReceipt | null;
 }
 
+export interface AgentComposerInteractionProjection {
+  readonly phase: 'composer';
+  readonly composerId: string;
+  readonly binding: AgentBoundDomainBinding;
+}
+
 export interface AgentSessionInteractionProjection {
   readonly phase: 'session';
   readonly conversationId: string;
@@ -72,7 +78,9 @@ export interface AgentSessionInteractionProjection {
 }
 
 export type AgentInteractionProjection =
-  AgentDraftInteractionProjection | AgentSessionInteractionProjection;
+  | AgentDraftInteractionProjection
+  | AgentComposerInteractionProjection
+  | AgentSessionInteractionProjection;
 
 export function createAgentDraftInteraction(input: {
   readonly draftId: string;
@@ -98,11 +106,37 @@ export function createAgentSessionInteraction(input: {
   });
 }
 
+export function createAgentComposerInteraction(input: {
+  readonly composerId: string;
+  readonly binding: AgentBoundDomainBinding;
+}): AgentComposerInteractionProjection {
+  return parseAgentComposerInteractionProjection({
+    phase: 'composer',
+    composerId: input.composerId,
+    binding: input.binding,
+  });
+}
+
 export function parseAgentInteractionProjection(value: unknown): AgentInteractionProjection {
   const record = requireRecord(value, 'Agent interaction projection must be an object.');
   if (record['phase'] === 'draft') return parseAgentDraftInteractionProjection(record);
+  if (record['phase'] === 'composer') return parseAgentComposerInteractionProjection(record);
   if (record['phase'] === 'session') return parseAgentSessionInteractionProjection(record);
   throw new Error(`Unknown Agent interaction phase '${String(record['phase'])}'.`);
+}
+
+export function parseAgentComposerInteractionProjection(
+  value: unknown,
+): AgentComposerInteractionProjection {
+  const record = requireRecord(value, 'Agent Composer projection must be an object.');
+  requireExactKeys(record, ['phase', 'composerId', 'binding'], 'Agent Composer');
+  if (record['phase'] !== 'composer') throw new Error("Agent Composer phase must be 'composer'.");
+  const binding = parseAgentBoundDomainBinding(record['binding']);
+  return {
+    phase: 'composer',
+    composerId: requireIdentity(record['composerId'], 'Composer'),
+    binding,
+  };
 }
 
 export function parseAgentDraftInteractionProjection(

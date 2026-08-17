@@ -16,6 +16,9 @@ export function tryHandleAgentSkillControllerRoute(
   context: AgentHostRouteEffectContext,
 ): AgentSkillControllerRouteOperation {
   switch (message.type) {
+    case 'getAgentComposerInputCatalog':
+      return Promise.resolve(effects.readComposerInputCatalog(context));
+
     case 'getAgentInputCatalog':
       return runRequiredConversationRoute(
         message,

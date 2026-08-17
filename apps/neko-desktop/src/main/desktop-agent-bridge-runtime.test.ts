@@ -880,6 +880,7 @@ function createEffects(
       updateTabState: vi.fn(),
     },
     skill: {
+      readComposerInputCatalog: vi.fn(),
       readInputCatalog: vi.fn(),
       invokeInput: vi.fn(),
       readContextTokenCount: vi.fn(),

@@ -349,6 +349,10 @@ export interface GetAgentInputCatalogWebviewMessage {
   conversationId: string;
 }
 
+export interface GetAgentComposerInputCatalogWebviewMessage {
+  type: 'getAgentComposerInputCatalog';
+}
+
 export interface InvokeAgentInputWebviewMessage {
   type: 'invokeAgentInput';
   conversationId: string;
@@ -422,6 +426,7 @@ export type AgentWebviewToHostMessage =
   | RequestCanvasAuthoringHandoffWebviewMessage
   | DragStartWebviewMessage
   | GetAgentInputCatalogWebviewMessage
+  | GetAgentComposerInputCatalogWebviewMessage
   | InvokeAgentInputWebviewMessage
   | ExitCharacterDialogueSessionWebviewMessage
   | ExitEmbodyCharacterSessionWebviewMessage
@@ -819,6 +824,14 @@ export interface AgentInputCatalogMessage {
   entries: readonly AgentInputCatalogEntry[];
 }
 
+export interface AgentComposerInputCatalogMessage {
+  type: 'agentComposerInputCatalog';
+  composerId: string;
+  phase: 'composer';
+  bindingKind: Exclude<AgentBindingKind, 'unbound'>;
+  entries: readonly AgentInputCatalogEntry[];
+}
+
 export interface ContextTokenCountMessage {
   type: 'contextTokenCount';
   conversationId: string;
@@ -896,6 +909,7 @@ export type AgentHostToWebviewMessage =
   | EmbodyCharacterSessionStartedMessage
   | EmbodyCharacterSessionExitedMessage
   | AgentInputCatalogMessage
+  | AgentComposerInputCatalogMessage
   | ContextTokenCountMessage
   | CompressionResultMessage
   | CompressionErrorMessage
@@ -984,6 +998,7 @@ export const AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES = [
   'requestCanvasAuthoringHandoff',
   'dnd:start',
   'getAgentInputCatalog',
+  'getAgentComposerInputCatalog',
   'invokeAgentInput',
   'exitCharacterDialogueSession',
   'exitEmbodyCharacterSession',
@@ -1406,6 +1421,8 @@ export function parseAgentWebviewToHostMessage(raw: unknown): AgentWebviewToHost
       return parseDragStartMessage(raw);
     case 'getAgentInputCatalog':
       return parseGetAgentInputCatalogMessage(raw);
+    case 'getAgentComposerInputCatalog':
+      return { type: 'getAgentComposerInputCatalog' };
     case 'invokeAgentInput':
       return parseInvokeAgentInputMessage(raw);
     case 'exitCharacterDialogueSession':
@@ -2640,6 +2657,20 @@ export function buildAgentInputCatalogMessage(input: {
   };
 }
 
+export function buildAgentComposerInputCatalogMessage(input: {
+  readonly composerId: string;
+  readonly bindingKind: Exclude<AgentBindingKind, 'unbound'>;
+  readonly entries: readonly AgentInputCatalogEntry[];
+}): AgentComposerInputCatalogMessage {
+  return {
+    type: 'agentComposerInputCatalog',
+    composerId: requireBuilderIdentity(input.composerId, 'Agent Composer'),
+    phase: 'composer',
+    bindingKind: input.bindingKind,
+    entries: parseAgentInputCatalog(input.entries),
+  };
+}
+
 function parseExitCharacterDialogueSessionMessage(
   raw: Record<string, unknown>,
 ): ExitCharacterDialogueSessionWebviewMessage | null {
@@ -3073,6 +3104,11 @@ function requireBuilderConversationId(value: unknown, messageType: string): stri
   if (!isNonEmptyString(value)) {
     throw new Error(`${messageType} requires non-empty conversationId`);
   }
+  return value;
+}
+
+function requireBuilderIdentity(value: unknown, label: string): string {
+  if (!isNonEmptyString(value)) throw new Error(`${label} identity is required.`);
   return value;
 }
 

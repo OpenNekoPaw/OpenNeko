@@ -8,6 +8,7 @@ import type { MutableRefObject } from 'react';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 import type { AgentHostToWebviewMessage, MessageOfType } from './messages';
 import type {
+  AgentComposerInputCatalogMessage,
   AgentInputCatalogMessage,
   Message,
   ConversationSummary,
@@ -111,6 +112,9 @@ export interface AgentStateContext {
 
 /** Pi Skill catalog projection. */
 export interface SkillContext {
+  setAgentComposerInputCatalog?: React.Dispatch<
+    React.SetStateAction<AgentComposerInputCatalogMessage | undefined>
+  >;
   setAgentInputCatalogByConversation?: React.Dispatch<
     React.SetStateAction<Map<string, AgentInputCatalogMessage>>
   >;

@@ -7,9 +7,9 @@ Workspace 内新建 Agent 会话时，Desktop Scene 会先投影同 owner Draft�
 ## What Changes
 
 - 将 `submitDraft` 的可达边界收窄到 Agent Director / Entry presentation。
-- Workspace、Character、Room、World 等 owner 已确定的 Surface 不再接入 Agent Launch Draft adapter。
+- 仅 Entry 使用 Draft；Workspace、Assistant、Character、Room、World 等 owner 已确定且尚无 Conversation 的 Surface 使用显式 owner-bound Composer presentation。
+- owner-bound Composer 不保存空 Conversation，但可从精确 owner 读取模型配置、`$` Skill、`/` Command 与索引能力。
 - owner-bound 新会话由 Agent Conversation owner 创建精确 identity，并从第一条消息起使用 canonical Conversation message path。
-- Workspace owner-bound Surface 挂载后立即且幂等创建 Conversation，不保留缺少模型、输入目录与精确 mention authority 的 tabless Draft 空档。
 - 增加路径级测试，poison Entry submit 并证明 Workspace 首发仍保留附件、文件引用和精确 owner。
 
 ## Impact

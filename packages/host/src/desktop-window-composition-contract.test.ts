@@ -22,7 +22,9 @@ describe('Desktop Window composition contract', () => {
       'windowId',
       'workbenchInstanceId',
     ]);
-    expect(composition.scene.slots.interaction?.agentSurfaceId).toBe(
+    const interaction = composition.scene.slots.interaction;
+    expect(interaction?.kind).toBe('agent');
+    expect(interaction?.kind === 'agent' ? interaction.agentSurfaceId : undefined).toBe(
       'agent-surface:window:1:draft:1',
     );
   });

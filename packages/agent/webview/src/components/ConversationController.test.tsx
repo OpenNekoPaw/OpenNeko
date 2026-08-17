@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type AgentConfigurationRequest,
   type AgentContextPayload,
+  type AgentComposerInteractionProjection,
   type AgentDomainBinding,
   type AgentDraftInteractionProjection,
   type AgentHostToWebviewMessage,
@@ -31,6 +32,7 @@ const hostMocks = vi.hoisted(() => ({
   getActiveConversation: vi.fn(),
   refreshConfigSnapshot: vi.fn(),
   getAgentStates: vi.fn(),
+  getAgentComposerInputCatalog: vi.fn(),
   getAgentInputCatalog: vi.fn(),
   getTabState: vi.fn(),
   updateTabState: vi.fn(),
@@ -572,6 +574,7 @@ vi.mock('./ChatView/InputArea', async () => {
         modelCatalogStatus,
         onRequestFiles,
         selectedModel,
+        inputCatalog = [],
         mediaModelSelection,
         mediaUnderstandingModels,
         contextChips,
@@ -681,6 +684,9 @@ vi.mock('./ChatView/InputArea', async () => {
           <span data-testid="entry-context-chips">
             {contextChips.map((payload) => payload.label).join('|')}
           </span>
+          <span data-testid="entry-input-catalog">
+            {inputCatalog.map((entry) => `${entry.prefix}${entry.name}`).join('|')}
+          </span>
           {mentionItems
             .filter((item) => item.characterLaunchSelection)
             .map((item) => (
@@ -763,15 +769,11 @@ describe('ConversationController entry state', () => {
 
   it('keeps the existing entry controller and controls available in draft presentation', () => {
     vi.clearAllMocks();
-    const launchCatalog = {
-      ...createDraftLaunchCatalog('draft-1', {
-        kind: 'workspace' as const,
-        workspaceId: 'workspace-1',
-        workspaceGrantId: 'workspace-grant-1',
-      }),
-      inputs: [createDraftSkillCatalogEntry('storyboard')],
-    };
-    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
+    const composer = createComposerProjection('composer-1', {
+      kind: 'workspace' as const,
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    });
     render(
       <ComposerWorkspaceProvider
         value={{
@@ -793,22 +795,23 @@ describe('ConversationController entry state', () => {
       >
         <ConversationController
           {...createProps()}
-          agentPresentation={launchCatalog.interaction}
+          agentPresentation={composer}
           emptyStatePresentation="desktop-dock"
         />
       </ComposerWorkspaceProvider>,
     );
 
-    expect(screen.queryByTestId('header')).toBeNull();
-    expect(screen.getByText('Start creating')).toBeTruthy();
+    expect(screen.getByTestId('header')).toBeTruthy();
+    expect(screen.getByText('Hi, create with chat')).toBeTruthy();
     expect(screen.getByRole('textbox')).toBeTruthy();
     expect(screen.getByTestId('entry-config-state').textContent).toBe('ready:false');
-    expect(hostMocks.getConversations).not.toHaveBeenCalled();
-    expect(hostMocks.getActiveConversation).not.toHaveBeenCalled();
-    expect(hostMocks.getTabState).not.toHaveBeenCalled();
-    expect(hostMocks.refreshConfigSnapshot).toHaveBeenCalledTimes(2);
+    expect(hostMocks.getConversations).toHaveBeenCalledTimes(1);
+    expect(hostMocks.getActiveConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.getTabState).toHaveBeenCalledTimes(1);
+    expect(hostMocks.refreshConfigSnapshot).toHaveBeenCalledTimes(1);
+    expect(hostMocks.getAgentComposerInputCatalog).toHaveBeenCalledTimes(1);
     expect(hostMocks.getAgentStates).toHaveBeenCalledTimes(1);
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'storyboard' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Choose Project' })).toBeNull();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '@hero' } });
@@ -817,12 +820,60 @@ describe('ConversationController entry state', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
     expect(screen.getByTestId('entry-context-chips').textContent).toContain('小橘');
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('accepts only the exact Composer catalog identity for `$` and `/` input', () => {
+    vi.clearAllMocks();
+    const composer = createComposerProjection('composer-workspace-catalog', {
+      kind: 'workspace',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    });
+    render(
+      <ComposerWorkspaceProvider
+        value={{
+          kind: 'workspace',
+          label: 'OpenNeko',
+          workspaceId: 'workspace-1',
+          loadCanvasCatalog: async () => ({
+            workspaceId: 'workspace-1',
+            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+            options: [],
+            diagnostics: [],
+          }),
+        }}
+      >
+        <ConversationController {...createProps()} agentPresentation={composer} />
+      </ComposerWorkspaceProvider>,
+    );
+
+    act(() => {
+      hostRuntimeMocks.listener?.({
+        type: 'agentComposerInputCatalog',
+        composerId: 'composer-foreign',
+        phase: 'composer',
+        bindingKind: 'workspace',
+        entries: [createDraftSkillCatalogEntry('foreign')],
+      });
+    });
+    expect(screen.getByTestId('entry-input-catalog').textContent).toBe('');
+
+    act(() => {
+      hostRuntimeMocks.listener?.({
+        type: 'agentComposerInputCatalog',
+        composerId: composer.composerId,
+        phase: 'composer',
+        bindingKind: 'workspace',
+        entries: [createDraftSkillCatalogEntry('storyboard')],
+      });
+    });
+    expect(screen.getByTestId('entry-input-catalog').textContent).toBe('$storyboard');
   });
 
   it('sends the first Workspace turn through canonical Conversation and preserves attachments', async () => {
     vi.clearAllMocks();
-    const launchCatalog = createDraftLaunchCatalog('draft-workspace-initial', {
+    const composer = createComposerProjection('composer-workspace-initial', {
       kind: 'workspace',
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant-1',
@@ -840,7 +891,6 @@ describe('ConversationController entry state', () => {
         target: null,
       },
     };
-    hostMocks.readLaunchCatalog.mockReturnValue(launchCatalog);
     hostMocks.readEntryIntent.mockReturnValue({
       mode: 'authoring',
       targetReceipt: foreignEntryReceipt,
@@ -867,13 +917,13 @@ describe('ConversationController entry state', () => {
       >
         <ConversationController
           {...createProps()}
-          agentPresentation={launchCatalog.interaction}
+          agentPresentation={composer}
           emptyStatePresentation="desktop-dock"
         />
       </ComposerWorkspaceProvider>,
     );
 
-    expect(hostMocks.newConversation).toHaveBeenCalledTimes(1);
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Continue in Workspace' } });
     fireEvent.click(screen.getByTestId('send-workspace-first-attachment'));
@@ -3925,6 +3975,13 @@ function createDraftProjection(
     binding,
     bindingReceipt: null,
   };
+}
+
+function createComposerProjection(
+  composerId: string,
+  binding: Exclude<AgentDomainBinding, { readonly kind: 'unbound' }>,
+): AgentComposerInteractionProjection {
+  return { phase: 'composer', composerId, binding };
 }
 
 function createBoundAssistantLaunchCatalog(draftId: string) {

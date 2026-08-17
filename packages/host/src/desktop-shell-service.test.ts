@@ -912,7 +912,7 @@ describe('DesktopShellService', () => {
             },
             scope: {
               kind: 'assistant',
-              draftId: 'draft-character-a',
+              composerId: 'composer-character-a',
               assistantSpaceId: 'assistant-space:local-user',
               conversationId: 'conversation-a',
             },
@@ -925,7 +925,7 @@ describe('DesktopShellService', () => {
               phase: 'session',
               scope: {
                 kind: 'assistant',
-                draftId: 'draft-character-a',
+                composerId: 'composer-character-a',
                 assistantSpaceId: 'assistant-space:local-user',
                 conversationId: 'conversation-a',
               },
@@ -1093,7 +1093,7 @@ describe('DesktopShellService', () => {
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await fixture.service.getProjection(windowId);
     const initialContext = activeScene(initial.window).context;
-    if (initialContext.kind !== 'agent') {
+    if (initialContext.kind !== 'agent' || initialContext.scope.kind !== 'unbound') {
       throw new Error('Initial Scene must be an Agent Entry Draft.');
     }
     const initialDraftId = initialContext.scope.draftId;
@@ -1107,7 +1107,11 @@ describe('DesktopShellService', () => {
         intent: { kind: 'open-agent-entry' },
       }),
     );
-    if (first.status !== 'transitioned' || first.scene.context.kind !== 'agent') {
+    if (
+      first.status !== 'transitioned' ||
+      first.scene.context.kind !== 'agent' ||
+      first.scene.context.scope.kind !== 'unbound'
+    ) {
       throw new Error('First Start Creating transition did not create an Agent draft.');
     }
     const afterFirst = await fixture.service.getProjection(windowId);
@@ -1120,7 +1124,11 @@ describe('DesktopShellService', () => {
         intent: { kind: 'open-agent-entry' },
       }),
     );
-    if (second.status !== 'transitioned' || second.scene.context.kind !== 'agent') {
+    if (
+      second.status !== 'transitioned' ||
+      second.scene.context.kind !== 'agent' ||
+      second.scene.context.scope.kind !== 'unbound'
+    ) {
       throw new Error('Second Start Creating transition did not create an Agent draft.');
     }
 
@@ -1413,7 +1421,7 @@ describe('DesktopShellService', () => {
           },
         },
         slots: {
-          interaction: { kind: 'agent', phase: 'draft' },
+          interaction: { kind: 'agent', phase: 'composer' },
           main: { kind: 'workspace-main', workspaceId: authorityResolution.workspaceId },
           rightManager: {
             kind: 'workspace-resources',
@@ -1673,7 +1681,7 @@ describe('DesktopShellService', () => {
         slots: {
           interaction: {
             kind: 'agent',
-            phase: 'draft',
+            phase: 'composer',
             scope: { kind: 'workspace' },
           },
         },
@@ -1735,7 +1743,7 @@ describe('DesktopShellService', () => {
         kind: 'agent',
         scope: {
           kind: 'workspace',
-          draftId: entryScene.context.scope.draftId,
+          composerId: entryScene.context.scope.draftId,
           workspaceId: workspace.workspaceId,
           workspaceGrantId: grant.workspaceGrantId,
           conversationId: input.conversationId,
@@ -1798,7 +1806,10 @@ describe('DesktopShellService', () => {
       workspaceId: workspace.workspaceId,
       workspaceGrantId: grant.workspaceGrantId,
     };
-    const draftId = opened.scene.context.scope.draftId;
+    if (opened.scene.context.scope.kind !== 'workspace') {
+      throw new Error('Workspace owner fixture requires Workspace Composer scope.');
+    }
+    const draftId = opened.scene.context.scope.composerId;
     const first = await fixture.service.projectOwnerBoundAgentConversation({
       windowId,
       rendererSessionId: initial.rendererSessionId,
@@ -1817,14 +1828,14 @@ describe('DesktopShellService', () => {
     expect(first).toMatchObject({
       context: {
         kind: 'agent',
-        scope: { draftId, conversationId: 'conversation:workspace-1' },
+        scope: { composerId: draftId, conversationId: 'conversation:workspace-1' },
       },
       slots: { interaction: { phase: 'session' } },
     });
     expect(second).toMatchObject({
       context: {
         kind: 'agent',
-        scope: { draftId, conversationId: 'conversation:workspace-2' },
+        scope: { composerId: draftId, conversationId: 'conversation:workspace-2' },
       },
       slots: { interaction: { phase: 'session' } },
     });
@@ -2122,6 +2133,10 @@ describe('DesktopShellService', () => {
       throw new Error('Workspace Project session fixture requires Workspace Agent scope.');
     }
     const scope = { ...context.scope, conversationId: 'conversation-1' };
+    const interaction = workspaceResult.scene.slots.interaction;
+    if (!interaction || interaction.kind !== 'agent') {
+      throw new Error('Workspace Project session fixture requires an Agent Surface.');
+    }
     const sessionScene = parseDesktopWorkbenchSceneProjection({
       ...workspaceResult.scene,
       context: { ...context, scope },
@@ -2129,7 +2144,7 @@ describe('DesktopShellService', () => {
         ...workspaceResult.scene.slots,
         interaction: {
           kind: 'agent',
-          agentSurfaceId: workspaceResult.scene.slots.interaction!.agentSurfaceId,
+          agentSurfaceId: interaction.agentSurfaceId,
           agentViewId: context.agentViewId,
           phase: 'session',
           scope,
@@ -2178,7 +2193,7 @@ describe('DesktopShellService', () => {
         slots: {
           interaction: {
             kind: 'agent',
-            phase: 'draft',
+            phase: 'composer',
             scope: { kind: 'workspace' },
           },
         },
@@ -2202,7 +2217,7 @@ describe('DesktopShellService', () => {
       windowId,
       rendererSessionId: draftProjection.rendererSessionId,
       agentViewId: result.scene.context.agentViewId,
-      draftId: result.scene.context.scope.draftId,
+      draftId: result.scene.context.scope.composerId,
       context: {
         kind: 'workspace',
         workspaceId: project.workspaceId,
@@ -2583,7 +2598,7 @@ describe('DesktopShellService', () => {
         },
       },
       slots: {
-        interaction: { kind: 'agent', phase: 'draft' },
+        interaction: { kind: 'agent', phase: 'composer' },
         rightManager: { kind: 'workspace-resources' },
       },
     });
@@ -2594,7 +2609,7 @@ describe('DesktopShellService', () => {
     expect(activeScene(reattached.window).slots.main).toBeUndefined();
     expect(activeScene(reattached.window).slots.interaction).toMatchObject({
       kind: 'agent',
-      phase: 'draft',
+      phase: 'composer',
     });
   });
 

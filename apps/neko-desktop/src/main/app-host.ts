@@ -1176,32 +1176,41 @@ export class DesktopAppHost {
       throw new Error('Desktop Agent bootstrap does not match its exact Agent Surface View.');
     }
     if ('assistantSpaceId' in request) {
+      const initialConversationId = request.conversationId;
       if (
-        surfaceInteraction.phase !== 'session' ||
         surfaceInteraction.scope.kind !== 'assistant' ||
         surfaceInteraction.scope.assistantSpaceId !== request.assistantSpaceId ||
-        surfaceInteraction.scope.conversationId !== request.conversationId
+        surfaceInteraction.scope.conversationId !== initialConversationId ||
+        surfaceInteraction.phase !==
+          (initialConversationId === undefined ? 'composer' : 'session')
       ) {
         throw new Error(
           'Desktop Assistant Agent bootstrap does not match its exact Agent Surface.',
         );
       }
-      const restored = await readAgentConversationBootstrap(
-        this.conversationLifecycle,
-        request.conversationId,
-      );
-      if (restored.status === 'unavailable') {
+      const restored =
+        initialConversationId === undefined
+          ? undefined
+          : await readAgentConversationBootstrap(
+              this.conversationLifecycle,
+              initialConversationId,
+            );
+      if (restored?.status === 'unavailable') {
         return {
           requestId: request.requestId,
           status: 'unavailable',
           diagnostic: restored.diagnostic,
         };
       }
-      const { context, firstSubmitRecord } = restored;
+      const context = restored?.context;
+      const firstSubmitRecord = restored?.firstSubmitRecord;
       const scene = resolveActiveDesktopWindowWorkbench(
         (await this.shell.getProjection(window.windowId)).window,
       ).scene;
-      if (!assistantSurfaceContextMatches(context, scene, request.assistantSpaceId)) {
+      if (
+        context !== undefined &&
+        !assistantSurfaceContextMatches(context, scene, request.assistantSpaceId)
+      ) {
         throw new Error(
           'Desktop Assistant Agent bootstrap does not match its persisted Conversation context.',
         );
@@ -1231,7 +1240,20 @@ export class DesktopAppHost {
           viewId: request.viewId,
         },
         workspace,
-        initialConversationId: request.conversationId,
+        ...(initialConversationId === undefined ? {} : { initialConversationId }),
+        ...(initialConversationId === undefined
+          ? {
+              composer: {
+                phase: 'composer' as const,
+                composerId: surfaceInteraction.scope.composerId,
+                binding: {
+                  kind: 'assistant' as const,
+                  assistantSpaceId: request.assistantSpaceId,
+                  baseGrantIds: [] as const,
+                },
+              },
+            }
+          : {}),
         ...(firstSubmitRecord === undefined
           ? {}
           : {
@@ -1247,15 +1269,11 @@ export class DesktopAppHost {
         },
         readConversationEntryTargetReceipt: (conversationId) =>
           this.conversationLifecycle.readConversationEntryTargetReceipt(conversationId),
-        ...(context.kind === 'assistant' || context.kind === 'character'
-          ? {
-              readConversationConfiguration: (conversationId: string) =>
-                this.conversationLifecycle.readConversationConfiguration(conversationId),
-              updateConversationConfiguration: (
-                input: Parameters<AgentConversationLifecycleService['updateConfiguration']>[0],
-              ) => this.conversationLifecycle.updateConfiguration(input),
-            }
-          : {}),
+        readConversationConfiguration: (conversationId: string) =>
+          this.conversationLifecycle.readConversationConfiguration(conversationId),
+        updateConversationConfiguration: (
+          input: Parameters<AgentConversationLifecycleService['updateConfiguration']>[0],
+        ) => this.conversationLifecycle.updateConfiguration(input),
         readGlobalSkillCatalog: () => this.agent.readGlobalSkillCatalog(),
         personalSkillOwnerId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
         commitConversationCreation: ({ conversationId }) =>
@@ -1294,7 +1312,7 @@ export class DesktopAppHost {
     const initialConversationId = request.conversationId ?? surfaceInteraction.scope.conversationId;
     if (
       initialConversationId !== surfaceInteraction.scope.conversationId ||
-      (initialConversationId === undefined && surfaceInteraction.phase !== 'draft') ||
+      (initialConversationId === undefined && surfaceInteraction.phase !== 'composer') ||
       (initialConversationId !== undefined && surfaceInteraction.phase !== 'session')
     ) {
       throw new Error('Desktop Workspace Agent bootstrap does not match its exact Agent Surface.');
@@ -1322,6 +1340,19 @@ export class DesktopAppHost {
       requestId: request.requestId,
       grant,
       workspace,
+      ...(initialConversationId === undefined
+        ? {
+            composer: {
+              phase: 'composer' as const,
+              composerId: surfaceInteraction.scope.composerId,
+              binding: {
+                kind: 'workspace' as const,
+                workspaceId: grant.workspaceId,
+                workspaceGrantId: surfaceInteraction.scope.workspaceGrantId,
+              },
+            },
+          }
+        : {}),
       ...(initialConversationId === undefined ? {} : { initialConversationId }),
       ...(initialConversationRecord === undefined
         ? {}
@@ -1373,6 +1404,7 @@ export class DesktopAppHost {
       if (
         interaction.agentViewId !== request.viewId ||
         interaction.phase !== 'draft' ||
+        interaction.scope.kind !== 'unbound' ||
         !desktopAgentScopeMatchesBinding(interaction.scope, request.draft.binding) ||
         interaction.scope.draftId !== request.draft.draftId
       ) {
@@ -3224,12 +3256,21 @@ export class DesktopAppHost {
   private async resolveOwnerBoundConversationContext(
     scene: DesktopWorkbenchSceneProjection,
   ): Promise<AgentBoundDomainBinding> {
-    if (scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace') {
-      return {
-        kind: 'workspace',
-        workspaceId: scene.context.scope.workspaceId,
-        workspaceGrantId: scene.context.scope.workspaceGrantId,
-      };
+    if (scene.context.kind === 'agent') {
+      if (scene.context.scope.kind === 'workspace') {
+        return {
+          kind: 'workspace',
+          workspaceId: scene.context.scope.workspaceId,
+          workspaceGrantId: scene.context.scope.workspaceGrantId,
+        };
+      }
+      if (scene.context.scope.kind === 'assistant') {
+        return {
+          kind: 'assistant',
+          assistantSpaceId: scene.context.scope.assistantSpaceId,
+          baseGrantIds: [],
+        };
+      }
     }
     const conversationId =
       scene.context.kind === 'character-interaction'
