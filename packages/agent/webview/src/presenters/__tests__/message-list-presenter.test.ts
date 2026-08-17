@@ -22,7 +22,7 @@ describe('message-list-presenter', () => {
     ]);
   });
 
-  it('binds execution activity to only the latest non-queued user message', () => {
+  it('keeps execution activity in one model-output item after the latest user message', () => {
     const state = { phase: 'thinking' as const, startedAt: 2_000 };
     const projection = projectMessageList({
       messages: [
@@ -41,20 +41,20 @@ describe('message-list-presenter', () => {
       streamingMessageId: null,
     });
 
-    expect(projection.items).toHaveLength(3);
-    expect(projection.items[0]).not.toHaveProperty('agentState');
+    expect(projection.items).toHaveLength(4);
     expect(projection.items[2]).toEqual(
-      expect.objectContaining({
-        kind: 'message',
-        ownerMessageId: 'user-current',
-        agentState: state,
-        isCurrentRunMessage: true,
-      }),
+      expect.objectContaining({ kind: 'message', ownerMessageId: 'user-current' }),
     );
-    expect(projection.items.some((item) => item.kind === 'execution_activity')).toBe(false);
+    expect(projection.items[2]).not.toHaveProperty('agentState');
+    expect(projection.items[3]).toEqual({
+      kind: 'execution_activity',
+      agentState: state,
+      ownerMessageId: null,
+      estimatedHeight: 34,
+    });
   });
 
-  it('keeps the current user time visible when canonical records suppress generic activity', () => {
+  it('lets canonical model output replace the generic model-output activity', () => {
     const projection = projectMessageList({
       messages: [
         { id: 'user-current', role: 'user', content: 'Continue', timestamp: 2_000 },
@@ -71,13 +71,36 @@ describe('message-list-presenter', () => {
     });
 
     expect(projection.showExecutionActivity).toBe(false);
-    expect(projection.items[0]).toEqual(
-      expect.objectContaining({
-        ownerMessageId: 'user-current',
-        isCurrentRunMessage: true,
-      }),
-    );
-    expect(projection.items[0]).not.toHaveProperty('agentState');
+    expect(projection.items).toHaveLength(2);
+    expect(projection.items.some((item) => item.kind === 'execution_activity')).toBe(false);
+  });
+
+  it('does not let a queued user message hide canonical model output', () => {
+    const projection = projectMessageList({
+      messages: [
+        { id: 'user-current', role: 'user', content: 'Continue', timestamp: 2_000 },
+        {
+          id: 'assistant-stream',
+          role: 'assistant',
+          content: 'Streaming response',
+          timestamp: 2_100,
+          isStreaming: true,
+        },
+        {
+          id: 'user-queued',
+          role: 'user',
+          content: 'Wait behind it',
+          timestamp: 2_200,
+          isQueued: true,
+        },
+      ],
+      agentState: { phase: 'streaming', startedAt: 2_000 },
+      streamingMessageId: 'assistant-stream',
+    });
+
+    expect(projection.showExecutionActivity).toBe(false);
+    expect(projection.items).toHaveLength(2);
+    expect(projection.items.some((item) => item.kind === 'execution_activity')).toBe(false);
   });
 
   it('lets canonical streaming and pending tool records replace generic activity', () => {

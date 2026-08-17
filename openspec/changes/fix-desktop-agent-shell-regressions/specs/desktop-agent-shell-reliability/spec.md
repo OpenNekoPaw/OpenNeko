@@ -757,24 +757,26 @@ manager and Host path guard, and arbitrary symlink escapes SHALL remain rejected
 - **THEN** Host authorization rejects only that resource with an owner-qualified diagnostic
 - **AND** valid sibling files and the rest of the Workspace remain usable
 
-### Requirement: Current user messages expose authoritative execution feedback
+### Requirement: Every turn exposes authoritative execution feedback in one model-output timeline
 
 Desktop SHALL publish the active Conversation's authoritative non-idle Agent state before the corresponding active
-submission receipt can be consumed. Webview SHALL bind that state to the latest non-queued user message, showing its
-send time, processing label and elapsed time without hover. Historical user messages SHALL NOT receive the current
-state, and canonical streaming, Tool or terminal assistant records SHALL continue to suppress duplicate generic
-activity. Renderer optimistic state SHALL NOT substitute for a missing Agent state snapshot.
+submission receipt can be consumed. Webview SHALL render its processing label and elapsed time in the model-output
+transcript rail after the latest non-queued user message. First and later turns SHALL use the same placement. User
+messages SHALL NOT own execution activity or change timestamp visibility because of run state. Canonical streaming,
+Tool or terminal assistant records SHALL replace generic activity in the same model-output timeline. Renderer
+optimistic state SHALL NOT substitute for a missing Agent state snapshot.
 
 #### Scenario: A later active turn begins
 
 - **WHEN** a completed Conversation accepts another user message as the active Turn
 - **THEN** its authoritative state is observable before the acceptance resolves
-- **AND** only that latest user message shows default-visible time, processing state and elapsed time
+- **AND** its processing state and elapsed time use the same model-output rail as the first Turn
+- **AND** the user message contains no execution activity
 
 #### Scenario: Canonical execution records arrive or the turn becomes idle
 
 - **WHEN** streaming, Tool or terminal assistant records replace generic activity, or the Agent state becomes idle
-- **THEN** the user-message processing projection disappears without leaving a duplicate activity row
+- **THEN** the generic model-output activity disappears without leaving a duplicate activity row or spatial jump
 - **AND** historical message presentation remains unchanged
 
 ### Requirement: Queued messages expose item-local waiting feedback

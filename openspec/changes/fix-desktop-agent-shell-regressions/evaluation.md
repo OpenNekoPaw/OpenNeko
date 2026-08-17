@@ -183,18 +183,18 @@ Date: 2026-08-03
 
 - Decision and owning suite: `reuse` `agent-runtime.workflow-controller/queue-during-run` for the
   canonical submit/queue/drain path; `update` the existing visible `desktop-agent-provider-ui`
-  scenario for authoritative activity placement and computed-visible user-message time.
+  scenario for one authoritative model-output activity placement across first and later turns.
 - Canonical path: visible Composer → sender-bound controller → awaited `AgentStateRuntime`
-  publication → submission receipt → MessageList current-user projection. The forbidden fallback is
-  Renderer inference from optimistic `isThinking`, a duplicate queue transcript row, or a second
-  execution-status owner.
+  publication → submission receipt → MessageList model-output projection. The forbidden fallback is
+  Renderer inference from optimistic `isThinking`, user-message execution activity, a duplicate queue
+  transcript row, or a second execution-status owner.
 
 ### Verification
 
-- Key-free Agent Evaluation passed `45/45` files and `310/310` tests; all `27` suites / `80` cases
+- Key-free Agent Evaluation passed `45/45` files and `311/311` tests; all `27` suites / `81` cases
   passed indexed dry-run. This proves harness readiness, not real provider behavior.
-- Deterministic runtime and Webview coverage proves ordered publication, publication failure,
-  latest-user selection, Tool/streaming suppression, default-visible time and queued row status/time.
+- Deterministic runtime and Webview coverage proves ordered publication, publication failure, uniform
+  first/later-turn model-output placement, Tool/streaming replacement and queued row status/time.
 - Visible `desktop-agent-message-queue` execution was attempted through the isolated real Electron
   fixture but blocked before application inspection because its CDP target never became ready
   (`fetch failed`). No screenshot or visual pass is claimed.
@@ -209,7 +209,7 @@ Date: 2026-08-03
 - Application reopen, compaction, generation restoration and cross-conversation switching do not
   change contract or authority in this delta and retain their indexed suites.
 - Pixel acceptance for active, queued, narrow and dark-theme states remains blocked by the Desktop
-  launch environment; the existing real-provider scenario now rejects the former placement when
+  launch environment; the existing real-provider scenario now rejects user-message placement when
   authorization and runtime become available.
 
 ## 2026-08-05 Agent diagnostic portal update

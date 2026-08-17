@@ -384,8 +384,9 @@ Agent state 仍由 package-owned `AgentStateRuntime` 唯一拥有。Desktop conn
 不得由 Renderer 根据 optimistic `isThinking` 推断或补造状态。queued acceptance 不重置当前运行 Turn 的
 `startedAt`，避免第二条排队消息改变第一条运行计时。
 
-Webview 只把非 idle 的权威 state 投影到最后一条非 queued 用户消息。该消息默认显示发送时间，并在气泡内
-复用现有 execution activity 的状态与 elapsed 表达；同一状态不再重复为独立 transcript row。canonical
-streaming、Tool 和 completed assistant record 继续按现有规则取代 generic activity。queued item 不进入
-transcript，composer queue 使用既有 `createdAt` 显示逐项“等待中”和时间，发送、重编辑、取消操作保持不变。
-消息与队列时间共用一个 package-local formatter，不新增状态 owner、contract 字段或 fallback。
+Webview 把非 idle 的权威 state 投影到用户消息之后的 model-output transcript rail，首轮和后续轮次使用同一
+空间 owner。generic execution activity 只覆盖模型尚未产生 canonical record 的间隔；streaming、Tool 和
+completed assistant record 在同一 model-output 空间按现有规则取代它，不得把处理状态临时挂入用户消息再
+跳转。用户消息继续只拥有发送时间和用户操作，时间可见性不因运行态改变。queued item 不进入 transcript，
+composer queue 使用既有 `createdAt` 显示逐项“等待中”和时间，发送、重编辑、取消操作保持不变。消息与队列
+时间共用一个 package-local formatter，不新增状态 owner、contract 字段或 fallback。

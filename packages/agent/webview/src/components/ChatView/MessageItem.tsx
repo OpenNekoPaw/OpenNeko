@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import type { AgentState, Message, ToolCall } from '@neko/agent-contracts';
+import type { Message, ToolCall } from '@neko/agent-contracts';
 import { SubAgentCard } from './SubAgentCard';
 import { ContentBlockItem } from './ContentBlockItem';
 import { MessageActions } from './MessageActions';
@@ -27,15 +27,12 @@ import { ReferenceToken } from './InputArea/ReferenceToken';
 import { AssistantTurnActivity } from './AssistantTurnActivity';
 import { useTranslation } from '../../i18n/I18nContext';
 import { ErrorIcon } from '@neko/ui/icons';
-import { AgentExecutionActivity } from './AgentExecutionActivity';
 import { formatMessageTime } from './message-time';
 
 type MessageContextReference = NonNullable<Message['contextReferences']>[number];
 
 interface MessageItemProps {
   message: Message;
-  agentState?: AgentState;
-  isCurrentRunMessage?: boolean;
   conversationId: string | null;
   identities: MessageIdentityMap;
   // P2: Message operations
@@ -190,8 +187,6 @@ function InlineErrorMessage({ content, label }: { content: string; label: string
 
 export const MessageItem = memo(function MessageItem({
   message,
-  agentState,
-  isCurrentRunMessage = false,
   conversationId,
   onEditMessage,
   onResendFrom,
@@ -249,15 +244,12 @@ export const MessageItem = memo(function MessageItem({
             isUser ? 'flex max-w-[85%] flex-col items-end' : 'max-w-none'
           }`}
         >
-          {(!isGrouped || isCurrentRunMessage) && isUser && (
+          {!isGrouped && isUser && (
             <div className="mb-0.5 flex flex-row-reverse items-center gap-2">
               <span className="text-[11px] font-medium text-[var(--neko-foreground)]">
                 {identity.displayName}
               </span>
-              <span
-                className={`text-[10px] text-[var(--neko-descriptionForeground)] transition-opacity ${isCurrentRunMessage ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                data-message-timestamp
-              >
+              <span className="text-[10px] text-[var(--neko-descriptionForeground)] opacity-0 transition-opacity group-hover:opacity-100">
                 {formatMessageTime(message.timestamp)}
               </span>
               {message.editedAt && (
@@ -288,9 +280,6 @@ export const MessageItem = memo(function MessageItem({
                 </div>
               )}
               <div className="min-w-0 whitespace-pre-wrap break-words">{message.content}</div>
-              {agentState && (
-                <AgentExecutionActivity agentState={agentState} placement="user-message" />
-              )}
             </div>
           ) : message.isError ? (
             <InlineErrorMessage content={message.content} label={t('chat.message.error')} />

@@ -5,13 +5,9 @@ import { ToolLoadingSpinner } from './ToolCallDisplay';
 
 interface AgentExecutionActivityProps {
   readonly agentState: AgentState;
-  readonly placement?: 'transcript' | 'user-message';
 }
 
-export function AgentExecutionActivity({
-  agentState,
-  placement = 'transcript',
-}: AgentExecutionActivityProps) {
+export function AgentExecutionActivity({ agentState }: AgentExecutionActivityProps) {
   const { t } = useTranslation();
   const [now, setNow] = useState(() => Date.now());
 
@@ -29,17 +25,14 @@ export function AgentExecutionActivity({
 
   return (
     <div
-      className={`agent-execution-activity ${placement === 'transcript' ? 'agent-message-row px-3 py-1.5' : 'mt-1.5'}`}
+      className="agent-execution-activity agent-message-row px-3 py-1.5"
       role="status"
       aria-live="polite"
       aria-label={t('chat.agentRun.activityLabel')}
       data-phase={agentState.phase}
       data-started-at={agentState.startedAt}
-      data-placement={placement}
     >
-      <div
-        className={`flex min-w-0 items-center gap-2 text-[11px] text-[var(--agent-fg-secondary,var(--neko-descriptionForeground))] ${placement === 'transcript' ? 'pl-7' : 'justify-end'}`}
-      >
+      <div className="flex min-w-0 items-center gap-2 pl-7 text-[11px] text-[var(--agent-fg-secondary,var(--neko-descriptionForeground))]">
         <ToolLoadingSpinner className="h-3 w-3 shrink-0 text-[var(--agent-info,var(--neko-textLink-foreground))]" />
         <span className="min-w-0 truncate">{visibleLabel}</span>
         <span className="agent-execution-elapsed shrink-0 opacity-70" aria-hidden="true">

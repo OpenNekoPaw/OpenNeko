@@ -111,10 +111,10 @@ export const desktopAgentProviderUiScenario = Object.freeze({
       `(() => {
         const observation = window.__openNekoAgentProviderUiObservation;
         return observation?.sawTranscriptActivity === true &&
-          observation?.sawUserMessageActivity === true &&
-          observation?.sawVisibleUserTimestamp === true;
+          observation?.sawModelOutputActivity === true &&
+          observation?.sawUserMessageActivity === false;
       })()`,
-      'Visible Desktop Agent did not bind live execution activity and time to the user message.',
+      'Visible Desktop Agent did not keep live execution activity in the model-output rail.',
     );
     checkpoint('visible-transcript-execution-activity', await inspectProviderWaitState(evaluate));
 
@@ -442,8 +442,8 @@ async function beginExecutionActivityObservation(evaluate) {
     window.__openNekoAgentProviderUiObservation?.observer?.disconnect();
     const observation = {
       sawTranscriptActivity: false,
+      sawModelOutputActivity: false,
       sawUserMessageActivity: false,
-      sawVisibleUserTimestamp: false,
       observer: undefined,
     };
     const inspect = () => {
@@ -451,14 +451,12 @@ async function beginExecutionActivityObservation(evaluate) {
         '[data-owner-root="agent"] .agent-message-list .agent-execution-activity',
       );
       observation.sawTranscriptActivity ||= activity instanceof HTMLElement;
+      observation.sawModelOutputActivity ||=
+        activity instanceof HTMLElement &&
+        activity.closest('.agent-transcript-rail') instanceof HTMLElement &&
+        activity.closest('.agent-user-prompt') === null;
       observation.sawUserMessageActivity ||=
-        activity?.getAttribute('data-placement') === 'user-message' &&
-        activity.closest('.agent-user-prompt') instanceof HTMLElement;
-      const timestamp = activity
-        ?.closest('.agent-message-row')
-        ?.querySelector('[data-message-timestamp]');
-      observation.sawVisibleUserTimestamp ||=
-        timestamp instanceof HTMLElement && getComputedStyle(timestamp).opacity === '1';
+        activity?.closest('.agent-user-prompt') instanceof HTMLElement;
     };
     observation.observer = new MutationObserver(inspect);
     observation.observer.observe(document.body, {
