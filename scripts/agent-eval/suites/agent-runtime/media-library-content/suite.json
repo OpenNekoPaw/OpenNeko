@@ -48,6 +48,12 @@
       "file": "cases/retired-workspace-prefix-rejected.json",
       "group": "boundary",
       "visibility": "public"
+    },
+    {
+      "id": "linked-core-read-list-write-boundary",
+      "file": "cases/linked-core-read-list-write-boundary.json",
+      "group": "boundary",
+      "visibility": "public"
     }
   ],
   "rubricRefs": [],

@@ -1,0 +1,123 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "linked-core-read-list-write-boundary",
+  "suiteId": "agent-runtime.media-library-content",
+  "caseGroup": "boundary",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "List and read a text file through the Workspace Media Library symlink, then attempt and fail to write through the same Workspace path.",
+    "canonicalPath": [
+      "Desktop Workspace Agent input path",
+      "ListDirectory on neko/assets/workspace",
+      "Read through the canonical Workspace ContentReadService",
+      "Write through the strict Workspace writer authorization",
+      "request-local write denial without fallback",
+      "terminal answer"
+    ],
+    "observables": [
+      {
+        "ref": "linked-core-file-facts",
+        "kind": "runtime-fact",
+        "description": "Successful linked ListDirectory and Read facts, one denied Write fact, exact Workspace-relative arguments, terminal state, and final markers without Host target paths.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent lists neko/assets/workspace, reads linked-story.md through its Workspace-relative path, receives an explicit authorization error when Write targets the same linked file, performs no alternate writer or shell fallback, and reaches idle with both markers.",
+    "expectedFailure": "A rejected linked list/read, successful linked Write, missing approval identity, absolute target projection, raw Media Library locator, shell or alternate writer fallback, runtime diagnostic, or missing terminal marker fails visibly."
+  },
+  "fixtureRefs": ["media-library-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit-read",
+      "kind": "submit",
+      "prompt": "先调用 ListDirectory 一次，path 必须是 neko/assets/workspace；再调用 Read 一次，file_path 必须是 neko/assets/workspace/linked-story.md。不要构造绝对路径、locator 或 media-library，不要调用其他工具。读取成功后输出 MEDIA_LIBRARY_DOCUMENT_7X9，并单独输出 LINKED_CORE_READ_LIST_OK。"
+    },
+    {
+      "id": "read-idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    },
+    {
+      "id": "submit-write",
+      "kind": "submit",
+      "prompt": "调用 Write 一次，file_path 必须是 neko/assets/workspace/linked-story.md，content 必须是 MUST_NOT_REPLACE_LINKED_MEDIA。等待明确批准；该写入必须被授权层拒绝。不要尝试其他路径、writer、shell 或 fallback。确认失败后单独输出 LINKED_CORE_WRITE_DENIED_OK。"
+    },
+    {
+      "id": "approve-write-attempt",
+      "kind": "confirm",
+      "afterStepId": "submit-write",
+      "toolName": "Write",
+      "approved": true,
+      "timeoutMs": 120000
+    },
+    {
+      "id": "write-idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 120000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "linked-core-file-facts"
+    },
+    {
+      "id": "idle",
+      "kind": "fully-idle",
+      "evidenceRef": "linked-core-file-facts"
+    },
+    {
+      "id": "list-linked-directory",
+      "kind": "tool-call",
+      "name": "ListDirectory",
+      "status": "success",
+      "expectedArguments": {
+        "path": "neko/assets/workspace"
+      },
+      "evidenceRef": "linked-core-file-facts"
+    },
+    {
+      "id": "read-linked-text",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "success",
+      "expectedArguments": {
+        "file_path": "neko/assets/workspace/linked-story.md"
+      },
+      "evidenceRef": "linked-core-file-facts"
+    },
+    {
+      "id": "write-linked-text-denied",
+      "kind": "tool-call",
+      "name": "Write",
+      "status": "error",
+      "expectedArguments": {
+        "file_path": "neko/assets/workspace/linked-story.md",
+        "content": "MUST_NOT_REPLACE_LINKED_MEDIA"
+      },
+      "evidenceRef": "linked-core-file-facts"
+    },
+    {
+      "id": "shell-absent",
+      "kind": "tool-call",
+      "name": "Bash",
+      "status": "absent",
+      "evidenceRef": "linked-core-file-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["LINKED_CORE_READ_LIST_OK", "LINKED_CORE_WRITE_DENIED_OK"],
+      "evidenceRef": "linked-core-file-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 240000,
+    "repetitions": 1
+  }
+}
