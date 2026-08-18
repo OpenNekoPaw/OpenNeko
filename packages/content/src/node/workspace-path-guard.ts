@@ -43,34 +43,9 @@ export async function authorizeWorkspaceContainedPath(
   input: AuthorizeWorkspacePathInput,
 ): Promise<WorkspacePathGuardResult> {
   const fs = input.fs ?? nodeFileSystem;
-  if (!path.isAbsolute(input.workspaceRoot) || !path.isAbsolute(input.requestedPath)) {
-    return rejected(
-      'invalid-workspace-path',
-      'Workspace content path must be absolute internally.',
-    );
-  }
-
-  const workspaceRoot = path.resolve(input.workspaceRoot);
-  const requestedPath = path.resolve(input.requestedPath);
-  const relative = path.relative(workspaceRoot, requestedPath);
-  if (!isContainedRelativePath(relative)) {
-    return rejected('invalid-workspace-path', 'Content path is outside the workspace namespace.');
-  }
-
-  const workspacePath = toWorkspacePath(relative);
-  if (workspacePath === '.neko' || workspacePath?.startsWith('.neko/')) {
-    return rejected(
-      'invalid-workspace-path',
-      'Project-local state is not a Workspace content source.',
-      workspacePath,
-    );
-  }
-
-  const segments = relative.split(path.sep).filter(Boolean);
-  const libraryName =
-    segments[0] === 'neko' && segments[1] === 'assets' && segments.length >= 3
-      ? segments[2]
-      : undefined;
+  const lexical = validateLexicalWorkspacePath(input);
+  if (!('ok' in lexical)) return lexical;
+  const { workspaceRoot, requestedPath, workspacePath, libraryName } = lexical;
 
   try {
     const workspaceRealPath = await fs.realpath(workspaceRoot);
@@ -132,6 +107,67 @@ export async function authorizeWorkspaceContainedPath(
       libraryName,
     );
   }
+}
+
+export async function authorizeWorkspaceReadablePath(
+  input: AuthorizeWorkspacePathInput,
+): Promise<WorkspacePathGuardResult> {
+  const fs = input.fs ?? nodeFileSystem;
+  const lexical = validateLexicalWorkspacePath(input);
+  if (!('ok' in lexical)) return lexical;
+  try {
+    await fs.realpath(lexical.requestedPath);
+    return { authorized: true };
+  } catch (error) {
+    return rejected(
+      diagnosticCodeForError(error, lexical.libraryName !== undefined),
+      diagnosticMessageForError(error, lexical.libraryName !== undefined),
+      lexical.workspacePath,
+      lexical.libraryName,
+    );
+  }
+}
+
+type LexicalWorkspacePath = {
+  readonly ok: true;
+  readonly workspaceRoot: string;
+  readonly requestedPath: string;
+  readonly workspacePath: string | undefined;
+  readonly libraryName: string | undefined;
+};
+
+function validateLexicalWorkspacePath(
+  input: AuthorizeWorkspacePathInput,
+): LexicalWorkspacePath | WorkspacePathGuardResult {
+  if (!path.isAbsolute(input.workspaceRoot) || !path.isAbsolute(input.requestedPath)) {
+    return rejected(
+      'invalid-workspace-path',
+      'Workspace content path must be absolute internally.',
+    );
+  }
+
+  const workspaceRoot = path.resolve(input.workspaceRoot);
+  const requestedPath = path.resolve(input.requestedPath);
+  const relative = path.relative(workspaceRoot, requestedPath);
+  if (!isContainedRelativePath(relative)) {
+    return rejected('invalid-workspace-path', 'Content path is outside the workspace namespace.');
+  }
+
+  const workspacePath = toWorkspacePath(relative);
+  if (workspacePath === '.neko' || workspacePath?.startsWith('.neko/')) {
+    return rejected(
+      'invalid-workspace-path',
+      'Project-local state is not a Workspace content source.',
+      workspacePath,
+    );
+  }
+
+  const segments = relative.split(path.sep).filter(Boolean);
+  const libraryName =
+    segments[0] === 'neko' && segments[1] === 'assets' && segments.length >= 3
+      ? segments[2]
+      : undefined;
+  return { ok: true, workspaceRoot, requestedPath, workspacePath, libraryName };
 }
 
 function rejected(

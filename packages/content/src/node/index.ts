@@ -16,6 +16,7 @@ export {
 } from './workspace-directory-creator';
 export {
   authorizeWorkspaceContainedPath,
+  authorizeWorkspaceReadablePath,
   type AuthorizeWorkspacePathInput,
   type WorkspacePathGuardDiagnostic,
   type WorkspacePathGuardDiagnosticCode,

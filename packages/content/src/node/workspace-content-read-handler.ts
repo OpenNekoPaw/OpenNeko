@@ -10,7 +10,7 @@ import type {
 } from '../contracts';
 import type { ContentFingerprint, WorkspaceFileContentLocator } from '../contracts';
 import {
-  authorizeWorkspaceContainedPath,
+  authorizeWorkspaceReadablePath,
   type AuthorizeWorkspacePathInput,
   type WorkspacePathGuardResult,
 } from './workspace-path-guard';
@@ -120,7 +120,7 @@ export class NodeWorkspaceContentReadHandler implements ContentReadHandler<Works
     | { readonly ok: false; readonly code: ContentIoDiagnosticCode }
   > {
     const requestedPath = path.join(this.options.workspaceRoot, ...locator.path.split('/'));
-    const result = await (this.options.authorize ?? authorizeWorkspaceContainedPath)({
+    const result = await (this.options.authorize ?? authorizeWorkspaceReadablePath)({
       workspaceRoot: this.options.workspaceRoot,
       requestedPath,
     });

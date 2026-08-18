@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createNodeHostContentReadService } from './content-read-service';
+import { NodeAuthorizedWorkspaceDirectoryCreator } from './workspace-directory-creator';
 import { NodeAuthorizedWorkspaceWriter } from './workspace-content-writer';
 
 const roots: string[] = [];
@@ -105,7 +106,7 @@ describe('Node workspace content path ownership', () => {
     expect(new TextDecoder().decode(result.bytes)).toBe('retired-link');
   });
 
-  it('rejects a real directory in the managed media-library namespace', async () => {
+  it('reads a real directory in the managed media-library namespace but rejects writes', async () => {
     const root = await createWorkspace('neko/assets/Footage/shot.mov', 'project-owned-directory');
     const locator = {
       kind: 'workspace-file' as const,
@@ -114,11 +115,7 @@ describe('Node workspace content path ownership', () => {
 
     await expect(
       createNodeHostContentReadService({ workspaceRoot: root }).read(locator),
-    ).resolves.toEqual({
-      status: 'unavailable',
-      locator,
-      diagnostic: { code: 'content-unauthorized' },
-    });
+    ).resolves.toMatchObject({ status: 'ready', locator });
     await expect(
       new NodeAuthorizedWorkspaceWriter({ workspaceRoot: root }).write(
         locator,
@@ -159,11 +156,56 @@ describe('Node workspace content path ownership', () => {
 
     await expect(
       createNodeHostContentReadService({ workspaceRoot: root }).read(locator),
+    ).resolves.toMatchObject({ status: 'ready', locator });
+    await expect(
+      new NodeAuthorizedWorkspaceWriter({ workspaceRoot: root }).write(
+        locator,
+        new TextEncoder().encode('replacement'),
+        { conflict: 'replace' },
+      ),
     ).resolves.toEqual({
       status: 'unavailable',
       locator,
       diagnostic: { code: 'content-unauthorized' },
     });
+  });
+
+  it('rejects directory creation through a linked parent', async () => {
+    const root = await createWorkspace();
+    const externalRoot = await mkdtemp(path.join(tmpdir(), 'openneko-linked-content-'));
+    roots.push(externalRoot);
+    await mkdir(path.join(root, 'neko'), { recursive: true });
+    await symlink(
+      externalRoot,
+      path.join(root, 'neko', 'linked'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+
+    await expect(
+      new NodeAuthorizedWorkspaceDirectoryCreator({ workspaceRoot: root }).create(
+        'neko/linked/new-directory',
+      ),
+    ).resolves.toEqual({
+      status: 'unavailable',
+      path: 'neko/linked/new-directory',
+      diagnostic: { code: 'content-unauthorized' },
+    });
+    await expect(readdir(externalRoot)).resolves.toEqual([]);
+  });
+
+  it('reports a broken linked file as missing without leaking its target', async () => {
+    const root = await createWorkspace();
+    await symlink(path.join(root, 'missing-target.txt'), path.join(root, 'broken.txt'), 'file');
+    const locator = { kind: 'workspace-file' as const, path: 'broken.txt' };
+
+    const result = await createNodeHostContentReadService({ workspaceRoot: root }).read(locator);
+
+    expect(result).toEqual({
+      status: 'unavailable',
+      locator,
+      diagnostic: { code: 'content-missing' },
+    });
+    expect(JSON.stringify(result)).not.toContain(root);
   });
 });
 
