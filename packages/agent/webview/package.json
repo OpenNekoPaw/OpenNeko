@@ -3,48 +3,24 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./root": "./src/root.tsx",
-    "./assistant-resources/root": "./src/assistant-resources/root.tsx",
+    "./dsh-session/root": "./src/dsh-session/root.tsx",
     "./extension-management/root": "./src/extension-management/root.tsx"
   },
   "scripts": {
-    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@neko/agent-contracts": "workspace:*",
-    "@neko/ai-contracts": "workspace:*",
-    "@neko/canvas-domain": "workspace:*",
-    "@neko/chara": "workspace:*",
-    "@neko/content": "workspace:*",
-    "@neko/markdown": "workspace:*",
-    "@neko/media": "workspace:*",
-    "@neko/preview-domain": "workspace:*",
-    "@neko/preview-webview": "workspace:*",
-    "@neko/search-domain": "workspace:*",
-    "@neko/shared": "workspace:*",
     "@neko/ui": "workspace:*",
-    "@tanstack/react-virtual": "^3.13.14",
-    "clsx": "^2.1.1",
-    "d3": "^7.9.0",
-    "mermaid": "^11.12.2",
-    "prism-react-renderer": "^2.4.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react": "^18.2.0"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
     "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.16",
     "jsdom": "^27.0.1",
-    "postcss": "^8.4.32",
-    "streamdown": "2.5.0",
-    "tailwindcss": "^3.3.6",
     "typescript": "^5.3.2",
-    "vite": "^6.4.2",
     "vitest": "^4.1.2"
   },
   "license": "AGPL-3.0-or-later"
