@@ -1,126 +1,156 @@
 ## ADDED Requirements
 
-### Requirement: DSH is the sole Agent runtime authority
+### Requirement: DSH subprocess is the sole Agent runtime authority
 
-`@neko/agent-runtime` SHALL compose one minimal Cordis Context in which qualified DSH packages are the sole Agent, Session, Tool and model-loop runtime. Production code MUST NOT register, select or fall back to Pi Agent/Session/Skill/Tool loop, a generic multi-engine runtime port, an OpenNeko Tool registry or another transcript executor.
+Desktop Main SHALL start and supervise one independent DSH subprocess from the officially maintained, precisely locked OpenNeko DSH profile. Production communication between OpenNeko and DSH SHALL use only ACP JSON-RPC over stdio. OpenNeko MUST NOT embed Cordis or `ctx.agents`, use DSH Web/Client Runtime, TypeScript SDK or Remote API as a parallel transport, or invoke Pi or a self-developed Agent runtime as fallback. Stdout SHALL contain only ACP protocol frames; diagnostics and logs SHALL use stderr or an explicit protocol diagnostic.
 
 #### Scenario: Execute a normal Agent turn
 
-- **WHEN** Desktop submits a validated turn for an executable Conversation
-- **THEN** one DSH Agent and its exact DSH Session execute the turn and Tool calls
-- **AND** path evidence contains no Pi runtime, alternate Tool registry, direct test runner or fallback provider
+- **WHEN** Desktop submits a validated turn for an executable Conversation through the canonical ACP client
+- **THEN** the independent DSH Agent and its exact DSH Session execute the turn and Tool calls
+- **AND** path evidence contains no Pi runtime, embedded Cordis, alternate transport, direct test runner or fallback provider
 
-#### Scenario: Required DSH runtime is unavailable
+#### Scenario: DSH subprocess is unavailable
 
-- **WHEN** the qualified DSH composition or required package registration is absent
-- **THEN** Agent startup or the affected Conversation fails with an explicit diagnostic
-- **AND** the system does not instantiate Pi or another runtime to return success
+- **WHEN** the subprocess cannot start, negotiate ACP or recover the required Session
+- **THEN** the affected request or Conversation fails with an explicit diagnostic
+- **AND** sibling product records remain accessible without instantiating another runtime
 
-### Requirement: DSH Session owns transcript and context
+### Requirement: Host-neutral application logic and Desktop process ownership remain separate
 
-Each executable Conversation SHALL reference one exact current DSH Session identity. DSH Session SHALL be authoritative for user, assistant and Tool events, turn/call lineage, actual model context and qualified compaction events. OpenNeko catalog and projection stores MUST NOT copy a complete transcript or become a fallback authority.
+`@neko/agent-runtime` SHALL own the host-neutral ACP application client, Conversation-to-DSH-Session coordination and canonical event projection. Desktop Main SHALL own only executable resolution, subprocess lifecycle, stdio concrete transport, SecretStorage, sender-bound IPC and OS/owning-domain concrete adapters that require the Electron trust boundary. Desktop Main MUST NOT own Agent, Session, inbox, extension or domain workflow policy.
+
+#### Scenario: Desktop starts the DSH backend
+
+- **WHEN** the application root wires Agent capability
+- **THEN** Desktop injects a concrete subprocess/stdio port into the package-owned ACP application adapter
+- **AND** Electron objects do not enter host-neutral Agent contracts or domain services
+
+#### Scenario: ACP behavior is tested without Electron
+
+- **WHEN** the package-owned application adapter is tested with a deterministic transport fixture
+- **THEN** Session binding, routing and projection behavior can be verified without starting Electron
+- **AND** authoritative subprocess/security tests remain in the Desktop boundary
+
+### Requirement: DSH Session owns transcript, context and pending input
+
+Each executable Conversation SHALL reference one exact DSH Session identity. DSH Session SHALL be authoritative for transcript, model context, turn/call lineage, qualified compaction and the DSH inbox. OpenNeko catalogs, projections and presentation state MUST NOT copy a complete transcript, retain an executable queue or become fallback authorities.
 
 #### Scenario: Reopen an executable Conversation
 
-- **WHEN** the complete Desktop owner closes and reopens a Conversation with a valid DSH Session reference
-- **THEN** the transcript, context and next turn are restored from that exact DSH Session
-- **AND** no catalog preview, legacy Pi JSONL or renderer state hydrates the transcript
+- **WHEN** the complete Desktop owner reopens a Conversation with a valid DSH Session reference
+- **THEN** transcript and context are restored from DSH through ACP load/resume and history replay
+- **AND** no catalog preview, Pi JSONL, raw Session file or Renderer state hydrates the transcript
 
-#### Scenario: One DSH Session cannot be decoded
+#### Scenario: Edit pending input
 
-- **WHEN** one Conversation references an unsupported or malformed DSH Session while sibling Conversations are valid
-- **THEN** only that Conversation becomes non-executable with an identity-scoped diagnostic
-- **AND** its source bytes, sibling Conversations and unrelated Workspaces remain available
+- **WHEN** the user edits or removes a pending message using its exact projected identity
+- **THEN** the bridge applies the corresponding DSH inbox operation and projects the resulting snapshot
+- **AND** OpenNeko does not mutate an independent pending map or queue
 
-### Requirement: Agent and Tool identities use qualified DSH coordinates
+#### Scenario: Submit a Workspace turn with product context
 
-The Agent runtime SHALL project the exact DSH Session, turn and call identities qualified in Q0. A domain operation that survives the Tool call SHALL retain its owning-domain Job identity; DSH call identity MUST NOT replace, infer or own that Job.
+- **WHEN** the user submits from a Workspace Agent Surface
+- **THEN** Host resolves the exact durable Conversation context and Canvas-owned canonical Workspace Board
+- **AND** the bridge materializes that validated value through the exact DSH Agent scope as dynamic runtime context before the prompt
+- **AND** the user message stored and projected by DSH remains unchanged
 
-#### Scenario: Tool starts a durable domain Job
+#### Scenario: Product context is unavailable or unsupported
 
-- **WHEN** a DSH Tool call submits a Generation, Cut or other durable domain operation
-- **THEN** the Timeline correlates the exact DSH call identity to the returned owning-domain Job identity
-- **AND** cancellation, recovery and result facts remain owned by the domain Job service
+- **WHEN** the exact Conversation context, Workspace grant or owning-domain context cannot be resolved
+- **THEN** only that prompt fails with an explicit diagnostic before model execution
+- **AND** no Renderer value, active Workspace, recent Canvas, empty context or legacy handoff is used as fallback
 
-#### Scenario: Stale identity targets another turn
+### Requirement: The ACP bridge supplements DSH without becoming another runtime
 
-- **WHEN** a cancellation, approval, queue mutation or result uses a call identity from another Session or turn
-- **THEN** the current operation is rejected without affecting either valid execution owner
+Because the official `dsh-acp` rc.7 bridge is automation-only, OpenNeko SHALL ship one thin official DSH ACP bridge plugin/profile. It SHALL reuse public DSH Agent/Session APIs to provide the standard ACP session list/load/resume/history replay, Tool/progress updates and per-session close required by the product. Only capabilities not expressible in standard ACP MAY use one canonical extension surface: DSH inbox snapshot/edit/remove, official extension inventory/readiness/configuration/diagnostics, and typed DSH-to-Host domain Tool requests and responses. The bridge MUST NOT implement an Agent loop, Session store, queue, Tool registry, Skill runtime, MCP runtime or Plugin runtime.
 
-### Requirement: Tool adapters preserve canonical validation and authorization
+#### Scenario: Resume a known Session
 
-OpenNeko Tool and Capability owners SHALL remain authoritative for canonical schema, semantic validation, permission, workspace trust, resource authorization, bounded result projection and domain invocation. DSH Tool definitions MAY project the model-facing schema but MUST invoke the same canonical validator before the owning service, including constraints not enforced by the DSH schema DSL.
+- **WHEN** Desktop requests load or resume for a bound Session
+- **THEN** the bridge delegates to the exact public DSH Session/Agent owner and replays history over ACP
+- **AND** it does not consult or create a Host transcript repository
 
-#### Scenario: DSH emits semantically invalid Tool arguments
+#### Scenario: A requested product surface needs private DSH internals
 
-- **WHEN** Tool arguments violate a discriminated locator, numeric range, array bound or cross-field requirement
-- **THEN** the package-owned validator rejects the call before resource access or domain mutation
-- **AND** DSH receives an explicit failed Tool result tied to the exact call identity
+- **WHEN** Q0 shows that a required surface can only be implemented by copying a DSH state machine or depending on an unqualified private module
+- **THEN** qualification fails and production consumer cutover stops
+- **AND** the bridge is not expanded into a second runtime to satisfy the surface
 
-#### Scenario: Tool returns authorized content
+### Requirement: DSH lifecycle events project precise identities and stop semantics
 
-- **WHEN** a Tool reads a document, image or generated artifact
-- **THEN** its DSH result preserves bounded short references and `ContentLocator`-based authorization
-- **AND** no absolute path, raw locator, secret or unbounded media payload enters the model or Renderer
+The canonical product contract SHALL preserve the qualified DSH Session, turn, call, request and inbox identities. Permission, cancellation, close and progress SHALL target those exact identities. Bidirectional JSON-RPC SHALL use bounded payloads and fair backpressure across Sessions. A long-running domain operation SHALL additionally retain the owning-domain Job identity; a DSH call identity MUST NOT replace or infer that Job identity. Late events after cancel, close or disconnect SHALL be contained to their exact operation and SHALL NOT reopen settled work or block sibling Sessions.
 
-### Requirement: DSH inbox owns pending Agent input
+#### Scenario: Tool starts a durable Generation Job
 
-Pending follow-up, steering and queued input SHALL use the qualified DSH Agent inbox and durable `MessageId` operations. OpenNeko MUST NOT retain an independent runtime message queue, pending-operation map or pause state as a second authority. Product operations without an exact DSH inbox equivalent MUST be removed atomically or remain presentation-only drafts that cannot execute.
+- **WHEN** a DSH Tool call submits an authorized long-running Generation operation
+- **THEN** the response correlates the exact DSH call identity with the returned Generation Job identity
+- **AND** Job cancellation, recovery, progress and result remain owned by Generation
 
-#### Scenario: Edit a queued message
+#### Scenario: Stale identity targets another execution
 
-- **WHEN** the user edits a pending message by its exact product projection identity
-- **THEN** the runtime applies the mapped DSH inbox replacement to the same pending item
-- **AND** the Renderer snapshot is rebuilt from the DSH inbox events
+- **WHEN** cancellation, approval, inbox mutation or Tool response names an identity from another Session, turn or call
+- **THEN** the current operation is rejected with a local diagnostic
+- **AND** neither valid execution owner is changed
 
-#### Scenario: Cancel the active turn and retain pending input
+#### Scenario: User resolves a pending Tool permission
 
-- **WHEN** product semantics request turn cancellation while retaining the inbox
-- **THEN** the exact DSH cancellation operation uses its qualified retain-inbox behavior
-- **AND** no OpenNeko queue is paused or replayed independently
+- **WHEN** the UI selects an option for the exact Conversation, DSH Session, turn and Tool call
+- **THEN** the pending approval owner returns only that option when it was advertised by the ACP request
+- **AND** a stale, cross-Conversation or unadvertised decision cannot settle the request
 
-### Requirement: Clear creates a new Conversation and compact uses DSH
+#### Scenario: One Session floods progress updates
 
-Product clear SHALL create a new Conversation identity with a new empty DSH Session and navigate the current Window to it after an atomic catalog/session commit. It MUST NOT erase or replace the source Conversation transcript. Context compaction SHALL use only the DSH compaction implementation qualified in Q0.
+- **WHEN** one Session exceeds the frozen buffering or payload limits
+- **THEN** its exact stream applies bounded backpressure or fails locally according to the canonical contract
+- **AND** requests and events for sibling Sessions continue to make progress
 
-The cross-store commit SHALL create and validate the new Session in an unpublished provisional scope before one catalog transaction publishes the complete binding. A pre-publish failure MAY remove only the exact provisional Session created by the current request. Window selection is presentation state after durable publication; its failure MUST preserve the valid new Conversation, keep the source Conversation selected and return the new identity with an exact local diagnostic.
+### Requirement: Domain Tools preserve package ownership
 
-#### Scenario: User clears the current conversation
+Generation and Canvas SHALL be the first vertical official domain Tool slice registered in DSH; Cut, Assets, Character, World and remaining domain capabilities SHALL follow. DSH SHALL own Tool registration, selection, call identity and execution lifecycle. Each owning package SHALL remain authoritative for the Tool schema, semantic validation, authorization, exact resource identity, business transaction, durable facts and long-running Job. The Host adapter SHALL validate with the package-owned canonical validator before invoking the owning service. Domain capabilities SHALL NOT be wrapped in MCP merely to reach DSH, and direct UI operations SHALL call the same owning application service without creating a hidden Agent turn.
 
-- **WHEN** the user confirms clear on an executable Conversation
-- **THEN** a new Conversation and empty DSH Session are committed and selected
-- **AND** the source Conversation remains listable and restorable with unchanged transcript bytes
+#### Scenario: DSH emits semantically invalid Canvas arguments
+
+- **WHEN** arguments violate a locator, range, array bound or cross-field invariant
+- **THEN** the Canvas-owned validator rejects the request before resource access or mutation
+- **AND** DSH receives an explicit failed Tool result for the exact call
+
+#### Scenario: User starts Generation directly from UI
+
+- **WHEN** the user invokes a Generation action from a native product control
+- **THEN** the UI delegates directly to the Generation application service through its typed Desktop port
+- **AND** no Conversation, Agent turn or MCP wrapper is created
+
+### Requirement: Clear and compact retain one authoritative path
+
+Product clear SHALL create a new Conversation identity bound to a newly created empty DSH Session; it MUST NOT erase or rebind the source Conversation. The new Session SHALL be created and validated before one catalog transaction publishes the complete binding. Pre-publication cleanup MAY target only the exact provisional Session created by that request. Window selection occurs after durable publication and MUST NOT roll back or hide the new record. Compaction SHALL use only the qualified DSH compaction path.
+
+#### Scenario: User clears the current Conversation
+
+- **WHEN** creation, Session validation and catalog publication succeed
+- **THEN** Desktop selects the new Conversation and empty DSH Session
+- **AND** the source Conversation remains listable with unchanged transcript authority
 
 #### Scenario: DSH compaction is unavailable
 
-- **WHEN** the current Session requires compaction but the qualified DSH compaction path cannot complete
+- **WHEN** the qualified DSH compaction operation cannot complete
 - **THEN** the operation fails visibly for that Conversation
-- **AND** no OpenNeko compaction engine, hidden Session or old transcript projection returns success
+- **AND** no self-developed compactor, hidden Session or stale projection returns success
 
-#### Scenario: Catalog publication fails after provisional Session creation
+### Requirement: Native UI creates a Conversation through one durable publication path
 
-- **WHEN** the new Session is flushed and reopenable but the catalog transaction cannot publish its binding
-- **THEN** no new Conversation is visible and only that request's exact unpublished Session may be removed
-- **AND** the source Conversation and every unrelated Session remain unchanged
+The package-owned Agent application SHALL own the only new-Conversation publication path. It SHALL reserve canonical Host Conversation metadata and exact domain context, create one DSH Session through standard ACP `session/new`, revalidate that exact Session through the complete bounded `session/list` path, and publish one Conversation-to-Session binding. Desktop Main SHALL resolve the exact sender-bound Agent Surface and attach the published Conversation to that draft only after durable publication. Renderer MUST NOT provide Workspace authority, provider/model facts, cwd or a DSH Session identity, and no active/recent Conversation fallback is allowed.
 
-#### Scenario: Window selection fails after publication
+#### Scenario: User creates a Conversation from an exact Workspace Agent Surface
 
-- **WHEN** the new Conversation and Session binding are durably published but the current Window cannot select it
-- **THEN** the valid new Conversation remains listable and the source Conversation remains selected
-- **AND** the operation reports the new identity and selection diagnostic without rollback or a half-bound record
+- **WHEN** the user activates the create control on an unbound Workspace Agent Surface
+- **THEN** the Host resolves that Surface's exact Workspace and grant context
+- **AND** the package-owned publication path creates, revalidates and binds one DSH Session
+- **AND** Desktop selects the resulting Conversation only after its catalog record and binding are durable
 
-### Requirement: OpenNeko CredentialStore is the only production credential authority
+#### Scenario: Session creation succeeds but publication cannot complete
 
-The production Cordis composition SHALL resolve DSH provider credentials through an OpenNeko implementation backed by the program-owned CredentialStore and Desktop SecretStorage/keychain adapter. Environment credential providers, default in-memory persistence and provider fallback MUST NOT participate in production success.
-
-#### Scenario: DSH provider resolves an API credential
-
-- **WHEN** a configured provider begins an authorized request
-- **THEN** DSH resolves the exact provider credential through the OpenNeko credentials implementation
-- **AND** secret bytes do not enter settings, environment variables, Session, SQLite, logs, Renderer or Evaluation facts
-
-#### Scenario: Credential persistence fails after refresh
-
-- **WHEN** a provider refreshes a credential but keychain persistence fails
-- **THEN** the current request or refresh operation reports a provider-qualified diagnostic
-- **AND** the credential is not presented as durably updated and no environment fallback is attempted
+- **WHEN** DSH returns a new Session but exact revalidation or binding publication fails
+- **THEN** the request fails visibly and the reserved Host Conversation remains visible with a local diagnostic
+- **AND** no raw DSH file deletion, private DSH API, `session/close`-as-delete, Pi path or recent-Session fallback reports success
+- **AND** release readiness remains blocked until exact provisional cleanup is available through a qualified public seam

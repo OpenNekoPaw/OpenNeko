@@ -1,45 +1,65 @@
 ## MODIFIED Requirements
 
-### Requirement: Secrets and raw logs use dedicated authorities
+### Requirement: Secrets and runtime logs use dedicated authorities
 
-Credentials, provider tokens, mount secrets and encryption material MUST use a protected credential authority. The production DSH credentials service SHALL delegate to the OpenNeko program-owned CredentialStore backed by SecretStorage/keychain and MUST NOT use environment variables, DSH settings, default in-memory persistence or another credential source as fallback. Raw logs/audit data MUST use owner-partitioned managed files with retention/redaction and MUST NOT be stored as ordinary SQLite rows or replayed as business facts.
+Provider credentials, tokens and encryption material SHALL remain in the program-owned CredentialStore backed by SecretStorage/keychain. DSH SHALL request an exact credential through the typed Host boundary and SHALL NOT receive the whole environment or a general secret store. Environment credentials, DSH settings, Session data, SQLite rows, Renderer state, logs and Evaluation reports MUST NOT become credential sources or fallbacks. Protocol/diagnostic logs SHALL be redacted and owner-partitioned; DSH stdout SHALL remain ACP-frame-only.
 
-#### Scenario: Provider credential is configured
+#### Scenario: DSH provider requests a credential
 
-- **WHEN** a DSH provider needs a secret
-- **THEN** configuration stores only non-secret identity/presence metadata and the DSH credentials request resolves through the OpenNeko store
-- **AND** secret bytes remain inside SecretStorage/keychain and never enter Session, settings, environment, logs or projections
+- **WHEN** the exact configured provider needs a secret
+- **THEN** the Host resolves it through the program-owned credential authority for that request
+- **AND** secret bytes do not enter Session, environment, stdout, projection or report data
 
-### Requirement: Retired data is outside product runtime
+#### Scenario: Credential is missing
 
-Product startup, public entries, build output and ordinary tests MUST NOT inspect, import, classify, archive, delete, convert, repair or rewrite retired databases, Pi transcript files, mixed config sources or workspace `.neko/` data. Existing bytes MUST remain untouched. A stable current catalog MAY retain identity and bounded metadata for an unavailable record, but MUST NOT decode retired content or make it executable.
+- **WHEN** the requested secret cannot be resolved or user access is denied
+- **THEN** only that provider request fails with an explicit diagnostic
+- **AND** DSH does not try environment variables, settings or another provider
 
-#### Scenario: Unknown retired workspace file exists
+### Requirement: DSH profile owns DSH Session storage
 
-- **WHEN** a retired `.neko/` or Pi Session path contains an unknown file
-- **THEN** normal product runtime ignores the retired bytes and leaves the file unchanged
-- **AND** no cleanup, migration, DSH Session creation or transcript restoration is marked successful
+DSH Session persistence SHALL be owned by the DSH subprocess/profile under the single writable `DSH_HOME` rooted at Electron `userData/dsh`; the official profile SHALL therefore own Session artifacts below its `sessions/` directory. OpenNeko MUST NOT implement another Session store or read/write, copy, migrate, reset or repair DSH Session files directly. Desktop MAY materialize only the verified official profile configuration and exact package links under `profiles/openneko`, and this operation MUST preserve `sessions/` and every other DSH-owned durable file. Desktop MAY provide a virtual Workspace identity configuration at launch. Physical Workspace paths MUST NOT enter durable Session metadata, model-visible content, Renderer projection or logs merely to establish identity. DSH Session data MUST NOT be stored in project files, Workspace `.neko/`, SQLite transcript blobs or presentation caches.
 
-#### Scenario: Legacy Conversation metadata remains identifiable
+#### Scenario: Create a Session for a Workspace Conversation
 
-- **WHEN** the current catalog can identify a Conversation whose only transcript is retired Pi data
-- **THEN** the catalog keeps bounded identity/metadata and a local unavailable diagnostic
-- **AND** product runtime does not open the retired transcript to supply messages
+- **WHEN** an authorized Conversation creates its DSH Session
+- **THEN** DSH persists it under the declared profile-owned root using stable virtual Workspace identity
+- **AND** no physical Workspace path is exposed to the model or Renderer
 
-## ADDED Requirements
+#### Scenario: Official profile is refreshed after an application update
 
-### Requirement: DSH Session storage has a declared user-global authority
+- **WHEN** Desktop materializes the verified packaged OpenNeko profile into the writable DSH home
+- **THEN** only the official profile configuration and exact package links are replaced
+- **AND** existing `sessions/` bytes and unrelated DSH-owned durable files remain unchanged
 
-DSH Session persistence SHALL use one program-owned user-global root provided through the Agent runtime Node adapter and partitioned by stable DSH Session identity. Session metadata and physical storage paths MUST use a Host-generated virtual cwd rather than a real Workspace path. DSH Session files MUST NOT be stored in Workspace content, SQLite blobs, Renderer state or another package cache.
+#### Scenario: Workspace physical path changes
 
-#### Scenario: Create a DSH Session for a Workspace Conversation
+- **WHEN** the same stable Workspace identity is rebound to another authorized path
+- **THEN** the Conversation-to-Session relation remains stable
+- **AND** Host adapters resolve the new path only at the operation boundary
 
-- **WHEN** an authorized Workspace Conversation starts its first turn
-- **THEN** the Agent runtime creates the Session under the declared user-global DSH root with virtual cwd metadata
-- **AND** no physical Workspace path is written to the Session header, model context, log or Renderer projection
+### Requirement: Host projections and caches never copy transcript authority
 
-#### Scenario: Move a Workspace directory
+OpenNeko SHALL consume transcript history only through ACP/bridge replay. Host-side caches and projections MAY retain bounded rebuildable display facts but MUST NOT contain a complete alternate transcript or serve as a successful source when DSH replay fails. Cache hit or miss SHALL not change identity, contract or result semantics.
 
-- **WHEN** the same stable Workspace identity is rebound to a new physical path
-- **THEN** its existing DSH Conversation mapping remains based on stable identity and authorized Host adapters
-- **AND** Session persistence does not move or select data using the old physical path
+#### Scenario: Session replay fails
+
+- **WHEN** DSH cannot replay a corrupt or unsupported Session
+- **THEN** the affected Conversation reports an exact diagnostic
+- **AND** Host cache, preview and Renderer state are not used to restore it
+
+### Requirement: Retired local data remains byte-preserved and unreachable
+
+Normal product startup, public entries, build output and ordinary recovery MUST NOT inspect, import, classify, archive, delete, convert, repair or rewrite retired Pi databases, transcript files, mixed configuration sources or Workspace `.neko/` data. Existing bytes SHALL remain unchanged. A current catalog MAY retain stable identity and bounded metadata for an unavailable record without decoding retired content.
+
+#### Scenario: Unknown retired file exists
+
+- **WHEN** an old Pi or `.neko/` root contains an unknown file
+- **THEN** normal product runtime ignores and preserves it
+- **AND** no cleanup, migration or DSH Session creation is reported as successful
+
+#### Scenario: Data-protection gate runs
+
+- **WHEN** startup, list, open, clear, compact and injected failure scenarios complete
+- **THEN** recorded hashes for retired fixtures remain equal
+- **AND** any byte change fails the migration release gate

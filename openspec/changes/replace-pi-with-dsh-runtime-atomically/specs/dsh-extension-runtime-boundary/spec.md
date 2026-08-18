@@ -1,75 +1,81 @@
 ## ADDED Requirements
 
-### Requirement: Skill catalog projects trusted content into DSH
+### Requirement: DSH owns the Skill, MCP and Plugin runtime
 
-OpenNeko SHALL remain authoritative for Skill installation, source, trust, enablement, fingerprint and user metadata. A thin OpenNeko DSH Skill provider SHALL register only exact trusted, enabled records and MUST NOT pass ordinary project, personal or third-party Plugin Skill directories to a trusted filesystem provider or expose physical paths.
+The official OpenNeko DSH profile SHALL be the sole production owner of Skill discovery/loading, MCP connection/Tool projection and DSH Plugin loading/lifecycle. OpenNeko MUST NOT retain a Skill Host, MCP Manager/client/bootstrap, Plugin execution runtime or parallel registration path. Product management state SHALL NOT decide execution by bypassing the DSH profile.
 
-#### Scenario: Register a trusted Skill
+#### Scenario: An official extension is enabled
 
-- **WHEN** the canonical catalog contains an enabled trusted Skill with a matching fingerprint
-- **THEN** the DSH Skill registry receives its allowed metadata and content projection
-- **AND** model-visible data contains no absolute directory, raw Host locator or permission grant
+- **WHEN** the user enables an available official contribution through the product management surface
+- **THEN** the request is applied to the exact DSH-owned extension capability and its resulting readiness is replayed through the bridge
+- **AND** no OpenNeko Skill, MCP or Plugin runtime loads the contribution
 
-#### Scenario: One Skill is invalid
+#### Scenario: DSH extension runtime is unavailable
 
-- **WHEN** one Skill fails parsing, fingerprint or containment validation
-- **THEN** only that Skill is unavailable with a source-qualified diagnostic
-- **AND** sibling Skills, Conversations and Workspaces continue through the canonical DSH runtime
+- **WHEN** DSH cannot load the selected contribution
+- **THEN** that contribution reports an explicit unavailable diagnostic
+- **AND** OpenNeko does not start a legacy extension runtime to provide success
 
-### Requirement: DSH MCP client is the sole MCP execution path
+### Requirement: The first release accepts only official packaged extensions
 
-Qualified DSH MCP packages SHALL own MCP connection and MCP Tool projection for product-authorized server configurations. OpenNeko SHALL continue to own configuration, trust, process/environment authorization and product diagnostics. The retired MCP manager, client, bootstrap and Tool wrapper MUST NOT provide success or fallback.
+The first release SHALL load only DSH profiles and plugins maintained by OpenNeko, shipped with the product and resolved from the precisely locked read-only package closure. The writable profile SHALL contain the verified official manifest/patch and exact links to the packaged OpenNeko bridge, Generation, Canvas and Cut packages; its home-level patch SHALL remain the canonical empty patch. It SHALL NOT resolve executable contributions from ordinary workspace dependencies, user-installed profile dependencies, Marketplace paths, a local override, `PATH`, or Q0 fixtures, and SHALL NOT execute locally installed third-party Plugin JavaScript, third-party Webview JavaScript or an OpenNeko-defined third-party extension runtime. Future third-party execution requires a separate accepted OpenSpec defining sandbox, distribution, trust and lifecycle.
 
-#### Scenario: Connect an authorized MCP server
+#### Scenario: Packaged official profile is loaded
 
-- **WHEN** a valid enabled server configuration selects a qualified transport
-- **THEN** DSH establishes the exact connection and registers its Tools in the current DSH Agent scope
-- **AND** Tool calls preserve server identity, cancellation, timeout and explicit result diagnostics
+- **WHEN** the packaged application starts DSH
+- **THEN** the runtime resolves the exact audited profile/plugin set from the product package
+- **AND** no mutable user path or marketplace package can shadow an official executable contribution
 
-#### Scenario: One MCP server fails
+#### Scenario: Mutable profile contains an extra executable contribution
 
-- **WHEN** one server cannot start, connect, enumerate Tools or satisfy its configuration
-- **THEN** only that server and its Tools are unavailable with a visible diagnostic
-- **AND** sibling MCP servers, first-party Tools and Conversations remain usable without another MCP client
+- **WHEN** Desktop prepares the production DSH home for startup
+- **THEN** the profile is atomically restored to the verified official manifest, patch and exact package links
+- **AND** the extra contribution cannot participate while DSH-owned Session data remains untouched
 
-### Requirement: Plugin catalog and Cordis Loader have distinct authorities
+#### Scenario: A local Plugin contains executable JavaScript
 
-OpenNeko Plugin catalog SHALL own installation, source, trust, enablement, fingerprint and user metadata. Cordis Loader SHALL own only mount, unmount and effect disposal for the exact authorized runtime projection. Runtime inventory MUST remain a rebuildable read-only projection and MUST NOT write catalog facts or choose another Plugin after failure.
+- **WHEN** an unqualified local package requests Plugin or Webview code execution
+- **THEN** the request is rejected with an unsupported diagnostic
+- **AND** its code is not imported by Electron Main, Renderer or DSH
 
-#### Scenario: Enable an authorized Plugin projection
+### Requirement: OpenNeko extension management is a read model and command boundary
 
-- **WHEN** the user enables a valid Plugin whose contributions pass catalog and trust validation
-- **THEN** Cordis Loader mounts the exact allowed OpenNeko factory or data contribution and inventory reports its runtime state
-- **AND** catalog state remains owned by OpenNeko
+OpenNeko MAY present official Skill, MCP and Plugin inventory, readiness, supported configuration and diagnostics received through the ACP bridge. That presentation SHALL be a rebuildable projection. Management commands SHALL target an exact advertised DSH contribution and capability; OpenNeko MUST NOT mirror the DSH registry, invent readiness, mutate DSH storage directly or infer success from a stale projection.
 
-#### Scenario: Plugin mount fails
+#### Scenario: Management UI is reopened
 
-- **WHEN** one authorized Plugin factory fails during mount
-- **THEN** Loader disposes that partial effect and the Plugin record reports a local diagnostic
-- **AND** sibling Plugins, Agent runtime and Workspaces continue without try-next registration
+- **WHEN** the Extension management scene mounts after being absent
+- **THEN** it rebuilds from a fresh DSH inventory/readiness response
+- **AND** no retained React root or OpenNeko runtime registry is required
 
-### Requirement: Third-party Extensions cannot execute arbitrary Main-process code
+#### Scenario: Configuration changed after projection
 
-The first DSH migration SHALL allow Cordis Loader to execute only Plugin factories shipped in and reviewed with the OpenNeko codebase. Installed third-party Extensions SHALL remain data-only and MAY contribute only validated Skill, MCP or explicit automation-adapter projections. They MUST NOT import or execute arbitrary JavaScript in Electron Main, access Electron/Node objects or register an unreviewed Cordis factory.
+- **WHEN** a command targets stale contribution state
+- **THEN** DSH rejects the exact command or returns current readiness
+- **AND** OpenNeko refreshes the projection without applying a local optimistic authority
 
-#### Scenario: Third-party Extension declares executable code
+### Requirement: Extension failures remain local and visible
 
-- **WHEN** an installed Extension includes a JavaScript entrypoint or Cordis factory not shipped by OpenNeko
-- **THEN** the runtime rejects that code contribution with an explicit unsupported diagnostic
-- **AND** any independently valid data-only contribution is handled according to its own exact authorization without executing the code
+DSH profile/bridge integration SHALL isolate invalid Skill content, MCP configuration/connection and Plugin registration to the exact contribution. Duplicate identity, missing dependency, unsupported configuration or load failure MUST produce a stable diagnostic and MUST NOT clear sibling registries, stop unrelated Sessions or return empty success. Registry selection MUST be exact and MUST NOT use wildcard/default handlers, priority probing or try-next fallback.
 
-#### Scenario: Builtin factory uses a Desktop adapter
+#### Scenario: One MCP contribution fails to connect
 
-- **WHEN** a reviewed OpenNeko factory requires an Electron or OS capability
-- **THEN** it receives only the minimal concrete port wired by `apps/neko-desktop`
-- **AND** host-neutral Plugin policy and catalog reconciliation remain in the owning package
+- **WHEN** another official Skill and Plugin remain valid
+- **THEN** the MCP contribution alone reports connection failure
+- **AND** the valid Skill, Plugin, sibling Conversations and unrelated Workspaces remain usable
 
-### Requirement: Extension failures remain local and fail visible
+#### Scenario: Duplicate contribution identity is discovered
 
-Skill, MCP and Plugin registration SHALL validate entries independently. Invalid input MUST reject only the affected record, server, contribution or request and MUST NOT fail the root Context, clear shared registries, disable unrelated capabilities or report empty success.
+- **WHEN** two packaged contributions claim the same exact identity
+- **THEN** the conflicting registration is rejected visibly according to the frozen ownership rule
+- **AND** load order does not choose a winner
 
-#### Scenario: Mixed valid and invalid contributions load
+### Requirement: Skills remain method content rather than runtime protocol
 
-- **WHEN** one catalog snapshot contains valid and invalid Skill, MCP and Plugin records
-- **THEN** each valid record reaches its unique canonical runtime path
-- **AND** each invalid record retains an exact diagnostic without preventing the valid siblings from loading
+DSH-owned Skill content SHALL contain reusable methods, domain judgment and output guidance. Runtime Tool names, ACP methods, MCP transport/configuration, permission grants, Host commands, queue protocol and package-private schema SHALL remain in machine-readable capability/Tool/profile definitions rather than Skill prose. Skill content MUST NOT grant trust, executable code authority or Host access.
+
+#### Scenario: Official Skill contains a runtime protocol tutorial
+
+- **WHEN** validation detects Tool parameters, ACP/MCP commands or Host permission instructions in Skill prose
+- **THEN** that Skill fails qualification with an exact diagnostic
+- **AND** sibling official contributions remain loadable

@@ -1,55 +1,65 @@
 ## MODIFIED Requirements
 
-### Requirement: Conversation facts and operational state remain distinct
+### Requirement: Conversation catalog and DSH execution state have distinct authorities
 
-DSH Session files SHALL remain authoritative for transcript and model-context facts of executable Conversations. Conversation catalog, current DSH Session reference, permissions, checkpoints and domain Job references MAY use Agent-owned stable state/cache repositories, but MUST be scoped by exact conversation/session/turn/call/job identity without writer epochs, schema versions or active-object fallback. Old Pi Session files and Pi-only operational fields MUST remain untouched and MUST NOT be opened as a successful transcript path.
+OpenNeko SHALL own durable Conversation identity, user-visible metadata, Workspace binding, current DSH Session reference, permission/checkpoint metadata and domain Job references. The DSH subprocess/profile SHALL own transcript, model context, turn/call events, inbox and extension execution state. Every relation SHALL use exact stable identities without active/current fallback, internal schema generation or writer epoch. Neither side SHALL duplicate the other's authoritative facts.
 
-#### Scenario: Two conversations run concurrently
+#### Scenario: Two Conversations execute concurrently
 
-- **WHEN** each Conversation commits operational state against its exact DSH Session
-- **THEN** each Session owner serializes its own writes
-- **AND** neither operation targets active Conversation state or a shared generation counter
+- **WHEN** each Conversation targets its exact DSH Session
+- **THEN** DSH serializes each Session/Agent execution under its own identity
+- **AND** OpenNeko updates only the matching catalog/projection records without a shared active Conversation owner
 
-#### Scenario: Existing Pi Conversation is encountered
+#### Scenario: DSH Session reference is missing
 
-- **WHEN** a stable catalog record is identifiable but lacks a valid current DSH Session reference
-- **THEN** the catalog preserves the record and reports a Conversation-scoped runtime-unavailable diagnostic
-- **AND** normal runtime does not open, convert, delete or replace its Pi transcript
+- **WHEN** a catalog record has no valid current DSH Session reference
+- **THEN** the record remains visible with a Conversation-scoped runtime-unavailable diagnostic
+- **AND** no empty Session, recent Session or Pi transcript is substituted
 
-### Requirement: Agent projections are rebuildable but not fallback authorities
+### Requirement: Agent projections are rebuildable and never fallback authorities
 
-Listing, search and semantic acceleration SHALL be derived from Agent/project facts. Projection loss MAY trigger ordinary recomputation from the current DSH Session and current product authorities. A stale/invalid projection MUST NOT replace facts, return fabricated empty success or switch to Pi, raw Session bytes or another retired source. Conversation catalog enumeration SHALL read the one stable Conversation authority independently from the currently open Workspace or Desktop Project catalog. A missing Project or valid DSH Session binding MUST NOT hide the Conversation; it SHALL produce an unavailable owner/runtime projection with exact fields.
+Transcript, Timeline, inbox, Tool progress and extension management projections SHALL be rebuilt from ACP replay/events plus current owning-domain facts. Projection loss MAY trigger recomputation from those authorities. A stale or invalid projection MUST NOT replace facts, fabricate empty success, mutate DSH state or switch to Pi, raw Session bytes, cached transcript or Renderer state. A single invalid projection SHALL remain local to its record or surface.
 
-#### Scenario: One conversation projection is invalid
+#### Scenario: One Conversation projection is invalid
 
-- **WHEN** another Conversation projection remains valid
-- **THEN** the invalid entry reports its exact identity and invalid fields
-- **AND** the valid Conversation remains listable and restorable through its exact DSH Session
+- **WHEN** sibling Conversation projections remain valid
+- **THEN** the invalid entry reports its exact identity and diagnostic
+- **AND** valid siblings remain listable and restorable through their exact DSH Sessions
 
-#### Scenario: Conversation Workspace is not in the Shell catalog
+#### Scenario: DSH history replay fails
 
-- **WHEN** a valid Conversation references a Workspace that is not currently open
-- **THEN** Agent Home still lists the Conversation under its stable Workspace identity
-- **AND** Desktop marks only the unavailable Project/locator fields for manual handling
-
-#### Scenario: Legacy projection is the only readable message source
-
-- **WHEN** current DSH Session restoration fails but an old preview or Pi-derived projection remains
-- **THEN** the Conversation stays non-executable with an exact diagnostic
+- **WHEN** an old preview or Pi-derived projection is still readable
+- **THEN** the Conversation remains non-executable
 - **AND** the projection is not used to fabricate transcript restoration
 
-### Requirement: Retired Agent databases and config are product-unreachable
+### Requirement: Catalog visibility is independent from UI and runtime residency
 
-Normal Agent startup MUST NOT open, import, archive, delete, convert or repair retired Agent-specific databases, Pi Session files, Pi-only transcript mappings or mixed config sources. Existing bytes remain untouched; identifiable catalog records MAY expose bounded metadata and an unavailable diagnostic without decoding retired transcript content. Exact offline repair, export or deletion requires a separate product-unreachable workflow and explicit user authorization.
+Conversation catalog enumeration SHALL not depend on the currently mounted Agent Root, current Workspace scene or a live DSH Agent handle. Closing Agent UI or a per-session runtime SHALL release UI/runtime resources without deleting or hiding durable catalog records. Background work that DSH still owns MAY continue without retaining a React tree.
 
-#### Scenario: Retired Agent database remains on disk
+#### Scenario: User leaves the Agent scene
 
-- **WHEN** Agent starts with the canonical DSH authority available
-- **THEN** it never opens the retired database or Pi Session root as a runtime source
-- **AND** canonical DSH Conversations and settings continue independently
+- **WHEN** the current Agent Root unmounts while a DSH turn continues
+- **THEN** DSH retains the exact running Session/turn and OpenNeko retains the Conversation record
+- **AND** no hidden Agent React tree is kept alive
 
-#### Scenario: User inspects a legacy Conversation record
+#### Scenario: Workspace is not currently open
 
-- **WHEN** its stable identity and catalog metadata are readable but its transcript authority is retired
-- **THEN** the record remains visible with disabled execution and an explicit repair/export availability diagnostic
-- **AND** no empty DSH Session is created on its behalf
+- **WHEN** a Conversation references a stable Workspace identity absent from current Shell navigation
+- **THEN** Agent Home still lists the Conversation with an unavailable Workspace projection where necessary
+- **AND** the Conversation is not rebound to the active Workspace
+
+### Requirement: Retired Agent storage remains product-unreachable
+
+Normal product startup, listing, open, clear, compact and failure recovery MUST NOT open, import, archive, delete, convert or repair retired Agent databases, Pi Session files, Pi-only mappings or mixed configuration sources. Identifiable current catalog records MAY retain bounded metadata and a local unavailable diagnostic without decoding retired transcript content. Offline export, repair or deletion requires a separate product-unreachable workflow and explicit authorization.
+
+#### Scenario: Retired Pi database remains on disk
+
+- **WHEN** the canonical DSH runtime starts
+- **THEN** the product leaves the retired database and Pi Session root untouched
+- **AND** canonical DSH Conversations continue independently
+
+#### Scenario: User inspects a legacy Conversation
+
+- **WHEN** its stable identity is readable but its transcript authority is retired
+- **THEN** the record remains visible with execution disabled and a clear diagnostic
+- **AND** no DSH Session is created on its behalf
