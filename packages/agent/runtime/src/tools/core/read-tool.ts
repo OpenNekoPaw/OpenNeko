@@ -22,6 +22,7 @@ import {
   presentLineTruncationMarker,
   presentReadFailure,
   presentReadTextBoundaryFailure,
+  projectPortableIoFailure,
 } from './core-tool-presentation';
 
 const MAX_LINE_LENGTH = 2000;
@@ -45,13 +46,13 @@ export class ReadTool extends BuiltinTool {
 
   readonly name = 'Read';
   readonly description =
-    'Read bounded UTF-8 text from a Workspace-relative file path. Structured documents and media use their exact content Tools.';
+    'Read bounded UTF-8 text from a Workspace-relative or authorized absolute file path. Never use Read for .nkc or .otio structured project documents; use their exact domain Tools. Other structured documents and media also use their exact content Tools.';
   readonly parameters: ToolParameters = {
     type: 'object',
     properties: {
       file_path: {
         type: 'string',
-        description: 'Workspace-relative UTF-8 text file path.',
+        description: 'Normalized Workspace-relative or authorized absolute UTF-8 text file path.',
       },
       offset: {
         type: 'number',
@@ -92,10 +93,10 @@ export class ReadTool extends BuiltinTool {
           presentCoreFileAccessDenial('read-file', authorization, options?.metadata?.['locale']),
         );
       }
-      const resolved = authorization?.path ?? path.resolve(filePath);
+      const resolved = authorization?.hostPath ?? path.resolve(filePath);
       const classification = classifyAgentContentPath(
-        authorization?.allowed && authorization.contentLocator
-          ? authorization.contentLocator.path
+        authorization?.allowed && authorization.workspacePath
+          ? authorization.workspacePath
           : resolved,
       );
       if (classification.kind !== 'text' && classification.kind !== 'unknown') {
@@ -108,7 +109,7 @@ export class ReadTool extends BuiltinTool {
           ),
         );
       }
-      const workspacePath = authorization?.allowed ? authorization.contentLocator?.path : undefined;
+      const workspacePath = authorization?.allowed ? authorization.workspacePath : undefined;
       const loaded: { readonly bytes: Uint8Array; readonly fingerprint?: ContentFingerprint } =
         workspacePath
           ? await this.readWorkspaceFile(workspacePath, options?.signal)
@@ -172,7 +173,7 @@ export class ReadTool extends BuiltinTool {
       return this.error(
         presentReadFailure(
           'read-failed',
-          err instanceof Error ? err.message : String(err),
+          projectPortableIoFailure(err),
           options?.metadata?.['locale'],
         ),
       );

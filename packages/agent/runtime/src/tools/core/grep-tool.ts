@@ -22,6 +22,7 @@ import {
   presentCoreFileAccessDenial,
   presentGrepFailure,
   presentInvalidToolArguments,
+  projectPortableIoFailure,
 } from './core-tool-presentation';
 
 const MAX_RESULTS = 100;
@@ -43,7 +44,7 @@ interface GrepMatch {
 export class GrepTool extends BuiltinTool {
   readonly name = 'Grep';
   readonly description =
-    'Search file contents using regex. Returns matching lines with file paths and line numbers.';
+    'Search Workspace files using regex. Returns matching lines with Workspace-relative paths and line numbers.';
   readonly parameters: ToolParameters = {
     type: 'object',
     properties: {
@@ -53,7 +54,8 @@ export class GrepTool extends BuiltinTool {
       },
       path: {
         type: 'string',
-        description: 'Directory or file to search in',
+        description:
+          'Normalized Workspace-relative or authorized absolute directory or file path. Use "." for the root.',
       },
       include: {
         type: 'string',
@@ -109,15 +111,24 @@ export class GrepTool extends BuiltinTool {
         presentCoreFileAccessDenial('search-path', authorization, options?.metadata?.['locale']),
       );
     }
-    const resolved = authorization?.path ?? path.resolve(this.defaultCwd ?? '.', searchPath);
+    const resolved = authorization?.hostPath ?? path.resolve(this.defaultCwd ?? '.', searchPath);
+    const displaySearchPath = authorization?.allowed ? authorization.workspacePath : searchPath;
     const matches: GrepMatch[] = [];
 
     try {
       const stat = await fs.stat(resolved);
       if (stat.isFile()) {
-        await this.searchFile(resolved, regex, contextLines, matches);
+        await this.searchFile(resolved, displaySearchPath, regex, contextLines, matches);
       } else if (stat.isDirectory()) {
-        await this.searchDir(resolved, regex, include, contextLines, matches);
+        await this.searchDir(
+          resolved,
+          displaySearchPath,
+          regex,
+          include,
+          contextLines,
+          matches,
+          new Set<string>(),
+        );
       } else {
         return this.error(
           presentGrepFailure('invalid-path-kind', searchPath, options?.metadata?.['locale']),
@@ -132,7 +143,7 @@ export class GrepTool extends BuiltinTool {
       return this.error(
         presentGrepFailure(
           'search-failed',
-          err instanceof Error ? err.message : String(err),
+          projectPortableIoFailure(err),
           options?.metadata?.['locale'],
         ),
       );
@@ -159,6 +170,7 @@ export class GrepTool extends BuiltinTool {
 
   private async searchFile(
     filePath: string,
+    displayPath: string,
     regex: RegExp,
     contextLines: number,
     matches: GrepMatch[],
@@ -189,7 +201,7 @@ export class GrepTool extends BuiltinTool {
             }
           }
           matches.push({
-            file: filePath,
+            file: displayPath,
             line: i + 1,
             content: line.trim(),
             context: context.length > 0 ? context : undefined,
@@ -204,12 +216,23 @@ export class GrepTool extends BuiltinTool {
 
   private async searchDir(
     dirPath: string,
+    displayDirPath: string,
     regex: RegExp,
     include: string | undefined,
     contextLines: number,
     matches: GrepMatch[],
+    visitedDirectories: Set<string>,
   ): Promise<void> {
     if (matches.length >= MAX_RESULTS * 2) return;
+
+    let realDirectoryPath: string;
+    try {
+      realDirectoryPath = await fs.realpath(dirPath);
+    } catch {
+      return;
+    }
+    if (visitedDirectories.has(realDirectoryPath)) return;
+    visitedDirectories.add(realDirectoryPath);
 
     let dirents;
     try {
@@ -226,19 +249,56 @@ export class GrepTool extends BuiltinTool {
       if (dirent.name === 'node_modules' || dirent.name === 'dist') continue;
 
       const fullPath = path.join(dirPath, dirent.name);
-      const authorization = this.fileAccessPolicy?.authorize(fullPath, 'read');
+      const childRelativePath = joinDisplayPath(displayDirPath, dirent.name);
+      const authorization = this.fileAccessPolicy?.authorize(childRelativePath, 'read');
       if (authorization && !authorization.allowed) {
         continue;
       }
+      const childDisplayPath = authorization?.allowed
+        ? authorization.workspacePath
+        : childRelativePath;
 
       if (dirent.isDirectory()) {
-        await this.searchDir(fullPath, regex, include, contextLines, matches);
+        await this.searchDir(
+          fullPath,
+          childDisplayPath,
+          regex,
+          include,
+          contextLines,
+          matches,
+          visitedDirectories,
+        );
       } else if (dirent.isFile()) {
         if (include && !matchGlob(dirent.name, include)) continue;
-        await this.searchFile(fullPath, regex, contextLines, matches);
+        await this.searchFile(fullPath, childDisplayPath, regex, contextLines, matches);
+      } else if (dirent.isSymbolicLink()) {
+        let target;
+        try {
+          target = await fs.stat(fullPath);
+        } catch {
+          continue;
+        }
+        if (target.isDirectory()) {
+          await this.searchDir(
+            fullPath,
+            childDisplayPath,
+            regex,
+            include,
+            contextLines,
+            matches,
+            visitedDirectories,
+          );
+        } else if (target.isFile()) {
+          if (include && !matchGlob(dirent.name, include)) continue;
+          await this.searchFile(fullPath, childDisplayPath, regex, contextLines, matches);
+        }
       }
     }
   }
+}
+
+function joinDisplayPath(directoryPath: string, name: string): string {
+  return directoryPath === '.' ? name : path.posix.join(directoryPath, name);
 }
 
 /** Simple glob matching for file extensions like "*.ts" or "*.{ts,tsx}" */

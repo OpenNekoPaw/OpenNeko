@@ -8,38 +8,39 @@ export function presentCoreFileAccessDenial(
   locale: unknown,
 ): string {
   const zh = isChinesePromptLocale(locale);
+  const displayPath = decision.displayPath;
   switch (decision.reason) {
     case 'missing-authorized-root':
       return zh
-        ? `无法${presentOperation(zh, operation)}“${decision.path}”：没有可用的已授权工作区根目录。`
-        : `Cannot ${presentOperation(zh, operation)} "${decision.path}": no authorized workspace root is available.`;
-    case 'relative-path-without-root':
+        ? `无法${presentOperation(zh, operation)}“${displayPath}”：没有可用的已授权工作区根目录。`
+        : `Cannot ${presentOperation(zh, operation)} "${displayPath}": no authorized workspace root is available.`;
+    case 'invalid-workspace-relative-path':
       return zh
-        ? `路径必须是绝对路径或工作区相对路径：${decision.path}`
-        : `Path must be absolute or workspace-relative: ${decision.path}`;
+        ? `路径必须是规范化的 Workspace-relative 路径：${displayPath}`
+        : `Path must be a normalized Workspace-relative path: ${displayPath}`;
     case 'forbidden-unmanaged-path':
       return zh
-        ? `路径位于系统临时目录、Downloads 或 Desktop，拒绝访问：${decision.path}`
-        : `Path is denied because it is in system temp, Downloads, or Desktop: ${decision.path}`;
+        ? `路径位于系统临时目录、Downloads 或 Desktop，拒绝访问：${displayPath}`
+        : `Path is denied because it is in system temp, Downloads, or Desktop: ${displayPath}`;
     case 'outside-authorized-roots':
       return zh
-        ? `路径不在${presentOperationRoot(zh, operation)}授权根目录内：${decision.path}`
-        : `Path is outside authorized ${presentOperationRoot(zh, operation)} roots: ${decision.path}`;
+        ? `路径不在${presentOperationRoot(zh, operation)}授权根目录内：${displayPath}`
+        : `Path is outside authorized ${presentOperationRoot(zh, operation)} roots: ${displayPath}`;
     case 'ignored-workspace-path':
       if (decision.rule !== undefined) {
         return zh
-          ? `路径被工作区 .gitignore 规则“${decision.rule}”忽略：${decision.path}`
-          : `Path is ignored by workspace .gitignore rule "${decision.rule}": ${decision.path}`;
+          ? `路径被工作区 .gitignore 规则“${decision.rule}”忽略：${displayPath}`
+          : `Path is ignored by workspace .gitignore rule "${decision.rule}": ${displayPath}`;
       }
       return zh
-        ? `路径位于受管理的工作区运行时或缓存目录中，已被忽略：${decision.path}`
-        : `Path is ignored because it is in a managed workspace runtime or cache directory: ${decision.path}`;
+        ? `路径位于受管理的工作区运行时或缓存目录中，已被忽略：${displayPath}`
+        : `Path is ignored because it is in a managed workspace runtime or cache directory: ${displayPath}`;
     case 'protected-project-document': {
       const owner = decision.protectedProjectOwner;
       if (!owner) throw new Error('Protected project denial requires an owning domain.');
       return zh
-        ? `受保护的项目文档只能通过 ${owner} 领域能力访问，不能读取或写入原始文件：${decision.path}`
-        : `Protected project document must use the ${owner} domain capability and cannot be read or written as a raw file: ${decision.path}`;
+        ? `受保护的项目文档只能通过 ${owner} 领域能力访问，不能读取或写入原始文件：${displayPath}`
+        : `Protected project document must use the ${owner} domain capability and cannot be read or written as a raw file: ${displayPath}`;
     }
   }
 }
@@ -138,8 +139,20 @@ export function presentWriteFailure(detail: string, locale: unknown): string {
     : `Failed to write file: ${detail}`;
 }
 
+export function projectPortableIoFailure(error: unknown): string {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { readonly code?: unknown }).code
+      : undefined;
+  if (typeof code === 'string' && /^[a-z0-9_-]+$/iu.test(code)) return code;
+  if (error instanceof Error && /^[a-z0-9][a-z0-9_-]*$/iu.test(error.message)) {
+    return error.message;
+  }
+  return 'unknown-io-error';
+}
+
 export function presentListDirectoryFailure(
-  code: 'not-found' | 'not-directory' | 'list-failed' | 'symlink-denied' | 'cursor-invalid',
+  code: 'not-found' | 'not-directory' | 'list-failed' | 'cursor-invalid',
   value: string,
   locale: unknown,
 ): string {
@@ -151,10 +164,6 @@ export function presentListDirectoryFailure(
       return zh ? `路径不是目录：${value}` : `Path is not a directory: ${value}`;
     case 'list-failed':
       return zh ? `列出目录失败：${value}` : `Failed to list directory: ${value}`;
-    case 'symlink-denied':
-      return zh
-        ? `普通工作区目录读取不会跟随符号链接：${value}`
-        : `Ordinary Workspace directory listing does not follow symbolic links: ${value}`;
     case 'cursor-invalid':
       return zh
         ? `目录内容已变化或游标无效：${value}`

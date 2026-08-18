@@ -8,6 +8,7 @@
 import {
   isContentFingerprint,
   type AuthorizedWorkspaceWriter,
+  type AuthorizedWorkspaceWriteResult,
   type ContentFingerprint,
 } from '@neko/content';
 import type {
@@ -23,6 +24,7 @@ import {
   presentContentWriteDiagnostic,
   presentInvalidToolArguments,
   presentWriteFailure,
+  projectPortableIoFailure,
 } from './core-tool-presentation';
 
 export interface WriteToolOptions {
@@ -42,14 +44,13 @@ export class WriteTool extends BuiltinTool {
 
   readonly name = 'Write';
   readonly description =
-    'Create a Workspace content file, or replace one exact file state using freshness returned by Read.';
+    'Create a Workspace content file from a Workspace-relative or authorized absolute target, or replace one exact file state using freshness returned by Read.';
   readonly parameters: ToolParameters = {
     type: 'object',
     properties: {
       file_path: {
         type: 'string',
-        description:
-          'Path to the file to write. Relative paths are resolved against the workspace root.',
+        description: 'Normalized Workspace-relative or authorized absolute file path.',
       },
       content: {
         type: 'string',
@@ -87,19 +88,20 @@ export class WriteTool extends BuiltinTool {
     const content = args.content as string;
     const expectedFingerprint = parseExpectedFingerprint(args.expected_fingerprint);
 
+    const authorization = this.fileAccessPolicy?.authorize(filePath, 'write');
+    if (authorization && !authorization.allowed) {
+      return this.error(
+        presentCoreFileAccessDenial('write-file', authorization, options?.metadata?.['locale']),
+      );
+    }
+    const workspacePath = authorization?.allowed ? authorization.workspacePath : undefined;
+    if (!workspacePath || !this.workspaceWriter) {
+      throw new Error('Workspace Write requires a canonical Workspace target and Content writer.');
+    }
+    const bytes = new TextEncoder().encode(content);
+    let result: AuthorizedWorkspaceWriteResult;
     try {
-      const authorization = this.fileAccessPolicy?.authorize(filePath, 'write');
-      if (authorization && !authorization.allowed) {
-        return this.error(
-          presentCoreFileAccessDenial('write-file', authorization, options?.metadata?.['locale']),
-        );
-      }
-      const workspacePath = authorization?.allowed ? authorization.contentLocator?.path : undefined;
-      if (!workspacePath || !this.workspaceWriter) {
-        throw new Error('Workspace Write requires a relative target and canonical Content writer.');
-      }
-      const bytes = new TextEncoder().encode(content);
-      const result = await this.workspaceWriter.write(
+      result = await this.workspaceWriter.write(
         { kind: 'workspace-file', path: workspacePath },
         bytes,
         {
@@ -108,34 +110,31 @@ export class WriteTool extends BuiltinTool {
           ...(options?.signal ? { signal: options.signal } : {}),
         },
       );
-      if (result.status !== 'written') {
-        return this.error(
-          presentContentWriteDiagnostic(
-            result.diagnostic.code,
-            workspacePath,
-            options?.metadata?.['locale'],
-          ),
-        );
-      }
-      if (!result.fingerprint) {
-        throw new Error('Workspace writer did not return durable freshness.');
-      }
-      return this.success({
-        ...(authorization?.allowed && authorization.contentLocator
-          ? { contentLocator: authorization.contentLocator }
-          : {}),
-        operation: expectedFingerprint ? 'replace' : 'create',
-        byteLength: result.byteLength,
-        fingerprint: result.fingerprint,
-      });
-    } catch (err) {
+    } catch (error) {
       return this.error(
-        presentWriteFailure(
-          err instanceof Error ? err.message : String(err),
+        presentWriteFailure(projectPortableIoFailure(error), options?.metadata?.['locale']),
+      );
+    }
+    if (result.status !== 'written') {
+      return this.error(
+        presentContentWriteDiagnostic(
+          result.diagnostic.code,
+          workspacePath,
           options?.metadata?.['locale'],
         ),
       );
     }
+    if (!result.fingerprint) {
+      throw new Error('Workspace writer did not return durable freshness.');
+    }
+    return this.success({
+      ...(authorization?.allowed && authorization.contentLocator
+        ? { contentLocator: authorization.contentLocator }
+        : {}),
+      operation: expectedFingerprint ? 'replace' : 'create',
+      byteLength: result.byteLength,
+      fingerprint: result.fingerprint,
+    });
   }
 }
 

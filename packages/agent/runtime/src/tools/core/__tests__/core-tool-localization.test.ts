@@ -62,6 +62,7 @@ describe('core tool prompt-locale projection', () => {
     const upstreamDecision = {
       allowed: false as const,
       path: '/external/原文.txt',
+      displayPath: 'references/原文.txt',
       reason: 'outside-authorized-roots' as const,
       message: 'UNEXPECTED LOCALIZED PROSE',
     };
@@ -72,12 +73,12 @@ describe('core tool prompt-locale projection', () => {
 
     await expect(read.execute({ file_path: '/external/原文.txt' }, EN_OPTIONS)).resolves.toEqual({
       success: false,
-      error: 'Path is outside authorized read roots: /external/原文.txt',
+      error: 'Path is outside authorized read roots: references/原文.txt',
     });
     await expect(read.execute({ file_path: '/external/原文.txt' }, ZH_CN_OPTIONS)).resolves.toEqual(
       {
         success: false,
-        error: '路径不在读取授权根目录内：/external/原文.txt',
+        error: '路径不在读取授权根目录内：references/原文.txt',
       },
     );
   });

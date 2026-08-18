@@ -95,6 +95,84 @@ describe('createCoreTools', () => {
     });
   });
 
+  it('accepts an absolute Workspace path for the same file and canonicalizes the result', async () => {
+    const read = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'Read');
+
+    const result = await read.execute({
+      file_path: path.join(workspaceRoot, 'src', 'story.txt'),
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: expect.objectContaining({
+        contentLocator: { kind: 'workspace-file', path: 'src/story.txt' },
+        content: expect.stringContaining('hello neko'),
+      }),
+    });
+    expect(JSON.stringify(result)).not.toContain(workspaceRoot);
+  });
+
+  it('reads and searches through a linked target while keeping writes denied', async () => {
+    await fs.symlink(outsideRoot, path.join(workspaceRoot, 'linked-outside'), 'dir');
+    await fs.symlink(outsideRoot, path.join(outsideRoot, 'loop'), 'dir');
+    const tools = createCoreTools({ defaultCwd: workspaceRoot });
+
+    const read = await getTool(tools, 'Read').execute({
+      file_path: 'linked-outside/secret.txt',
+    });
+    expect(read).toMatchObject({
+      success: true,
+      data: expect.objectContaining({
+        content: expect.stringContaining('outside'),
+        contentLocator: { kind: 'workspace-file', path: 'linked-outside/secret.txt' },
+      }),
+    });
+
+    const listed = await getTool(tools, 'ListDirectory').execute({ path: 'linked-outside' });
+    expect(listed).toMatchObject({
+      success: true,
+      data: expect.objectContaining({
+        directoryPath: 'linked-outside',
+        entries: expect.arrayContaining([
+          expect.objectContaining({ name: 'secret.txt', type: 'file' }),
+        ]),
+      }),
+    });
+
+    const searched = await getTool(tools, 'Grep').execute({
+      pattern: 'outside',
+      path: 'linked-outside',
+    });
+    expect(searched).toMatchObject({ success: true });
+    expect(JSON.stringify(searched)).toContain('linked-outside/secret.txt');
+
+    const written = await getTool(tools, 'Write').execute({
+      file_path: 'linked-outside/secret.txt',
+      content: 'must remain outside',
+    });
+    expect(written).toMatchObject({
+      success: false,
+      error: expect.stringContaining('content-unauthorized'),
+    });
+    expect(JSON.stringify({ read, listed, searched, written })).not.toContain(outsideRoot);
+    expect(await fs.readFile(path.join(outsideRoot, 'secret.txt'), 'utf8')).toBe('outside\n');
+  });
+
+  it('reports a broken linked directory locally and keeps sibling listing available', async () => {
+    await fs.symlink(
+      path.join(fixtureRoot, 'missing-directory'),
+      path.join(workspaceRoot, 'broken-link'),
+      'dir',
+    );
+    const list = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'ListDirectory');
+
+    await expect(list.execute({ path: 'broken-link' })).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('Directory not found'),
+    });
+    await expect(list.execute({ path: 'src' })).resolves.toMatchObject({ success: true });
+  });
+
   it('returns portable locators for Workspace writes without exposing the absolute root', async () => {
     const write = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'Write');
 
@@ -233,91 +311,65 @@ describe('createCoreTools', () => {
     expect(JSON.stringify(listed.data)).toContain('edit.otio');
   });
 
-  it('blocks reads, listings, and searches outside the workspace root', async () => {
+  it('rejects absolute outside-authority paths across Read, Write, ListDirectory and Grep', async () => {
     const tools = createCoreTools({ defaultCwd: workspaceRoot });
     const outsideFile = path.join(outsideRoot, 'secret.txt');
     const outsideDir = outsideRoot;
 
-    await expect(getTool(tools, 'Read').execute({ file_path: outsideFile })).resolves.toMatchObject(
-      {
-        success: false,
-        error: expect.stringContaining('outside authorized read roots'),
-      },
-    );
-    await expect(
-      getTool(tools, 'ListDirectory').execute({ path: outsideDir }),
-    ).resolves.toMatchObject({
+    const read = await getTool(tools, 'Read').execute({ file_path: outsideFile });
+    expect(read).toMatchObject({
       success: false,
-      error: expect.stringContaining('outside authorized read roots'),
+      error: expect.stringContaining('outside authorized'),
     });
-    await expect(
-      getTool(tools, 'Grep').execute({ pattern: 'outside', path: outsideDir }),
-    ).resolves.toMatchObject({
+    expect(JSON.stringify(read)).not.toContain(workspaceRoot);
+    expect(JSON.stringify(read)).not.toContain(outsideRoot);
+
+    const listed = await getTool(tools, 'ListDirectory').execute({ path: outsideDir });
+    expect(listed).toMatchObject({
       success: false,
-      error: expect.stringContaining('outside authorized read roots'),
+      error: expect.stringContaining('outside authorized'),
     });
+    expect(JSON.stringify(listed)).not.toContain(workspaceRoot);
+    expect(JSON.stringify(listed)).not.toContain(outsideRoot);
+
+    const searched = await getTool(tools, 'Grep').execute({ pattern: 'outside', path: outsideDir });
+    expect(searched).toMatchObject({
+      success: false,
+      error: expect.stringContaining('outside authorized'),
+    });
+    expect(JSON.stringify(searched)).not.toContain(workspaceRoot);
+    expect(JSON.stringify(searched)).not.toContain(outsideRoot);
+
+    const written = await getTool(tools, 'Write').execute({
+      file_path: path.join(outsideRoot, 'new.txt'),
+      content: 'nope',
+    });
+    expect(written).toMatchObject({
+      success: false,
+      error: expect.stringContaining('outside authorized'),
+    });
+    expect(JSON.stringify(written)).not.toContain(workspaceRoot);
+    expect(JSON.stringify(written)).not.toContain(outsideRoot);
   });
 
-  it('keeps additional authorized roots readable and searchable without exposing a directory namespace', async () => {
-    const tools = createCoreTools({
-      defaultCwd: workspaceRoot,
-      authorizedReadRoots: [outsideRoot],
-    });
-    const outsideFile = path.join(outsideRoot, 'secret.txt');
+  it('rejects traversal paths before resolution without exposing host roots', async () => {
+    const tools = createCoreTools({ defaultCwd: workspaceRoot });
 
-    await expect(getTool(tools, 'Read').execute({ file_path: outsideFile })).resolves.toMatchObject(
-      {
-        success: true,
-        data: expect.objectContaining({
-          content: expect.stringContaining('outside'),
-        }),
-      },
-    );
-    await expect(
-      getTool(tools, 'ListDirectory').execute({ path: outsideRoot }),
-    ).resolves.toMatchObject({
+    const read = await getTool(tools, 'Read').execute({ file_path: '../outside/secret.txt' });
+    expect(read).toMatchObject({
       success: false,
-      error: expect.stringContaining('outside authorized read roots'),
+      error: expect.stringContaining('normalized Workspace-relative path'),
     });
-    await expect(
-      getTool(tools, 'Grep').execute({ pattern: 'outside', path: outsideRoot }),
-    ).resolves.toMatchObject({
-      success: true,
-      data: expect.objectContaining({
-        content: expect.stringContaining('secret.txt'),
-      }),
-    });
-  });
+    expect(JSON.stringify(read)).not.toContain(workspaceRoot);
+    expect(JSON.stringify(read)).not.toContain(outsideRoot);
 
-  it('blocks writes outside workspace and rejects system temp paths', async () => {
-    const write = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'Write');
-
-    await expect(
-      write.execute({ file_path: path.join(outsideRoot, 'new.txt'), content: 'nope' }),
-    ).resolves.toMatchObject({
+    const listed = await getTool(tools, 'ListDirectory').execute({ path: '../outside' });
+    expect(listed).toMatchObject({
       success: false,
-      error: expect.stringContaining('outside authorized write roots'),
+      error: expect.stringContaining('normalized Workspace-relative path'),
     });
-    await expect(
-      write.execute({ file_path: '/tmp/neko-agent-denied.txt', content: 'nope' }),
-    ).resolves.toMatchObject({
-      success: false,
-      error: expect.stringContaining('system temp'),
-    });
-  });
-
-  it('keeps additional authorized read roots read-only', async () => {
-    const write = getTool(
-      createCoreTools({ defaultCwd: workspaceRoot, authorizedReadRoots: [outsideRoot] }),
-      'Write',
-    );
-
-    await expect(
-      write.execute({ file_path: path.join(outsideRoot, 'new.txt'), content: 'nope' }),
-    ).resolves.toMatchObject({
-      success: false,
-      error: expect.stringContaining('outside authorized write roots'),
-    });
+    expect(JSON.stringify(listed)).not.toContain(workspaceRoot);
+    expect(JSON.stringify(listed)).not.toContain(outsideRoot);
   });
 
   it('blocks generic file tools from managed workspace runtime and cache directories', async () => {
@@ -414,6 +466,66 @@ describe('createCoreTools', () => {
     expect(JSON.stringify(grep.data)).not.toContain('page.txt');
   });
 
+  it('returns Workspace-relative Grep match paths and never echoes the absolute root', async () => {
+    const grep = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'Grep');
+
+    const found = await grep.execute({ pattern: 'hello', path: '.' });
+    expect(found).toMatchObject({ success: true });
+    expect(JSON.stringify(found)).toContain('src/story.txt');
+    expect(JSON.stringify(found)).not.toContain(workspaceRoot);
+
+    const foundAbsolute = await grep.execute({ pattern: 'hello', path: workspaceRoot });
+    expect(foundAbsolute).toMatchObject({ success: true });
+    expect(JSON.stringify(foundAbsolute)).toContain('src/story.txt');
+    expect(JSON.stringify(foundAbsolute)).not.toContain(workspaceRoot);
+
+    const missing = await grep.execute({ pattern: 'hello', path: 'missing-dir' });
+    expect(missing).toMatchObject({
+      success: false,
+      error: expect.stringContaining('Path not found'),
+    });
+    expect(JSON.stringify(missing)).not.toContain(workspaceRoot);
+  });
+
+  it('lists an authorized absolute Workspace directory with canonical entries', async () => {
+    const list = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'ListDirectory');
+
+    const result = await list.execute({ path: workspaceRoot });
+    expect(result).toMatchObject({
+      success: true,
+      data: expect.objectContaining({
+        directoryPath: '.',
+        entries: expect.arrayContaining([
+          expect.objectContaining({
+            name: 'src',
+            type: 'directory',
+            contentLocator: { kind: 'workspace-file', path: 'src' },
+          }),
+        ]),
+      }),
+    });
+    expect(JSON.stringify(result)).not.toContain(workspaceRoot);
+  });
+
+  it('writes through an authorized absolute Workspace target with a canonical locator', async () => {
+    const write = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'Write');
+    const absoluteTarget = path.join(workspaceRoot, 'docs', 'absolute.md');
+
+    const result = await write.execute({
+      file_path: absoluteTarget,
+      content: '# Absolute\n',
+    });
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        contentLocator: { kind: 'workspace-file', path: 'docs/absolute.md' },
+        operation: 'create',
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(workspaceRoot);
+    expect(await fs.readFile(absoluteTarget, 'utf8')).toBe('# Absolute\n');
+  });
+
   it('paginates a stable single-level directory without returning physical paths', async () => {
     const directory = path.join(workspaceRoot, 'many');
     await fs.mkdir(directory);
@@ -449,18 +561,21 @@ describe('createCoreTools', () => {
     });
   });
 
-  it('rejects directory paths that cross a symlink before enumeration', async () => {
+  it('lists directory paths that cross a symlink without leaking the target path', async () => {
     await fs.symlink(outsideRoot, path.join(workspaceRoot, 'linked-outside'), 'dir');
+    await fs.writeFile(path.join(outsideRoot, 'secret.txt'), 'linked secret\n');
     const list = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'ListDirectory');
 
     await expect(list.execute({ path: 'linked-outside' })).resolves.toMatchObject({
-      success: false,
-      error: expect.stringContaining('does not follow symbolic links'),
+      success: true,
+      data: expect.objectContaining({
+        directoryPath: 'linked-outside',
+        entries: [expect.objectContaining({ name: 'secret.txt', type: 'file' })],
+      }),
     });
     const root = await list.execute({ path: '.' });
     expect(root).toMatchObject({ success: true });
-    expect(JSON.stringify(root.data)).toContain('linked-outside');
-    expect(JSON.stringify(root.data)).not.toContain('secret.txt');
+    expect(JSON.stringify(root)).not.toContain(outsideRoot);
   });
 
   it('keeps Read on bounded strict UTF-8 text and rejects known non-text classes', async () => {

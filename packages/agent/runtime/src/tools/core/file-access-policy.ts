@@ -4,11 +4,7 @@ import {
   shouldIgnoreWorkspaceFile,
   type WorkspaceFileIgnoreRules,
 } from '../../input/workspace-ignore';
-import {
-  authorizePathInsideRoots,
-  isPathInsideRoot,
-  normalizeAccessRoots,
-} from './path-access-core';
+import { isForbiddenUnmanagedPath } from './path-access-core';
 
 export type FileAccessKind = 'read' | 'write' | 'list' | 'cwd';
 
@@ -21,12 +17,14 @@ export interface CoreFileAccessPolicy {
 export type CoreFileAccessDecision =
   | {
       readonly allowed: true;
-      readonly path: string;
+      readonly hostPath: string;
+      readonly workspacePath: string;
       readonly contentLocator?: WorkspaceFileContentLocator;
     }
   | {
       readonly allowed: false;
       readonly path: string;
+      readonly displayPath: string;
       readonly reason: CoreFileAccessDenialReason;
       readonly rule?: string;
       readonly protectedProjectOwner?: ProtectedProjectDocumentOwner;
@@ -34,7 +32,7 @@ export type CoreFileAccessDecision =
 
 export type CoreFileAccessDenialReason =
   | 'missing-authorized-root'
-  | 'relative-path-without-root'
+  | 'invalid-workspace-relative-path'
   | 'forbidden-unmanaged-path'
   | 'outside-authorized-roots'
   | 'ignored-workspace-path'
@@ -42,8 +40,6 @@ export type CoreFileAccessDenialReason =
 
 export interface WorkspaceFileAccessPolicyOptions {
   readonly workspaceRoot: string;
-  readonly readRoots?: readonly string[];
-  readonly writeRoots?: readonly string[];
   readonly ignoreRules?: WorkspaceFileIgnoreRules;
 }
 
@@ -59,51 +55,83 @@ export function createNoWorkspaceFileAccessPolicy(): CoreFileAccessPolicy {
 
 class WorkspaceFileAccessPolicy implements CoreFileAccessPolicy {
   private readonly workspaceRoot: string;
-  private readonly readRoots: readonly string[];
-  private readonly writeRoots: readonly string[];
+  private readonly workspaceSyntax: PathSyntax;
   private readonly ignoreRules: WorkspaceFileIgnoreRules;
 
   constructor(options: WorkspaceFileAccessPolicyOptions) {
-    this.workspaceRoot = path.resolve(options.workspaceRoot);
-    this.readRoots = normalizeAccessRoots(options.readRoots ?? [this.workspaceRoot]);
-    this.writeRoots = normalizeAccessRoots(options.writeRoots ?? [this.workspaceRoot]);
+    const normalizedRoot = normalizeAbsoluteWorkspaceRoot(options.workspaceRoot);
+    this.workspaceRoot = normalizedRoot.path;
+    this.workspaceSyntax = normalizedRoot.syntax;
     this.ignoreRules = options.ignoreRules ?? {};
   }
 
   authorize(filePath: string, accessKind: FileAccessKind): CoreFileAccessDecision {
-    const resolved = resolveAgainstRoot(filePath, this.workspaceRoot);
-    if (!resolved) {
-      return {
-        allowed: false,
-        path: filePath,
-        reason: 'relative-path-without-root',
-      };
+    if (filePath.includes('\0')) {
+      return denial(filePath, undefined, 'invalid-workspace-relative-path');
     }
 
-    const roots = accessKind === 'write' ? this.writeRoots : this.readRoots;
-    const rootDecision = authorizePathInsideRoots(resolved, roots);
+    const absoluteInput = isAbsolutePathInput(filePath);
+    let resolved: string;
+    if (absoluteInput) {
+      const normalized = normalizeAbsolutePath(filePath);
+      if (normalized.syntax !== this.workspaceSyntax) {
+        return denial(filePath, undefined, 'outside-authorized-roots');
+      }
+      resolved = normalized.path;
+    } else {
+      const validation = validateRelativeModelPath(filePath);
+      if (validation !== undefined) {
+        return denial(filePath, undefined, validation);
+      }
+      resolved = resolveRelativeAgainstRoot(filePath, this.workspaceRoot, this.workspaceSyntax);
+    }
+
+    const rootDecision = authorizeNormalizedPath(
+      resolved,
+      this.workspaceRoot,
+      this.workspaceSyntax,
+    );
     if (rootDecision.reason === 'forbidden-unmanaged-path') {
-      return {
-        allowed: false,
-        path: resolved,
-        reason: 'forbidden-unmanaged-path',
-      };
+      return denial(
+        filePath,
+        resolved,
+        'forbidden-unmanaged-path',
+        this.workspaceRoot,
+        this.workspaceSyntax,
+      );
     }
     if (rootDecision.reason === 'outside-authorized-roots') {
-      return {
-        allowed: false,
-        path: resolved,
-        reason: 'outside-authorized-roots',
-      };
+      return denial(
+        filePath,
+        resolved,
+        'outside-authorized-roots',
+        this.workspaceRoot,
+        this.workspaceSyntax,
+      );
     }
 
-    const relativePath = toWorkspaceRelativePath(resolved, this.workspaceRoot);
-    if (relativePath) {
+    const relativePath = toWorkspaceRelativePath(
+      resolved,
+      this.workspaceRoot,
+      this.workspaceSyntax,
+    );
+    if (relativePath === undefined) {
+      return denial(
+        filePath,
+        resolved,
+        'outside-authorized-roots',
+        this.workspaceRoot,
+        this.workspaceSyntax,
+      );
+    }
+
+    if (relativePath !== '.') {
       const ignoreDecision = shouldIgnoreWorkspaceFile(relativePath, this.ignoreRules);
       if (ignoreDecision.ignored) {
         return {
           allowed: false,
           path: resolved,
+          displayPath: relativePath,
           reason: 'ignored-workspace-path',
           ...(ignoreDecision.reason === 'gitignore' && ignoreDecision.rule
             ? { rule: ignoreDecision.rule }
@@ -115,6 +143,7 @@ class WorkspaceFileAccessPolicy implements CoreFileAccessPolicy {
         return {
           allowed: false,
           path: resolved,
+          displayPath: relativePath,
           reason: 'protected-project-document',
           protectedProjectOwner,
         };
@@ -123,17 +152,158 @@ class WorkspaceFileAccessPolicy implements CoreFileAccessPolicy {
 
     return {
       allowed: true,
-      path: resolved,
-      ...(relativePath
-        ? {
+      hostPath: resolved,
+      workspacePath: relativePath,
+      ...(relativePath === '.'
+        ? {}
+        : {
             contentLocator: {
               kind: 'workspace-file' as const,
-              path: relativePath.split(path.sep).join('/'),
+              path: relativePath,
             },
-          }
-        : {}),
+          }),
     };
   }
+}
+
+type PathSyntax = 'posix' | 'win32';
+
+interface NormalizedAbsolutePath {
+  readonly path: string;
+  readonly syntax: PathSyntax;
+}
+
+function normalizeAbsoluteWorkspaceRoot(value: string): NormalizedAbsolutePath {
+  if (isWindowsAbsolutePath(value) || isAbsolutePathInput(value)) {
+    const normalized = normalizeAbsolutePath(value);
+    if (!isAbsolutePathInput(normalized.path)) {
+      throw new Error('Workspace file access policy requires an absolute Workspace root.');
+    }
+    return normalized;
+  }
+  return normalizeAbsolutePath(path.resolve(value));
+}
+
+function normalizeAbsolutePath(value: string): NormalizedAbsolutePath {
+  if (isWindowsAbsolutePath(value)) {
+    return {
+      path: path.win32.normalize(value),
+      syntax: 'win32',
+    };
+  }
+  return {
+    path: path.posix.normalize(value),
+    syntax: 'posix',
+  };
+}
+
+function isWindowsAbsolutePath(value: string): boolean {
+  return /^[A-Za-z]:[\\/]/u.test(value) || /^\\\\[^\\]+\\[^\\]+/u.test(value);
+}
+
+function isAbsolutePathInput(value: string): boolean {
+  return path.posix.isAbsolute(value) || path.win32.isAbsolute(value) || /^[A-Za-z]:/u.test(value);
+}
+
+function validateRelativeModelPath(
+  filePath: string,
+): 'invalid-workspace-relative-path' | undefined {
+  if (filePath === '' || filePath.includes('\\')) {
+    return 'invalid-workspace-relative-path';
+  }
+  if (filePath !== '.' && path.posix.normalize(filePath) !== filePath) {
+    return 'invalid-workspace-relative-path';
+  }
+  const segments = filePath.split('/');
+  if (
+    filePath.endsWith('/') ||
+    (filePath !== '.' &&
+      segments.some((segment) => segment === '' || segment === '.' || segment === '..'))
+  ) {
+    return 'invalid-workspace-relative-path';
+  }
+  return undefined;
+}
+
+function resolveRelativeAgainstRoot(
+  filePath: string,
+  workspaceRoot: string,
+  syntax: PathSyntax,
+): string {
+  return syntax === 'win32'
+    ? path.win32.resolve(workspaceRoot, filePath)
+    : path.posix.resolve(workspaceRoot, filePath);
+}
+
+function authorizeNormalizedPath(
+  candidate: string,
+  root: string,
+  syntax: PathSyntax,
+): { readonly reason?: 'forbidden-unmanaged-path' | 'outside-authorized-roots' } {
+  if (isForbiddenUnmanagedPath(candidate)) {
+    return { reason: 'forbidden-unmanaged-path' };
+  }
+  if (!isPathInsideNormalizedRoot(candidate, root, syntax)) {
+    return { reason: 'outside-authorized-roots' };
+  }
+  return {};
+}
+
+function isPathInsideNormalizedRoot(candidate: string, root: string, syntax: PathSyntax): boolean {
+  const relative = relativeNormalized(candidate, root, syntax);
+  if (relative === '') return true;
+  if (relative === '..' || relative.startsWith(`..${syntax === 'win32' ? '\\' : '/'}`))
+    return false;
+  return !isAbsolutePathInput(relative);
+}
+
+function toWorkspaceRelativePath(
+  candidate: string,
+  root: string,
+  syntax: PathSyntax,
+): string | undefined {
+  if (!isPathInsideNormalizedRoot(candidate, root, syntax)) return undefined;
+  const relative = relativeNormalized(candidate, root, syntax);
+  return relative === '' ? '.' : relative.split(/[\\/]/).join('/');
+}
+
+function relativeNormalized(candidate: string, root: string, syntax: PathSyntax): string {
+  return syntax === 'win32'
+    ? path.win32.relative(root, candidate)
+    : path.posix.relative(root, candidate);
+}
+
+function denial(
+  originalPath: string,
+  resolvedPath: string | undefined,
+  reason: CoreFileAccessDenialReason,
+  workspaceRoot?: string,
+  workspaceSyntax?: PathSyntax,
+): Extract<CoreFileAccessDecision, { allowed: false }> {
+  return {
+    allowed: false,
+    path: resolvedPath ?? originalPath,
+    displayPath: displayPathForDenial(originalPath, resolvedPath, workspaceRoot, workspaceSyntax),
+    reason,
+  };
+}
+
+function displayPathForDenial(
+  originalPath: string,
+  resolvedPath: string | undefined,
+  workspaceRoot: string | undefined,
+  workspaceSyntax: PathSyntax | undefined,
+): string {
+  if (resolvedPath !== undefined && workspaceRoot !== undefined && workspaceSyntax !== undefined) {
+    const relative = toWorkspaceRelativePath(resolvedPath, workspaceRoot, workspaceSyntax);
+    if (relative) return relative;
+  }
+  if (isAbsolutePathInput(originalPath)) return '(absolute path omitted)';
+  return portableSubmittedPath(originalPath);
+}
+
+function portableSubmittedPath(filePath: string): string {
+  return filePath.replace(/\\/g, '/');
 }
 
 function protectedProjectOwnerForPath(
@@ -154,25 +324,8 @@ class NoWorkspaceFileAccessPolicy implements CoreFileAccessPolicy {
     return {
       allowed: false,
       path: filePath,
+      displayPath: '(path omitted)',
       reason: 'missing-authorized-root',
     };
   }
-}
-
-function resolveAgainstRoot(filePath: string, root: string): string | undefined {
-  if (path.isAbsolute(filePath)) {
-    return path.normalize(filePath);
-  }
-  if (!filePath.trim()) {
-    return undefined;
-  }
-  return path.resolve(root, filePath);
-}
-
-function toWorkspaceRelativePath(filePath: string, workspaceRoot: string): string | undefined {
-  if (!isPathInsideRoot(filePath, workspaceRoot)) {
-    return undefined;
-  }
-  const relativePath = path.relative(workspaceRoot, filePath);
-  return relativePath && !relativePath.startsWith('..') ? relativePath : undefined;
 }

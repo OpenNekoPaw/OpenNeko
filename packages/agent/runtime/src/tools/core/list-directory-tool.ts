@@ -14,18 +14,17 @@ import type {
 } from '@neko/agent-contracts';
 import { BuiltinTool } from '../base';
 import { createNoWorkspaceFileAccessPolicy, type CoreFileAccessPolicy } from './file-access-policy';
-import { pathCrossesSymlinkInsideRoots } from './path-access-core';
 import {
   presentCoreFileAccessDenial,
   presentInvalidToolArguments,
   presentListDirectoryFailure,
+  projectPortableIoFailure,
 } from './core-tool-presentation';
 
 const MAX_ENTRIES = 80;
 
 export interface ListDirectoryToolOptions {
   readonly fileAccessPolicy?: CoreFileAccessPolicy;
-  readonly authorizedRoots?: readonly string[];
   readonly workspaceRoot?: string;
 }
 
@@ -38,13 +37,11 @@ interface DirEntry {
 
 export class ListDirectoryTool extends BuiltinTool {
   private readonly fileAccessPolicy?: CoreFileAccessPolicy;
-  private readonly authorizedRoots: readonly string[];
   private readonly workspaceRoot?: string;
 
   constructor(options?: ListDirectoryToolOptions) {
     super();
     this.fileAccessPolicy = options?.fileAccessPolicy ?? createNoWorkspaceFileAccessPolicy();
-    this.authorizedRoots = (options?.authorizedRoots ?? []).map((root) => path.resolve(root));
     this.workspaceRoot = options?.workspaceRoot && path.resolve(options.workspaceRoot);
   }
 
@@ -56,7 +53,8 @@ export class ListDirectoryTool extends BuiltinTool {
     properties: {
       path: {
         type: 'string',
-        description: 'Workspace-relative directory path. Use "." for the Workspace root.',
+        description:
+          'Normalized Workspace-relative or authorized absolute directory path. Use "." for the Workspace root.',
       },
       after: {
         type: 'string',
@@ -90,15 +88,7 @@ export class ListDirectoryTool extends BuiltinTool {
           ),
         );
       }
-      const resolved = authorization?.path ?? path.resolve(dirPath);
-      if (
-        this.authorizedRoots.length > 0 &&
-        (await pathCrossesSymlinkInsideRoots(resolved, this.authorizedRoots))
-      ) {
-        return this.error(
-          presentListDirectoryFailure('symlink-denied', dirPath, options?.metadata?.['locale']),
-        );
-      }
+      const resolved = authorization?.hostPath ?? path.resolve(dirPath);
       const entries = await this.listDir(resolved);
       const startIndex =
         after === undefined ? 0 : entries.findIndex((entry) => entry.name === after) + 1;
@@ -110,7 +100,9 @@ export class ListDirectoryTool extends BuiltinTool {
       const shown = entries.slice(startIndex, startIndex + MAX_ENTRIES);
       const truncated = startIndex + shown.length < entries.length;
       const last = shown.at(-1);
-      const directoryPath = this.toWorkspacePath(resolved);
+      const directoryPath = authorization?.allowed
+        ? authorization.workspacePath
+        : this.toWorkspacePath(resolved);
 
       return this.success({
         directoryPath,
@@ -133,7 +125,7 @@ export class ListDirectoryTool extends BuiltinTool {
       return this.error(
         presentListDirectoryFailure(
           'list-failed',
-          err instanceof Error ? err.message : String(err),
+          projectPortableIoFailure(err),
           options?.metadata?.['locale'],
         ),
       );
@@ -150,7 +142,8 @@ export class ListDirectoryTool extends BuiltinTool {
       if (dirent.name.startsWith('.')) continue;
 
       const fullPath = path.join(dirPath, dirent.name);
-      const authorization = this.fileAccessPolicy?.authorize(fullPath, 'list');
+      const childRelativePath = this.toWorkspacePath(fullPath);
+      const authorization = this.fileAccessPolicy?.authorize(childRelativePath, 'list');
       if (authorization && !authorization.allowed) {
         continue;
       }

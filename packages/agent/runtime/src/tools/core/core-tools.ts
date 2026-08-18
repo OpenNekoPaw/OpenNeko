@@ -26,8 +26,6 @@ import {
 export interface CoreToolsOptions {
   /** Default working directory for Grep and optional Developer Mode shell */
   defaultCwd?: string;
-  /** Additional read-only roots such as enabled media libraries. */
-  authorizedReadRoots?: readonly string[];
   /** Workspace-local ignore rules, including parsed .gitignore entries. */
   workspaceIgnoreRules?: WorkspaceFileIgnoreRules;
   /** Bash command timeout in ms (default 120000). Ignored unless includeShell is true. */
@@ -51,8 +49,6 @@ export function createCoreTools(options?: CoreToolsOptions): Tool[] {
     (options?.defaultCwd
       ? createWorkspaceFileAccessPolicy({
           workspaceRoot: options.defaultCwd,
-          readRoots: [options.defaultCwd, ...(options.authorizedReadRoots ?? [])],
-          writeRoots: [options.defaultCwd],
           ignoreRules: options.workspaceIgnoreRules,
         })
       : createNoWorkspaceFileAccessPolicy());
@@ -61,7 +57,6 @@ export function createCoreTools(options?: CoreToolsOptions): Tool[] {
     (options?.defaultCwd
       ? createWorkspaceFileAccessPolicy({
           workspaceRoot: options.defaultCwd,
-          readRoots: [options.defaultCwd],
           ignoreRules: options.workspaceIgnoreRules,
         })
       : createNoWorkspaceFileAccessPolicy());
@@ -79,7 +74,6 @@ export function createCoreTools(options?: CoreToolsOptions): Tool[] {
       ...(options?.defaultCwd
         ? {
             workspaceRoot: options.defaultCwd,
-            authorizedRoots: [options.defaultCwd],
           }
         : {}),
     }),
