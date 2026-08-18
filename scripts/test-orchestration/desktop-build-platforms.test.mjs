@@ -36,13 +36,18 @@ describe('Desktop build platform contract', () => {
     const hostGuardSource = await readFile('scripts/assert-supported-desktop-host.mjs', 'utf8');
     const outputGuardSource = await readFile('scripts/assert-desktop-package-output.mjs', 'utf8');
     const scripts = packageJson.scripts ?? {};
-    for (const command of ['build', 'dev', 'make', 'package']) {
+    for (const command of ['build', 'make', 'package']) {
       assert.match(
         scripts[command] ?? '',
-        /^node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && /u,
+        /^node \.\.\/\.\.\/scripts\/assert-dsh-cutover-release-ready\.mjs && node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && /u,
         `${command} must reject unsupported hosts before Forge`,
       );
     }
+    assert.match(
+      scripts.dev ?? '',
+      /^node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && /u,
+      'dev must reject unsupported hosts before starting the development runtime',
+    );
 
     for (const command of ['build', 'make', 'package']) {
       assert.match(scripts[command] ?? '', /&& electron-forge /u);

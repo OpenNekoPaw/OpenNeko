@@ -41,6 +41,7 @@ const config: KnipConfig = {
         'scripts/agent-eval/canvas-json-check.mjs',
         'scripts/agent-eval/fixtures/generate-synthetic-document-image-epub.mjs',
         'scripts/agent-eval/validators/file-validator-cli.mjs',
+        'scripts/assert-dsh-cutover-release-ready.mjs',
         'scripts/check-application-boundaries.mjs',
         'scripts/check-canvas-playback-boundary.mjs',
         'scripts/check-content-access-boundaries.mjs',
@@ -52,7 +53,9 @@ const config: KnipConfig = {
         'scripts/check-openspec.mjs',
         'scripts/check-strict-tsconfig.mjs',
         'scripts/check-webview-boundaries.mjs',
+        'scripts/dsh-runtime-closure.mjs',
         'scripts/prepare-media-runtime-bundle.mjs',
+        'scripts/prepare-dsh-runtime-stage.mjs',
         'scripts/smoke-webview-builds.mjs',
         'scripts/validate-node-media-matrix.mts',
         'scripts/validate-node-media-waveform.mts',
@@ -178,19 +181,30 @@ const config: KnipConfig = {
         'src/preload/index.ts',
       ],
     },
-    'packages/agent/webview': {
-      ignore: [
-        // Barrel exports
-        'src/components/ChatView/InputArea/index.ts',
-      ],
-    },
     'packages/agent/runtime': {
       entry: [
         'src/index.ts',
-        'src/pi/index.ts',
         'src/runtime/index.ts',
-        'src/tools/index.ts',
         'src/workspace/index.ts',
+      ],
+    },
+    'scripts/dsh-q0': {
+      entry: [
+        'seed-plugin/index.mjs',
+        'src/qualify.mjs',
+        'w2-seed-plugin/index.mjs',
+      ],
+      ignoreBinaries: [
+        // The qualifier invokes build scripts in the three first-party plugin packages.
+        'build',
+      ],
+      ignoreDependencies: [
+        // Resolved as the exact executable package by the qualification process.
+        '@deepseek-ai/dsh',
+        // Named in the isolated profile manifest created at runtime.
+        '@deepseek-ai/dsh-base',
+        // Version-qualified without importing implementation modules.
+        '@deepseek-ai/dsh-headless',
       ],
     },
     'packages/canvas/webview': {

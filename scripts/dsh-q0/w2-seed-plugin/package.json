@@ -1,0 +1,9 @@
+{
+  "name": "@openneko/dsh-w2-seed",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "dependencies": {
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.7"
+  }
+}
