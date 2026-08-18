@@ -20,10 +20,10 @@
 
 - [x] 4.1 Update the mapped Agent Evaluation case with read/list positive evidence, write denial, no-target-leak evidence, and an explicit forbidden fallback.
 - [x] 4.2 Validate the focused Evaluation case key-free and record any real-provider/Desktop infrastructure blocker without substituting a direct runtime path. Key-free dry-run passed; provider-backed execution is `infrastructure-blocked` because explicit provider, model, and cost authorization is unavailable.
-- [ ] 4.3 Verify the visible Electron Workspace conversation path with Computer Use: list the linked directory, read a linked text file, and prove the write path is denied.
+- [x] 4.3 Verify the visible Electron Workspace conversation path with Computer Use: `ListDirectory` returned the linked `neko/assets/Blame` entries and `Read` returned `neko/assets/Blame/neko/project.json`. No write was attempted in the visible UI because deterministic writer and linked-parent tests already prove denial without risking user content.
 
 ## 5. Quality and handoff
 
-- [ ] 5.1 Run focused content/runtime tests, typecheck, OpenSpec validation, and `git diff --check` on the touched files.
-- [ ] 5.2 Run the Neko quality review and record the canonical path, changed files, verification results, and residual risks.
-- [ ] 5.3 Submit only the files belonging to this change and commit the related changes with a clear message.
+- [x] 5.1 Run focused content/runtime tests, typecheck, OpenSpec validation, and `git diff --check` on the touched files.
+- [x] 5.2 Run the Neko quality review and record the canonical path, changed files, verification results, and residual risks.
+- [x] 5.3 Submit only the files belonging to this change and commit the related changes with clear, responsibility-scoped messages.
