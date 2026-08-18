@@ -51,3 +51,20 @@ The `@neko/app-desktop dev` command SHALL remain the single successful developme
 
 - **WHEN** the Desktop functional runner selects a fingerprint-verified packaged executable
 - **THEN** it starts that executable directly without acquiring the development bundle owner
+
+### Requirement: Shared Main and Preload output remains a complete graph
+
+The Desktop Vite build SHALL treat `.vite/build` as one shared output owned by the Forge build lifecycle. Main and Preload targets MUST NOT independently clear that directory, MUST build in a deterministic order, and MUST restart the development Electron process only after both targets have emitted their entry graphs and lazy chunks.
+
+#### Scenario: Main references a lazy provider chunk during development
+
+- **WHEN** Main and Preload are rebuilt by the canonical development command
+- **THEN** the Main entry and every referenced hashed lazy chunk remain present in `.vite/build`
+- **AND** Preload output is emitted without deleting Main output
+- **AND** Electron restarts only after the shared bundle is complete
+
+#### Scenario: One target build fails
+
+- **WHEN** either Main or Preload fails during the shared build
+- **THEN** Electron is not restarted from a partial output graph
+- **AND** the failure remains visible to the owning development process

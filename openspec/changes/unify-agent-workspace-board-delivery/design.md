@@ -77,11 +77,11 @@ missing Workspace authority blocks only that delivery and never selects an activ
 
 ### Stable locator display projection
 
-Agent Tool results and Canvas nodes retain `ContentLocator` or `ContentRepresentationLocator` as their stable
-identity. The Agent workspace content runtime is the canonical reader for Agent result projection; Canvas uses the
-same package-owned content read contract for its exact Workspace. Desktop Main only adapts already authorized bytes
-or files into the exact-resource registry and returns a sender-bound `openneko://resource` URL. It does not parse
-EPUB/CBZ/PDF/DOCX or reconstruct document-entry paths.
+Agent Tool results may retain a transient representation handle for current-Surface display, but creator-visible
+artifacts and Canvas nodes retain only `ContentLocator` as durable identity. The Agent workspace content runtime is
+the canonical reader for Agent result projection; Canvas uses the same package-owned content read contract for its
+exact Workspace. Desktop Main only adapts already authorized bytes or files into the exact-resource registry and
+returns a sender-bound `openneko://resource` URL. It does not parse EPUB/CBZ/PDF/DOCX or reconstruct selectors.
 
 The display URL is presentation state only. It is never written to transcript, Tool output, delivery ledger or
 `.nkc`. Agent leases are owned by the exact projection attachment and connection. Canvas preview leases are owned by
@@ -89,11 +89,11 @@ the exact Window/View/session/renderer identity plus source and role, and are re
 is replaced. A failed locator is projected as a local diagnostic on its own card or node while valid siblings remain
 available.
 
-`document-entry` reads preserve the archive source fingerprint and entry path. A
-`ContentRepresentationLocator` is read as the represented pixels and is never replaced by its source locator. The
-resource registry remains the single authorization and transport boundary for both direct files and in-memory
-document entries; no data URL, temporary extraction file, raw absolute path or legacy media scheme becomes a second
-successful display path.
+File-internal selectors preserve the addressable archive/document position. A transient representation handle is
+read as the represented pixels for the current Surface and is never persisted or substituted as a durable source.
+The resource registry remains the single authorization and transport boundary for direct files, selected document
+content and computed representations; no data URL, temporary extraction file, raw absolute path or legacy media
+scheme becomes a second successful display path.
 
 Agent, Canvas, Resource Browser and Asset Center SHALL NOT construct `PreviewMediaDescriptor` records or choose
 file-versus-bytes transport independently. A package-owned Preview resource projection service accepts the stable

@@ -27,6 +27,32 @@ describe('Canvas workspace index service', () => {
     expect(read.readExactCanvasSummary).not.toHaveBeenCalled();
   });
 
+  it('orders exact Canvas identities deterministically regardless of input order', async () => {
+    const read: CanvasWorkspaceIndexReadPort = {
+      listExactCanvasDocuments: vi.fn(async () => [
+        'neko/boards/z.nkc',
+        'neko/boards/A.nkc',
+        'neko/boards/a.nkc',
+        'neko/boards/m.nkc',
+      ]),
+      readExactCanvasSummary: vi.fn(async (_workspaceId, identity) => ({
+        canvasId: identity,
+        name: identity,
+      })),
+    };
+    const service = createCanvasWorkspaceIndexService({ read });
+
+    const catalog = await service.readCatalog('workspace-1');
+
+    expect(
+      catalog.options
+        .slice(1)
+        .map((option) =>
+          option.target.kind === 'exact-canvas' ? option.target.canvasId : option.label,
+        ),
+    ).toEqual(['neko/boards/a.nkc', 'neko/boards/A.nkc', 'neko/boards/m.nkc', 'neko/boards/z.nkc']);
+  });
+
   it('keeps a broken exact document disabled while preserving the Board and valid siblings', async () => {
     const read: CanvasWorkspaceIndexReadPort = {
       listExactCanvasDocuments: vi.fn(async () => ['neko/boards/a.nkc', 'neko/boards/b.nkc']),

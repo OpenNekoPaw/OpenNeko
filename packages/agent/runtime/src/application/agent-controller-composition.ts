@@ -14,7 +14,6 @@ import {
   type OpenNekoPiModelConfig,
   type OpenNekoPiProtocolProfile,
   type PiProductEventSink,
-  type PiProductAgentEvent,
   type PiToolPermissionPolicy,
 } from '@neko/agent-runtime/pi';
 import {
@@ -112,6 +111,7 @@ import {
   projectAgentInputCatalog,
   projectAgentModelCatalog,
 } from './agent-launch-service';
+import { createDeferredDesktopAgentFactsEvents } from './deferred-desktop-agent-facts-events';
 
 const SESSION_COMMAND_HANDLER_IDS = new Set(['builtin:clear', 'builtin:compact']);
 
@@ -503,14 +503,26 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       }
       post = context.post;
     };
+    const activeTurnOperations = new Set<Promise<unknown>>();
+    const trackTurnOperation = (operation: Promise<unknown>): void => {
+      activeTurnOperations.add(operation);
+      void operation.then(
+        () => activeTurnOperations.delete(operation),
+        () => activeTurnOperations.delete(operation),
+      );
+      this.track(operation);
+    };
     let disposal: Promise<void> | undefined;
     const disposeOwned = (): Promise<void> => {
       disposal ??= Promise.resolve().then(async () => {
         try {
           unsubscribeAgentStates();
-          resourceDisplay.dispose();
           await projection.abandon();
           await visiblePresentation.dispose();
+          while (activeTurnOperations.size > 0) {
+            await Promise.allSettled([...activeTurnOperations]);
+          }
+          resourceDisplay.dispose();
           facts.dispose();
         } catch (error) {
           facts.failDisposal();
@@ -550,6 +562,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         input.publishConversationCreation ?? missingConversationCreationPublishDependency,
         input.prepareInitialConversationTurn ?? readNoInitialConversationTurn,
         input.settleInitialConversationTurn ?? missingInitialConversationTurnSettlementDependency,
+        trackTurnOperation,
       ),
       config: this.createConfigEffects(
         input.workspace,
@@ -573,6 +586,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           missingConversationCapabilityConstraintDependency,
         input.composer,
         input.resolveConversationDomainTurnContext,
+        trackTurnOperation,
       ),
       content: createAgentContentEffects({
         workspace: input.workspace.workspace,
@@ -903,6 +917,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       readonly status: 'completed' | 'failed';
       readonly diagnostic?: string;
     }) => Promise<void> = missingInitialConversationTurnSettlementDependency,
+    trackTurnOperation: (operation: Promise<unknown>) => void = (operation) =>
+      this.track(operation),
   ): AgentControllerEffects['conversation'] {
     const postConversationList = async (context: AgentHostRouteEffectContext): Promise<void> => {
       bind(context);
@@ -1051,7 +1067,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           throw error;
         },
       );
-      this.track(
+      trackTurnOperation(
         operation.catch(async (error: unknown) => {
           await context.post(
             buildAgentConversationTurnFailureMessage(request.conversationId, error),
@@ -1066,7 +1082,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     return {
       createConversation: (message, context): Promise<AgentConversationTurnAcceptance> => {
         bind(context);
-        return enqueueTabOperation(state, async () => {
+        const operation = enqueueTabOperation(state, async () => {
           if (!composer) throw new Error('Agent Conversation creation requires an exact Composer.');
           const conversationId = createConversationId(workspace.workspace.workspacePath);
           const input = message.input;
@@ -1142,6 +1158,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
             invocation,
           );
         });
+        trackTurnOperation(operation);
+        return operation;
       },
       submitTurn: (request, context) => submit(request, context),
       confirmTool: ({ conversationId, toolCallId, approved }, context) => {
@@ -1441,6 +1459,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     ) => Promise<AgentTurnCapabilityConstraint>,
     composer?: import('@neko/agent-contracts').AgentComposerInteractionProjection,
     resolveConversationDomainTurnContext?: AgentConversationDomainTurnResolutionPort,
+    trackTurnOperation: (operation: Promise<unknown>) => void = (operation) =>
+      this.track(operation),
   ): AgentControllerEffects['skill'] {
     const readCatalog = async (conversationId: string) => {
       if (!personalSkillOwnerId.trim()) {
@@ -1538,7 +1558,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
             ...(input.kind === 'skill' && input.args ? { additionalInstructions: input.args } : {}),
           }),
       );
-      this.track(operation);
+      trackTurnOperation(operation);
     };
     return {
       readComposerInputCatalog: async (context) => {
@@ -1766,18 +1786,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       input.workspace.workspace.workspacePath,
       join(this.options.userHome, '.neko'),
     );
-    const systemPrompt = [
-      promptBuilder.buildForExecutionMode(executionMode),
-      ...(input.capabilityConstraint?.tools === 'none'
-        ? []
-        : input.workspace
-            .readCapabilityPromptFragments(locale)
-            .map((fragment) => fragment.content.trim())
-            .filter(Boolean)),
-      settings.customSystemPrompt.trim(),
-    ]
-      .filter(Boolean)
-      .join('\n\n# User Instructions\n\n');
+    const systemPrompt = promptBuilder.buildForExecutionMode(executionMode);
     if (
       input.request.canvasTurnTarget !== undefined &&
       input.conversationContext.kind !== 'workspace'
@@ -1827,6 +1836,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         ),
       workspaceTrusted: true,
       locale,
+      userInstructions: settings.customSystemPrompt,
       systemPrompt,
       queueDraft: {
         message: input.presentationText ?? input.request.messageText,
@@ -1877,6 +1887,15 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       onQueuedMessageReleased: ({ item, snapshot }) => {
         this.postReleasedMessageQueueSnapshot(input.context, item, snapshot);
       },
+      onSystemPromptComposed: ({ identity, systemPrompt: effectiveSystemPrompt }) => {
+        factsEvents.bind(
+          identity,
+          input.facts.beginTurn({
+            identity,
+            systemPrompt: effectiveSystemPrompt,
+          }),
+        );
+      },
     };
     const operation = input.workspace.startTurn(observedTurnInput);
     try {
@@ -1886,7 +1905,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       await operation.completion.catch(() => undefined);
       throw error;
     }
-    factsEvents.bind(input.facts.beginTurn({ identity: operation.identity, systemPrompt }));
     this.postMessageQueueSnapshot(
       input.context,
       input.workspace.readMessageQueue(input.request.conversationId),
@@ -1921,6 +1939,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     });
     try {
       const turn = await operation.completion;
+      factsEvents.requireBound(turn.identity);
       input.facts.completeTurn({
         conversation: input.workspace.readConversationEvidence(input.request.conversationId),
         turn,
@@ -2745,37 +2764,6 @@ function normalizeLocale(locale: string | undefined): 'en' | 'zh' {
 
 function ownerKey(workspaceId: string, conversationId: string): string {
   return `${workspaceId}\u0000${conversationId}`;
-}
-
-function createDeferredDesktopAgentFactsEvents(): {
-  readonly events: PiProductEventSink;
-  bind(sink: PiProductEventSink): void;
-} {
-  const buffered: PiProductAgentEvent[] = [];
-  let target: PiProductEventSink | undefined;
-  return {
-    events: {
-      emit(event) {
-        if (!target) {
-          buffered.push(event);
-          return;
-        }
-        return target.emit(event);
-      },
-    },
-    bind(sink) {
-      if (target) throw new Error('Desktop Agent facts event sink is already bound.');
-      target = sink;
-      for (const event of buffered.splice(0)) {
-        const result = target.emit(event);
-        if (result instanceof Promise) {
-          throw new Error(
-            'Desktop Agent facts projector must consume buffered events synchronously.',
-          );
-        }
-      }
-    },
-  };
 }
 
 function projectCreateConversationTurnRequest(

@@ -46,7 +46,7 @@ const config: ForgeConfig = {
           config: 'vite.renderer.config.ts',
         },
       ],
-      concurrent: 2,
+      concurrent: false,
     }),
     new FusesPlugin(desktopFuseConfig),
   ],

@@ -41,6 +41,7 @@ class SkillCreationCapabilityProvider implements AgentCapabilityProvider {
       {
         id: 'neko-agent:skill-creation',
         priority: 72,
+        toolNames: [TOOL_NAMES_SKILLS.CREATE_SKILL],
         content:
           'CreateSkill publishes one new portable Skill package to the destination owned by this Conversation. The Host fixes that destination; never request another scope or path. Use only necessary relative resources, never overwrite an existing package, and keep Host permission or Tool protocol out of portable Skill content.',
         locales: {

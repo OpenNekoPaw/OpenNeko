@@ -30,9 +30,11 @@ describe('appendCanvasTurnContextPrompt', () => {
     );
     expect(prompt).toContain('full Canvas document is not loaded');
     expect(prompt).toContain('selected exact Canvas is the primary creative context for this turn');
-    expect(prompt).toContain('query this exact Canvas first');
     expect(prompt).toContain(
-      'Do not use generic file, directory, or shell operations to rediscover or read the selected .nkc document.',
+      'call canvas_list_nodes first with document_path exactly "neko/boards/a.nkc"',
+    );
+    expect(prompt).toContain(
+      'Do not use Read, generic file, directory, or shell operations to rediscover or read the selected .nkc document.',
     );
     expect(prompt).toContain('Do not load the full Canvas for requests unrelated to it.');
   });
@@ -71,7 +73,9 @@ describe('appendCanvasTurnContextPrompt', () => {
     });
 
     expect(prompt).toContain('canonical Workspace Board is the primary Canvas index for this turn');
-    expect(prompt).toContain('query this exact Canvas first');
+    expect(prompt).toContain(
+      'call canvas_list_nodes first with document_path exactly "neko/boards/workspace.nkc"',
+    );
     expect(prompt).toContain('if the Board does not exist, do not create it');
     expect(prompt).toContain('do not treat the missing Board as an empty result');
     const metadataLine = prompt.split('\n').find((line) => line.startsWith('Canvas metadata: '));

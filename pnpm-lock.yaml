@@ -23,6 +23,9 @@ overrides:
 packageExtensionsChecksum: sha256-Xb+ny2e8YMBWHTGBSWbQ/jdU1VwPvzSGzvO6c4kT1rY=
 
 patchedDependencies:
+  '@earendil-works/pi-agent-core@0.80.7':
+    hash: 02df3d433c891ee9f1666eb89629eb24d729213fd29acff936541c36a97a2914
+    path: patches/earendil-works__pi-agent-core@0.80.7.patch
   vite@6.4.2:
     hash: dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537
     path: patches/vite@6.4.2.patch
@@ -37,7 +40,7 @@ importers:
     devDependencies:
       '@earendil-works/pi-agent-core':
         specifier: ^0.80.7
-        version: 0.80.7(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.18.3)(zod@4.4.3)
+        version: 0.80.7(patch_hash=02df3d433c891ee9f1666eb89629eb24d729213fd29acff936541c36a97a2914)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.18.3)(zod@4.4.3)
       '@eslint/js':
         specifier: ^9.39.4
         version: 9.39.4
@@ -339,7 +342,7 @@ importers:
     dependencies:
       '@earendil-works/pi-agent-core':
         specifier: ^0.80.7
-        version: 0.80.7(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.18.3)(zod@4.4.3)
+        version: 0.80.7(patch_hash=02df3d433c891ee9f1666eb89629eb24d729213fd29acff936541c36a97a2914)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.18.3)(zod@4.4.3)
       '@earendil-works/pi-ai':
         specifier: ^0.80.7
         version: 0.80.7(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.18.3)(zod@4.4.3)
@@ -9334,7 +9337,7 @@ snapshots:
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 
-  '@earendil-works/pi-agent-core@0.80.7(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.18.3)(zod@4.4.3)':
+  '@earendil-works/pi-agent-core@0.80.7(patch_hash=02df3d433c891ee9f1666eb89629eb24d729213fd29acff936541c36a97a2914)(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.18.3)(zod@4.4.3)':
     dependencies:
       '@earendil-works/pi-ai': 0.80.7(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(ws@8.18.3)(zod@4.4.3)
       ignore: 7.0.5

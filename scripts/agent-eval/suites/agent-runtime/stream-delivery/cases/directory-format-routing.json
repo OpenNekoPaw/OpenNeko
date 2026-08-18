@@ -10,8 +10,9 @@
       "Desktop Agent input queue",
       "ListDirectory with one Workspace-relative level",
       "Conversation-scoped workspace_path and input_ref projection",
-      "Read for bounded UTF-8 text",
+      "Read for bounded UTF-8 text through the single canonical path resolver",
       "ReadDocument for the discovered EPUB",
+      "outside-authority absolute rejection without fallback",
       "terminal answer"
     ],
     "observables": [
@@ -22,8 +23,8 @@
         "required": true
       }
     ],
-    "expectedResult": "The Agent lists only the Workspace root, reads notes.txt through Read, uses the directory-issued input_ref for synthetic-document.epub through ReadDocument, and reaches idle with the final marker.",
-    "expectedFailure": "Absolute or recursive directory arguments, raw locator projection, binary-as-text reading, shell discovery, failed Tool execution, or a missing terminal marker fails visibly."
+    "expectedResult": "The Agent lists only the Workspace root, reads notes.txt through Read using the canonical Workspace-relative identity (whether submitted as relative or authorized absolute), uses the directory-issued input_ref for synthetic-document.epub through ReadDocument, rejects an outside-authority absolute target with a typed local diagnostic, and reaches idle with the final marker.",
+    "expectedFailure": "Absolute or recursive directory arguments, raw locator projection, binary-as-text reading, shell discovery, failed Tool execution, an outside-authority absolute path accepted through a fallback reader/root, Host absolute path leakage in Tool data, or a missing terminal marker fails visibly."
   },
   "fixtureRefs": ["document-image-workspace"],
   "runtimeProfileId": "markdown",
@@ -38,6 +39,16 @@
       "id": "idle",
       "kind": "wait-for-idle",
       "timeoutMs": 180000
+    },
+    {
+      "id": "submit-outside-absolute",
+      "kind": "submit",
+      "prompt": "再单独调用 Read 一次，file_path 使用绝对路径 /etc/hosts。不要尝试其他工具、不要读取内容、不要 fallback；该调用必须被拒绝且不能暴露 Workspace 根目录。确认后输出 DIRECTORY_ABSOLUTE_OUTSIDE_REJECTED_OK。"
+    },
+    {
+      "id": "outside-idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 120000
     }
   ],
   "assertions": [
@@ -102,6 +113,16 @@
       "evidenceRef": "directory-routing-facts"
     },
     {
+      "id": "outside-absolute-rejected",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "error",
+      "expectedArguments": {
+        "file_path": "/etc/hosts"
+      },
+      "evidenceRef": "directory-routing-facts"
+    },
+    {
       "id": "shell-absent",
       "kind": "tool-call",
       "name": "Bash",
@@ -112,7 +133,7 @@
       "id": "answer",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["DIRECTORY_FORMAT_ROUTING_OK"],
+      "text": ["DIRECTORY_FORMAT_ROUTING_OK", "DIRECTORY_ABSOLUTE_OUTSIDE_REJECTED_OK"],
       "evidenceRef": "directory-routing-facts"
     }
   ],

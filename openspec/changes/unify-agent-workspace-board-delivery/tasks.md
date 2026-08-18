@@ -37,3 +37,5 @@
 - [x] 3.6 Remove raw media display fallbacks, preserve seekable file transport and authorized byte transport behind
       the same service, and add path-level tests for shared service usage, typed sibling-local diagnostics and exact
       Surface lease release.
+- [ ] 3.7 After `simplify-content-locator-addressing` lands, verify Board/Canvas durability accepts only
+      `ContentLocator`, representation-only evidence is not delivered, and explicit exports receive a new locator.

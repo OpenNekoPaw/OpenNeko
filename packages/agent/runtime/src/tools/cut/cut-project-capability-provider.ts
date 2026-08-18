@@ -28,6 +28,7 @@ class CutProjectCapabilityProvider implements AgentCapabilityProvider {
       {
         id: 'neko-cut:structured-project-authoring',
         priority: 72,
+        toolNames: [TOOL_NAMES_CUT.CUT_QUERY_TIMELINE, TOOL_NAMES_CUT.CUT_APPLY_COMMANDS],
         content:
           'Cut .otio documents use the Cut timeline query and command operations. Query the exact Workspace-relative document before mutation and pass its exact fingerprint. Use stable Track and Clip identities; never infer targets from playhead or active UI state, and never use generic file or shell operations for .otio.',
         locales: {

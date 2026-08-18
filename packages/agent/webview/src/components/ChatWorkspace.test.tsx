@@ -5,6 +5,7 @@ import type { AgentContextPayload } from '@neko/agent-contracts';
 import { type Message, type SettingsState } from '@neko/agent-contracts';
 import type { ChatWorkspaceProps } from './ChatWorkspace';
 import { ChatWorkspace } from './ChatWorkspace';
+import { ComposerWorkspaceProvider } from './ComposerWorkspaceContext';
 import type { ComposerMenuState } from './ChatView/InputArea/types';
 import { createTabRenderRuntime } from '../render-runtime/tab-render-runtime';
 
@@ -271,6 +272,49 @@ describe('ChatWorkspace pending send', () => {
       createdAt: 1_700_000_000_000,
       state: 'active' as const,
     }));
+  });
+
+  it('does not reload the Canvas catalog when a new projection object keeps the same Workspace identity', async () => {
+    const loadCanvasCatalog = vi.fn(async () => ({
+      workspaceId: 'workspace-1',
+      defaultTarget: { kind: 'workspace-board' as const, workspaceId: 'workspace-1' },
+      options: [
+        {
+          target: { kind: 'workspace-board' as const, workspaceId: 'workspace-1' },
+          label: 'Workspace Board',
+        },
+      ],
+      diagnostics: [],
+    }));
+    const props = createProps();
+    const firstWorkspace = {
+      kind: 'workspace' as const,
+      label: 'First projection',
+      workspaceId: 'workspace-1',
+      loadCanvasCatalog,
+    };
+    const secondWorkspace = {
+      kind: 'workspace' as const,
+      label: 'Streaming projection',
+      workspaceId: 'workspace-1',
+      loadCanvasCatalog,
+    };
+
+    const { rerender } = render(
+      <ComposerWorkspaceProvider value={firstWorkspace}>
+        <ChatWorkspace {...props} />
+      </ComposerWorkspaceProvider>,
+    );
+
+    await waitFor(() => expect(loadCanvasCatalog).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <ComposerWorkspaceProvider value={secondWorkspace}>
+        <ChatWorkspace {...props} />
+      </ComposerWorkspaceProvider>,
+    );
+
+    expect(loadCanvasCatalog).toHaveBeenCalledTimes(1);
   });
 
   it('renders a pending first send without replaying it through the Session runtime', () => {

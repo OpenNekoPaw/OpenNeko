@@ -208,6 +208,8 @@ export function ChatWorkspace({
   const [workspaceCanvasDiagnostic, setWorkspaceCanvasDiagnostic] = useState<string>();
   const workspaceCanvasRequestSeq = useRef(0);
   const previousWorkspaceIdRef = useRef<string | undefined>(undefined);
+  const composerWorkspaceRef = useRef(composerWorkspace);
+  composerWorkspaceRef.current = composerWorkspace;
   const inputValue = tabState.inputValue;
   const selectedModel = tabState.selectedModel;
   const mediaModelSelection = tabState.mediaModelSelection;
@@ -460,7 +462,8 @@ export function ChatWorkspace({
   const workspaceId =
     composerWorkspace?.kind === 'workspace' ? composerWorkspace.workspaceId : undefined;
   useEffect(() => {
-    if (workspaceId === undefined || composerWorkspace?.kind !== 'workspace') {
+    const currentComposerWorkspace = composerWorkspaceRef.current;
+    if (workspaceId === undefined || currentComposerWorkspace?.kind !== 'workspace') {
       setWorkspaceCanvasCatalog(undefined);
       setWorkspaceCanvasLoading(false);
       setWorkspaceCanvasDiagnostic(undefined);
@@ -471,7 +474,7 @@ export function ChatWorkspace({
     setWorkspaceCanvasLoading(true);
     setWorkspaceCanvasDiagnostic(undefined);
     setWorkspaceCanvasCatalog(undefined);
-    composerWorkspace
+    currentComposerWorkspace
       .loadCanvasCatalog()
       .then((catalog) => {
         if (workspaceCanvasRequestSeq.current !== seq) return;
@@ -483,7 +486,7 @@ export function ChatWorkspace({
         setWorkspaceCanvasDiagnostic(error instanceof Error ? error.message : String(error));
         setWorkspaceCanvasLoading(false);
       });
-  }, [composerWorkspace, workspaceId]);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (workspaceId === undefined) {
@@ -1017,7 +1020,10 @@ export function projectWorkspaceCanvasTurnTarget(
     if (selected.disabled || selected.diagnostic) {
       throw new Error(selected.diagnostic ?? 'Workspace Board selection is unavailable.');
     }
-    return undefined;
+    return {
+      workspaceId: selected.target.workspaceId,
+      target: selected.target,
+    };
   }
   if (canvas.loading) {
     throw new Error('Workspace Canvas catalog is loading.');

@@ -1,0 +1,100 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "comprehensive-analysis-partial-coverage",
+  "suiteId": "agent-runtime.prompt-composition",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Return an explicitly partial result when a bounded comprehensive analysis has an unavailable segment.",
+    "canonicalPath": [
+      "Desktop Agent session assembly",
+      "base prompt fragment",
+      "comprehensive bounded analysis request",
+      "unavailable segment",
+      "assistant answer"
+    ],
+    "observables": [
+      {
+        "ref": "prompt-facts",
+        "kind": "runtime-fact",
+        "description": "Secret-free base prompt composition facts and the final assistant Markdown answer.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Facts include the base fragment; the final answer identifies the missing segment and explicitly describes the result as partial.",
+    "expectedFailure": "Missing base composition, invented coverage for the unavailable segment, or a complete-coverage claim fails."
+  },
+  "fixtureRefs": [
+    "empty-workspace"
+  ],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": [
+    "configured-default"
+  ],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "请完整分析以下三个文件：A.md 的内容是“第一段文字”，B.md 的内容是“第二段文字”，C.md 没有可用的读取结果/不可见。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "prompt-facts"
+    },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "evidenceRef": "prompt-facts"
+    },
+    {
+      "id": "composition",
+      "kind": "prompt-composition",
+      "requiredFragments": [
+        {
+          "id": "base",
+          "source": "base"
+        }
+      ],
+      "evidenceRef": "prompt-facts"
+    },
+    {
+      "id": "partial-disclosure",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": [
+        "C.md",
+        "部分"
+      ],
+      "evidenceRef": "prompt-facts"
+    },
+    {
+      "id": "no-complete-claim",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": [
+        "三个文件均已完整分析",
+        "完整覆盖了全部请求范围"
+      ],
+      "evidenceRef": "prompt-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
+}

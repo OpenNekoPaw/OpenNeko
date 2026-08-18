@@ -4,7 +4,7 @@ import {
   TOOL_NAMES_QUALITY,
   type Tool,
 } from '@neko/agent-contracts';
-import { createReadDocumentTool, createReadImageTool } from '../../tools';
+import { createCoreTools, createReadDocumentTool, createReadImageTool } from '../../tools';
 import { Value } from 'typebox/value';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -68,6 +68,36 @@ describe('OpenNeko tool projection to Pi', () => {
 
   it('does not invent a purpose for a tool without a configured model contract', () => {
     expect(resolveOpenNekoToolModelPurpose({ name: 'InspectAsset' })).toBeUndefined();
+  });
+
+  it('projects exactly one OpenNeko path schema per core file operation without fallback fields', () => {
+    const coreTools = createCoreTools({ defaultCwd: '/workspace' });
+    const projected = projectOpenNekoTools(coreTools);
+    const names = projected.map((tool) => tool.name);
+
+    expect(names).toEqual(['Read', 'Write', 'ListDirectory', 'Grep']);
+    expect(new Set(names).size).toBe(4);
+
+    for (const tool of projected) {
+      if (tool.parameters.additionalProperties !== undefined) {
+        expect(tool.parameters.additionalProperties).toBe(false);
+      }
+      expect(JSON.stringify(tool.parameters.properties)).not.toMatch(
+        /"absolute_path"|"relative_path"|"filePath"|"hostPath"|"workspacePath"/u,
+      );
+    }
+
+    const read = projected.find((tool) => tool.name === 'Read');
+    const write = projected.find((tool) => tool.name === 'Write');
+    const list = projected.find((tool) => tool.name === 'ListDirectory');
+    const grep = projected.find((tool) => tool.name === 'Grep');
+    expect(read?.parameters.properties['file_path']).toMatchObject({ type: 'string' });
+    expect(write?.parameters.properties['file_path']).toMatchObject({ type: 'string' });
+    expect(list?.parameters.properties['path']).toMatchObject({ type: 'string' });
+    expect(grep?.parameters.properties['path']).toMatchObject({ type: 'string' });
+
+    const coreRead = coreTools.find((tool) => tool.name === 'Read');
+    expect(read?.parameters.properties).toEqual(coreRead?.parameters.properties);
   });
 
   it('routes detached generation to one call-time purpose from a bounded candidate set', () => {

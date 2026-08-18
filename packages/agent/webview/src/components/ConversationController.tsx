@@ -336,6 +336,12 @@ export function ConversationController({
   const [workspaceCanvasDiagnostic, setWorkspaceCanvasDiagnostic] = useState<string>();
   const workspaceCanvasRequestSeq = useRef(0);
   const [isEntryBindingPending, setIsEntryBindingPending] = useState(false);
+  const composerWorkspaceRef = useRef(composerWorkspace);
+  composerWorkspaceRef.current = composerWorkspace;
+  const [workspaceCanvasSelectionHandoffs, setWorkspaceCanvasSelectionHandoffs] = useState<
+    ReadonlyMap<string, string>
+  >(() => new Map());
+  const pendingWorkspaceCanvasSelectionIdRef = useRef<string | null>(null);
   const [entryQuickDetailOpen, setEntryQuickDetailOpen] = useState(true);
   const [entryConversationContextSelection, setEntryConversationContextSelection] = useState<
     'character' | 'world'
@@ -881,6 +887,12 @@ export function ConversationController({
       conversationCompressingRef.current.delete(conversationId);
       conversationMediaCallCountRef.current.delete(conversationId);
       setWorkItemsByConversation((prev) => removeConversationWorkItems(prev, conversationId));
+      setWorkspaceCanvasSelectionHandoffs((current) => {
+        if (!current.has(conversationId)) return current;
+        const next = new Map(current);
+        next.delete(conversationId);
+        return next;
+      });
       setAmbientNodesByConversation((prev) => {
         if (!prev.has(conversationId)) return prev;
         const next = new Map(prev);
@@ -896,13 +908,54 @@ export function ConversationController({
   }, []);
 
   useEffect(() => {
-    if (isDraftPresentation && composerWorkspace?.kind === 'workspace') {
+    const consumedConversationIds: string[] = [];
+    for (const tab of openTabs) {
+      const handoff = workspaceCanvasSelectionHandoffs.get(tab.conversationId);
+      if (handoff === undefined) continue;
+      const runtime = tabRenderRuntimeRegistry.get(tab.id);
+      if (!runtime) continue;
+      runtime.store.updateState({ workspaceCanvasSelectionId: handoff });
+      consumedConversationIds.push(tab.conversationId);
+    }
+    const pendingSelection = pendingWorkspaceCanvasSelectionIdRef.current;
+    if (pendingSelection !== null) {
+      for (const tab of openTabs) {
+        if (workspaceCanvasSelectionHandoffs.has(tab.conversationId)) continue;
+        if (consumedConversationIds.includes(tab.conversationId)) continue;
+        const runtime = tabRenderRuntimeRegistry.get(tab.id);
+        if (!runtime) continue;
+        runtime.store.updateState({ workspaceCanvasSelectionId: pendingSelection });
+        consumedConversationIds.push(tab.conversationId);
+      }
+      if (consumedConversationIds.length > 0) {
+        pendingWorkspaceCanvasSelectionIdRef.current = null;
+      }
+    }
+    if (consumedConversationIds.length === 0) return;
+    setWorkspaceCanvasSelectionHandoffs((current) => {
+      const next = new Map(current);
+      for (const conversationId of consumedConversationIds) next.delete(conversationId);
+      return next;
+    });
+  }, [openTabs, tabRenderRuntimeRegistry, workspaceCanvasSelectionHandoffs]);
+
+  const workspaceCanvasWorkspaceId =
+    isWorkspaceInitialPresentation && composerWorkspace?.kind === 'workspace'
+      ? composerWorkspace.workspaceId
+      : undefined;
+  useEffect(() => {
+    const currentComposerWorkspace = composerWorkspaceRef.current;
+    if (
+      workspaceCanvasWorkspaceId !== undefined &&
+      isWorkspaceInitialPresentation &&
+      currentComposerWorkspace?.kind === 'workspace'
+    ) {
       const seq = workspaceCanvasRequestSeq.current + 1;
       workspaceCanvasRequestSeq.current = seq;
       setWorkspaceCanvasLoading(true);
       setWorkspaceCanvasDiagnostic(undefined);
       setWorkspaceCanvasCatalog(undefined);
-      composerWorkspace
+      currentComposerWorkspace
         .loadCanvasCatalog()
         .then((catalog) => {
           if (workspaceCanvasRequestSeq.current !== seq) return;
@@ -922,7 +975,7 @@ export function ConversationController({
     setWorkspaceCanvasLoading(false);
     setWorkspaceCanvasDiagnostic(undefined);
     setWorkspaceCanvasSelectionId('workspace-board');
-  }, [composerWorkspace, isDraftPresentation]);
+  }, [isWorkspaceInitialPresentation, workspaceCanvasWorkspaceId]);
 
   const workspaceCanvasPresentation = useMemo(() => {
     if (!isWorkspaceInitialPresentation || composerWorkspace?.kind !== 'workspace')
@@ -1740,6 +1793,7 @@ export function ConversationController({
       const messageText = (input?.messageText ?? entryInputValue).trim();
       if (!messageText) return false;
       const contextPayloads = input?.contextPayloads ?? entryContextReferences;
+      const canvasTurnTarget = projectWorkspaceCanvasTurnTarget(workspaceCanvasPresentation);
 
       if (isEntryDraftPresentation) {
         const draftHostRuntimeAdapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
@@ -1849,13 +1903,9 @@ export function ConversationController({
             sessionMode: 'agent',
             agentMediaModels: entryModelState.agentMediaModels,
           }).purposeModels;
-          const canvasTurnTarget = projectWorkspaceCanvasTurnTarget(workspaceCanvasPresentation);
           const projection = await draftHostRuntimeAdapter.submitDraft({
             draft: authoritativeDraft,
-            entryTargetReceipt:
-              composerWorkspace?.kind === 'workspace'
-                ? null
-                : (effectiveIntent?.targetReceipt ?? null),
+            entryTargetReceipt: effectiveIntent?.targetReceipt ?? null,
             input: inputIntent,
             references,
             resourceGrantIds,
@@ -1863,9 +1913,14 @@ export function ConversationController({
             ...(purposeModels && Object.keys(purposeModels).length > 0 ? { purposeModels } : {}),
             ...(canvasTurnTarget === undefined ? {} : { canvasTurnTarget }),
           });
-          if (composerWorkspace?.kind !== 'workspace') {
-            committedEntryDraftIdRef.current = agentPresentation.draftId;
-            writeAgentEntryDraftSnapshot(hostRuntimeAdapter, undefined);
+          committedEntryDraftIdRef.current = agentPresentation.draftId;
+          writeAgentEntryDraftSnapshot(hostRuntimeAdapter, undefined);
+          if (canvasTurnTarget !== undefined) {
+            setWorkspaceCanvasSelectionHandoffs((current) => {
+              const next = new Map(current);
+              next.set(projection.session.conversationId, workspaceCanvasSelectionId);
+              return next;
+            });
           }
           setEntryInputValue((current) => (current === entryInputValue ? '' : current));
           setEntryContextReferences((current) =>
@@ -1884,12 +1939,16 @@ export function ConversationController({
 
       setInitialInputRequest(null);
       setInitialSessionModeRequest(null);
+      if (canvasTurnTarget !== undefined) {
+        pendingWorkspaceCanvasSelectionIdRef.current = workspaceCanvasSelectionId;
+      }
       handleSendWithoutConversation({
         ...input,
         messageText,
         displayMessageText: input?.displayMessageText ?? messageText,
         sessionMode: input?.sessionMode ?? entrySessionMode,
         ...(contextPayloads.length > 0 ? { contextPayloads: [...contextPayloads] } : {}),
+        ...(canvasTurnTarget === undefined ? {} : { canvasTurnTarget }),
       });
       updateEntryInputValue('');
       setEntryContextReferences([]);
@@ -1920,6 +1979,8 @@ export function ConversationController({
       isEntryDraftPresentation,
       t,
       updateEntryInputValue,
+      workspaceCanvasPresentation,
+      workspaceCanvasSelectionId,
     ],
   );
 

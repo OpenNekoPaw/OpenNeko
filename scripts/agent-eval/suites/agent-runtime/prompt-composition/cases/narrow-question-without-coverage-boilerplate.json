@@ -1,0 +1,100 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "narrow-question-without-coverage-boilerplate",
+  "suiteId": "agent-runtime.prompt-composition",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Answer a narrow ordinary question directly without coverage boilerplate.",
+    "canonicalPath": [
+      "Desktop Agent session assembly",
+      "base prompt fragment",
+      "narrow ordinary question",
+      "direct assistant answer"
+    ],
+    "observables": [
+      {
+        "ref": "prompt-facts",
+        "kind": "runtime-fact",
+        "description": "Secret-free base prompt composition facts and the final assistant Markdown answer.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Facts include the base fragment; the final answer is direct and lacks a coverage checklist or audit preamble.",
+    "expectedFailure": "Missing base composition, empty output, or unnecessary coverage/audit boilerplate fails."
+  },
+  "fixtureRefs": [
+    "empty-workspace"
+  ],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": [
+    "configured-default"
+  ],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "请用一句话解释什么是 Markdown 标题。最后一行写 NARROW_ANSWER_OK。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "prompt-facts"
+    },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "evidenceRef": "prompt-facts"
+    },
+    {
+      "id": "composition",
+      "kind": "prompt-composition",
+      "requiredFragments": [
+        {
+          "id": "base",
+          "source": "base"
+        }
+      ],
+      "evidenceRef": "prompt-facts"
+    },
+    {
+      "id": "direct-answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": [
+        "NARROW_ANSWER_OK"
+      ],
+      "evidenceRef": "prompt-facts"
+    },
+    {
+      "id": "no-coverage-boilerplate",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": [
+        "Scope → Evidence → Claim → Completeness",
+        "覆盖清单",
+        "审计清单",
+        "PARTIAL_COVERAGE_OK"
+      ],
+      "evidenceRef": "prompt-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
+}

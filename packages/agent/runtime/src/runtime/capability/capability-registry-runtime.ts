@@ -7,6 +7,7 @@ import type {
   AgentCapabilityProvider,
   AgentCapabilityTrustLevel,
   IToolRegistry,
+  OwnedPromptFragment,
   PromptFragment,
   Tool,
 } from '@neko/agent-contracts';
@@ -214,7 +215,7 @@ export class CapabilityRegistryRuntime {
     return Array.from(this.providers.values()).map((entry) => entry.provider);
   }
 
-  getAllPromptFragments(): PromptFragment[] {
+  getAllPromptFragments(locale?: 'en' | 'zh'): OwnedPromptFragment[] {
     if (!this.capabilityContext) {
       if (!this.warnedMissingCapabilityContextForFragments) {
         emitCapabilityDiagnostic(this.logger, 'warn', {
@@ -231,23 +232,43 @@ export class CapabilityRegistryRuntime {
       return [];
     }
 
-    const aggregated: PromptFragment[] = [];
+    const aggregated: OwnedPromptFragment[] = [];
+    const fragmentOwners = new Map<string, string>();
     for (const { provider } of this.providers.values()) {
       if (!provider.getPromptFragments) continue;
+      let fragments: PromptFragment[];
       try {
-        const fragments = provider.getPromptFragments(this.capabilityContext);
-        if (fragments && fragments.length > 0) {
-          aggregated.push(
-            ...fragments.map((fragment) =>
-              localizePromptFragment(fragment, this.capabilityContext?.locale),
-            ),
-          );
-        }
+        fragments = provider.getPromptFragments(this.capabilityContext) ?? [];
       } catch (err) {
         this.logger.warn(`Provider "${provider.id}" getPromptFragments threw; skipping`, err);
+        continue;
+      }
+      for (const fragment of fragments) {
+        const existingOwner = fragmentOwners.get(fragment.id);
+        if (existingOwner !== undefined) {
+          throw new Error(
+            `Prompt fragment '${fragment.id}' is already owned by provider '${existingOwner}'.`,
+          );
+        }
+        if (fragment.toolNames.length === 0) {
+          throw new Error(
+            `Prompt fragment '${fragment.id}' must declare at least one canonical Tool name.`,
+          );
+        }
+        if (new Set(fragment.toolNames).size !== fragment.toolNames.length) {
+          throw new Error(`Prompt fragment '${fragment.id}' contains duplicate Tool names.`);
+        }
+        fragmentOwners.set(fragment.id, provider.id);
+        aggregated.push({
+          ...localizePromptFragment(fragment, locale ?? this.capabilityContext?.locale),
+          providerId: provider.id,
+        });
       }
     }
-    return aggregated;
+    return aggregated.sort(
+      (left, right) =>
+        (right.priority ?? 70) - (left.priority ?? 70) || left.id.localeCompare(right.id),
+    );
   }
 
   getAllManifests(): AgentCapabilityManifest[] {

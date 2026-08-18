@@ -1628,7 +1628,7 @@ describe('message runtime helpers', () => {
       buildAgentTurnConfigurationPlan({
         conversationId: 'conv-1',
         baseSystemPrompt: 'base',
-        customSystemPrompt: 'Prefer concise replies.',
+        userInstructions: 'Prefer concise replies.',
         ambientCanvas: [{ nodeId: 'node-1', type: 'markdown', summary: 'Opening note' }],
         executionMode: 'plan',
         chatModel: { providerId: 'openai', modelId: 'gpt-4.1', category: 'llm' },
@@ -1661,7 +1661,7 @@ describe('message runtime helpers', () => {
     const plan = buildAgentTurnConfigurationPlan({
       conversationId: 'conv-1',
       baseSystemPrompt: 'base',
-      customSystemPrompt: 'Prefer concise replies.',
+      userInstructions: 'Prefer concise replies.',
       executionMode: 'ask',
     });
     expect(plan.systemPrompt).toContain('base');

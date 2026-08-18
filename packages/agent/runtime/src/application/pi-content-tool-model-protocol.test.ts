@@ -35,6 +35,12 @@ describe('Pi content Tool model protocol', () => {
 
     const definition = protocol.projectDefinition(tool(TOOL_NAMES_SYSTEM.READ_DOCUMENT));
     expect(definition?.parameters.properties).toHaveProperty('input_ref');
+    expect(definition?.parameters.required).toEqual(['input_ref']);
+    const providerTool = projectOpenNekoTool(tool(TOOL_NAMES_SYSTEM.READ_DOCUMENT), {
+      modelProtocol: protocol,
+    });
+    expect(providerTool.parameters.required).toEqual(['input_ref']);
+    expect(providerTool.parameters.properties['input_ref']).toMatchObject({ minLength: 1 });
     expect(JSON.stringify(definition)).not.toMatch(
       /ContentLocator|DocumentLocator|fingerprint|representationLocator|entryPath/u,
     );
@@ -194,7 +200,7 @@ describe('Pi content Tool model protocol', () => {
 
   it('rebuilds input and Tool-result bindings from persisted Pi entries', () => {
     const seed = new PiContentToolModelProtocol();
-    seed.bindInputs('conversation-1', [documentPayload()]);
+    const inputRef = seed.bindInputs('conversation-1', [documentPayload()]).get('file:book.pdf');
     const projected = JSON.parse(
       requireText(
         seed.projectResultText({
@@ -211,7 +217,7 @@ describe('Pi content Tool model protocol', () => {
     expect(
       restored.prepareArguments({
         tool: tool(TOOL_NAMES_SYSTEM.READ_DOCUMENT),
-        args: { mode: 'next', cursor_ref: projected.cursor_ref },
+        args: { input_ref: inputRef, mode: 'next', cursor_ref: projected.cursor_ref },
         context: context('conversation-1'),
       }),
     ).toMatchObject({ source: SOURCE, mode: 'next' });
@@ -222,6 +228,75 @@ describe('Pi content Tool model protocol', () => {
         context: context('conversation-1'),
       }),
     ).toMatchObject({ images: [{ contentLocator: IMAGE }] });
+  });
+
+  it('rejects missing and cross-source document references before content execution', () => {
+    const protocol = new PiContentToolModelProtocol();
+    const firstInputRef = protocol
+      .bindInputs('conversation-1', [documentPayload()])
+      .get('file:book.pdf');
+    const secondSource = { kind: 'workspace-file' as const, path: 'books/other.pdf' };
+    protocol.bindInputs('conversation-1', [
+      {
+        ...documentPayload(),
+        id: 'file:other.pdf',
+        label: 'other.pdf',
+        data: {
+          kind: 'authorized-content-reference',
+          locator: secondSource,
+          mediaType: 'document',
+        },
+      },
+    ]);
+    const projected = JSON.parse(
+      requireText(
+        protocol.projectResultText({
+          tool: tool(TOOL_NAMES_SYSTEM.READ_DOCUMENT),
+          result: {
+            ...readDocumentResult(),
+            data: {
+              ...readDocumentResult().data,
+              source: secondSource,
+              cursor: {
+                ...readDocumentResult().data.cursor,
+                source: {
+                  filePath: '${WORKSPACE}/books/other.pdf',
+                  format: 'pdf',
+                  contentLocator: secondSource,
+                },
+              },
+            },
+          },
+          context: context('conversation-1'),
+        }),
+      ),
+    ) as { cursor_ref: string };
+
+    expect(() =>
+      protocol.prepareArguments({
+        tool: tool(TOOL_NAMES_SYSTEM.READ_DOCUMENT),
+        args: { mode: 'content' },
+        context: context('conversation-1'),
+      }),
+    ).toThrow('input_ref must be a non-empty short reference');
+    expect(() =>
+      protocol.prepareArguments({
+        tool: tool(TOOL_NAMES_SYSTEM.READ_DOCUMENT),
+        args: { input_ref: '', mode: 'content' },
+        context: context('conversation-1'),
+      }),
+    ).toThrow('input_ref must be a non-empty short reference');
+    expect(() =>
+      protocol.prepareArguments({
+        tool: tool(TOOL_NAMES_SYSTEM.READ_DOCUMENT),
+        args: {
+          input_ref: firstInputRef,
+          mode: 'next',
+          cursor_ref: projected.cursor_ref,
+        },
+        context: context('conversation-1'),
+      }),
+    ).toThrow('belongs to another source');
   });
 
   it('projects generated image Tool results as short refs while retaining canonical details', () => {

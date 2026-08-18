@@ -261,10 +261,12 @@ Board delivery status SHALL distinguish queued, claimed, projected, no-op, block
 
 ### Requirement: Stable content references have one authorized display projection
 
-Agent result cards and Canvas nodes SHALL resolve `ContentLocator` and `ContentRepresentationLocator` through the
-owning content runtime and SHALL expose the resulting bytes to the exact Renderer only through a short-lived
-`openneko://resource` URL. Transcript, Tool result authority, delivery metadata and Canvas documents SHALL retain the
-stable locator and SHALL NOT persist the URL, raw bytes, data URL, temporary extraction path or absolute source path.
+Agent result cards SHALL resolve an authorized transient representation handle through the owning content runtime
+when current-Surface representation display is requested. Canvas nodes and creator-visible artifacts SHALL resolve
+and persist only `ContentLocator`.
+Resulting bytes SHALL reach the exact Renderer only through a short-lived `openneko://resource` URL. Transcript
+artifact authority, delivery metadata and Canvas documents SHALL NOT persist a representation handle/locator, URL,
+raw bytes, data URL, temporary extraction path or absolute source path.
 
 The system SHALL use one package-owned Preview resource projection service for image, audio and video descriptors,
 exact-resource leases and release behavior across Agent cards, Canvas nodes, Resource Browser quick Preview, Asset
@@ -303,10 +305,16 @@ and session attachment; they SHALL use the same descriptor contract, resource tr
 - **THEN** the Agent thumbnail and Canvas node SHALL each display the complete image pixels using contain semantics through an authorized `openneko://resource` URL
 - **AND** neither durable projection SHALL replace the `document-entry` locator with an extracted path or runtime URL
 
-#### Scenario: A derived document page is displayed
+#### Scenario: A derived document page is displayed in an Agent result
 
-- **WHEN** a Tool result contains a valid `ContentRepresentationLocator` for a rasterized document page
-- **THEN** display projection SHALL read that exact representation and SHALL NOT substitute its source `ContentLocator`
+- **WHEN** a Tool result contains an authorized transient handle for a rasterized document page
+- **THEN** Agent display projection SHALL read that exact representation for the current Surface
+- **AND** creator-visible artifact collection SHALL NOT persist the handle or create a Board node for it
+
+#### Scenario: A derived document page is explicitly exported
+
+- **WHEN** the user explicitly requests a durable export of a rasterized document page
+- **THEN** the owning export operation SHALL commit bytes and return a new `ContentLocator` before Board projection
 
 #### Scenario: One locator in a batch cannot be projected
 

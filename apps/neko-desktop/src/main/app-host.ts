@@ -1181,8 +1181,7 @@ export class DesktopAppHost {
         surfaceInteraction.scope.kind !== 'assistant' ||
         surfaceInteraction.scope.assistantSpaceId !== request.assistantSpaceId ||
         surfaceInteraction.scope.conversationId !== initialConversationId ||
-        surfaceInteraction.phase !==
-          (initialConversationId === undefined ? 'composer' : 'session')
+        surfaceInteraction.phase !== (initialConversationId === undefined ? 'composer' : 'session')
       ) {
         throw new Error(
           'Desktop Assistant Agent bootstrap does not match its exact Agent Surface.',
@@ -1191,10 +1190,7 @@ export class DesktopAppHost {
       const restored =
         initialConversationId === undefined
           ? undefined
-          : await readAgentConversationBootstrap(
-              this.conversationLifecycle,
-              initialConversationId,
-            );
+          : await readAgentConversationBootstrap(this.conversationLifecycle, initialConversationId);
       if (restored?.status === 'unavailable') {
         return {
           requestId: request.requestId,
@@ -3730,9 +3726,7 @@ function projectInitialTurnContextReferences(
                 : 'file',
       id: reference.id,
       label: reference.label,
-      ...(reference.thumbnailUri === undefined
-        ? {}
-        : { thumbnailUri: reference.thumbnailUri }),
+      ...(reference.thumbnailUri === undefined ? {} : { thumbnailUri: reference.thumbnailUri }),
       ...(reference.mediaType === undefined ? {} : { mediaType: reference.mediaType }),
       contentLocator: reference.contentLocator,
     });

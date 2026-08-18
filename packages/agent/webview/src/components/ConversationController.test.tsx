@@ -354,6 +354,9 @@ vi.mock('./ChatWorkspace', () => ({
         <span data-testid={testId('workspace-tab-conversation')}>
           {tabRenderSnapshot.snapshot.conversationId}
         </span>
+        <span data-testid={testId('workspace-canvas-selection')}>
+          {tabRenderSnapshot.snapshot.state.workspaceCanvasSelectionId}
+        </span>
         <span data-testid={testId('workspace-messages')}>
           {props.messages?.map((message) => message.content).join('|') ?? ''}
         </span>
@@ -532,7 +535,12 @@ vi.mock('./ChatWorkspace', () => ({
     if (canvas === undefined) return undefined;
     const selected = canvas.options.find((option) => option.id === canvas.selectedId);
     if (selected === undefined) throw new Error('Workspace Canvas selection is unavailable.');
-    if (selected.target.kind === 'workspace-board') return undefined;
+    if (selected.target.kind === 'workspace-board') {
+      return {
+        workspaceId: selected.target.workspaceId,
+        target: selected.target,
+      };
+    }
     if (selected.summary === undefined) {
       throw new Error('Exact Canvas selection requires its light summary.');
     }
@@ -581,6 +589,10 @@ vi.mock('./ChatView/InputArea', async () => {
         mode: import('./ChatView/InputArea/types').CharacterConversationMode,
       ) => void;
       entryCharacterConversationModeDisabled?: boolean;
+      workspaceCanvas?: {
+        readonly workspaceLabel: string;
+        readonly canvas?: import('./ComposerWorkspaceContext').AgentComposerCanvasPresentation;
+      };
     }) => {
       const {
         isBusy,
@@ -742,6 +754,21 @@ vi.mock('./ChatView/InputArea', async () => {
           <button type="button" onClick={() => props.onEntryPromptMenuChange?.(null)}>
             Close Entry Menu
           </button>
+          <span data-testid="entry-workspace-canvas-selection">
+            {props.workspaceCanvas?.canvas?.selectedId ?? 'none'}
+          </span>
+          {props.workspaceCanvas?.canvas?.options
+            ?.filter((option) => option.id !== 'workspace-board')
+            .map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                data-testid={`select-canvas-${option.id}`}
+                onClick={() => void props.workspaceCanvas?.canvas?.onSelect(option.id)}
+              >
+                Select {option.label}
+              </button>
+            ))}
         </div>
       );
     },
@@ -1044,13 +1071,14 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.createConversation).toHaveBeenCalledTimes(1);
   });
 
-  it('projects the compact composer into Desktop dock conversation tabs', async () => {
+  it('hands off the exact Workspace Canvas selection through canonical first send', async () => {
     vi.clearAllMocks();
-    const composer = createComposerProjection('composer-workspace-compact', {
+    const composer = createComposerProjection('composer-workspace-handoff', {
       kind: 'workspace',
       workspaceId: 'workspace-1',
       workspaceGrantId: 'workspace-grant-1',
     });
+
     render(
       <ComposerWorkspaceProvider
         value={{
@@ -1060,7 +1088,22 @@ describe('ConversationController entry state', () => {
           loadCanvasCatalog: async () => ({
             workspaceId: 'workspace-1',
             defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
-            options: [],
+            options: [
+              {
+                target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                label: 'Workspace Board',
+              },
+              {
+                id: 'neko/boards/a.nkc',
+                label: 'Story',
+                target: {
+                  kind: 'exact-canvas',
+                  workspaceId: 'workspace-1',
+                  canvasId: 'neko/boards/a.nkc',
+                },
+                summary: { canvasId: 'neko/boards/a.nkc', name: 'Story' },
+              },
+            ],
             diagnostics: [],
           }),
         }}
@@ -1073,33 +1116,45 @@ describe('ConversationController entry state', () => {
       </ComposerWorkspaceProvider>,
     );
 
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Start chat' } });
+    expect(hostMocks.createConversation).not.toHaveBeenCalled();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('entry-workspace-canvas-selection').textContent).toBe(
+        'workspace-board',
+      ),
+    );
+    fireEvent.click(screen.getByTestId('select-canvas-neko/boards/a.nkc'));
+    expect(screen.getByTestId('entry-workspace-canvas-selection').textContent).toBe(
+      'neko/boards/a.nkc',
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Continue exact Canvas' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(hostMocks.createConversation).toHaveBeenCalledTimes(1));
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+
     act(() => {
       hostRuntimeMocks.listener?.({
         type: 'tabState',
         tabState: {
           openTabs: [
             {
-              id: 'tab-desktop',
-              title: 'Desktop Chat',
-              conversationId: 'conversation-desktop',
+              id: 'tab-handoff',
+              title: 'Handoff',
+              conversationId: 'conversation-handoff',
             },
           ],
-          activeTabId: 'tab-desktop',
+          activeTabId: 'tab-handoff',
         },
       });
     });
 
     await waitFor(() =>
-      expect(
-        document
-          .querySelector('[data-testid^="workspace-runtime-"]')
-          ?.getAttribute('data-composer-presentation'),
-      ).toBe('compact'),
+      expect(screen.getByTestId('workspace-canvas-selection').textContent).toBe(
+        'neko/boards/a.nkc',
+      ),
     );
-    expect(hostMocks.createConversation).toHaveBeenCalledTimes(1);
-    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
   });
 
   it('submits an unbound Entry Draft without an explicit Assistant selection', async () => {

@@ -40,11 +40,17 @@ export function createCanvasWorkspaceIndexService(
       const boardTarget = createCanvasWorkspaceBoardTarget(workspaceId);
       const diagnostics: string[] = [];
       const identities = await options.read.listExactCanvasDocuments(workspaceId);
+      const sortedIdentities = [...identities].sort((left, right) => {
+        const primary = left.localeCompare(right, 'en', { numeric: true, sensitivity: 'base' });
+        return primary === 0
+          ? left.localeCompare(right, 'en', { sensitivity: 'variant' })
+          : primary;
+      });
       const seen = new Set<string>();
       const optionsList: CanvasWorkspaceContextCatalogOption[] = [
         { target: boardTarget, label: boardLabel },
       ];
-      for (const identity of identities) {
+      for (const identity of sortedIdentities) {
         if (seen.has(identity)) {
           diagnostics.push(`Duplicate Canvas identity '${identity}' ignored.`);
           continue;

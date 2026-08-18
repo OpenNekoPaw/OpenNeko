@@ -489,6 +489,40 @@ describe('DesktopAgentSurface', () => {
     expect(detachSession).toHaveBeenCalledTimes(2);
   });
 
+  it('unmounts the retired Agent Root while a replacement Workspace connection bootstraps', async () => {
+    let resolveReplacement: ((value: ReturnType<typeof readyBootstrap>) => void) | undefined;
+    const replacementBootstrap = new Promise<ReturnType<typeof readyBootstrap>>((resolve) => {
+      resolveReplacement = resolve;
+    });
+    const getBootstrap = vi
+      .fn<typeof window.openNekoDesktop.agent.getBootstrap>()
+      .mockResolvedValueOnce(readyBootstrap('view-1', 'connection-1'))
+      .mockReturnValueOnce(replacementBootstrap);
+    installBridge(getBootstrap);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<TestAgentSurface viewId="view-1" />);
+    });
+    await act(async () => undefined);
+    expect(container.querySelector('[data-owner-root="agent"]')).toBeTruthy();
+
+    await act(async () => {
+      root.render(<TestAgentSurface viewId="view-2" />);
+    });
+    await act(async () => undefined);
+
+    expect(container.querySelector('[data-owner-root="agent"]')).toBeNull();
+    expect(container.textContent).toContain('Connecting to Agent');
+
+    resolveReplacement?.(readyBootstrap('view-2', 'connection-2'));
+    await act(async () => undefined);
+    expect(container.querySelector('[data-owner-root="agent"]')).toBeTruthy();
+    await act(async () => root.unmount());
+  });
+
   it('starts the Agent module and owner bootstrap concurrently', async () => {
     const started: string[] = [];
     let resolveModule: (() => void) | undefined;
@@ -705,7 +739,7 @@ describe('DesktopAgentSurface', () => {
     expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 'launch-1').connection);
   });
 
-  it('keeps the Root DOM identity while replacing the adapter by exact launch identity', async () => {
+  it('replaces the Root while switching to an exact launch identity', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
     const attach = vi
       .fn()
@@ -723,13 +757,13 @@ describe('DesktopAgentSurface', () => {
     await act(async () => root.render(<TestLaunchAgentSurface assistantSpaceId="assistant:2" />));
     await act(async () => undefined);
 
-    expect(container.querySelector('[data-testid="agent-root"]')).toBe(firstRoot);
+    expect(container.querySelector('[data-testid="agent-root"]')).not.toBe(firstRoot);
     expect(container.textContent).toContain('neko.agent.webview.electron.launch:launch-2:en');
     expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 'launch-1').connection);
     await act(async () => root.unmount());
   });
 
-  it('keeps the Root DOM identity while attaching an Assistant committed session', async () => {
+  it('replaces the Root while attaching an Assistant committed session', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
     const getAssistantBootstrap = vi.fn(async () => readyAssistantBootstrap());
     const attach = vi.fn(async () => launchReady('assistant:1', 'launch-1'));
@@ -754,7 +788,7 @@ describe('DesktopAgentSurface', () => {
     await act(async () => undefined);
 
     const sessionRoot = container.querySelector('[data-testid="agent-root"]');
-    expect(sessionRoot).toBe(firstRoot);
+    expect(sessionRoot).not.toBe(firstRoot);
     expect(sessionRoot?.getAttribute('data-agent-presentation')).toBe('session');
     expect(sessionRoot?.getAttribute('data-initial-conversation-id')).toBe('conversation:1');
     expect(container.textContent).toContain(
@@ -799,16 +833,15 @@ describe('DesktopAgentSurface', () => {
       ),
     );
 
-    expect(container.querySelector('[data-testid="agent-root"]')).toBe(agentRoot);
-    expect(agentRoot?.getAttribute('data-agent-presentation')).toBe('draft');
-    expect(agentRoot?.closest('.desktop-agent-root')?.hasAttribute('hidden')).toBe(true);
+    expect(container.querySelector('[data-testid="agent-root"]')).toBeNull();
     expect(container.querySelector('.desktop-agent-status')).not.toBeNull();
 
     resolveSession?.(readyAssistantBootstrap());
     await act(async () => undefined);
-    expect(container.querySelector('[data-testid="agent-root"]')).toBe(agentRoot);
-    expect(agentRoot?.getAttribute('data-agent-presentation')).toBe('session');
-    expect(agentRoot?.closest('.desktop-agent-root')?.hasAttribute('hidden')).toBe(false);
+    expect(container.querySelector('[data-testid="agent-root"]')).not.toBe(agentRoot);
+    expect(container.querySelector('[data-testid="agent-root"]')?.getAttribute('data-agent-presentation')).toBe(
+      'session',
+    );
     await act(async () => root.unmount());
   });
 
@@ -863,11 +896,13 @@ function TestAgentSurface({
   composerWorkspace,
   initialConversation,
   onCharacterProductHandoff,
+  viewId = 'view-1',
 }: {
   readonly agentPresentation?: AgentInteractionProjection;
   readonly composerWorkspace?: AgentComposerWorkspacePresentation;
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly onCharacterProductHandoff?: (handoff: CharacterProductHandoff) => void;
+  readonly viewId?: string;
 }): JSX.Element {
   const i18n = createDesktopI18n('en');
   return (
@@ -883,7 +918,7 @@ function TestAgentSurface({
         tab={{
           tabId: 'tab-1',
           projectId: 'project-1',
-          viewId: 'view-1',
+          viewId,
           viewInstanceId: 'view-instance-2',
         }}
       />
@@ -1331,7 +1366,7 @@ function createResourceBridgeMock() {
   };
 }
 
-function readyBootstrap() {
+function readyBootstrap(viewId = 'view-1', connectionId = 'connection-1') {
   return {
     requestId: 'request-1',
     status: 'ready' as const,
@@ -1342,8 +1377,8 @@ function readyBootstrap() {
       agentSurfaceId: 'agent-surface-1',
       projectId: 'project-1',
       workspaceId: 'workspace-1',
-      viewId: 'view-1',
-      connectionId: 'connection-1',
+      viewId,
+      connectionId,
     },
   };
 }

@@ -182,6 +182,7 @@ export function useChatActions({
           ...(pendingSessionMode === 'agent' && input?.understandingModels
             ? { understandingModels: input.understandingModels }
             : {}),
+          ...(input?.canvasTurnTarget ? { canvasTurnTarget: input.canvasTurnTarget } : {}),
         });
       }
 

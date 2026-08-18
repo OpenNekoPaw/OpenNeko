@@ -151,6 +151,7 @@ class GlobalWorldCreationCapabilityProvider implements AgentCapabilityProvider {
       {
         id: 'neko-world:global-creation',
         priority: 72,
+        toolNames: [TOOL_NAMES_WORLD.FILL_WORLD_DRAFT],
         content:
           'Assistant World creation commits one confirmed proposal directly as a global World and its first immutable version. Separate source-backed facts from inferred suggestions, present the complete proposal with the pending global write, and treat the standard Tool approval as the single mutation confirmation. On success, describe the result as a global World and use its title; do not expose internal identities, version metadata, lifecycle labels, or field counts unless a diagnostic requires them. It never creates or infers a Project, workspace World, synchronization link, Run, Save, branch, event, Character, Room, Skill, or Tool configuration fact.',
         locales: {
@@ -215,6 +216,7 @@ class WorldAuthoringCapabilityProvider implements AgentCapabilityProvider {
       {
         id: 'neko-world:authoring',
         priority: 72,
+        toolNames: [TOOL_NAMES_WORLD.FILL_WORLD_DRAFT],
         content:
           'World authoring fills only the exact fresh workspace World authorized for the current Conversation. Separate source-backed facts from inferred suggestions, present the complete proposal together with the pending workspace write, and treat the standard Tool approval as the single mutation confirmation without adding a text-confirmation gate. On success, describe the result as a workspace World and use its title; do not expose internal WorldProject identity or draft lifecycle fields unless the user explicitly asks or a diagnostic requires them. When no exact WorldProject authoring target is bound, return a proposal and state that the current Conversation has no writable workspace World target. It never synchronizes a WorldVersion or creates a Run, Save, branch, event, Character, Room, Skill, or Tool configuration fact.',
         locales: {

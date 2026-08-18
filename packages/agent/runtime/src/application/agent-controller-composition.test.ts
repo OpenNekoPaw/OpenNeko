@@ -3,8 +3,75 @@ import {
   buildAgentConversationTurnFailureMessage,
   waitForDesktopAgentIdle,
 } from './agent-controller-composition';
+import { createDeferredDesktopAgentFactsEvents } from './deferred-desktop-agent-facts-events';
 
 describe('Desktop Agent complete-session idle observation', () => {
+  it('fails visibly when a completed Turn never composed its final system prompt', () => {
+    const factsEvents = createDeferredDesktopAgentFactsEvents();
+    const identity = {
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      branchId: 'main',
+      turnId: 'turn-1',
+      runId: 'run-1',
+    };
+
+    expect(() => factsEvents.requireBound(identity)).toThrow(
+      "completed turn 'conversation-1/turn-1/run-1' without composing its final system prompt",
+    );
+  });
+
+  it('fails visibly when the final system prompt belongs to another Turn', () => {
+    const factsEvents = createDeferredDesktopAgentFactsEvents();
+    const identity = {
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      branchId: 'main',
+      turnId: 'turn-1',
+      runId: 'run-1',
+    };
+    factsEvents.bind(identity, { emit: () => undefined });
+
+    expect(() =>
+      factsEvents.requireBound({ ...identity, turnId: 'turn-2', runId: 'run-2' }),
+    ).toThrow(
+      "final system prompt identity 'conversation-1/turn-1/run-1' does not match completed turn 'conversation-1/turn-2/run-2'",
+    );
+  });
+
+  it('replays early product events once after final-prompt binding', () => {
+    const factsEvents = createDeferredDesktopAgentFactsEvents();
+    const identity = {
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      branchId: 'main',
+      turnId: 'turn-1',
+      runId: 'run-1',
+    };
+    const event = {
+      identity,
+      timestamp: 1,
+      type: 'usage' as const,
+      provider: 'provider-1',
+      model: 'model-1',
+      usage: {
+        input: 1,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 2,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    };
+    const emit = vi.fn(() => undefined);
+
+    factsEvents.events.emit(event);
+    expect(emit).not.toHaveBeenCalled();
+    factsEvents.bind(identity, { emit });
+    expect(emit).toHaveBeenCalledOnce();
+    expect(emit).toHaveBeenCalledWith(event);
+  });
+
   it('projects Turn preparation failure to the exact Conversation instead of global UI', () => {
     expect(
       buildAgentConversationTurnFailureMessage(

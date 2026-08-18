@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createOpenNekoPiModels, type PiConversationTranscriptEntry } from '@neko/agent-runtime/pi';
@@ -557,6 +558,7 @@ describe('Agent controller composition', () => {
       assistantRuntimeSettings: createRuntimeSettings({
         selectedProviderId: 'deepseek',
         selectedModelId: 'deepseek-chat',
+        customSystemPrompt: 'Use the configured creator terminology.',
       }),
     });
     const workspace = createWorkspace(root);
@@ -596,6 +598,10 @@ describe('Agent controller composition', () => {
         turnId,
         runId: `run-${turnId}`,
       };
+      input.onSystemPromptComposed?.({
+        identity: turnIdentity,
+        systemPrompt: `Final prompt for ${turnId}`,
+      });
       return {
         identity: turnIdentity,
         queueItem: {
@@ -717,6 +723,7 @@ describe('Agent controller composition', () => {
     expect(workspace.startTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         entryTargetReceipt: authoringReceipt(),
+        userInstructions: 'Use the configured creator terminology.',
         modelPolicy: expect.objectContaining({
           'agent.main': expect.objectContaining({ execution: 'pi' }),
           'image.generate': {
@@ -852,158 +859,163 @@ describe('Agent controller composition', () => {
         args: 'check this',
       },
     },
-  ])('commits $label before publishing its Session and reading Session state', async ({ input }) => {
-    const workspace = createWorkspace();
-    vi.mocked(workspace.readSkillCatalog).mockResolvedValue({
-      records: [
-        {
-          name: 'review',
-          description: 'Review the exact Workspace',
-          source: { kind: 'project' },
-          fingerprint: 'skill-fingerprint',
-          locator: {
-            kind: 'skill',
-            value: 'skills/review/SKILL.md',
-            fingerprint: 'skill-fingerprint',
-          },
-        },
-      ],
-      diagnostics: [],
-      warnings: [],
-      commands: {
+  ])(
+    'commits $label before publishing its Session and reading Session state',
+    async ({ input }) => {
+      const workspace = createWorkspace();
+      vi.mocked(workspace.readSkillCatalog).mockResolvedValue({
         records: [
           {
-            name: 'review-command',
-            description: 'Review with a command',
+            name: 'review',
+            description: 'Review the exact Workspace',
             source: { kind: 'project' },
-            fingerprint: 'command-fingerprint',
-            activationId: 'command:project:command-fingerprint',
-            supportsArguments: true,
+            fingerprint: 'skill-fingerprint',
+            locator: {
+              kind: 'skill',
+              value: 'skills/review/SKILL.md',
+              fingerprint: 'skill-fingerprint',
+            },
           },
         ],
         diagnostics: [],
-      },
-    });
-    const events: string[] = [];
-    const reserveConversationCreation = vi.fn(async () => {
-      events.push('reserve');
-    });
-    const prepareInitialConversationTurn = vi.fn(async () => {
-      events.push('firstSubmit');
-      return { turnId: 'turn-first' };
-    });
-    const publishConversationCreation = vi.fn(async () => {
-      events.push('publish');
-    });
-    vi.mocked(workspace.invokeCommand).mockImplementation(async () => {
-      events.push('invokeCommand');
-      return 'Resolved command prompt';
-    });
-    const composition = createAgentControllerComposition({
-      host: createHost(),
-      userHome: '/Users/fixture',
-      credentialRuntime: createCredentialRuntime(),
-      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
-      resources: {
-        registerFile: vi.fn(async () => ({
-          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-          release: vi.fn(),
-        })),
-      },
-      contentInteraction: { openContent: vi.fn(), revealDocument: vi.fn() },
-      configInteraction: { openUserConfig: vi.fn() },
-      reportError: vi.fn(),
-      canvas: createCanvasIndexService(),
-    });
-    const effects = composition.createEffects({
-      workspace,
-      identity: {
-        applicationInstanceId: 'app-1',
-        windowId: 'window-1',
-        workbenchInstanceId: 'workbench-1',
-        agentSurfaceId: 'agent-surface-1',
-        projectId: 'project-1',
-        workspaceId: workspace.workspaceId,
-        viewId: 'view-1',
-        connectionId: 'connection-1',
-      },
-      composer: {
-        phase: 'composer',
-        composerId: 'composer-workspace-1',
-        binding: {
-          kind: 'workspace',
-          workspaceId: workspace.workspaceId,
-          workspaceGrantId: 'workspace-grant-1',
+        warnings: [],
+        commands: {
+          records: [
+            {
+              name: 'review-command',
+              description: 'Review with a command',
+              source: { kind: 'project' },
+              fingerprint: 'command-fingerprint',
+              activationId: 'command:project:command-fingerprint',
+              supportsArguments: true,
+            },
+          ],
+          diagnostics: [],
         },
-      },
-      personalSkillOwnerId: 'assistant-space-1',
-      reserveConversationCreation,
-      rollbackConversationCreation: vi.fn(async () => undefined),
-      prepareInitialConversationTurn,
-      publishConversationCreation,
-      readConversationConfiguration: async () => {
-        events.push('readConfiguration');
-        throw new Error('stop after Session publication');
-      },
-      readConversationContext: async () => {
-        events.push('readContext');
-        return {
-          kind: 'workspace',
-          workspaceId: workspace.workspaceId,
-          workspaceGrantId: 'workspace-grant-1',
-        };
-      },
-      readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
-      settleInitialConversationTurn: vi.fn(async () => undefined),
-    });
-    const post = vi.fn((message: AgentHostToWebviewMessage) => {
-      events.push(message.type);
-    });
-
-    await expect(
-      effects.conversation.createConversation(
-        {
-          type: 'createConversation',
-          input,
-          sessionMode: 'agent',
+      });
+      const events: string[] = [];
+      const reserveConversationCreation = vi.fn(async () => {
+        events.push('reserve');
+      });
+      const prepareInitialConversationTurn = vi.fn(async () => {
+        events.push('firstSubmit');
+        return { turnId: 'turn-first' };
+      });
+      const publishConversationCreation = vi.fn(async () => {
+        events.push('publish');
+      });
+      vi.mocked(workspace.invokeCommand).mockImplementation(async () => {
+        events.push('invokeCommand');
+        return 'Resolved command prompt';
+      });
+      const composition = createAgentControllerComposition({
+        host: createHost(),
+        userHome: '/Users/fixture',
+        credentialRuntime: createCredentialRuntime(),
+        resolveWorkspaceConfig: createWorkspaceConfigResolver(),
+        resources: {
+          registerFile: vi.fn(async () => ({
+            url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            release: vi.fn(),
+          })),
         },
-        {
-          identity: {
-            hostKind: 'electron',
-            applicationId: 'neko-desktop',
-            windowId: 'window-1',
-            viewId: 'view-1',
+        contentInteraction: { openContent: vi.fn(), revealDocument: vi.fn() },
+        configInteraction: { openUserConfig: vi.fn() },
+        reportError: vi.fn(),
+        canvas: createCanvasIndexService(),
+      });
+      const effects = composition.createEffects({
+        workspace,
+        identity: {
+          applicationInstanceId: 'app-1',
+          windowId: 'window-1',
+          workbenchInstanceId: 'workbench-1',
+          agentSurfaceId: 'agent-surface-1',
+          projectId: 'project-1',
+          workspaceId: workspace.workspaceId,
+          viewId: 'view-1',
+          connectionId: 'connection-1',
+        },
+        composer: {
+          phase: 'composer',
+          composerId: 'composer-workspace-1',
+          binding: {
+            kind: 'workspace',
             workspaceId: workspace.workspaceId,
-            connectionId: 'connection-1',
+            workspaceGrantId: 'workspace-grant-1',
           },
-          post,
         },
-      ),
-    ).rejects.toThrow('stop after Session publication');
+        personalSkillOwnerId: 'assistant-space-1',
+        reserveConversationCreation,
+        rollbackConversationCreation: vi.fn(async () => undefined),
+        prepareInitialConversationTurn,
+        publishConversationCreation,
+        readConversationConfiguration: async () => {
+          events.push('readConfiguration');
+          throw new Error('stop after Session publication');
+        },
+        readConversationContext: async () => {
+          events.push('readContext');
+          return {
+            kind: 'workspace',
+            workspaceId: workspace.workspaceId,
+            workspaceGrantId: 'workspace-grant-1',
+          };
+        },
+        readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
+        settleInitialConversationTurn: vi.fn(async () => undefined),
+      });
+      const post = vi.fn((message: AgentHostToWebviewMessage) => {
+        events.push(message.type);
+      });
 
-    expect(events.slice(0, 6)).toEqual([
-      'reserve',
-      'firstSubmit',
-      'publish',
-      'conversationList',
-      'tabState',
-      'activeConversation',
-    ]);
-    expect(events.indexOf('readConfiguration')).toBeGreaterThan(events.indexOf('publish'));
-    if (input.kind === 'command') {
-      expect(workspace.invokeCommand).toHaveBeenCalledOnce();
-      expect(events.indexOf('invokeCommand')).toBeGreaterThan(events.indexOf('publish'));
-    } else {
-      expect(workspace.invokeCommand).not.toHaveBeenCalled();
-    }
-    expect(prepareInitialConversationTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ messageText: input.kind === 'message' ? input.text : input.args }),
-      input,
-    );
+      await expect(
+        effects.conversation.createConversation(
+          {
+            type: 'createConversation',
+            input,
+            sessionMode: 'agent',
+          },
+          {
+            identity: {
+              hostKind: 'electron',
+              applicationId: 'neko-desktop',
+              windowId: 'window-1',
+              viewId: 'view-1',
+              workspaceId: workspace.workspaceId,
+              connectionId: 'connection-1',
+            },
+            post,
+          },
+        ),
+      ).rejects.toThrow('stop after Session publication');
 
-    effects.dispose();
-    await composition.dispose?.();
-  });
+      expect(events.slice(0, 6)).toEqual([
+        'reserve',
+        'firstSubmit',
+        'publish',
+        'conversationList',
+        'tabState',
+        'activeConversation',
+      ]);
+      expect(events.indexOf('readConfiguration')).toBeGreaterThan(events.indexOf('publish'));
+      if (input.kind === 'command') {
+        expect(workspace.invokeCommand).toHaveBeenCalledOnce();
+        expect(events.indexOf('invokeCommand')).toBeGreaterThan(events.indexOf('publish'));
+      } else {
+        expect(workspace.invokeCommand).not.toHaveBeenCalled();
+      }
+      expect(prepareInitialConversationTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messageText: input.kind === 'message' ? input.text : input.args,
+        }),
+        input,
+      );
+
+      effects.dispose();
+      await composition.dispose?.();
+    },
+  );
 
   it('rolls back a reserved runtime Conversation when first-submit persistence fails', async () => {
     const workspace = createWorkspace();
@@ -1581,6 +1593,10 @@ describe('Agent controller composition', () => {
       runId: 'run-initial-facts',
     };
     workspace.startTurn.mockImplementation((input) => {
+      input.onSystemPromptComposed?.({
+        identity: turnIdentity,
+        systemPrompt: 'Final character authoring prompt.',
+      });
       input.events?.emit({
         identity: turnIdentity,
         timestamp: 1,
@@ -1720,6 +1736,15 @@ describe('Agent controller composition', () => {
       },
       usage: { inputTokens: 12, outputTokens: 8, costUsd: 0.3 },
     });
+    expect(effects.automation?.readFacts(turnIdentity).receipts.prompts.items).toEqual([
+      {
+        id: 'desktop-agent-system-prompt',
+        source: 'system',
+        digest: `sha256:${createHash('sha256')
+          .update('Final character authoring prompt.')
+          .digest('hex')}`,
+      },
+    ]);
 
     effects.dispose();
     await composition.dispose?.();
@@ -1776,48 +1801,60 @@ describe('Agent controller composition', () => {
       piSessionId: 'pi-session-board-blocked',
       writerLeaseId: 'writer-lease-board-blocked',
     });
+    let releaseTurn: (() => void) | undefined;
+    const turnGate = new Promise<void>((resolve) => {
+      releaseTurn = resolve;
+    });
     workspace.startTurn.mockImplementation(
-      (input: Parameters<AgentWorkspaceRuntime['startTurn']>[0]) => ({
-        identity: turnIdentity,
-        queueItem: {
-          id: 'queue-board-blocked',
-          conversationId: input.conversationId,
-          content: input.presentationText ?? input.prompt,
-          createdAt: 1,
-          source: 'composer' as const,
-        },
-        state: 'active' as const,
-        completion: Promise.resolve({
+      (input: Parameters<AgentWorkspaceRuntime['startTurn']>[0]) => {
+        return {
           identity: turnIdentity,
-          durability: 'durable',
-          projection: {
-            conversationId: turnIdentity.conversationId,
-            turns: [
-              {
-                turnId: turnIdentity.turnId,
-                runId: turnIdentity.runId,
-                messageId: 'message-board-blocked',
-                items: [],
-                completion: { status: 'completed', completedAt: 1 },
+          queueItem: {
+            id: 'queue-board-blocked',
+            conversationId: input.conversationId,
+            content: input.presentationText ?? input.prompt,
+            createdAt: 1,
+            source: 'composer' as const,
+          },
+          state: 'active' as const,
+          completion: turnGate.then(() => {
+            input.onSystemPromptComposed?.({
+              identity: turnIdentity,
+              systemPrompt: 'Final Workspace Board delivery prompt.',
+            });
+            return {
+              identity: turnIdentity,
+              durability: 'durable' as const,
+              projection: {
+                conversationId: turnIdentity.conversationId,
+                turns: [
+                  {
+                    turnId: turnIdentity.turnId,
+                    runId: turnIdentity.runId,
+                    messageId: 'message-board-blocked',
+                    items: [],
+                    completion: { status: 'completed' as const, completedAt: 1 },
+                  },
+                ],
               },
-            ],
-          },
-          configuration: input.configuration,
-          artifactDelivery: {
-            status: 'blocked',
-            diagnostic: {
-              code: 'workspace-board-read-only',
-              message: 'Host-only detail.',
-            },
-          },
-          path: {
-            runtime: 'pi-conversation-runtime',
-            transcript: 'pi-session',
-            metadata: 'sqlite',
-            projection: 'conversation-projection-store',
-          },
-        }),
-      }),
+              configuration: input.configuration,
+              artifactDelivery: {
+                status: 'blocked' as const,
+                diagnostic: {
+                  code: 'workspace-board-read-only',
+                  message: 'Host-only detail.',
+                },
+              },
+              path: {
+                runtime: 'pi-conversation-runtime' as const,
+                transcript: 'pi-session' as const,
+                metadata: 'sqlite' as const,
+                projection: 'conversation-projection-store' as const,
+              },
+            };
+          }),
+        };
+      },
     );
     const request = {
       modelCatalogEntryId: 'provider-1:model-1',
@@ -1941,6 +1978,8 @@ describe('Agent controller composition', () => {
         },
       },
     );
+    effects.dispose();
+    releaseTurn?.();
 
     await vi.waitFor(() =>
       expect(posted).toContainEqual({
@@ -1983,7 +2022,193 @@ describe('Agent controller composition', () => {
       }),
     );
 
-    effects.dispose();
+    await composition.dispose?.();
+  });
+
+  it('drains an accepted Skill Turn before disposing connection facts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'desktop-agent-skill-disposal-'));
+    temporaryRoots.push(root);
+    const config = await createConfiguredWorkspaceConfig(root);
+    const workspace = createWorkspace(root);
+    await workspace.createConversation('conversation-skill-disposal');
+    vi.mocked(workspace.readSkillCatalog).mockResolvedValue({
+      records: [
+        {
+          name: 'review',
+          description: 'Review the exact Workspace',
+          source: { kind: 'project' },
+          fingerprint: 'skill-disposal',
+          locator: {
+            kind: 'skill',
+            value: 'skills/review/SKILL.md',
+            fingerprint: 'skill-disposal',
+          },
+        },
+      ],
+      diagnostics: [],
+      warnings: [],
+      commands: { records: [], diagnostics: [] },
+    });
+    const turnIdentity = {
+      workspaceId: workspace.workspaceId,
+      conversationId: 'conversation-skill-disposal',
+      branchId: 'main',
+      turnId: 'turn-skill-disposal',
+      runId: 'run-skill-disposal',
+    };
+    workspace.readConversationEvidence.mockReturnValue({
+      workspaceId: workspace.workspaceId,
+      conversationId: turnIdentity.conversationId,
+      branchId: turnIdentity.branchId,
+      piSessionId: 'pi-session-skill-disposal',
+      writerLeaseId: 'writer-lease-skill-disposal',
+    });
+    let releaseTurn: (() => void) | undefined;
+    const turnGate = new Promise<void>((resolve) => {
+      releaseTurn = resolve;
+    });
+    workspace.startTurn.mockImplementation((input) => ({
+      identity: turnIdentity,
+      queueItem: {
+        id: 'queue-skill-disposal',
+        conversationId: input.conversationId,
+        content: input.presentationText ?? input.prompt,
+        createdAt: 1,
+        source: 'composer' as const,
+      },
+      state: 'active' as const,
+      completion: turnGate.then(() => {
+        input.onSystemPromptComposed?.({
+          identity: turnIdentity,
+          systemPrompt: 'Final detached Skill prompt.',
+        });
+        return {
+          identity: turnIdentity,
+          durability: 'durable' as const,
+          projection: {
+            conversationId: turnIdentity.conversationId,
+            turns: [
+              {
+                turnId: turnIdentity.turnId,
+                runId: turnIdentity.runId,
+                messageId: 'message-skill-disposal',
+                items: [],
+                completion: { status: 'completed' as const, completedAt: 1 },
+              },
+            ],
+          },
+          configuration: input.configuration,
+          path: {
+            runtime: 'pi-conversation-runtime' as const,
+            transcript: 'pi-session' as const,
+            metadata: 'sqlite' as const,
+            projection: 'conversation-projection-store' as const,
+          },
+        };
+      }),
+    }));
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: root,
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: () => config,
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: { openContent: vi.fn(), revealDocument: vi.fn() },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
+    });
+    const request = {
+      modelCatalogEntryId: 'provider-1:model-1',
+      providerId: 'provider-1',
+      modelId: 'model-1',
+      executionMode: 'ask' as const,
+      temperature: 0.7,
+      maximumOutputTokens: 4096,
+      thinkingBudget: 0,
+    };
+    const effects = composition.createEffects({
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-1',
+      },
+      readConversationConfiguration: async () => ({
+        conversationId: turnIdentity.conversationId,
+        request,
+        projection: projectAgentConfigurationPolicy({
+          models: projectAgentModelCatalog(config.getAssistantConfigState()),
+          request,
+          source: 'conversation',
+          defaults: {
+            executionMode: 'ask',
+            temperature: 0.7,
+            maximumOutputTokens: 4096,
+            thinkingBudget: 0,
+          },
+        }),
+      }),
+      readConversationContext: async () => ({
+        kind: 'workspace',
+        workspaceId: workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant-1',
+      }),
+      readConversationCapabilityConstraint: readConfiguredCapabilityConstraint,
+      personalSkillOwnerId: 'assistant:default',
+    });
+    const context = {
+      identity: {
+        hostKind: 'electron' as const,
+        applicationId: 'neko-desktop',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        workspaceId: workspace.workspaceId,
+        connectionId: 'connection-1',
+      },
+      post: vi.fn(async () => undefined),
+    };
+
+    await effects.skill.invokeInput(
+      {
+        conversationId: turnIdentity.conversationId,
+        input: {
+          kind: 'skill',
+          catalogEntryId: 'skill:project:skill-disposal',
+          skillName: 'review',
+          activationId: 'skill:project:skill-disposal',
+          args: 'check this',
+        },
+      },
+      context,
+    );
+    const factsAfterDisposal = effects.automation?.disposeAndReadFacts(turnIdentity);
+    let disposalSettled = false;
+    void factsAfterDisposal?.then(() => {
+      disposalSettled = true;
+    });
+    await Promise.resolve();
+    expect(disposalSettled).toBe(false);
+
+    releaseTurn?.();
+    await expect(factsAfterDisposal).resolves.toMatchObject({
+      projection: { terminalState: 'completed' },
+      receipts: {
+        prompts: {
+          items: [expect.objectContaining({ id: 'desktop-agent-system-prompt' })],
+        },
+      },
+    });
     await composition.dispose?.();
   });
 
@@ -2618,7 +2843,6 @@ function createWorkspace(
       commands: { records: [], diagnostics: [] },
     })),
     invokeCommand: vi.fn(),
-    readCapabilityPromptFragments: () => [],
     listConversations: () => records,
     readConversationEvidence,
     readConversationProjection: vi.fn(() => projection),

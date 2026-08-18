@@ -1390,9 +1390,7 @@ describe('DesktopAppHost', () => {
     expect(sendAgentMessage).toHaveBeenCalledOnce();
     const unchangedProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
     expect(activeScene(unchangedProjection)).toEqual(committedScene);
-    expect(unchangedProjection.agentHome.conversations).toHaveLength(
-      assistantConversationCount,
-    );
+    expect(unchangedProjection.agentHome.conversations).toHaveLength(assistantConversationCount);
     await fixture.appHost.dispose();
   });
 
@@ -3048,7 +3046,9 @@ describe('DesktopAppHost', () => {
 
   it('binds Character package import to one exact sender and destination', async () => {
     const projectAuthoring = createProjectAuthoring();
-    vi.mocked(projectAuthoring.importCharacterGlobalPackage).mockResolvedValue('character-imported');
+    vi.mocked(projectAuthoring.importCharacterGlobalPackage).mockResolvedValue(
+      'character-imported',
+    );
     const fixture = await createShellAppHost({ projectAuthoring });
     const resolution = createWorkspaceResolution();
     fixture.registry.resolve.mockResolvedValue(resolution);
@@ -4753,7 +4753,7 @@ async function createShellAppHost(options?: {
           connection,
         );
         if (
-          (conversationId === undefined
+          conversationId === undefined
             ? surface.interaction.scope.kind !== 'unbound' ||
               surface.interaction.scope.draftId !== draftId ||
               surface.interaction.phase !== 'draft' ||
@@ -4761,7 +4761,7 @@ async function createShellAppHost(options?: {
             : surface.interaction.phase !== 'session' ||
               surface.interaction.scope.kind === 'unbound' ||
               surface.interaction.scope.composerId !== draftId ||
-              surface.interaction.scope.conversationId !== conversationId)
+              surface.interaction.scope.conversationId !== conversationId
         ) {
           throw new Error('Agent Draft submit is not the exact active Draft presentation.');
         }
@@ -5455,7 +5455,6 @@ function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime
     compactContext: unavailable,
     readSkillCatalog: unavailable,
     invokeCommand: unavailable,
-    readCapabilityPromptFragments: () => [],
     listConversations: () => [],
     readConversationEvidence: () => {
       throw new Error('Agent evidence is not expected by this AppHost test.');

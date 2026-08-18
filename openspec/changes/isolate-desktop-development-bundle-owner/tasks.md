@@ -8,6 +8,7 @@
 - [x] 2.1 Implement the Node-owned Desktop development launcher with a canonical-checkout owner identity, atomic restrictive owner file and exact process-liveness checks.
 - [x] 2.2 Replace the direct `electron-forge start` package script with the launcher while retaining `@neko/app-desktop dev` as the only canonical development command.
 - [x] 2.3 Add path assertions proving root development and Desktop functional scenarios delegate through the guarded command while packaged scenarios remain direct.
+- [x] 2.4 Serialize the shared Main/Preload Vite output, disable per-target directory clearing, and restart Electron only after the final shared bundle target completes.
 
 ## 3. Verification And Evidence
 

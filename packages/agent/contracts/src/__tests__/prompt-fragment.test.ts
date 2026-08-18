@@ -8,6 +8,7 @@ describe('PromptFragment localization', () => {
       id: 'provider:guide',
       content: 'English guide.',
       priority: 75,
+      toolNames: ['CanvasQuery'],
       locales: {
         zh: {
           content: '中文指导。',
@@ -25,6 +26,7 @@ describe('PromptFragment localization', () => {
     const fragment: PromptFragment = {
       id: 'provider:guide',
       content: 'Default guide.',
+      toolNames: ['CanvasQuery'],
       locales: {
         en: {
           content: 'English guide.',
@@ -39,6 +41,7 @@ describe('PromptFragment localization', () => {
     const fragment: PromptFragment = {
       id: 'provider:guide',
       content: 'Default guide.',
+      toolNames: ['CanvasQuery'],
       locales: {
         ja: {
           content: '日本語ガイド。',

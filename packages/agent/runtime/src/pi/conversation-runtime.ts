@@ -2,7 +2,6 @@ import {
   Agent,
   compact,
   estimateContextTokens,
-  formatSkillsForSystemPrompt,
   prepareCompaction,
   type AgentEvent,
   type AgentMessage,
@@ -43,6 +42,7 @@ import type {
   SkillResourceLocator,
 } from './skill-host';
 import type { PiUserMessagePresentation } from './user-message-presentation';
+import { RepeatedToolFailureConvergence } from './repeated-tool-failure-convergence';
 
 export interface OpenPiConversationRuntimeOptions {
   readonly authority: NodePiConversationAuthority;
@@ -80,6 +80,7 @@ export interface ExecutePiConversationTurnInput {
   readonly workspaceTrusted: boolean;
   readonly events: PiProductEventSink;
   readonly systemPrompt?: string;
+  readonly onSystemPromptComposed?: (systemPrompt: string) => void;
 }
 
 export interface ExecutePiConversationSkillInput extends Omit<
@@ -392,6 +393,7 @@ export class PiConversationRuntime {
       input.systemPrompt ?? this.options.baseSystemPrompt,
       input.skillSnapshot,
     );
+    input.onSystemPromptComposed?.(this.agent.state.systemPrompt);
     this.agent.streamFn = createPolicyStream(
       this.options.models,
       main.parameters,
@@ -403,20 +405,30 @@ export class PiConversationRuntime {
     const previousMessageCount = this.agent.state.messages.length;
     const turnMessages: AgentMessage[] = [];
     let terminalListenerError: unknown;
+    let convergenceFailure: string | undefined;
+    const failureConvergence = new RepeatedToolFailureConvergence();
+    this.agent.shouldStopAfterTurn = async (context) => {
+      convergenceFailure = failureConvergence.observe(context);
+      return convergenceFailure !== undefined;
+    };
     const unsubscribe = this.agent.subscribe(async (event) => {
       if (event.type === 'message_end') {
         turnMessages.push(structuredClone(event.message));
       }
       if (event.type === 'agent_end') {
         try {
-          await projector.project(event);
+          if (convergenceFailure === undefined) {
+            await projector.project(event);
+          } else {
+            await projector.failed(convergenceFailure);
+          }
           await projector.persistenceChanged('persisting');
           await this.options.authority.checkpointTurn({
             lease: this.lease,
             conversationId: this.options.conversationId,
             branchId: this.options.branchId,
             turnId: input.turnId,
-            terminalState: terminalState(event),
+            terminalState: convergenceFailure === undefined ? terminalState(event) : 'failed',
             ...(input.userMessagePresentation === undefined
               ? {}
               : { userMessagePresentation: input.userMessagePresentation }),
@@ -745,9 +757,23 @@ function providerTimeoutMessage(model: Model<Api>, timeoutMs: number): Assistant
 }
 
 function composeSystemPrompt(base: string, skills: PiSkillHostSnapshot): string {
-  const catalog = formatSkillsForSystemPrompt([...skills.skills]);
-  if (catalog.length === 0) return base;
-  return `${base}\n\n${catalog}\n\nSkill locations under /__neko_skills/ are opaque, process-local locators. Pass a matching Skill locator, or a contained relative resource locator under the same virtual directory, only to the read_skill tool. Never pass these locators to workspace file, content, cache, path-resolution, shell, or Webview tools.`;
+  if (skills.records.length === 0) return base;
+  const catalog = skills.records
+    .map(
+      (record) =>
+        `  <skill>\n    <name>${escapeSkillCatalogXml(record.name)}</name>\n    <description>${escapeSkillCatalogXml(record.description)}</description>\n    <locator>${escapeSkillCatalogXml(record.locator.value)}</locator>\n  </skill>`,
+    )
+    .join('\n');
+  return `${base}\n\n## Available Skills\n\nThe following Skills provide specialized task methods. Read a matching Skill only with read_skill. Every /__neko_skills/ value is an opaque, process-local locator; pass the selected locator or its contained virtual child locator only to read_skill. Never resolve it to an absolute host path or pass it to workspace file, content, cache, path, shell, or Webview operations.\n\n<available_skills>\n${catalog}\n</available_skills>`;
+}
+
+function escapeSkillCatalogXml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
 }
 
 function createSkillReadTool(

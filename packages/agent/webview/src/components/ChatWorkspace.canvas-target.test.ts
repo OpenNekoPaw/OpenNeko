@@ -23,7 +23,7 @@ describe('projectWorkspaceCanvasTurnTarget', () => {
     workspaceId: 'workspace-1',
   };
 
-  it('returns undefined for the logical Board', () => {
+  it('projects the logical Board as an explicit canonical target', () => {
     const canvas: AgentComposerCanvasPresentation = {
       workspaceId: 'workspace-1',
       defaultTarget: board,
@@ -32,7 +32,10 @@ describe('projectWorkspaceCanvasTurnTarget', () => {
       options: [{ id: 'workspace-board', label: 'Workspace Board', target: board }],
       onSelect: async () => undefined,
     };
-    expect(projectWorkspaceCanvasTurnTarget(canvas)).toBeUndefined();
+    expect(projectWorkspaceCanvasTurnTarget(canvas)).toEqual({
+      workspaceId: 'workspace-1',
+      target: board,
+    });
   });
 
   it('projects the selected exact Canvas target with summary', () => {
@@ -73,10 +76,16 @@ describe('projectWorkspaceCanvasTurnTarget', () => {
       options: [{ id: 'workspace-board', label: 'Workspace Board', target: board }],
       onSelect: async () => undefined,
     };
-    expect(projectWorkspaceCanvasTurnTarget(canvas)).toBeUndefined();
+    expect(projectWorkspaceCanvasTurnTarget(canvas)).toEqual({
+      workspaceId: 'workspace-1',
+      target: board,
+    });
     expect(
       projectWorkspaceCanvasTurnTarget({ ...canvas, loading: false, diagnostic: 'catalog failed' }),
-    ).toBeUndefined();
+    ).toEqual({
+      workspaceId: 'workspace-1',
+      target: board,
+    });
   });
 
   it('blocks unknown selectedId instead of falling back to Board', () => {

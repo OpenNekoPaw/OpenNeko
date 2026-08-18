@@ -47,6 +47,15 @@ class CanvasProjectCapabilityProvider implements AgentCapabilityProvider {
       {
         id: 'neko-canvas:structured-project-authoring',
         priority: 72,
+        toolNames: [
+          TOOL_NAMES_CANVAS.CANVAS_LIST_NODES,
+          TOOL_NAMES_CANVAS.CANVAS_GET_NODE,
+          TOOL_NAMES_CANVAS.CANVAS_CREATE_NODE,
+          TOOL_NAMES_CANVAS.CANVAS_UPDATE_BLOCK,
+          TOOL_NAMES_CANVAS.CANVAS_LIST_CONNECTIONS,
+          TOOL_NAMES_CANVAS.CANVAS_GET_CONNECTION,
+          TOOL_NAMES_CANVAS.CANVAS_CREATE_CONNECTION,
+        ],
         content:
           'Canvas .nkc documents use the Canvas query and authoring operations. Query the exact Workspace-relative document before mutation and pass its exact fingerprint. Never use generic file or shell operations for .nkc.',
         locales: {

@@ -137,6 +137,22 @@ describe('AgentAppHost', () => {
     );
   });
 
+  it('registers exactly one OpenNeko core file Tool per operation with one path schema', async () => {
+    const fixture = await createFixture();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+
+    for (const name of ['Read', 'Write', 'ListDirectory', 'Grep']) {
+      const matches = workspace.tools.list().filter((tool) => tool.name === name);
+      expect(matches).toHaveLength(1);
+      const tool = matches[0];
+      const pathField = name === 'Read' || name === 'Write' ? 'file_path' : 'path';
+      expect(tool?.parameters.properties[pathField]).toMatchObject({ type: 'string' });
+      expect(JSON.stringify(tool?.parameters)).not.toMatch(
+        /"absolute_path"|"relative_path"|"hostPath"|"workspacePath"/u,
+      );
+    }
+  });
+
   it('registers one no-Renderer Canvas/Cut authoring path beside protected core file tools', async () => {
     const fixture = await createFixture();
     await mkdir(join(fixture.workspace.workspacePath, 'boards'), { recursive: true });
@@ -268,7 +284,7 @@ describe('AgentAppHost', () => {
   });
 
   it('binds Content mutations to the exact receipt per Turn and withholds them from Character and World', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'neko-agent-authoring-target-'));
+    const root = await mkdtemp(join(process.cwd(), 'neko-agent-authoring-target-'));
     roots.push(root);
     const userHome = join(root, 'home');
     const userDataRoot = join(userHome, '.neko');
@@ -323,14 +339,45 @@ describe('AgentAppHost', () => {
       .map((tool) => tool.name);
     expect(mutationNames).toEqual(expect.arrayContaining(['Write', 'ContentMutationFixture']));
     const seenTools = new Map<string, readonly string[]>();
+    const seenSystemPrompts = new Map<string, string>();
     const models = createFixtureModels((_model, context) => {
       const prompt = lastUserPrompt(context);
       const toolNames = context.tools?.map((tool) => tool.name) ?? [];
       seenTools.set(prompt, toolNames);
+      seenSystemPrompts.set(prompt, context.systemPrompt ?? '');
       if (prompt === 'write content' || prompt === 'write denied content') {
         return context.messages.some((message) => message.role === 'toolResult')
           ? completedStream(assistant('Write handled.'))
           : completedStream(assistantToolCall('ContentMutationFixture'));
+      }
+      if (prompt === 'write wrong content path') {
+        const write = context.tools?.find((tool) => tool.name === 'Write');
+        if (!write) throw new Error('Receipt-bound Write was not projected to Pi.');
+        expect(write.parameters).toMatchObject({
+          properties: {
+            file_path: {
+              enum: ['documents/exact-target.md'],
+            },
+          },
+        });
+        return context.messages.some((message) => message.role === 'toolResult')
+          ? completedStream(assistant('Wrong path rejected.'))
+          : completedStream(
+              assistantToolCall('Write', {
+                file_path: 'documents/sibling.md',
+                content: 'must not be written',
+              }),
+            );
+      }
+      if (prompt === 'write exact content path') {
+        return context.messages.some((message) => message.role === 'toolResult')
+          ? completedStream(assistant('Exact path written.'))
+          : completedStream(
+              assistantToolCall('Write', {
+                file_path: 'documents/exact-write.md',
+                content: 'Exact receipt content.\n',
+              }),
+            );
       }
       return completedStream(assistant('No Content mutation available.'));
     });
@@ -340,6 +387,8 @@ describe('AgentAppHost', () => {
       'conversation-character-target',
       'conversation-world-target',
       'conversation-inferred-target',
+      'conversation-content-wrong-path',
+      'conversation-content-exact-write',
       'conversation-content-denied',
     ]) {
       await workspace.openConversation({
@@ -362,8 +411,22 @@ describe('AgentAppHost', () => {
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
+      userInstructions: 'Use the creator preferred terminology.',
     });
     expect(seenTools.get('write content')).toEqual(expect.arrayContaining(mutationNames));
+    const contentSystemPrompt = seenSystemPrompts.get('write content') ?? '';
+    expect(contentSystemPrompt).toContain(
+      '## Capability Guidance: neko-canvas-project-authoring / neko-canvas:structured-project-authoring',
+    );
+    expect(contentSystemPrompt).toContain(
+      '## Capability Guidance: neko-cut-project-authoring / neko-cut:structured-project-authoring',
+    );
+    expect(contentSystemPrompt.indexOf('neko-canvas:structured-project-authoring')).toBeLessThan(
+      contentSystemPrompt.indexOf('neko-cut:structured-project-authoring'),
+    );
+    expect(contentSystemPrompt).toContain(
+      '## User Instructions\n\nUse the creator preferred terminology.',
+    );
     expect(JSON.stringify(contentResult.projection)).not.toContain('"success":false');
     expect(executeMutation).toHaveBeenCalledOnce();
     expect(executeMutation).toHaveBeenCalledWith(
@@ -379,6 +442,37 @@ describe('AgentAppHost', () => {
     expect(authorize).toHaveBeenCalledWith(
       expect.objectContaining({ expectedTargetKind: 'content-document' }),
     );
+
+    const wrongPath = await workspace.executeTurn({
+      conversationId: 'conversation-content-wrong-path',
+      prompt: 'write wrong content path',
+      entryTargetReceipt: authoringTargetReceipt('content-document', 'documents/exact-target.md'),
+      modelPolicy: policy,
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    expect(JSON.stringify(wrongPath.projection)).toContain(
+      'file_path: must be equal to one of the allowed values',
+    );
+    expect(authorize).toHaveBeenCalledTimes(1);
+
+    const exactWrite = await workspace.executeTurn({
+      conversationId: 'conversation-content-exact-write',
+      prompt: 'write exact content path',
+      entryTargetReceipt: authoringTargetReceipt('content-document', 'documents/exact-write.md'),
+      modelPolicy: policy,
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    expect(JSON.stringify(exactWrite.projection)).not.toContain('"success":false');
+    await expect(
+      readFile(join(workspacePath, 'documents', 'exact-write.md'), 'utf8'),
+    ).resolves.toBe('Exact receipt content.\n');
+    expect(authorize).toHaveBeenCalledTimes(2);
 
     await workspace.executeTurn({
       conversationId: 'conversation-character-target',
@@ -404,6 +498,7 @@ describe('AgentAppHost', () => {
       for (const mutationName of mutationNames) {
         expect(seenTools.get(prompt)).not.toContain(mutationName);
       }
+      expect(seenSystemPrompts.get(prompt)).not.toContain('structured-project-authoring');
     }
     const inferredPrompt =
       'Use prompt mention selectedRow mountedSurface currentProject recentProject to write Content';
@@ -420,7 +515,8 @@ describe('AgentAppHost', () => {
     for (const mutationName of mutationNames) {
       expect(seenTools.get(inferredPrompt)).not.toContain(mutationName);
     }
-    expect(authorize).toHaveBeenCalledTimes(1);
+    expect(seenSystemPrompts.get(inferredPrompt)).not.toContain('structured-project-authoring');
+    expect(authorize).toHaveBeenCalledTimes(2);
 
     const denied = await workspace.executeTurn({
       conversationId: 'conversation-content-denied',
@@ -436,7 +532,78 @@ describe('AgentAppHost', () => {
     expect(JSON.stringify(denied.projection)).toContain(
       'Agent authoring authority rejected ContentMutationFixture: Content owner denied the exact target.',
     );
-    expect(authorize).toHaveBeenCalledTimes(2);
+    expect(authorize).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects invalid fragment snapshots without hanging the Conversation queue', async () => {
+    const fixture = await createFixture();
+    let conflicting = true;
+    const fragmentProvider = (id: string, toolName: string, content: string) => ({
+      id,
+      getTools: () => [
+        {
+          name: toolName,
+          description: `${toolName} fixture`,
+          parameters: { type: 'object' as const, properties: {}, additionalProperties: false },
+          category: 'system' as const,
+          execute: async () => ({ success: true }),
+        },
+      ],
+      getPromptFragments: () => [
+        {
+          id: conflicting ? 'fixture:conflict' : `fixture:${id}`,
+          content,
+          toolNames: [toolName],
+        },
+      ],
+    });
+    const composition = createAgentAppHost({
+      userDataRoot: fixture.userDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-fragment-recovery',
+      credentialRuntime: createTestCredentialRuntime(),
+      resolveGenerationJobs: async () => createTestGenerationJobs(),
+      catalogReader: await NodePiConversationCatalogReader.create({
+        userDataRoot: fixture.userDataRoot,
+      }),
+      resolveWorkspaceCapabilityProviders: () => [
+        fragmentProvider('fixture-first', 'FixtureFirstTool', 'First guidance.'),
+        fragmentProvider('fixture-second', 'FixtureSecondTool', 'Second guidance.'),
+      ],
+    });
+    compositions.push(composition);
+    const workspace = await composition.attachWorkspace(fixture.workspace);
+    const models = createFixtureModels(() => completedStream(assistant('Recovered reply.')));
+    const policy = fixturePolicy();
+    await workspace.openConversation({
+      conversationId: 'conversation-fragment-recovery',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Fragment recovery fixture',
+    });
+    const input = {
+      conversationId: 'conversation-fragment-recovery',
+      modelPolicy: policy,
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en' as const,
+    };
+
+    await expect(
+      workspace.executeTurn({ ...input, prompt: 'invalid fragment turn' }),
+    ).rejects.toThrow("Prompt fragment 'fixture:conflict' is already owned");
+    expect(workspace.hasActiveTurns()).toBe(false);
+
+    conflicting = false;
+    await expect(
+      workspace.executeTurn({ ...input, prompt: 'valid fragment turn' }),
+    ).resolves.toMatchObject({
+      projection: expect.objectContaining({
+        conversationId: 'conversation-fragment-recovery',
+      }),
+    });
+    expect(workspace.hasActiveTurns()).toBe(false);
   });
 
   it('keeps generic project editors out of Assistant Space while retaining target-bound providers', async () => {
@@ -642,6 +809,7 @@ describe('AgentAppHost', () => {
     });
     const evidence = workspace.readConversationEvidence('conversation-1');
     const observedEvents: PiProductAgentEvent[] = [];
+    const composedSystemPrompts: string[] = [];
 
     const first = await workspace.executeTurn({
       conversationId: 'conversation-1',
@@ -670,6 +838,9 @@ describe('AgentAppHost', () => {
         emit: (event) => {
           observedEvents.push(event);
         },
+      },
+      onSystemPromptComposed: ({ systemPrompt }) => {
+        composedSystemPrompts.push(systemPrompt);
       },
     });
     const skillRecord = (await workspace.readSkillCatalog(true)).records.find(
@@ -700,6 +871,9 @@ describe('AgentAppHost', () => {
       permissionPolicy: allowTools(),
       workspaceTrusted: true,
       locale: 'en',
+      onSystemPromptComposed: ({ systemPrompt }) => {
+        composedSystemPrompts.push(systemPrompt);
+      },
     });
 
     expect(evidence).toMatchObject({
@@ -719,6 +893,10 @@ describe('AgentAppHost', () => {
     expect(first.configuration).toEqual(fixtureConfiguration());
     expect(Object.isFrozen(first.configuration)).toBe(true);
     expect(skill.durability).toBe('durable');
+    expect(composedSystemPrompts).toHaveLength(2);
+    expect(composedSystemPrompts[0]).toContain('Desktop Agent fixture');
+    expect(composedSystemPrompts[1]).toContain('Desktop Agent fixture');
+    expect(composedSystemPrompts[1]).toContain('<available_skills>');
     expect(first.projection.turns[0]?.items).toContainEqual(
       expect.objectContaining({
         kind: 'assistant_text',
@@ -1714,14 +1892,71 @@ describe('AgentAppHost', () => {
     expect(contexts[0]!.systemPrompt).toContain(
       'canonical Workspace Board is the primary Canvas index for this turn',
     );
-    expect(contexts[0]!.systemPrompt).toContain('neko/boards/workspace.nkc');
+    expect(contexts[0]!.systemPrompt).toContain(
+      'call canvas_list_nodes first with document_path exactly "neko/boards/workspace.nkc"',
+    );
     expect(contexts[1]!.systemPrompt).toContain(
       'selected exact Canvas is the primary creative context for this turn',
     );
-    expect(contexts[1]!.systemPrompt).toContain('neko/boards/plan.nkc');
-    expect(contexts[1]!.tools?.map((tool) => tool.name)).toContain(
-      TOOL_NAMES_CANVAS.CANVAS_LIST_NODES,
+    expect(contexts[1]!.systemPrompt).toContain(
+      'call canvas_list_nodes first with document_path exactly "neko/boards/plan.nkc"',
     );
+    const canvasQueryNames = [
+      TOOL_NAMES_CANVAS.CANVAS_LIST_NODES,
+      TOOL_NAMES_CANVAS.CANVAS_GET_NODE,
+      TOOL_NAMES_CANVAS.CANVAS_LIST_CONNECTIONS,
+      TOOL_NAMES_CANVAS.CANVAS_GET_CONNECTION,
+    ];
+    for (const toolName of canvasQueryNames) {
+      expect(
+        contexts[0]!.tools?.find((tool) => tool.name === toolName)?.parameters.properties[
+          'document_path'
+        ],
+      ).toMatchObject({ enum: ['neko/boards/workspace.nkc'] });
+      expect(
+        contexts[1]!.tools?.find((tool) => tool.name === toolName)?.parameters.properties[
+          'document_path'
+        ],
+      ).toMatchObject({ enum: ['neko/boards/plan.nkc'] });
+    }
+    expect(contexts[1]!.tools?.map((tool) => tool.name)).not.toContain(
+      TOOL_NAMES_CANVAS.CANVAS_CREATE_NODE,
+    );
+    expect(contexts[1]!.tools?.find((tool) => tool.name === TOOL_NAMES_SYSTEM.READ)).toMatchObject({
+      description: expect.stringContaining('Never use Read for .nkc or .otio'),
+    });
+  });
+
+  it('does not bind Canvas query schemas without a selected Canvas turn context', async () => {
+    const fixture = await createFixture();
+    const contexts: Context[] = [];
+    const models = createFixtureModels((_model, context) => {
+      contexts.push(context);
+      return completedStream(assistant('canvas response'));
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-no-canvas-routing',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Canvas routing fixture',
+    });
+
+    await workspace.startTurn({
+      conversationId: 'conversation-no-canvas-routing',
+      prompt: 'Analyze the notes.',
+      modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    }).completion;
+
+    const listNodes = contexts[0]!.tools?.find(
+      (tool) => tool.name === TOOL_NAMES_CANVAS.CANVAS_LIST_NODES,
+    );
+    expect(listNodes?.parameters.properties['document_path']).not.toHaveProperty('enum');
+    expect(contexts[0]!.systemPrompt).not.toContain('## Selected Workspace Canvas');
   });
 
   it('releases only after queued and approval protection leases leave the invisible Conversation', async () => {

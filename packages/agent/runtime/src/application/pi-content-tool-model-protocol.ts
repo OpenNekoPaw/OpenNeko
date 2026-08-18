@@ -58,7 +58,9 @@ const READ_DOCUMENT_PARAMETERS: ToolParameters = {
   properties: {
     input_ref: {
       type: 'string',
-      description: 'Input reference shown with the attached document.',
+      minLength: 1,
+      description:
+        'Required source reference shown with the attached document. Keep the same input_ref for every read of that document.',
     },
     mode: {
       type: 'string',
@@ -75,7 +77,9 @@ const READ_DOCUMENT_PARAMETERS: ToolParameters = {
     },
     cursor_ref: {
       type: 'string',
-      description: 'Cursor reference returned by an earlier result.',
+      minLength: 1,
+      description:
+        "Continuation reference returned by an earlier result. Use it with that document's original input_ref.",
     },
     max_chars: {
       type: 'integer',
@@ -88,6 +92,7 @@ const READ_DOCUMENT_PARAMETERS: ToolParameters = {
       description: 'Return bounded image references when available.',
     },
   },
+  required: ['input_ref'],
   additionalProperties: false,
 };
 
@@ -190,7 +195,7 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
     if (tool.name === TOOL_NAMES_SYSTEM.READ_DOCUMENT) {
       return {
         description:
-          'Read an attached structured document by short references. Use input_ref from the message, then unit_ref, cursor_ref, and image_ref values returned by this Tool. Never construct locators or paths.',
+          'Read an attached structured document by short references. Every call requires the original input_ref from the message; continuation also uses unit_ref or cursor_ref values returned by this Tool. Never construct locators or paths.',
         parameters: READ_DOCUMENT_PARAMETERS,
       };
     }
@@ -348,22 +353,23 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
     const mode = readMode(args['mode']);
     const maxChars = readBoundedInteger(args['max_chars'], 20_000, 1_000, MAX_MODEL_DOCUMENT_CHARS);
     const includeImages = args['include_images'] === undefined || args['include_images'] === true;
+    const sourceRef = requireRef(args['input_ref'], 'ReadDocument input_ref');
+    const source = this.requireBinding(conversationId, sourceRef, 'input');
+    if (source.mediaType !== 'document') {
+      throw new Error(`ReadDocument input_ref '${sourceRef}' is not a structured document.`);
+    }
     if (mode === 'next') {
       const cursorRef = requireRef(args['cursor_ref'], 'ReadDocument cursor_ref');
       const cursor = this.requireBinding(conversationId, cursorRef, 'cursor');
+      assertSameSource(source.locator, cursor.source, cursorRef);
       return {
-        source: cursor.source,
+        source: source.locator,
         mode,
         cursor: cursor.cursor,
         max_chars: maxChars,
         max_images: MAX_MODEL_IMAGE_REFS,
         include_images: includeImages,
       };
-    }
-    const sourceRef = requireRef(args['input_ref'], 'ReadDocument input_ref');
-    const source = this.requireBinding(conversationId, sourceRef, 'input');
-    if (source.mediaType !== 'document') {
-      throw new Error(`ReadDocument input_ref '${sourceRef}' is not a structured document.`);
     }
     if (mode === 'range') {
       const unitRef = requireRef(args['unit_ref'], 'ReadDocument unit_ref');

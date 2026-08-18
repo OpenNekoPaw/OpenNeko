@@ -12,9 +12,9 @@ delivery 恢复、真实 Electron 可见投影，以及 Canvas authoritative sav
 - LocalMetadata 只保存 delivery ledger/claim 状态，`.nkc` 始终是内容与布局权威。
 - 使用稳定 delivery/projection identity、target-scoped fenced claim、当前 authoritative document
   校验和原子 save，禁止 active/recent Canvas 推断、last-write-wins 与 legacy handoff fallback。
-- 将 `ContentLocator` 与 `ContentRepresentationLocator` 通过 owning content runtime 投影为绑定当前
-  Renderer 的短生命周期 `openneko://resource` URL，使 EPUB/CBZ 内部图片和文档派生页在 Agent
-  卡片与 Workspace Board 上显示真实像素；durable transcript 与 `.nkc` 仍只保存稳定 locator。
+- 将 durable `ContentLocator` 和 transient representation handle 通过 owning content runtime 投影为
+  绑定当前 Renderer 的短生命周期 `openneko://resource` URL，使 EPUB/CBZ 内部图片和文档派生页在
+  Agent 卡片中显示真实像素；Workspace Board、durable transcript 与 `.nkc` 只保存 `ContentLocator`。
 - 完成恢复、可见关系图、用户布局保护、authoritative save 和后续 Generation delivery 的
   Electron Desktop 场景。
 - 当 canonical Workspace Board 已在 Canvas 中打开时，通过同一 Main-owned document mutation

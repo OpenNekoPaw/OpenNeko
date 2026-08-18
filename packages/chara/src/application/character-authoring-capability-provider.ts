@@ -120,6 +120,7 @@ class GlobalCharacterCreationCapabilityProvider implements AgentCapabilityProvid
       {
         id: 'neko-chara:global-creation',
         priority: 72,
+        toolNames: [TOOL_NAMES_CHARA.FILL_CHARACTER_DRAFT],
         content:
           'Assistant Character creation commits one confirmed proposal directly as a global Character and its first immutable version. Separate source-backed facts from inferred suggestions, present the complete proposal with the pending global write, and treat the standard Tool approval as the single mutation confirmation. On success, describe the result as a global Character and use its display name; do not expose internal identities, version metadata, lifecycle labels, or field counts unless a diagnostic requires them. It never creates or infers a Project, workspace Character, synchronization link, runtime, Room, Storyline, memory, model, Skill, or Tool configuration fact.',
         locales: {
@@ -184,6 +185,7 @@ class CharacterAuthoringCapabilityProvider implements AgentCapabilityProvider {
       {
         id: 'neko-chara:authoring',
         priority: 72,
+        toolNames: [TOOL_NAMES_CHARA.FILL_CHARACTER_DRAFT],
         content:
           'Character authoring fills only the exact fresh workspace Character authorized for the current Conversation. Separate source-backed facts from inferred suggestions, present the complete proposal together with the pending workspace write, and treat the standard Tool approval as the single mutation confirmation without adding a text-confirmation gate. On success, describe the result as a workspace Character and use its display name; do not expose internal CharacterProject identity or draft lifecycle fields unless the user explicitly asks or a diagnostic requires them. When no exact CharacterProject authoring target is bound, return a proposal and state that the current Conversation has no writable workspace Character target; do not conflate this with global CharacterVersion synchronization or suggest that capability may appear later. It never synchronizes a CharacterVersion or creates runtime, Room, Storyline, memory, model, Skill, or Tool configuration facts.',
         locales: {

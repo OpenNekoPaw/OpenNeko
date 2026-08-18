@@ -5,7 +5,7 @@
   "caseGroup": "regression",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Read a committed synthetic document through ReadDocument and deliver its structured Tool result through the Pi runtime.",
+    "userBehavior": "Read a committed synthetic document through the required attached input_ref and deliver its structured Tool result through the Pi runtime.",
     "canonicalPath": [
       "Desktop Agent input queue",
       "Pi Agent Tool schema",
@@ -19,20 +19,16 @@
       {
         "ref": "read-document-facts",
         "kind": "runtime-fact",
-        "description": "Pi runtime and exact Timeline/Item identity, one successful ReadDocument Tool item, one exact terminal patch, and terminal answer facts.",
+        "description": "Pi runtime, exact attached input_ref path, Timeline/Item identity, one successful ReadDocument Tool item, one exact terminal patch, and terminal answer facts.",
         "required": true
       }
     ],
-    "expectedResult": "ReadDocument accepts its short-reference schema, reads the attached synthetic EPUB once, and returns a successful Tool result before the final marker.",
-    "expectedFailure": "Provider schema rejection, missing or failed ReadDocument execution, runtime diagnostics, or a missing terminal marker fails visibly."
+    "expectedResult": "ReadDocument receives the exact required attached input_ref, reads the synthetic EPUB once, and returns a successful Tool result before the final marker.",
+    "expectedFailure": "Provider schema rejection, omitted or replaced input_ref, missing or failed ReadDocument execution, runtime diagnostics, or a missing terminal marker fails visibly."
   },
-  "fixtureRefs": [
-    "document-image-workspace"
-  ],
+  "fixtureRefs": ["document-image-workspace"],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
@@ -101,9 +97,7 @@
       "id": "answer",
       "kind": "final-answer",
       "mode": "contains",
-      "text": [
-        "READ_DOCUMENT_DELIVERY_OK"
-      ],
+      "text": ["READ_DOCUMENT_DELIVERY_OK"],
       "evidenceRef": "read-document-facts"
     }
   ],

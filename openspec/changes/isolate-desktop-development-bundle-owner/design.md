@@ -64,6 +64,12 @@ The record contains the launcher PID and a random ownership token. Cleanup rerea
 
 `@neko/app-desktop` continues exposing `dev`, so root commands, functional scenarios and developer workflows do not gain a parallel entry. The launcher forwards all arguments to `electron-forge start` and propagates the exact exit status.
 
+### Serialize the shared Main/Preload Vite output
+
+Electron Forge builds Main and Preload into the same `.vite/build` directory. The Forge lifecycle removes that directory once before the build group starts; the individual Vite configs therefore set `emptyOutDir: false`, and the Forge Vite build group runs these targets sequentially. The development restart hook is attached to the final Preload target, so Electron is restarted only after both entry graphs and their hashed lazy chunks exist. This keeps one complete graph in the shared output and prevents Main from importing a chunk removed by a sibling build.
+
+Alternative rejected: leaving the two Vite targets concurrent or letting each target clear the directory. Either choice permits a valid Main entry to retain a reference to a deleted hashed chunk.
+
 ### Evaluation disposition
 
 The defect can prevent provider behavior, but the change does not alter Agent prompts, models, Tool routing or provider contracts. Reuse `agent-runtime.stream-delivery` only as adjacent key-free regression evidence. The owning acceptance is deterministic orchestration plus a real development launch conflict because a real model cannot establish build ownership correctness.

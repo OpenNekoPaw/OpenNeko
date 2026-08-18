@@ -74,6 +74,7 @@ import {
   CONFIGURED_AGENT_TURN_CAPABILITIES,
   AGENT_AUTHORING_BINDING_METADATA_KEY,
   isAgentAuthorizedContentReferenceContextData,
+  TOOL_NAMES_CANVAS,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
   TOOL_NAMES_SYSTEM,
@@ -83,7 +84,7 @@ import {
   type AgentEntryTargetReceipt,
   type AgentTurnCapabilityConstraint,
   type IToolRegistry,
-  type PromptFragment,
+  type OwnedPromptFragment,
   type Tool,
 } from '@neko/agent-contracts';
 import type { AgentAuthoringMutationAuthority } from './agent-authoring-mutation-authority';
@@ -92,6 +93,7 @@ import {
   NodeAuthorizedWorkspaceWriter,
 } from '@neko/content/node';
 import {
+  CANVAS_WORKSPACE_BOARD_PATH,
   CanvasProjectAuthoringService,
   type CanvasWorkspaceTurnContext,
 } from '@neko/canvas-domain';
@@ -161,7 +163,10 @@ export interface AgentTurnInput {
   readonly locale: 'en' | 'zh';
   readonly contextPayloads?: readonly AgentContextPayload[];
   readonly entryTargetReceipt?: AgentEntryTargetReceipt | null;
+  /** Base system policy before Turn-owned capability and user-instruction composition. */
   readonly systemPrompt?: string;
+  /** The only Turn-level input for Host-configured user instructions. */
+  readonly userInstructions?: string;
   readonly skillName?: string;
   readonly skillActivationId?: string;
   readonly additionalInstructions?: string;
@@ -171,6 +176,10 @@ export interface AgentTurnInput {
   readonly onQueuedMessageReleased?: (release: {
     readonly item: AgentQueuedMessageItem;
     readonly snapshot: AgentMessageQueueSnapshot;
+  }) => void;
+  readonly onSystemPromptComposed?: (input: {
+    readonly identity: PiToolRunIdentity;
+    readonly systemPrompt: string;
   }) => void;
   readonly capabilityConstraint?: AgentTurnCapabilityConstraint;
 }
@@ -317,7 +326,6 @@ export interface AgentWorkspaceRuntime {
   ): Promise<Awaited<ReturnType<PiConversationRuntime['compactContext']>>>;
   readSkillCatalog(workspaceTrusted: boolean): Promise<AgentSkillCatalog>;
   invokeCommand(name: string, activationId: string, args?: string): Promise<string>;
-  readCapabilityPromptFragments(locale: 'en' | 'zh'): readonly PromptFragment[];
   listConversations(): ReturnType<NodePiConversationAuthority['listConversations']>;
   readConversationEvidence(conversationId: string): AgentConversationEvidence;
   readConversationProjection(
@@ -1333,14 +1341,17 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     for (const pluginId of this.pluginRuntime?.contributions.keys() ?? []) {
       pending.pluginIds.add(pluginId);
     }
-    const runtimeSnapshot = Object.freeze({
-      tools: Object.freeze([...this.tools.list()]),
-      pluginSkillRoots: this.pluginSkillRoots,
-    });
     let outcome:
       | { readonly ok: true; readonly result: AgentTurnResult }
       | { readonly ok: false; readonly error: unknown };
     try {
+      const runtimeSnapshot = Object.freeze({
+        tools: Object.freeze([...this.tools.list()]),
+        pluginSkillRoots: this.pluginSkillRoots,
+        promptFragments: Object.freeze(
+          this.capabilities.getAllPromptFragments(pending.input.locale),
+        ),
+      });
       outcome = {
         ok: true,
         result: await this.executeTurnOwned(pending.input, pending.identity, runtimeSnapshot),
@@ -1457,6 +1468,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     runtimeSnapshot: {
       readonly tools: readonly Tool[];
       readonly pluginSkillRoots: readonly SkillSourceRoot[];
+      readonly promptFragments: readonly OwnedPromptFragment[];
     },
   ): Promise<AgentTurnResult> {
     this.requireActive();
@@ -1481,10 +1493,21 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       capabilityConstraint.tools === 'none'
         ? []
         : bindAgentAuthoringMutationAuthority(
-            filterAgentTurnImageTools(runtimeSnapshot.tools, imageRoute),
+            bindCanvasTurnQueryTarget(
+              filterAgentTurnImageTools(runtimeSnapshot.tools, imageRoute),
+              input.canvasTurnContext,
+            ),
             input.entryTargetReceipt ?? null,
             this.options.authoringMutationAuthority,
           );
+    const systemPrompt = composeAgentTurnSystemPrompt({
+      base: input.systemPrompt ?? owner.baseSystemPrompt,
+      userInstructions: input.userInstructions,
+      fragments: runtimeSnapshot.promptFragments,
+      tools: turnTools,
+      canvasTurnContext: input.canvasTurnContext,
+      imageRoute,
+    });
     const contextPayloads = await materializeAgentTurnContextPayloads({
       contextPayloads: input.contextPayloads,
       contentAccessRuntime: this.contentAccessRuntime,
@@ -1573,13 +1596,13 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       workspaceTrusted: input.workspaceTrusted,
       events,
       ...(images.length === 0 ? {} : { images }),
-      systemPrompt: appendAgentTurnImageRoutingPrompt(
-        appendCanvasTurnContextPrompt(
-          input.systemPrompt ?? owner.baseSystemPrompt,
-          input.canvasTurnContext,
-        ),
-        imageRoute,
-      ),
+      systemPrompt,
+      ...(input.onSystemPromptComposed === undefined
+        ? {}
+        : {
+            onSystemPromptComposed: (systemPrompt: string) =>
+              input.onSystemPromptComposed?.({ identity, systemPrompt }),
+          }),
       ...(input.skillName === undefined ? {} : { skillName: input.skillName }),
       ...(input.skillActivationId === undefined
         ? {}
@@ -1705,12 +1728,6 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   async invokeCommand(name: string, activationId: string, args?: string): Promise<string> {
     this.requireActive();
     return (await this.discoverCommands()).invokeExact(name, activationId, args);
-  }
-
-  readCapabilityPromptFragments(locale: 'en' | 'zh'): readonly PromptFragment[] {
-    this.requireActive();
-    this.capabilities.setCapabilityContext({ hostContext: null, locale });
-    return Object.freeze(this.capabilities.getAllPromptFragments());
   }
 
   listConversations(): ReturnType<NodePiConversationAuthority['listConversations']> {
@@ -2270,6 +2287,49 @@ function filterAgentTurnImageTools(
   });
 }
 
+const CANVAS_QUERY_TOOL_NAMES: ReadonlySet<string> = new Set([
+  TOOL_NAMES_CANVAS.CANVAS_LIST_NODES,
+  TOOL_NAMES_CANVAS.CANVAS_GET_NODE,
+  TOOL_NAMES_CANVAS.CANVAS_LIST_CONNECTIONS,
+  TOOL_NAMES_CANVAS.CANVAS_GET_CONNECTION,
+]);
+
+function bindCanvasTurnQueryTarget(
+  tools: readonly Tool[],
+  context: CanvasWorkspaceTurnContext | undefined,
+): readonly Tool[] {
+  if (context === undefined) return tools;
+  const documentPath =
+    context.target.kind === 'workspace-board'
+      ? CANVAS_WORKSPACE_BOARD_PATH
+      : context.target.canvasId;
+  return tools.map((tool) => {
+    if (!CANVAS_QUERY_TOOL_NAMES.has(tool.name)) return tool;
+    const documentPathParameter = tool.parameters.properties['document_path'];
+    if (documentPathParameter === undefined || documentPathParameter.type !== 'string') {
+      throw new Error(
+        `Canvas query Tool '${tool.name}' requires a string document_path parameter.`,
+      );
+    }
+    return new Proxy(tool, {
+      get(target, property, receiver) {
+        if (property !== 'parameters') return Reflect.get(target, property, receiver);
+        return {
+          ...target.parameters,
+          properties: {
+            ...target.parameters.properties,
+            document_path: {
+              ...documentPathParameter,
+              enum: [documentPath],
+              description: `Exact selected Workspace-relative Canvas: ${documentPath}`,
+            },
+          },
+        };
+      },
+    });
+  });
+}
+
 function bindAgentAuthoringMutationAuthority(
   tools: readonly Tool[],
   receipt: AgentEntryTargetReceipt | null,
@@ -2286,14 +2346,33 @@ function bindAgentAuthoringMutationAuthority(
     ) {
       return [];
     }
+    const exactContentDocumentId =
+      tool.name === 'Write' && receipt.binding.target.kind === 'content-document'
+        ? receipt.binding.target.documentId
+        : undefined;
     return [
       new Proxy(tool, {
         get(target, property, receiver) {
+          if (property === 'parameters' && exactContentDocumentId !== undefined) {
+            return projectExactContentDocumentWriteParameters(
+              target.parameters,
+              exactContentDocumentId,
+            );
+          }
           if (property !== 'execute') return Reflect.get(target, property, receiver);
           return async (
             args: Record<string, unknown>,
             options?: Parameters<Tool['execute']>[1],
           ) => {
+            if (
+              exactContentDocumentId !== undefined &&
+              args['file_path'] !== exactContentDocumentId
+            ) {
+              return {
+                success: false,
+                error: `Agent authoring authority rejected Write: file_path must match exact content document '${exactContentDocumentId}'.`,
+              };
+            }
             let binding;
             try {
               binding = await authority.authorize({
@@ -2319,12 +2398,57 @@ function bindAgentAuthoringMutationAuthority(
   });
 }
 
+function projectExactContentDocumentWriteParameters(
+  parameters: Tool['parameters'],
+  documentId: string,
+): Tool['parameters'] {
+  const filePath = parameters.properties['file_path'];
+  if (filePath === undefined || filePath.type !== 'string') {
+    throw new Error('Receipt-bound Write requires a string file_path parameter.');
+  }
+  return {
+    ...parameters,
+    properties: {
+      ...parameters.properties,
+      file_path: {
+        ...filePath,
+        enum: [documentId],
+        description: `Exact authorized Workspace-relative document: ${documentId}`,
+      },
+    },
+  };
+}
+
 function appendAgentTurnImageRoutingPrompt(
   systemPrompt: string,
   route: AgentTurnImageRoute,
 ): string {
   if (route !== 'external') return systemPrompt;
   return `${systemPrompt}\n\n## External Image Understanding\n\nThe main model cannot inspect image pixels directly. For image inspection, OCR, comparison, style, layout, or quality questions, call the registered external image understanding Tool with the short image references from this Conversation and a concise focus. Base the answer on its structured evidence. Never construct paths or locators, select a provider or model, call ReadImage, or guess from filenames and labels.`;
+}
+
+function composeAgentTurnSystemPrompt(input: {
+  readonly base: string;
+  readonly userInstructions?: string;
+  readonly fragments: readonly OwnedPromptFragment[];
+  readonly tools: readonly Tool[];
+  readonly canvasTurnContext?: CanvasWorkspaceTurnContext;
+  readonly imageRoute: AgentTurnImageRoute;
+}): string {
+  const toolNames = new Set(input.tools.map((tool) => tool.name));
+  const sections = [input.base.trim()];
+  for (const fragment of input.fragments) {
+    if (!fragment.toolNames.every((toolName) => toolNames.has(toolName))) continue;
+    const content = fragment.content.trim();
+    if (!content) continue;
+    sections.push(`## Capability Guidance: ${fragment.providerId} / ${fragment.id}\n\n${content}`);
+  }
+  const userInstructions = input.userInstructions?.trim();
+  if (userInstructions) sections.push(`## User Instructions\n\n${userInstructions}`);
+  return appendAgentTurnImageRoutingPrompt(
+    appendCanvasTurnContextPrompt(sections.filter(Boolean).join('\n\n'), input.canvasTurnContext),
+    input.imageRoute,
+  );
 }
 
 async function materializeAgentTurnContextPayloads(input: {
@@ -2566,6 +2690,7 @@ interface ExecuteAgentConversationInput {
   readonly workspaceTrusted: boolean;
   readonly events: PiProductEventSink;
   readonly systemPrompt?: string;
+  readonly onSystemPromptComposed?: (systemPrompt: string) => void;
   readonly skillName?: string;
   readonly skillActivationId?: string;
   readonly additionalInstructions?: string;
@@ -2616,6 +2741,9 @@ class AgentConversationOwner {
             workspaceTrusted: input.workspaceTrusted,
             events: input.events,
             ...(input.systemPrompt === undefined ? {} : { systemPrompt: input.systemPrompt }),
+            ...(input.onSystemPromptComposed === undefined
+              ? {}
+              : { onSystemPromptComposed: input.onSystemPromptComposed }),
           })
         : this.runtime.executeSkill({
             turnId: input.identity.turnId,
@@ -2637,6 +2765,9 @@ class AgentConversationOwner {
             workspaceTrusted: input.workspaceTrusted,
             events: input.events,
             ...(input.systemPrompt === undefined ? {} : { systemPrompt: input.systemPrompt }),
+            ...(input.onSystemPromptComposed === undefined
+              ? {}
+              : { onSystemPromptComposed: input.onSystemPromptComposed }),
           });
     this.active = { identity: input.identity, operation };
     try {

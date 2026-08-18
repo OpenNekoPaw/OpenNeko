@@ -970,7 +970,6 @@ function workspace(workspaceId = 'workspace-1'): AgentWorkspaceRuntime {
     compactContext: vi.fn(),
     readSkillCatalog: vi.fn(),
     invokeCommand: vi.fn(),
-    readCapabilityPromptFragments: () => [],
     listConversations: vi.fn(() => []),
     readConversationEvidence: vi.fn(),
     readConversationProjection: vi.fn(),

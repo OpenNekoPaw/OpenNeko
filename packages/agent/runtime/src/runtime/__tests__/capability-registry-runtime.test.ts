@@ -27,6 +27,8 @@ describe('CapabilityRegistryRuntime', () => {
     const fragment = {
       id: 'neko.canvas:markdown',
       content: 'Canvas Markdown guidance.',
+      priority: 72,
+      toolNames: ['CanvasMarkdown'],
       locales: {
         zh: {
           content: 'Canvas Markdown 中文指导。',
@@ -42,7 +44,7 @@ describe('CapabilityRegistryRuntime', () => {
 
     runtime.registerProvider(
       {
-        ...createProvider('neko.canvas', []),
+        ...createProvider('neko.canvas', [createTool('CanvasMarkdown')]),
         getPromptFragments: () => [fragment],
       },
       { hostContext: {}, locale: 'zh' },
@@ -52,8 +54,63 @@ describe('CapabilityRegistryRuntime', () => {
       expect.objectContaining({
         id: 'neko.canvas:markdown',
         content: 'Canvas Markdown 中文指导。',
+        providerId: 'neko.canvas',
       }),
     ]);
+  });
+
+  it('sorts prompt fragments by priority and rejects duplicate identities', () => {
+    const runtime = new CapabilityRegistryRuntime({ toolRegistry: new ToolRegistry() });
+    runtime.registerProvider(
+      {
+        ...createProvider('neko.first', [createTool('FirstTool')]),
+        getPromptFragments: () => [
+          {
+            id: 'shared:guide',
+            content: 'First guide.',
+            priority: 71,
+            toolNames: ['FirstTool'],
+          },
+        ],
+      },
+      { hostContext: {} },
+    );
+    runtime.registerProvider(
+      {
+        ...createProvider('neko.second', [createTool('SecondTool')]),
+        getPromptFragments: () => [
+          {
+            id: 'second:guide',
+            content: 'Second guide.',
+            priority: 72,
+            toolNames: ['SecondTool'],
+          },
+        ],
+      },
+      { hostContext: {} },
+    );
+
+    expect(runtime.getAllPromptFragments().map((fragment) => fragment.id)).toEqual([
+      'second:guide',
+      'shared:guide',
+    ]);
+
+    runtime.registerProvider(
+      {
+        ...createProvider('neko.conflict', [createTool('ConflictTool')]),
+        getPromptFragments: () => [
+          {
+            id: 'shared:guide',
+            content: 'Conflicting guide.',
+            toolNames: ['ConflictTool'],
+          },
+        ],
+      },
+      { hostContext: {} },
+    );
+    expect(() => runtime.getAllPromptFragments()).toThrow(
+      "Prompt fragment 'shared:guide' is already owned by provider 'neko.first'.",
+    );
   });
 
   it('cleans registered providers that no longer have installed manifests', () => {

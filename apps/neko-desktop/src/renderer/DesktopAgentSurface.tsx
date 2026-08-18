@@ -375,51 +375,48 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
     const connectionReady = state.connectionKey === connectionKey;
     content = (
       <div className="desktop-agent-composition">
-        <div
-          className="desktop-agent-root"
-          data-owner-root="agent"
-          data-view-id={viewId}
-          hidden={!connectionReady}
-        >
-          <Suspense fallback={<AgentSurfaceStatus message={t('agent.loading')} />}>
-            <DesktopAutomationSessionControlBoundary runtime={automationSessionControlRuntime}>
-              <AgentWebviewRoot
-                hostRuntimeAdapter={state.adapter}
-                agentPresentation={state.agentPresentation}
-                composerWorkspace={props.composerWorkspace}
-                initialConversation={
-                  state.agentPresentation?.phase === 'session'
-                    ? { id: state.agentPresentation.conversationId, title: '' }
-                    : state.initialConversation
-                }
-                initialInput={state.initialInput}
-                characterDialogueHandoff={props.characterDialogueHandoff}
-                onCharacterDialogueHandoffConsumed={props.onCharacterDialogueHandoffConsumed}
-                locale={locale}
-                presentation="desktop-dock"
-                conversationFeed={
-                  props.conversationFeed && state.agentPresentation?.phase === 'session'
-                    ? {
-                        conversationId: state.agentPresentation.conversationId,
-                        content: props.conversationFeed,
-                      }
-                    : undefined
-                }
-                toolCallAccessoryRenderer={({ conversationId, toolCall }) => (
-                  <>
-                    {automationSessionControlRuntime
-                      ? renderAutomationSessionControl({ conversationId, toolCall })
-                      : null}
-                    <CharacterProductHandoffAccessory
-                      onHandoff={props.onCharacterProductHandoff}
-                      toolCall={toolCall}
-                    />
-                  </>
-                )}
-              />
-            </DesktopAutomationSessionControlBoundary>
-          </Suspense>
-        </div>
+        {connectionReady ? (
+          <div className="desktop-agent-root" data-owner-root="agent" data-view-id={viewId}>
+            <Suspense fallback={<AgentSurfaceStatus message={t('agent.loading')} />}>
+              <DesktopAutomationSessionControlBoundary runtime={automationSessionControlRuntime}>
+                <AgentWebviewRoot
+                  hostRuntimeAdapter={state.adapter}
+                  agentPresentation={state.agentPresentation}
+                  composerWorkspace={props.composerWorkspace}
+                  initialConversation={
+                    state.agentPresentation?.phase === 'session'
+                      ? { id: state.agentPresentation.conversationId, title: '' }
+                      : state.initialConversation
+                  }
+                  initialInput={state.initialInput}
+                  characterDialogueHandoff={props.characterDialogueHandoff}
+                  onCharacterDialogueHandoffConsumed={props.onCharacterDialogueHandoffConsumed}
+                  locale={locale}
+                  presentation="desktop-dock"
+                  conversationFeed={
+                    props.conversationFeed && state.agentPresentation?.phase === 'session'
+                      ? {
+                          conversationId: state.agentPresentation.conversationId,
+                          content: props.conversationFeed,
+                        }
+                      : undefined
+                  }
+                  toolCallAccessoryRenderer={({ conversationId, toolCall }) => (
+                    <>
+                      {automationSessionControlRuntime
+                        ? renderAutomationSessionControl({ conversationId, toolCall })
+                        : null}
+                      <CharacterProductHandoffAccessory
+                        onHandoff={props.onCharacterProductHandoff}
+                        toolCall={toolCall}
+                      />
+                    </>
+                  )}
+                />
+              </DesktopAutomationSessionControlBoundary>
+            </Suspense>
+          </div>
+        ) : null}
         {connectionReady && state.connection ? (
           <DesktopAutomationTargetSelectionSurface
             connection={state.connection}

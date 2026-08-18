@@ -196,6 +196,14 @@ export class PiEventProjector {
     await this.emit({ type: 'confirmation.required', ...input });
   }
 
+  async failed(error: string): Promise<void> {
+    if (this.terminal) {
+      throw new Error('Pi turn failure arrived after terminal turn state.');
+    }
+    this.terminal = true;
+    await this.emit({ type: 'turn.failed', error });
+  }
+
   async persistenceChanged(state: PiTurnDurabilityState, diagnostic?: string): Promise<void> {
     await this.emit({
       type: 'turn.persistence',
@@ -224,8 +232,8 @@ export class PiEventProjector {
 
   private async projectTerminal(messages: AgentMessage[]): Promise<void> {
     const assistant = findLastAssistant(messages);
-    this.terminal = true;
     if (assistant?.stopReason === 'aborted') {
+      this.terminal = true;
       await this.emit({
         type: 'turn.cancelled',
         ...(assistant.errorMessage === undefined ? {} : { reason: assistant.errorMessage }),
@@ -233,12 +241,10 @@ export class PiEventProjector {
       return;
     }
     if (assistant?.stopReason === 'error') {
-      await this.emit({
-        type: 'turn.failed',
-        error: assistant.errorMessage ?? 'Pi Agent turn failed without an error message.',
-      });
+      await this.failed(assistant.errorMessage ?? 'Pi Agent turn failed without an error message.');
       return;
     }
+    this.terminal = true;
     await this.emit({ type: 'turn.completed' });
   }
 

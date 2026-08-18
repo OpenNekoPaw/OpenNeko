@@ -8,9 +8,8 @@
  * baking the guidance into Skills (which would couple the advice to a
  * persona).
  *
- * Scope (PR3e): fragments are unconditional — whatever a provider returns
- * is always injected. Activation filters (by skill / stage / tool) are
- * deferred until real use cases demand them.
+ * Scope: fragments are injected only when every declared Tool name is
+ * available in the exact final Turn Tool snapshot.
  *
  * Locale variants: providers own translated model-facing text. Runtime
  * surfaces select matching content before injecting the fragment.
@@ -18,19 +17,18 @@
  * Id convention: fragment ids must be globally unique across all providers.
  * By convention use `{package-name}:{local-id}` so collisions are obvious
  * (e.g. `neko-cut:timeline-basics`, `neko-canvas:shot-composition`). The
- * SubpackageFragmentsModule drops duplicates silently (first-writer-wins).
+ * capability registry rejects duplicate ids at the owning registration boundary.
  */
 export interface PromptFragment {
   /**
    * Globally-unique fragment id. Convention: `{package}:{local-id}`.
-   * Used as the composer section id (prefixed `fragment:`) so fragments
-   * can be bulk-cleared via `removeSectionsByPrefix('fragment:')`.
+   * Used with provider provenance in the final capability-guidance heading.
    */
   readonly id: string;
 
   /**
-   * Prompt text content. Markdown preferred; no wrapper headings added by
-   * the module — the fragment body is emitted verbatim.
+   * Prompt text content. Markdown preferred; the Turn composer adds the
+   * provider-qualified capability-guidance heading.
    */
   readonly content: string;
 
@@ -41,11 +39,18 @@ export interface PromptFragment {
   readonly locales?: Readonly<Record<string, PromptFragmentLocalizedContent>>;
 
   /**
-   * Optional per-fragment priority within the environment layer. Defaults
-   * to 70 (between AGENTS.md=80 and memory:project=60). Higher values
-   * appear earlier in the composed output.
+   * Optional per-fragment priority. Defaults to 70; higher values appear
+   * earlier among capability-guidance sections.
    */
   readonly priority?: number;
+
+  /** Canonical Tool names whose exact Turn availability makes this guidance applicable. */
+  readonly toolNames: readonly string[];
+}
+
+export interface OwnedPromptFragment extends PromptFragment {
+  /** Exact capability provider that contributed this fragment. */
+  readonly providerId: string;
 }
 
 export interface PromptFragmentLocalizedContent {

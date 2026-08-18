@@ -506,7 +506,7 @@ export interface AgentTurnRuntimePlan {
 export interface AgentTurnConfigurationPlanInput {
   readonly conversationId: string;
   readonly baseSystemPrompt: string;
-  readonly customSystemPrompt?: string | null;
+  readonly userInstructions?: string | null;
   readonly ambientCanvas?: readonly AgentAmbientCanvasNode[];
   readonly executionMode: 'auto' | 'ask' | 'plan';
   readonly chatModel?: ModelRef<'llm'>;
@@ -1633,11 +1633,8 @@ export function appendAmbientCanvasSystemPrompt(
   );
 }
 
-function appendCustomSystemPromptOverlay(
-  systemPrompt: string,
-  customSystemPrompt?: string | null,
-): string {
-  const trimmed = customSystemPrompt?.trim();
+function appendUserInstructions(systemPrompt: string, userInstructions?: string | null): string {
+  const trimmed = userInstructions?.trim();
   if (!trimmed) {
     return systemPrompt;
   }
@@ -1758,7 +1755,7 @@ export function buildAgentTurnConfigurationPlan(
 
   return {
     systemPrompt: appendAmbientCanvasSystemPrompt(
-      appendCustomSystemPromptOverlay(input.baseSystemPrompt, input.customSystemPrompt),
+      appendUserInstructions(input.baseSystemPrompt, input.userInstructions),
       input.ambientCanvas ?? [],
     ),
     maxIterations: input.maxIterations ?? 200,

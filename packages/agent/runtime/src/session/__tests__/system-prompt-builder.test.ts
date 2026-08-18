@@ -134,6 +134,53 @@ describe('SystemPromptBuilder', () => {
       expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('当请求同时包含分析和创作产物');
     });
 
+    it('requires truthful ordinary-document handoff through current Write authority', () => {
+      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain(
+        'the current Tool list contains `Write`, use that Tool with the exact authorized target',
+      );
+      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain(
+        'If `Write` is absent, state that this Turn lacks durable document mutation authority',
+      );
+      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain(
+        '当前 Tool 列表包含 `Write` 时，应使用该 Tool 写入精确授权目标',
+      );
+      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain(
+        '若 `Write` 不存在，应说明当前 Turn 缺少持久文档变更权限',
+      );
+    });
+
+    it('requires conditional analysis-coverage discipline in base prompts', () => {
+      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain(
+        'Base analysis claims only on inputs and Tool/runtime observations actually available in the current Turn',
+      );
+      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain(
+        'When the user asks for complete or comprehensive analysis',
+      );
+      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain(
+        'or actual observations show truncation, sampling, missing portions, or failed reads',
+      );
+      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain(
+        'Claim complete coverage only when the requested scope is determinable',
+      );
+      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain(
+        'For ordinary conversation, narrow questions, and single execution results, answer directly',
+      );
+      expect(BUILTIN_DEFAULT_PROMPT_EN).toContain(
+        'not by file type, asset category, domain, or Skill identity',
+      );
+
+      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain(
+        '分析结论只能基于当前 Turn 实际可用的输入和 Tool/runtime 观察',
+      );
+      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('当用户要求完整/全面分析');
+      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('或实际观察显示截断、抽样、缺失或读取失败');
+      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain(
+        '只有请求范围可判定且每个请求部分都实际观察成功时，才可声称完整覆盖',
+      );
+      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('普通对话、局部问题和单次执行结果应直接回答');
+      expect(BUILTIN_DEFAULT_PROMPT_ZH).toContain('不按文件类型、素材类别、领域或 Skill 身份触发');
+    });
+
     it('should build plan mode English prompt', () => {
       const builder = new SystemPromptBuilder({ locale: 'en', executionMode: 'plan' });
       const prompt = builder.build();

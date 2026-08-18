@@ -88,6 +88,7 @@ describe('PiConversationRuntime', () => {
       baseSystemPrompt: 'OpenNeko fixture',
     });
     const events: PiProductAgentEvent[] = [];
+    const composedPrompts: string[] = [];
 
     await runtime.execute({
       turnId: 'turn-1',
@@ -99,6 +100,7 @@ describe('PiConversationRuntime', () => {
       permissionPolicy: { preflight: () => ({ allowed: true }) },
       workspaceTrusted: true,
       events: collect(events),
+      onSystemPromptComposed: (systemPrompt) => composedPrompts.push(systemPrompt),
     });
 
     expect(captured).toHaveLength(1);
@@ -112,6 +114,7 @@ describe('PiConversationRuntime', () => {
       },
     });
     expect(captured[0]!.context.tools).toEqual([]);
+    expect(composedPrompts).toEqual([captured[0]!.context.systemPrompt]);
     await expect(
       captured[0]?.options?.onPayload?.({ model: 'main', messages: [] }, captured[0].model),
     ).resolves.toEqual({ model: 'main', messages: [], top_p: 0.95 });
@@ -292,6 +295,191 @@ describe('PiConversationRuntime', () => {
         }),
       }),
     );
+    runtime.dispose();
+  });
+
+  it('fails the current turn after two consecutive identical Tool failures', async () => {
+    const lease = authority.acquireLease('conversation-repeated-tool-failure');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-repeated-tool-failure',
+      branchId: 'branch-main',
+    });
+    const responses = [
+      assistantContent('toolUse', [
+        {
+          type: 'toolCall' as const,
+          id: 'read-document-invalid-1',
+          name: 'ReadDocument',
+          arguments: {},
+        },
+      ]),
+      assistantContent('toolUse', [
+        {
+          type: 'toolCall' as const,
+          id: 'read-document-invalid-2',
+          name: 'ReadDocument',
+          arguments: {},
+        },
+      ]),
+      assistant('stop', 'later turn remains usable'),
+    ];
+    let providerCalls = 0;
+    const models = createFixtureModels(() => {
+      providerCalls += 1;
+      const response = responses.shift();
+      if (response === undefined) throw new Error('Unexpected extra Pi model turn.');
+      return completedStream(response);
+    });
+    const modelPolicy = policy();
+    const execute = vi.fn(async () => ({ content: [], details: {} }));
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-repeated-tool-failure',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'OpenNeko fixture',
+    });
+    const events: PiProductAgentEvent[] = [];
+    const failingTool = {
+      name: 'ReadDocument',
+      label: 'Read document',
+      description: 'Read one document.',
+      parameters: Type.Object(
+        { input_ref: Type.String({ minLength: 1 }) },
+        { additionalProperties: false },
+      ),
+      execute,
+    };
+
+    await runtime.execute({
+      turnId: 'turn-repeated-tool-failure',
+      runId: 'run-repeated-tool-failure',
+      prompt: 'read the document',
+      modelPolicy,
+      skillSnapshot: await emptySkills(),
+      capabilityTools: [failingTool],
+      permissionPolicy: { preflight: () => ({ allowed: true }) },
+      workspaceTrusted: true,
+      events: collect(events),
+    });
+
+    expect(providerCalls).toBe(2);
+    expect(execute).not.toHaveBeenCalled();
+    expect(events.filter((event) => event.type === 'tool.completed')).toHaveLength(2);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'turn.failed',
+        error:
+          'Agent stopped after ReadDocument repeated the same failed Tool call twice consecutively.',
+      }),
+    );
+    expect(events.filter((event) => event.type === 'turn.completed')).toHaveLength(0);
+    expect(
+      authority.readCheckpoint('conversation-repeated-tool-failure', 'turn-repeated-tool-failure'),
+    ).toMatchObject({ terminalState: 'failed' });
+
+    const laterEvents: PiProductAgentEvent[] = [];
+    await runtime.execute({
+      turnId: 'turn-after-repeated-tool-failure',
+      runId: 'run-after-repeated-tool-failure',
+      prompt: 'continue normally',
+      modelPolicy,
+      skillSnapshot: await emptySkills(),
+      capabilityTools: [],
+      permissionPolicy: { preflight: () => ({ allowed: true }) },
+      workspaceTrusted: true,
+      events: collect(laterEvents),
+    });
+    expect(providerCalls).toBe(3);
+    expect(laterEvents).toContainEqual(expect.objectContaining({ type: 'turn.completed' }));
+    runtime.dispose();
+  });
+
+  it('continues when the model corrects a failed Tool call', async () => {
+    const lease = authority.acquireLease('conversation-corrected-tool-failure');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-corrected-tool-failure',
+      branchId: 'branch-main',
+    });
+    const responses = [
+      assistantContent('toolUse', [
+        {
+          type: 'toolCall' as const,
+          id: 'read-document-invalid',
+          name: 'ReadDocument',
+          arguments: {},
+        },
+      ]),
+      assistantContent('toolUse', [
+        {
+          type: 'toolCall' as const,
+          id: 'read-document-corrected',
+          name: 'ReadDocument',
+          arguments: { input_ref: 'input_valid' },
+        },
+      ]),
+      assistant('stop', 'document read completed'),
+    ];
+    let providerCalls = 0;
+    const models = createFixtureModels(() => {
+      providerCalls += 1;
+      const response = responses.shift();
+      if (response === undefined) throw new Error('Unexpected extra Pi model turn.');
+      return completedStream(response);
+    });
+    const modelPolicy = policy();
+    const execute = vi.fn(async () => ({
+      content: [{ type: 'text' as const, text: 'document evidence' }],
+      details: {},
+    }));
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-corrected-tool-failure',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'OpenNeko fixture',
+    });
+    const events: PiProductAgentEvent[] = [];
+
+    await runtime.execute({
+      turnId: 'turn-corrected-tool-failure',
+      runId: 'run-corrected-tool-failure',
+      prompt: 'read the document',
+      modelPolicy,
+      skillSnapshot: await emptySkills(),
+      capabilityTools: [
+        {
+          name: 'ReadDocument',
+          label: 'Read document',
+          description: 'Read one document.',
+          parameters: Type.Object(
+            { input_ref: Type.String({ minLength: 1 }) },
+            { additionalProperties: false },
+          ),
+          execute,
+        },
+      ],
+      permissionPolicy: { preflight: () => ({ allowed: true }) },
+      workspaceTrusted: true,
+      events: collect(events),
+    });
+
+    expect(providerCalls).toBe(3);
+    expect(execute).toHaveBeenCalledOnce();
+    expect(events.filter((event) => event.type === 'turn.failed')).toHaveLength(0);
+    expect(events).toContainEqual(expect.objectContaining({ type: 'turn.completed' }));
+    expect(
+      authority.readCheckpoint(
+        'conversation-corrected-tool-failure',
+        'turn-corrected-tool-failure',
+      ),
+    ).toMatchObject({ terminalState: 'completed' });
     runtime.dispose();
   });
 
@@ -1150,6 +1338,11 @@ describe('PiConversationRuntime', () => {
     });
 
     expect(contexts[0]!.systemPrompt ?? '').toContain('read_skill');
+    expect(contexts[0]!.systemPrompt ?? '').toContain('<locator>/__neko_skills/');
+    expect(contexts[0]!.systemPrompt ?? '').not.toContain(
+      'use that absolute path in tool commands',
+    );
+    expect(contexts[0]!.systemPrompt ?? '').not.toContain(skillDirectory);
     expect(contexts[0]!.tools?.map((tool) => tool.name)).toEqual(['read_skill']);
     expect(permissionTraits).toEqual([{ requiresConfirmation: false, isReadOnly: true }]);
     expect(JSON.stringify(contexts[1]!.messages)).toContain('Model selected body.');

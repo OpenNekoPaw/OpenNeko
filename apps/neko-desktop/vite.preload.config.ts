@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
+import { createDesktopDevelopmentRestartPlugin } from './vite.development-restart';
 
 export function createSandboxPreloadBoundaryPlugin(
   readBundle: () => string = () =>
@@ -23,9 +24,13 @@ export function assertSandboxPreloadBundle(bundle: string): void {
   }
 }
 
-export default defineConfig({
-  plugins: [createSandboxPreloadBoundaryPlugin()],
+export default defineConfig(({ command }) => ({
+  plugins: [
+    createSandboxPreloadBoundaryPlugin(),
+    createDesktopDevelopmentRestartPlugin(command),
+  ],
   build: {
+    emptyOutDir: false,
     sourcemap: true,
     rollupOptions: {
       external: ['electron'],
@@ -34,4 +39,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
