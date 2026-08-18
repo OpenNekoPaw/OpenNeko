@@ -1,5 +1,4 @@
 export * from './world-authoring-service';
-export * from './world-authoring-capability-provider';
 export * from './world-authoring-host-service';
 export * from './world-authoring-preview-service';
 export * from './world-management-service';

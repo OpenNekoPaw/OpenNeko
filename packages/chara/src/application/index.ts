@@ -23,4 +23,3 @@ export * from './character-conversation-launch-service';
 export * from './character-companion-continuity-service';
 export * from './character-storyline-service';
 export * from './character-presentation-service';
-export * from './character-authoring-capability-provider';

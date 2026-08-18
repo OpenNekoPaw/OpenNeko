@@ -18,6 +18,10 @@ export interface DesktopWorkspaceGrantResolution {
 
 export interface DesktopWorkspaceGrantAuthorityPort {
   resolve(windowId: string, workspaceGrantId: string): Promise<DesktopWorkspaceGrantResolution>;
+  resolveAuthorizedWorkspace(
+    workspaceGrantId: string,
+    workspaceId: string,
+  ): Promise<DesktopWorkspaceGrantResolution>;
   restore(
     windowId: string,
     workspaceGrantId: string,

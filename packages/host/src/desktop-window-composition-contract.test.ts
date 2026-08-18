@@ -22,9 +22,12 @@ describe('Desktop Window composition contract', () => {
       'windowId',
       'workbenchInstanceId',
     ]);
-    expect(composition.scene.slots.interaction?.agentSurfaceId).toBe(
-      'agent-surface:window:1:draft:1',
-    );
+    const interaction = composition.scene.slots.interaction;
+    expect(interaction?.kind).toBe('agent');
+    if (!interaction || interaction.kind !== 'agent') {
+      throw new Error('Default Desktop Scene requires an Agent interaction.');
+    }
+    expect(interaction.agentSurfaceId).toBe('agent-surface:window:1:draft:1');
   });
 
   it('rejects an invalid current record without interpreting additional fields', () => {
