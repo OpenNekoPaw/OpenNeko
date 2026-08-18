@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import * as acp from '../acp/index';
 import * as runtime from '../index';
 import * as runtimeSubpath from '../runtime/index';
 
@@ -60,11 +61,11 @@ describe('agent-runtime public surface convergence', () => {
     expect(runtime).not.toHaveProperty('CORE_TOOLS');
   });
 
-  it('keeps the canonical Agent runtime root exports', () => {
-    expect(runtime).toHaveProperty('createMCPClient');
-    expect(runtime).toHaveProperty('ToolRegistry');
-    expect(runtime).toHaveProperty('createToolRegistry');
-    expect(runtime).toHaveProperty('createCoreTools');
+  it('keeps retired MCP and Tool runtime exports absent from the canonical root', () => {
+    expect(runtime).not.toHaveProperty('createMCPClient');
+    expect(runtime).not.toHaveProperty('ToolRegistry');
+    expect(runtime).not.toHaveProperty('createToolRegistry');
+    expect(runtime).not.toHaveProperty('createCoreTools');
     expect(runtime).toHaveProperty('composeProviderImageBatches');
     expect(runtime).toHaveProperty('projectMultimodalPacketToChatMessage');
     expect(runtime).toHaveProperty('createConversationId');
@@ -82,7 +83,15 @@ describe('agent-runtime public surface convergence', () => {
     expect(runtimeSubpath).not.toHaveProperty('createMcpExternalResearchProvider');
     expect(runtimeSubpath).not.toHaveProperty('createCapabilityRuntimeBindingStore');
     expect(runtimeSubpath).not.toHaveProperty('createAgentCapabilityRuntimeRegistries');
-    expect(runtimeSubpath).toHaveProperty('CapabilityRegistryRuntime');
+    expect(runtimeSubpath).not.toHaveProperty('CapabilityRegistryRuntime');
+    expect(runtimeSubpath).not.toHaveProperty('createConversationProjectionStore');
+    expect(runtimeSubpath).not.toHaveProperty('createConversationRunRegistry');
+    expect(runtimeSubpath).not.toHaveProperty('createExecutionOwnershipRegistry');
+    expect(runtimeSubpath).not.toHaveProperty('deliverCreatorVisibleArtifactsFromTurnProjection');
+  });
+
+  it('exposes the package-owned ACP application client through one subpath', () => {
+    expect(acp).toHaveProperty('DshAcpApplicationClient');
   });
 
   it('removes the deleted package subpath files and exports', () => {
@@ -91,6 +100,7 @@ describe('agent-runtime public surface convergence', () => {
     };
     expect(manifest.exports ?? {}).not.toHaveProperty('./approval');
     expect(manifest.exports ?? {}).not.toHaveProperty('./validation');
+    expect(manifest.exports).toHaveProperty('./acp', './src/acp/index.ts');
 
     for (const deleted of [
       'src/approval/index.ts',
@@ -102,6 +112,12 @@ describe('agent-runtime public surface convergence', () => {
       'src/tools/tool-category-registry.ts',
       'src/tools/tier-resolver.ts',
       'src/tools/perception/perception-tool-group.ts',
+      'src/tools/tool-registry.ts',
+      'src/mcp/index.ts',
+      'src/runtime/projection/conversation-projection-store.ts',
+      'src/runtime/session/conversation-run-registry.ts',
+      'src/runtime/session/execution-ownership.ts',
+      'src/runtime/turn/creator-visible-artifact-collector.ts',
     ]) {
       expect(existsSync(join(PACKAGE_ROOT, deleted)), `${deleted} should not exist`).toBe(false);
     }

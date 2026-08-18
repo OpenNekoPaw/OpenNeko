@@ -4,10 +4,13 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./agent-launch-host": "./src/agent-launch-host.ts",
-    "./assistant-resource-host": "./src/assistant-resource-host.ts",
+    "./dsh-acp": "./src/dsh-acp.ts",
+    "./dsh-permission-host": "./src/dsh-permission-host.ts",
+    "./dsh-runtime-host": "./src/dsh-runtime-host.ts",
+    "./dsh-session-host": "./src/dsh-session-host.ts",
     "./extension-management": "./src/extension-management.ts",
-    "./extension-management-host": "./src/extension-management-host.ts"
+    "./extension-management-host": "./src/extension-management-host.ts",
+    "./testing": "./src/testing/index.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -16,7 +19,6 @@
   "dependencies": {
     "@neko/ai-contracts": "workspace:*",
     "@neko/canvas-domain": "workspace:*",
-    "@neko/preview-domain": "workspace:*",
     "@neko/chara": "workspace:*",
     "@neko/content": "workspace:*",
     "@neko/entity-domain": "workspace:*",

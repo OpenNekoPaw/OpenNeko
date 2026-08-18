@@ -4,6 +4,11 @@ import {
   isSameAgentConversationOwner,
   parseAgentHomeProjection,
 } from '../agent-home';
+import {
+  internalVersionFields,
+  overlappingConversationOwners,
+  retiredIdentityAliasFields,
+} from '../testing/dsh-contract-negative-fixtures';
 
 describe('Agent Home contract', () => {
   it('parses every closed Conversation owner without synthetic Project identity', () => {
@@ -58,6 +63,14 @@ describe('Agent Home contract', () => {
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }),
     ).toThrowError(AgentHomeContractError);
+    for (const owner of overlappingConversationOwners) {
+      expect(() =>
+        parseAgentHomeProjection({
+          conversations: [summary('overlap', owner)],
+          attention: { needsInput: 0, needsReview: 0, running: 0 },
+        }),
+      ).toThrowError(AgentHomeContractError);
+    }
     expect(() =>
       parseAgentHomeProjection({
         conversations: [summary('character-1', { kind: 'character', characterId: 'character:1' })],
@@ -147,6 +160,88 @@ describe('Agent Home contract', () => {
         { kind: 'room', roomId: 'room:1', roomRunId: 'run:2' },
       ),
     ).toBe(false);
+  });
+
+  it('accepts only exact ACP-derived activity identity and rejects retired aliases', () => {
+    const projection = parseAgentHomeProjection({
+      conversations: [
+        {
+          ...summary('running', { kind: 'workspace', workspaceId: 'workspace:1' }),
+          attention: 'running',
+          lastActivity: {
+            kind: 'turn-running',
+            occurredAt: '2026-08-04T00:00:00.000Z',
+            dshSessionId: 'dsh-session:1',
+            turn: 3,
+          },
+        },
+      ],
+      attention: { needsInput: 0, needsReview: 0, running: 1 },
+    });
+    expect(projection.conversations[0]?.lastActivity).toMatchObject({
+      dshSessionId: 'dsh-session:1',
+      turn: 3,
+    });
+
+    const forbiddenFields = [...retiredIdentityAliasFields, ...internalVersionFields];
+    for (const { field, value } of forbiddenFields) {
+      expect(() =>
+        parseAgentHomeProjection({
+          conversations: [
+            {
+              ...summary('invalid', { kind: 'workspace', workspaceId: 'workspace:1' }),
+              lastActivity: {
+                kind: 'turn-running',
+                occurredAt: '2026-08-04T00:00:00.000Z',
+                dshSessionId: 'dsh-session:1',
+                turn: 3,
+                [field]: value,
+              },
+            },
+          ],
+          attention: { needsInput: 0, needsReview: 0, running: 0 },
+        }),
+      ).toThrowError(AgentHomeContractError);
+    }
+
+    for (const lastActivity of [
+      {
+        kind: 'turn-running',
+        occurredAt: '2026-08-04T00:00:00.000Z',
+        turnId: 'turn-3',
+        runId: 'run-3',
+      },
+      {
+        kind: 'turn-running',
+        occurredAt: '2026-08-04T00:00:00.000Z',
+        dshSessionId: null,
+        turn: 3,
+      },
+      {
+        kind: 'conversation-updated',
+        occurredAt: '2026-08-04T00:00:00.000Z',
+        dshSessionId: 'dsh-session:1',
+        turn: 3,
+      },
+      {
+        kind: 'tool-confirmation-required',
+        occurredAt: '2026-08-04T00:00:00.000Z',
+        dshSessionId: 'dsh-session:1',
+        turn: 3,
+      },
+    ]) {
+      expect(() =>
+        parseAgentHomeProjection({
+          conversations: [
+            {
+              ...summary('invalid', { kind: 'workspace', workspaceId: 'workspace:1' }),
+              lastActivity,
+            },
+          ],
+          attention: { needsInput: 0, needsReview: 0, running: 0 },
+        }),
+      ).toThrowError(AgentHomeContractError);
+    }
   });
 });
 
