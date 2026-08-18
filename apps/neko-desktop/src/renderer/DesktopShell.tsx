@@ -99,11 +99,10 @@ import type {
 } from '@neko/project/contracts';
 import '@neko/project-webview/style.css';
 import {
-  createEmptyCharacterDefinition,
   type CharacterAuthoringSnapshot,
   type CharacterProductHandoff,
 } from '@neko/chara/contracts';
-import type { WorldAuthoringSnapshot, WorldDefinition } from '@neko/world/contracts';
+import type { WorldAuthoringSnapshot } from '@neko/world/contracts';
 import { DesktopAssetCenterMainSurface } from './DesktopAssetCenterMainSurface';
 import { DesktopAssistantPreviewSurface } from './DesktopAssistantPreviewSurface';
 import { DesktopAssetCenterRuntime } from './desktop-asset-center-runtime';
@@ -117,9 +116,6 @@ import {
 } from './DesktopApplicationSidebar';
 import {
   createCharacterDialogueHandoffIntent,
-  createAgentDraftInteraction,
-  createAgentSessionInteraction,
-  type AgentInteractionProjection,
   type CharacterDialogueHandoffIntent,
 } from '@neko/agent-contracts';
 import type { DesktopWindowCompositionProjection } from '@neko/host/desktop-window-composition-contract';
@@ -279,22 +275,6 @@ interface ShellActions {
     readonly label: string;
   }) => Promise<void>;
   readonly onCharacterProductHandoff: (handoff: CharacterProductHandoff) => void;
-  readonly onChooseWorkspaceTarget: () => Promise<
-    import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined
-  >;
-  readonly onSelectWorkspaceProjectTarget: (
-    projectId: string,
-  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
-  readonly onLoadAuthoringTargets: () => Promise<
-    import('@neko/agent-webview/root').AgentComposerAuthoringCatalog
-  >;
-  readonly onSelectAuthoringTarget: (
-    option: import('@neko/agent-webview/root').AgentComposerAuthoringTargetOption,
-  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
-  readonly onCreateAuthoringTarget: (
-    context: import('@neko/agent-webview/root').AgentComposerAuthoringCreationContext,
-    name: string,
-  ) => Promise<import('@neko/agent-webview/root').AgentComposerAuthoringCreationResult | undefined>;
 }
 
 export function DesktopApplication(): JSX.Element {
@@ -940,220 +920,6 @@ export function DesktopApplication(): JSX.Element {
           : 'Synchronize the Workspace Character to the global catalog before managing it.',
       );
     },
-    onChooseWorkspaceTarget: async () => {
-      const finishPending = beginPending('target-selection');
-      setDiagnostic(undefined);
-      try {
-        const result = await window.openNekoDesktop.workspaceGrants.chooseDirectory(
-          projection.window.windowId,
-        );
-        if (result.status === 'cancelled') return undefined;
-        return {
-          label: result.grant.label,
-          context: {
-            kind: 'workspace' as const,
-            workspaceId: result.workspaceId,
-            workspaceGrantId: result.grant.workspaceGrantId,
-          },
-        };
-      } catch (error: unknown) {
-        setDiagnostic(describeError(error));
-        await refresh();
-        return undefined;
-      } finally {
-        finishPending();
-      }
-    },
-    onSelectWorkspaceProjectTarget: async (projectId) => {
-      const finishPending = beginPending('target-selection');
-      setDiagnostic(undefined);
-      try {
-        const result = await window.openNekoDesktop.workspaceGrants.selectProject(
-          projection.window.windowId,
-          projectId,
-        );
-        if (result.status === 'cancelled') return undefined;
-        return {
-          label: result.grant.label,
-          context: {
-            kind: 'workspace' as const,
-            workspaceId: result.workspaceId,
-            workspaceGrantId: result.grant.workspaceGrantId,
-          },
-          authority: {
-            kind: 'project' as const,
-            projectId,
-          },
-        };
-      } catch (error: unknown) {
-        setDiagnostic(describeError(error));
-        await refresh();
-        return undefined;
-      } finally {
-        finishPending();
-      }
-    },
-    onLoadAuthoringTargets: async () => {
-      const diagnostics: string[] = [];
-      const targets: import('@neko/agent-webview/root').AgentComposerAuthoringTargetOption[] = [];
-      const projectCatalogResult = await Promise.resolve(
-        window.openNekoDesktop.projectAuthoring.getCatalog(projection.window.windowId),
-      ).then(
-        (value) => ({ status: 'fulfilled' as const, value }),
-        (reason: unknown) => ({ status: 'rejected' as const, reason }),
-      );
-      if (projectCatalogResult.status === 'fulfilled') {
-        const projectCatalog = projectCatalogResult.value;
-        targets.push(
-          ...projectCatalog.projects.flatMap((project) =>
-            project.navigation.flatMap((item) => {
-              if (item.kind !== 'authoring-target') {
-                return [];
-              }
-              return [
-                {
-                  optionId: `${project.projectId}:${item.identity}`,
-                  label: item.label,
-                  workspaceLabel: project.label,
-                  target: item.target,
-                  placement: {
-                    kind: 'project' as const,
-                    projectId: project.projectId,
-                  },
-                  ...(item.diagnostic ? { disabled: true } : {}),
-                },
-              ];
-            }),
-          ),
-        );
-        diagnostics.push(
-          ...projectCatalog.diagnostics.map(
-            (item) => `Project '${item.projectId}': ${item.message}`,
-          ),
-          ...projectCatalog.projects.flatMap((project) =>
-            project.navigation.flatMap((item) =>
-              item.diagnostic ? [`${project.label} / ${item.identity}: ${item.diagnostic}`] : [],
-            ),
-          ),
-        );
-      } else {
-        diagnostics.push(`Projects: ${describeError(projectCatalogResult.reason)}`);
-      }
-      return {
-        targets,
-        creationContexts: [
-          ...projection.catalog.projects.flatMap((project) =>
-            project.unavailable
-              ? []
-              : [
-                  {
-                    creationId: `${project.projectId}:character`,
-                    label: `${project.displayName} / ${t('home.characters')}`,
-                    targetKind: 'character-project' as const,
-                    placement: {
-                      kind: 'project' as const,
-                      projectId: project.projectId,
-                    },
-                  },
-                  {
-                    creationId: `${project.projectId}:world`,
-                    label: `${project.displayName} / ${t('home.worlds')}`,
-                    targetKind: 'world-project' as const,
-                    placement: {
-                      kind: 'project' as const,
-                      projectId: project.projectId,
-                    },
-                  },
-                ],
-          ),
-        ],
-        diagnostics,
-      };
-    },
-    onSelectAuthoringTarget: async (option) => {
-      const result = await window.openNekoDesktop.workspaceGrants.selectProject(
-        projection.window.windowId,
-        option.placement.projectId,
-      );
-      if (result.status === 'cancelled') return undefined;
-      return {
-        label: `${option.workspaceLabel} / ${option.label}`,
-        context: {
-          kind: 'workspace' as const,
-          workspaceId: result.workspaceId,
-          workspaceGrantId: result.grant.workspaceGrantId,
-        },
-        target: option.target,
-        authority: {
-          kind: 'project' as const,
-          projectId: option.placement.projectId,
-        },
-      };
-    },
-    onCreateAuthoringTarget: async (context, name) => {
-      const targetId = crypto.randomUUID();
-      const result = await window.openNekoDesktop.workspaceGrants.selectProject(
-        projection.window.windowId,
-        context.placement.projectId,
-      );
-      if (result.status === 'cancelled') return undefined;
-      const target =
-        context.targetKind === 'character-project'
-          ? { kind: 'character-project' as const, characterProjectId: targetId }
-          : { kind: 'world-project' as const, worldProjectId: targetId };
-      const createdTarget = {
-        label: `${result.grant.label} / ${name}`,
-        context: {
-          kind: 'workspace' as const,
-          workspaceId: result.workspaceId,
-          workspaceGrantId: result.grant.workspaceGrantId,
-        },
-        target,
-        authority: {
-          kind: 'project' as const,
-          projectId: context.placement.projectId,
-        },
-      };
-      const binding = {
-        workspaceId: result.workspaceId,
-        workspaceGrantId: result.grant.workspaceGrantId,
-        projectId: context.placement.projectId,
-      };
-      if (context.targetKind === 'character-project') {
-        const entity = {
-          kind: 'create' as const,
-          entityId: `entity:${crypto.randomUUID()}`,
-          name,
-        };
-        const projectResult = await window.openNekoDesktop.projectLocalAuthoring.createTarget(
-          projection.window.windowId,
-          binding,
-          {
-            kind: 'character-project',
-            characterProjectId: targetId,
-            displayName: name,
-            draft: createEmptyCharacterDefinition(),
-            sources: { evidence: [], assetRepresentations: [] },
-            entity,
-          },
-        );
-        return { status: projectResult.status, target: createdTarget };
-      }
-      await window.openNekoDesktop.projectLocalAuthoring.createTarget(
-        projection.window.windowId,
-        binding,
-        {
-          kind: 'world-project',
-          worldProjectId: targetId,
-          title: name,
-          draft: emptyWorldDefinition(),
-        },
-      );
-      return {
-        status: 'created',
-        target: createdTarget,
-      };
-    },
   };
 
   return (
@@ -1196,6 +962,11 @@ export function DesktopApplication(): JSX.Element {
           onCharacterDialogueHandoffConsumed={(intentId) => {
             setCharacterDialogueHandoff((current) =>
               current?.intent.intentId === intentId ? undefined : current,
+            );
+            setDiagnostic(
+              locale === 'zh-cn'
+                ? '角色对话上下文尚未接入 DSH，已拒绝本次切换，未丢失角色数据。'
+                : 'Character dialogue context is not connected to DSH yet. The launch was rejected without discarding character data.',
             );
           }}
           pending={pending}
@@ -1300,15 +1071,6 @@ export function DesktopShellView({
     onStartGlobalCharacterConversation: async () => undefined,
     onFinalizeAndStartCharacterConversation: async () => undefined,
     onCharacterProductHandoff: () => undefined,
-    onChooseWorkspaceTarget: async () => undefined,
-    onSelectWorkspaceProjectTarget: async () => undefined,
-    onLoadAuthoringTargets: async () => ({
-      targets: [],
-      creationContexts: [],
-      diagnostics: [],
-    }),
-    onSelectAuthoringTarget: async () => undefined,
-    onCreateAuthoringTarget: async () => undefined,
   };
   return (
     <DesktopSceneWorkbench
@@ -1326,10 +1088,10 @@ function DesktopSceneWorkbench({
   characterManagementReloadToken,
   worldManagementReloadToken,
   interactive = true,
-  onCharacterDialogueHandoffConsumed,
   pending,
   projection,
   projectPortabilityPort,
+  onCharacterDialogueHandoffConsumed,
 }: {
   readonly actions: ShellActions;
   readonly characterDialogueHandoff?: {
@@ -1360,6 +1122,10 @@ function DesktopSceneWorkbench({
   const [portalTargets, setPortalTargets] = useState<ReadonlyMap<string, HTMLDivElement>>(
     () => new Map(),
   );
+  useEffect(() => {
+    if (characterDialogueHandoff === undefined) return;
+    onCharacterDialogueHandoffConsumed?.(characterDialogueHandoff.intent.intentId);
+  }, [characterDialogueHandoff, onCharacterDialogueHandoffConsumed]);
   const registerPortalTarget = useCallback(
     (
       workbenchInstanceId: string,
@@ -1570,18 +1336,8 @@ function DesktopSceneWorkbench({
   const agentSurfaceProps =
     scene.slots.interaction?.kind === 'agent'
       ? createDesktopAgentSurfaceProps({
-          projection,
           workbenchInstanceId: activeWorkbench.workbenchInstanceId,
           interaction: scene.slots.interaction,
-          characterDialogueHandoff,
-          onCharacterDialogueHandoffConsumed,
-          onCharacterProductHandoff: actions.onCharacterProductHandoff,
-          onChooseWorkspaceTarget: actions.onChooseWorkspaceTarget,
-          onSelectWorkspaceProjectTarget: actions.onSelectWorkspaceProjectTarget,
-          onLoadAuthoringTargets: actions.onLoadAuthoringTargets,
-          onSelectAuthoringTarget: actions.onSelectAuthoringTarget,
-          onCreateAuthoringTarget: actions.onCreateAuthoringTarget,
-          workspaceSelectionDisabled: interactionLocks.targetSelection || !interactive,
         })
       : undefined;
   const projectCatalogUnavailable = hasProjectCatalogDiagnostic(projection);
@@ -2770,201 +2526,18 @@ function hasCharacterVisualRepresentation(
   );
 }
 
-function createLaunchAgentPresentation(
-  scope: Extract<DesktopWorkbenchSceneProjection['context'], { readonly kind: 'agent' }>['scope'],
-): AgentInteractionProjection {
-  if (scope.kind === 'workspace') {
-    throw new Error('Launch Agent presentation cannot use Workspace scope.');
-  }
-  if (scope.kind === 'unbound') {
-    return createAgentDraftInteraction({
-      draftId: scope.draftId,
-      binding: { kind: 'unbound' },
-    });
-  }
-  const binding = {
-    kind: 'assistant' as const,
-    assistantSpaceId: scope.assistantSpaceId,
-    baseGrantIds: [],
-  };
-  return scope.conversationId
-    ? createAgentSessionInteraction({ binding, conversationId: scope.conversationId })
-    : createAgentDraftInteraction({ draftId: scope.draftId, binding });
-}
-
 export function createDesktopAgentSurfaceProps(input: {
-  readonly projection: DesktopShellProjection;
   readonly workbenchInstanceId: string;
-  readonly project?: DesktopProjectCatalogItem;
   readonly interaction: DesktopAgentInteractionSurfaceRef;
-  readonly characterDialogueHandoff?: {
-    readonly draftId: string;
-    readonly intent: CharacterDialogueHandoffIntent;
-  };
-  readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
-  readonly onCharacterProductHandoff?: (handoff: CharacterProductHandoff) => void;
-  readonly onChooseWorkspaceTarget?: () => Promise<
-    import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined
-  >;
-  readonly onSelectWorkspaceProjectTarget?: (
-    projectId: string,
-  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
-  readonly onLoadAuthoringTargets?: () => Promise<
-    import('@neko/agent-webview/root').AgentComposerAuthoringCatalog
-  >;
-  readonly onSelectAuthoringTarget?: (
-    option: import('@neko/agent-webview/root').AgentComposerAuthoringTargetOption,
-  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
-  readonly onCreateAuthoringTarget?: (
-    context: import('@neko/agent-webview/root').AgentComposerAuthoringCreationContext,
-    name: string,
-  ) => Promise<import('@neko/agent-webview/root').AgentComposerAuthoringCreationResult | undefined>;
-  readonly workspaceSelectionDisabled?: boolean;
-}): DesktopAgentSurfaceProps | undefined {
+}): DesktopAgentSurfaceProps {
   const { interaction } = input;
-  const scope = interaction.scope;
-  if (scope.kind === 'workspace') {
-    const project =
-      input.project ??
-      input.projection.catalog.projects.find(
-        (candidate) => candidate.workspaceId === scope.workspaceId,
-      );
-    if (!project) {
-      const scene = resolveActiveDesktopWindowWorkbench(input.projection.window).scene;
-      if (
-        scene.slots.main === undefined &&
-        scene.slots.secondaryMain === undefined &&
-        scene.slots.rightManager === undefined &&
-        resolveActiveDesktopWindowWorkbench(input.projection.window).layout.main.views.length === 0
-      ) {
-        return {
-          binding: 'launch',
-          workbenchInstanceId: input.workbenchInstanceId,
-          agentSurfaceId: interaction.agentSurfaceId,
-          viewId: interaction.agentViewId,
-          agentPresentation: createAgentDraftInteraction({
-            draftId: scope.draftId,
-            binding: {
-              kind: 'workspace',
-              workspaceId: scope.workspaceId,
-              workspaceGrantId: scope.workspaceGrantId,
-            },
-          }),
-          onCharacterProductHandoff: input.onCharacterProductHandoff,
-          composerWorkspace: {
-            kind: 'workspace',
-            label: 'Workspace',
-            workspaceId: scope.workspaceId,
-            loadCanvasCatalog: async () => {
-              const result = await window.openNekoDesktop.canvas.readWorkspaceIndexCatalog({
-                requestId: crypto.randomUUID(),
-                workspaceId: scope.workspaceId,
-                workspaceGrantId: scope.workspaceGrantId,
-              });
-              return result.catalog;
-            },
-            openCanvasDocument: async (canvasId) => {
-              await window.openNekoDesktop.canvas.openWorkspaceDocument({
-                requestId: crypto.randomUUID(),
-                workspaceId: scope.workspaceId,
-                workspaceGrantId: scope.workspaceGrantId,
-                canvasId,
-              });
-            },
-          },
-        };
-      }
-      if (hasProjectCatalogDiagnostic(input.projection)) return undefined;
-      throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no Workspace Project.`);
-    }
-    const tab = input.projection.window.tabs.find(
-      (candidate) => candidate.projectId === project.projectId,
-    );
-    if (!tab || tab.viewId !== interaction.agentViewId) {
-      throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no exact Workspace View.`);
-    }
-    const binding = {
-      kind: 'workspace' as const,
-      workspaceId: scope.workspaceId,
-      workspaceGrantId: scope.workspaceGrantId,
-    };
-    const agentPresentation = scope.conversationId
-      ? createAgentSessionInteraction({ binding, conversationId: scope.conversationId })
-      : createAgentDraftInteraction({ draftId: scope.draftId, binding });
-    return {
-      binding: 'workspace',
-      workbenchInstanceId: input.workbenchInstanceId,
-      agentSurfaceId: interaction.agentSurfaceId,
-      tab,
-      agentPresentation,
-      onCharacterProductHandoff: input.onCharacterProductHandoff,
-      composerWorkspace: {
-        kind: 'workspace',
-        label: project.displayName,
-        workspaceId: scope.workspaceId,
-        loadCanvasCatalog: async () => {
-          const result = await window.openNekoDesktop.canvas.readWorkspaceIndexCatalog({
-            requestId: crypto.randomUUID(),
-            workspaceId: scope.workspaceId,
-            workspaceGrantId: scope.workspaceGrantId,
-          });
-          return result.catalog;
-        },
-        openCanvasDocument: async (canvasId) => {
-          await window.openNekoDesktop.canvas.openWorkspaceDocument({
-            requestId: crypto.randomUUID(),
-            workspaceId: scope.workspaceId,
-            workspaceGrantId: scope.workspaceGrantId,
-            canvasId,
-          });
-        },
-      },
-    };
-  }
-  if (
-    !input.onChooseWorkspaceTarget ||
-    !input.onSelectWorkspaceProjectTarget ||
-    !input.onLoadAuthoringTargets ||
-    !input.onSelectAuthoringTarget ||
-    !input.onCreateAuthoringTarget
-  ) {
-    throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no Workspace chooser.`);
-  }
-  const agentPresentation = createLaunchAgentPresentation(scope);
   return {
-    binding: 'launch',
-    workbenchInstanceId: input.workbenchInstanceId,
     agentSurfaceId: interaction.agentSurfaceId,
-    viewId: interaction.agentViewId,
-    agentPresentation,
-    ...(agentPresentation.phase === 'draft' &&
-    input.characterDialogueHandoff?.draftId === agentPresentation.draftId
-      ? {
-          characterDialogueHandoff: input.characterDialogueHandoff.intent,
-          onCharacterDialogueHandoffConsumed: input.onCharacterDialogueHandoffConsumed,
-        }
-      : {}),
-    onCharacterProductHandoff: input.onCharacterProductHandoff,
-    ...(agentPresentation.phase === 'draft' && agentPresentation.binding.kind === 'unbound'
-      ? {
-          composerWorkspace: {
-            kind: 'entry' as const,
-            projects: input.projection.catalog.projects.map((project) => ({
-              projectId: project.projectId,
-              label: project.displayName,
-              ...(project.unavailable ? { disabled: true } : {}),
-            })),
-            onChooseDirectory: input.onChooseWorkspaceTarget,
-            onSelectProject: input.onSelectWorkspaceProjectTarget,
-            loadAuthoringCatalog: input.onLoadAuthoringTargets,
-            onSelectAuthoringTarget: input.onSelectAuthoringTarget,
-            onCreateAuthoringTarget: input.onCreateAuthoringTarget,
-            ...(input.workspaceSelectionDisabled === undefined
-              ? {}
-              : { disabled: input.workspaceSelectionDisabled }),
-          },
-        }
-      : {}),
+    workbenchInstanceId: input.workbenchInstanceId,
+    entryKind: interaction.scope.kind === 'assistant' ? 'assistant' : 'authoring',
+    ...(interaction.scope.kind === 'unbound' || interaction.scope.conversationId === undefined
+      ? {}
+      : { conversationId: interaction.scope.conversationId }),
   };
 }
 
@@ -5364,17 +4937,6 @@ function ShellStatus({
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function emptyWorldDefinition(): WorldDefinition {
-  return {
-    background: '',
-    worldBook: [],
-    locations: [],
-    organizations: [],
-    rules: [],
-    initialFacts: [],
-  };
 }
 
 function createPersistedDiagnosticPresentation(

@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 import { readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { assertDesktopAgentAutomationLaunch } from '../shared/agent-automation-contract';
 
 const FUNCTIONAL_FIXTURE_ARGUMENT = '--openneko-functional-fixture';
 const FUNCTIONAL_HIDDEN_ARGUMENT = '--openneko-functional-hidden';
@@ -166,18 +165,6 @@ export function resolveDesktopFunctionalCutExport(input: {
     throw new Error('Desktop functional Cut export must be a contained MP4 or MOV file.');
   }
   return relative.split(path.sep).join('/');
-}
-
-export function resolveDesktopAgentAutomationLaunch(input: {
-  readonly argv: readonly string[];
-  readonly workspace: string | undefined;
-}): boolean {
-  if (!input.argv.includes(FUNCTIONAL_FIXTURE_ARGUMENT)) return false;
-  if (!input.workspace) {
-    throw new Error('Desktop Agent automation requires an isolated fixture Workspace.');
-  }
-  assertDesktopAgentAutomationLaunch({ fixtureLaunch: true, isolatedUserData: true });
-  return true;
 }
 
 function isStrictDescendant(parent: string, target: string): boolean {

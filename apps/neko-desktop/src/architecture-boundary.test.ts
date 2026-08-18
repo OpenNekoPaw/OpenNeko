@@ -63,47 +63,54 @@ describe('Desktop architecture boundaries', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps Desktop Agent composition on the canonical host-neutral Pi path', () => {
-    const mainRoot = path.join(sourceRoot, 'main');
-    const violations = findForbiddenImports(mainRoot, [
-      '@neko-agent/extension',
-      '@neko/extension',
-      'vscode',
-    ]);
-    const composition = readFileSync(
-      path.join(sourceRoot, '../../../packages/agent/runtime/src/application/agent-app-host.ts'),
+  it('keeps Desktop Agent composition on the canonical ACP and DSH subprocess path', () => {
+    const supervisor = readFileSync(
+      path.join(sourceRoot, 'main', 'desktop-dsh-subprocess-supervisor.ts'),
+      'utf8',
+    );
+    const application = readFileSync(
+      path.join(
+        repositoryRoot,
+        'packages/agent/runtime/src/application/conversation-dsh-session-application.ts',
+      ),
+      'utf8',
+    );
+    const client = readFileSync(
+      path.join(repositoryRoot, 'packages/agent/runtime/src/acp/dsh-acp-application-client.ts'),
       'utf8',
     );
 
-    expect(violations).toEqual([]);
-    expect(composition).toContain('PiConversationRuntime.open');
-    expect(composition).toContain('NodePiConversationAuthority.create');
-    expect(composition).toContain('createConversationProjectionStore');
-    expect(composition).toContain('createPiTimelineProjector');
-    expect(composition).not.toContain('AgentSession');
-    expect(composition).not.toMatch(/\bactiveConversation(?:Id)?\b/u);
+    expect(supervisor).toContain("stdio: ['pipe', 'pipe', 'pipe']");
+    expect(supervisor).toContain('import type { DshAcpByteTransport }');
+    expect(application).toContain('createConversationDshSessionBindingService');
+    expect(application).toContain('createConversationDshSessionBoundClient');
+    expect(client).toContain('new ClientSideConnection');
+    for (const source of [supervisor, application, client]) {
+      expect(source).not.toContain('@neko/agent-runtime/pi');
+      expect(source).not.toContain('createAgentAppHost');
+      expect(source).not.toContain('createAgentControllerComposition');
+      expect(source).not.toContain('ctx.agents');
+    }
   });
 
-  it('delegates Agent launch policy and first submit to package application services', () => {
-    const mainRoot = path.join(sourceRoot, 'main');
-    const application = readFileSync(path.join(mainRoot, 'index.ts'), 'utf8');
-    const appHost = readFileSync(path.join(mainRoot, 'app-host.ts'), 'utf8');
-    const launchRuntime = readFileSync(
-      path.join(mainRoot, 'desktop-agent-launch-runtime.ts'),
-      'utf8',
-    );
+  it('keeps the DSH Session bridge as the only Renderer Agent path', () => {
+    const preload = readFileSync(path.join(sourceRoot, 'preload', 'index.ts'), 'utf8');
+    const renderer = readFileSync(path.join(sourceRoot, 'renderer', 'DesktopAgentSurface.tsx'), 'utf8');
 
-    expect(application).toContain('createAgentLaunchDraftSubmissionApplicationService');
-    expect(launchRuntime).toContain('createAgentLaunchApplicationService');
-    expect(launchRuntime).toContain('projectAgentLaunchBaseCatalog');
-    expect(appHost).toContain('this.agentLaunchSubmission.submit');
-    expect(appHost).not.toContain('projectAgentLaunchBaseCatalog');
-    expect(appHost).not.toContain('createAgentLaunchApplicationService');
-    for (const source of [appHost, launchRuntime]) {
-      expect(source).not.toMatch(/\b(?:active|current|recent|first)Project\b/u);
-      expect(source).not.toMatch(/\btryNext\b/u);
-      expect(source).not.toMatch(/\b(?:merge|resolve)Model/u);
-    }
+    expect(preload).toContain('dshSessions: {');
+    expect(preload).toContain('dshPermissions: {');
+    expect(preload).toContain('dshRuntime: {');
+    expect(renderer).toContain('window.openNekoDesktop.dshSessions.prompt');
+    expect(renderer).toContain('window.openNekoDesktop.dshPermissions.decide');
+    expect(renderer).toContain('window.openNekoDesktop.dshRuntime.restart');
+    expect(renderer).toContain('requireReadyState');
+    expect(renderer).not.toMatch(/localStorage|sessionStorage|indexedDB/u);
+    expect(renderer).not.toMatch(/rawSession|piHistory|PiConversation/u);
+    expect(preload).not.toContain('DESKTOP_AGENT_CHANNELS');
+    expect(preload).not.toContain('agentLaunch: {');
+    expect(preload).not.toContain('assistantResources: {');
+    expect(existsSync(path.join(sourceRoot, 'shared', 'agent-contract.ts'))).toBe(false);
+    expect(existsSync(path.join(sourceRoot, 'shared', 'agent-automation-contract.ts'))).toBe(false);
   });
 
   it('keeps one canonical Agent Entry mode and submit path', () => {
@@ -113,16 +120,19 @@ describe('Desktop architecture boundaries', () => {
       path.join(repositoryRoot, 'packages/chara/src/contracts/character-conversation-launch.ts'),
       'utf8',
     );
+    const retiredEntryTargetService = path.join(agentRuntimeRoot, 'agent-entry-target-service.ts');
+    const retiredAgentWebviewRoot = path.join(agentWebviewRoot, 'root.tsx');
+    const retiredAgentAppShell = path.join(agentWebviewRoot, 'components', 'AppShell.tsx');
+    const retiredConversationController = path.join(
+      agentWebviewRoot,
+      'components',
+      'ConversationController.tsx',
+    );
     const sources = [
       readFileSync(path.join(sourceRoot, 'main', 'app-host.ts'), 'utf8'),
       readFileSync(path.join(sourceRoot, 'main', 'ipc.ts'), 'utf8'),
       readFileSync(path.join(sourceRoot, 'preload', 'index.ts'), 'utf8'),
       readFileSync(path.join(sourceRoot, 'shared', 'global.d.ts'), 'utf8'),
-      readFileSync(path.join(agentWebviewRoot, 'root.tsx'), 'utf8'),
-      readFileSync(path.join(agentWebviewRoot, 'components', 'AppShell.tsx'), 'utf8'),
-      readFileSync(path.join(agentWebviewRoot, 'components', 'ConversationController.tsx'), 'utf8'),
-      readFileSync(path.join(agentRuntimeRoot, 'agent-entry-target-service.ts'), 'utf8'),
-      readFileSync(path.join(agentRuntimeRoot, 'agent-launch-submit-service.ts'), 'utf8'),
       charaLaunchContract,
     ];
 
@@ -133,6 +143,10 @@ describe('Desktop architecture boundaries', () => {
       'world-experience',
     ]);
     expect(existsSync(path.join(agentWebviewRoot, 'entry-experience-mode.ts'))).toBe(false);
+    expect(existsSync(retiredEntryTargetService)).toBe(false);
+    expect(existsSync(retiredAgentWebviewRoot)).toBe(false);
+    expect(existsSync(retiredAgentAppShell)).toBe(false);
+    expect(existsSync(retiredConversationController)).toBe(false);
     for (const source of sources) {
       expect(source).not.toContain('CHARACTER_CONVERSATION_LAUNCH_HOST_CHANNEL');
       expect(source).not.toContain('OpenNekoDesktopCharacterConversationBridge');
@@ -142,24 +156,11 @@ describe('Desktop architecture boundaries', () => {
     }
   });
 
-  it('wires Character and World creator Tools through exact Project repositories', () => {
+  it('keeps retired Character and World capability providers out of Desktop composition', () => {
     const application = readFileSync(path.join(sourceRoot, 'main', 'index.ts'), 'utf8');
-    const start = application.indexOf('resolveWorkspaceCapabilityProviders:');
-    const end = application.indexOf('pluginToolAdapters:', start);
-    const providerComposition = application.slice(start, end);
 
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    expect(providerComposition).toContain('createCharacterAuthoringCapabilityProvider');
-    expect(providerComposition).toContain('createWorldAuthoringCapabilityProvider');
-    expect(providerComposition).toContain('workspaceGrantAuthority.resolveAuthorizedWorkspace');
-    expect(providerComposition).toContain('requireProjectIdentity');
-    expect(providerComposition).toContain('createCharacterAuthoringFileRepository');
-    expect(providerComposition).toContain('createWorldAuthoringFileRepository');
-    expect(providerComposition).toContain('binding.target.characterProjectId');
-    expect(providerComposition).toContain('binding.target.worldProjectId');
-    expect(providerComposition.match(/\.fillFreshDraft\(/gu)).toHaveLength(2);
-    expect(providerComposition).not.toMatch(/\b(?:active|current|recent|default)Project\b/u);
+    expect(application).not.toContain('createCharacterAuthoringCapabilityProvider');
+    expect(application).not.toContain('createWorldAuthoringCapabilityProvider');
   });
 
   it('keeps domain management routing in the application sidebar only', () => {
@@ -185,44 +186,56 @@ describe('Desktop architecture boundaries', () => {
     expect(shell.match(/<ControlledWorkbenchShell/gu)).toHaveLength(1);
   });
 
-  it('keeps provider credentials in Host secret and protected native UI boundaries', () => {
+  it('keeps provider credentials in the Host authority and Desktop safeStorage boundary', () => {
     const mainRoot = path.join(sourceRoot, 'main');
     const application = readFileSync(path.join(mainRoot, 'index.ts'), 'utf8');
-    const credentialRuntime = readFileSync(
-      path.join(sourceRoot, '../../../packages/agent/runtime/src/pi/credential-runtime.ts'),
+    const credentialAuthority = readFileSync(
+      path.join(sourceRoot, '../../../packages/host/src/settings/provider-credential-authority.ts'),
       'utf8',
     );
-    const authPrompt = readFileSync(path.join(mainRoot, 'macos-protected-auth-prompt.ts'), 'utf8');
 
     expect(application).toContain('safeStorage.encryptString');
     expect(application).toContain('createEncryptedDesktopSecretPort');
-    expect(credentialRuntime).toContain('HostSecretPort');
-    expect(authPrompt).toContain('with hidden answer');
-    for (const source of [credentialRuntime, authPrompt]) {
-      expect(source).not.toContain('BrowserWindow');
-      expect(source).not.toContain('ipcRenderer');
-      expect(source).not.toContain('postMessage');
-    }
+    expect(application).toContain("'provider-credentials.json'");
+    expect(application).not.toContain("'agent-credentials.json'");
+    expect(application).not.toContain('createAgentCredentialRuntime');
+    expect(application).not.toContain('createMacOSProtectedAuthPrompt');
+    expect(credentialAuthority).toContain('HostSecretPort');
+    expect(credentialAuthority).toContain("'openneko.provider.credential:'");
+    expect(credentialAuthority).not.toContain('openneko.agent.pi.credential');
+    expect(credentialAuthority).not.toContain('BrowserWindow');
+    expect(credentialAuthority).not.toContain('ipcRenderer');
+    expect(credentialAuthority).not.toContain('postMessage');
+    expect(existsSync(path.join(mainRoot, 'macos-protected-auth-prompt.ts'))).toBe(false);
   });
 
-  it('keeps Desktop Agent content effects sender-bound and locator-authorized', () => {
-    const source = readFileSync(
+  it('keeps direct Canvas Generation on owning services without an Agent turn', () => {
+    const application = readFileSync(path.join(sourceRoot, 'main', 'index.ts'), 'utf8');
+    const canvasHost = readFileSync(
       path.join(
         repositoryRoot,
-        'packages/agent/runtime/src/runtime/host-controller/agent-content-effects.ts',
+        'packages/canvas/webview/src/host-runtime/canvas-webview-host.ts',
       ),
       'utf8',
     );
-
-    expect(source).toContain('assertWorkspaceGrant');
-    expect(source).toContain('validateContentLocator');
-    expect(source).toContain('realpath');
-    expect(source).not.toContain('activeWorkspace');
-    expect(source).not.toContain('ChatViewProvider');
-    expect(source).not.toContain('vscode.commands');
-    expect(existsSync(path.join(sourceRoot, 'main', 'desktop-agent-content-effects.ts'))).toBe(
-      false,
+    const canvasSurface = readFileSync(
+      path.join(sourceRoot, 'renderer', 'DesktopCanvasSurface.tsx'),
+      'utf8',
     );
+    const canvasRuntime = readFileSync(
+      path.join(sourceRoot, 'renderer', 'desktop-canvas-host-runtime.ts'),
+      'utf8',
+    );
+
+    expect(application).toContain('new CanvasGenerationNodeRuntime');
+    expect(application).toContain('generationRuntime.getJobs({');
+    expect(canvasHost).toContain("type: 'run-generation-node'");
+    expect(canvasHost).toContain("type: 'cancel-generation-node'");
+    for (const source of [canvasHost, canvasSurface, canvasRuntime]) {
+      expect(source).not.toContain('dshSessions.prompt');
+      expect(source).not.toContain('openneko.generation');
+      expect(source).not.toContain('openneko.canvas');
+    }
   });
 
   it('keeps Resource Browser effects owner-bound, portable and outside the renderer', () => {
@@ -489,26 +502,33 @@ describe('Desktop architecture boundaries', () => {
 
   it('does not expose raw IPC or an arbitrary command bridge', () => {
     const preload = readFileSync(path.join(sourceRoot, 'preload', 'index.ts'), 'utf8');
-    const contract = readFileSync(path.join(sourceRoot, 'shared', 'agent-contract.ts'), 'utf8');
-    expect(preload).toContain('agent: {');
-    expect(preload).toContain('async getBootstrap(');
-    expect(preload).toContain('createDesktopAgentBootstrapRequest');
-    expect(preload).toContain('createDesktopAgentMessageRequest');
+    const sessionContract = readFileSync(
+      path.join(repositoryRoot, 'packages/agent/contracts/src/dsh-session-host.ts'),
+      'utf8',
+    );
+    const runtimeContract = readFileSync(
+      path.join(repositoryRoot, 'packages/agent/contracts/src/dsh-runtime-host.ts'),
+      'utf8',
+    );
+    expect(preload).toContain('dshSessions: {');
+    expect(preload).toContain('DSH_SESSION_HOST_CHANNEL');
+    expect(preload).toContain('DSH_RUNTIME_HOST_CHANNEL');
     expect(preload).toContain('createDesktopWorkbenchMutationRequest');
     expect(preload).toContain('workbench: {');
     expect(preload).toContain('resources: {');
     expect(preload).toContain('parseResourceBrowserSnapshotRequest');
-    expect(preload).toContain('process.argv.includes(DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT)');
-    expect(preload).toContain('createDesktopAgentAutomationRequest');
-    expect(preload).toContain('DESKTOP_AGENT_AUTOMATION_CHANNEL');
     expect(preload).not.toContain('ipcRenderer.send');
     expect(preload).not.toContain('executeCommand');
     expect(preload).not.toContain('executeRuntime');
     expect(preload).not.toContain('arbitraryChannel');
     expect(preload).not.toContain('channel: string');
-    expect(contract).not.toContain('workspacePath');
-    expect(contract).not.toContain('resolvedPath');
-    expect(contract).not.toContain('credential');
+    expect(sessionContract).not.toContain('workspacePath');
+    expect(sessionContract).not.toContain('resolvedPath');
+    expect(sessionContract).not.toContain('credential');
+    expect(sessionContract).not.toContain('runId');
+    expect(runtimeContract).not.toContain('generation');
+    expect(runtimeContract).not.toContain('fallback');
+    expect(runtimeContract).not.toContain('processPath');
   });
 });
 

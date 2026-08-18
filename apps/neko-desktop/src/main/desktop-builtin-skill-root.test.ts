@@ -41,6 +41,7 @@ describe('Desktop builtin Skill root', () => {
       resourcesPath: '/ignored',
     });
     const bundledExtensionRoot = resolve(import.meta.dirname, '../../resources/extensions');
+    const dshRuntimeStageRoot = resolve(import.meta.dirname, '../../.vite/runtime-stage/dsh-runtime');
 
     await expect(access(join(sourceRoot, 'storyboard', 'SKILL.md'))).resolves.toBeUndefined();
     await expect(
@@ -49,6 +50,7 @@ describe('Desktop builtin Skill root', () => {
     expect(forgeConfig.packagerConfig?.extraResource).toEqual([
       sourceRoot,
       bundledExtensionRoot,
+      dshRuntimeStageRoot,
     ]);
   });
 });
