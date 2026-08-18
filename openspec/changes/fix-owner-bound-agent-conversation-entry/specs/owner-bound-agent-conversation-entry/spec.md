@@ -14,6 +14,13 @@ The system MUST expose `submitDraft` only to an Agent Director / Entry Surface. 
 - **AND** model configuration, `$` Skill, `/` Command, mention, and index capabilities resolve from that exact owner
 - **AND** poisoned Agent Launch attach and draft submit operations are not invoked
 
+#### Scenario: Workspace Composer default model
+
+- **WHEN** an exact Workspace Composer opens without a persisted Conversation
+- **THEN** it selects the configured default chat model when available
+- **AND** otherwise selects the first available explicitly configured chat model
+- **AND** the visible model selector does not report an empty catalog while available models exist
+
 #### Scenario: Other owner-bound composers
 
 - **WHEN** a user starts a new conversation from an exact Assistant, Character, Room, or World Surface
@@ -35,6 +42,13 @@ The system MUST create an exact owner-bound Conversation before accepting its fi
 - **WHEN** the first Workspace message includes attachments or file references
 - **THEN** the accepted Conversation message preserves those inputs
 - **AND** the same Conversation identity owns the first and subsequent turns
+
+#### Scenario: Workspace first message model binding
+
+- **WHEN** the first Workspace message is submitted with the model selected by the Composer
+- **THEN** the initial Conversation configuration uses that exact provider and model
+- **AND** the first provider Turn publishes visible processing state and reaches a terminal result
+- **AND** the system does not ignore the Composer selection and retry with a global or Entry default
 
 #### Scenario: First message lifecycle ordering
 

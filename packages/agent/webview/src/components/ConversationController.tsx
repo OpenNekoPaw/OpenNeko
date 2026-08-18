@@ -109,6 +109,7 @@ import {
   projectMessageModelSelection,
   projectMediaModelSelectionDefaults,
   projectMediaModelSelectionForSessionModeChange,
+  selectInitialChatModelOption,
 } from '../presenters/config-message-presenter';
 import {
   type ConversationAmbientNode,
@@ -1107,13 +1108,22 @@ export function ConversationController({
     const availableModelIds = new Set(draftLaunchCatalog ? catalogModelIds : settingsModelIds);
     const configuredModelId = draftLaunchCatalog
       ? (draftLaunchCatalog.configuration.fields.model.effectiveValue?.modelCatalogEntryId ?? '')
-      : (activeSettings.selectedModelId ?? '');
+      : (activeSettings.chatModelOptions.find(
+          (option) =>
+            option.providerId === activeSettings.selectedProviderId &&
+            option.modelId === activeSettings.selectedModelId,
+        )?.id ?? '');
+    const initialModelId = draftLaunchCatalog
+      ? ''
+      : (selectInitialChatModelOption(activeSettings.chatModelOptions)?.id ?? '');
     setEntrySelectedModel((current) =>
       availableModelIds.has(current)
         ? current
         : availableModelIds.has(configuredModelId)
           ? configuredModelId
-          : '',
+          : availableModelIds.has(initialModelId)
+            ? initialModelId
+            : '',
     );
     setEntryMediaModelSelection((current) => {
       const availableMediaModels = new Map(

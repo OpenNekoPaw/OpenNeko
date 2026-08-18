@@ -3317,7 +3317,11 @@ export class DesktopAppHost {
     if (!composition) {
       throw new Error('Desktop Agent initial Conversation configuration is unavailable.');
     }
-    const configuration = await composition.createInitialConversationConfiguration({ workspace });
+    const model = request.agentModels?.primary ?? request.chatModel;
+    const configuration = await composition.createInitialConversationConfiguration({
+      workspace,
+      ...(model === undefined ? {} : { model }),
+    });
     const record = await this.conversationLifecycle.firstSubmit({
       requestId: request.messageTrackingId ?? `first-turn:${request.conversationId}`,
       conversationId: request.conversationId,

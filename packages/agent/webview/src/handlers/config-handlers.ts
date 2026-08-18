@@ -6,7 +6,6 @@
 
 import { defineHandler } from './types';
 import type { MessageHandler, HandlerRegistration } from './types';
-import type { ChatModelOption } from '@neko/ai-contracts';
 import type {
   SettingsDataMessage,
   ProjectFilesMessage,
@@ -23,8 +22,8 @@ import {
   projectProjectFilesMessage,
   projectSettingsDataMessage,
   projectSettingsMutationError,
+  selectInitialChatModelOption,
 } from '../presenters/config-message-presenter';
-import type { SettingsDataProjection } from '@neko/agent-contracts';
 
 /**
  * Handle 'settingsData' message - Settings from extension
@@ -35,7 +34,9 @@ const handleSettingsData: MessageHandler<'settingsData'> = (
 ) => {
   const projection = projectSettingsDataMessage(message);
 
-  const defaultChatModel = selectInitialChatModel(projection);
+  const defaultChatModel = selectInitialChatModelOption(
+    projection.settingsPatch.chatModelOptions ?? [],
+  );
   context.hydrateConversationSettings(message.conversationId, {
     selectedModel: projection.selectedModel ?? defaultChatModel?.id ?? '',
     availableModelIds: (projection.settingsPatch.chatModelOptions ?? []).map((option) => option.id),
@@ -57,14 +58,6 @@ const handleSettingsData: MessageHandler<'settingsData'> = (
     context.setGlobalError(projection.configDiagnostic.message);
   }
 };
-
-function selectInitialChatModel(projection: SettingsDataProjection): ChatModelOption | null {
-  const chatModelOptions = projection.settingsPatch.chatModelOptions ?? [];
-  const llmModels = chatModelOptions.filter(
-    (option) => option.providerId && option.modelId && (option.category ?? 'llm') === 'llm',
-  );
-  return llmModels.find((option) => option.source === 'explicit-config') ?? llmModels[0] ?? null;
-}
 
 /**
  * Handle 'projectFiles' message - Project file list + optional canvas/story mention extras

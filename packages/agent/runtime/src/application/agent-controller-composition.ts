@@ -251,6 +251,7 @@ export interface AgentControllerComposition {
   }) => Promise<AgentProviderExecutionResult>;
   createInitialConversationConfiguration(input: {
     readonly workspace: AgentWorkspaceRuntime;
+    readonly model?: AgentConversationControllerTurnRequest['chatModel'];
   }): Promise<{
     readonly request: AgentConfigurationRequest;
     readonly projection: AgentConfigurationPolicyProjection;
@@ -790,26 +791,27 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
 
   async createInitialConversationConfiguration(input: {
     readonly workspace: AgentWorkspaceRuntime;
+    readonly model?: AgentConversationControllerTurnRequest['chatModel'];
   }): Promise<{
     readonly request: AgentConfigurationRequest;
     readonly projection: AgentConfigurationPolicyProjection;
   }> {
     const config = this.getConfig(input.workspace);
     const settings = config.getAssistantRuntimeSettingsSnapshot();
-    if (!settings.selectedProviderId || !settings.selectedModelId) {
-      throw new Error('Character Agent requires an explicitly configured provider and model.');
+    const selectedProviderId = input.model?.providerId ?? settings.selectedProviderId;
+    const selectedModelId = input.model?.modelId ?? settings.selectedModelId;
+    if (!selectedProviderId || !selectedModelId) {
+      throw new Error('Agent Conversation requires an explicitly configured provider and model.');
     }
     const models = projectAgentModelCatalog(config.getAssistantConfigState());
     const model = models.find(
       (candidate) =>
-        candidate.providerId === settings.selectedProviderId &&
-        candidate.modelId === settings.selectedModelId,
+        candidate.providerId === selectedProviderId && candidate.modelId === selectedModelId,
     );
     const request = {
-      modelCatalogEntryId:
-        model?.id ?? `${settings.selectedProviderId}:${settings.selectedModelId}`,
-      providerId: settings.selectedProviderId,
-      modelId: settings.selectedModelId,
+      modelCatalogEntryId: model?.id ?? `${selectedProviderId}:${selectedModelId}`,
+      providerId: selectedProviderId,
+      modelId: selectedModelId,
       executionMode: settings.executionMode,
       temperature: settings.temperature,
       maximumOutputTokens: settings.maxTokens,
@@ -818,7 +820,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const projection = projectAgentConfigurationPolicy({
       models,
       request,
-      source: 'global-default',
+      source: input.model ? 'conversation' : 'global-default',
       defaults: {
         executionMode: settings.executionMode,
         temperature: settings.temperature,

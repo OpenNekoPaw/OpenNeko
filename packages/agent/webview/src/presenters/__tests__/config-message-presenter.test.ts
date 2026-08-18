@@ -11,6 +11,7 @@ import {
   projectProjectFilesMessage,
   projectSettingsDataMessage,
   projectSettingsMutationError,
+  selectInitialChatModelOption,
 } from '../config-message-presenter';
 import { buildConfigStateMessage } from '@neko/agent-contracts';
 
@@ -481,6 +482,37 @@ describe('config message presenter', () => {
     ).toEqual({
       chatModel: { providerId: 'local-gateway', modelId: 'auto', category: 'llm' },
     });
+  });
+
+  it('selects the first explicit configured LLM when no default model is bound', () => {
+    expect(
+      selectInitialChatModelOption([
+        {
+          id: 'discovered:model',
+          label: 'Discovered',
+          providerId: 'discovered',
+          modelId: 'model',
+          category: 'llm',
+          source: 'provider-discovery',
+        },
+        {
+          id: 'media:image',
+          label: 'Image',
+          providerId: 'media',
+          modelId: 'image',
+          category: 'image',
+          source: 'explicit-config',
+        },
+        {
+          id: 'configured:chat',
+          label: 'Configured Chat',
+          providerId: 'configured',
+          modelId: 'chat',
+          category: 'llm',
+          source: 'explicit-config',
+        },
+      ]),
+    ).toMatchObject({ id: 'configured:chat' });
   });
 
   it('does not infer an Agent generation purpose from the media model category', () => {

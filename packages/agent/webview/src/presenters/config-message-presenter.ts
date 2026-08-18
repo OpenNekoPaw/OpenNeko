@@ -166,6 +166,13 @@ export function projectMessageModelSelection(
   };
 }
 
+export function selectInitialChatModelOption(
+  chatModelOptions: readonly ChatModelOption[],
+): ChatModelOption | null {
+  const llmModels = chatModelOptions.filter(isChatSelectableModel);
+  return llmModels.find((option) => option.source === 'explicit-config') ?? llmModels[0] ?? null;
+}
+
 function projectAgentGenerationPurposeModels(
   selections: AgentMediaModelSelections,
   modelOptions: readonly ChatModelOption[],

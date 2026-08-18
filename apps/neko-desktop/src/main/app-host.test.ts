@@ -63,6 +63,7 @@ import type {
   AgentExtensionCatalogSnapshot,
   AgentExtensionManager,
 } from '@neko/agent-runtime/extensions';
+import type { AgentConversationControllerTurnRequest } from '@neko/agent-runtime/runtime';
 import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 import type { DesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
@@ -112,6 +113,69 @@ const standardCapabilityConstraint = async (input: {
 });
 
 describe('DesktopAppHost', () => {
+  it('passes the first-turn primary Composer model into initial Conversation configuration', async () => {
+    const createInitialConversationConfiguration = vi.fn(async () => firstSubmitConfiguration());
+    const fixture = await createShellAppHost({
+      agentControllerComposition: {
+        requirements: {
+          'conversation-effects': true,
+          'config-effects': true,
+          'skill-effects': true,
+          'content-effects': true,
+          'projection-effects': true,
+          'pi-runtime': true,
+        },
+        createInitialConversationConfiguration,
+      } as unknown as NonNullable<DesktopAppHostOptions['agentControllerComposition']>,
+    });
+    const conversationId = 'conversation:workspace-primary-model';
+    await fixture.appHost.conversationLifecycle.reserveConversationContext(conversationId, {
+      kind: 'workspace',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    });
+    const prepareInitialConversationTurn = (
+      fixture.appHost as unknown as {
+        prepareInitialConversationTurn(
+          workspace: AgentWorkspaceRuntime,
+          request: AgentConversationControllerTurnRequest,
+          input: { readonly kind: 'message'; readonly text: string },
+        ): Promise<{ readonly turnId: string } | undefined>;
+      }
+    ).prepareInitialConversationTurn.bind(fixture.appHost);
+
+    await expect(
+      prepareInitialConversationTurn(
+        createAgentWorkspaceRuntime('workspace-1'),
+        {
+          source: 'user-message',
+          conversationId,
+          messageText: 'First Workspace message',
+          sessionMode: 'agent',
+          chatModel: { providerId: 'chat-provider', modelId: 'chat-model', category: 'llm' },
+          agentModels: {
+            primary: {
+              providerId: 'primary-provider',
+              modelId: 'primary-model',
+              category: 'llm',
+            },
+          },
+        },
+        { kind: 'message', text: 'First Workspace message' },
+      ),
+    ).resolves.toEqual({ turnId: expect.any(String) });
+    expect(createInitialConversationConfiguration).toHaveBeenCalledWith({
+      workspace: expect.any(Object),
+      model: {
+        providerId: 'primary-provider',
+        modelId: 'primary-model',
+        category: 'llm',
+      },
+    });
+
+    await fixture.appHost.dispose();
+  });
+
   it('rejects retired Character Project authoring commands at the Foundation boundary', async () => {
     const commands = { execute: vi.fn(async () => undefined) };
     const fixture = await createShellAppHost({ characterFoundationCommands: commands });
@@ -4631,6 +4695,7 @@ async function createShellAppHost(options?: {
   readonly runtimeEntry?: Parameters<
     typeof createAgentLaunchDraftSubmissionApplicationService
   >[0]['runtimeEntry'];
+  readonly agentControllerComposition?: DesktopAppHostOptions['agentControllerComposition'];
 }) {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
@@ -4734,6 +4799,7 @@ async function createShellAppHost(options?: {
     projectAuthoring: options?.projectAuthoring ?? createProjectAuthoring(),
     agent,
     assistantWorkspace: createAssistantWorkspaceResolution(),
+    agentControllerComposition: options?.agentControllerComposition,
     agentLaunch,
     agentLaunchSubmission,
     workspaceGrants: fixture.workspaceGrants,

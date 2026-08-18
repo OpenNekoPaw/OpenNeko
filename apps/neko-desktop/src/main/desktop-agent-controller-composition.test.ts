@@ -39,6 +39,50 @@ afterEach(async () => {
 });
 
 describe('Agent controller composition', () => {
+  it('creates initial Conversation configuration from the exact Composer model', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'desktop-agent-initial-model-'));
+    temporaryRoots.push(root);
+    const config = await createConfiguredWorkspaceConfig(root, {});
+    const workspace = createWorkspace(root);
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: () => config,
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: { openContent: vi.fn(), revealDocument: vi.fn() },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+      canvas: createCanvasIndexService(),
+    });
+
+    await expect(
+      composition.createInitialConversationConfiguration({
+        workspace,
+        model: { providerId: 'provider-1', modelId: 'model-1', category: 'llm' },
+      }),
+    ).resolves.toMatchObject({
+      request: {
+        modelCatalogEntryId: 'provider-1:model-1',
+        providerId: 'provider-1',
+        modelId: 'model-1',
+      },
+      projection: {
+        request: {
+          providerId: 'provider-1',
+          modelId: 'model-1',
+        },
+      },
+    });
+
+    await composition.dispose?.();
+  });
+
   it('projects the exact owner-bound Composer catalog without a Conversation lookup', async () => {
     const workspace = createWorkspace();
     const readConversationContext = vi.fn();
@@ -2777,6 +2821,44 @@ function createWorkspaceConfigResolver(): () => ConfigManager {
     assistantRuntimeSettings: createRuntimeSettings(),
   });
   return () => config;
+}
+
+async function createConfiguredWorkspaceConfig(
+  root: string,
+  initialSettings: ReturnType<AssistantRuntimeSettingsPort['snapshot']> = {
+    selectedProviderId: 'provider-1',
+    selectedModelId: 'model-1',
+  },
+): Promise<ConfigManager> {
+  const configPath = join(root, 'config.toml');
+  await writeFile(
+    configPath,
+    [
+      '[[providers]]',
+      'id = "provider-1"',
+      'name = "Provider"',
+      'type = "openai"',
+      'api_url = "https://example.test/v1"',
+      'protocol_profile = "openai-chat"',
+      'enabled = true',
+      'requires_api_key = false',
+      '',
+      '[[models]]',
+      'id = "model-1"',
+      'name = "model-1"',
+      'provider_id = "provider-1"',
+      'type = "llm"',
+      'capabilities = ["chat", "tools"]',
+      'context_window = 8192',
+      'max_output_tokens = 4096',
+      'enabled = true',
+    ].join('\n'),
+    'utf8',
+  );
+  return new ConfigManager({
+    userConfigManager: new FileUserConfigManager({ filePath: configPath }),
+    assistantRuntimeSettings: createRuntimeSettings(initialSettings),
+  });
 }
 
 function missingTurnConfiguration(conversationId: string, turnId: string) {

@@ -884,6 +884,61 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('entry-input-catalog').textContent).toBe('$storyboard');
   });
 
+  it('binds a Workspace Composer to the first explicit chat model before first send', async () => {
+    vi.clearAllMocks();
+    const composer = createComposerProjection('composer-workspace-model', {
+      kind: 'workspace',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    });
+    const settings = createSettings();
+    render(
+      <ConversationController
+        {...createProps({
+          settings: {
+            ...settings,
+            selectedProviderId: null,
+            selectedModelId: null,
+            chatModelOptions: [
+              {
+                id: 'discovered:model',
+                label: 'Discovered',
+                providerId: 'discovered',
+                modelId: 'model',
+                category: 'llm',
+                source: 'provider-discovery',
+              },
+              {
+                id: 'configured:chat',
+                label: 'Configured Chat',
+                providerId: 'configured',
+                modelId: 'chat',
+                category: 'llm',
+                source: 'explicit-config',
+              },
+            ],
+          },
+        })}
+        agentPresentation={composer}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('entry-selected-model').textContent).toBe('configured:chat'),
+    );
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'First Workspace turn' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(hostMocks.createConversation).toHaveBeenCalledTimes(1));
+    expect(hostMocks.createConversation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: { kind: 'message', text: 'First Workspace turn' },
+        chatModel: { providerId: 'configured', modelId: 'chat', category: 'llm' },
+      }),
+    );
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+  });
+
   it('sends the first Workspace turn through canonical Conversation and preserves attachments', async () => {
     vi.clearAllMocks();
     const composer = createComposerProjection('composer-workspace-initial', {
