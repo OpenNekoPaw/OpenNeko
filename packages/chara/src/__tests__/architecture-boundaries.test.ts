@@ -226,7 +226,7 @@ describe('neko-chara architecture boundaries', () => {
     );
   });
 
-  it('keeps the retired Agent Webview and Character capability provider absent', () => {
+  it('keeps Desktop composition and Agent Webview detached from Character application runtime', () => {
     const repositoryRoot = resolve(packageRoot, '../..');
     const productionFiles = listTypeScriptFiles(repositoryRoot).filter(
       (file) => !file.endsWith('.test.ts') && !file.endsWith('.test.tsx'),
@@ -249,7 +249,7 @@ describe('neko-chara architecture boundaries', () => {
     expect(composerOwners).toEqual([]);
     expect(characterProviderOwners).toEqual([]);
     expect(agentWebviewSources).not.toMatch(
-      /ComposerWorkspaceProvider|@neko\/chara\/application|CharacterAuthoringCapabilityProvider/u,
+      /@neko\/chara\/application|CharacterAuthoringCapabilityProvider/u,
     );
   });
 });

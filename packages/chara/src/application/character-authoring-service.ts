@@ -681,7 +681,7 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
-function isFreshCharacterCreationTarget(project: CharacterProject): boolean {
+export function isFreshCharacterCreationTarget(project: CharacterProject): boolean {
   const { draft } = project;
   return (
     project.reviewStatus === 'draft' &&
