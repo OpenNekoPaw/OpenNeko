@@ -26,8 +26,6 @@ import { AgentError } from '../errors';
 import { getLogger } from '../utils/logger';
 import { validateSchema, formatValidationErrors } from './schema-validator';
 
-const logger = getLogger('ToolRegistry');
-
 /**
  * Default tool execution config
  */
@@ -56,7 +54,7 @@ export class ToolRegistry implements IToolRegistry {
    */
   register(tool: Tool): void {
     if (this.tools.has(tool.name)) {
-      logger.warn('Tool already registered, overwriting', { toolName: tool.name });
+      throw new Error(`Tool '${tool.name}' is already registered.`);
     }
     this.tools.set(tool.name, tool);
   }
@@ -336,6 +334,13 @@ export class ToolRegistry implements IToolRegistry {
    * @param tools Array of tools to register
    */
   registerMany(tools: Tool[]): void {
+    const names = new Set<string>();
+    for (const tool of tools) {
+      if (names.has(tool.name) || this.tools.has(tool.name)) {
+        throw new Error(`Tool '${tool.name}' is already registered.`);
+      }
+      names.add(tool.name);
+    }
     for (const tool of tools) {
       this.register(tool);
     }

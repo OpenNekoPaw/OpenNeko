@@ -27,6 +27,9 @@ export class MCPManager implements IMCPManager {
    * Register a server
    */
   register(config: MCPServerConfig): void {
+    if (this.servers.has(config.id)) {
+      throw new Error(`MCP server '${config.id}' is already registered.`);
+    }
     this.servers.set(config.id, config);
   }
 

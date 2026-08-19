@@ -8,7 +8,6 @@ import type {
   AgentCapabilityTrustLevel,
   IToolRegistry,
   PromptFragment,
-  Tool,
 } from '@neko/agent-contracts';
 
 export interface CapabilityProtocolInfo {
@@ -90,10 +89,7 @@ export class CapabilityRegistryRuntime {
   private readonly providers = new Map<string, RegisteredProvider>();
   private readonly manifests = new Map<string, AgentCapabilityManifest>();
   private readonly toolOwners = new Map<string, string>();
-  private readonly toolShortNameOwners = new Map<
-    string,
-    { toolName: string; providerId: string }
-  >();
+  private readonly toolShortNameOwners = new Map<string, Map<string, string>>();
   private readonly diagnostics: CapabilityRuntimeDiagnostic[] = [];
   private readonly logger: CapabilityRegistryRuntimeLogger;
   private capabilityContext: AgentCapabilityContext | null = null;
@@ -136,41 +132,64 @@ export class CapabilityRegistryRuntime {
 
   registerProvider(provider: AgentCapabilityProvider, context: AgentCapabilityContext): void {
     const { id } = provider;
-    this.setCapabilityContext(context);
 
     if (this.providers.has(id)) {
       this.recordCapabilityDiagnostic('warn', {
         code: 'extension.capability.provider.duplicate-id',
         reason: 'duplicate-provider-id',
-        message: 'Capability provider id is already registered; replacing the previous provider.',
+        message: 'Capability provider id is already registered.',
         context: {
           providerId: id,
           existingProviderId: id,
           conflictingProviderId: id,
         },
       });
-      this.unregisterProvider(id);
+      throw new Error(`Capability provider '${id}' is already registered.`);
+    }
+
+    const tools = provider.getTools(context);
+    const providerToolNames = new Set<string>();
+    for (const tool of tools) {
+      const existingOwner = this.toolOwners.get(tool.name);
+      const existsInRuntime = this.deps.toolRegistry.get(tool.name) !== undefined;
+      if (providerToolNames.has(tool.name) || existingOwner !== undefined || existsInRuntime) {
+        const reason = providerToolNames.has(tool.name)
+          ? 'duplicate-name-in-provider'
+          : existingOwner
+            ? 'provider-name-collision'
+            : 'preexisting-name-collision';
+        this.recordCapabilityDiagnostic('warn', {
+          code: 'extension.capability.tool.name-collision',
+          reason,
+          message: 'Capability Tool exact identity is already registered.',
+          context: {
+            capabilityKind: 'tool',
+            name: tool.name,
+            providerId: id,
+            existingOwner: existingOwner ?? null,
+          },
+        });
+        throw new Error(`Capability Tool '${tool.name}' is already registered.`);
+      }
+      providerToolNames.add(tool.name);
     }
 
     const registeredTools: string[] = [];
 
     try {
-      const tools: Tool[] = provider.getTools(context);
       for (const tool of tools) {
-        this.recordCapabilityNameCollision({
-          kind: 'tool',
-          name: tool.name,
-          providerId: id,
-          existingOwner: this.toolOwners.get(tool.name),
-          existsInRuntime: this.deps.toolRegistry.get(tool.name) !== undefined,
-        });
-        this.recordToolShortNameRegistration(tool.name, id);
         this.deps.toolRegistry.register(tool);
+        this.recordToolShortNameRegistration(tool.name, id);
         this.toolOwners.set(tool.name, id);
         registeredTools.push(tool.name);
       }
     } catch (err) {
-      this.logger.warn(`Failed to get tools from provider "${id}"`, { error: err });
+      for (const toolName of registeredTools) {
+        this.deps.toolRegistry.unregister(toolName);
+        this.toolOwners.delete(toolName);
+        this.removeToolShortNameRegistration(toolName, id);
+      }
+      throw err;
     }
 
     this.providers.set(id, {
@@ -178,6 +197,7 @@ export class CapabilityRegistryRuntime {
       protocol: resolveCapabilityProtocolInfo(id, provider, 'provider'),
       registeredTools,
     });
+    this.setCapabilityContext(context);
 
     this.logger.info(`Provider "${id}" registered: ${registeredTools.length} tools`);
   }
@@ -191,10 +211,7 @@ export class CapabilityRegistryRuntime {
       if (this.toolOwners.get(toolName) === id) {
         this.toolOwners.delete(toolName);
       }
-      const shortName = normalizeCapabilityShortName(toolName);
-      if (this.toolShortNameOwners.get(shortName)?.providerId === id) {
-        this.toolShortNameOwners.delete(shortName);
-      }
+      this.removeToolShortNameRegistration(toolName, id);
     }
 
     entry.provider.dispose?.();
@@ -297,81 +314,14 @@ export class CapabilityRegistryRuntime {
     return null;
   }
 
-  private recordCapabilityNameCollision(input: {
-    kind: 'tool';
-    name: string;
-    providerId: string;
-    existingOwner?: string;
-    existsInRuntime: boolean;
-  }): void {
-    let reason:
-      | 'duplicate-name-in-provider'
-      | 'provider-name-collision'
-      | 'preexisting-name-collision'
-      | null = null;
-
-    if (input.existingOwner === input.providerId) {
-      reason = 'duplicate-name-in-provider';
-    } else if (input.existingOwner) {
-      reason = 'provider-name-collision';
-    } else if (input.existsInRuntime) {
-      reason = 'preexisting-name-collision';
-    }
-
-    if (!reason) {
-      return;
-    }
-
-    this.recordCapabilityDiagnostic('warn', {
-      code: `extension.capability.${input.kind}.name-collision`,
-      reason,
-      message: 'Capability registration is overwriting a shared runtime name.',
-      context: {
-        capabilityKind: input.kind,
-        name: input.name,
-        providerId: input.providerId,
-        existingOwner: input.existingOwner ?? null,
-      },
-    });
-
-    this.recordToolShortNameCollision(input.name, input.providerId, input.existingOwner);
-  }
-
-  private recordToolShortNameCollision(
-    toolName: string,
-    providerId: string,
-    existingOwner: string | undefined,
-  ): void {
-    if (!existingOwner || existingOwner === providerId) {
-      return;
-    }
-    const shortName = normalizeCapabilityShortName(toolName);
-    const conflictingTool = Array.from(this.toolOwners.entries()).find(
-      ([registeredTool, owner]) =>
-        owner === existingOwner && normalizeCapabilityShortName(registeredTool) === shortName,
-    );
-    if (!conflictingTool) {
-      return;
-    }
-    this.recordCapabilityDiagnostic('warn', {
-      code: 'extension.capability.tool.short-name-collision',
-      reason: 'conflicting-short-name',
-      message: 'Capability tool short name conflicts with an existing provider tool.',
-      context: {
-        capabilityKind: 'tool',
-        name: toolName,
-        shortName,
-        providerId,
-        existingOwner,
-        existingToolName: conflictingTool[0],
-      },
-    });
-  }
-
   private recordToolShortNameRegistration(toolName: string, providerId: string): void {
     const shortName = normalizeCapabilityShortName(toolName);
-    const existing = this.toolShortNameOwners.get(shortName);
-    if (existing && existing.providerId !== providerId && existing.toolName !== toolName) {
+    const owners = this.toolShortNameOwners.get(shortName) ?? new Map<string, string>();
+    const existing = Array.from(owners.entries()).find(
+      ([existingToolName, existingProviderId]) =>
+        existingProviderId !== providerId && existingToolName !== toolName,
+    );
+    if (existing) {
       this.recordCapabilityDiagnostic('warn', {
         code: 'extension.capability.tool.short-name-collision',
         reason: 'conflicting-short-name',
@@ -381,12 +331,23 @@ export class CapabilityRegistryRuntime {
           name: toolName,
           shortName,
           providerId,
-          existingOwner: existing.providerId,
-          existingToolName: existing.toolName,
+          existingOwner: existing[1],
+          existingToolName: existing[0],
         },
       });
     }
-    this.toolShortNameOwners.set(shortName, { toolName, providerId });
+    owners.set(toolName, providerId);
+    this.toolShortNameOwners.set(shortName, owners);
+  }
+
+  private removeToolShortNameRegistration(toolName: string, providerId: string): void {
+    const shortName = normalizeCapabilityShortName(toolName);
+    const owners = this.toolShortNameOwners.get(shortName);
+    if (owners?.get(toolName) !== providerId) return;
+    owners.delete(toolName);
+    if (owners.size === 0) {
+      this.toolShortNameOwners.delete(shortName);
+    }
   }
 
   private recordCapabilityDiagnostic(

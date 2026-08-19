@@ -89,16 +89,28 @@ describe('CapabilityRegistryRuntime', () => {
     expect(disposed).toHaveBeenCalledTimes(1);
   });
 
-  it('records duplicate provider id diagnostics before replacing the provider', () => {
+  it('rejects a duplicate provider id without replacing the registered provider', () => {
     const toolRegistry = new ToolRegistry();
     const runtime = new CapabilityRegistryRuntime({ toolRegistry });
+    const fragment: PromptFragment = {
+      id: 'neko.duplicate:context',
+      content: 'Original context.',
+      locales: { zh: { content: '重复上下文。' } },
+    };
 
-    runtime.registerProvider(createProvider('neko.duplicate', [createTool('FirstTool')]), {
-      hostContext: {},
-    });
-    runtime.registerProvider(createProvider('neko.duplicate', [createTool('SecondTool')]), {
-      hostContext: {},
-    });
+    runtime.registerProvider(
+      {
+        ...createProvider('neko.duplicate', [createTool('FirstTool')]),
+        getPromptFragments: () => [fragment],
+      },
+      { hostContext: {}, locale: 'en' },
+    );
+    expect(() =>
+      runtime.registerProvider(createProvider('neko.duplicate', [createTool('SecondTool')]), {
+        hostContext: {},
+        locale: 'zh',
+      }),
+    ).toThrow("Capability provider 'neko.duplicate' is already registered.");
 
     expect(runtime.getDiagnostics()).toEqual(
       expect.arrayContaining([
@@ -113,20 +125,25 @@ describe('CapabilityRegistryRuntime', () => {
         }),
       ]),
     );
-    expect(toolRegistry.get('FirstTool')).toBeUndefined();
-    expect(toolRegistry.get('SecondTool')).toBeDefined();
+    expect(toolRegistry.get('FirstTool')).toBeDefined();
+    expect(toolRegistry.get('SecondTool')).toBeUndefined();
+    expect(runtime.getAllPromptFragments()).toEqual([
+      expect.objectContaining({ content: 'Original context.' }),
+    ]);
   });
 
-  it('records duplicate canonical tool diagnostics with both conflicting providers', () => {
+  it('rejects a duplicate canonical Tool identity and preserves the existing owner', () => {
     const toolRegistry = new ToolRegistry();
     const runtime = new CapabilityRegistryRuntime({ toolRegistry });
 
     runtime.registerProvider(createProvider('neko.story', [createTool('GenerateScene')]), {
       hostContext: {},
     });
-    runtime.registerProvider(createProvider('neko.canvas', [createTool('GenerateScene')]), {
-      hostContext: {},
-    });
+    expect(() =>
+      runtime.registerProvider(createProvider('neko.canvas', [createTool('GenerateScene')]), {
+        hostContext: {},
+      }),
+    ).toThrow("Capability Tool 'GenerateScene' is already registered.");
 
     expect(runtime.getDiagnostics()).toEqual(
       expect.arrayContaining([
@@ -142,6 +159,9 @@ describe('CapabilityRegistryRuntime', () => {
         }),
       ]),
     );
+    expect(runtime.hasProvider('neko.story')).toBe(true);
+    expect(runtime.hasProvider('neko.canvas')).toBe(false);
+    expect(toolRegistry.get('GenerateScene')).toBeDefined();
   });
 
   it('records conflicting short names across provider namespaces', () => {
@@ -154,6 +174,10 @@ describe('CapabilityRegistryRuntime', () => {
     runtime.registerProvider(createProvider('neko.canvas', [createTool('canvas.GenerateScene')]), {
       hostContext: {},
     });
+    runtime.unregisterProvider('neko.canvas');
+    runtime.registerProvider(createProvider('neko.cut', [createTool('cut.GenerateScene')]), {
+      hostContext: {},
+    });
 
     expect(runtime.getDiagnostics()).toEqual(
       expect.arrayContaining([
@@ -161,9 +185,9 @@ describe('CapabilityRegistryRuntime', () => {
           code: 'extension.capability.tool.short-name-collision',
           reason: 'conflicting-short-name',
           context: expect.objectContaining({
-            name: 'canvas.GenerateScene',
+            name: 'cut.GenerateScene',
             shortName: 'generatescene',
-            providerId: 'neko.canvas',
+            providerId: 'neko.cut',
             existingOwner: 'neko.story',
             existingToolName: 'story.GenerateScene',
           }),

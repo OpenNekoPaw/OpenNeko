@@ -97,16 +97,18 @@ describe('MCPManager', () => {
       expect(servers).toContainEqual(config2);
     });
 
-    it('should overwrite existing server with same ID', () => {
+    it('should reject an existing server ID without replacing it', () => {
       const config1 = createServerConfig({ name: 'Original' });
       const config2 = createServerConfig({ name: 'Updated' });
 
       manager.register(config1);
-      manager.register(config2);
+      expect(() => manager.register(config2)).toThrow(
+        "MCP server 'test-server' is already registered.",
+      );
 
       const servers = manager.listServers();
       expect(servers).toHaveLength(1);
-      expect(servers[0]?.name).toBe('Updated');
+      expect(servers[0]?.name).toBe('Original');
     });
   });
 
