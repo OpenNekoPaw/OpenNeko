@@ -120,6 +120,31 @@ describe('Resource Browser controller', () => {
     expect(source.files.list).not.toHaveBeenCalled();
   });
 
+  it('queries without changing or publishing the active Resource Browser projection', async () => {
+    const source = createSource();
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions: createInteractions(),
+    });
+    const listener = vi.fn();
+    controller.subscribe(listener);
+    const active = await controller.getSnapshot();
+
+    const queried = await controller.query(
+      createResourceBrowserSearchRequest({
+        requestId: 'composer-query',
+        identity,
+        source: 'media',
+        query: 'scene',
+      }),
+    );
+
+    expect(queried).toMatchObject({ source: 'media', query: 'scene' });
+    expect(await controller.getSnapshot()).toBe(active);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it('allows Rescan only after an observation failure and clears the local diagnostic', async () => {
     const source = createSource();
     const controller = new ResourceBrowserController({

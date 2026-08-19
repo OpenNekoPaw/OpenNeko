@@ -281,6 +281,15 @@ function createStableDesktopDshAgentClient(
     async readPermissionPresets(sessionId) {
       return requireClient().readPermissionPresets(sessionId);
     },
+    async readInputCatalog(sessionId) {
+      return requireClient().readInputCatalog(sessionId);
+    },
+    async executeCommand(input) {
+      return requireClient().executeCommand(input);
+    },
+    async invokeSkill(input) {
+      return requireClient().invokeSkill(input);
+    },
     async readInbox(sessionId) {
       return requireClient().readInbox(sessionId);
     },

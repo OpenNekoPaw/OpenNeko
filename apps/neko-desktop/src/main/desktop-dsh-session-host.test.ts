@@ -90,7 +90,9 @@ describe('Desktop DSH Session Host', () => {
     const result = requireSessionResult(
       await host.execute(
         { webContentsId: 1, frameUrl: 'openneko://app' },
-        request('prompt', { text: 'hello' }),
+        request('submit', {
+          input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+        }),
       ),
     );
 
@@ -115,6 +117,170 @@ describe('Desktop DSH Session Host', () => {
     ]);
   });
 
+  it('injects the exact selected context receipt before the DSH prompt', async () => {
+    const resolve = vi.fn(async () => 'OpenNeko context with selected Asset');
+    const setSessionContext = vi.fn(async () => undefined);
+    const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
+    const host = createHost({ prompt, setSessionContext, promptContext: { resolve } });
+    const contextPayload = {
+      type: 'asset' as const,
+      id: 'asset-lighting',
+      label: 'Lighting',
+      summary: 'Soft studio lighting',
+      data: { assetRef: { assetId: 'asset-lighting' } },
+    };
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      request('submit', {
+        input: {
+          kind: 'message',
+          text: 'Use this reference',
+          references: [],
+          contextPayloads: [contextPayload],
+        },
+      }),
+    );
+
+    expect(resolve).toHaveBeenCalledWith(identity.conversationId, [contextPayload]);
+    expect(setSessionContext).toHaveBeenCalledWith(
+      identity.conversationId,
+      'OpenNeko context with selected Asset',
+    );
+    expect(setSessionContext.mock.invocationCallOrder[0]).toBeLessThan(
+      prompt.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+  });
+
+  it('executes a DSH command without creating a model turn or applying prompt context', async () => {
+    const prompt = vi.fn();
+    const executeCommand = vi.fn(async () => ({
+      commandId: 'command-1',
+      outcome: 'success' as const,
+    }));
+    const applyConversation = vi.fn();
+    const host = createHost({ prompt, executeCommand, applyConversation });
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      request('submit', { input: { kind: 'command', line: '/help models' } }),
+    );
+
+    expect(executeCommand).toHaveBeenCalledWith(identity.conversationId, '/help models');
+    expect(applyConversation).not.toHaveBeenCalled();
+    expect(prompt).not.toHaveBeenCalled();
+  });
+
+  it('invokes a catalog-validated DSH Skill through the canonical prompt context path', async () => {
+    const prompt = vi.fn();
+    const invokeSkill = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
+    const applyConversation = vi.fn(async () => undefined);
+    const host = createHost({ prompt, invokeSkill, applyConversation });
+
+    const result = requireSessionResult(
+      await host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        request('submit', {
+          input: {
+            kind: 'skill',
+            skillName: 'story-review',
+            displayText: '$story-review chapter-1',
+            args: 'chapter-1',
+          },
+        }),
+      ),
+    );
+
+    expect(invokeSkill).toHaveBeenCalledWith({
+      conversationId: identity.conversationId,
+      skillName: 'story-review',
+      displayText: '$story-review chapter-1',
+      args: 'chapter-1',
+    });
+    expect(applyConversation).toHaveBeenCalledWith(identity.conversationId, 'window-1');
+    expect(prompt).not.toHaveBeenCalled();
+    expect(result.stopReason).toBe('end_turn');
+  });
+
+  it('routes Workspace mention search through the exact sender-bound Surface', async () => {
+    const searchMentions = vi.fn(async () => [
+      {
+        id: 'files:scene',
+        kind: 'file' as const,
+        label: 'scene.md',
+        contentLocator: { kind: 'workspace-file' as const, path: 'notes/scene.md' },
+        source: 'workspace' as const,
+        mediaType: 'text' as const,
+      },
+    ]);
+    const host = createHost({ searchMentions });
+
+    const result = await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      {
+        requestId: 'request-mentions',
+        operation: 'composer-mentions',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        filter: 'scene',
+      },
+    );
+
+    if (!('mentions' in result)) throw new Error('Expected composer mentions result.');
+    expect(searchMentions).toHaveBeenCalledWith({
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      filter: 'scene',
+    });
+    expect(result.mentions).toHaveLength(1);
+  });
+
+  it('delegates canonical DSH turn timing without using Desktop receipt time', async () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 0,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 2 },
+    });
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 1,
+      time: 4_250,
+      type: 'turn/end',
+      data: { turn: 2, reason: { kind: 'completed' } },
+    });
+
+    const result = requireSessionResult(
+      await createHost({ projection }).execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-snapshot',
+          operation: 'snapshot',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: identity.conversationId,
+        },
+      ),
+    );
+
+    expect(result.projection.events).toEqual([
+      { kind: 'turn', turn: 2, phase: 'start', startedAt: 1_000 },
+      {
+        kind: 'turn',
+        turn: 2,
+        phase: 'end',
+        startedAt: 1_000,
+        completedAt: 4_250,
+        reason: 'completed',
+      },
+    ]);
+  });
+
   it('fails before ACP prompt when authoritative product context cannot be resolved', async () => {
     const prompt = vi.fn();
     const setSessionContext = vi.fn();
@@ -131,7 +297,9 @@ describe('Desktop DSH Session Host', () => {
     await expect(
       host.execute(
         { webContentsId: 1, frameUrl: 'openneko://app' },
-        request('prompt', { text: 'hello' }),
+        request('submit', {
+          input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+        }),
       ),
     ).rejects.toThrow(/Workspace authority is unavailable/u);
     expect(setSessionContext).not.toHaveBeenCalled();
@@ -215,17 +383,38 @@ describe('Desktop DSH Session Host', () => {
 
   it('rejects one invalid Tool detail visibly without hiding the Tool or sibling events', async () => {
     const projection = new DshAcpProjection();
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 0,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 0 },
+    });
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 1,
+      time: 1_001,
+      type: 'step/start',
+      data: { turn: 0, step: 0 },
+    });
     projection.acceptSessionUpdate({
       sessionId: identity.dshSessionId,
-      _meta: { opennekoSequence: 1 },
+      _meta: {
+        opennekoSequence: 2,
+        opennekoTurn: 0,
+        opennekoStep: 0,
+        opennekoBlockIndex: 0,
+        opennekoMessagePhase: 'delta',
+      },
       update: {
         sessionUpdate: 'agent_message_chunk',
+        messageId: 'dsh:0:0:text',
         content: { type: 'text', text: 'before' },
       },
     });
     projection.acceptSessionUpdate({
       sessionId: identity.dshSessionId,
-      _meta: { opennekoSequence: 2, opennekoTurn: 0 },
+      _meta: { opennekoSequence: 3, opennekoTurn: 0 },
       update: {
         sessionUpdate: 'tool_call',
         toolCallId: 'tool-invalid',
@@ -238,12 +427,23 @@ describe('Desktop DSH Session Host', () => {
     const result = requireSessionResult(
       await createHost({ projection }).execute(
         { webContentsId: 1, frameUrl: 'openneko://app' },
-        request('prompt', { text: 'hello' }),
+        request('submit', {
+          input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+        }),
       ),
     );
 
     expect(result.projection.events).toEqual([
-      { kind: 'message', role: 'assistant', text: 'before' },
+      { kind: 'turn', turn: 0, phase: 'start', startedAt: 1_000 },
+      {
+        kind: 'message',
+        role: 'assistant',
+        turn: 0,
+        step: 0,
+        text: 'before',
+        messageId: 'dsh:0:0:text',
+        state: 'streaming',
+      },
       expect.objectContaining({
         kind: 'diagnostic',
         code: 'ACP_TOOL_PAYLOAD_INVALID',
@@ -264,7 +464,12 @@ describe('Desktop DSH Session Host', () => {
     await expect(
       host.execute(
         { webContentsId: 1, frameUrl: 'openneko://app' },
-        { ...request('prompt', { text: 'hello' }), rendererSessionId: 'stale' },
+        {
+          ...request('submit', {
+            input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+          }),
+          rendererSessionId: 'stale',
+        },
       ),
     ).rejects.toThrow(/sender-bound/u);
     expect(prompt).not.toHaveBeenCalled();
@@ -301,11 +506,21 @@ function createHost(overrides: {
       { readonly kind: 'surface' } | { readonly kind: 'project'; readonly projectId: string };
   }) => Promise<{ readonly conversationId: string }>;
   readonly applyConversation?: (conversationId: string, windowId: string) => Promise<void>;
-  readonly promptContext?: { resolve(conversationId: string): Promise<string> };
+  readonly promptContext?: {
+    resolve(
+      conversationId: string,
+      contextPayloads?: readonly import('@neko/agent-contracts').AgentContextPayload[],
+    ): Promise<string>;
+  };
   readonly setSessionContext?: (conversationId: string, text: string) => Promise<void>;
+  readonly executeCommand?: ConversationDshSessionBoundClient['executeCommand'];
+  readonly invokeSkill?: ConversationDshSessionBoundClient['invokeSkill'];
   readonly selectModel?: () => Promise<ReturnType<typeof composerConfiguration>>;
   readonly selectMediaModel?: () => Promise<ReturnType<typeof composerConfiguration>>;
   readonly selectPermissionPreset?: () => Promise<ReturnType<typeof composerConfiguration>>;
+  readonly searchMentions?: () => Promise<
+    readonly import('@neko/agent-contracts/dsh-session-host').DshComposerMentionProjection[]
+  >;
 }) {
   return new DesktopDshSessionHost({
     bindings: {
@@ -316,6 +531,11 @@ function createHost(overrides: {
       prompt: overrides.prompt ?? vi.fn(async () => ({ stopReason: 'end_turn' as const })),
       cancel: vi.fn(async () => undefined),
       setSessionContext: overrides.setSessionContext ?? vi.fn(async () => undefined),
+      executeCommand:
+        overrides.executeCommand ??
+        vi.fn(async () => ({ commandId: 'command-1', outcome: 'success' as const })),
+      invokeSkill:
+        overrides.invokeSkill ?? vi.fn(async () => ({ stopReason: 'end_turn' as const })),
     },
     composer: {
       project: vi.fn(async () => composerConfiguration()),
@@ -323,6 +543,7 @@ function createHost(overrides: {
       selectMediaModel: overrides.selectMediaModel ?? vi.fn(async () => composerConfiguration()),
       selectPermissionPreset:
         overrides.selectPermissionPreset ?? vi.fn(async () => composerConfiguration()),
+      searchMentions: overrides.searchMentions ?? vi.fn(async () => []),
       applyConversation: overrides.applyConversation ?? vi.fn(async () => undefined),
     },
     promptContext: overrides.promptContext ?? {
@@ -370,7 +591,12 @@ function composerConfiguration() {
   };
 }
 
-function request(operation: 'prompt', extra: { readonly text: string }) {
+function request(
+  operation: 'submit',
+  extra: {
+    readonly input: import('@neko/agent-contracts/dsh-session-host').DshComposerSubmitInput;
+  },
+) {
   return {
     requestId: 'request-1',
     operation,

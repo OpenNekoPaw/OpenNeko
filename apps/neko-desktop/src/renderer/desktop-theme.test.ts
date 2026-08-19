@@ -40,18 +40,19 @@ describe('Desktop system theme', () => {
     },
   );
 
-  it('projects a neutral Codex-like light surface hierarchy', () => {
+  it('projects a white Codex-like light surface hierarchy', () => {
     applyResolvedDesktopTheme(document, 'light');
 
     const style = document.documentElement.style;
-    expect(style.getPropertyValue('--neko-desktop-window')).toBe('#f7f7f6');
-    expect(style.getPropertyValue('--neko-desktop-chrome')).toBe('rgba(247, 247, 246, 0.94)');
+    expect(style.getPropertyValue('--neko-desktop-window')).toBe('#ffffff');
+    expect(style.getPropertyValue('--neko-desktop-chrome')).toBe('rgba(255, 255, 255, 0.96)');
     expect(style.getPropertyValue('--neko-desktop-main')).toBe('#ffffff');
-    expect(style.getPropertyValue('--neko-desktop-surface-muted')).toBe('#f3f3f2');
+    expect(style.getPropertyValue('--neko-desktop-surface')).toBe('#ffffff');
+    expect(style.getPropertyValue('--neko-desktop-surface-muted')).toBe('#f7f7f6');
     expect(style.getPropertyValue('--neko-sideBar-background')).toBe(
       'var(--neko-desktop-surface-muted)',
     );
-    expect(style.getPropertyValue('--neko-list-activeSelectionBackground')).toBe('#e8e8e7');
+    expect(style.getPropertyValue('--neko-list-activeSelectionBackground')).toBe('#f3f3f2');
     expect(style.getPropertyValue('--neko-focusBorder')).toBe('#6d716f');
   });
 

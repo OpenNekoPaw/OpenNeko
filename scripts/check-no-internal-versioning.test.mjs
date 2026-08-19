@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   buildAuditReport,
+  isGeneratedDirectoryName,
   scanSources,
   validateAllowanceRegistry,
   validateCorrectnessAllowanceRegistry,
@@ -97,6 +98,11 @@ describe('internal versioning audit', () => {
     ]);
 
     assert.deepEqual(findings, []);
+  });
+
+  it('keeps generated DSH development closures outside the internal contract audit', () => {
+    assert.equal(isGeneratedDirectoryName('.dsh-development-runtime'), true);
+    assert.equal(isGeneratedDirectoryName('packages'), false);
   });
 
   it('distinguishes AI generation domain data from numeric generation counters', () => {

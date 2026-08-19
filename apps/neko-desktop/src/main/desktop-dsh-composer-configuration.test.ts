@@ -47,8 +47,13 @@ describe('Desktop DSH composer configuration', () => {
         getApplicationConfig: () => applicationConfig,
         getWorkspaceConfig: vi.fn(() => workspaceConfig),
       },
-      sessions: { setSessionConfigOption },
+      sessions: {
+        setSessionConfigOption,
+        readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
+      },
       executionCatalog: createExecutionCatalog(),
+      resourceBrowser: unavailableResourceBrowser(),
+      entities: unavailableEntities(),
       permissions: {
         read: vi.fn(async () => permissionPresets('workspace-write')),
         set: setPermissionPreset,
@@ -140,8 +145,11 @@ describe('Desktop DSH composer configuration', () => {
       },
       sessions: {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
+        readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
       },
       executionCatalog: createExecutionCatalog(),
+      resourceBrowser: unavailableResourceBrowser(),
+      entities: unavailableEntities(),
       permissions: {
         read: vi.fn(async () => permissionPresets('workspace-write')),
         set: vi.fn(async () => permissionPresets('workspace-write')),
@@ -158,6 +166,178 @@ describe('Desktop DSH composer configuration', () => {
     ).rejects.toThrow(/not advertised by the runtime/u);
     await expect(service.applyConversation('conversation-missing', 'window-1')).rejects.toThrow(
       /no authoritative domain context/u,
+    );
+  });
+
+  it('projects exact Workspace file, media, and Asset mentions through read-only Resource queries', async () => {
+    const config = createConfig();
+    const mentionIdentity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewInstanceId: 'view-instance-1',
+      rendererSessionId: 'renderer-1',
+    };
+    const query = vi.fn(async (_windowId: string, request: unknown) => {
+      const source = (request as { readonly source: 'files' | 'media' | 'assets' }).source;
+      if (source === 'assets') {
+        return {
+          identity: mentionIdentity,
+          source,
+          query: 'scene',
+          items: [
+            {
+              resourceId: 'scene-lighting',
+              source,
+              kind: 'asset' as const,
+              label: 'Scene lighting',
+              description: 'Lighting reference',
+              capabilities: [],
+              role: 'asset' as const,
+              depth: 0,
+              assetRef: { assetId: 'global-asset-library:scene-lighting' },
+              availability: 'available' as const,
+            },
+          ],
+        };
+      }
+      return {
+        identity: mentionIdentity,
+        source,
+        query: 'scene',
+        items: [
+          {
+            resourceId: source === 'files' ? 'scene-file' : 'scene-image',
+            source,
+            kind: source === 'files' ? ('file' as const) : ('image' as const),
+            label: source === 'files' ? 'scene.md' : 'scene.png',
+            capabilities: [],
+            role: 'content' as const,
+            depth: 0,
+            locator:
+              source === 'files'
+                ? { kind: 'workspace-file' as const, path: 'notes/scene.md' }
+                : { kind: 'workspace-file' as const, path: 'media/scene.png' },
+          },
+        ],
+      };
+    });
+    const character = {
+      entityId: 'entity-hero',
+      kind: 'character' as const,
+      names: { canonical: 'Hero', display: 'Scene hero', aliases: ['lead'] },
+      representations: [],
+      lifecycle: { state: 'active' as const },
+      createdAt: '2026-08-19T00:00:00.000Z',
+      updatedAt: '2026-08-19T00:00:00.000Z',
+    };
+    const service = createDesktopDshComposerConfiguration({
+      resolveSurface: vi.fn(async () => ({
+        windowId: 'window-1',
+        binding: {
+          kind: 'workspace' as const,
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        },
+        mentionIdentity,
+      })),
+      contexts: { readContext: vi.fn(async () => undefined) },
+      workspaceGrants: {
+        restore: vi.fn(async () => ({
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath: '${WORKSPACE}/one',
+            displayName: 'Workspace One',
+          },
+        })),
+      },
+      configuration: { getApplicationConfig: () => config, getWorkspaceConfig: () => config },
+      sessions: {
+        setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
+        readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
+      },
+      executionCatalog: createExecutionCatalog(),
+      resourceBrowser: { query },
+      entities: { search: vi.fn(async () => [character]) },
+      permissions: {
+        read: vi.fn(async () => permissionPresets('workspace-write')),
+        set: vi.fn(async () => permissionPresets('workspace-write')),
+      },
+    });
+
+    await expect(
+      service.searchMentions({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        filter: ' scene ',
+      }),
+    ).resolves.toEqual([
+      {
+        id: 'files:scene-file',
+        kind: 'file',
+        label: 'scene.md',
+        contentLocator: { kind: 'workspace-file', path: 'notes/scene.md' },
+        source: 'workspace',
+        mediaType: 'text',
+      },
+      {
+        id: 'media:scene-image',
+        kind: 'media',
+        label: 'scene.png',
+        contentLocator: { kind: 'workspace-file', path: 'media/scene.png' },
+        source: 'media-library',
+        mediaType: 'image',
+      },
+      {
+        id: 'assets:scene-lighting',
+        kind: 'asset',
+        label: 'Scene lighting',
+        description: 'Lighting reference',
+        contextPayload: {
+          type: 'asset',
+          id: 'global-asset-library:scene-lighting',
+          label: 'Scene lighting',
+          summary: 'Lighting reference',
+          data: { assetRef: { assetId: 'global-asset-library:scene-lighting' } },
+        },
+        source: 'entity-graph',
+      },
+      {
+        id: 'entity:entity-hero',
+        kind: 'character',
+        label: 'Scene hero',
+        description: 'character',
+        contextPayload: {
+          type: 'character',
+          id: 'entity-hero',
+          label: 'Scene hero',
+          summary: 'character: Scene hero',
+          data: {
+            kind: 'resolved-entity-context',
+            entityRef: { entityId: 'entity-hero', entityKind: 'character' },
+            entity: character,
+          },
+        },
+        source: 'entity-graph',
+      },
+    ]);
+    expect(query).toHaveBeenCalledTimes(3);
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      'window-1',
+      expect.objectContaining({ identity: mentionIdentity, source: 'files', query: 'scene' }),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      'window-1',
+      expect.objectContaining({ identity: mentionIdentity, source: 'media', query: 'scene' }),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      3,
+      'window-1',
+      expect.objectContaining({ identity: mentionIdentity, source: 'assets', query: 'scene' }),
     );
   });
 
@@ -181,8 +361,11 @@ describe('Desktop DSH composer configuration', () => {
       },
       sessions: {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
+        readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
       },
       executionCatalog,
+      resourceBrowser: unavailableResourceBrowser(),
+      entities: unavailableEntities(),
       permissions: {
         read: vi.fn(async () => permissionPresets('workspace-write')),
         set: vi.fn(async () => permissionPresets('workspace-write')),
@@ -225,6 +408,22 @@ function createExecutionCatalog(options: { readonly includeDeepSeek?: boolean } 
       const apiModelName = models.get(providerId)?.get(productModelId);
       return apiModelName === undefined ? undefined : { providerId, productModelId, apiModelName };
     },
+  };
+}
+
+function unavailableResourceBrowser() {
+  return {
+    query: vi.fn(async () => {
+      throw new Error('Resource Browser search is not expected in this test.');
+    }),
+  };
+}
+
+function unavailableEntities() {
+  return {
+    search: vi.fn(async () => {
+      throw new Error('Project Entity search is not expected in this test.');
+    }),
   };
 }
 

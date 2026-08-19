@@ -17,10 +17,12 @@ import {
 } from '@agentclientprotocol/sdk';
 import type { AgentHandle } from '@deepseek-ai/dsh-agent';
 import type {} from '@deepseek-ai/dsh-agent-presets';
+import type {} from '@deepseek-ai/dsh-commands';
 import type { Context } from '@deepseek-ai/cordis';
 import { createUserMessage, errorChain } from '@deepseek-ai/dsh-llm';
 import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-session-persistence';
+import { isSkillName, isUserInvocable } from '@deepseek-ai/dsh-skill';
 import type {} from '@deepseek-ai/dsh-system-prompt';
 import type {} from '@deepseek-ai/dsh-permission-presets';
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
@@ -30,12 +32,15 @@ import {
   DSH_ACP_MODEL_CONFIG_ID,
   DSH_ACP_EXTENSION_METHODS,
   decodeDshAcpModelConfiguration,
+  decodeDshAcpCommandExecuteRequest,
+  decodeDshAcpSkillInvokeRequest,
   decodeDshAcpSessionContextSetRequest,
   decodeDshAcpPermissionPresetProjection,
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
   encodeDshAcpModelConfiguration,
   type DshAcpHostToolPort,
+  type DshAcpSessionEventNotification,
 } from '@neko/agent-contracts/dsh-acp';
 import { PromptAdmission } from './prompt-admission.js';
 
@@ -44,9 +49,11 @@ export const inject = [
   'agents',
   'agentPresets',
   'approval',
+  'commands',
   'permissionPresets',
   'sessions',
   'sessionPersistence',
+  'skills',
   'systemPrompt',
 ];
 
@@ -76,6 +83,7 @@ interface OwnedSession {
   readonly configuration: DshSessionConfiguration;
   readonly runtimeContext: DshSessionRuntimeContext;
   inflight: InflightPrompt | undefined;
+  commandAbort: AbortController | undefined;
   outputTail: Promise<void>;
 }
 
@@ -183,18 +191,21 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
     },
   };
   ctx.provide('opennekoHostTools', hostTools);
-  const publishEvent = async (sessionId: string, event: SessionEvent): Promise<void> => {
-    const standardNotifications = projectSessionEvent(sessionId, event);
+  const publishEvent = async (
+    sessionId: string,
+    event: SessionEvent,
+    replay = false,
+  ): Promise<void> => {
+    if (replay && event.type === 'assistant/chunk') return;
+    const standardNotifications = projectSessionEvent(sessionId, event, { replay });
     if (standardNotifications.length > 0) {
       for (const notification of standardNotifications) await notify(notification);
       return;
     }
-    await connection.extNotification('openneko/session/event', {
-      sessionId,
-      sequence: event.seq,
-      type: event.type,
-      data: event.data,
-    });
+    await connection.extNotification(
+      'openneko/session/event',
+      projectExtensionSessionEvent(sessionId, event),
+    );
   };
 
   ctx.on('agent/inbox/claimed', ({ agent, turn }) => {
@@ -248,6 +259,53 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
     });
     return projectApprovalOutcome(response.outcome);
   });
+
+  const runPrompt = (
+    sessionId: string,
+    content: readonly { readonly type: 'text'; readonly text: string }[],
+    displayText?: string,
+  ): Promise<PromptResponse> =>
+    promptAdmission.run(sessionId, async () => {
+      requireOpen();
+      const record = requireOwned(sessionId);
+      if (record.commandAbort !== undefined) {
+        throw RequestError.invalidParams(
+          undefined,
+          `A command is already in flight for this session: ${sessionId}`,
+        );
+      }
+      if (record.inflight !== undefined) {
+        throw RequestError.invalidParams(
+          undefined,
+          'A prompt is already in flight for this session.',
+        );
+      }
+      const inflight: InflightPrompt = {
+        completion: deferred(),
+        turn: undefined,
+        cancelRequested: false,
+        settlementStarted: false,
+        failure: undefined,
+        endReason: undefined,
+      };
+      record.inflight = inflight;
+      try {
+        record.handle.agent.followup(
+          createUserMessage({
+            content: [...content],
+            source:
+              displayText === undefined
+                ? { kind: 'user' as const }
+                : { kind: 'user' as const, opennekoDisplayText: displayText },
+          }),
+        );
+      } catch (error) {
+        record.inflight = undefined;
+        throw RequestError.internalError(undefined, `Prompt was not queued: ${errorChain(error)}`);
+      }
+      settlePrompt(record);
+      return { stopReason: await inflight.completion.promise };
+    });
 
   const makeAgent = (nextConnection: AcpConnection): AcpAgent => {
     connection = nextConnection;
@@ -317,7 +375,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           preset,
         );
         for (const event of record.handle.agent.session.events)
-          await publishEvent(params.sessionId, event);
+          await publishEvent(params.sessionId, event, true);
         return {
           modes: projectModeState(ctx, record),
           configOptions: projectModelConfigOptions(record.configuration),
@@ -344,6 +402,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
         const record = requireOwned(params.sessionId);
         promptAdmission.cancel(params.sessionId);
         owned.delete(params.sessionId);
+        record.commandAbort?.abort(new Error('DSH Session closed.'));
         record.handle.agent.cancel({ kind: 'user' });
         await record.handle.agent.whenIdle();
         await record.outputTail;
@@ -391,36 +450,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
         requireOpen();
         requireOwned(params.sessionId);
         const content = admitPrompt(params.prompt);
-        return promptAdmission.run(params.sessionId, async () => {
-          requireOpen();
-          const record = requireOwned(params.sessionId);
-          if (record.inflight !== undefined) {
-            throw RequestError.invalidParams(
-              undefined,
-              'A prompt is already in flight for this session.',
-            );
-          }
-          const inflight: InflightPrompt = {
-            completion: deferred(),
-            turn: undefined,
-            cancelRequested: false,
-            settlementStarted: false,
-            failure: undefined,
-            endReason: undefined,
-          };
-          record.inflight = inflight;
-          try {
-            record.handle.agent.followup(createUserMessage({ content, source: { kind: 'user' } }));
-          } catch (error) {
-            record.inflight = undefined;
-            throw RequestError.internalError(
-              undefined,
-              `Prompt was not queued: ${errorChain(error)}`,
-            );
-          }
-          settlePrompt(record);
-          return { stopReason: await inflight.completion.promise };
-        });
+        return runPrompt(params.sessionId, content);
       },
       cancel(params) {
         const admission = promptAdmission.cancel(params.sessionId);
@@ -468,6 +498,115 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
                 sessionId === undefined ? undefined : requireOwned(sessionId),
               ),
             };
+          }
+          case DSH_ACP_EXTENSION_METHODS.readInputCatalog: {
+            const keys = Object.keys(params);
+            if (keys.length !== 1 || keys[0] !== 'sessionId') {
+              throw RequestError.invalidParams(
+                undefined,
+                'Input catalog read requires exactly one sessionId.',
+              );
+            }
+            const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
+            const agent = record.handle.agent;
+            const skills = await ctx.skills.snapshot({
+              cwd: agent.session.header.cwd,
+              scope: agent,
+            });
+            return {
+              commands: ctx.commands.list(agent).map((command) => ({
+                name: command.name,
+                description: command.description,
+                ...(command.input === undefined ? {} : { inputHint: command.input.hint }),
+              })),
+              skills: skills.skills.filter(isUserInvocable).map((skill) => ({
+                name: skill.name,
+                description: skill.description,
+                source: skill.source,
+                provider: skill.provider,
+              })),
+              skillsComplete: skills.complete,
+            };
+          }
+          case DSH_ACP_EXTENSION_METHODS.executeCommand: {
+            const request = decodeDshAcpCommandExecuteRequest(params);
+            const record = requireOwned(request.sessionId);
+            if (
+              record.handle.agent.status !== 'idle' ||
+              record.inflight !== undefined ||
+              record.commandAbort !== undefined
+            ) {
+              throw RequestError.invalidParams(
+                undefined,
+                `Command cannot execute while the Session is busy: ${request.sessionId}`,
+              );
+            }
+            const abort = new AbortController();
+            record.commandAbort = abort;
+            try {
+              const execution = await ctx.commands.execute(
+                record.handle.agent,
+                request.line,
+                abort.signal,
+              );
+              if (execution === undefined) {
+                throw RequestError.invalidParams(
+                  undefined,
+                  `Unknown or malformed DSH command: ${request.line}`,
+                );
+              }
+              await record.outputTail;
+              await ctx.sessions.flush(record.handle.agent.session);
+              return {
+                commandId: execution.commandId,
+                outcome: execution.result.kind,
+                ...(execution.result.text === undefined ? {} : { text: execution.result.text }),
+              };
+            } finally {
+              if (record.commandAbort === abort) record.commandAbort = undefined;
+            }
+          }
+          case DSH_ACP_EXTENSION_METHODS.invokeSkill: {
+            const request = decodeDshAcpSkillInvokeRequest(params);
+            if (!isSkillName(request.skillName)) {
+              throw RequestError.invalidParams(
+                undefined,
+                `Invalid DSH Skill name: ${request.skillName}`,
+              );
+            }
+            const record = requireOwned(request.sessionId);
+            const agent = record.handle.agent;
+            const snapshot = await ctx.skills.snapshot({
+              cwd: agent.session.header.cwd,
+              scope: agent,
+            });
+            if (!snapshot.complete) {
+              throw RequestError.invalidParams(
+                undefined,
+                `DSH Skill catalog is incomplete for Session: ${request.sessionId}`,
+              );
+            }
+            const skill = snapshot.skills.find((candidate) => candidate.name === request.skillName);
+            if (skill === undefined || !isUserInvocable(skill)) {
+              throw RequestError.invalidParams(
+                undefined,
+                `Unknown, stale, or non-user-invocable DSH Skill: ${request.skillName}`,
+              );
+            }
+            const canonicalDisplay = `$${request.skillName}${request.args === undefined ? '' : ` ${request.args}`}`;
+            if (request.displayText !== canonicalDisplay) {
+              throw RequestError.invalidParams(
+                undefined,
+                'DSH Skill display text does not match its canonical invocation.',
+              );
+            }
+            const gesture = `/${request.skillName}${request.args === undefined ? '' : ` ${request.args}`}`;
+            const response = await runPrompt(
+              request.sessionId,
+              [{ type: 'text', text: gesture }],
+              canonicalDisplay,
+            );
+            return { stopReason: response.stopReason };
           }
           case 'openneko/session/inbox/read': {
             const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
@@ -520,6 +659,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
     const records = [...owned.values()];
     owned.clear();
     for (const record of records) {
+      record.commandAbort?.abort(new Error('OpenNeko ACP bridge closed.'));
       if (record.inflight !== undefined) record.inflight.cancelRequested = true;
       record.handle.agent.cancel({ kind: 'user' });
       settlePrompt(record);
@@ -600,17 +740,27 @@ export function listOpenNekoSessions(
 export function projectSessionEvent(
   sessionId: string,
   event: SessionEvent,
+  options: { readonly replay?: boolean } = {},
 ): readonly SessionNotification[] {
   switch (event.type) {
     case 'user/message':
       if (event.data.source.kind !== 'user') return [];
-      return projectMessage(sessionId, 'user_message_chunk', event.data.content).map(
-        (notification) => withOpenNekoMeta(notification, event.seq),
+      return projectMessage(
+        sessionId,
+        'user_message_chunk',
+        event.data.content,
+        event.data.id,
+        readOpenNekoDisplayText(event.data.source),
+      ).map((notification, frameIndex, notifications) =>
+        withOpenNekoMeta(notification, event.seq, undefined, undefined, {
+          frameIndex,
+          frameCount: notifications.length,
+        }),
       );
+    case 'assistant/chunk':
+      return options.replay ? [] : projectAssistantChunk(sessionId, event);
     case 'assistant/message':
-      return projectMessage(sessionId, 'agent_message_chunk', event.data.message.content).map(
-        (notification) => withOpenNekoMeta(notification, event.seq),
-      );
+      return projectAssistantMessage(sessionId, event);
     case 'tool/call':
       return [
         withOpenNekoMeta(
@@ -650,22 +800,150 @@ export function projectSessionEvent(
   }
 }
 
+export function projectExtensionSessionEvent(
+  sessionId: string,
+  event: SessionEvent,
+): DshAcpSessionEventNotification & Record<string, unknown> {
+  return {
+    sessionId,
+    sequence: event.seq,
+    time: event.time,
+    type: event.type,
+    data: event.data,
+  };
+}
+
 function projectMessage(
   sessionId: string,
   sessionUpdate: 'user_message_chunk' | 'agent_message_chunk',
   content: readonly { readonly type: string; readonly text?: string }[],
+  messageId?: string,
+  textOverride?: string,
 ): readonly SessionNotification[] {
-  return content.flatMap((block) =>
-    block.type === 'text' && block.text !== undefined && block.text.length > 0
-      ? [{ sessionId, update: { sessionUpdate, content: { type: 'text', text: block.text } } }]
-      : [],
-  );
+  const text =
+    textOverride ??
+    content
+      .filter(
+        (block): block is { readonly type: string; readonly text: string } =>
+          block.type === 'text' && block.text !== undefined && block.text.length > 0,
+      )
+      .map((block) => block.text)
+      .join('');
+  return text.length === 0
+    ? []
+    : [
+        {
+          sessionId,
+          update: {
+            sessionUpdate,
+            ...(messageId === undefined ? {} : { messageId }),
+            content: { type: 'text', text },
+          },
+        },
+      ];
+}
+
+function readOpenNekoDisplayText(source: unknown): string | undefined {
+  if (source === null || typeof source !== 'object' || Array.isArray(source)) return undefined;
+  const value = (source as Record<string, unknown>).opennekoDisplayText;
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !/^\$[a-z0-9]+(?:-[a-z0-9]+)*(?:\s|$)/u.test(value)) {
+    throw new Error('OpenNeko Skill display text is invalid.');
+  }
+  return value;
+}
+
+function projectAssistantChunk(
+  sessionId: string,
+  event: SessionEvent<'assistant/chunk'>,
+): readonly SessionNotification[] {
+  const chunk = event.data.chunk;
+  if (chunk.type !== 'text-delta' && chunk.type !== 'reasoning-delta') return [];
+  if (chunk.text.length === 0) return [];
+  return [
+    withOpenNekoMeta(
+      {
+        sessionId,
+        update: {
+          sessionUpdate:
+            chunk.type === 'text-delta' ? 'agent_message_chunk' : 'agent_thought_chunk',
+          messageId: transientAssistantMessageId(event.data.turn, event.data.step, chunk.type),
+          content: { type: 'text', text: chunk.text },
+        },
+      },
+      event.seq,
+      event.data.turn,
+      {
+        step: event.data.step,
+        blockIndex: chunk.index,
+        messagePhase: 'delta',
+      },
+    ),
+  ];
+}
+
+function projectAssistantMessage(
+  sessionId: string,
+  event: SessionEvent<'assistant/message'>,
+): readonly SessionNotification[] {
+  const reasoning = event.data.message.content
+    .filter((block) => block.type === 'reasoning')
+    .map((block) => block.text)
+    .join('');
+  const text = event.data.message.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('');
+  return [
+    withOpenNekoMeta(
+      {
+        sessionId,
+        update: {
+          sessionUpdate: 'agent_thought_chunk',
+          messageId: event.data.message.id,
+          content: { type: 'text', text: reasoning },
+        },
+      },
+      event.seq,
+      event.data.turn,
+      { step: event.data.step, messagePhase: 'final', frameIndex: 0, frameCount: 2 },
+    ),
+    withOpenNekoMeta(
+      {
+        sessionId,
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          messageId: event.data.message.id,
+          content: { type: 'text', text },
+        },
+      },
+      event.seq,
+      event.data.turn,
+      { step: event.data.step, messagePhase: 'final', frameIndex: 1, frameCount: 2 },
+    ),
+  ];
+}
+
+function transientAssistantMessageId(
+  turn: number,
+  step: number,
+  type: 'text-delta' | 'reasoning-delta',
+): string {
+  return `dsh:${turn}:${step}:${type === 'text-delta' ? 'text' : 'reasoning'}`;
 }
 
 function withOpenNekoMeta(
   notification: SessionNotification,
   sequence: number,
   turn?: number,
+  assistant?: {
+    readonly step: number;
+    readonly blockIndex?: number;
+    readonly messagePhase: 'delta' | 'final';
+    readonly frameIndex?: number;
+    readonly frameCount?: number;
+  },
+  frame?: { readonly frameIndex: number; readonly frameCount: number },
 ): SessionNotification {
   return {
     ...notification,
@@ -675,6 +953,27 @@ function withOpenNekoMeta(
         : notification._meta),
       opennekoSequence: sequence,
       ...(turn === undefined ? {} : { opennekoTurn: turn }),
+      ...(assistant === undefined
+        ? {}
+        : {
+            opennekoStep: assistant.step,
+            opennekoMessagePhase: assistant.messagePhase,
+            ...(assistant.blockIndex === undefined
+              ? {}
+              : { opennekoBlockIndex: assistant.blockIndex }),
+            ...(assistant.frameIndex === undefined
+              ? {}
+              : { opennekoFrameIndex: assistant.frameIndex }),
+            ...(assistant.frameCount === undefined
+              ? {}
+              : { opennekoFrameCount: assistant.frameCount }),
+          }),
+      ...(frame === undefined || frame.frameCount === 1
+        ? {}
+        : {
+            opennekoFrameIndex: frame.frameIndex,
+            opennekoFrameCount: frame.frameCount,
+          }),
     },
   };
 }
@@ -771,6 +1070,7 @@ function createOwnedSession(
     configuration,
     runtimeContext,
     inflight: undefined,
+    commandAbort: undefined,
     outputTail: Promise.resolve(),
   };
 }

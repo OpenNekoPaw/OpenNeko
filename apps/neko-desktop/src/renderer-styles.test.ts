@@ -30,6 +30,15 @@ describe('Desktop renderer styles', () => {
     );
   });
 
+  it('keeps the Extension catalog on raised surfaces instead of gray fills', () => {
+    expect(styles).toMatch(
+      /\.agent-extension-management-root \.agent-extension-catalog-row\s*\{[^}]*background:\s*var\(--neko-desktop-surface-raised\)/u,
+    );
+    expect(styles).toMatch(
+      /\.agent-extension-management-root \.management-segmented-control\s*\{[^}]*background:\s*var\(--neko-desktop-surface-raised\)/u,
+    );
+  });
+
   it('aligns embedded Project Content with the compact Resource Browser list language', () => {
     const groupsRule = styles.match(
       /\.project-content-root\.is-embedded \.project-content-groups\s*\{(?<body>[\s\S]*?)\n\}/u,

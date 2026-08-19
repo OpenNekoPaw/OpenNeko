@@ -212,6 +212,14 @@ export class ResourceBrowserNodeRuntime {
     return (await this.resolveController(windowId, request.identity)).search(request);
   }
 
+  async query(
+    windowId: string,
+    value: ResourceBrowserSearchRequest | unknown,
+  ): Promise<ResourceBrowserProjection> {
+    const request = parseResourceBrowserSearchRequest(value);
+    return (await this.resolveController(windowId, request.identity)).query(request);
+  }
+
   async children(
     windowId: string,
     value: ResourceBrowserChildrenRequest | unknown,

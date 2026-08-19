@@ -227,6 +227,7 @@ describe('DshAcpApplicationClient', () => {
     await protocolClient.extNotification?.('openneko/session/event', {
       sessionId: 'session-1',
       sequence: 4,
+      time: 1_004,
       type: 'tool/call',
       data: {},
     });
@@ -277,6 +278,7 @@ describe('DshAcpApplicationClient', () => {
     await protocolClient.extNotification?.('openneko/session/event', {
       sessionId: 's1',
       sequence: 0,
+      time: 1_000,
       type: 'turn/start',
       data: { turn: 0 },
     });
@@ -387,6 +389,7 @@ describe('DshAcpApplicationClient', () => {
       protocolClient.extNotification?.('openneko/session/event', {
         sessionId: 's1',
         sequence: 0,
+        time: 1_000,
         type: 'turn/start',
         data: { turn: 1.5 },
       }),

@@ -114,14 +114,47 @@ describe('DSH ACP extension contract', () => {
   });
 
   it('rejects malformed event and inbox records locally', () => {
+    expect(
+      decodeDshAcpSessionEventNotification({
+        sessionId: 'session-1',
+        sequence: 1,
+        time: 1_000,
+        type: 'turn/start',
+        data: { turn: 1 },
+      }),
+    ).toEqual({
+      sessionId: 'session-1',
+      sequence: 1,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 1 },
+    });
     expect(() =>
       decodeDshAcpSessionEventNotification({
         sessionId: 'session-1',
         sequence: -1,
+        time: 1_000,
         type: 'tool/call',
         data: {},
       }),
     ).toThrow(/sequence must be a non-negative safe integer/);
+    expect(() =>
+      decodeDshAcpSessionEventNotification({
+        sessionId: 'session-1',
+        sequence: 1,
+        type: 'turn/start',
+        data: { turn: 1 },
+      }),
+    ).toThrow(/must contain exactly/u);
+    expect(() =>
+      decodeDshAcpSessionEventNotification({
+        sessionId: 'session-1',
+        sequence: 1,
+        time: -1,
+        type: 'turn/start',
+        data: { turn: 1 },
+      }),
+    ).toThrow(/time must be a non-negative safe integer/u);
     expect(() => decodeDshAcpInboxSnapshot({ nextTurn: [], nextStep: [{ content: [] }] })).toThrow(
       /messageId must be a string/,
     );

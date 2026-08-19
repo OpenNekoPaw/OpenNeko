@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   parseDshComposerConfigurationHostResult,
   parseDshComposerConfigurationProjection,
+  parseDshComposerMentionsHostResult,
   parseDshSessionHostProjection,
   parseDshSessionHostRequest,
   parseDshSessionHostResult,
@@ -163,17 +164,20 @@ describe('DSH Session Host contract', () => {
     },
   );
 
-  it('accepts the canonical prompt request and bounded projection', () => {
+  it('accepts the canonical submit request and bounded projection', () => {
     expect(
       parseDshSessionHostRequest({
         requestId: 'request-1',
-        operation: 'prompt',
+        operation: 'submit',
         windowId: 'window-1',
         rendererSessionId: 'renderer-1',
         conversationId: 'conversation-1',
-        text: 'hello',
+        input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
       }),
-    ).toMatchObject({ operation: 'prompt', text: 'hello' });
+    ).toMatchObject({
+      operation: 'submit',
+      input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+    });
     expect(
       parseDshSessionHostResult(
         {
@@ -184,6 +188,268 @@ describe('DSH Session Host contract', () => {
         'request-1',
       ),
     ).toMatchObject({ projection: { dshSessionId: 'session-1' } });
+  });
+
+  it('strictly decodes mention queries and authorized ContentLocator results', () => {
+    expect(
+      parseDshSessionHostRequest({
+        ...surfaceRequest,
+        operation: 'composer-mentions',
+        filter: 'scene',
+      }),
+    ).toMatchObject({ operation: 'composer-mentions', filter: 'scene' });
+    expect(
+      parseDshComposerMentionsHostResult(
+        {
+          requestId: 'request-mentions',
+          mentions: [
+            {
+              id: 'files:scene',
+              kind: 'file',
+              label: 'scene.md',
+              contentLocator: { kind: 'workspace-file', path: 'notes/scene.md' },
+              source: 'workspace',
+              mediaType: 'text',
+            },
+            {
+              id: 'assets:lighting',
+              kind: 'asset',
+              label: 'Lighting',
+              contextPayload: {
+                type: 'asset',
+                id: 'asset-lighting',
+                label: 'Lighting',
+                summary: 'Lighting reference',
+                data: { assetRef: { assetId: 'asset-lighting' } },
+              },
+              source: 'entity-graph',
+            },
+          ],
+        },
+        'request-mentions',
+      ).mentions,
+    ).toEqual([
+      {
+        id: 'files:scene',
+        kind: 'file',
+        label: 'scene.md',
+        contentLocator: { kind: 'workspace-file', path: 'notes/scene.md' },
+        source: 'workspace',
+        mediaType: 'text',
+      },
+      {
+        id: 'assets:lighting',
+        kind: 'asset',
+        label: 'Lighting',
+        contextPayload: {
+          type: 'asset',
+          id: 'asset-lighting',
+          label: 'Lighting',
+          summary: 'Lighting reference',
+          data: { assetRef: { assetId: 'asset-lighting' } },
+        },
+        source: 'entity-graph',
+      },
+    ]);
+    expect(() =>
+      parseDshComposerMentionsHostResult(
+        {
+          requestId: 'request-mentions',
+          mentions: [
+            {
+              id: 'forged',
+              kind: 'file',
+              label: 'private',
+              contentLocator: { kind: 'workspace-file', path: '/private/file' },
+              source: 'workspace',
+            },
+          ],
+        },
+        'request-mentions',
+      ),
+    ).toThrow(/ContentLocator is invalid/u);
+  });
+
+  it('rejects prompt and authority fields smuggled into command and Skill submits', () => {
+    for (const input of [
+      { kind: 'command', line: '/help', text: 'fallback prompt' },
+      { kind: 'skill', skillName: 'story', displayText: '$story', line: '/story' },
+      {
+        kind: 'message',
+        text: 'hello',
+        references: [],
+        contextPayloads: [],
+        skillName: 'story',
+      },
+    ]) {
+      expect(() =>
+        parseDshSessionHostRequest({
+          requestId: 'request-submit',
+          operation: 'submit',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: 'conversation-1',
+          input,
+        }),
+      ).toThrow(/unexpected=/u);
+    }
+  });
+
+  it('strictly accepts bounded context receipts and rejects duplicate or malformed context', () => {
+    const contextPayload = {
+      type: 'asset',
+      id: 'asset-lighting',
+      label: 'Lighting',
+      summary: 'Soft studio lighting',
+      data: { assetRef: { assetId: 'asset-lighting' } },
+    };
+    const submit = (contextPayloads: unknown[]) =>
+      parseDshSessionHostRequest({
+        requestId: 'request-context',
+        operation: 'submit',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: 'conversation-1',
+        input: { kind: 'message', text: '', references: [], contextPayloads },
+      });
+
+    expect(submit([contextPayload])).toMatchObject({
+      input: { kind: 'message', contextPayloads: [contextPayload] },
+    });
+    expect(() => submit([contextPayload, contextPayload])).toThrow(/duplicated/u);
+    expect(() => submit([{ ...contextPayload, data: { invalid: undefined } }])).toThrow(
+      /lossless JSON/u,
+    );
+  });
+
+  it('rejects mention receipts whose kind does not match locator or context authority', () => {
+    expect(() =>
+      parseDshComposerMentionsHostResult(
+        {
+          requestId: 'request-mentions',
+          mentions: [
+            {
+              id: 'forged-asset',
+              kind: 'asset',
+              label: 'Forged',
+              contentLocator: { kind: 'workspace-file', path: 'forged.png' },
+              source: 'workspace',
+            },
+          ],
+        },
+        'request-mentions',
+      ),
+    ).toThrow(/kind does not match/u);
+  });
+
+  it('decodes command activity without accepting Tool or turn fields', () => {
+    expect(
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            kind: 'command',
+            commandId: 'command-1',
+            name: 'help',
+            args: 'tools',
+            status: 'completed',
+            text: 'Available commands',
+          },
+        ],
+      }).events,
+    ).toEqual([
+      {
+        kind: 'command',
+        commandId: 'command-1',
+        name: 'help',
+        args: 'tools',
+        status: 'completed',
+        text: 'Available commands',
+      },
+    ]);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            kind: 'command',
+            commandId: 'command-1',
+            name: 'help',
+            status: 'running',
+            turn: 1,
+          },
+        ],
+      }),
+    ).toThrow(/unexpected=turn/u);
+    expect(
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            kind: 'command',
+            commandId: 'command-2',
+            name: 'goal',
+            args: '',
+            status: 'running',
+          },
+        ],
+      }).events,
+    ).toEqual([
+      {
+        kind: 'command',
+        commandId: 'command-2',
+        name: 'goal',
+        args: '',
+        status: 'running',
+      },
+    ]);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            kind: 'command',
+            commandId: 'command-3',
+            name: 'goal',
+            args: 1,
+            status: 'running',
+          },
+        ],
+      }),
+    ).toThrow(/event.args must be a string/u);
+  });
+
+  it('requires canonical DSH timing on exact turn boundaries', () => {
+    expect(
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          { kind: 'turn', turn: 1, phase: 'start', startedAt: 1_000 },
+          {
+            kind: 'turn',
+            turn: 1,
+            phase: 'end',
+            startedAt: 1_000,
+            completedAt: 2_500,
+          },
+        ],
+      }).events,
+    ).toEqual([
+      { kind: 'turn', turn: 1, phase: 'start', startedAt: 1_000 },
+      { kind: 'turn', turn: 1, phase: 'end', startedAt: 1_000, completedAt: 2_500 },
+    ]);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [{ kind: 'turn', turn: 1, phase: 'end', completedAt: 2_500 }],
+      }),
+    ).toThrow(/startedAt/u);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [{ kind: 'turn', turn: 1, phase: 'end', startedAt: 3_000, completedAt: 2_500 }],
+      }),
+    ).toThrow(/must not precede/u);
   });
 
   it('rejects compatibility fields and accepts only bounded JSON Tool payloads', () => {
@@ -232,7 +498,15 @@ function projection() {
     dshSessionId: 'session-1',
     currentTurn: 1,
     events: [
-      { kind: 'message', role: 'assistant', text: 'hello', messageId: 'message-1' },
+      {
+        kind: 'message',
+        role: 'assistant',
+        turn: 1,
+        step: 0,
+        text: 'hello',
+        messageId: 'message-1',
+        state: 'streaming',
+      },
       { kind: 'tool', toolCallId: 'tool-1', turn: 1, status: 'pending', title: 'Generate' },
     ],
   };

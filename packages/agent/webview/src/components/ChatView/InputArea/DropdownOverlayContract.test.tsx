@@ -226,11 +226,56 @@ describe('dropdown overlay presentation contract', () => {
     expect(shellRule).toContain('max-width: 820px');
     expect(shellRule).toContain('margin-inline: auto');
     expect(transcriptRailRule).toContain('width: calc(100% - 24px)');
-    expect(transcriptRailRule).toContain('max-width: 960px');
+    expect(transcriptRailRule).toContain('max-width: 820px');
     expect(transcriptRailRule).toContain('margin-inline: auto');
-    expect(railRule).toContain('padding:');
+    expect(railRule).toContain('padding: 0 12px 12px');
+    expect(css).not.toMatch(/@media \(max-width: 560px\)\s*\{\s*\.agent-transcript-rail/u);
     expect(narrowRule).toContain('.agent-composer-toolbar');
     expect(narrowRule).toContain('flex-wrap: wrap');
+  });
+
+  it('uses white light-theme surfaces without changing the default dark theme contract', () => {
+    const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
+    const lightRule = css.match(
+      /body\.neko-light,\s*body\[data-neko-theme-kind='neko-light'\]\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body;
+    const lightDesktopDockRule = css.match(
+      /body\.neko-light \[data-presentation='desktop-dock'\],\s*body\[data-neko-theme-kind='neko-light'\] \[data-presentation='desktop-dock'\]\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body;
+    const defaultTokens = css.slice(
+      css.indexOf(':root {'),
+      css.indexOf("[data-presentation='desktop-dock']"),
+    );
+
+    expect(lightRule).toContain('--agent-elevated: #ffffff');
+    expect(lightRule).toContain('--agent-surface: #ffffff');
+    expect(lightRule).toContain('--agent-composer-rail-bg: #ffffff');
+    expect(lightRule).toContain('--agent-composer-bg: #ffffff');
+    expect(lightRule).toContain('--agent-control-bg: #ffffff');
+    expect(lightRule).toContain('--agent-overlay-bg: #ffffff');
+    expect(lightRule).toContain('--agent-control-hover-bg: color-mix');
+    expect(lightDesktopDockRule).toContain('--agent-bg: #ffffff');
+    expect(defaultTokens).toContain('--agent-elevated: color-mix');
+    expect(defaultTokens).toContain('--agent-composer-bg: color-mix');
+  });
+
+  it('keeps every default-expanded Entry target selector unframed', () => {
+    const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
+    const panelRule = css.match(/\.agent-entry-quick-panel\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const detailRules = Array.from(
+      css.matchAll(/\.agent-entry-quick-detail\s*\{(?<body>[^}]+)\}/g),
+    ).map((match) => match.groups?.body ?? '');
+    const unframedDetailRule = detailRules.find((body) => body.includes('border-top: 0'));
+    const expandedToggleRule = css.match(
+      /\.agent-entry-quick-toggle\[aria-expanded='true'\]\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body;
+
+    expect(panelRule).toContain('border: 0');
+    expect(panelRule).toContain('border-radius: 0');
+    expect(panelRule).toContain('background: transparent');
+    expect(expandedToggleRule).toContain('background: transparent');
+    expect(unframedDetailRule).toContain('border-top: 0');
+    expect(css).not.toContain(".agent-entry-quick-actions[data-entry-panel-mode='authoring']");
   });
 
   it('keeps preset and generation parameter dialogs bounded with field headers', () => {
@@ -279,6 +324,26 @@ describe('dropdown overlay presentation contract', () => {
     expect(tagRule).toContain('font-weight: 600');
     expect(headerRule).toBeTruthy();
     expect(headerRule).toContain('border-bottom');
+  });
+
+  it('keeps the white model surface while distinguishing selected options', () => {
+    const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
+    const tabsRule = css.match(/\.agent-model-config-tabs\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const selectedCategoryRule = css.match(/\.agent-model-config-tab-selected\s*\{(?<body>[^}]+)\}/)
+      ?.groups?.body;
+    const selectedSectionRule = css.match(
+      /\.agent-model-config-secondary-tab-selected\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body;
+    const selectedModelRule = css.match(/\.agent-model-config-radio-selected\s*\{(?<body>[^}]+)\}/)
+      ?.groups?.body;
+
+    expect(tabsRule).toContain('background: var(--agent-overlay-bg)');
+    expect(selectedCategoryRule).toContain('background: color-mix');
+    expect(selectedCategoryRule).toContain('box-shadow:');
+    expect(selectedSectionRule).toContain('background: color-mix');
+    expect(selectedSectionRule).toContain('box-shadow:');
+    expect(selectedModelRule).toContain('background: color-mix');
+    expect(selectedModelRule).toContain('box-shadow:');
   });
 });
 

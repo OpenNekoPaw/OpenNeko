@@ -6,10 +6,25 @@ import type { DshAcpSessionEventNotification } from '@neko/agent-contracts/dsh-a
 import { DshAcpProjection } from './dsh-acp-projection';
 
 describe('DshAcpProjection', () => {
-  it('projects bounded user and assistant text through the same Session snapshot', () => {
+  it('assembles interleaved DSH text blocks and settles the final message exactly once', () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionUpdate(messageChunk('s1', 'user_message_chunk', 'hello', 0, 'u1'));
-    projection.acceptSessionUpdate(messageChunk('s1', 'agent_message_chunk', 'hi', 1, 'a1'));
+    projection.acceptSessionEvent(turnEvent('s1', 1, 'turn/start', 0));
+    projection.acceptSessionEvent(stepEvent('s1', 2, 'step/start', 0, 0));
+    projection.acceptSessionUpdate(assistantChunk('s1', 3, 0, 0, 'text', 1, 'world'));
+    projection.acceptSessionUpdate(assistantChunk('s1', 4, 0, 0, 'text', 0, 'Hello '));
+
+    expect(projection.snapshot('s1').events.at(-1)).toMatchObject({
+      kind: 'message',
+      role: 'assistant',
+      text: 'Hello world',
+      state: 'streaming',
+    });
+
+    projection.acceptSessionUpdate(finalAssistantChunk('s1', 5, 0, 0, 'reasoning', 'a1', '', 0));
+    projection.acceptSessionUpdate(
+      finalAssistantChunk('s1', 5, 0, 0, 'text', 'a1', 'Final answer', 1),
+    );
 
     expect(projection.snapshot('s1').events).toEqual([
       {
@@ -20,13 +35,98 @@ describe('DshAcpProjection', () => {
         messageId: 'u1',
       },
       {
+        kind: 'turn',
+        sessionId: 's1',
+        turn: 0,
+        phase: 'start',
+        startedAt: 1_001,
+      },
+      {
         kind: 'message',
         sessionId: 's1',
         role: 'assistant',
-        text: 'hi',
+        turn: 0,
+        step: 0,
+        text: 'Final answer',
         messageId: 'a1',
+        state: 'final',
       },
     ]);
+  });
+
+  it('keeps reasoning separate and removes transient content absent from the final DSH message', () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent(turnEvent('s1', 0, 'turn/start', 0));
+    projection.acceptSessionEvent(stepEvent('s1', 1, 'step/start', 0, 0));
+    projection.acceptSessionUpdate(assistantChunk('s1', 2, 0, 0, 'reasoning', 0, 'Inspect'));
+
+    expect(projection.snapshot('s1').events.at(-1)).toMatchObject({
+      kind: 'thought',
+      text: 'Inspect',
+      state: 'streaming',
+    });
+
+    projection.acceptSessionUpdate(finalAssistantChunk('s1', 3, 0, 0, 'reasoning', 'a1', '', 0));
+    projection.acceptSessionUpdate(finalAssistantChunk('s1', 3, 0, 0, 'text', 'a1', 'Done', 1));
+
+    expect(projection.snapshot('s1').events.filter((event) => event.kind === 'thought')).toEqual(
+      [],
+    );
+    expect(projection.snapshot('s1').events.at(-1)).toMatchObject({
+      kind: 'message',
+      text: 'Done',
+      state: 'final',
+    });
+  });
+
+  it('fails an overflowing assistant assembly locally and preserves a sibling Session', () => {
+    const projection = new DshAcpProjection({ maxAssistantStreamBytes: 4 });
+    projection.acceptSessionEvent(turnEvent('s1', 0, 'turn/start', 0));
+    projection.acceptSessionEvent(stepEvent('s1', 1, 'step/start', 0, 0));
+    expect(
+      projection.acceptSessionUpdate(assistantChunk('s1', 2, 0, 0, 'text', 0, '12345'))[0],
+    ).toMatchObject({
+      kind: 'diagnostic',
+      code: 'ACP_PROJECTION_ASSISTANT_STREAM_OVERFLOW',
+    });
+
+    projection.acceptSessionEvent(turnEvent('s2', 0, 'turn/start', 0));
+    projection.acceptSessionEvent(stepEvent('s2', 1, 'step/start', 0, 0));
+    expect(
+      projection.acceptSessionUpdate(assistantChunk('s2', 2, 0, 0, 'text', 0, 'ok'))[0],
+    ).toMatchObject({ kind: 'message', sessionId: 's2', text: 'ok' });
+  });
+
+  it('removes an unsettled transient assistant stream when its turn ends fail-visible', () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent(turnEvent('s1', 0, 'turn/start', 0));
+    projection.acceptSessionEvent(stepEvent('s1', 1, 'step/start', 0, 0));
+    projection.acceptSessionUpdate(assistantChunk('s1', 2, 0, 0, 'text', 0, 'Partial'));
+    projection.acceptSessionEvent(stepEvent('s1', 3, 'step/end', 0, 0));
+
+    expect(projection.acceptSessionEvent(turnEvent('s1', 4, 'turn/end', 0, 'failed'))).toEqual([
+      expect.objectContaining({ kind: 'turn', phase: 'end', turn: 0 }),
+      expect.objectContaining({
+        kind: 'diagnostic',
+        code: 'ACP_PROJECTION_UNSETTLED_ASSISTANT_STREAM',
+      }),
+    ]);
+    expect(projection.snapshot('s1')).toMatchObject({
+      currentTurn: undefined,
+      events: [
+        expect.objectContaining({ kind: 'turn', phase: 'start' }),
+        expect.objectContaining({ kind: 'turn', phase: 'end' }),
+        expect.objectContaining({
+          kind: 'diagnostic',
+          code: 'ACP_PROJECTION_UNSETTLED_ASSISTANT_STREAM',
+        }),
+      ],
+    });
+    expect(
+      projection
+        .snapshot('s1')
+        .events.some((event) => event.kind === 'message' && event.role === 'assistant'),
+    ).toBe(false);
   });
 
   it('projects tool call progress with exact turn and sequence', () => {
@@ -59,7 +159,97 @@ describe('DshAcpProjection', () => {
       status: 'completed',
       rawOutput: { ok: true },
     });
-    expect(events[3]).toMatchObject({ kind: 'turn', turn: 0, phase: 'end', reason: 'success' });
+    expect(events[3]).toMatchObject({
+      kind: 'turn',
+      turn: 0,
+      phase: 'end',
+      startedAt: 1_000,
+      completedAt: 1_003,
+      reason: 'success',
+    });
+  });
+
+  it('projects exact user command events independently from model turns and Tools', () => {
+    const projection = new DshAcpProjection();
+    expect(
+      projection.acceptSessionEvent(
+        commandEvent('s1', 0, 'command/run', {
+          commandId: 'command-1',
+          name: 'help',
+          args: 'tools',
+          source: { kind: 'user' },
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'command',
+        sessionId: 's1',
+        commandId: 'command-1',
+        name: 'help',
+        args: 'tools',
+        status: 'running',
+      },
+    ]);
+    expect(
+      projection.acceptSessionEvent(
+        commandEvent('s1', 1, 'command/done', {
+          commandId: 'command-1',
+          kind: 'success',
+          text: 'Available commands',
+          sourceEventSeq: 0,
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'command',
+        sessionId: 's1',
+        commandId: 'command-1',
+        name: 'help',
+        args: 'tools',
+        status: 'completed',
+        text: 'Available commands',
+      },
+    ]);
+    expect(projection.snapshot('s1')).toMatchObject({ currentTurn: undefined, tools: [] });
+  });
+
+  it('fails duplicate, unpaired, and malformed command events locally', () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent(
+      commandEvent('s1', 0, 'command/run', {
+        commandId: 'command-1',
+        name: 'help',
+        source: { kind: 'user' },
+      }),
+    );
+    expect(
+      projection.acceptSessionEvent(
+        commandEvent('s1', 1, 'command/run', {
+          commandId: 'command-1',
+          name: 'help',
+          source: { kind: 'user' },
+        }),
+      )[0],
+    ).toMatchObject({ kind: 'diagnostic', code: 'ACP_PROJECTION_DUPLICATE_COMMAND' });
+    expect(
+      projection.acceptSessionEvent(
+        commandEvent('s2', 0, 'command/done', {
+          commandId: 'command-missing',
+          kind: 'success',
+        }),
+      )[0],
+    ).toMatchObject({ kind: 'diagnostic', code: 'ACP_PROJECTION_UNKNOWN_COMMAND' });
+    expect(
+      projection.acceptSessionEvent(
+        commandEvent('s3', 0, 'command/run', {
+          commandId: 'command-3',
+          name: 'help',
+          source: { kind: 'agent' },
+        }),
+      )[0],
+    ).toMatchObject({ kind: 'diagnostic', code: 'ACP_PROJECTION_INVALID_COMMAND' });
+    expect(projection.snapshot('s2').events).toHaveLength(1);
+    expect(projection.snapshot('s3').events).toHaveLength(1);
   });
 
   it('correlates permission requests to the exact tool call and turn', () => {
@@ -237,6 +427,7 @@ describe('DshAcpProjection', () => {
       projection.acceptSessionEvent({
         sessionId: 's1',
         sequence: 5,
+        time: 1_005,
         type: 'turn/start',
         data: { turn: 1.5 },
       })[0],
@@ -268,6 +459,31 @@ describe('DshAcpProjection', () => {
     expect(projection.snapshot('s1').currentTurn).toBe(0);
     projection.acceptSessionEvent(turnEvent('s1', 1, 'turn/end', 0, 'success'));
     expect(projection.snapshot('s1').currentTurn).toBeUndefined();
+  });
+
+  it('rejects missing or decreasing DSH turn timing without affecting a sibling Session', () => {
+    const projection = new DshAcpProjection();
+    expect(projection.acceptSessionEvent(turnEvent('s1', 0, 'turn/end', 0))[0]).toMatchObject({
+      kind: 'diagnostic',
+      code: 'ACP_PROJECTION_MISSING_TURN_START',
+    });
+
+    projection.acceptSessionEvent(turnEvent('s2', 0, 'turn/start', 0, undefined, 2_000));
+    expect(
+      projection.acceptSessionEvent(turnEvent('s2', 1, 'turn/end', 0, 'success', 1_999))[0],
+    ).toMatchObject({
+      kind: 'diagnostic',
+      code: 'ACP_PROJECTION_INVALID_TURN_TIME',
+    });
+
+    projection.acceptSessionEvent(turnEvent('s3', 0, 'turn/start', 0, undefined, 3_000));
+    expect(
+      projection.acceptSessionEvent(turnEvent('s3', 1, 'turn/end', 0, 'success', 4_500))[0],
+    ).toMatchObject({
+      kind: 'turn',
+      startedAt: 3_000,
+      completedAt: 4_500,
+    });
   });
 
   it('rejects terminal-turn late frames without reopening the tool', () => {
@@ -357,6 +573,70 @@ function messageChunk(
   };
 }
 
+function assistantChunk(
+  sessionId: string,
+  sequence: number,
+  turn: number,
+  step: number,
+  channel: 'text' | 'reasoning',
+  blockIndex: number,
+  text: string,
+): SessionNotification {
+  return {
+    sessionId,
+    _meta: {
+      opennekoSequence: sequence,
+      opennekoTurn: turn,
+      opennekoStep: step,
+      opennekoBlockIndex: blockIndex,
+      opennekoMessagePhase: 'delta',
+    },
+    update: {
+      sessionUpdate: channel === 'text' ? 'agent_message_chunk' : 'agent_thought_chunk',
+      messageId: `dsh:${turn}:${step}:${channel}`,
+      content: { type: 'text', text },
+    },
+  };
+}
+
+function finalAssistantChunk(
+  sessionId: string,
+  sequence: number,
+  turn: number,
+  step: number,
+  channel: 'text' | 'reasoning',
+  messageId: string,
+  text: string,
+  frameIndex: number,
+): SessionNotification {
+  return {
+    sessionId,
+    _meta: {
+      opennekoSequence: sequence,
+      opennekoTurn: turn,
+      opennekoStep: step,
+      opennekoMessagePhase: 'final',
+      opennekoFrameIndex: frameIndex,
+      opennekoFrameCount: 2,
+    },
+    update: {
+      sessionUpdate: channel === 'text' ? 'agent_message_chunk' : 'agent_thought_chunk',
+      messageId,
+      content: { type: 'text', text },
+    },
+  };
+}
+
+function stepEvent(
+  sessionId: string,
+  sequence: number,
+  type: 'step/start' | 'step/end',
+  turn: number,
+  step: number,
+): DshAcpSessionEventNotification {
+  return { sessionId, sequence, time: 1_000 + sequence, type, data: { turn, step } };
+}
+
 function toolCallUpdate(
   sessionId: string,
   toolCallId: string,
@@ -381,13 +661,24 @@ function turnEvent(
   type: 'turn/start' | 'turn/end',
   turn: number,
   reason?: string,
+  time = 1_000 + sequence,
 ): DshAcpSessionEventNotification {
   return {
     sessionId,
     sequence,
+    time,
     type,
     data: reason === undefined ? { turn } : { turn, reason: { kind: reason } },
   };
+}
+
+function commandEvent(
+  sessionId: string,
+  sequence: number,
+  type: 'command/run' | 'command/done',
+  data: unknown,
+): DshAcpSessionEventNotification {
+  return { sessionId, sequence, time: 1_000 + sequence, type, data };
 }
 
 function permission(

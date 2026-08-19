@@ -3002,7 +3002,7 @@ function installBridge({
           dshSessionId: `dsh:${conversationId}`,
           events: [],
         })),
-        prompt: vi.fn(),
+        submit: vi.fn(),
         cancel: vi.fn(),
         getComposerConfiguration: vi.fn(async () => ({
           models: [
@@ -3025,6 +3025,7 @@ function installBridge({
             { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
           ],
         })),
+        searchComposerMentions: vi.fn(async () => []),
         selectComposerModel: vi.fn(),
         selectComposerMediaModel: vi.fn(),
         selectComposerPermissionPreset: vi.fn(),

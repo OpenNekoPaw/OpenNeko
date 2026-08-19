@@ -6,6 +6,7 @@ import {
   type DshSessionHostProjection,
   type DshSessionHostResult,
   type DshComposerConfigurationHostResult,
+  type DshComposerMentionsHostResult,
 } from '@neko/agent-contracts/dsh-session-host';
 import { decodeDshAcpJsonPayload } from '@neko/agent-contracts/dsh-acp';
 import type {
@@ -22,9 +23,19 @@ export class DesktopDshSessionHost {
       readonly bindings: Pick<ConversationDshSessionBindingStore, 'getByDshSessionId'>;
       readonly conversations: Pick<
         ConversationDshSessionBoundClient,
-        'ensureLoaded' | 'prompt' | 'cancel' | 'setSessionContext'
+        | 'ensureLoaded'
+        | 'prompt'
+        | 'cancel'
+        | 'setSessionContext'
+        | 'executeCommand'
+        | 'invokeSkill'
       >;
-      readonly promptContext: { resolve(conversationId: string): Promise<string> };
+      readonly promptContext: {
+        resolve(
+          conversationId: string,
+          selectedContextPayloads?: readonly import('@neko/agent-contracts').AgentContextPayload[],
+        ): Promise<string>;
+      };
       readonly composer: {
         project(input: {
           readonly windowId: string;
@@ -50,6 +61,12 @@ export class DesktopDshSessionHost {
           readonly agentSurfaceId: string;
           readonly permissionPresetId: string;
         }): Promise<DshComposerConfigurationHostResult['configuration']>;
+        searchMentions(input: {
+          readonly windowId: string;
+          readonly workbenchInstanceId: string;
+          readonly agentSurfaceId: string;
+          readonly filter: string;
+        }): Promise<DshComposerMentionsHostResult['mentions']>;
         applyConversation(conversationId: string, windowId: string): Promise<void>;
       };
       readonly createConversation: (input: {
@@ -74,7 +91,9 @@ export class DesktopDshSessionHost {
   async execute(
     sender: DesktopSenderIdentity,
     value: unknown,
-  ): Promise<DshSessionHostResult | DshComposerConfigurationHostResult> {
+  ): Promise<
+    DshSessionHostResult | DshComposerConfigurationHostResult | DshComposerMentionsHostResult
+  > {
     const request = parseDshSessionHostRequest(value);
     const window = this.options.windows.resolveSender(sender);
     if (
@@ -85,6 +104,7 @@ export class DesktopDshSessionHost {
     }
     if (
       request.operation === 'composer-snapshot' ||
+      request.operation === 'composer-mentions' ||
       request.operation === 'composer-model' ||
       request.operation === 'composer-media-model' ||
       request.operation === 'composer-permission-preset'
@@ -94,6 +114,15 @@ export class DesktopDshSessionHost {
         workbenchInstanceId: request.workbenchInstanceId,
         agentSurfaceId: request.agentSurfaceId,
       };
+      if (request.operation === 'composer-mentions') {
+        return {
+          requestId: request.requestId,
+          mentions: await this.options.composer.searchMentions({
+            ...scope,
+            filter: request.filter,
+          }),
+        };
+      }
       const configuration =
         request.operation === 'composer-snapshot'
           ? await this.options.composer.project(scope)
@@ -127,16 +156,42 @@ export class DesktopDshSessionHost {
           target: request.target,
         })
       ).conversationId;
-    } else if (request.operation === 'prompt') {
+    } else if (request.operation === 'submit') {
       conversationId = request.conversationId;
-      await this.options.composer.applyConversation(conversationId, request.windowId);
-      const context = await this.options.promptContext.resolve(conversationId);
-      await this.options.conversations.setSessionContext(conversationId, context);
-      const response = await this.options.conversations.prompt({
-        conversationId: request.conversationId,
-        prompt: [{ type: 'text', text: request.text }],
-      });
-      stopReason = response.stopReason;
+      if (request.input.kind === 'command') {
+        await this.options.conversations.executeCommand(conversationId, request.input.line);
+      } else {
+        await this.options.composer.applyConversation(conversationId, request.windowId);
+        const context = await this.options.promptContext.resolve(
+          conversationId,
+          request.input.kind === 'message' ? request.input.contextPayloads : [],
+        );
+        await this.options.conversations.setSessionContext(conversationId, context);
+        if (request.input.kind === 'skill') {
+          const response = await this.options.conversations.invokeSkill({
+            conversationId,
+            skillName: request.input.skillName,
+            displayText: request.input.displayText,
+            ...(request.input.args === undefined ? {} : { args: request.input.args }),
+          });
+          stopReason = response.stopReason;
+        } else {
+          const response = await this.options.conversations.prompt({
+            conversationId,
+            prompt: [
+              ...(request.input.text.length === 0
+                ? []
+                : [{ type: 'text' as const, text: request.input.text }]),
+              ...request.input.references.map((reference) => ({
+                type: 'resource_link' as const,
+                name: reference.label,
+                uri: serializeContentLocatorResourceUri(reference.contentLocator),
+              })),
+            ],
+          });
+          stopReason = response.stopReason;
+        }
+      }
     } else if (request.operation === 'cancel') {
       conversationId = request.conversationId;
       await this.options.conversations.cancel(request.conversationId);
@@ -168,6 +223,12 @@ export class DesktopDshSessionHost {
       events: projectEvents(snapshot.events),
     };
   }
+}
+
+function serializeContentLocatorResourceUri(
+  locator: import('@neko/content').ContentLocator,
+): string {
+  return `openneko-content:${encodeURIComponent(JSON.stringify(locator))}`;
 }
 
 function projectEvents(events: readonly DshAcpProjectedEvent[]): readonly DshSessionHostEvent[] {
@@ -212,21 +273,58 @@ function projectEvents(events: readonly DshAcpProjectedEvent[]): readonly DshSes
 function projectEvent(event: DshAcpProjectedEvent): DshSessionHostEvent | undefined {
   switch (event.kind) {
     case 'message':
+      return event.role === 'user'
+        ? {
+            kind: 'message',
+            role: 'user',
+            text: event.text,
+            ...(event.messageId === undefined ? {} : { messageId: event.messageId }),
+          }
+        : {
+            kind: 'message',
+            role: 'assistant',
+            turn: event.turn,
+            step: event.step,
+            text: event.text,
+            messageId: event.messageId,
+            state: event.state,
+          };
+    case 'thought':
       return {
-        kind: 'message',
-        role: event.role,
+        kind: 'thought',
+        turn: event.turn,
+        step: event.step,
         text: event.text,
-        ...(event.messageId === undefined ? {} : { messageId: event.messageId }),
+        messageId: event.messageId,
+        state: event.state,
       };
     case 'tool':
       throw new Error('Tool events must be projected through the bounded payload path.');
-    case 'turn':
+    case 'command':
       return {
-        kind: 'turn',
-        turn: event.turn,
-        phase: event.phase,
-        ...(event.reason === undefined ? {} : { reason: event.reason }),
+        kind: 'command',
+        commandId: event.commandId,
+        name: event.name,
+        ...(event.args === undefined ? {} : { args: event.args }),
+        status: event.status,
+        ...(event.text === undefined ? {} : { text: event.text }),
       };
+    case 'turn':
+      return event.phase === 'start'
+        ? {
+            kind: 'turn',
+            turn: event.turn,
+            phase: 'start',
+            startedAt: event.startedAt,
+          }
+        : {
+            kind: 'turn',
+            turn: event.turn,
+            phase: 'end',
+            startedAt: event.startedAt,
+            completedAt: event.completedAt,
+            ...(event.reason === undefined ? {} : { reason: event.reason }),
+          };
     case 'cancel':
       return {
         kind: 'cancel',

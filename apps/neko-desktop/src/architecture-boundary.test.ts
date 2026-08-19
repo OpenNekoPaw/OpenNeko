@@ -100,7 +100,7 @@ describe('Desktop architecture boundaries', () => {
     expect(preload).toContain('dshSessions: {');
     expect(preload).toContain('dshPermissions: {');
     expect(preload).toContain('dshRuntime: {');
-    expect(renderer).toContain('window.openNekoDesktop.dshSessions.prompt');
+    expect(renderer).toContain('window.openNekoDesktop.dshSessions.submit');
     expect(renderer).toContain('window.openNekoDesktop.dshPermissions.decide');
     expect(renderer).toContain('window.openNekoDesktop.dshRuntime.restart');
     expect(renderer).toContain('requireReadyState');

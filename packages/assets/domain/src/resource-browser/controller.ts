@@ -112,6 +112,13 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     return this.commitProjection(nextProjection);
   }
 
+  async query(request: ResourceBrowserSearchRequest): Promise<ResourceBrowserProjection> {
+    this.requireActive();
+    const parsed = parseResourceBrowserSearchRequest(request);
+    assertResourceBrowserIdentity(this.identity, parsed.identity);
+    return this.readProjection(parsed.source, parsed.query, parsed.limit);
+  }
+
   async children(request: ResourceBrowserChildrenRequest): Promise<ResourceBrowserProjection> {
     this.requireActive();
     const parsed = parseResourceBrowserChildrenRequest(request);

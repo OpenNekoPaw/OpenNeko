@@ -26,6 +26,7 @@ const exactExcludedFiles = new Set([
 ]);
 const generatedDirectoryNames = new Set([
   '.git',
+  '.dsh-development-runtime',
   '.neko',
   '.vite',
   'build',
@@ -65,6 +66,10 @@ const parallelDataPathPattern =
   /(?:^|-)dual-(?:read|write)(?:-|$)|(?:^|-)(?:cache|projection|raw)-or-(?:cache|projection|raw|source)(?:-|$)/u;
 const alternateSuccessPathPattern =
   /(?:^|-)fallback-(?:adapter|handler|provider|reader|renderer|source|writer)(?:-|$)|(?:^|-)(?:default|wildcard)-handler(?:-|$)|(?:^|-)fallback-to-active(?:-|$)|(?:^|-)implicit-(?:project|session|success|workspace)(?:-|$)|(?:^|-)try-next-(?:adapter|handler|provider|reader|renderer|source|writer)(?:-|$)/u;
+
+export function isGeneratedDirectoryName(name) {
+  return generatedDirectoryNames.has(name);
+}
 
 export function scanSources(sources) {
   const findings = [];
@@ -638,7 +643,7 @@ function discoverSources(root) {
 
 function walk(directory, files) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (generatedDirectoryNames.has(entry.name)) continue;
+    if (isGeneratedDirectoryName(entry.name)) continue;
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
       walk(path, files);

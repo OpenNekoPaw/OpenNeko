@@ -1,24 +1,32 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { DshPermissionHostProjection } from '@neko/agent-contracts/dsh-permission-host';
 import type {
   DshConversationCreationTarget,
   DshComposerConfigurationProjection,
+  DshComposerMentionProjection,
+  DshComposerSubmitInput,
   DshSessionHostEvent,
   DshSessionHostProjection,
 } from '@neko/agent-contracts/dsh-session-host';
 import type {
+  AgentContextPayload,
   AgentCharacterDialogueTargetOption,
+  AgentInputCatalogEntry,
   AgentWorldExperienceTargetOption,
 } from '@neko/agent-contracts';
+import { parseAgentInputTrigger } from '@neko/agent-contracts';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
 import type { ChatModelOption } from '@neko/ai-contracts';
 import { InputArea } from '../components/ChatView/InputArea/InputArea';
 import { InputAreaProvider } from '../components/ChatView/InputAreaContext';
 import type {
   GenerationParams,
+  MentionItem,
+  SelectedFileReference,
   SelectedCharacterLaunch,
   SelectedWorldLaunch,
 } from '../components/ChatView/InputArea/types';
+import { resolveAgentInputInvocationIntent } from '../components/ChatView/InputArea/slash-command-catalog';
 import type { AgentComposerWorkspacePresentation } from '../components/ComposerWorkspaceContext';
 import { AuthoringTargetSelector } from '../components/ChatView/AuthoringTargetSelector';
 import type { DshEntryProjectSelection } from '../components/ChatView/AuthoringTargetSelector';
@@ -50,6 +58,8 @@ export interface DshAgentViewProps {
   readonly entryContext?: DshEntryContextPresentation;
   readonly composerConfiguration?: DshComposerConfigurationProjection;
   readonly composerConfigurationError?: string;
+  readonly mentionItems?: readonly DshComposerMentionProjection[];
+  readonly mentionDiagnostic?: string;
   readonly configuring: boolean;
   readonly draft: string;
   readonly errorMessage?: string;
@@ -69,7 +79,11 @@ export interface DshAgentViewProps {
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
   readonly onRestartRuntime: () => void;
-  readonly onSubmit: (target: DshConversationCreationTarget) => void;
+  readonly onRequestMentions?: (filter: string) => void;
+  readonly onSubmit: (
+    target: DshConversationCreationTarget,
+    input: DshComposerSubmitInput,
+  ) => Promise<boolean>;
 }
 
 export interface DshEntryContextPresentation {
@@ -102,7 +116,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const copy = locale === 'zh-cn' ? ZH_COPY : EN_COPY;
   const [entryExperience, setEntryExperience] = useState<'assistant' | 'authoring'>('assistant');
   const [entryDetail, setEntryDetail] = useState<'project' | 'character' | 'world'>('character');
-  const [entryDetailExpanded, setEntryDetailExpanded] = useState(false);
+  const [entryDetailExpanded, setEntryDetailExpanded] = useState(true);
   const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<DshEntryProjectSelection>();
   const [entryCharacterTargets, setEntryCharacterTargets] = useState<
     readonly AgentCharacterDialogueTargetOption[]
@@ -123,6 +137,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const [entryContextDiagnostic, setEntryContextDiagnostic] = useState<string>();
   const runtimeReady = props.runtime?.status === 'running';
   const hasEvents = (props.projection?.events.length ?? 0) > 0;
+  const activeTurnStart = findActiveTurnStart(props.projection);
   const showEmptyState =
     props.conversationId === undefined && !hasEvents && !props.conversationFeed;
   const emptyTitle =
@@ -201,10 +216,13 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   };
   const composer = (
     <DshComposer
+      key={props.conversationId ?? `draft:${props.agentSurfaceId}`}
       copy={copy}
       surfaceKind={props.surfaceKind}
       configuration={props.composerConfiguration}
       configurationError={props.composerConfigurationError}
+      mentionItems={props.mentionItems ?? []}
+      mentionDiagnostic={props.mentionDiagnostic}
       configuring={props.configuring}
       currentTurn={props.projection?.currentTurn}
       disabled={props.submitting || !runtimeReady}
@@ -214,6 +232,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       onModelChange={props.onModelChange}
       onMediaModelChange={props.onMediaModelChange}
       onPermissionPresetChange={props.onPermissionPresetChange}
+      onRequestMentions={props.onRequestMentions}
       onSubmit={props.onSubmit}
       entryExperience={entryExperience}
       entryContextAvailable={props.entryContext !== undefined}
@@ -268,7 +287,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
                   }
                   setEntryExperience(value);
                   setEntryDetail(value === 'authoring' ? 'project' : 'character');
-                  setEntryDetailExpanded(false);
+                  setEntryDetailExpanded(true);
                   setEntryContextDiagnostic(undefined);
                   if (value === 'authoring') {
                     setEntryCharacterLaunches([]);
@@ -358,6 +377,13 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
             {props.projection?.events.map((event, index) => (
               <DshSessionEvent copy={copy} event={event} key={eventKey(event, index)} />
             ))}
+            {activeTurnStart ? (
+              <DshActiveTurnStatus
+                copy={copy}
+                startedAt={activeTurnStart.startedAt}
+                turn={activeTurnStart.turn}
+              />
+            ) : null}
             {renderRuntimeState(props, copy)}
           </div>
           <DshPermissionPanel
@@ -378,6 +404,8 @@ function DshComposer({
   surfaceKind,
   configuration,
   configurationError,
+  mentionItems,
+  mentionDiagnostic,
   configuring,
   currentTurn,
   disabled,
@@ -387,6 +415,7 @@ function DshComposer({
   onModelChange,
   onMediaModelChange,
   onPermissionPresetChange,
+  onRequestMentions,
   onSubmit,
   entryExperience,
   entryContextAvailable,
@@ -403,6 +432,8 @@ function DshComposer({
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
   readonly configuration?: DshComposerConfigurationProjection;
   readonly configurationError?: string;
+  readonly mentionItems: readonly DshComposerMentionProjection[];
+  readonly mentionDiagnostic?: string;
   readonly configuring: boolean;
   readonly currentTurn?: number;
   readonly disabled: boolean;
@@ -415,7 +446,11 @@ function DshComposer({
     modelOptionId: string,
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
-  readonly onSubmit: (target: DshConversationCreationTarget) => void;
+  readonly onRequestMentions?: (filter: string) => void;
+  readonly onSubmit: (
+    target: DshConversationCreationTarget,
+    input: DshComposerSubmitInput,
+  ) => Promise<boolean>;
   readonly entryExperience: 'assistant' | 'authoring';
   readonly entryContextAvailable: boolean;
   readonly entryWorkspaceTarget?: DshEntryProjectSelection;
@@ -427,6 +462,8 @@ function DshComposer({
   readonly onRemoveWorldLaunch: () => void;
   readonly presentation: 'entry' | 'workspace' | 'conversation';
 }): JSX.Element {
+  const [inputDiagnostic, setInputDiagnostic] = useState<string>();
+  const [contextChips, setContextChips] = useState<readonly AgentContextPayload[]>([]);
   const models: ChatModelOption[] = (configuration?.models ?? []).map((model) => ({
     id: model.id,
     label: model.label,
@@ -445,14 +482,94 @@ function DshComposer({
     audioType: 'sfx',
   };
   const configurationDiagnostic = configurationError ?? configuration?.diagnostic;
-  const entryTargetDiagnostic =
+  const inputCatalog = useMemo(() => projectDshInputCatalog(configuration), [configuration]);
+  const inputCatalogBindingKind = configuration?.context ? 'workspace' : 'assistant';
+  const projectedMentionItems: MentionItem[] = mentionItems.map((mention) => ({
+    id: mention.id,
+    kind: mention.kind,
+    label: mention.label,
+    ...(mention.description === undefined ? {} : { description: mention.description }),
+    source: mention.source,
+    ...(mention.contentLocator === undefined ? {} : { contentLocator: mention.contentLocator }),
+    ...(mention.contextPayload === undefined ? {} : { contextPayload: mention.contextPayload }),
+    ...(mention.mediaType === undefined ? {} : { mediaType: mention.mediaType }),
+  }));
+  const entryTargetMissing =
     presentation === 'entry' &&
     surfaceKind === 'entry' &&
     entryExperience === 'authoring' &&
-    entryWorkspaceTarget === undefined
-      ? copy.projectRequired
-      : undefined;
-  const submissionDiagnostic = configurationDiagnostic ?? entryTargetDiagnostic;
+    entryWorkspaceTarget === undefined;
+  const submissionBlocked = configurationDiagnostic !== undefined || entryTargetMissing;
+  const submitTarget = (): DshConversationCreationTarget =>
+    entryExperience === 'authoring' && entryWorkspaceTarget !== undefined
+      ? { kind: 'project', projectId: entryWorkspaceTarget.projectId }
+      : { kind: 'surface' };
+  const submitComposerInput = async (input?: {
+    readonly messageText?: string;
+    readonly fileReferences?: SelectedFileReference[];
+    readonly contextPayloads?: AgentContextPayload[];
+  }): Promise<boolean> => {
+    if (submissionBlocked || disabled) return false;
+    try {
+      const messageText = input?.messageText ?? draft;
+      const references = (input?.fileReferences ?? []).map((reference) => ({
+        label: reference.label,
+        contentLocator: reference.contentLocator,
+      }));
+      const submittedContextPayloads = input?.contextPayloads ?? [];
+      const trigger = parseAgentInputTrigger(messageText);
+      if (trigger?.trigger === 'mention') {
+        throw new Error(
+          `Agent reference '@${trigger.name}' is unknown, stale, or was not selected from this Workspace.`,
+        );
+      }
+      if (trigger !== null && (trigger.trigger === 'command' || trigger.trigger === 'skill')) {
+        if (references.length > 0 || submittedContextPayloads.length > 0) {
+          throw new Error('DSH commands and Skills do not accept attached Workspace context.');
+        }
+        const executableTrigger =
+          trigger.trigger === 'command'
+            ? { ...trigger, trigger: 'command' as const }
+            : { ...trigger, trigger: 'skill' as const };
+        const intent = resolveAgentInputInvocationIntent({
+          trigger: executableTrigger,
+          entries: inputCatalog,
+          phase: 'session',
+          bindingKind: inputCatalogBindingKind,
+        });
+        const submitInput: DshComposerSubmitInput =
+          intent.kind === 'command'
+            ? { kind: 'command', line: messageText.trim() }
+            : {
+                kind: 'skill',
+                skillName: intent.skillName,
+                displayText: `$${intent.skillName}${intent.args === undefined ? '' : ` ${intent.args}`}`,
+                ...(intent.args === undefined ? {} : { args: intent.args }),
+              };
+        const accepted = await onSubmit(submitTarget(), submitInput);
+        if (accepted) setInputDiagnostic(undefined);
+        return accepted;
+      }
+      if (
+        messageText.trim().length === 0 &&
+        references.length === 0 &&
+        submittedContextPayloads.length === 0
+      ) {
+        return false;
+      }
+      const accepted = await onSubmit(submitTarget(), {
+        kind: 'message',
+        text: messageText.trim(),
+        references,
+        contextPayloads: submittedContextPayloads,
+      });
+      if (accepted) setInputDiagnostic(undefined);
+      return accepted;
+    } catch (error) {
+      setInputDiagnostic(describeError(error));
+      return false;
+    }
+  };
   return (
     <InputAreaProvider
       isBusy={configuring || currentTurn !== undefined}
@@ -477,8 +594,21 @@ function DshComposer({
       contextTokenCount={0}
       isCompressing={false}
       mediaModelCallCount={0}
-      contextChips={[]}
-      onRemoveContextChip={() => undefined}
+      inputCatalog={inputCatalog}
+      inputCatalogPhase="session"
+      inputCatalogBindingKind={inputCatalogBindingKind}
+      onSlashCommand={() => setInputDiagnostic(undefined)}
+      onRequestFiles={onRequestMentions}
+      mentionItems={projectedMentionItems}
+      contextChips={[...contextChips]}
+      onAddContextChip={(payload) =>
+        setContextChips((current) =>
+          current.some((item) => item.id === payload.id) ? current : [...current, payload],
+        )
+      }
+      onRemoveContextChip={(id) =>
+        setContextChips((current) => current.filter((payload) => payload.id !== id))
+      }
       genCategory="image"
       genParams={generationParams}
       onGenCategoryChange={() => undefined}
@@ -491,16 +621,11 @@ function DshComposer({
           isThinking={currentTurn !== undefined}
           isRunActive={currentTurn !== undefined}
           queueingEnabled={false}
-          onInputChange={onDraftChange}
-          onSend={() => {
-            if (submissionDiagnostic || disabled || draft.trim().length === 0) return false;
-            onSubmit(
-              entryExperience === 'authoring' && entryWorkspaceTarget !== undefined
-                ? { kind: 'project', projectId: entryWorkspaceTarget.projectId }
-                : { kind: 'surface' },
-            );
-            return true;
+          onInputChange={(value) => {
+            setInputDiagnostic(undefined);
+            onDraftChange(value);
           }}
+          onSend={submitComposerInput}
           onCancel={onCancel}
           disabled={disabled || configuring || configuration === undefined}
           attachmentsDisabled
@@ -520,8 +645,8 @@ function DshComposer({
                   onChange: onPermissionPresetChange,
                 }
           }
-          submissionBlocked={submissionDiagnostic !== undefined}
-          submissionBlockedReason={submissionDiagnostic}
+          submissionBlocked={submissionBlocked}
+          submissionBlockedReason={inputDiagnostic ?? mentionDiagnostic ?? configurationDiagnostic}
           workspaceCanvas={
             configuration?.context
               ? {
@@ -601,6 +726,58 @@ function DshComposer({
   );
 }
 
+function projectDshInputCatalog(
+  configuration: DshComposerConfigurationProjection | undefined,
+): readonly AgentInputCatalogEntry[] {
+  const catalog = configuration?.inputCatalog;
+  if (!catalog) return [];
+  const commands: readonly AgentInputCatalogEntry[] = catalog.commands.map((command) => ({
+    id: `dsh-command:${command.name}`,
+    name: command.name,
+    description:
+      command.inputHint === undefined
+        ? command.description
+        : `${command.description} ${command.inputHint}`,
+    trigger: 'command',
+    prefix: '/',
+    phaseRequirement: 'session',
+    bindingRequirement: 'any',
+    source: { kind: 'personal', ownerId: 'dsh', sourceId: command.name },
+    availability: { status: 'available' },
+    executable: {
+      kind: 'command',
+      commandId: command.name,
+      handlerId: 'dsh-command',
+    },
+  }));
+  const skills: readonly AgentInputCatalogEntry[] = catalog.skills.map((skill) => ({
+    id: `dsh-skill:${skill.name}`,
+    name: skill.name,
+    description: skill.description,
+    trigger: 'skill',
+    prefix: '$',
+    phaseRequirement: 'session',
+    bindingRequirement: 'any',
+    source: { kind: 'personal', ownerId: 'dsh', sourceId: skill.provider },
+    availability: catalog.skillsComplete
+      ? { status: 'available' }
+      : {
+          status: 'unavailable',
+          diagnostic: {
+            owner: 'dsh',
+            code: 'SKILL_CATALOG_INCOMPLETE',
+            message: configuration.inputCatalogDiagnostic ?? 'The DSH Skill catalog is incomplete.',
+          },
+        },
+    executable: {
+      kind: 'skill',
+      skillName: skill.name,
+      activationId: `dsh-skill:${skill.name}`,
+    },
+  }));
+  return [...commands, ...skills];
+}
+
 function DshSessionEvent({
   copy,
   event,
@@ -608,6 +785,30 @@ function DshSessionEvent({
   readonly copy: DshAgentCopy;
   readonly event: DshSessionHostEvent;
 }): JSX.Element | null {
+  if (event.kind === 'thought') {
+    return (
+      <div className="agent-message-list-item py-0.5">
+        <div className="agent-transcript-rail">
+          <details
+            className="agent-turn-activity ml-7"
+            data-agent-thought-state={event.state}
+            open={event.state === 'streaming' ? true : undefined}
+          >
+            <summary className="agent-turn-activity-summary">
+              <span className="font-medium text-[var(--agent-fg)]">{copy.thought}</span>
+            </summary>
+            <div className="agent-turn-activity-list">
+              <div className="agent-turn-activity-item">
+                <div className="agent-turn-activity-detail">
+                  <MarkdownDocumentView className="markdown-content" value={event.text} />
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+    );
+  }
   if (event.kind === 'message') {
     const isUser = event.role === 'user';
     return (
@@ -636,7 +837,10 @@ function DshSessionEvent({
                   </div>
                 ) : (
                   <div className="agent-assistant-turn">
-                    <div className="agent-turn-answer agent-turn-text-lane">
+                    <div
+                      className="agent-turn-answer agent-turn-text-lane"
+                      data-agent-message-state={event.state}
+                    >
                       <MarkdownDocumentView className="markdown-content" value={event.text} />
                     </div>
                   </div>
@@ -649,8 +853,16 @@ function DshSessionEvent({
     );
   }
   if (event.kind === 'tool') return <DshToolEvent copy={copy} event={event} />;
+  if (event.kind === 'command') return <DshCommandEvent copy={copy} event={event} />;
   if (event.kind === 'turn' && event.phase === 'start') return null;
   const diagnostic = event.kind === 'diagnostic';
+  const turnDuration =
+    event.kind === 'turn'
+      ? copy.turnDuration.replace(
+          '{duration}',
+          formatTurnDuration(copy, event.completedAt - event.startedAt),
+        )
+      : undefined;
   return (
     <div className="agent-message-list-item py-0.5">
       <div className="agent-transcript-rail">
@@ -665,12 +877,70 @@ function DshSessionEvent({
               : event.kind === 'cancel'
                 ? copy.cancelled
                 : copy.turnEnded.replace('{turn}', String(event.turn)) +
+                  ` · ${turnDuration}` +
                   (event.reason ? ` · ${event.reason}` : '')}
           </span>
         </div>
       </div>
     </div>
   );
+}
+
+function findActiveTurnStart(
+  projection: DshSessionHostProjection | undefined,
+): Extract<DshSessionHostEvent, { readonly kind: 'turn'; readonly phase: 'start' }> | undefined {
+  const currentTurn = projection?.currentTurn;
+  if (!projection || currentTurn === undefined) return undefined;
+  return projection.events.find(
+    (
+      event,
+    ): event is Extract<DshSessionHostEvent, { readonly kind: 'turn'; readonly phase: 'start' }> =>
+      event.kind === 'turn' && event.phase === 'start' && event.turn === currentTurn,
+  );
+}
+
+function DshActiveTurnStatus({
+  copy,
+  startedAt,
+  turn,
+}: {
+  readonly copy: DshAgentCopy;
+  readonly startedAt: number;
+  readonly turn: number;
+}): JSX.Element {
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  useEffect(() => {
+    setCurrentTime(Date.now());
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [startedAt, turn]);
+  const duration = formatTurnDuration(copy, Math.max(0, currentTime - startedAt));
+
+  return (
+    <div className="agent-message-list-item py-0.5" data-agent-active-turn={turn}>
+      <div className="agent-transcript-rail">
+        <div className="agent-turn-activity-meta flex items-center gap-1.5" role="status">
+          <LoadingIcon className="h-3 w-3 shrink-0 text-[var(--agent-info)]" />
+          <span>
+            {copy.turnInProgress.replace('{turn}', String(turn))} ·{' '}
+            {copy.turnElapsed.replace('{duration}', duration)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatTurnDuration(copy: DshAgentCopy, durationMs: number): string {
+  const totalSeconds = Math.floor(durationMs / 1_000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) {
+    return copy.durationSeconds.replace('{seconds}', String(seconds));
+  }
+  return copy.durationMinutesSeconds
+    .replace('{minutes}', String(minutes))
+    .replace('{seconds}', String(seconds).padStart(2, '0'));
 }
 
 function DshToolEvent({
@@ -727,6 +997,68 @@ function DshToolEvent({
               <div className="border-t border-[var(--agent-divider)] px-3 py-2 text-[10px]">
                 <ToolPayload label={copy.input} value={event.rawInput} />
                 <ToolPayload label={copy.output} value={event.rawOutput} />
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DshCommandEvent({
+  copy,
+  event,
+}: {
+  readonly copy: DshAgentCopy;
+  readonly event: Extract<DshSessionHostEvent, { readonly kind: 'command' }>;
+}): JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const expandable = event.text !== undefined;
+  const tone =
+    event.status === 'failed'
+      ? 'is-danger'
+      : event.status === 'completed'
+        ? 'is-success'
+        : 'is-info';
+  const icon =
+    event.status === 'failed' ? (
+      <ErrorIcon className="h-3 w-3 shrink-0 text-[var(--agent-danger)]" />
+    ) : event.status === 'completed' ? (
+      <SuccessIcon className="h-3 w-3 shrink-0 text-[var(--agent-success)]" />
+    ) : (
+      <LoadingIcon className="h-3 w-3 shrink-0 text-[var(--agent-info)]" />
+    );
+  const status =
+    event.status === 'running' ? copy.toolStatus.in_progress : copy.toolStatus[event.status];
+  return (
+    <div className="agent-message-list-item py-0.5">
+      <div className="agent-transcript-rail">
+        <div className="agent-turn-activity ml-7">
+          <div className={`agent-inline-card ${tone}`} data-agent-command-id={event.commandId}>
+            <button
+              className="agent-inline-header flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition-colors"
+              disabled={!expandable}
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {icon}
+              <span className="shrink-0 font-medium text-[var(--agent-fg)]">
+                /{event.name}
+                {event.args === undefined ? '' : ` ${event.args}`}
+              </span>
+              <span className="flex-1 truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
+                {status}
+              </span>
+              {expandable ? (
+                <ChevronDownIcon
+                  className={`h-3 w-3 shrink-0 text-[var(--agent-fg-secondary)] transition-transform ${expanded ? 'rotate-180' : ''}`}
+                />
+              ) : null}
+            </button>
+            {expanded && event.text !== undefined ? (
+              <div className="border-t border-[var(--agent-divider)] px-3 py-2 text-[10px]">
+                <MarkdownDocumentView className="markdown-content" value={event.text} />
               </div>
             ) : null}
           </div>
@@ -858,7 +1190,9 @@ function renderRuntimeState(props: DshAgentViewProps, copy: DshAgentCopy): JSX.E
 
 function eventKey(event: DshSessionHostEvent, index: number): string {
   if (event.kind === 'message') return `message:${event.messageId ?? index}`;
+  if (event.kind === 'thought') return `thought:${event.turn}:${event.step}:${event.messageId}`;
   if (event.kind === 'tool') return `tool:${event.turn}:${event.toolCallId}`;
+  if (event.kind === 'command') return `command:${event.commandId}`;
   if (event.kind === 'turn') return `turn:${event.turn}:${event.phase}:${index}`;
   if (event.kind === 'diagnostic') return `diagnostic:${event.code}:${index}`;
   return `cancel:${event.turn ?? 'session'}:${event.toolCallId ?? index}`;
@@ -892,14 +1226,19 @@ interface DshAgentCopy {
   readonly output: string;
   readonly permissions: string;
   readonly placeholder: string;
-  readonly projectRequired: string;
   readonly restartRuntime: string;
   readonly restartingRuntime: string;
   readonly runtimeUnavailableTitle: string;
   readonly send: string;
   readonly selectModel: string;
   readonly toolStatus: Readonly<Record<'pending' | 'in_progress' | 'completed' | 'failed', string>>;
+  readonly thought: string;
+  readonly turnDuration: string;
+  readonly durationSeconds: string;
+  readonly durationMinutesSeconds: string;
+  readonly turnElapsed: string;
   readonly turnEnded: string;
+  readonly turnInProgress: string;
   readonly you: string;
   readonly youAvatar: string;
   readonly unavailable: string;
@@ -936,7 +1275,6 @@ const EN_COPY: DshAgentCopy = {
   modelRequired: 'Select a configured model before sending.',
   permissions: 'Pending permissions',
   placeholder: 'Ask the DSH Agent…',
-  projectRequired: 'Choose a project before starting creation.',
   restartRuntime: 'Restart DSH',
   restartingRuntime: 'Restarting DSH runtime…',
   runtimeUnavailableTitle: 'DSH runtime unavailable',
@@ -948,7 +1286,13 @@ const EN_COPY: DshAgentCopy = {
     completed: 'Completed',
     failed: 'Failed',
   },
+  thought: 'Reasoning',
+  turnDuration: 'Ran for {duration}',
+  durationSeconds: '{seconds}s',
+  durationMinutesSeconds: '{minutes}m {seconds}s',
+  turnElapsed: '{duration} elapsed',
   turnEnded: 'Turn {turn} ended',
+  turnInProgress: 'Turn {turn} in progress',
   you: 'You',
   youAvatar: 'ME',
   unavailable: 'Unavailable',
@@ -984,14 +1328,19 @@ const ZH_COPY: DshAgentCopy = {
   modelRequired: '发送前请选择已配置的模型。',
   permissions: '待处理权限',
   placeholder: '向 DSH Agent 提问…',
-  projectRequired: '开始创作前请选择项目。',
   restartRuntime: '重启 DSH',
   restartingRuntime: '正在重启 DSH 运行时…',
   runtimeUnavailableTitle: 'DSH 运行时不可用',
   send: '发送消息',
   selectModel: '选择模型',
   toolStatus: { pending: '等待中', in_progress: '运行中', completed: '已完成', failed: '失败' },
+  thought: '思考过程',
+  turnDuration: '用时 {duration}',
+  durationSeconds: '{seconds}秒',
+  durationMinutesSeconds: '{minutes}分{seconds}秒',
+  turnElapsed: '已用时 {duration}',
   turnEnded: '回合 {turn} 已结束',
+  turnInProgress: '回合 {turn} 处理中',
   you: '你',
   youAvatar: '我',
   unavailable: '不可用',

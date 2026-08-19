@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { ConversationDshSessionBindingStore } from '@neko/agent-runtime/application';
@@ -34,6 +34,7 @@ export async function prepareDesktopDshRuntime(options: {
   readonly isPackaged: boolean;
   readonly resourcesPath: string;
   readonly userDataRoot: string;
+  readonly builtinSkillRoot: string;
   readonly environment: Readonly<Record<string, string | undefined>>;
   readonly providers: DesktopDshProviderRuntimeProjection;
   readonly onStderr?: (chunk: string) => void;
@@ -46,9 +47,11 @@ export async function prepareDesktopDshRuntime(options: {
   });
   const workingDirectory = join(profile.dshHome, 'workspace');
   await mkdir(workingDirectory, { recursive: true });
+  const builtinSkillRoot = await realpath(options.builtinSkillRoot);
   const environment = Object.freeze({
     ...selectDshShellEnvironment(options.environment),
     ...profile.environment,
+    DSH_BUNDLED_SKILL_DIR: builtinSkillRoot,
     ...options.providers.credentialEnvironment,
   });
   return Object.freeze({
@@ -70,6 +73,7 @@ export async function startDesktopDshProductRuntime(options: {
   readonly isPackaged: boolean;
   readonly resourcesPath: string;
   readonly userDataRoot: string;
+  readonly builtinSkillRoot: string;
   readonly environment: Readonly<Record<string, string | undefined>>;
   readonly providers: DesktopDshProviderRuntimeProjection;
   readonly metadataStore: LocalMetadataStore;

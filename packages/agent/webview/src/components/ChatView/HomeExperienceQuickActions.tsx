@@ -38,7 +38,11 @@ export function HomeExperienceQuickActions({
   const accessibleLabel = summary ? `${title}: ${summary}` : title;
 
   return (
-    <section className="agent-entry-quick-actions" aria-label={t('chat.entryQuickActions.label')}>
+    <section
+      className="agent-entry-quick-actions"
+      aria-label={t('chat.entryQuickActions.label')}
+      data-entry-panel-mode={mode}
+    >
       <Collapsible
         className="agent-entry-quick-panel"
         contentClassName="agent-entry-quick-detail"

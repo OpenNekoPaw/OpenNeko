@@ -34,7 +34,15 @@ const projection: DshSessionHostProjection = {
       rawInput: { operation: 'create-node', title: 'Opening' },
       rawOutput: { accepted: true },
     },
-    { kind: 'message', role: 'assistant', text: 'Working on it', messageId: 'message-2' },
+    {
+      kind: 'message',
+      role: 'assistant',
+      turn: 3,
+      step: 0,
+      text: 'Working on it',
+      messageId: 'message-2',
+      state: 'streaming',
+    },
   ],
 };
 
@@ -113,9 +121,10 @@ let permissionListener: ((event: { readonly conversationId: string }) => void) |
 const dshSessions = {
   create: vi.fn(async () => projection),
   getSnapshot: vi.fn<() => Promise<DshSessionHostProjection>>(async () => projection),
-  prompt: vi.fn(async () => ({ requestId: 'request-1', projection, stopReason: 'end_turn' })),
+  submit: vi.fn(async () => ({ requestId: 'request-1', projection, stopReason: 'end_turn' })),
   cancel: vi.fn(async () => projection),
   getComposerConfiguration: vi.fn(async () => composerConfiguration),
+  searchComposerMentions: vi.fn(async () => []),
   selectComposerModel: vi.fn(async () => ({
     ...composerConfiguration,
     selectedModelOptionId: 'openai:gpt-5',
@@ -160,7 +169,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   dshSessions.create.mockResolvedValue(projection);
   dshSessions.getSnapshot.mockResolvedValue(projection);
-  dshSessions.prompt.mockResolvedValue({
+  dshSessions.submit.mockResolvedValue({
     requestId: 'request-1',
     projection,
     stopReason: 'end_turn',
@@ -232,7 +241,7 @@ describe('DesktopAgentSurface', () => {
     await waitFor(() => expect(dshSessions.getSnapshot).toHaveBeenCalledTimes(2));
   });
 
-  it('does not let an older refresh replace the latest Host projection', async () => {
+  it('coalesces stream refreshes without letting an older projection replace the latest', async () => {
     const stale = deferred<DshSessionHostProjection>();
     dshSessions.getSnapshot
       .mockResolvedValueOnce(projection)
@@ -243,8 +252,11 @@ describe('DesktopAgentSurface', () => {
           {
             kind: 'message',
             role: 'assistant',
+            turn: 3,
+            step: 0,
             text: 'Latest Host projection',
             messageId: 'message-latest',
+            state: 'final',
           },
         ],
       });
@@ -261,7 +273,6 @@ describe('DesktopAgentSurface', () => {
     await act(async () => sessionListener?.({ conversationId: 'conversation-1' }));
     await waitFor(() => expect(dshSessions.getSnapshot).toHaveBeenCalledTimes(2));
     await act(async () => sessionListener?.({ conversationId: 'conversation-1' }));
-    expect(await screen.findByText('Latest Host projection')).toBeTruthy();
 
     await act(async () =>
       stale.resolve({
@@ -270,12 +281,17 @@ describe('DesktopAgentSurface', () => {
           {
             kind: 'message',
             role: 'assistant',
+            turn: 3,
+            step: 0,
             text: 'Stale Host projection',
             messageId: 'message-stale',
+            state: 'final',
           },
         ],
       }),
     );
+    expect(await screen.findByText('Latest Host projection')).toBeTruthy();
+    expect(dshSessions.getSnapshot).toHaveBeenCalledTimes(3);
     expect(screen.queryByText('Stale Host projection')).toBeNull();
     expect(screen.getByText('Latest Host projection')).toBeTruthy();
   });
@@ -300,7 +316,14 @@ describe('DesktopAgentSurface', () => {
 
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: '  hello  ' } });
     fireEvent.click(screen.getByLabelText('Send (Enter)'));
-    await waitFor(() => expect(dshSessions.prompt).toHaveBeenCalledWith('conversation-1', 'hello'));
+    await waitFor(() =>
+      expect(dshSessions.submit).toHaveBeenCalledWith('conversation-1', {
+        kind: 'message',
+        text: 'hello',
+        references: [],
+        contextPayloads: [],
+      }),
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Allow once' }));
     await waitFor(() =>
@@ -317,6 +340,29 @@ describe('DesktopAgentSurface', () => {
 
     fireEvent.click(screen.getByLabelText('Stop response (Esc)'));
     await waitFor(() => expect(dshSessions.cancel).toHaveBeenCalledWith('conversation-1'));
+  });
+
+  it('keeps the existing transcript and draft when a DSH submit fails visibly', async () => {
+    dshSessions.getSnapshot.mockResolvedValueOnce({ ...projection, currentTurn: undefined });
+    dshPermissions.list.mockResolvedValueOnce([]);
+    dshSessions.submit.mockRejectedValueOnce(new Error('DSH submit rejected.'));
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+    expect(await screen.findByText('Create a node')).toBeTruthy();
+
+    const composer = screen.getByLabelText('Message') as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: 'retry this request' } });
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
+
+    expect(await screen.findByText('DSH submit rejected.')).toBeTruthy();
+    expect(screen.getByText('Create a node')).toBeTruthy();
+    expect(composer.value).toBe('retry this request');
   });
 
   it.each([
@@ -491,7 +537,7 @@ describe('DesktopAgentSurface', () => {
       dshSessionId: 'dsh-session-created',
     };
     dshSessions.create.mockResolvedValueOnce(createdProjection);
-    dshSessions.prompt.mockResolvedValueOnce({
+    dshSessions.submit.mockResolvedValueOnce({
       requestId: 'request-created',
       projection: createdProjection,
       stopReason: 'end_turn',
@@ -518,7 +564,12 @@ describe('DesktopAgentSurface', () => {
         { kind: 'surface' },
       ),
     );
-    expect(dshSessions.prompt).toHaveBeenCalledWith('conversation-created', 'first message');
+    expect(dshSessions.submit).toHaveBeenCalledWith('conversation-created', {
+      kind: 'message',
+      text: 'first message',
+      references: [],
+      contextPayloads: [],
+    });
     expect(dshPermissions.list).toHaveBeenCalledWith('conversation-created');
     expect(await screen.findByText('Create a node')).toBeTruthy();
   });
@@ -530,7 +581,7 @@ describe('DesktopAgentSurface', () => {
       dshSessionId: 'dsh-session-project',
     };
     dshSessions.create.mockResolvedValueOnce(createdProjection);
-    dshSessions.prompt.mockResolvedValueOnce({
+    dshSessions.submit.mockResolvedValueOnce({
       requestId: 'request-project',
       projection: createdProjection,
       stopReason: 'end_turn',
@@ -567,7 +618,12 @@ describe('DesktopAgentSurface', () => {
         { kind: 'project', projectId: 'project-1' },
       ),
     );
-    expect(dshSessions.prompt).toHaveBeenCalledWith('conversation-project', 'create in project');
+    expect(dshSessions.submit).toHaveBeenCalledWith('conversation-project', {
+      kind: 'message',
+      text: 'create in project',
+      references: [],
+      contextPayloads: [],
+    });
   });
 
   it('fails locally instead of rendering a permission from another DSH Session', async () => {

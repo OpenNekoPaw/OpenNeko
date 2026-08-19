@@ -11,7 +11,10 @@ import type {
 import type {
   DshAcpContentBlock,
   DshAcpInboxSnapshot,
+  DshAcpInputCatalogProjection,
   DshAcpPermissionPresetProjection,
+  DshAcpCommandExecuteProjection,
+  DshAcpSkillInvokeProjection,
 } from '@neko/agent-contracts/dsh-acp';
 
 import type { ConversationDshSessionBindingService } from './conversation-dsh-session-binding';
@@ -34,6 +37,17 @@ export interface ConversationDshSessionAcpClient {
   cancel(sessionId: string): Promise<void>;
   setSessionContext(input: { readonly sessionId: string; readonly text: string }): Promise<void>;
   readPermissionPresets(sessionId?: string): Promise<DshAcpPermissionPresetProjection>;
+  readInputCatalog(sessionId: string): Promise<DshAcpInputCatalogProjection>;
+  executeCommand(input: {
+    readonly sessionId: string;
+    readonly line: string;
+  }): Promise<DshAcpCommandExecuteProjection>;
+  invokeSkill(input: {
+    readonly sessionId: string;
+    readonly skillName: string;
+    readonly displayText: string;
+    readonly args?: string;
+  }): Promise<DshAcpSkillInvokeProjection>;
   readInbox(sessionId: string): Promise<DshAcpInboxSnapshot>;
   replaceInboxMessage(input: {
     readonly sessionId: string;
@@ -67,6 +81,14 @@ export interface ConversationDshSessionBoundClient {
   cancel(conversationId: string): Promise<void>;
   setSessionContext(conversationId: string, text: string): Promise<void>;
   readPermissionPresets(conversationId: string): Promise<DshAcpPermissionPresetProjection>;
+  readInputCatalog(conversationId: string): Promise<DshAcpInputCatalogProjection>;
+  executeCommand(conversationId: string, line: string): Promise<DshAcpCommandExecuteProjection>;
+  invokeSkill(input: {
+    readonly conversationId: string;
+    readonly skillName: string;
+    readonly displayText: string;
+    readonly args?: string;
+  }): Promise<DshAcpSkillInvokeProjection>;
   readInbox(conversationId: string): Promise<DshAcpInboxSnapshot>;
   replaceInboxMessage(input: {
     readonly conversationId: string;
@@ -139,6 +161,18 @@ export function createConversationDshSessionBoundClient(
     async readPermissionPresets(conversationId) {
       const dshSessionId = await resolveForOperation(options, conversationId);
       return options.client.readPermissionPresets(dshSessionId);
+    },
+    async readInputCatalog(conversationId) {
+      const dshSessionId = await resolveForOperation(options, conversationId);
+      return options.client.readInputCatalog(dshSessionId);
+    },
+    async executeCommand(conversationId, line) {
+      const dshSessionId = await resolveForOperation(options, conversationId);
+      return options.client.executeCommand({ sessionId: dshSessionId, line });
+    },
+    async invokeSkill({ conversationId, ...request }) {
+      const dshSessionId = await resolveForOperation(options, conversationId);
+      return options.client.invokeSkill({ ...request, sessionId: dshSessionId });
     },
     async readInbox(conversationId) {
       const dshSessionId = await resolveForOperation(options, conversationId);

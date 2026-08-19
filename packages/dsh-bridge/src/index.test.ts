@@ -3,10 +3,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Session, SessionId, type SessionHeader } from '@deepseek-ai/dsh-session';
-import { CallId, MessageId, createUserMessage } from '@deepseek-ai/dsh-llm';
+import { CallId, MessageId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm';
 import { describe, expect, it } from 'vitest';
 
-import { listOpenNekoSessions, projectSessionEvent } from './index';
+import { listOpenNekoSessions, projectExtensionSessionEvent, projectSessionEvent } from './index';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -105,6 +105,7 @@ describe('OpenNeko DSH ACP bridge projections', () => {
         sessionId: 'session-1',
         update: {
           sessionUpdate: 'user_message_chunk',
+          messageId: user.data.id,
           content: { type: 'text', text: 'hello' },
         },
         _meta: { opennekoSequence: user.seq },
@@ -170,6 +171,92 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     ]);
   });
 
+  it('projects DSH text and reasoning deltas through standard ACP chunks', () => {
+    const session = Session.create(SessionId('session-1'));
+    const text = session.append('assistant/chunk', {
+      turn: 2,
+      step: 1,
+      chunk: { type: 'text-delta', index: 0, text: 'Hello' },
+    });
+    const reasoning = session.append('assistant/chunk', {
+      turn: 2,
+      step: 1,
+      chunk: { type: 'reasoning-delta', index: 1, text: 'Inspect' },
+    });
+
+    expect(projectSessionEvent('session-1', text)).toEqual([
+      {
+        sessionId: 'session-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          messageId: 'dsh:2:1:text',
+          content: { type: 'text', text: 'Hello' },
+        },
+        _meta: {
+          opennekoSequence: text.seq,
+          opennekoTurn: 2,
+          opennekoStep: 1,
+          opennekoBlockIndex: 0,
+          opennekoMessagePhase: 'delta',
+        },
+      },
+    ]);
+    expect(projectSessionEvent('session-1', reasoning)[0]).toMatchObject({
+      update: { sessionUpdate: 'agent_thought_chunk', content: { text: 'Inspect' } },
+      _meta: { opennekoBlockIndex: 1, opennekoMessagePhase: 'delta' },
+    });
+    expect(projectSessionEvent('session-1', text, { replay: true })).toEqual([]);
+  });
+
+  it('projects one DSH assistant message as ordered final reasoning and text frames', () => {
+    const session = Session.create(SessionId('session-1'));
+    const assistant = createAssistantMessage({
+      content: [
+        { type: 'reasoning', text: 'Consider.' },
+        { type: 'text', text: 'Answer.' },
+      ],
+      source: { provider: 'provider', model: 'model' },
+    });
+    const message = session.append(
+      'assistant/message',
+      {
+        turn: 0,
+        step: 0,
+        message: assistant,
+      },
+      { surfaceOp: 'append', sourceEventSeqs: [] },
+    );
+
+    expect(projectSessionEvent('session-1', message)).toEqual([
+      expect.objectContaining({
+        update: expect.objectContaining({
+          sessionUpdate: 'agent_thought_chunk',
+          messageId: assistant.id,
+          content: { type: 'text', text: 'Consider.' },
+        }),
+        _meta: expect.objectContaining({
+          opennekoSequence: message.seq,
+          opennekoMessagePhase: 'final',
+          opennekoFrameIndex: 0,
+          opennekoFrameCount: 2,
+        }),
+      }),
+      expect.objectContaining({
+        update: expect.objectContaining({
+          sessionUpdate: 'agent_message_chunk',
+          messageId: assistant.id,
+          content: { type: 'text', text: 'Answer.' },
+        }),
+        _meta: expect.objectContaining({
+          opennekoSequence: message.seq,
+          opennekoMessagePhase: 'final',
+          opennekoFrameIndex: 1,
+          opennekoFrameCount: 2,
+        }),
+      }),
+    ]);
+  });
+
   it('does not project non-standard DSH events as standard ACP messages', () => {
     const session = Session.create(SessionId('session-1'));
     const todo = session.append('todo/write', {
@@ -177,6 +264,13 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     });
 
     expect(projectSessionEvent('session-1', todo)).toEqual([]);
+    expect(projectExtensionSessionEvent('session-1', todo)).toEqual({
+      sessionId: 'session-1',
+      sequence: todo.seq,
+      time: todo.time,
+      type: 'todo/write',
+      data: todo.data,
+    });
   });
 
   it('does not project DSH runtime-context snapshots as user messages', () => {
@@ -251,7 +345,10 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
 
     expect(source).toContain("from './prompt-admission.js'");
     expect(source).toContain('const promptAdmission = new PromptAdmission<PromptResponse>()');
-    expect(source).toMatch(/async prompt\(params\)[\s\S]*promptAdmission\.run\(params\.sessionId/u);
+    expect(source).toMatch(/const runPrompt[\s\S]*promptAdmission\.run\(sessionId/u);
+    expect(source).toMatch(
+      /async prompt\(params\)[\s\S]*return runPrompt\(params\.sessionId, content\)/u,
+    );
     expect(source).toMatch(/cancel\(params\)[\s\S]*promptAdmission\.cancel\(params\.sessionId/u);
     expect(source).toMatch(
       /async closeSession\(params\)[\s\S]*promptAdmission\.cancel\(params\.sessionId/u,

@@ -6,6 +6,8 @@ import type {
 import type {
   DshConversationCreationTarget,
   DshComposerConfigurationProjection,
+  DshComposerMentionProjection,
+  DshComposerSubmitInput,
   DshSessionHostProjection,
 } from '@neko/agent-contracts/dsh-session-host';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
@@ -47,9 +49,13 @@ export function DesktopAgentSurface({
   const [composerConfiguration, setComposerConfiguration] =
     useState<DshComposerConfigurationProjection>();
   const [composerConfigurationError, setComposerConfigurationError] = useState<string>();
+  const [mentionItems, setMentionItems] = useState<readonly DshComposerMentionProjection[]>([]);
+  const [mentionDiagnostic, setMentionDiagnostic] = useState<string>();
+  const [operationError, setOperationError] = useState<string>();
   const [configuring, setConfiguring] = useState(false);
   const refreshSequence = useRef(0);
   const composerRefreshSequence = useRef(0);
+  const mentionRequestSequence = useRef(0);
 
   const refresh = useCallback(async (): Promise<void> => {
     if (!conversationId) return;
@@ -89,10 +95,30 @@ export function DesktopAgentSurface({
 
   useEffect(() => {
     let active = true;
+    let refreshInFlight = false;
+    let refreshPending = false;
+    const requestRefresh = (): void => {
+      refreshPending = true;
+      if (refreshInFlight) {
+        refreshSequence.current += 1;
+        return;
+      }
+      refreshInFlight = true;
+      void (async () => {
+        try {
+          while (active && refreshPending) {
+            refreshPending = false;
+            await refresh();
+          }
+        } finally {
+          refreshInFlight = false;
+        }
+      })();
+    };
     void refreshComposerConfiguration();
     if (conversationId) {
       setState({ kind: 'loading' });
-      void refresh();
+      requestRefresh();
     } else {
       void window.openNekoDesktop.dshRuntime.getStatus().then(
         (projection) => {
@@ -105,18 +131,18 @@ export function DesktopAgentSurface({
     }
     const unsubscribeSession = conversationId
       ? window.openNekoDesktop.dshSessions.subscribe((event) => {
-          if (event.conversationId === conversationId) void refresh();
+          if (event.conversationId === conversationId) requestRefresh();
         })
       : () => undefined;
     const unsubscribePermissions = conversationId
       ? window.openNekoDesktop.dshPermissions.subscribe((event) => {
-          if (event.conversationId === conversationId) void refresh();
+          if (event.conversationId === conversationId) requestRefresh();
         })
       : () => undefined;
     const unsubscribeRuntime = window.openNekoDesktop.dshRuntime.subscribe((projection) => {
       if (!active) return;
       setRuntime(projection);
-      if (projection.status === 'running') void refresh();
+      if (projection.status === 'running') requestRefresh();
     });
     return () => {
       active = false;
@@ -186,10 +212,12 @@ export function DesktopAgentSurface({
     }
   };
 
-  const submit = async (creationTarget: DshConversationCreationTarget): Promise<void> => {
-    if (submitting) return;
-    const text = draft.trim();
-    if (text.length === 0) return;
+  const submit = async (
+    creationTarget: DshConversationCreationTarget,
+    input: DshComposerSubmitInput,
+  ): Promise<boolean> => {
+    if (submitting) return false;
+    setOperationError(undefined);
     setSubmitting(true);
     try {
       const permissionPresetId = composerConfiguration?.permissionPresetId;
@@ -207,14 +235,33 @@ export function DesktopAgentSurface({
             creationTarget,
           )
         ).conversationId;
-      const result = await window.openNekoDesktop.dshSessions.prompt(targetConversationId, text);
+      const result = await window.openNekoDesktop.dshSessions.submit(targetConversationId, input);
       const permissions = await window.openNekoDesktop.dshPermissions.list(targetConversationId);
-      setDraft('');
       setState(requireReadyState(targetConversationId, result.projection, permissions));
+      return true;
     } catch (error) {
-      setState({ kind: 'error', message: describeError(error) });
+      setOperationError(describeError(error));
+      return false;
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const requestMentions = async (filter: string): Promise<void> => {
+    const sequence = ++mentionRequestSequence.current;
+    try {
+      const mentions = await window.openNekoDesktop.dshSessions.searchComposerMentions(
+        workbenchInstanceId,
+        agentSurfaceId,
+        filter,
+      );
+      if (sequence !== mentionRequestSequence.current) return;
+      setMentionItems(mentions);
+      setMentionDiagnostic(undefined);
+    } catch (error) {
+      if (sequence !== mentionRequestSequence.current) return;
+      setMentionItems([]);
+      setMentionDiagnostic(describeError(error));
     }
   };
 
@@ -222,13 +269,14 @@ export function DesktopAgentSurface({
     const targetConversationId =
       conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined);
     if (!targetConversationId || submitting) return;
+    setOperationError(undefined);
     setSubmitting(true);
     try {
       const projection = await window.openNekoDesktop.dshSessions.cancel(targetConversationId);
       const permissions = await window.openNekoDesktop.dshPermissions.list(targetConversationId);
       setState(requireReadyState(targetConversationId, projection, permissions));
     } catch (error) {
-      setState({ kind: 'error', message: describeError(error) });
+      setOperationError(describeError(error));
     } finally {
       setSubmitting(false);
     }
@@ -238,6 +286,7 @@ export function DesktopAgentSurface({
     permission: DshPermissionHostProjection,
     optionId: string,
   ): Promise<void> => {
+    setOperationError(undefined);
     try {
       const permissions = await window.openNekoDesktop.dshPermissions.decide(
         projectPermissionIdentity(permission),
@@ -249,11 +298,12 @@ export function DesktopAgentSurface({
           : current,
       );
     } catch (error) {
-      setState({ kind: 'error', message: describeError(error) });
+      setOperationError(describeError(error));
     }
   };
 
   const cancelPermission = async (permission: DshPermissionHostProjection): Promise<void> => {
+    setOperationError(undefined);
     try {
       const permissions = await window.openNekoDesktop.dshPermissions.cancel(
         projectPermissionIdentity(permission),
@@ -264,18 +314,19 @@ export function DesktopAgentSurface({
           : current,
       );
     } catch (error) {
-      setState({ kind: 'error', message: describeError(error) });
+      setOperationError(describeError(error));
     }
   };
 
   const restartRuntime = async (): Promise<void> => {
+    setOperationError(undefined);
     setRuntime({ status: 'restarting' });
     try {
       const projection = await window.openNekoDesktop.dshRuntime.restart();
       setRuntime(projection);
       if (projection.status === 'running') await refresh();
     } catch (error) {
-      setState({ kind: 'error', message: describeError(error) });
+      setOperationError(describeError(error));
     }
   };
 
@@ -291,8 +342,10 @@ export function DesktopAgentSurface({
       draft={draft}
       composerConfiguration={composerConfiguration}
       composerConfigurationError={composerConfigurationError}
+      mentionItems={mentionItems}
+      mentionDiagnostic={mentionDiagnostic}
       configuring={configuring}
-      errorMessage={state.kind === 'error' ? state.message : undefined}
+      errorMessage={operationError ?? (state.kind === 'error' ? state.message : undefined)}
       loading={state.kind === 'loading'}
       permissions={state.kind === 'ready' && runtime?.status === 'running' ? state.permissions : []}
       projection={state.kind === 'ready' ? state.projection : undefined}
@@ -301,7 +354,11 @@ export function DesktopAgentSurface({
       onCancelPermission={(permission) => void cancelPermission(permission)}
       onCancelTurn={() => void cancelTurn()}
       onDecidePermission={(permission, optionId) => void decidePermission(permission, optionId)}
-      onDraftChange={setDraft}
+      onDraftChange={(value) => {
+        setOperationError(undefined);
+        setMentionDiagnostic(undefined);
+        setDraft(value);
+      }}
       onModelChange={(modelOptionId) => void selectModel(modelOptionId)}
       onMediaModelChange={(category, modelOptionId) =>
         void selectMediaModel(category, modelOptionId)
@@ -310,7 +367,8 @@ export function DesktopAgentSurface({
         void selectPermissionPreset(permissionPresetId)
       }
       onRestartRuntime={() => void restartRuntime()}
-      onSubmit={(target) => void submit(target)}
+      onRequestMentions={(filter) => void requestMentions(filter)}
+      onSubmit={submit}
     />
   );
 }

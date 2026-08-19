@@ -1553,6 +1553,11 @@ code {
 .agent-extension-management-root .agent-extension-catalog-row {
   min-height: 72px;
   padding: 10px;
+  background: var(--neko-desktop-surface-raised);
+}
+
+.agent-extension-management-root .management-segmented-control {
+  background: var(--neko-desktop-surface-raised);
 }
 
 .agent-extension-management-root .agent-extension-catalog-row[data-selected='true'] {

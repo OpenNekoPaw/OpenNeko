@@ -1,15 +1,234 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nService, type SupportedLocale } from '@neko/ui/i18n';
 import { I18nProvider } from '@neko/ui/i18n/react';
 
 import { DshAgentView } from './root';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('DshAgentView content-creation composer', () => {
+  it('dispatches DSH commands and Skills from the retained Composer menus without prompt fallback', async () => {
+    const onSubmit = vi.fn(async () => true);
+    renderAgent(<DshComposerHarness onSubmit={onSubmit} />);
+    const composer = screen.getByLabelText('消息');
+
+    fireEvent.change(composer, { target: { value: '/' } });
+    expect(await screen.findByText('/help')).toBeTruthy();
+    fireEvent.click(screen.getByText('/help'));
+    fireEvent.change(composer, { target: { value: '/help models' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { kind: 'surface' },
+        { kind: 'command', line: '/help models' },
+      ),
+    );
+
+    fireEvent.change(composer, { target: { value: '$story-review chapter-1' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenLastCalledWith(
+        { kind: 'surface' },
+        {
+          kind: 'skill',
+          skillName: 'story-review',
+          displayText: '$story-review chapter-1',
+          args: 'chapter-1',
+        },
+      ),
+    );
+
+    fireEvent.change(composer, { target: { value: '/missing' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+    expect(await screen.findByText(/unknown or stale/u)).toBeTruthy();
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+    expect((composer as HTMLTextAreaElement).value).toBe('/missing');
+  });
+
+  it('requests exact Workspace mentions and submits only the selected ContentLocator', async () => {
+    const onSubmit = vi.fn(async () => true);
+    const onRequestMentions = vi.fn();
+    renderAgent(
+      <DshComposerHarness
+        onSubmit={onSubmit}
+        onRequestMentions={onRequestMentions}
+        mentionItems={[
+          {
+            id: 'files:scene',
+            kind: 'file',
+            label: 'scene.md',
+            contentLocator: { kind: 'workspace-file', path: 'notes/scene.md' },
+            source: 'workspace',
+            mediaType: 'text',
+          },
+        ]}
+      />,
+    );
+    const composer = screen.getByLabelText('消息');
+
+    fireEvent.change(composer, { target: { value: '@' } });
+    expect(await screen.findByText('输入以搜索文件、素材、媒体或实体')).toBeTruthy();
+    expect(screen.getByText('文件')).toBeTruthy();
+    expect(screen.getByText('工作区')).toBeTruthy();
+    expect(screen.getByText('文本')).toBeTruthy();
+
+    fireEvent.change(composer, { target: { value: '@sce' } });
+    await waitFor(() => expect(onRequestMentions).toHaveBeenCalledWith('sce'));
+    fireEvent.click(await screen.findByText('scene.md'));
+    expect(screen.getByRole('button', { name: 'Remove scene.md' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { kind: 'surface' },
+        {
+          kind: 'message',
+          text: '',
+          references: [
+            {
+              label: 'scene.md',
+              contentLocator: { kind: 'workspace-file', path: 'notes/scene.md' },
+            },
+          ],
+          contextPayloads: [],
+        },
+      ),
+    );
+  });
+
+  it('reuses the retained mention menu for Assets and submits the selected context receipt', async () => {
+    const onSubmit = vi.fn(async () => true);
+    renderAgent(
+      <DshComposerHarness
+        onSubmit={onSubmit}
+        mentionItems={[
+          {
+            id: 'assets:lighting',
+            kind: 'asset',
+            label: 'Lighting reference',
+            contextPayload: {
+              type: 'asset',
+              id: 'asset-lighting',
+              label: 'Lighting reference',
+              summary: 'Soft studio lighting',
+              data: { assetRef: { assetId: 'asset-lighting' } },
+            },
+            source: 'entity-graph',
+          },
+        ]}
+      />,
+    );
+    const composer = screen.getByLabelText('消息');
+    fireEvent.change(composer, { target: { value: '@light' } });
+    fireEvent.click(await screen.findByText('Lighting reference'));
+    expect(screen.getByTitle('Soft studio lighting')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { kind: 'surface' },
+        {
+          kind: 'message',
+          text: '',
+          references: [],
+          contextPayloads: [
+            {
+              type: 'asset',
+              id: 'asset-lighting',
+              label: 'Lighting reference',
+              summary: 'Soft studio lighting',
+              data: { assetRef: { assetId: 'asset-lighting' } },
+            },
+          ],
+        },
+      ),
+    );
+  });
+
+  it('does not carry selected mention context into another exact Conversation', async () => {
+    const onSubmit = vi.fn(async () => true);
+    const view = renderAgent(
+      <DshComposerHarness
+        conversationId="conversation-1"
+        onSubmit={onSubmit}
+        mentionItems={[
+          {
+            id: 'assets:lighting',
+            kind: 'asset',
+            label: 'Lighting reference',
+            contextPayload: {
+              type: 'asset',
+              id: 'asset-lighting',
+              label: 'Lighting reference',
+              summary: 'Soft studio lighting',
+              data: { assetRef: { assetId: 'asset-lighting' } },
+            },
+            source: 'entity-graph',
+          },
+        ]}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('消息'), { target: { value: '@light' } });
+    fireEvent.click(await screen.findByText('Lighting reference'));
+    expect(screen.getByRole('button', { name: 'Remove Lighting reference' })).toBeTruthy();
+
+    rerenderAgent(
+      view,
+      <DshComposerHarness conversationId="conversation-2" onSubmit={onSubmit} mentionItems={[]} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Remove Lighting reference' })).toBeNull();
+  });
+
+  it('renders canonical DSH command lifecycle as one retained activity', () => {
+    const view = renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-command"
+        surfaceKind="assistant"
+        conversationId="conversation-1"
+        projection={{
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          events: [
+            {
+              kind: 'command',
+              commandId: 'command-1',
+              name: 'help',
+              args: 'models',
+              status: 'completed',
+              text: 'Available models',
+            },
+          ],
+        }}
+        configuring={false}
+        draft=""
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn(async () => true)}
+      />,
+    );
+
+    expect(view.container.querySelectorAll('[data-agent-command-id="command-1"]')).toHaveLength(1);
+    expect(screen.getByText('/help models')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /help models/u }));
+    expect(screen.getByText('Available models')).toBeTruthy();
+  });
+
   it('keeps the final title, context rail, model, mode, attachment, and send controls', () => {
     const onModelChange = vi.fn();
     const onPermissionPresetChange = vi.fn();
@@ -86,7 +305,10 @@ describe('DshAgentView content-creation composer', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Full access' }));
     expect(onPermissionPresetChange).toHaveBeenCalledWith('danger-full-access');
     fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
-    expect(onSubmit).toHaveBeenCalledWith({ kind: 'surface' });
+    expect(onSubmit).toHaveBeenCalledWith(
+      { kind: 'surface' },
+      { kind: 'message', text: '创建一个分镜', references: [], contextPayloads: [] },
+    );
   });
 
   it('restores the assistant entry presentation without claiming unsupported bindings', () => {
@@ -256,6 +478,11 @@ describe('DshAgentView content-creation composer', () => {
       (view.container.querySelector('[data-entry-context-action="world"]') as HTMLButtonElement)
         .disabled,
     ).toBe(false);
+    expect(
+      view.container.querySelector('.agent-entry-quick-toggle')?.getAttribute('aria-expanded'),
+    ).toBe('true');
+    expect(view.container.querySelector('[data-entry-panel-mode="assistant"]')).toBeTruthy();
+    expect(await screen.findByText('Neko')).toBeTruthy();
     expect(screen.queryByRole('button', { name: '选择项目' })).toBeNull();
     expect(screen.getByRole('tab', { name: '对话' }).getAttribute('aria-selected')).toBe('true');
     const authoring = screen.getByRole('tab', { name: '创作' }) as HTMLButtonElement;
@@ -263,17 +490,29 @@ describe('DshAgentView content-creation composer', () => {
     fireEvent.click(authoring);
     expect(screen.getByText('这次要创作什么？')).toBeTruthy();
     expect(authoring.getAttribute('aria-selected')).toBe('true');
+    expect(
+      view.container.querySelector('.agent-entry-quick-toggle')?.getAttribute('aria-expanded'),
+    ).toBe('true');
+    expect(view.container.querySelector('[data-entry-panel-mode="authoring"]')).toBeTruthy();
+    expect(screen.getByTitle('Project One')).toBeTruthy();
     const projectAction = view.container.querySelector(
       '[data-entry-context-action="project"]',
     ) as HTMLButtonElement;
     expect(projectAction.disabled).toBe(false);
+    expect(screen.queryByText('开始创作前请选择项目。')).toBeNull();
+    expect(
+      (screen.getByRole('button', { name: '发送 (Enter)' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
     expect(screen.queryByRole('button', { name: '选择角色' })).toBeNull();
     expect(screen.queryByRole('button', { name: '选择世界' })).toBeNull();
     fireEvent.click(projectAction);
     fireEvent.click(screen.getByTitle('Project One'));
     expect(await screen.findByRole('button', { name: '清除: Project One' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
-    expect(onSubmit).toHaveBeenCalledWith({ kind: 'project', projectId: 'project-1' });
+    expect(onSubmit).toHaveBeenCalledWith(
+      { kind: 'project', projectId: 'project-1' },
+      { kind: 'message', text: 'Create a scene', references: [], contextPayloads: [] },
+    );
   });
 
   it('loads and selects exact Character and World context without starting a DSH session', async () => {
@@ -333,6 +572,12 @@ describe('DshAgentView content-creation composer', () => {
       />,
     );
 
+    expect(
+      view.container.querySelector('.agent-entry-quick-toggle')?.getAttribute('aria-expanded'),
+    ).toBe('true');
+    expect(await screen.findByText('Neko')).toBeTruthy();
+    expect(loadCharacterTargets).toHaveBeenCalledOnce();
+
     fireEvent.click(
       view.container.querySelector('[data-entry-context-action="character"]') as HTMLButtonElement,
     );
@@ -341,7 +586,6 @@ describe('DshAgentView content-creation composer', () => {
         view.container.querySelector('.agent-entry-quick-toggle')?.getAttribute('aria-expanded'),
       ).toBe('true'),
     );
-    expect(await screen.findByText('Neko')).toBeTruthy();
     fireEvent.click(screen.getByTitle('Neko'));
     expect(loadCharacterTargets).toHaveBeenCalledOnce();
     expect(screen.getAllByText('Neko').length).toBeGreaterThan(1);
@@ -349,6 +593,9 @@ describe('DshAgentView content-creation composer', () => {
     fireEvent.click(
       view.container.querySelector('[data-entry-context-action="world"]') as HTMLButtonElement,
     );
+    expect(
+      view.container.querySelector('.agent-entry-quick-toggle')?.getAttribute('aria-expanded'),
+    ).toBe('true');
     expect(await screen.findByText('Archive City')).toBeTruthy();
     fireEvent.click(screen.getByTitle('Archive City'));
     expect(loadWorldTargets).toHaveBeenCalledOnce();
@@ -359,7 +606,9 @@ describe('DshAgentView content-creation composer', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: '清除: Neko' })).toBeNull());
   });
 
-  it('adapts an active DSH turn without exposing the retired message queue', () => {
+  it('shows live elapsed time for the active DSH turn and removes it on canonical completion', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
     const view = renderAgent(
       <DshAgentView
         agentSurfaceId="surface-active"
@@ -369,7 +618,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           currentTurn: 1,
-          events: [{ kind: 'turn', turn: 1, phase: 'start' }],
+          events: [{ kind: 'turn', turn: 1, phase: 'start', startedAt: 10_000 }],
         }}
         configuring={false}
         draft="next message"
@@ -391,9 +640,290 @@ describe('DshAgentView content-creation composer', () => {
     expect(screen.getByRole('button', { name: '停止回答 (Esc)' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: '加入队列 (Enter)' })).toBeNull();
     expect(view.container.querySelector('[data-empty-state="false"]')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('回合 1 处理中 · 已用时 0秒');
+
+    act(() => vi.advanceTimersByTime(3_000));
+    expect(screen.getByRole('status').textContent).toBe('回合 1 处理中 · 已用时 3秒');
+
+    rerenderAgent(
+      view,
+      <DshAgentView
+        agentSurfaceId="surface-active"
+        surfaceKind="assistant"
+        conversationId="conversation-1"
+        projection={{
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          events: [
+            { kind: 'turn', turn: 1, phase: 'start', startedAt: 10_000 },
+            {
+              kind: 'turn',
+              turn: 1,
+              phase: 'end',
+              startedAt: 10_000,
+              completedAt: 12_500,
+              reason: 'completed',
+            },
+          ],
+        }}
+        configuring={false}
+        draft="next message"
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(view.container.querySelector('[data-agent-active-turn]')).toBeNull();
+    expect(screen.queryByText(/处理中/)).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('回合 1 已结束 · 用时 2秒 · completed');
+  });
+
+  it('shows canonical DSH turn duration in the existing status row', () => {
+    renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-duration"
+        surfaceKind="assistant"
+        conversationId="conversation-1"
+        projection={{
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          events: [
+            { kind: 'turn', turn: 2, phase: 'start', startedAt: 1_000 },
+            {
+              kind: 'turn',
+              turn: 2,
+              phase: 'end',
+              startedAt: 1_000,
+              completedAt: 66_000,
+              reason: 'completed',
+            },
+          ],
+        }}
+        configuring={false}
+        draft=""
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('status').textContent).toBe('回合 2 已结束 · 用时 1分05秒 · completed');
+  });
+
+  it('renders DSH streaming text and reasoning through the retained transcript components', () => {
+    const view = renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-stream"
+        surfaceKind="assistant"
+        conversationId="conversation-1"
+        projection={{
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          currentTurn: 4,
+          events: [
+            { kind: 'turn', turn: 4, phase: 'start', startedAt: 1_000 },
+            {
+              kind: 'thought',
+              turn: 4,
+              step: 0,
+              text: 'Inspect the workspace.',
+              messageId: 'dsh:4:0:reasoning',
+              state: 'streaming',
+            },
+            {
+              kind: 'message',
+              role: 'assistant',
+              turn: 4,
+              step: 0,
+              text: 'Draft answer',
+              messageId: 'dsh:4:0:text',
+              state: 'streaming',
+            },
+          ],
+        }}
+        configuring={false}
+        draft=""
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Inspect the workspace.')).toBeTruthy();
+    expect(screen.getByText('Draft answer')).toBeTruthy();
+    expect(view.container.querySelector('[data-agent-thought-state="streaming"]')).toBeTruthy();
+    expect(view.container.querySelector('[data-agent-message-state="streaming"]')).toBeTruthy();
+
+    rerenderAgent(
+      view,
+      <DshAgentView
+        agentSurfaceId="surface-stream"
+        surfaceKind="assistant"
+        conversationId="conversation-1"
+        projection={{
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          events: [
+            { kind: 'turn', turn: 4, phase: 'start', startedAt: 1_000 },
+            {
+              kind: 'thought',
+              turn: 4,
+              step: 0,
+              text: 'Checked the workspace.',
+              messageId: 'assistant-4',
+              state: 'final',
+            },
+            {
+              kind: 'message',
+              role: 'assistant',
+              turn: 4,
+              step: 0,
+              text: 'Final answer',
+              messageId: 'assistant-4',
+              state: 'final',
+            },
+            {
+              kind: 'turn',
+              turn: 4,
+              phase: 'end',
+              startedAt: 1_000,
+              completedAt: 2_000,
+              reason: 'completed',
+            },
+          ],
+        }}
+        configuring={false}
+        draft=""
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Draft answer')).toBeNull();
+    expect(screen.getByText('Final answer')).toBeTruthy();
+    expect(view.container.querySelectorAll('[data-agent-message-state="final"]')).toHaveLength(1);
+    expect(view.container.querySelector('[data-agent-thought-state="final"]')).toBeTruthy();
   });
 });
 
 function renderAgent(view: JSX.Element, locale: SupportedLocale = 'zh-cn') {
   return render(<I18nProvider service={new I18nService(locale)}>{view}</I18nProvider>);
+}
+
+function DshComposerHarness({
+  conversationId = 'conversation-1',
+  mentionItems = [],
+  onRequestMentions = vi.fn(),
+  onSubmit,
+}: {
+  readonly conversationId?: string;
+  readonly mentionItems?: React.ComponentProps<typeof DshAgentView>['mentionItems'];
+  readonly onRequestMentions?: (filter: string) => void;
+  readonly onSubmit: React.ComponentProps<typeof DshAgentView>['onSubmit'];
+}): JSX.Element {
+  const [draft, setDraft] = useState('');
+  return (
+    <DshAgentView
+      agentSurfaceId="surface-input-catalog"
+      surfaceKind="workspace"
+      conversationId={conversationId}
+      composerConfiguration={{
+        models: [
+          {
+            id: 'deepseek-official:deepseek-v4',
+            label: 'DeepSeek V4',
+            providerId: 'deepseek-official',
+            modelId: 'deepseek-v4',
+            providerLabel: 'DeepSeek',
+            category: 'llm',
+            capabilities: ['chat'],
+          },
+        ],
+        selectedModelOptionId: 'deepseek-official:deepseek-v4',
+        selectedMediaModelOptionIds: {},
+        permissionPresetId: 'workspace-write',
+        permissionPresets: [{ id: 'workspace-write', label: 'workspace-write', selectable: true }],
+        context: {
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceLabel: 'Workspace One',
+          canvas: { kind: 'workspace-board', label: 'Board' },
+        },
+        inputCatalog: {
+          commands: [{ name: 'help', description: 'Show help', inputHint: '[topic]' }],
+          skills: [
+            {
+              name: 'story-review',
+              description: 'Review a story',
+              source: 'personal',
+              provider: 'filesystem',
+            },
+          ],
+          skillsComplete: true,
+        },
+      }}
+      mentionItems={mentionItems}
+      configuring={false}
+      draft={draft}
+      loading={false}
+      permissions={[]}
+      runtime={{ status: 'running' }}
+      submitting={false}
+      onCancelPermission={vi.fn()}
+      onCancelTurn={vi.fn()}
+      onDecidePermission={vi.fn()}
+      onDraftChange={setDraft}
+      onModelChange={vi.fn()}
+      onPermissionPresetChange={vi.fn()}
+      onRequestMentions={onRequestMentions}
+      onRestartRuntime={vi.fn()}
+      onSubmit={onSubmit}
+    />
+  );
+}
+
+function rerenderAgent(
+  result: ReturnType<typeof renderAgent>,
+  view: JSX.Element,
+  locale: SupportedLocale = 'zh-cn',
+): void {
+  result.rerender(<I18nProvider service={new I18nService(locale)}>{view}</I18nProvider>);
 }

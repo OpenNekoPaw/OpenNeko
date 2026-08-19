@@ -5,6 +5,41 @@ import { createCanvasWorkspaceBoardTarget } from '@neko/canvas-domain';
 import { createDshConversationTurnContextResolver } from './dsh-conversation-turn-context';
 
 describe('DSH Conversation turn context', () => {
+  it('appends exact user-selected context as untrusted turn data', async () => {
+    const resolver = createDshConversationTurnContextResolver({
+      contexts: {
+        readContext: async () => ({
+          kind: 'assistant' as const,
+          assistantSpaceId: 'assistant-1',
+          baseGrantIds: [],
+        }),
+      },
+      workspaceGrants: {
+        resolveAuthorizedWorkspace: async () => {
+          throw new Error('Workspace authority must not run.');
+        },
+      },
+      canvas: {
+        resolveTurnContext: async () => {
+          throw new Error('Canvas authority must not run.');
+        },
+      },
+    });
+
+    await expect(
+      resolver.resolve('conversation-1', [
+        {
+          type: 'asset',
+          id: 'asset-lighting',
+          label: 'Lighting',
+          summary: 'Soft studio lighting',
+          data: { assetRef: { assetId: 'asset-lighting' } },
+        },
+      ]),
+    ).resolves.toContain(
+      'Selected context: [{"type":"asset","id":"asset-lighting","label":"Lighting","summary":"Soft studio lighting","data":{"assetRef":{"assetId":"asset-lighting"}}}]',
+    );
+  });
   it('resolves the exact durable Workspace and canonical Board context', async () => {
     const resolveTurnContext = vi.fn(async (_workspaceId: string, target: unknown) => ({
       target: target as ReturnType<typeof createCanvasWorkspaceBoardTarget>,

@@ -1,5 +1,12 @@
-import { decodeDshAcpJsonPayload, type DshAcpJsonValue } from './dsh-acp';
+import {
+  decodeDshAcpInputCatalogProjection,
+  decodeDshAcpJsonPayload,
+  type DshAcpInputCatalogProjection,
+  type DshAcpJsonValue,
+} from './dsh-acp';
+import { isAgentContextType, type AgentContextPayload } from './agent-context';
 import type { ModelType } from '@neko/ai-contracts';
+import { validateContentLocator, type ContentLocator } from '@neko/content';
 
 export const DSH_SESSION_HOST_CHANNEL = 'openneko:dsh:session';
 export const DSH_SESSION_CHANGED_CHANNEL = 'openneko:dsh:session:changed';
@@ -7,9 +14,26 @@ export const DSH_SESSION_CHANGED_CHANNEL = 'openneko:dsh:session:changed';
 export type DshSessionHostEvent =
   | {
       readonly kind: 'message';
-      readonly role: 'user' | 'assistant';
+      readonly role: 'user';
       readonly text: string;
       readonly messageId?: string;
+    }
+  | {
+      readonly kind: 'message';
+      readonly role: 'assistant';
+      readonly turn: number;
+      readonly step: number;
+      readonly text: string;
+      readonly messageId: string;
+      readonly state: 'streaming' | 'final';
+    }
+  | {
+      readonly kind: 'thought';
+      readonly turn: number;
+      readonly step: number;
+      readonly text: string;
+      readonly messageId: string;
+      readonly state: 'streaming' | 'final';
     }
   | {
       readonly kind: 'tool';
@@ -21,9 +45,25 @@ export type DshSessionHostEvent =
       readonly rawOutput?: DshAcpJsonValue;
     }
   | {
+      readonly kind: 'command';
+      readonly commandId: string;
+      readonly name: string;
+      readonly args?: string;
+      readonly status: 'running' | 'completed' | 'failed';
+      readonly text?: string;
+    }
+  | {
       readonly kind: 'turn';
       readonly turn: number;
-      readonly phase: 'start' | 'end';
+      readonly phase: 'start';
+      readonly startedAt: number;
+    }
+  | {
+      readonly kind: 'turn';
+      readonly turn: number;
+      readonly phase: 'end';
+      readonly startedAt: number;
+      readonly completedAt: number;
       readonly reason?: string;
     }
   | {
@@ -80,8 +120,41 @@ export interface DshComposerConfigurationProjection {
   readonly permissionPresetId: string;
   readonly permissionPresets: readonly DshComposerPermissionPresetOption[];
   readonly context?: DshComposerContextProjection;
+  readonly inputCatalog?: DshAcpInputCatalogProjection;
+  readonly inputCatalogDiagnostic?: string;
   readonly diagnostic?: string;
 }
+
+export interface DshComposerReference {
+  readonly label: string;
+  readonly contentLocator: ContentLocator;
+}
+
+export interface DshComposerMentionProjection {
+  readonly id: string;
+  readonly kind: 'file' | 'media' | 'asset' | 'entity' | 'canvas-node' | 'character' | 'scene';
+  readonly label: string;
+  readonly description?: string;
+  readonly contentLocator?: ContentLocator;
+  readonly contextPayload?: AgentContextPayload;
+  readonly source: 'workspace' | 'media-library' | 'entity-graph' | 'story' | 'canvas';
+  readonly mediaType?: 'video' | 'audio' | 'image' | 'text' | 'document';
+}
+
+export type DshComposerSubmitInput =
+  | {
+      readonly kind: 'message';
+      readonly text: string;
+      readonly references: readonly DshComposerReference[];
+      readonly contextPayloads: readonly AgentContextPayload[];
+    }
+  | { readonly kind: 'command'; readonly line: string }
+  | {
+      readonly kind: 'skill';
+      readonly skillName: string;
+      readonly displayText: string;
+      readonly args?: string;
+    };
 
 interface DshSessionHostSenderRequest {
   readonly requestId: string;
@@ -105,12 +178,21 @@ export type DshSessionHostRequest =
       readonly target: DshConversationCreationTarget;
     })
   | (DshSessionHostConversationRequest & { readonly operation: 'snapshot' })
-  | (DshSessionHostConversationRequest & { readonly operation: 'prompt'; readonly text: string })
+  | (DshSessionHostConversationRequest & {
+      readonly operation: 'submit';
+      readonly input: DshComposerSubmitInput;
+    })
   | (DshSessionHostConversationRequest & { readonly operation: 'cancel' })
   | (DshSessionHostSenderRequest & {
       readonly operation: 'composer-snapshot';
       readonly workbenchInstanceId: string;
       readonly agentSurfaceId: string;
+    })
+  | (DshSessionHostSenderRequest & {
+      readonly operation: 'composer-mentions';
+      readonly workbenchInstanceId: string;
+      readonly agentSurfaceId: string;
+      readonly filter: string;
     })
   | (DshSessionHostSenderRequest & {
       readonly operation: 'composer-model';
@@ -143,6 +225,11 @@ export interface DshComposerConfigurationHostResult {
   readonly configuration: DshComposerConfigurationProjection;
 }
 
+export interface DshComposerMentionsHostResult {
+  readonly requestId: string;
+  readonly mentions: readonly DshComposerMentionProjection[];
+}
+
 export interface DshSessionChangedEvent {
   readonly conversationId: string;
 }
@@ -156,12 +243,17 @@ export interface OpenNekoDshSessionBridge {
       target: DshConversationCreationTarget,
     ): Promise<DshSessionHostProjection>;
     getSnapshot(conversationId: string): Promise<DshSessionHostProjection>;
-    prompt(conversationId: string, text: string): Promise<DshSessionHostResult>;
+    submit(conversationId: string, input: DshComposerSubmitInput): Promise<DshSessionHostResult>;
     cancel(conversationId: string): Promise<DshSessionHostProjection>;
     getComposerConfiguration(
       workbenchInstanceId: string,
       agentSurfaceId: string,
     ): Promise<DshComposerConfigurationProjection>;
+    searchComposerMentions(
+      workbenchInstanceId: string,
+      agentSurfaceId: string,
+      filter: string,
+    ): Promise<readonly DshComposerMentionProjection[]>;
     selectComposerModel(
       workbenchInstanceId: string,
       agentSurfaceId: string,
@@ -211,6 +303,7 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
   }
   if (
     record.operation === 'composer-snapshot' ||
+    record.operation === 'composer-mentions' ||
     record.operation === 'composer-model' ||
     record.operation === 'composer-media-model' ||
     record.operation === 'composer-permission-preset'
@@ -231,6 +324,14 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
     if (record.operation === 'composer-snapshot') {
       requireExactKeys(record, commonKeys);
       return { ...common, operation: 'composer-snapshot' };
+    }
+    if (record.operation === 'composer-mentions') {
+      requireExactKeys(record, [...commonKeys, 'filter']);
+      return {
+        ...common,
+        operation: 'composer-mentions',
+        filter: requireString(record.filter, 'mention filter'),
+      };
     }
     if (record.operation === 'composer-model') {
       requireExactKeys(record, [...commonKeys, 'modelOptionId']);
@@ -267,20 +368,20 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
     ]);
     return { ...base, operation: record.operation, conversationId };
   }
-  if (record.operation === 'prompt') {
+  if (record.operation === 'submit') {
     requireExactKeys(record, [
       'requestId',
       'operation',
       'windowId',
       'rendererSessionId',
       'conversationId',
-      'text',
+      'input',
     ]);
     return {
       ...base,
-      operation: 'prompt',
+      operation: 'submit',
       conversationId,
-      text: requireIdentity(record.text, 'text'),
+      input: parseComposerSubmitInput(record.input),
     };
   }
   throw new Error(`DSH Session operation '${String(record.operation)}' is unsupported.`);
@@ -335,6 +436,8 @@ export function parseDshComposerConfigurationProjection(
       'permissionPresetId',
       'permissionPresets',
       'context',
+      'inputCatalog',
+      'inputCatalogDiagnostic',
       'diagnostic',
     ],
     ['models', 'selectedMediaModelOptionIds', 'permissionPresetId', 'permissionPresets'],
@@ -425,9 +528,221 @@ export function parseDshComposerConfigurationProjection(
     permissionPresetId,
     permissionPresets,
     ...(record.context === undefined ? {} : { context: parseComposerContext(record.context) }),
+    ...(record.inputCatalog === undefined
+      ? {}
+      : {
+          inputCatalog: decodeDshAcpInputCatalogProjection(
+            requireRecord(record.inputCatalog, 'DSH composer input catalog'),
+          ),
+        }),
+    ...(record.inputCatalogDiagnostic === undefined
+      ? {}
+      : {
+          inputCatalogDiagnostic: requireIdentity(
+            record.inputCatalogDiagnostic,
+            'inputCatalogDiagnostic',
+          ),
+        }),
     ...(record.diagnostic === undefined
       ? {}
       : { diagnostic: requireIdentity(record.diagnostic, 'diagnostic') }),
+  };
+}
+
+export function parseDshComposerMentionsHostResult(
+  value: unknown,
+  expectedRequestId: string,
+): DshComposerMentionsHostResult {
+  const record = requireRecord(value, 'DSH composer mentions result');
+  requireExactKeys(record, ['requestId', 'mentions']);
+  const requestId = requireIdentity(record.requestId, 'requestId');
+  if (requestId !== expectedRequestId) {
+    throw new Error(
+      `DSH composer mentions result '${requestId}' does not match '${expectedRequestId}'.`,
+    );
+  }
+  if (!Array.isArray(record.mentions)) {
+    throw new Error('DSH composer mentions must be an array.');
+  }
+  decodeDshAcpJsonPayload(record.mentions, 'composer mentions');
+  const mentions = record.mentions.map((value, index): DshComposerMentionProjection => {
+    const mention = requireRecord(value, `DSH composer mention[${index}]`);
+    requireAllowedKeys(
+      mention,
+      [
+        'id',
+        'kind',
+        'label',
+        'description',
+        'contentLocator',
+        'contextPayload',
+        'source',
+        'mediaType',
+      ],
+      ['id', 'kind', 'label', 'source'],
+    );
+    if (
+      mention.kind !== 'file' &&
+      mention.kind !== 'media' &&
+      mention.kind !== 'asset' &&
+      mention.kind !== 'entity' &&
+      mention.kind !== 'canvas-node' &&
+      mention.kind !== 'character' &&
+      mention.kind !== 'scene'
+    ) {
+      throw new Error(`DSH composer mention[${index}] kind is unsupported.`);
+    }
+    if (
+      mention.source !== 'workspace' &&
+      mention.source !== 'media-library' &&
+      mention.source !== 'entity-graph' &&
+      mention.source !== 'story' &&
+      mention.source !== 'canvas'
+    ) {
+      throw new Error(`DSH composer mention[${index}] source is unsupported.`);
+    }
+    const locator =
+      mention.contentLocator === undefined
+        ? undefined
+        : validateContentLocator(mention.contentLocator);
+    if (locator !== undefined && !locator.ok) {
+      throw new Error(`DSH composer mention[${index}] ContentLocator is invalid.`);
+    }
+    const contextPayload =
+      mention.contextPayload === undefined
+        ? undefined
+        : parseAgentContextPayload(mention.contextPayload, `mention[${index}].contextPayload`);
+    if ((locator === undefined) === (contextPayload === undefined)) {
+      throw new Error(
+        `DSH composer mention[${index}] requires exactly one ContentLocator or context payload.`,
+      );
+    }
+    if ((mention.kind === 'file' || mention.kind === 'media') !== (locator !== undefined)) {
+      throw new Error(`DSH composer mention[${index}] kind does not match its resource receipt.`);
+    }
+    const mediaType =
+      mention.mediaType === undefined
+        ? undefined
+        : parseComposerMentionMediaType(mention.mediaType);
+    return {
+      id: requireIdentity(mention.id, `mention[${index}].id`),
+      kind: mention.kind,
+      label: requireIdentity(mention.label, `mention[${index}].label`),
+      ...(mention.description === undefined
+        ? {}
+        : { description: requireIdentity(mention.description, `mention[${index}].description`) }),
+      source: mention.source,
+      ...(locator === undefined ? {} : { contentLocator: locator.locator }),
+      ...(contextPayload === undefined ? {} : { contextPayload }),
+      ...(mediaType === undefined ? {} : { mediaType }),
+    };
+  });
+  const ids = new Set<string>();
+  for (const mention of mentions) {
+    if (ids.has(mention.id)) throw new Error(`DSH composer mention '${mention.id}' is duplicated.`);
+    ids.add(mention.id);
+  }
+  return { requestId, mentions };
+}
+
+function parseComposerMentionMediaType(
+  value: unknown,
+): 'video' | 'audio' | 'image' | 'text' | 'document' {
+  if (
+    value === 'video' ||
+    value === 'audio' ||
+    value === 'image' ||
+    value === 'text' ||
+    value === 'document'
+  ) {
+    return value;
+  }
+  throw new Error(`DSH composer mention media type '${String(value)}' is unsupported.`);
+}
+
+function parseComposerSubmitInput(value: unknown): DshComposerSubmitInput {
+  const record = requireRecord(value, 'DSH Composer submit input');
+  if (record.kind === 'message') {
+    requireExactKeys(record, ['kind', 'text', 'references', 'contextPayloads']);
+    if (!Array.isArray(record.references)) {
+      throw new Error('DSH Composer message references must be an array.');
+    }
+    const references = record.references.map((candidate, index) => {
+      const reference = requireRecord(candidate, `DSH Composer reference[${index}]`);
+      requireExactKeys(reference, ['label', 'contentLocator']);
+      const locator = validateContentLocator(reference.contentLocator);
+      if (!locator.ok) {
+        throw new Error(`DSH Composer reference[${index}] ContentLocator is invalid.`);
+      }
+      return {
+        label: requireIdentity(reference.label, `reference[${index}].label`),
+        contentLocator: locator.locator,
+      };
+    });
+    const text = requireString(record.text, 'message text');
+    if (!Array.isArray(record.contextPayloads)) {
+      throw new Error('DSH Composer message context payloads must be an array.');
+    }
+    decodeDshAcpJsonPayload(record.contextPayloads, 'message context payloads');
+    const contextPayloads = record.contextPayloads.map((payload, index) =>
+      parseAgentContextPayload(payload, `contextPayloads[${index}]`),
+    );
+    if (contextPayloads.length > 32) {
+      throw new Error('DSH Composer message context payloads exceed the limit of 32.');
+    }
+    const contextIds = new Set<string>();
+    for (const payload of contextPayloads) {
+      if (contextIds.has(payload.id)) {
+        throw new Error(`DSH Composer context payload '${payload.id}' is duplicated.`);
+      }
+      contextIds.add(payload.id);
+    }
+    if (text.trim().length === 0 && references.length === 0 && contextPayloads.length === 0) {
+      throw new Error('DSH Composer message requires text or an authorized reference/context.');
+    }
+    return { kind: 'message', text, references, contextPayloads };
+  }
+  if (record.kind === 'command') {
+    requireExactKeys(record, ['kind', 'line']);
+    const line = requireIdentity(record.line, 'command line');
+    if (!line.startsWith('/')) throw new Error("DSH Composer command must start with '/'.");
+    return { kind: 'command', line };
+  }
+  if (record.kind === 'skill') {
+    requireAllowedKeys(
+      record,
+      ['kind', 'skillName', 'displayText', 'args'],
+      ['kind', 'skillName', 'displayText'],
+    );
+    return {
+      kind: 'skill',
+      skillName: requireIdentity(record.skillName, 'Skill name'),
+      displayText: requireIdentity(record.displayText, 'Skill display text'),
+      ...(record.args === undefined ? {} : { args: requireIdentity(record.args, 'Skill args') }),
+    };
+  }
+  throw new Error(`DSH Composer submit kind '${String(record.kind)}' is unsupported.`);
+}
+
+function parseAgentContextPayload(value: unknown, field: string): AgentContextPayload {
+  const record = requireRecord(value, `DSH Composer ${field}`);
+  requireAllowedKeys(
+    record,
+    ['type', 'id', 'label', 'summary', 'data', 'intent'],
+    ['type', 'id', 'label', 'summary', 'data'],
+  );
+  if (!isAgentContextType(record.type)) {
+    throw new Error(`DSH Composer ${field}.type is unsupported.`);
+  }
+  return {
+    type: record.type,
+    id: requireIdentity(record.id, `${field}.id`),
+    label: requireIdentity(record.label, `${field}.label`),
+    summary: requireIdentity(record.summary, `${field}.summary`),
+    data: decodeDshAcpJsonPayload(record.data, `${field}.data`),
+    ...(record.intent === undefined
+      ? {}
+      : { intent: requireIdentity(record.intent, `${field}.intent`) }),
   };
 }
 
@@ -531,17 +846,38 @@ export function parseDshSessionHostProjection(value: unknown): DshSessionHostPro
 function parseEvent(value: unknown): DshSessionHostEvent {
   const record = requireRecord(value, 'DSH Session event');
   if (record.kind === 'message') {
-    requireAllowedKeys(record, ['kind', 'role', 'text', 'messageId'], ['kind', 'role', 'text']);
-    if (record.role !== 'user' && record.role !== 'assistant') {
-      throw new Error('DSH Session message role is unsupported.');
+    if (record.role === 'user') {
+      requireAllowedKeys(record, ['kind', 'role', 'text', 'messageId'], ['kind', 'role', 'text']);
+      return {
+        kind: 'message',
+        role: 'user',
+        text: requireIdentity(record.text, 'event.text'),
+        ...(record.messageId === undefined
+          ? {}
+          : { messageId: requireIdentity(record.messageId, 'event.messageId') }),
+      };
     }
+    if (record.role !== 'assistant') throw new Error('DSH Session message role is unsupported.');
+    requireExactKeys(record, ['kind', 'role', 'turn', 'step', 'text', 'messageId', 'state']);
     return {
       kind: 'message',
-      role: record.role,
+      role: 'assistant',
+      turn: requireNonNegativeInteger(record.turn, 'event.turn'),
+      step: requireNonNegativeInteger(record.step, 'event.step'),
       text: requireIdentity(record.text, 'event.text'),
-      ...(record.messageId === undefined
-        ? {}
-        : { messageId: requireIdentity(record.messageId, 'event.messageId') }),
+      messageId: requireIdentity(record.messageId, 'event.messageId'),
+      state: parseAssistantOutputState(record.state),
+    };
+  }
+  if (record.kind === 'thought') {
+    requireExactKeys(record, ['kind', 'turn', 'step', 'text', 'messageId', 'state']);
+    return {
+      kind: 'thought',
+      turn: requireNonNegativeInteger(record.turn, 'event.turn'),
+      step: requireNonNegativeInteger(record.step, 'event.step'),
+      text: requireIdentity(record.text, 'event.text'),
+      messageId: requireIdentity(record.messageId, 'event.messageId'),
+      state: parseAssistantOutputState(record.state),
     };
   }
   if (record.kind === 'tool') {
@@ -575,15 +911,59 @@ function parseEvent(value: unknown): DshSessionHostEvent {
         : { rawOutput: decodeDshAcpJsonPayload(record.rawOutput, 'event.rawOutput') }),
     };
   }
+  if (record.kind === 'command') {
+    requireAllowedKeys(
+      record,
+      ['kind', 'commandId', 'name', 'args', 'status', 'text'],
+      ['kind', 'commandId', 'name', 'status'],
+    );
+    if (
+      record.status !== 'running' &&
+      record.status !== 'completed' &&
+      record.status !== 'failed'
+    ) {
+      throw new Error('DSH Session command status is unsupported.');
+    }
+    return {
+      kind: 'command',
+      commandId: requireIdentity(record.commandId, 'event.commandId'),
+      name: requireIdentity(record.name, 'event.name'),
+      ...(record.args === undefined ? {} : { args: requireString(record.args, 'event.args') }),
+      status: record.status,
+      ...(record.text === undefined ? {} : { text: requireIdentity(record.text, 'event.text') }),
+    };
+  }
   if (record.kind === 'turn') {
-    requireAllowedKeys(record, ['kind', 'turn', 'phase', 'reason'], ['kind', 'turn', 'phase']);
-    if (record.phase !== 'start' && record.phase !== 'end') {
-      throw new Error('DSH Session turn phase is unsupported.');
+    if (record.phase === 'start') {
+      requireAllowedKeys(
+        record,
+        ['kind', 'turn', 'phase', 'startedAt'],
+        ['kind', 'turn', 'phase', 'startedAt'],
+      );
+      return {
+        kind: 'turn',
+        turn: requireNonNegativeInteger(record.turn, 'event.turn'),
+        phase: 'start',
+        startedAt: requireNonNegativeInteger(record.startedAt, 'event.startedAt'),
+      };
+    }
+    if (record.phase !== 'end') throw new Error('DSH Session turn phase is unsupported.');
+    requireAllowedKeys(
+      record,
+      ['kind', 'turn', 'phase', 'startedAt', 'completedAt', 'reason'],
+      ['kind', 'turn', 'phase', 'startedAt', 'completedAt'],
+    );
+    const startedAt = requireNonNegativeInteger(record.startedAt, 'event.startedAt');
+    const completedAt = requireNonNegativeInteger(record.completedAt, 'event.completedAt');
+    if (completedAt < startedAt) {
+      throw new Error('DSH Session turn completedAt must not precede startedAt.');
     }
     return {
       kind: 'turn',
       turn: requireNonNegativeInteger(record.turn, 'event.turn'),
-      phase: record.phase,
+      phase: 'end',
+      startedAt,
+      completedAt,
       ...(record.reason === undefined
         ? {}
         : { reason: requireIdentity(record.reason, 'event.reason') }),
@@ -612,6 +992,11 @@ function parseEvent(value: unknown): DshSessionHostEvent {
   throw new Error(`DSH Session event kind '${String(record.kind)}' is unsupported.`);
 }
 
+function parseAssistantOutputState(value: unknown): 'streaming' | 'final' {
+  if (value === 'streaming' || value === 'final') return value;
+  throw new Error(`DSH Session assistant output state '${String(value)}' is unsupported.`);
+}
+
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${label} must be an object.`);
@@ -623,6 +1008,11 @@ function requireIdentity(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`DSH Session ${field} must be a non-empty string.`);
   }
+  return value;
+}
+
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== 'string') throw new Error(`DSH Session ${field} must be a string.`);
   return value;
 }
 

@@ -1,7 +1,7 @@
 export type DesktopResolvedTheme = 'light' | 'dark';
 
 export const DESKTOP_BACKGROUND_COLORS = {
-  light: '#f7f7f6',
+  light: '#ffffff',
   dark: '#171918',
 } as const satisfies Readonly<Record<DesktopResolvedTheme, string>>;
 

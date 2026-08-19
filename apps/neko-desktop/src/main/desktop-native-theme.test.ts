@@ -26,7 +26,7 @@ describe('createDesktopNativeThemeController', () => {
       listWindows: () => [first, destroyed],
     });
 
-    expect(controller.backgroundColor).toBe('#f7f7f6');
+    expect(controller.backgroundColor).toBe('#ffffff');
     nativeTheme.shouldUseDarkColors = true;
     for (const listener of listeners) listener();
 

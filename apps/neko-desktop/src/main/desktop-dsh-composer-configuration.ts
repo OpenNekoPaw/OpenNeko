@@ -6,9 +6,16 @@ import {
 import type {
   DshComposerContextProjection,
   DshComposerConfigurationProjection,
+  DshComposerMentionProjection,
   DshComposerModelOption,
 } from '@neko/agent-contracts/dsh-session-host';
+import {
+  createResourceBrowserSearchRequest,
+  type ResourceBrowserIdentity,
+  type ResourceBrowserProjection,
+} from '@neko/assets-domain/resource-browser/contract';
 import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
+import type { ProjectEntityRecord } from '@neko/entity-domain';
 import type {
   AgentConversationContextAuthorityPort,
   ConversationDshSessionBoundClient,
@@ -20,6 +27,7 @@ interface ComposerSurfaceScope {
   readonly windowId: string;
   readonly binding: AgentBoundDomainBinding;
   readonly conversationId?: string;
+  readonly mentionIdentity?: ResourceBrowserIdentity;
 }
 
 interface ComposerSurfaceIdentity {
@@ -56,8 +64,21 @@ export function createDesktopDshComposerConfiguration(options: {
       readonly workspacePath: string;
     }): ComposerConfigManager;
   };
-  readonly sessions: Pick<ConversationDshSessionBoundClient, 'setSessionConfigOption'>;
+  readonly sessions: Pick<
+    ConversationDshSessionBoundClient,
+    'setSessionConfigOption' | 'readInputCatalog'
+  >;
   readonly executionCatalog: DesktopDshExecutionCatalog;
+  readonly resourceBrowser: {
+    query(windowId: string, request: unknown): Promise<ResourceBrowserProjection>;
+  };
+  readonly entities: {
+    search(input: {
+      readonly workspace: { readonly workspaceId: string; readonly workspacePath: string };
+      readonly query: string;
+      readonly limit: number;
+    }): Promise<readonly ProjectEntityRecord[]>;
+  };
   readonly permissions: {
     read(conversationId?: string): Promise<DshAcpPermissionPresetProjection>;
     set(
@@ -66,6 +87,7 @@ export function createDesktopDshComposerConfiguration(options: {
     ): Promise<DshAcpPermissionPresetProjection>;
   };
 }) {
+  let mentionRequestSequence = 0;
   const resolveConfiguration = async (
     binding: AgentBoundDomainBinding,
     windowId: string,
@@ -104,6 +126,9 @@ export function createDesktopDshComposerConfiguration(options: {
     );
   };
 
+  const readInputCatalog = (conversationId: string | undefined) =>
+    conversationId === undefined ? undefined : options.sessions.readInputCatalog(conversationId);
+
   return Object.freeze({
     async project(input: ComposerSurfaceIdentity): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
@@ -113,7 +138,76 @@ export function createDesktopDshComposerConfiguration(options: {
         options.executionCatalog,
         await options.permissions.read(scope.conversationId),
         resolved.context,
+        await readInputCatalog(scope.conversationId),
       );
+    },
+
+    async searchMentions(
+      input: ComposerSurfaceIdentity & { readonly filter: string },
+    ): Promise<readonly DshComposerMentionProjection[]> {
+      const scope = await options.resolveSurface(input);
+      if (scope.binding.kind !== 'workspace' || scope.mentionIdentity === undefined) {
+        throw new Error('Composer mentions require an exact Workspace-bound Agent Surface.');
+      }
+      const mentionIdentity = scope.mentionIdentity;
+      const query = input.filter.trim();
+      const workspace = await options.workspaceGrants.restore(
+        scope.windowId,
+        scope.binding.workspaceGrantId,
+        scope.binding.workspaceId,
+      );
+      const requests = (['files', 'media', 'assets'] as const).map((source) =>
+        createResourceBrowserSearchRequest({
+          requestId: `dsh-composer-mentions:${++mentionRequestSequence}:${source}`,
+          identity: mentionIdentity,
+          source,
+          query,
+          limit: 50,
+        }),
+      );
+      const [projections, entities] = await Promise.all([
+        Promise.all(
+          requests.map((request) => options.resourceBrowser.query(scope.windowId, request)),
+        ),
+        options.entities.search({ workspace: workspace.workspace, query, limit: 50 }),
+      ]);
+      const resources = projections
+        .flatMap((projection) => projection.items)
+        .flatMap((item): DshComposerMentionProjection[] => {
+          if (item.role === 'asset') {
+            if (item.availability !== 'available') return [];
+            return [
+              {
+                id: `${item.source}:${item.resourceId}`,
+                kind: 'asset',
+                label: item.label,
+                ...(item.description === undefined ? {} : { description: item.description }),
+                contextPayload: {
+                  type: 'asset',
+                  id: item.assetRef.assetId,
+                  label: item.label,
+                  summary: item.description ?? item.label,
+                  data: { assetRef: item.assetRef },
+                },
+                source: 'entity-graph',
+              },
+            ];
+          }
+          if (item.role !== 'content' || item.kind === 'directory') return [];
+          const mediaType = projectMentionMediaType(item.kind);
+          return [
+            {
+              id: `${item.source}:${item.resourceId}`,
+              kind: item.source === 'media' ? 'media' : 'file',
+              label: item.label,
+              ...(item.description === undefined ? {} : { description: item.description }),
+              contentLocator: item.locator,
+              source: item.source === 'media' ? 'media-library' : 'workspace',
+              ...(mediaType === undefined ? {} : { mediaType }),
+            },
+          ];
+        });
+      return [...resources, ...entities.map(projectEntityMention)];
     },
 
     async selectModel(
@@ -146,6 +240,7 @@ export function createDesktopDshComposerConfiguration(options: {
         options.executionCatalog,
         await options.permissions.read(scope.conversationId),
         resolved.context,
+        await readInputCatalog(scope.conversationId),
       );
     },
 
@@ -169,6 +264,7 @@ export function createDesktopDshComposerConfiguration(options: {
         options.executionCatalog,
         projection,
         resolved.context,
+        await readInputCatalog(scope.conversationId),
       );
     },
 
@@ -204,6 +300,7 @@ export function createDesktopDshComposerConfiguration(options: {
         options.executionCatalog,
         await options.permissions.read(scope.conversationId),
         resolved.context,
+        await readInputCatalog(scope.conversationId),
       );
     },
 
@@ -216,6 +313,36 @@ export function createDesktopDshComposerConfiguration(options: {
       await apply(conversationId, resolved.config);
     },
   });
+}
+
+function projectEntityMention(entity: ProjectEntityRecord): DshComposerMentionProjection {
+  const label = entity.names.display ?? entity.names.canonical;
+  const kind = entity.kind === 'character' || entity.kind === 'scene' ? entity.kind : 'entity';
+  return {
+    id: `entity:${entity.entityId}`,
+    kind,
+    label,
+    description: entity.kind,
+    contextPayload: {
+      type: kind,
+      id: entity.entityId,
+      label,
+      summary: `${entity.kind}: ${label}`,
+      data: {
+        kind: 'resolved-entity-context',
+        entityRef: { entityId: entity.entityId, entityKind: entity.kind },
+        entity,
+      },
+    },
+    source: 'entity-graph',
+  };
+}
+
+function projectMentionMediaType(
+  kind: 'file' | 'image' | 'video' | 'audio' | 'document' | 'asset',
+): DshComposerMentionProjection['mediaType'] | undefined {
+  if (kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'document') return kind;
+  return kind === 'file' ? 'text' : undefined;
 }
 
 function mediaPurpose(
@@ -231,6 +358,7 @@ function projectConfiguration(
   executionCatalog: DesktopDshExecutionCatalog,
   permissionPresets: DshAcpPermissionPresetProjection,
   context?: DshComposerContextProjection,
+  inputCatalog?: import('@neko/agent-contracts/dsh-acp').DshAcpInputCatalogProjection,
 ): DshComposerConfigurationProjection {
   const state = config.getAssistantConfigState();
   const models = state.chatModelOptions
@@ -264,6 +392,10 @@ function projectConfiguration(
       ...(option.description === undefined ? {} : { description: option.description }),
     })),
     ...(context === undefined ? {} : { context }),
+    ...(inputCatalog === undefined ? {} : { inputCatalog }),
+    ...(inputCatalog?.skillsComplete === false
+      ? { inputCatalogDiagnostic: 'The DSH Skill catalog is incomplete.' }
+      : {}),
     ...(diagnostic === undefined ? {} : { diagnostic }),
   };
 }

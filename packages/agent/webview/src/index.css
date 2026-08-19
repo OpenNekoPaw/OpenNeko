@@ -256,16 +256,35 @@ body[data-neko-theme-kind='neko-high-contrast'] {
 
 body.neko-light,
 body[data-neko-theme-kind='neko-light'] {
-  --agent-empty-panel-bg: color-mix(in srgb, var(--agent-bg) 84%, #f3f3f3 16%);
+  --agent-elevated: #ffffff;
+  --agent-surface: #ffffff;
+  --agent-input-bg: #ffffff;
+  --agent-empty-panel-bg: #ffffff;
   --agent-empty-panel-border: color-mix(in srgb, var(--agent-fg) 12%, transparent);
   --agent-empty-panel-shadow:
     0 1px 2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.68);
   --agent-empty-copy: color-mix(in srgb, var(--agent-fg) 66%, transparent);
   --agent-empty-muted: color-mix(in srgb, var(--agent-fg) 32%, transparent);
-  --agent-empty-action-bg: color-mix(in srgb, var(--agent-bg) 72%, #ffffff 28%);
+  --agent-empty-action-bg: #ffffff;
   --agent-empty-action-border: color-mix(in srgb, var(--agent-fg) 13%, transparent);
   --agent-empty-action-hover-bg: color-mix(in srgb, var(--agent-accent) 6%, #ffffff 94%);
   --agent-empty-action-hover-border: color-mix(in srgb, var(--agent-accent) 42%, transparent);
+  --agent-bubble-assistant-bg: #ffffff;
+  --agent-composer-rail-bg: #ffffff;
+  --agent-composer-bg: #ffffff;
+  --agent-composer-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 10px 28px rgba(0, 0, 0, 0.07);
+  --agent-composer-focus-shadow:
+    0 0 0 1px color-mix(in srgb, var(--agent-accent) 14%, transparent),
+    0 2px 5px rgba(0, 0, 0, 0.05), 0 12px 30px rgba(0, 0, 0, 0.08);
+  --agent-control-bg: #ffffff;
+  --agent-control-border: color-mix(in srgb, var(--agent-fg) 10%, transparent);
+  --agent-control-hover-bg: color-mix(in srgb, var(--agent-fg) 4%, transparent);
+  --agent-overlay-bg: #ffffff;
+}
+
+body.neko-light [data-presentation='desktop-dock'],
+body[data-neko-theme-kind='neko-light'] [data-presentation='desktop-dock'] {
+  --agent-bg: #ffffff;
 }
 
 * {
@@ -631,7 +650,7 @@ body {
 
 .agent-transcript-rail {
   width: calc(100% - 24px);
-  max-width: 960px;
+  max-width: 820px;
   margin-inline: auto;
 }
 
@@ -872,10 +891,6 @@ body {
 }
 
 @media (max-width: 560px) {
-  .agent-transcript-rail {
-    width: calc(100% - 12px);
-  }
-
   .agent-message-row > .flex {
     padding-inline: 4px;
   }
@@ -987,10 +1002,10 @@ body {
 
 .agent-entry-quick-panel {
   width: 100%;
-  overflow: hidden;
-  border: 1px solid var(--agent-control-border);
-  border-radius: 12px;
-  background: var(--agent-control-bg);
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .agent-entry-quick-toggle {
@@ -1000,7 +1015,7 @@ body {
   min-height: 38px;
   align-items: center;
   gap: 8px;
-  padding: 9px 12px;
+  padding: 9px 0;
   overflow: hidden;
   border: 0;
   background: transparent;
@@ -1041,9 +1056,18 @@ body {
 }
 
 .agent-entry-quick-toggle:hover,
-.agent-entry-quick-toggle:focus-visible,
 .agent-entry-quick-toggle[aria-expanded='true'] {
-  background: var(--agent-control-hover-bg);
+  background: transparent;
+}
+
+.agent-entry-quick-toggle:focus-visible {
+  border-radius: 6px;
+  background: transparent;
+  outline: 1px solid var(--agent-composer-focus-border);
+  outline-offset: 2px;
+}
+
+.agent-entry-quick-toggle:hover {
   outline: none;
 }
 
@@ -1319,8 +1343,8 @@ body {
 
 .agent-entry-quick-detail {
   width: 100%;
-  padding: 12px;
-  border-top: 1px solid var(--agent-overlay-border);
+  padding: 8px 0 0;
+  border-top: 0;
   background: transparent;
   color: var(--agent-fg);
 }
@@ -2759,8 +2783,9 @@ body {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 2px;
   padding: 3px;
+  border: 1px solid var(--agent-overlay-border);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--agent-fg) 5%, transparent);
+  background: var(--agent-overlay-bg);
 }
 
 .agent-model-config-tab {
@@ -2781,15 +2806,19 @@ body {
 
 .agent-model-config-tab:hover,
 .agent-model-config-tab:focus-visible {
+  border-color: var(--agent-menu-row-hover-border);
+  background: var(--agent-menu-row-hover-bg);
   color: var(--neko-foreground);
   outline: none;
 }
 
 .agent-model-config-tab-selected {
-  border-color: color-mix(in srgb, var(--agent-fg) 8%, transparent);
-  background: var(--agent-overlay-bg);
+  border-color: color-mix(in srgb, var(--agent-accent) 24%, var(--agent-overlay-border));
+  background: color-mix(in srgb, var(--agent-accent) 6%, var(--agent-overlay-bg));
   color: var(--neko-foreground);
-  box-shadow: 0 1px 2px color-mix(in srgb, #000 12%, transparent);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--agent-fg) 12%, transparent),
+    0 4px 10px color-mix(in srgb, var(--agent-fg) 8%, transparent);
 }
 
 .agent-model-config-secondary-tabs {
@@ -2821,7 +2850,10 @@ body {
 }
 
 .agent-model-config-secondary-tab-selected {
-  background: color-mix(in srgb, var(--agent-accent) 12%, transparent);
+  background: color-mix(in srgb, var(--agent-accent) 10%, var(--agent-overlay-bg));
+  box-shadow:
+    inset 0 -2px 0 color-mix(in srgb, var(--agent-accent) 72%, transparent),
+    0 1px 3px color-mix(in srgb, var(--agent-fg) 7%, transparent);
   color: var(--agent-accent);
 }
 
@@ -2870,8 +2902,11 @@ body {
 }
 
 .agent-model-config-radio-selected {
-  border-color: var(--agent-menu-row-selected-border);
-  background: var(--agent-menu-row-selected-bg);
+  border-color: color-mix(in srgb, var(--agent-accent) 34%, var(--agent-overlay-border));
+  background: color-mix(in srgb, var(--agent-accent) 8%, var(--agent-overlay-bg));
+  box-shadow:
+    0 1px 3px color-mix(in srgb, var(--agent-fg) 8%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--agent-accent) 8%, transparent);
 }
 
 .agent-model-config-radio-muted {

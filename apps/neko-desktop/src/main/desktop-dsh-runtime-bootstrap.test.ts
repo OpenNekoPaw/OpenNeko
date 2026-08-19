@@ -18,11 +18,13 @@ describe('Desktop DSH runtime bootstrap', () => {
   it('prepares the exact runtime, writable profile, virtual cwd, and bounded environment', async () => {
     const runtimeRoot = await createRuntimeClosure();
     const userDataRoot = await createRoot('openneko-dsh-user-data-');
+    const builtinSkillRoot = await createRoot('openneko-dsh-skills-');
 
     const prepared = await prepareDesktopDshRuntime({
       isPackaged: false,
       resourcesPath: userDataRoot,
       userDataRoot,
+      builtinSkillRoot,
       providers: providerProjection({
         profilePatchEntries: [{ id: 'llm-pi-ai', config: { providers: {} } }],
         credentialEnvironment: { OPENNEKO_DSH_PROVIDER_CREDENTIAL_0: 'provider-secret' },
@@ -48,6 +50,7 @@ describe('Desktop DSH runtime bootstrap', () => {
       DSH_HOME: join(canonicalUserData, 'dsh'),
       HOME: join(canonicalUserData, 'dsh'),
       DSH_TELEMETRY_DISABLED: '1',
+      DSH_BUNDLED_SKILL_DIR: await realpath(builtinSkillRoot),
       OPENNEKO_DSH_PROVIDER_CREDENTIAL_0: 'provider-secret',
     });
     expect(prepared.environment).not.toHaveProperty('SECRET');
@@ -57,6 +60,7 @@ describe('Desktop DSH runtime bootstrap', () => {
   it('fails before subprocess construction when the runtime closure is modified', async () => {
     const runtimeRoot = await createRuntimeClosure();
     const userDataRoot = await createRoot('openneko-dsh-user-data-');
+    const builtinSkillRoot = await createRoot('openneko-dsh-skills-');
     await writeFile(
       join(runtimeRoot, 'payload', 'lib', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
       'modified',
@@ -67,6 +71,7 @@ describe('Desktop DSH runtime bootstrap', () => {
         isPackaged: false,
         resourcesPath: userDataRoot,
         userDataRoot,
+        builtinSkillRoot,
         providers: providerProjection(),
         environment: { NEKO_DSH_RUNTIME_ROOT: runtimeRoot },
       }),
@@ -76,6 +81,7 @@ describe('Desktop DSH runtime bootstrap', () => {
   it('fails before subprocess construction when the official DSH bridge is missing', async () => {
     const runtimeRoot = await createRuntimeClosure();
     const userDataRoot = await createRoot('openneko-dsh-user-data-');
+    const builtinSkillRoot = await createRoot('openneko-dsh-skills-');
     await rm(join(runtimeRoot, 'payload', 'lib', 'node_modules', '@neko', 'dsh-bridge'), {
       recursive: true,
     });
@@ -85,6 +91,7 @@ describe('Desktop DSH runtime bootstrap', () => {
         isPackaged: false,
         resourcesPath: userDataRoot,
         userDataRoot,
+        builtinSkillRoot,
         providers: providerProjection(),
         environment: { NEKO_DSH_RUNTIME_ROOT: runtimeRoot },
       }),

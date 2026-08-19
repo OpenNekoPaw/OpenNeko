@@ -11,6 +11,7 @@ import {
   DSH_SESSION_CHANGED_CHANNEL,
   DSH_SESSION_HOST_CHANNEL,
   parseDshComposerConfigurationHostResult,
+  parseDshComposerMentionsHostResult,
   parseDshSessionChangedEvent,
   parseDshSessionHostResult,
   type DshSessionHostResult,
@@ -446,15 +447,15 @@ const bridge: OpenNekoDesktopBridge &
         conversationId,
       ).projection;
     },
-    async prompt(conversationId, text) {
+    async submit(conversationId, input) {
       const context = requireDesktopWindowContext();
       const request = {
-        requestId: nextRequestId('dsh-session-prompt'),
-        operation: 'prompt' as const,
+        requestId: nextRequestId('dsh-session-submit'),
+        operation: 'submit' as const,
         windowId: context.windowId,
         rendererSessionId: context.rendererSessionId,
         conversationId,
-        text,
+        input,
       };
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return requireDshSessionConversation(
@@ -489,6 +490,20 @@ const bridge: OpenNekoDesktopBridge &
       };
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return parseDshComposerConfigurationHostResult(response, request.requestId).configuration;
+    },
+    async searchComposerMentions(workbenchInstanceId, agentSurfaceId, filter) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-composer-mentions'),
+        operation: 'composer-mentions' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        workbenchInstanceId,
+        agentSurfaceId,
+        filter,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      return parseDshComposerMentionsHostResult(response, request.requestId).mentions;
     },
     async selectComposerModel(workbenchInstanceId, agentSurfaceId, modelOptionId) {
       const context = requireDesktopWindowContext();

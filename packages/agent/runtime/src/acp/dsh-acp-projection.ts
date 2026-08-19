@@ -2,6 +2,7 @@ import type { RequestPermissionRequest, SessionNotification } from '@agentclient
 import type { DshAcpSessionEventNotification } from '@neko/agent-contracts/dsh-acp';
 
 export const DSH_ACP_PROJECTION_DEFAULT_MAX_EVENTS_PER_SESSION = 256;
+export const DSH_ACP_PROJECTION_DEFAULT_MAX_ASSISTANT_STREAM_BYTES = 262_144;
 
 export type DshAcpProjectedToolStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
@@ -24,13 +25,23 @@ export interface DshAcpProjectedPermissionEvent {
   readonly request: RequestPermissionRequest;
 }
 
-export interface DshAcpProjectedTurnEvent {
-  readonly kind: 'turn';
-  readonly sessionId: string;
-  readonly turn: number;
-  readonly phase: 'start' | 'end';
-  readonly reason?: string;
-}
+export type DshAcpProjectedTurnEvent =
+  | {
+      readonly kind: 'turn';
+      readonly sessionId: string;
+      readonly turn: number;
+      readonly phase: 'start';
+      readonly startedAt: number;
+    }
+  | {
+      readonly kind: 'turn';
+      readonly sessionId: string;
+      readonly turn: number;
+      readonly phase: 'end';
+      readonly startedAt: number;
+      readonly completedAt: number;
+      readonly reason?: string;
+    };
 
 export interface DshAcpProjectedCancelEvent {
   readonly kind: 'cancel';
@@ -46,20 +57,53 @@ export interface DshAcpProjectedDiagnosticEvent {
   readonly message: string;
 }
 
-export interface DshAcpProjectedMessageEvent {
-  readonly kind: 'message';
+export interface DshAcpProjectedCommandEvent {
+  readonly kind: 'command';
   readonly sessionId: string;
-  readonly role: 'user' | 'assistant';
+  readonly commandId: string;
+  readonly name: string;
+  readonly args?: string;
+  readonly status: 'running' | 'completed' | 'failed';
+  readonly text?: string;
+}
+
+export type DshAcpProjectedMessageEvent =
+  | {
+      readonly kind: 'message';
+      readonly sessionId: string;
+      readonly role: 'user';
+      readonly text: string;
+      readonly messageId?: string;
+    }
+  | {
+      readonly kind: 'message';
+      readonly sessionId: string;
+      readonly role: 'assistant';
+      readonly turn: number;
+      readonly step: number;
+      readonly text: string;
+      readonly messageId: string;
+      readonly state: 'streaming' | 'final';
+    };
+
+export interface DshAcpProjectedThoughtEvent {
+  readonly kind: 'thought';
+  readonly sessionId: string;
+  readonly turn: number;
+  readonly step: number;
   readonly text: string;
-  readonly messageId?: string;
+  readonly messageId: string;
+  readonly state: 'streaming' | 'final';
 }
 
 export type DshAcpProjectedEvent =
   | DshAcpProjectedMessageEvent
+  | DshAcpProjectedThoughtEvent
   | DshAcpProjectedToolEvent
   | DshAcpProjectedPermissionEvent
   | DshAcpProjectedTurnEvent
   | DshAcpProjectedCancelEvent
+  | DshAcpProjectedCommandEvent
   | DshAcpProjectedDiagnosticEvent;
 
 export interface DshAcpProjectionToolSnapshot {
@@ -71,6 +115,15 @@ export interface DshAcpProjectionToolSnapshot {
 
 export interface DshAcpProjectionOptions {
   readonly maxEventsPerSession?: number;
+  readonly maxAssistantStreamBytes?: number;
+}
+
+interface AssistantAssemblyState {
+  readonly turn: number;
+  readonly step: number;
+  readonly channel: 'text' | 'reasoning';
+  readonly blocks: Map<number, string>;
+  event: DshAcpProjectedMessageEvent | DshAcpProjectedThoughtEvent | undefined;
 }
 
 interface ToolProjectionState {
@@ -84,20 +137,34 @@ interface ToolProjectionState {
   permissionRequest: RequestPermissionRequest | undefined;
 }
 
+interface CommandProjectionState {
+  readonly commandId: string;
+  readonly name: string;
+  readonly args?: string;
+  event: DshAcpProjectedCommandEvent;
+}
+
 interface SessionProjectionState {
   readonly sessionId: string;
   lastEventSequence: number | undefined;
+  lastEventFrameIndex: number;
+  lastEventFrameCount: number;
   currentTurn: number | undefined;
+  readonly turnStartedAt: Map<number, number>;
+  readonly openSteps: Set<string>;
+  readonly assistantAssemblies: Map<string, AssistantAssemblyState>;
   readonly endedTurns: Set<number>;
   readonly cancelledTurns: Set<number>;
   readonly cancelledToolKeys: Set<string>;
   readonly tools: Map<string, ToolProjectionState>;
+  readonly commands: Map<string, CommandProjectionState>;
   readonly events: DshAcpProjectedEvent[];
 }
 
 export class DshAcpProjection {
   private readonly sessions = new Map<string, SessionProjectionState>();
   private readonly maxEventsPerSession: number;
+  private readonly maxAssistantStreamBytes: number;
 
   constructor(options: DshAcpProjectionOptions = {}) {
     const maxEventsPerSession =
@@ -106,11 +173,17 @@ export class DshAcpProjection {
       throw new Error('DSH ACP projection max events per session must be a positive integer.');
     }
     this.maxEventsPerSession = maxEventsPerSession;
+    const maxAssistantStreamBytes =
+      options.maxAssistantStreamBytes ?? DSH_ACP_PROJECTION_DEFAULT_MAX_ASSISTANT_STREAM_BYTES;
+    if (!Number.isSafeInteger(maxAssistantStreamBytes) || maxAssistantStreamBytes <= 0) {
+      throw new Error('DSH ACP assistant stream byte limit must be a positive integer.');
+    }
+    this.maxAssistantStreamBytes = maxAssistantStreamBytes;
   }
 
   acceptSessionUpdate(notification: SessionNotification): readonly DshAcpProjectedEvent[] {
     const session = this.session(notification.sessionId);
-    const sequenceResult = readOpenNekoSequence(notification);
+    const sequenceResult = readOpenNekoSequenceFrame(notification);
     if (sequenceResult.kind === 'invalid') {
       return this.record(
         session,
@@ -126,20 +199,23 @@ export class DshAcpProjection {
       if (stale.length > 0) return stale;
     }
     const update = notification.update;
-    if (
-      update.sessionUpdate === 'user_message_chunk' ||
-      update.sessionUpdate === 'agent_message_chunk'
-    ) {
+    if (update.sessionUpdate === 'user_message_chunk') {
       if (update.content.type !== 'text' || update.content.text.length === 0) return [];
       return this.record(session, {
         kind: 'message',
         sessionId: notification.sessionId,
-        role: update.sessionUpdate === 'user_message_chunk' ? 'user' : 'assistant',
+        role: 'user',
         text: update.content.text,
         ...(update.messageId === undefined || update.messageId === null
           ? {}
           : { messageId: update.messageId }),
       });
+    }
+    if (
+      update.sessionUpdate === 'agent_message_chunk' ||
+      update.sessionUpdate === 'agent_thought_chunk'
+    ) {
+      return this.acceptAssistantChunk(session, notification);
     }
     if (update.sessionUpdate === 'tool_call') {
       return this.acceptToolCall(session, notification);
@@ -165,7 +241,11 @@ export class DshAcpProjection {
         ),
       );
     }
-    const stale = this.rejectStaleSequence(session, sequenceResult.value);
+    const stale = this.rejectStaleSequence(session, {
+      sequence: sequenceResult.value,
+      frameIndex: 0,
+      frameCount: 1,
+    });
     if (stale.length > 0) return stale;
     if (notification.type === 'turn/start') {
       const turnResult = readTurn(notification.data);
@@ -197,11 +277,52 @@ export class DshAcpProjection {
           sessionId: session.sessionId,
           turn,
           phase: 'start',
+          startedAt: notification.time,
         },
         () => {
           session.currentTurn = turn;
+          session.turnStartedAt.set(turn, notification.time);
         },
       );
+    }
+    if (notification.type === 'step/start' || notification.type === 'step/end') {
+      const identity = readTurnStep(notification.data);
+      if (identity.kind !== 'value') {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_INVALID_STEP',
+            `DSH ${notification.type} event must contain non-negative safe integer turn and step identities.`,
+          ),
+        );
+      }
+      const key = stepKey(identity.turn, identity.step);
+      if (notification.type === 'step/start') {
+        if (session.currentTurn !== identity.turn || session.openSteps.has(key)) {
+          return this.record(
+            session,
+            diagnostic(
+              session.sessionId,
+              'ACP_PROJECTION_INVALID_STEP',
+              `DSH step ${identity.turn}:${identity.step} cannot start in the current projection state.`,
+            ),
+          );
+        }
+        session.openSteps.add(key);
+        return [];
+      }
+      if (!session.openSteps.delete(key)) {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_INVALID_STEP',
+            `DSH step ${identity.turn}:${identity.step} ended without a matching start.`,
+          ),
+        );
+      }
+      return [];
     }
     if (notification.type === 'turn/end') {
       const turnResult = readTurn(notification.data);
@@ -226,13 +347,43 @@ export class DshAcpProjection {
           ),
         );
       }
-      return this.commit(
+      const startedAt = session.turnStartedAt.get(turn);
+      if (startedAt === undefined) {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_MISSING_TURN_START',
+            `DSH turn ${turn} ended without a matching turn/start event.`,
+          ),
+        );
+      }
+      if (notification.time < startedAt) {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_INVALID_TURN_TIME',
+            `DSH turn ${turn} ended before it started.`,
+          ),
+        );
+      }
+      const unsettledAssemblies = [...session.assistantAssemblies.entries()].filter(([key]) =>
+        key.startsWith(`${turn}:`),
+      );
+      for (const [key, assembly] of unsettledAssemblies) {
+        session.assistantAssemblies.delete(key);
+        this.removeAssistantAssemblyEvent(session, assembly);
+      }
+      const completed = this.commit(
         session,
         {
           kind: 'turn',
           sessionId: session.sessionId,
           turn,
           phase: 'end',
+          startedAt,
+          completedAt: notification.time,
           reason: readTurnEndReason(notification.data),
         },
         () => {
@@ -240,6 +391,104 @@ export class DshAcpProjection {
           if (session.currentTurn === turn) session.currentTurn = undefined;
         },
       );
+      if (completed[0]?.kind === 'diagnostic' || unsettledAssemblies.length === 0) return completed;
+      return [
+        ...completed,
+        ...this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_UNSETTLED_ASSISTANT_STREAM',
+            `DSH turn ${turn} ended with ${unsettledAssemblies.length} assistant stream channel(s) missing a final message.`,
+          ),
+        ),
+      ];
+    }
+    if (notification.type === 'command/run') {
+      const command = readCommandRun(notification.data);
+      if (command.kind === 'invalid') {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_INVALID_COMMAND',
+            'DSH command/run must contain exact commandId, name, and optional args.',
+          ),
+        );
+      }
+      if (session.commands.has(command.commandId)) {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_DUPLICATE_COMMAND',
+            `DSH command ${command.commandId} already exists.`,
+          ),
+        );
+      }
+      const event: DshAcpProjectedCommandEvent = {
+        kind: 'command',
+        sessionId: session.sessionId,
+        commandId: command.commandId,
+        name: command.name,
+        ...(command.args === undefined ? {} : { args: command.args }),
+        status: 'running',
+      };
+      return this.commit(session, event, () => {
+        session.commands.set(command.commandId, {
+          commandId: command.commandId,
+          name: command.name,
+          ...(command.args === undefined ? {} : { args: command.args }),
+          event,
+        });
+      });
+    }
+    if (notification.type === 'command/done') {
+      const command = readCommandDone(notification.data);
+      if (command.kind === 'invalid') {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_INVALID_COMMAND',
+            'DSH command/done must contain exact commandId, outcome, and optional text.',
+          ),
+        );
+      }
+      const current = session.commands.get(command.commandId);
+      if (current === undefined) {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_UNKNOWN_COMMAND',
+            `DSH command ${command.commandId} completed without command/run.`,
+          ),
+        );
+      }
+      const index = session.events.indexOf(current.event);
+      if (index < 0) {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_COMMAND_EVENT_LOST',
+            `DSH command ${command.commandId} lost its projected running event.`,
+          ),
+        );
+      }
+      const event: DshAcpProjectedCommandEvent = {
+        kind: 'command',
+        sessionId: session.sessionId,
+        commandId: current.commandId,
+        name: current.name,
+        ...(current.args === undefined ? {} : { args: current.args }),
+        status: command.outcome === 'success' ? 'completed' : 'failed',
+        ...(command.text === undefined ? {} : { text: command.text }),
+      };
+      session.events[index] = event;
+      session.commands.delete(command.commandId);
+      return [event];
     }
     return [];
   }
@@ -487,6 +736,200 @@ export class DshAcpProjection {
     );
   }
 
+  private acceptAssistantChunk(
+    session: SessionProjectionState,
+    notification: SessionNotification,
+  ): readonly DshAcpProjectedEvent[] {
+    const update = notification.update;
+    if (
+      update.sessionUpdate !== 'agent_message_chunk' &&
+      update.sessionUpdate !== 'agent_thought_chunk'
+    ) {
+      return [];
+    }
+    if (update.content.type !== 'text') {
+      return this.record(
+        session,
+        diagnostic(
+          session.sessionId,
+          'ACP_PROJECTION_INVALID_ASSISTANT_CHUNK',
+          'DSH assistant output must use ACP text chunks.',
+        ),
+      );
+    }
+    const identity = readAssistantChunkIdentity(notification);
+    if (identity.kind !== 'value') {
+      return this.record(
+        session,
+        diagnostic(
+          session.sessionId,
+          'ACP_PROJECTION_INVALID_ASSISTANT_CHUNK',
+          'DSH assistant chunk must identify its exact turn, step, phase and block.',
+        ),
+      );
+    }
+    if (
+      session.currentTurn !== identity.turn ||
+      !session.openSteps.has(stepKey(identity.turn, identity.step))
+    ) {
+      return this.record(
+        session,
+        diagnostic(
+          session.sessionId,
+          'ACP_PROJECTION_UNKNOWN_ASSISTANT_STEP',
+          `DSH assistant chunk targets inactive step ${identity.turn}:${identity.step}.`,
+        ),
+      );
+    }
+    const channel =
+      update.sessionUpdate === 'agent_message_chunk' ? ('text' as const) : ('reasoning' as const);
+    const key = assistantAssemblyKey(identity.turn, identity.step, channel);
+    if (identity.phase === 'final') {
+      if (
+        update.messageId === undefined ||
+        update.messageId === null ||
+        update.messageId.length === 0
+      ) {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_INVALID_ASSISTANT_CHUNK',
+            'DSH final assistant message must provide its stable message identity.',
+          ),
+        );
+      }
+      return this.settleAssistantAssembly(
+        session,
+        key,
+        identity.turn,
+        identity.step,
+        channel,
+        update.messageId,
+        update.content.text,
+      );
+    }
+    if (identity.blockIndex === undefined || update.content.text.length === 0) {
+      return this.record(
+        session,
+        diagnostic(
+          session.sessionId,
+          'ACP_PROJECTION_INVALID_ASSISTANT_CHUNK',
+          'DSH assistant delta must contain a non-empty text block with an exact block index.',
+        ),
+      );
+    }
+    let assembly = session.assistantAssemblies.get(key);
+    if (assembly === undefined) {
+      assembly = {
+        turn: identity.turn,
+        step: identity.step,
+        channel,
+        blocks: new Map(),
+        event: undefined,
+      };
+      session.assistantAssemblies.set(key, assembly);
+    }
+    assembly.blocks.set(
+      identity.blockIndex,
+      (assembly.blocks.get(identity.blockIndex) ?? '') + update.content.text,
+    );
+    const text = assembleAssistantBlocks(assembly.blocks);
+    if (new TextEncoder().encode(text).length > this.maxAssistantStreamBytes) {
+      session.assistantAssemblies.delete(key);
+      this.removeAssistantAssemblyEvent(session, assembly);
+      return this.record(
+        session,
+        diagnostic(
+          session.sessionId,
+          'ACP_PROJECTION_ASSISTANT_STREAM_OVERFLOW',
+          `DSH assistant stream ${identity.turn}:${identity.step}:${channel} exceeded ${this.maxAssistantStreamBytes} bytes.`,
+        ),
+      );
+    }
+    const messageId =
+      update.messageId === undefined || update.messageId === null
+        ? `dsh:${identity.turn}:${identity.step}:${channel}`
+        : update.messageId;
+    const event = assistantEvent(
+      session.sessionId,
+      identity.turn,
+      identity.step,
+      channel,
+      messageId,
+      text,
+      'streaming',
+    );
+    return this.replaceOrRecordAssistantEvent(session, assembly, event);
+  }
+
+  private settleAssistantAssembly(
+    session: SessionProjectionState,
+    key: string,
+    turn: number,
+    step: number,
+    channel: 'text' | 'reasoning',
+    messageId: string,
+    text: string,
+  ): readonly DshAcpProjectedEvent[] {
+    const assembly = session.assistantAssemblies.get(key);
+    session.assistantAssemblies.delete(key);
+    if (text.length === 0) {
+      if (assembly !== undefined) this.removeAssistantAssemblyEvent(session, assembly);
+      return [];
+    }
+    if (new TextEncoder().encode(text).length > this.maxAssistantStreamBytes) {
+      if (assembly !== undefined) this.removeAssistantAssemblyEvent(session, assembly);
+      return this.record(
+        session,
+        diagnostic(
+          session.sessionId,
+          'ACP_PROJECTION_ASSISTANT_STREAM_OVERFLOW',
+          `DSH final assistant message ${turn}:${step}:${channel} exceeded ${this.maxAssistantStreamBytes} bytes.`,
+        ),
+      );
+    }
+    const event = assistantEvent(session.sessionId, turn, step, channel, messageId, text, 'final');
+    if (assembly === undefined) return this.record(session, event);
+    return this.replaceOrRecordAssistantEvent(session, assembly, event);
+  }
+
+  private replaceOrRecordAssistantEvent(
+    session: SessionProjectionState,
+    assembly: AssistantAssemblyState,
+    event: DshAcpProjectedMessageEvent | DshAcpProjectedThoughtEvent,
+  ): readonly DshAcpProjectedEvent[] {
+    if (assembly.event === undefined) {
+      const recorded = this.record(session, event);
+      if (recorded[0] === event) assembly.event = event;
+      return recorded;
+    }
+    const index = session.events.indexOf(assembly.event);
+    if (index < 0) {
+      return this.record(
+        session,
+        diagnostic(
+          session.sessionId,
+          'ACP_PROJECTION_ASSISTANT_ASSEMBLY_LOST',
+          `DSH assistant assembly ${assembly.turn}:${assembly.step}:${assembly.channel} lost its projected event.`,
+        ),
+      );
+    }
+    session.events[index] = event;
+    assembly.event = event;
+    return [event];
+  }
+
+  private removeAssistantAssemblyEvent(
+    session: SessionProjectionState,
+    assembly: AssistantAssemblyState,
+  ): void {
+    if (assembly.event === undefined) return;
+    const index = session.events.indexOf(assembly.event);
+    if (index >= 0) session.events.splice(index, 1);
+    assembly.event = undefined;
+  }
+
   private acceptToolCallUpdate(
     session: SessionProjectionState,
     notification: SessionNotification,
@@ -591,11 +1034,17 @@ export class DshAcpProjection {
       session = {
         sessionId,
         lastEventSequence: undefined,
+        lastEventFrameIndex: -1,
+        lastEventFrameCount: 1,
         currentTurn: undefined,
+        turnStartedAt: new Map(),
+        openSteps: new Set(),
+        assistantAssemblies: new Map(),
         endedTurns: new Set(),
         cancelledTurns: new Set(),
         cancelledToolKeys: new Set(),
         tools: new Map(),
+        commands: new Map(),
         events: [],
       };
       this.sessions.set(sessionId, session);
@@ -605,9 +1054,10 @@ export class DshAcpProjection {
 
   private rejectStaleSequence(
     session: SessionProjectionState,
-    sequence: number,
+    frame: SequenceFrame,
   ): readonly DshAcpProjectedEvent[] {
-    if (session.lastEventSequence !== undefined && sequence <= session.lastEventSequence) {
+    const sequence = frame.sequence;
+    if (session.lastEventSequence !== undefined && sequence < session.lastEventSequence) {
       return this.record(
         session,
         diagnostic(
@@ -617,7 +1067,36 @@ export class DshAcpProjection {
         ),
       );
     }
+    if (session.lastEventSequence === sequence) {
+      if (
+        frame.frameCount !== session.lastEventFrameCount ||
+        frame.frameIndex !== session.lastEventFrameIndex + 1
+      ) {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_STALE_SEQUENCE',
+            `DSH event sequence ${sequence} frame ${frame.frameIndex} does not follow frame ${session.lastEventFrameIndex}.`,
+          ),
+        );
+      }
+      session.lastEventFrameIndex = frame.frameIndex;
+      return [];
+    }
+    if (frame.frameIndex !== 0) {
+      return this.record(
+        session,
+        diagnostic(
+          session.sessionId,
+          'ACP_PROJECTION_INVALID_SEQUENCE',
+          `DSH event sequence ${sequence} must start at frame 0.`,
+        ),
+      );
+    }
     session.lastEventSequence = sequence;
+    session.lastEventFrameIndex = frame.frameIndex;
+    session.lastEventFrameCount = frame.frameCount;
     return [];
   }
 
@@ -664,6 +1143,49 @@ type IntegerFieldResult =
   | { readonly kind: 'value'; readonly value: number }
   | { readonly kind: 'invalid' };
 
+interface SequenceFrame {
+  readonly sequence: number;
+  readonly frameIndex: number;
+  readonly frameCount: number;
+}
+
+type SequenceFrameResult =
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'value'; readonly value: SequenceFrame }
+  | { readonly kind: 'invalid' };
+
+type AssistantChunkIdentityResult =
+  | {
+      readonly kind: 'value';
+      readonly turn: number;
+      readonly step: number;
+      readonly phase: 'delta' | 'final';
+      readonly blockIndex?: number;
+    }
+  | { readonly kind: 'invalid' };
+
+type TurnStepResult =
+  | { readonly kind: 'value'; readonly turn: number; readonly step: number }
+  | { readonly kind: 'invalid' };
+
+type CommandRunResult =
+  | {
+      readonly kind: 'value';
+      readonly commandId: string;
+      readonly name: string;
+      readonly args?: string;
+    }
+  | { readonly kind: 'invalid' };
+
+type CommandDoneResult =
+  | {
+      readonly kind: 'value';
+      readonly commandId: string;
+      readonly outcome: 'success' | 'error';
+      readonly text?: string;
+    }
+  | { readonly kind: 'invalid' };
+
 function readIntegerField(value: unknown): IntegerFieldResult {
   if (value === undefined) return { kind: 'missing' };
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
@@ -672,9 +1194,37 @@ function readIntegerField(value: unknown): IntegerFieldResult {
   return { kind: 'value', value };
 }
 
-function readOpenNekoSequence(notification: SessionNotification): IntegerFieldResult {
+function readOpenNekoSequenceFrame(notification: SessionNotification): SequenceFrameResult {
   const meta = notification._meta;
-  return readIntegerField(meta === undefined || meta === null ? undefined : meta.opennekoSequence);
+  if (meta === undefined || meta === null) return { kind: 'missing' };
+  const sequence = readIntegerField(meta.opennekoSequence);
+  if (sequence.kind !== 'value') return sequence;
+  const rawFrameIndex = meta.opennekoFrameIndex;
+  const rawFrameCount = meta.opennekoFrameCount;
+  if (rawFrameIndex === undefined && rawFrameCount === undefined) {
+    return {
+      kind: 'value',
+      value: { sequence: sequence.value, frameIndex: 0, frameCount: 1 },
+    };
+  }
+  const frameIndex = readIntegerField(rawFrameIndex);
+  const frameCount = readIntegerField(rawFrameCount);
+  if (
+    frameIndex.kind !== 'value' ||
+    frameCount.kind !== 'value' ||
+    frameCount.value === 0 ||
+    frameIndex.value >= frameCount.value
+  ) {
+    return { kind: 'invalid' };
+  }
+  return {
+    kind: 'value',
+    value: {
+      sequence: sequence.value,
+      frameIndex: frameIndex.value,
+      frameCount: frameCount.value,
+    },
+  };
 }
 
 function readOpenNekoTurn(notification: SessionNotification): IntegerFieldResult {
@@ -692,6 +1242,116 @@ function readTurn(data: unknown): IntegerFieldResult {
   return readIntegerField((data as { readonly turn?: unknown }).turn);
 }
 
+function readTurnStep(data: unknown): TurnStepResult {
+  if (data === null || typeof data !== 'object') return { kind: 'invalid' };
+  const record = data as { readonly turn?: unknown; readonly step?: unknown };
+  const turn = readIntegerField(record.turn);
+  const step = readIntegerField(record.step);
+  return turn.kind === 'value' && step.kind === 'value'
+    ? { kind: 'value', turn: turn.value, step: step.value }
+    : { kind: 'invalid' };
+}
+
+function readCommandRun(data: unknown): CommandRunResult {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    return { kind: 'invalid' };
+  }
+  const record = data as Record<string, unknown>;
+  const commandId = readNonEmptyString(record.commandId);
+  const name = readNonEmptyString(record.name);
+  const args = record.args === undefined ? undefined : readString(record.args);
+  const source = record.source;
+  if (
+    !hasOnlyKeys(record, ['commandId', 'name', 'args', 'source']) ||
+    commandId === undefined ||
+    name === undefined ||
+    (record.args !== undefined && args === undefined) ||
+    source === null ||
+    typeof source !== 'object' ||
+    Array.isArray(source) ||
+    !hasOnlyKeys(source as Record<string, unknown>, ['kind']) ||
+    (source as Record<string, unknown>).kind !== 'user'
+  ) {
+    return { kind: 'invalid' };
+  }
+  return {
+    kind: 'value',
+    commandId,
+    name,
+    ...(args === undefined ? {} : { args }),
+  };
+}
+
+function readCommandDone(data: unknown): CommandDoneResult {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    return { kind: 'invalid' };
+  }
+  const record = data as Record<string, unknown>;
+  const commandId = readNonEmptyString(record.commandId);
+  const outcome = record.kind;
+  const text = record.text === undefined ? undefined : readString(record.text);
+  const sourceEventSeq = readIntegerField(record.sourceEventSeq);
+  if (
+    !hasOnlyKeys(record, ['commandId', 'kind', 'text', 'sourceEventSeq']) ||
+    commandId === undefined ||
+    (outcome !== 'success' && outcome !== 'error') ||
+    (record.text !== undefined && text === undefined) ||
+    (record.sourceEventSeq !== undefined && sourceEventSeq.kind !== 'value')
+  ) {
+    return { kind: 'invalid' };
+  }
+  return {
+    kind: 'value',
+    commandId,
+    outcome,
+    ...(text === undefined ? {} : { text }),
+  };
+}
+
+function hasOnlyKeys(record: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Object.keys(record).every((key) => allowed.includes(key));
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function readAssistantChunkIdentity(
+  notification: SessionNotification,
+): AssistantChunkIdentityResult {
+  const meta = notification._meta;
+  if (meta === undefined || meta === null) return { kind: 'invalid' };
+  const turn = readIntegerField(meta.opennekoTurn);
+  const step = readIntegerField(meta.opennekoStep);
+  const sequence = readIntegerField(meta.opennekoSequence);
+  const phase = meta.opennekoMessagePhase;
+  if (
+    turn.kind !== 'value' ||
+    step.kind !== 'value' ||
+    sequence.kind !== 'value' ||
+    (phase !== 'delta' && phase !== 'final')
+  ) {
+    return { kind: 'invalid' };
+  }
+  if (phase === 'final') {
+    if (meta.opennekoBlockIndex !== undefined) return { kind: 'invalid' };
+    return { kind: 'value', turn: turn.value, step: step.value, phase };
+  }
+  const blockIndex = readIntegerField(meta.opennekoBlockIndex);
+  if (blockIndex.kind !== 'value') return { kind: 'invalid' };
+  return {
+    kind: 'value',
+    turn: turn.value,
+    step: step.value,
+    phase,
+    blockIndex: blockIndex.value,
+  };
+}
+
 function readTurnEndReason(data: unknown): string | undefined {
   if (data === null || typeof data !== 'object') return undefined;
   const reason = (data as { readonly reason?: unknown }).reason;
@@ -702,6 +1362,35 @@ function readTurnEndReason(data: unknown): string | undefined {
 
 function toolKey(turn: number, toolCallId: string): string {
   return `${turn}\u0000${toolCallId}`;
+}
+
+function stepKey(turn: number, step: number): string {
+  return `${turn}:${step}`;
+}
+
+function assistantAssemblyKey(turn: number, step: number, channel: 'text' | 'reasoning'): string {
+  return `${turn}:${step}:${channel}`;
+}
+
+function assembleAssistantBlocks(blocks: ReadonlyMap<number, string>): string {
+  return [...blocks.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, text]) => text)
+    .join('');
+}
+
+function assistantEvent(
+  sessionId: string,
+  turn: number,
+  step: number,
+  channel: 'text' | 'reasoning',
+  messageId: string,
+  text: string,
+  state: 'streaming' | 'final',
+): DshAcpProjectedMessageEvent | DshAcpProjectedThoughtEvent {
+  return channel === 'text'
+    ? { kind: 'message', sessionId, role: 'assistant', turn, step, text, messageId, state }
+    : { kind: 'thought', sessionId, turn, step, text, messageId, state };
 }
 
 function diagnostic(

@@ -71,7 +71,7 @@ describe('DSH Session preload bridge', () => {
     });
   });
 
-  it('uses bootstrap identity and emits only the canonical prompt request', async () => {
+  it('uses bootstrap identity and emits only the canonical submit request', async () => {
     state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
       if (channel.endsWith('bootstrap:get')) return bootstrap(request.requestId as string);
       expect(channel).toBe(DSH_SESSION_HOST_CHANNEL);
@@ -86,15 +86,20 @@ describe('DSH Session preload bridge', () => {
       };
     });
     await requireBridge().bootstrap.get();
-    await requireBridge().dshSessions.prompt('conversation-1', 'hello');
+    await requireBridge().dshSessions.submit('conversation-1', {
+      kind: 'message',
+      text: 'hello',
+      references: [],
+      contextPayloads: [],
+    });
 
     expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
       requestId: expect.any(String),
-      operation: 'prompt',
+      operation: 'submit',
       windowId: 'window-1',
       rendererSessionId: 'renderer-1',
       conversationId: 'conversation-1',
-      text: 'hello',
+      input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
     });
   });
 
@@ -188,6 +193,41 @@ describe('DSH Session preload bridge', () => {
         permissionPresetId: 'danger-full-access',
       }),
     );
+  });
+
+  it('requests Workspace mentions through the exact sender-bound Agent Surface', async () => {
+    state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
+      if (channel.endsWith('bootstrap:get')) return bootstrap(request.requestId as string);
+      expect(channel).toBe(DSH_SESSION_HOST_CHANNEL);
+      return {
+        requestId: request.requestId,
+        mentions: [
+          {
+            id: 'files:scene',
+            kind: 'file',
+            label: 'scene.md',
+            contentLocator: { kind: 'workspace-file', path: 'notes/scene.md' },
+            source: 'workspace',
+            mediaType: 'text',
+          },
+        ],
+      };
+    });
+    const bridge = requireBridge();
+    await bridge.bootstrap.get();
+
+    await expect(
+      bridge.dshSessions.searchComposerMentions('workbench-1', 'surface-1', 'scene'),
+    ).resolves.toHaveLength(1);
+    expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
+      requestId: expect.any(String),
+      operation: 'composer-mentions',
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      filter: 'scene',
+    });
   });
 
   it('projects changed events by Conversation identity', () => {

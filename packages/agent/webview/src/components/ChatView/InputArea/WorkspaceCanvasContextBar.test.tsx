@@ -42,6 +42,13 @@ describe('WorkspaceCanvasContextBar', () => {
     )?.[1];
     expect(matchingRailRule).toContain('width: calc(100% - 24px)');
     expect(matchingRailRule).toContain('border-radius: 12px');
+    expect(matchingRailRule).toContain('border: 0');
+    expect(matchingRailRule).toContain(
+      'background: color-mix(in srgb, var(--agent-fg) 4%, var(--agent-composer-rail-bg))',
+    );
+    expect(matchingRailRule).toContain(
+      'box-shadow: 0 8px 18px color-mix(in srgb, var(--agent-fg) 7%, transparent)',
+    );
     expect(workspaceRule).not.toContain('width: fit-content');
     expect(selectControlRule).toContain('width: fit-content');
   });

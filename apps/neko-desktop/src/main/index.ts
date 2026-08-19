@@ -70,6 +70,7 @@ import { setRootLogger as setAgentRootLogger } from '@neko/agent-runtime';
 import { NodeVideoThumbnail } from '@neko/media/node';
 import {
   NodeProjectEntityAuthoringService,
+  readProjectEntityResources,
   readProjectEntityManagementResources,
 } from '@neko/entity-node';
 import {
@@ -232,6 +233,7 @@ import {
   type DshRuntimeHostProjection,
 } from '@neko/agent-contracts/dsh-runtime-host';
 import { startDesktopDshProductRuntime } from './desktop-dsh-runtime-bootstrap';
+import { resolveDesktopBuiltinSkillRoot } from './desktop-builtin-skill-root';
 import {
   createDesktopDshProductHandlers,
   type DesktopDshProductHandlerAssembly,
@@ -242,6 +244,7 @@ import { DesktopDshSessionHost } from './desktop-dsh-session-host';
 import { resolveDesktopDshConversationContext } from './desktop-dsh-conversation-context';
 import { DesktopDshRuntimeHost } from './desktop-dsh-runtime-host';
 import { createDesktopDshProviderRuntimeProjection } from './desktop-dsh-provider-runtime';
+import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -1899,6 +1902,11 @@ async function startDesktop(): Promise<void> {
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
     userDataRoot: userData,
+    builtinSkillRoot: resolveDesktopBuiltinSkillRoot({
+      appPath: app.getAppPath(),
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+    }),
     environment: process.env,
     providers: dshProviderRuntime,
     metadataStore: localMetadataStore,
@@ -1972,9 +1980,35 @@ async function startDesktop(): Promise<void> {
               scope.kind === 'assistant' ? scope.assistantSpaceId : assistantSpaceId,
             baseGrantIds: [] as const,
           };
+    let mentionIdentity;
+    if (scope.kind === 'workspace') {
+      const projection = await shellService.getProjection(input.windowId);
+      const project = projection.catalog.projects.find(
+        (candidate) => candidate.workspaceId === scope.workspaceId,
+      );
+      const tab = projection.window.tabs.find(
+        (candidate) =>
+          candidate.viewId === grant.interaction.agentViewId &&
+          candidate.projectId === project?.projectId,
+      );
+      if (!project || !tab) {
+        throw new Error(
+          `Agent Surface '${input.agentSurfaceId}' has no exact Workspace Project View for mentions.`,
+        );
+      }
+      mentionIdentity = createDesktopResourceBrowserIdentity({
+        projectId: project.projectId,
+        workspaceId: project.workspaceId,
+        windowId: input.windowId,
+        projectViewId: tab.viewId,
+        projectViewInstanceId: tab.viewInstanceId,
+        rendererSessionId: projection.rendererSessionId,
+      });
+    }
     return {
       grant,
       binding,
+      ...(mentionIdentity === undefined ? {} : { mentionIdentity }),
       ...(scope.kind === 'unbound' || scope.conversationId === undefined
         ? {}
         : { conversationId: scope.conversationId }),
@@ -1989,6 +2023,9 @@ async function startDesktop(): Promise<void> {
         ...(resolved.conversationId === undefined
           ? {}
           : { conversationId: resolved.conversationId }),
+        ...(resolved.mentionIdentity === undefined
+          ? {}
+          : { mentionIdentity: resolved.mentionIdentity }),
       };
     },
     contexts: agentConversationContexts,
@@ -1996,6 +2033,21 @@ async function startDesktop(): Promise<void> {
     configuration: workspaceConfigAuthority,
     sessions: dshProduct.runtime.conversations.conversations,
     executionCatalog: dshProviderRuntime.executionCatalog,
+    resourceBrowser,
+    entities: {
+      search: async ({ workspace, query, limit }) => {
+        const resources = await readProjectEntityResources({ workspace });
+        const normalizedQuery = query.toLocaleLowerCase();
+        return resources.entities
+          .filter((entity) => {
+            if (normalizedQuery.length === 0) return true;
+            return [entity.names.canonical, entity.names.display, ...entity.names.aliases].some(
+              (name) => name?.toLocaleLowerCase().includes(normalizedQuery),
+            );
+          })
+          .slice(0, limit);
+      },
+    },
     permissions: {
       read: (conversationId) =>
         conversationId === undefined

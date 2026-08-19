@@ -27,17 +27,25 @@ import {
   DSH_ACP_EXTENSION_METHODS,
   DSH_ACP_EXTENSION_NOTIFICATIONS,
   decodeDshAcpDomainToolCancelRequest,
+  decodeDshAcpCommandExecuteProjection,
+  decodeDshAcpCommandExecuteRequest,
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
   decodeDshAcpInboxSnapshot,
+  decodeDshAcpInputCatalogProjection,
   decodeDshAcpPermissionPresetProjection,
   decodeDshAcpSessionContextSetRequest,
   decodeDshAcpSessionEventNotification,
+  decodeDshAcpSkillInvokeProjection,
+  decodeDshAcpSkillInvokeRequest,
   type DshAcpContentBlock,
   type DshAcpDomainToolRequest,
   type DshAcpDomainToolResponse,
   type DshAcpInboxSnapshot,
+  type DshAcpInputCatalogProjection,
   type DshAcpPermissionPresetProjection,
+  type DshAcpCommandExecuteProjection,
+  type DshAcpSkillInvokeProjection,
 } from '@neko/agent-contracts/dsh-acp';
 import { CANVAS_DSH_TOOL_NAME } from '@neko/canvas-domain';
 import { CUT_DSH_TOOL_NAME } from '@neko/cut-domain';
@@ -243,6 +251,37 @@ export class DshAcpApplicationClient {
       },
     );
     return decodeDshAcpPermissionPresetProjection(response);
+  }
+
+  async readInputCatalog(sessionId: string): Promise<DshAcpInputCatalogProjection> {
+    const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.readInputCatalog, {
+      sessionId,
+    });
+    return decodeDshAcpInputCatalogProjection(response);
+  }
+
+  async executeCommand(input: {
+    readonly sessionId: string;
+    readonly line: string;
+  }): Promise<DshAcpCommandExecuteProjection> {
+    const request = decodeDshAcpCommandExecuteRequest({ ...input });
+    const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.executeCommand, {
+      ...request,
+    });
+    return decodeDshAcpCommandExecuteProjection(response);
+  }
+
+  async invokeSkill(input: {
+    readonly sessionId: string;
+    readonly skillName: string;
+    readonly displayText: string;
+    readonly args?: string;
+  }): Promise<DshAcpSkillInvokeProjection> {
+    const request = decodeDshAcpSkillInvokeRequest({ ...input });
+    const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.invokeSkill, {
+      ...request,
+    });
+    return decodeDshAcpSkillInvokeProjection(response);
   }
 
   async readInbox(sessionId: string): Promise<DshAcpInboxSnapshot> {
