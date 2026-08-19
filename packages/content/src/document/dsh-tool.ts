@@ -1,4 +1,9 @@
-import { isContentLocator, type ContentLocator, type DocumentBatchCursor } from '../contracts';
+import {
+  isContentLocator,
+  isWorkspaceFileContentLocator,
+  type ContentLocator,
+  type DocumentBatchCursor,
+} from '../contracts';
 
 export const DOCUMENT_DSH_TOOL_NAME = 'openneko.document' as const;
 export const DOCUMENT_DSH_TOOL_OPERATIONS = ['read', 'continue', 'read-images'] as const;
@@ -142,7 +147,7 @@ export function documentDshJsonValue(value: unknown): DocumentDshJsonValue {
 }
 
 function requireContentLocator(value: unknown, field: string): ContentLocator {
-  if (!isContentLocator(value) || value.kind !== 'workspace-file') {
+  if (!isContentLocator(value) || !isWorkspaceFileContentLocator(value)) {
     throw new Error(`${field} must be a canonical workspace-file ContentLocator.`);
   }
   return value;

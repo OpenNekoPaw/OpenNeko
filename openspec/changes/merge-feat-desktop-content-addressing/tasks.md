@@ -1,0 +1,4 @@
+- [ ] 1. Migrate the canonical Content Locator contract and focused content tests.
+- [ ] 2. Migrate Canvas and domain consumers without changing DSH Agent ownership.
+- [ ] 3. Migrate Desktop content wiring and evaluation facts without retired runtime paths.
+- [ ] 4. Run focused typechecks/tests, boundary scans, and strict OpenSpec validation.

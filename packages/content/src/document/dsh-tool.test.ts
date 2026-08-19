@@ -6,7 +6,7 @@ import {
   DOCUMENT_DSH_TOOL_OPERATIONS,
 } from './dsh-tool';
 
-const source = { kind: 'workspace-file' as const, path: 'books/story.epub' };
+const source = { file: { authority: 'workspace' as const, path: 'books/story.epub' } };
 
 describe('OpenNeko document DSH contract', () => {
   it('uses the canonical domain name and operations', () => {
@@ -31,7 +31,7 @@ describe('OpenNeko document DSH contract', () => {
     expect(() => decodeDocumentDshToolInput('continue', { source })).toThrow(/cursor/u);
     expect(() =>
       decodeDocumentDshToolInput('read-images', {
-        source: { kind: 'workspace-file', path: '/tmp/story.epub' },
+        source: { file: { authority: 'workspace', path: '/tmp/story.epub' } },
       }),
     ).toThrow(/canonical workspace-file ContentLocator/u);
   });
