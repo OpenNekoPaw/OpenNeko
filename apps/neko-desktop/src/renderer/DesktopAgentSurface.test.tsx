@@ -407,7 +407,7 @@ describe('DesktopAgentSurface', () => {
         agentSurfaceId="surface-draft"
         surfaceKind="entry"
         entryContext={{
-          workspace: { projects: [], onSelectProject: vi.fn() },
+          workspace: { projects: [] },
           loadCharacterTargets,
           loadWorldTargets,
         }}
@@ -515,11 +515,59 @@ describe('DesktopAgentSurface', () => {
         'workbench-1',
         'surface-draft',
         'workspace-write',
+        { kind: 'surface' },
       ),
     );
     expect(dshSessions.prompt).toHaveBeenCalledWith('conversation-created', 'first message');
     expect(dshPermissions.list).toHaveBeenCalledWith('conversation-created');
     expect(await screen.findByText('Create a node')).toBeTruthy();
+  });
+
+  it('creates the first Entry Conversation for the exact selected Project', async () => {
+    const createdProjection: DshSessionHostProjection = {
+      ...projection,
+      conversationId: 'conversation-project',
+      dshSessionId: 'dsh-session-project',
+    };
+    dshSessions.create.mockResolvedValueOnce(createdProjection);
+    dshSessions.prompt.mockResolvedValueOnce({
+      requestId: 'request-project',
+      projection: createdProjection,
+      stopReason: 'end_turn',
+    });
+    dshPermissions.list.mockResolvedValueOnce([]);
+    const { container } = render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        agentSurfaceId="surface-project-draft"
+        surfaceKind="entry"
+        entryContext={{
+          workspace: { projects: [{ projectId: 'project-1', label: 'Project One' }] },
+          loadCharacterTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+          loadWorldTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+        }}
+      />,
+    );
+
+    const composer = screen.getByLabelText('Message');
+    await waitFor(() => expect((composer as HTMLTextAreaElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('tab', { name: 'Creation' }));
+    fireEvent.click(
+      container.querySelector('[data-entry-context-action="project"]') as HTMLButtonElement,
+    );
+    fireEvent.click(screen.getByTitle('Project One'));
+    fireEvent.change(composer, { target: { value: '  create in project  ' } });
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
+
+    await waitFor(() =>
+      expect(dshSessions.create).toHaveBeenCalledWith(
+        'workbench-1',
+        'surface-project-draft',
+        'workspace-write',
+        { kind: 'project', projectId: 'project-1' },
+      ),
+    );
+    expect(dshSessions.prompt).toHaveBeenCalledWith('conversation-project', 'create in project');
   });
 
   it('fails locally instead of rendering a permission from another DSH Session', async () => {

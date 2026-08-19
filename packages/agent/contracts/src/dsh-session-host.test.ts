@@ -24,6 +24,7 @@ const createRequest = {
   ...surfaceRequest,
   operation: 'create' as const,
   permissionPresetId: 'workspace-write',
+  target: { kind: 'surface' as const },
 };
 
 describe('DSH Session Host contract', () => {
@@ -139,6 +140,18 @@ describe('DSH Session Host contract', () => {
 
   it('accepts create with sender, exact Agent Surface identity, and DSH preset', () => {
     expect(parseDshSessionHostRequest(createRequest)).toEqual(createRequest);
+    expect(
+      parseDshSessionHostRequest({
+        ...createRequest,
+        target: { kind: 'project', projectId: 'project-1' },
+      }),
+    ).toMatchObject({ target: { kind: 'project', projectId: 'project-1' } });
+    expect(() =>
+      parseDshSessionHostRequest({
+        ...createRequest,
+        target: { kind: 'project', projectId: '', workspaceId: 'forged' },
+      }),
+    ).toThrow();
   });
 
   it.each(['conversationId', 'workspaceId', 'cwd', 'provider', 'model', 'dshSessionId'])(

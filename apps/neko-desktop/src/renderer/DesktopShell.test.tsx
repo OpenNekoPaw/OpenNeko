@@ -893,35 +893,29 @@ describe('Desktop scene Workbench', () => {
     expect(source).not.toMatch(/latest|versions\[0\]|activeCharacter|recentCharacter/u);
   });
 
-  it('keeps Entry target selection on exact public owners without navigating', () => {
-    const projectStart = desktopShellSource.indexOf(
-      'onSelectEntryProject: async (projectId) =>',
-    );
-    const characterStart = desktopShellSource.indexOf(
-      'onLoadEntryCharacterTargets: async () =>',
-      projectStart,
-    );
+  it('projects Entry targets without creating Workspace authority in Renderer', () => {
+    const characterStart = desktopShellSource.indexOf('onLoadEntryCharacterTargets: async () =>');
     const worldStart = desktopShellSource.indexOf(
       'onLoadEntryWorldTargets: async () =>',
       characterStart,
     );
-    const handoffStart = desktopShellSource.indexOf(
-      'onCharacterProductHandoff:',
-      worldStart,
-    );
-    const projectSource = desktopShellSource.slice(projectStart, characterStart);
+    const handoffStart = desktopShellSource.indexOf('onCharacterProductHandoff:', worldStart);
     const characterSource = desktopShellSource.slice(characterStart, worldStart);
     const worldSource = desktopShellSource.slice(worldStart, handoffStart);
+    const entryContextStart = desktopShellSource.indexOf('entryContext: {');
+    const entryContextEnd = desktopShellSource.indexOf('loadWorldTargets:', entryContextStart);
+    const entryContextSource = desktopShellSource.slice(entryContextStart, entryContextEnd);
 
-    expect(projectStart).toBeGreaterThanOrEqual(0);
-    expect(characterStart).toBeGreaterThan(projectStart);
+    expect(characterStart).toBeGreaterThanOrEqual(0);
     expect(worldStart).toBeGreaterThan(characterStart);
     expect(handoffStart).toBeGreaterThan(worldStart);
-    expect(projectSource).toContain('workspaceGrants.selectProject');
-    expect(projectSource).not.toMatch(/transitionScene|scenes\.transition/u);
-    expect(characterSource).toContain(
-      'characterFoundation.getConversationLaunchCatalog()',
-    );
+    expect(entryContextStart).toBeGreaterThanOrEqual(0);
+    expect(entryContextEnd).toBeGreaterThan(entryContextStart);
+    expect(entryContextSource).toContain('projection.catalog.projects.map');
+    expect(entryContextSource).toContain('projectId: project.projectId');
+    expect(entryContextSource).not.toContain('workspaceGrants.selectProject');
+    expect(desktopShellSource).not.toContain('onSelectEntryProject');
+    expect(characterSource).toContain('characterFoundation.getConversationLaunchCatalog()');
     expect(worldSource).toContain('worldManagement.getCatalog');
     expect(worldSource).toContain('worldManagement.getDetail');
     expect(desktopShellSource).not.toContain('onSelectWorkspaceProjectTarget');

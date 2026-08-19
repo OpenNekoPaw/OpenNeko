@@ -86,7 +86,7 @@ describe('DshAgentView content-creation composer', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Full access' }));
     expect(onPermissionPresetChange).toHaveBeenCalledWith('danger-full-access');
     fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
-    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(onSubmit).toHaveBeenCalledWith({ kind: 'surface' });
   });
 
   it('restores the assistant entry presentation without claiming unsupported bindings', () => {
@@ -170,23 +170,35 @@ describe('DshAgentView content-creation composer', () => {
   });
 
   it('keeps the entry experience selector only on the unbound Entry Draft', async () => {
-    const onSelectProject = vi.fn(async () => ({
-      label: 'Project One',
-      context: {
-        kind: 'workspace' as const,
-        workspaceId: 'workspace-1',
-        workspaceGrantId: 'workspace-grant-1',
-      },
-      authority: { kind: 'project' as const, projectId: 'project-1' },
-    }));
+    const onSubmit = vi.fn();
     const view = renderAgent(
       <DshAgentView
         agentSurfaceId="surface-entry"
         surfaceKind="entry"
+        composerConfiguration={{
+          models: [
+            {
+              id: 'deepseek-official:deepseek-v4',
+              label: 'DeepSeek V4',
+              providerId: 'deepseek-official',
+              modelId: 'deepseek-v4',
+              providerLabel: 'DeepSeek',
+              category: 'llm',
+              capabilities: ['chat'],
+            },
+          ],
+          selectedModelOptionId: 'deepseek-official:deepseek-v4',
+          selectedMediaModelOptionIds: {},
+          permissionPresetId: 'workspace-write',
+          permissionPresets: [
+            { id: 'read-only', label: 'read-only', selectable: true },
+            { id: 'workspace-write', label: 'workspace-write', selectable: true },
+            { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
+          ],
+        }}
         entryContext={{
           workspace: {
             projects: [{ projectId: 'project-1', label: 'Project One' }],
-            onSelectProject,
           },
           loadCharacterTargets: vi.fn(async () => ({
             targets: [
@@ -219,7 +231,7 @@ describe('DshAgentView content-creation composer', () => {
           })),
         }}
         configuring={false}
-        draft=""
+        draft="Create a scene"
         loading={false}
         permissions={[]}
         runtime={{ status: 'running' }}
@@ -231,7 +243,7 @@ describe('DshAgentView content-creation composer', () => {
         onModelChange={vi.fn()}
         onPermissionPresetChange={vi.fn()}
         onRestartRuntime={vi.fn()}
-        onSubmit={vi.fn()}
+        onSubmit={onSubmit}
       />,
     );
 
@@ -259,8 +271,9 @@ describe('DshAgentView content-creation composer', () => {
     expect(screen.queryByRole('button', { name: '选择世界' })).toBeNull();
     fireEvent.click(projectAction);
     fireEvent.click(screen.getByTitle('Project One'));
-    expect(onSelectProject).toHaveBeenCalledWith('project-1');
     expect(await screen.findByRole('button', { name: '清除: Project One' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+    expect(onSubmit).toHaveBeenCalledWith({ kind: 'project', projectId: 'project-1' });
   });
 
   it('loads and selects exact Character and World context without starting a DSH session', async () => {
@@ -299,7 +312,7 @@ describe('DshAgentView content-creation composer', () => {
         agentSurfaceId="surface-entry-context"
         surfaceKind="entry"
         entryContext={{
-          workspace: { projects: [], onSelectProject: vi.fn() },
+          workspace: { projects: [] },
           loadCharacterTargets,
           loadWorldTargets,
         }}

@@ -54,7 +54,10 @@ describe('DSH Session preload bridge', () => {
     });
     await requireBridge().bootstrap.get();
 
-    await requireBridge().dshSessions.create('workbench-1', 'surface-1', 'workspace-write');
+    await requireBridge().dshSessions.create('workbench-1', 'surface-1', 'workspace-write', {
+      kind: 'project',
+      projectId: 'project-1',
+    });
 
     expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
       requestId: expect.any(String),
@@ -64,6 +67,7 @@ describe('DSH Session preload bridge', () => {
       workbenchInstanceId: 'workbench-1',
       agentSurfaceId: 'surface-1',
       permissionPresetId: 'workspace-write',
+      target: { kind: 'project', projectId: 'project-1' },
     });
   });
 

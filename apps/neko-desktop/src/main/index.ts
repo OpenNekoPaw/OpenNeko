@@ -239,6 +239,7 @@ import {
 import { DesktopDshPermissionHost } from './desktop-dsh-permission-host';
 import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-configuration';
 import { DesktopDshSessionHost } from './desktop-dsh-session-host';
+import { resolveDesktopDshConversationContext } from './desktop-dsh-conversation-context';
 import { DesktopDshRuntimeHost } from './desktop-dsh-runtime-host';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
@@ -1968,6 +1969,7 @@ async function startDesktop(): Promise<void> {
     resolveSurface: async (input) => {
       const resolved = await resolveDshAgentSurfaceScope(input);
       return {
+        windowId: input.windowId,
         binding: resolved.binding,
         ...(resolved.conversationId === undefined
           ? {}
@@ -2008,6 +2010,7 @@ async function startDesktop(): Promise<void> {
       workbenchInstanceId,
       agentSurfaceId,
       permissionPresetId,
+      target,
     }) => {
       const resolved = await resolveDshAgentSurfaceScope({
         windowId,
@@ -2019,7 +2022,14 @@ async function startDesktop(): Promise<void> {
         throw new Error(`Agent Surface '${agentSurfaceId}' already has a Conversation.`);
       }
       const scope = grant.interaction.scope;
-      const context = resolved.binding;
+      const context = await resolveDesktopDshConversationContext({
+        windowId,
+        target,
+        surfaceBinding: resolved.binding,
+        surfaceIsUnbound: scope.kind === 'unbound',
+        projects: shellService,
+        workspaceGrants: workspaceGrantAuthority,
+      });
       const published = await dshProduct.runtime.conversations.publication.publish({
         context,
         title: app.getLocale().toLocaleLowerCase().startsWith('zh') ? '新会话' : 'New conversation',

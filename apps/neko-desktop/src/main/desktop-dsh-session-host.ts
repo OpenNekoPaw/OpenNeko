@@ -1,5 +1,6 @@
 import {
   parseDshSessionHostRequest,
+  type DshConversationCreationTarget,
   type DshSessionChangedEvent,
   type DshSessionHostEvent,
   type DshSessionHostProjection,
@@ -49,7 +50,7 @@ export class DesktopDshSessionHost {
           readonly agentSurfaceId: string;
           readonly permissionPresetId: string;
         }): Promise<DshComposerConfigurationHostResult['configuration']>;
-        applyConversation(conversationId: string): Promise<void>;
+        applyConversation(conversationId: string, windowId: string): Promise<void>;
       };
       readonly createConversation: (input: {
         readonly windowId: string;
@@ -57,6 +58,7 @@ export class DesktopDshSessionHost {
         readonly workbenchInstanceId: string;
         readonly agentSurfaceId: string;
         readonly permissionPresetId: string;
+        readonly target: DshConversationCreationTarget;
       }) => Promise<{ readonly conversationId: string }>;
       readonly projection: Pick<DshAcpProjection, 'snapshot'>;
       readonly windows: {
@@ -122,11 +124,12 @@ export class DesktopDshSessionHost {
           workbenchInstanceId: request.workbenchInstanceId,
           agentSurfaceId: request.agentSurfaceId,
           permissionPresetId: request.permissionPresetId,
+          target: request.target,
         })
       ).conversationId;
     } else if (request.operation === 'prompt') {
       conversationId = request.conversationId;
-      await this.options.composer.applyConversation(conversationId);
+      await this.options.composer.applyConversation(conversationId, request.windowId);
       const context = await this.options.promptContext.resolve(conversationId);
       await this.options.conversations.setSessionContext(conversationId, context);
       const response = await this.options.conversations.prompt({

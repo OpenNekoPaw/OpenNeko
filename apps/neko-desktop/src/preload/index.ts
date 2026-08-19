@@ -416,7 +416,7 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   dshSessions: {
-    async create(workbenchInstanceId, agentSurfaceId, permissionPresetId) {
+    async create(workbenchInstanceId, agentSurfaceId, permissionPresetId, target) {
       const context = requireDesktopWindowContext();
       const request = {
         requestId: nextRequestId('dsh-session-create'),
@@ -426,6 +426,7 @@ const bridge: OpenNekoDesktopBridge &
         workbenchInstanceId,
         agentSurfaceId,
         permissionPresetId,
+        target,
       };
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return parseDshSessionHostResult(response, request.requestId).projection;
@@ -518,11 +519,7 @@ const bridge: OpenNekoDesktopBridge &
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return parseDshComposerConfigurationHostResult(response, request.requestId).configuration;
     },
-    async selectComposerPermissionPreset(
-      workbenchInstanceId,
-      agentSurfaceId,
-      permissionPresetId,
-    ) {
+    async selectComposerPermissionPreset(workbenchInstanceId, agentSurfaceId, permissionPresetId) {
       const context = requireDesktopWindowContext();
       const request = {
         requestId: nextRequestId('dsh-composer-permission-preset'),

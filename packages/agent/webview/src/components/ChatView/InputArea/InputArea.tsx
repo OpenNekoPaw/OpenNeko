@@ -134,7 +134,10 @@ interface InputAreaProps {
     readonly disabledReason?: string;
   }[];
   entryContextActionsDisabled?: boolean;
-  entryWorkspaceTarget?: AgentComposerWorkspaceTarget;
+  entryWorkspaceTarget?: {
+    readonly label: string;
+    readonly target?: AgentComposerWorkspaceTarget['target'];
+  };
   workspaceCanvas?: {
     readonly workspaceLabel: string;
     readonly canvas?: AgentComposerCanvasPresentation;

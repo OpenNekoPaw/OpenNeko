@@ -16,6 +16,7 @@ import type {
 import type { ConfigManager } from '@neko/host/settings';
 
 interface ComposerSurfaceScope {
+  readonly windowId: string;
   readonly binding: AgentBoundDomainBinding;
   readonly conversationId?: string;
 }
@@ -35,7 +36,8 @@ export function createDesktopDshComposerConfiguration(options: {
   resolveSurface(input: ComposerSurfaceIdentity): Promise<ComposerSurfaceScope>;
   readonly contexts: Pick<AgentConversationContextAuthorityPort, 'readContext'>;
   readonly workspaceGrants: {
-    resolveAuthorizedWorkspace(
+    restore(
+      windowId: string,
       workspaceGrantId: string,
       workspaceId: string,
     ): Promise<{
@@ -56,11 +58,15 @@ export function createDesktopDshComposerConfiguration(options: {
   readonly sessions: Pick<ConversationDshSessionBoundClient, 'setSessionConfigOption'>;
   readonly permissions: {
     read(conversationId?: string): Promise<DshAcpPermissionPresetProjection>;
-    set(conversationId: string, permissionPresetId: string): Promise<DshAcpPermissionPresetProjection>;
+    set(
+      conversationId: string,
+      permissionPresetId: string,
+    ): Promise<DshAcpPermissionPresetProjection>;
   };
 }) {
   const resolveConfiguration = async (
     binding: AgentBoundDomainBinding,
+    windowId: string,
   ): Promise<{
     readonly config: ComposerConfigManager;
     readonly context?: DshComposerContextProjection;
@@ -68,7 +74,8 @@ export function createDesktopDshComposerConfiguration(options: {
     if (binding.kind !== 'workspace') {
       return { config: options.configuration.getApplicationConfig() };
     }
-    const resolution = await options.workspaceGrants.resolveAuthorizedWorkspace(
+    const resolution = await options.workspaceGrants.restore(
+      windowId,
       binding.workspaceGrantId,
       binding.workspaceId,
     );
@@ -98,7 +105,7 @@ export function createDesktopDshComposerConfiguration(options: {
   return Object.freeze({
     async project(input: ComposerSurfaceIdentity): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding);
+      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
       return projectConfiguration(
         resolved.config,
         await options.permissions.read(scope.conversationId),
@@ -110,7 +117,7 @@ export function createDesktopDshComposerConfiguration(options: {
       input: ComposerSurfaceIdentity & { readonly modelOptionId: string },
     ): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding);
+      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
       const config = resolved.config;
       const state = config.getAssistantConfigState();
       const matches = state.chatModelOptions.filter((model) => model.id === input.modelOptionId);
@@ -137,7 +144,7 @@ export function createDesktopDshComposerConfiguration(options: {
       input: ComposerSurfaceIdentity & { readonly permissionPresetId: string },
     ): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding);
+      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
       const current = await options.permissions.read(scope.conversationId);
       if (!current.options.some((option) => option.value === input.permissionPresetId)) {
         throw new Error(
@@ -158,7 +165,7 @@ export function createDesktopDshComposerConfiguration(options: {
       },
     ): Promise<DshComposerConfigurationProjection> {
       const scope = await options.resolveSurface(input);
-      const resolved = await resolveConfiguration(scope.binding);
+      const resolved = await resolveConfiguration(scope.binding, scope.windowId);
       const config = resolved.config;
       const state = config.getAssistantConfigState();
       const matches = state.chatModelOptions.filter(
@@ -170,7 +177,8 @@ export function createDesktopDshComposerConfiguration(options: {
         );
       }
       const selected = matches[0];
-      if (!selected) throw new Error(`Composer media model '${input.modelOptionId}' is unavailable.`);
+      if (!selected)
+        throw new Error(`Composer media model '${input.modelOptionId}' is unavailable.`);
       await config.setDefaultModelPurposeRefs({
         [mediaPurpose(input.category)]: {
           providerId: selected.providerId,
@@ -184,21 +192,20 @@ export function createDesktopDshComposerConfiguration(options: {
       );
     },
 
-    async applyConversation(conversationId: string): Promise<void> {
+    async applyConversation(conversationId: string, windowId: string): Promise<void> {
       const binding = await options.contexts.readContext(conversationId);
       if (binding === undefined) {
         throw new Error(`Conversation '${conversationId}' has no authoritative domain context.`);
       }
-      const resolved = await resolveConfiguration(binding);
+      const resolved = await resolveConfiguration(binding, windowId);
       await apply(conversationId, resolved.config);
     },
   });
 }
 
-function mediaPurpose(category: 'image' | 'video' | 'audio'):
-  | 'image.generate'
-  | 'video.generate'
-  | 'audio.generate' {
+function mediaPurpose(
+  category: 'image' | 'video' | 'audio',
+): 'image.generate' | 'video.generate' | 'audio.generate' {
   if (category === 'image') return 'image.generate';
   if (category === 'video') return 'video.generate';
   return 'audio.generate';

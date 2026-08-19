@@ -4,6 +4,7 @@ import type {
   DshPermissionHostProjection,
 } from '@neko/agent-contracts/dsh-permission-host';
 import type {
+  DshConversationCreationTarget,
   DshComposerConfigurationProjection,
   DshSessionHostProjection,
 } from '@neko/agent-contracts/dsh-session-host';
@@ -149,12 +150,11 @@ export function DesktopAgentSurface({
     if (configuring) return;
     setConfiguring(true);
     try {
-      const configuration =
-        await window.openNekoDesktop.dshSessions.selectComposerPermissionPreset(
-          workbenchInstanceId,
-          agentSurfaceId,
-          permissionPresetId,
-        );
+      const configuration = await window.openNekoDesktop.dshSessions.selectComposerPermissionPreset(
+        workbenchInstanceId,
+        agentSurfaceId,
+        permissionPresetId,
+      );
       setComposerConfiguration(configuration);
       setComposerConfigurationError(undefined);
     } catch (error) {
@@ -186,7 +186,7 @@ export function DesktopAgentSurface({
     }
   };
 
-  const submit = async (): Promise<void> => {
+  const submit = async (creationTarget: DshConversationCreationTarget): Promise<void> => {
     if (submitting) return;
     const text = draft.trim();
     if (text.length === 0) return;
@@ -199,12 +199,14 @@ export function DesktopAgentSurface({
       const targetConversationId =
         conversationId ??
         (state.kind === 'ready' ? state.projection.conversationId : undefined) ??
-        (await window.openNekoDesktop.dshSessions.create(
-          workbenchInstanceId,
-          agentSurfaceId,
-          permissionPresetId,
-        ))
-          .conversationId;
+        (
+          await window.openNekoDesktop.dshSessions.create(
+            workbenchInstanceId,
+            agentSurfaceId,
+            permissionPresetId,
+            creationTarget,
+          )
+        ).conversationId;
       const result = await window.openNekoDesktop.dshSessions.prompt(targetConversationId, text);
       const permissions = await window.openNekoDesktop.dshPermissions.list(targetConversationId);
       setDraft('');
@@ -308,7 +310,7 @@ export function DesktopAgentSurface({
         void selectPermissionPreset(permissionPresetId)
       }
       onRestartRuntime={() => void restartRuntime()}
-      onSubmit={() => void submit()}
+      onSubmit={(target) => void submit(target)}
     />
   );
 }

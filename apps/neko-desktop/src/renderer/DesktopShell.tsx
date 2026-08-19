@@ -275,9 +275,6 @@ interface ShellActions {
     readonly label: string;
   }) => Promise<void>;
   readonly onCharacterProductHandoff: (handoff: CharacterProductHandoff) => void;
-  readonly onSelectEntryProject: NonNullable<
-    DesktopAgentSurfaceProps['entryContext']
-  >['workspace']['onSelectProject'];
   readonly onLoadEntryCharacterTargets: NonNullable<
     DesktopAgentSurfaceProps['entryContext']
   >['loadCharacterTargets'];
@@ -885,34 +882,9 @@ export function DesktopApplication(): JSX.Element {
         finishPending();
       }
     },
-    onSelectEntryProject: async (projectId) => {
-      const finishPending = beginPending('target-selection');
-      setDiagnostic(undefined);
-      try {
-        const result = await window.openNekoDesktop.workspaceGrants.selectProject(
-          projection.window.windowId,
-          projectId,
-        );
-        if (result.status === 'cancelled') return undefined;
-        return {
-          label: result.grant.label,
-          context: {
-            kind: 'workspace' as const,
-            workspaceId: result.workspaceId,
-            workspaceGrantId: result.grant.workspaceGrantId,
-          },
-          authority: { kind: 'project' as const, projectId },
-        };
-      } catch (error) {
-        setDiagnostic(describeError(error));
-        await refresh();
-        throw error;
-      } finally {
-        finishPending();
-      }
-    },
     onLoadEntryCharacterTargets: async () => {
-      const catalog = await window.openNekoDesktop.characterFoundation.getConversationLaunchCatalog();
+      const catalog =
+        await window.openNekoDesktop.characterFoundation.getConversationLaunchCatalog();
       return {
         targets: catalog.targets.map((target) => ({
           globalCharacterId: target.globalCharacterId,
@@ -935,7 +907,9 @@ export function DesktopApplication(): JSX.Element {
       });
       const available = catalog.items.filter((item) => item.status === 'available');
       const details = await Promise.allSettled(
-        available.map((item) => window.openNekoDesktop.worldManagement.getDetail(item.globalWorldId)),
+        available.map((item) =>
+          window.openNekoDesktop.worldManagement.getDetail(item.globalWorldId),
+        ),
       );
       return {
         targets: details.flatMap((result) =>
@@ -1152,7 +1126,6 @@ export function DesktopShellView({
     onStartGlobalCharacterConversation: async () => undefined,
     onFinalizeAndStartCharacterConversation: async () => undefined,
     onCharacterProductHandoff: () => undefined,
-    onSelectEntryProject: async () => undefined,
     onLoadEntryCharacterTargets: async () => ({ targets: [], diagnostics: [] }),
     onLoadEntryWorldTargets: async () => ({ targets: [], diagnostics: [] }),
   };
@@ -1431,7 +1404,6 @@ function DesktopSceneWorkbench({
                       label: project.displayName,
                       ...(project.unavailable ? { disabled: true } : {}),
                     })),
-                    onSelectProject: actions.onSelectEntryProject,
                   },
                   loadCharacterTargets: actions.onLoadEntryCharacterTargets,
                   loadWorldTargets: actions.onLoadEntryWorldTargets,

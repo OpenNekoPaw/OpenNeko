@@ -32,6 +32,7 @@ describe('Desktop DSH Session Host', () => {
           workbenchInstanceId: 'workbench-1',
           agentSurfaceId: 'surface-1',
           permissionPresetId: 'workspace-write',
+          target: { kind: 'project', projectId: 'project-1' },
         },
       ),
     );
@@ -42,6 +43,7 @@ describe('Desktop DSH Session Host', () => {
       workbenchInstanceId: 'workbench-1',
       agentSurfaceId: 'surface-1',
       permissionPresetId: 'workspace-write',
+      target: { kind: 'project', projectId: 'project-1' },
     });
     expect(result.projection).toMatchObject(identity);
   });
@@ -61,6 +63,7 @@ describe('Desktop DSH Session Host', () => {
           workbenchInstanceId: 'workbench-1',
           agentSurfaceId: 'surface-1',
           permissionPresetId: 'workspace-write',
+          target: { kind: 'surface' },
         },
       ),
     ).rejects.toThrow(/sender-bound/u);
@@ -95,7 +98,7 @@ describe('Desktop DSH Session Host', () => {
       conversationId: identity.conversationId,
       prompt: [{ type: 'text', text: 'hello' }],
     });
-    expect(applyConversation).toHaveBeenCalledWith(identity.conversationId);
+    expect(applyConversation).toHaveBeenCalledWith(identity.conversationId, 'window-1');
     expect(applyConversation.mock.invocationCallOrder[0]).toBeLessThan(
       prompt.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
@@ -294,8 +297,10 @@ function createHost(overrides: {
     readonly workbenchInstanceId: string;
     readonly agentSurfaceId: string;
     readonly permissionPresetId: string;
+    readonly target:
+      { readonly kind: 'surface' } | { readonly kind: 'project'; readonly projectId: string };
   }) => Promise<{ readonly conversationId: string }>;
-  readonly applyConversation?: (conversationId: string) => Promise<void>;
+  readonly applyConversation?: (conversationId: string, windowId: string) => Promise<void>;
   readonly promptContext?: { resolve(conversationId: string): Promise<string> };
   readonly setSessionContext?: (conversationId: string, text: string) => Promise<void>;
   readonly selectModel?: () => Promise<ReturnType<typeof composerConfiguration>>;
@@ -315,13 +320,14 @@ function createHost(overrides: {
     composer: {
       project: vi.fn(async () => composerConfiguration()),
       selectModel: overrides.selectModel ?? vi.fn(async () => composerConfiguration()),
-      selectMediaModel:
-        overrides.selectMediaModel ?? vi.fn(async () => composerConfiguration()),
+      selectMediaModel: overrides.selectMediaModel ?? vi.fn(async () => composerConfiguration()),
       selectPermissionPreset:
         overrides.selectPermissionPreset ?? vi.fn(async () => composerConfiguration()),
       applyConversation: overrides.applyConversation ?? vi.fn(async () => undefined),
     },
-    promptContext: overrides.promptContext ?? { resolve: vi.fn(async () => 'OpenNeko test context') },
+    promptContext: overrides.promptContext ?? {
+      resolve: vi.fn(async () => 'OpenNeko test context'),
+    },
     createConversation:
       overrides.createConversation ??
       vi.fn(async () => ({ conversationId: identity.conversationId })),

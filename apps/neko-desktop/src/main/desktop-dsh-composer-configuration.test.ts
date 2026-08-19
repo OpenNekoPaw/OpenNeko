@@ -13,11 +13,19 @@ describe('Desktop DSH composer configuration', () => {
     const workspaceConfig = createConfig();
     const applicationConfig = createConfig();
     const setSessionConfigOption = vi.fn(async () => ({ configOptions: [] }));
+    const restoreWorkspace = vi.fn(async () => ({
+      workspace: {
+        workspaceId: 'workspace-1',
+        workspacePath: '${WORKSPACE}/one',
+        displayName: 'Workspace One',
+      },
+    }));
     const setPermissionPreset = vi.fn(async (_conversationId: string, permissionPresetId: string) =>
       permissionPresets(permissionPresetId),
     );
     const service = createDesktopDshComposerConfiguration({
       resolveSurface: vi.fn(async () => ({
+        windowId: 'window-1',
         binding: {
           kind: 'workspace' as const,
           workspaceId: 'workspace-1',
@@ -33,13 +41,7 @@ describe('Desktop DSH composer configuration', () => {
         })),
       },
       workspaceGrants: {
-        resolveAuthorizedWorkspace: vi.fn(async () => ({
-          workspace: {
-            workspaceId: 'workspace-1',
-            workspacePath: '${WORKSPACE}/one',
-            displayName: 'Workspace One',
-          },
-        })),
+        restore: restoreWorkspace,
       },
       configuration: {
         getApplicationConfig: () => applicationConfig,
@@ -68,6 +70,7 @@ describe('Desktop DSH composer configuration', () => {
         { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
       ],
     });
+    expect(restoreWorkspace).toHaveBeenCalledWith('window-1', 'grant-1', 'workspace-1');
 
     await service.selectModel({
       windowId: 'window-1',
@@ -94,10 +97,7 @@ describe('Desktop DSH composer configuration', () => {
         permissionPresetId: 'danger-full-access',
       }),
     ).resolves.toMatchObject({ permissionPresetId: 'danger-full-access' });
-    expect(setPermissionPreset).toHaveBeenCalledWith(
-      'conversation-1',
-      'danger-full-access',
-    );
+    expect(setPermissionPreset).toHaveBeenCalledWith('conversation-1', 'danger-full-access');
 
     await service.selectMediaModel({
       windowId: 'window-1',
@@ -124,11 +124,12 @@ describe('Desktop DSH composer configuration', () => {
     const config = createConfig();
     const service = createDesktopDshComposerConfiguration({
       resolveSurface: vi.fn(async () => ({
+        windowId: 'window-1',
         binding: { kind: 'assistant' as const, assistantSpaceId: 'assistant-1', baseGrantIds: [] },
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
       workspaceGrants: {
-        resolveAuthorizedWorkspace: vi.fn(async () => {
+        restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
         }),
       },
@@ -153,7 +154,7 @@ describe('Desktop DSH composer configuration', () => {
         permissionPresetId: 'auto',
       }),
     ).rejects.toThrow(/not advertised by the runtime/u);
-    await expect(service.applyConversation('conversation-missing')).rejects.toThrow(
+    await expect(service.applyConversation('conversation-missing', 'window-1')).rejects.toThrow(
       /no authoritative domain context/u,
     );
   });

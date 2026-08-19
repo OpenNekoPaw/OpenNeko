@@ -93,12 +93,16 @@ interface DshSessionHostConversationRequest extends DshSessionHostSenderRequest 
   readonly conversationId: string;
 }
 
+export type DshConversationCreationTarget =
+  { readonly kind: 'surface' } | { readonly kind: 'project'; readonly projectId: string };
+
 export type DshSessionHostRequest =
   | (DshSessionHostSenderRequest & {
       readonly operation: 'create';
       readonly workbenchInstanceId: string;
       readonly agentSurfaceId: string;
       readonly permissionPresetId: string;
+      readonly target: DshConversationCreationTarget;
     })
   | (DshSessionHostConversationRequest & { readonly operation: 'snapshot' })
   | (DshSessionHostConversationRequest & { readonly operation: 'prompt'; readonly text: string })
@@ -149,6 +153,7 @@ export interface OpenNekoDshSessionBridge {
       workbenchInstanceId: string,
       agentSurfaceId: string,
       permissionPresetId: string,
+      target: DshConversationCreationTarget,
     ): Promise<DshSessionHostProjection>;
     getSnapshot(conversationId: string): Promise<DshSessionHostProjection>;
     prompt(conversationId: string, text: string): Promise<DshSessionHostResult>;
@@ -193,6 +198,7 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
       'workbenchInstanceId',
       'agentSurfaceId',
       'permissionPresetId',
+      'target',
     ]);
     return {
       ...base,
@@ -200,6 +206,7 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
       workbenchInstanceId: requireIdentity(record.workbenchInstanceId, 'workbenchInstanceId'),
       agentSurfaceId: requireIdentity(record.agentSurfaceId, 'agentSurfaceId'),
       permissionPresetId: requireIdentity(record.permissionPresetId, 'permissionPresetId'),
+      target: parseConversationCreationTarget(record.target),
     };
   }
   if (
@@ -277,6 +284,19 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
     };
   }
   throw new Error(`DSH Session operation '${String(record.operation)}' is unsupported.`);
+}
+
+function parseConversationCreationTarget(value: unknown): DshConversationCreationTarget {
+  const record = requireRecord(value, 'DSH Conversation creation target');
+  if (record.kind === 'surface') {
+    requireExactKeys(record, ['kind']);
+    return { kind: 'surface' };
+  }
+  if (record.kind === 'project') {
+    requireExactKeys(record, ['kind', 'projectId']);
+    return { kind: 'project', projectId: requireIdentity(record.projectId, 'projectId') };
+  }
+  throw new Error(`DSH Conversation creation target '${String(record.kind)}' is unsupported.`);
 }
 
 function parseMediaCategory(value: unknown): 'image' | 'video' | 'audio' {

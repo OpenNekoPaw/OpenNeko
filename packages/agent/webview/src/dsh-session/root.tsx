@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { DshPermissionHostProjection } from '@neko/agent-contracts/dsh-permission-host';
 import type {
+  DshConversationCreationTarget,
   DshComposerConfigurationProjection,
   DshSessionHostEvent,
   DshSessionHostProjection,
@@ -18,11 +19,9 @@ import type {
   SelectedCharacterLaunch,
   SelectedWorldLaunch,
 } from '../components/ChatView/InputArea/types';
-import type {
-  AgentComposerWorkspacePresentation,
-  AgentComposerWorkspaceTarget,
-} from '../components/ComposerWorkspaceContext';
+import type { AgentComposerWorkspacePresentation } from '../components/ComposerWorkspaceContext';
 import { AuthoringTargetSelector } from '../components/ChatView/AuthoringTargetSelector';
+import type { DshEntryProjectSelection } from '../components/ChatView/AuthoringTargetSelector';
 import { CharacterDialogueTargetSelector } from '../components/ChatView/CharacterDialogueTargetSelector';
 import { HomeExperienceQuickActions } from '../components/ChatView/HomeExperienceQuickActions';
 import { WorldExperienceTargetSelector } from '../components/ChatView/WorldExperienceTargetSelector';
@@ -70,13 +69,13 @@ export interface DshAgentViewProps {
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
   readonly onRestartRuntime: () => void;
-  readonly onSubmit: () => void;
+  readonly onSubmit: (target: DshConversationCreationTarget) => void;
 }
 
 export interface DshEntryContextPresentation {
   readonly workspace: Pick<
     Extract<AgentComposerWorkspacePresentation, { readonly kind: 'entry' }>,
-    'projects' | 'onSelectProject'
+    'projects'
   >;
   readonly loadCharacterTargets: () => Promise<
     DshEntryTargetCatalog<AgentCharacterDialogueTargetOption>
@@ -104,7 +103,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const [entryExperience, setEntryExperience] = useState<'assistant' | 'authoring'>('assistant');
   const [entryDetail, setEntryDetail] = useState<'project' | 'character' | 'world'>('character');
   const [entryDetailExpanded, setEntryDetailExpanded] = useState(false);
-  const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
+  const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<DshEntryProjectSelection>();
   const [entryCharacterTargets, setEntryCharacterTargets] = useState<
     readonly AgentCharacterDialogueTargetOption[]
   >([]);
@@ -314,10 +313,10 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
               >
                 {entryExperience === 'authoring' ? (
                   <AuthoringTargetSelector
-                    presentation={props.entryContext.workspace}
+                    projects={props.entryContext.workspace.projects}
                     selected={entryWorkspaceTarget}
                     pending={props.submitting}
-                    onChange={async (target) => {
+                    onChange={(target) => {
                       setEntryWorkspaceTarget(target);
                       setEntryContextDiagnostic(undefined);
                     }}
@@ -416,10 +415,10 @@ function DshComposer({
     modelOptionId: string,
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
-  readonly onSubmit: () => void;
+  readonly onSubmit: (target: DshConversationCreationTarget) => void;
   readonly entryExperience: 'assistant' | 'authoring';
   readonly entryContextAvailable: boolean;
-  readonly entryWorkspaceTarget?: AgentComposerWorkspaceTarget;
+  readonly entryWorkspaceTarget?: DshEntryProjectSelection;
   readonly selectedCharacterLaunches: readonly SelectedCharacterLaunch[];
   readonly selectedWorldLaunch?: SelectedWorldLaunch;
   readonly onChooseEntryDetail: (detail: 'project' | 'character' | 'world') => void;
@@ -446,6 +445,14 @@ function DshComposer({
     audioType: 'sfx',
   };
   const configurationDiagnostic = configurationError ?? configuration?.diagnostic;
+  const entryTargetDiagnostic =
+    presentation === 'entry' &&
+    surfaceKind === 'entry' &&
+    entryExperience === 'authoring' &&
+    entryWorkspaceTarget === undefined
+      ? copy.projectRequired
+      : undefined;
+  const submissionDiagnostic = configurationDiagnostic ?? entryTargetDiagnostic;
   return (
     <InputAreaProvider
       isBusy={configuring || currentTurn !== undefined}
@@ -486,8 +493,12 @@ function DshComposer({
           queueingEnabled={false}
           onInputChange={onDraftChange}
           onSend={() => {
-            if (configurationDiagnostic || disabled || draft.trim().length === 0) return false;
-            onSubmit();
+            if (submissionDiagnostic || disabled || draft.trim().length === 0) return false;
+            onSubmit(
+              entryExperience === 'authoring' && entryWorkspaceTarget !== undefined
+                ? { kind: 'project', projectId: entryWorkspaceTarget.projectId }
+                : { kind: 'surface' },
+            );
             return true;
           }}
           onCancel={onCancel}
@@ -509,8 +520,8 @@ function DshComposer({
                   onChange: onPermissionPresetChange,
                 }
           }
-          submissionBlocked={configurationDiagnostic !== undefined}
-          submissionBlockedReason={configurationDiagnostic}
+          submissionBlocked={submissionDiagnostic !== undefined}
+          submissionBlockedReason={submissionDiagnostic}
           workspaceCanvas={
             configuration?.context
               ? {
@@ -881,6 +892,7 @@ interface DshAgentCopy {
   readonly output: string;
   readonly permissions: string;
   readonly placeholder: string;
+  readonly projectRequired: string;
   readonly restartRuntime: string;
   readonly restartingRuntime: string;
   readonly runtimeUnavailableTitle: string;
@@ -924,6 +936,7 @@ const EN_COPY: DshAgentCopy = {
   modelRequired: 'Select a configured model before sending.',
   permissions: 'Pending permissions',
   placeholder: 'Ask the DSH Agent…',
+  projectRequired: 'Choose a project before starting creation.',
   restartRuntime: 'Restart DSH',
   restartingRuntime: 'Restarting DSH runtime…',
   runtimeUnavailableTitle: 'DSH runtime unavailable',
@@ -971,6 +984,7 @@ const ZH_COPY: DshAgentCopy = {
   modelRequired: '发送前请选择已配置的模型。',
   permissions: '待处理权限',
   placeholder: '向 DSH Agent 提问…',
+  projectRequired: '开始创作前请选择项目。',
   restartRuntime: '重启 DSH',
   restartingRuntime: '正在重启 DSH 运行时…',
   runtimeUnavailableTitle: 'DSH 运行时不可用',
