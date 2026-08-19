@@ -52,8 +52,11 @@ shortcut. A malformed request or unavailable target rejects only the current Too
   identity, MCP, active Workspace/Character selection, global Character creation or final-text-only success.
 - Status: the complete DSH Desktop driver exists, but its scenario setup currently starts only at Entry or a
   generic Workspace surface. It cannot create/select an exact Character authoring surface, bind the resulting
-  CharacterProject target, or collect the owning pre/post project facts required by this case. The real provider
-  and visible Desktop case therefore remains `infrastructure-blocked`; no direct-runtime scenario may substitute.
+  CharacterProject target, or collect the owning pre/post project facts required by this case. The retired global
+  Character success case has been removed from executable discovery instead of being translated into a false
+  success; the adjacent roleplay boundary now poisons `openneko.character`, and Character DSH implementation
+  paths select `agent-runtime.creative-media-workflow`. The real provider and visible Desktop case therefore
+  remains `infrastructure-blocked`; no direct-runtime scenario may substitute.
 
 The foundational session/persistence matrix is not changed by the domain transaction, but the basic Tool path,
 Conversation isolation, restored Character artifact projection and visible Desktop lane remain unverified.

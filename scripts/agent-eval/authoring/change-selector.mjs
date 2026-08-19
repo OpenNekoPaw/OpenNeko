@@ -78,8 +78,11 @@ const RULES = Object.freeze([
     'packages/ai/sdk/src/',
   ]),
   rule('creative-media-workflow', 'agent-runtime.creative-media-workflow', [
+    'packages/chara/src/application/character-dsh-tool',
+    'packages/chara/dsh-plugin/',
     'packages/cut/domain/src/dsh-tool',
     'packages/cut/dsh-plugin/',
+    'packages/agent/runtime/src/acp/character-host-adapter',
     'packages/agent/runtime/src/acp/cut-host-adapter',
     'apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers',
   ]),
@@ -186,6 +189,8 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('packages/host/src/settings/') ||
     path.startsWith('packages/cut/domain/src/dsh-tool') ||
     path.startsWith('packages/cut/dsh-plugin/') ||
+    path.startsWith('packages/chara/src/application/character-dsh-tool') ||
+    path.startsWith('packages/chara/dsh-plugin/') ||
     path === 'packages/content/src/document/read-document-tool.ts' ||
     path === 'packages/content/src/document/read-image-tool.ts' ||
     path.startsWith('scripts/agent-eval/')
