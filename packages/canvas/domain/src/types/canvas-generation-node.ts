@@ -1,4 +1,8 @@
-import { validateContentLocator, type GeneratedOutputContentLocator } from '@neko/content';
+import {
+  isWorkspaceFileContentLocator,
+  validateContentLocator,
+  type WorkspaceFileContentLocator,
+} from '@neko/content';
 import {
   GENERATION_RECIPE_KINDS,
   GENERATION_RECIPE_PURPOSES,
@@ -38,7 +42,7 @@ export interface CanvasGenerationRunBinding {
 export interface CanvasGenerationOutputBinding {
   readonly outputId: string;
   readonly jobRef: JobRef<'generation'>;
-  readonly locator: GeneratedOutputContentLocator;
+  readonly locator: WorkspaceFileContentLocator;
   readonly kind: CanvasGenerationKind;
   readonly recipeInputFingerprint: string;
 }
@@ -302,7 +306,8 @@ function isCanvasGenerationOutputBinding(value: unknown): value is CanvasGenerat
     isNonEmptyString(value['outputId']) &&
     isGenerationJobRef(value['jobRef']) &&
     locator.ok &&
-    locator.locator.kind === 'generated-output' &&
+    isWorkspaceFileContentLocator(locator.locator) &&
+    locator.locator.selector === undefined &&
     isCanvasGenerationKind(value['kind']) &&
     isNonEmptyString(value['recipeInputFingerprint'])
   );

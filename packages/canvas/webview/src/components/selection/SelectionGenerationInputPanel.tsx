@@ -1177,10 +1177,7 @@ function readGenerationReferenceDragPayload(
   dataTransfer: Pick<DataTransfer, 'getData'>,
   recipeKind: CanvasGenerationRecipe['kind'],
 ): {
-  readonly locator: Exclude<
-    ReturnType<typeof parseContentLocatorDragData>['locator'],
-    { readonly kind: 'generated-output' }
-  >;
+  readonly locator: ReturnType<typeof parseContentLocatorDragData>['locator'];
   readonly mediaKind: CanvasMaterialMediaKind;
   readonly title: string;
 } {
@@ -1188,9 +1185,6 @@ function readGenerationReferenceDragPayload(
     dataTransfer.getData(CONTENT_LOCATOR_DRAG_MIME) || dataTransfer.getData('application/json');
   if (!serialized) throw new Error(t('generation.referenceDropInvalid'));
   const payload = parseContentLocatorDragData(JSON.parse(serialized));
-  if (payload.locator.kind === 'generated-output') {
-    throw new Error(t('generation.referenceDropInvalid'));
-  }
   const mediaKind = generationReferenceMediaKind(payload.name);
   if (!isCompatibleGenerationReference(recipeKind, mediaKind)) {
     throw new Error(t('generation.referenceDropIncompatible'));

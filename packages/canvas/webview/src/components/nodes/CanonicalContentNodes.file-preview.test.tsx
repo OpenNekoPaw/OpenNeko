@@ -94,10 +94,7 @@ describe('Canvas File node text preview', () => {
       ...fileNode('invalid-file', 'neko/assets/Books/story.epub', 'application/epub+zip'),
       data: {
         ...fileNode('invalid-file', 'neko/assets/Books/story.epub', 'application/epub+zip').data,
-        contentLocator: {
-          kind: 'workspace-file',
-          path: '/Users/example/private.epub',
-        },
+        contentLocator: { file: { authority: 'workspace', path: '/Users/example/private.epub' } },
       },
     } as unknown as FileCanvasNode;
 
@@ -167,7 +164,7 @@ describe('Canvas File node text preview', () => {
         (request) =>
           new Promise<CanvasTextFilePreviewResult>((resolve) => {
             pending.set(
-              request.nodeId + ':' + request.locator.kind + ':' + request.requestId,
+              request.nodeId + ':' + request.locator.file.path + ':' + request.requestId,
               resolve,
             );
           }),
@@ -184,7 +181,9 @@ describe('Canvas File node text preview', () => {
         ...first.data,
         path: 'data/second.json',
         title: 'second.json',
-        contentLocator: { kind: 'workspace-file' as const, path: 'data/second.json' },
+        contentLocator: {
+          file: { authority: 'workspace' as const, path: 'data/second.json' },
+        },
       },
     };
     await renderFile(root, host, second);
@@ -326,7 +325,7 @@ function fileNode(id: string, path: string, mediaType: string): FileCanvasNode {
       path,
       title: path.split('/').at(-1) ?? path,
       mediaType,
-      contentLocator: { kind: 'workspace-file', path },
+      contentLocator: { file: { authority: 'workspace', path } },
     },
   };
 }

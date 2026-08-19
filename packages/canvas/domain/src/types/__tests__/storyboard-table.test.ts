@@ -990,11 +990,10 @@ describe('storyboard table contract', () => {
     ]);
   });
 
-  it('accepts a document-entry ContentLocator as storyboard image identity', () => {
+  it('accepts a selected document entry as storyboard image identity', () => {
     const contentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/comic.epub' },
-      entryPath: 'OPS/page-1.jpg',
+      file: { authority: 'workspace' as const, path: 'books/comic.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/page-1.jpg' },
     };
     const table = storyboardTable({
       imageStrategy: 'reuse-original',
@@ -1174,11 +1173,7 @@ function sourceMediaRef(refId: string) {
 
 describe('canonical storyboard contract', () => {
   it('requires source profile, stable trace, and content-bound projections', () => {
-    const sourceLocator = {
-      kind: 'workspace-file',
-      path: 'story/script.md',
-      fingerprint: { strategy: 'sha256', value: 'sha256:script-content' },
-    } as const;
+    const sourceLocator = { file: { authority: 'workspace', path: 'story/script.md' } } as const;
     const table = {
       kind: 'storyboard-table',
       sourceProfile: 'from-script',

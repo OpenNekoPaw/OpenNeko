@@ -36,7 +36,7 @@ describe('SelectionContextToolbar', () => {
       data: {
         mediaType: 'image',
         assetPath: 'assets/image.png',
-        contentLocator: { kind: 'workspace-file', path: 'assets/image.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'assets/image.png' } },
       },
     };
     const host = createMaterialHost([
@@ -173,7 +173,7 @@ describe('SelectionContextToolbar', () => {
       data: {
         mediaType: 'video',
         assetPath: 'media/clip.mp4',
-        contentLocator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
       },
     };
     const descriptors: readonly CanvasMaterialActionDescriptor[] = [
@@ -334,12 +334,7 @@ describe('SelectionContextToolbar', () => {
       data: {
         mediaType: 'image',
         assetPath: 'neko/generated/result.png',
-        contentLocator: {
-          kind: 'generated-output',
-          outputId: 'output-1',
-          digest: 'sha256:output-1',
-          path: 'neko/generated/result.png',
-        },
+        contentLocator: { file: { authority: 'workspace', path: 'neko/generated/result.png' } },
       },
     };
     const otio = await renderToolbar(
@@ -482,10 +477,7 @@ describe('SelectionContextToolbar', () => {
             outputId: 'prompt-output-1',
             jobRef: { kind: 'generation', jobId: 'generation-job-1' },
             locator: {
-              kind: 'generated-output',
-              outputId: 'prompt-output-1',
-              digest: 'sha256:prompt-output-1',
-              path: 'neko/generated/prompt-output-1.txt',
+              file: { authority: 'workspace', path: 'neko/generated/prompt-output-1.txt' },
             },
             kind: 'prompt',
             recipeInputFingerprint: 'recipe-fingerprint-1',
@@ -535,10 +527,7 @@ describe('SelectionContextToolbar', () => {
             outputId: 'video-output-1',
             jobRef: { kind: 'generation', jobId: 'generation-job-1' },
             locator: {
-              kind: 'generated-output',
-              outputId: 'video-output-1',
-              digest: 'sha256:video-output-1',
-              path: 'neko/generated/video-output-1.mp4',
+              file: { authority: 'workspace', path: 'neko/generated/video-output-1.mp4' },
             },
             kind: 'video',
             recipeInputFingerprint: 'recipe-fingerprint-1',
@@ -887,7 +876,7 @@ function fileNode(
       title: path,
       path,
       mediaKind,
-      contentLocator: { kind: 'workspace-file', path },
+      contentLocator: { file: { authority: 'workspace', path } },
     },
   } as CanvasNode;
 }
@@ -902,7 +891,7 @@ function mediaNode(id: string, mediaType: 'image' | 'audio' | 'video', path: str
     data: {
       mediaType,
       assetPath: path,
-      contentLocator: { kind: 'workspace-file', path },
+      contentLocator: { file: { authority: 'workspace', path } },
     },
   };
 }

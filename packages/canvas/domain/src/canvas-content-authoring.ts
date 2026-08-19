@@ -27,13 +27,7 @@ export function projectResolvedCanvasMaterialToCanvas(input: {
   readonly generateId?: () => string;
 }): CanvasData {
   const { material } = input;
-  const origin = deriveCanvasMaterialOrigin(material.locator);
-  if (origin === 'referenced' && material.generation) {
-    throw new Error('Referenced Canvas material must not contain Generation evidence.');
-  }
-  if (origin === 'generated' && !material.generation) {
-    throw new Error('Generated Canvas material requires canonical Generation evidence.');
-  }
+  deriveCanvasMaterialOrigin(material.locator, material.generation);
 
   const position = material.position ?? {
     x: 100 + (input.canvas.nodes.length % 4) * 40,
@@ -62,7 +56,7 @@ export function projectResolvedCanvasMaterialToCanvas(input: {
         type: 'media',
         position,
         data: {
-          assetPath: material.locator.kind === 'document-entry' ? '' : portablePath,
+          assetPath: material.locator.selector ? '' : portablePath,
           contentLocator: material.locator,
           mediaType: material.mediaKind,
           title: material.title,
@@ -162,7 +156,9 @@ export function replaceCanvasEntityRepresentationOnCanvas(input: {
   if (input.material.entity.entityId !== currentEntity.entityId) {
     throw new Error('Canvas Entity representation refresh cannot change stable Entity identity.');
   }
-  if (deriveCanvasMaterialOrigin(input.material.locator) !== 'referenced') {
+  if (
+    deriveCanvasMaterialOrigin(input.material.locator, input.material.generation) !== 'referenced'
+  ) {
     throw new Error(
       'Canvas Entity representation refresh requires a referenced representation locator.',
     );
@@ -221,16 +217,7 @@ function sameEntityEvidence(
 }
 
 export function portableMaterialPath(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-      return locator.path;
-    case 'document-entry':
-      return locator.entryPath;
-    case 'generated-output':
-      return locator.path;
-    case 'package-resource':
-      return locator.resourcePath;
-  }
+  return locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path;
 }
 
 function isRenderableMediaKind(

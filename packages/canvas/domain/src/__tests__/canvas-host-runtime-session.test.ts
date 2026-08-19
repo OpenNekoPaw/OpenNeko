@@ -100,16 +100,10 @@ describe('CanvasHostRuntimeSession', () => {
 
   it('authorizes embedded preview only for the exact node, output and locator', () => {
     const firstLocator = {
-      kind: 'generated-output' as const,
-      outputId: 'output-1',
-      digest: 'sha256:output-1',
-      path: 'neko/generated/output-1.png',
+      file: { authority: 'workspace' as const, path: 'neko/generated/output-1.png' },
     };
     const secondLocator = {
-      kind: 'generated-output' as const,
-      outputId: 'output-2',
-      digest: 'sha256:output-2',
-      path: 'neko/generated/output-2.png',
+      file: { authority: 'workspace' as const, path: 'neko/generated/output-2.png' },
     };
     const runtime = new CanvasHostRuntimeSession({
       identity,
@@ -160,7 +154,10 @@ describe('CanvasHostRuntimeSession', () => {
       runtime.authorizePreviewSource({
         nodeId: 'generation-1',
         outputId: 'output-1',
-        locator: { ...firstLocator, path: 'neko/generated/other.png' },
+        locator: {
+          ...firstLocator,
+          file: { ...firstLocator.file, path: 'neko/generated/other.png' },
+        },
         contentKind: 'image',
       }),
     ).toThrow('output "output-1" is stale');
@@ -184,7 +181,9 @@ describe('CanvasHostRuntimeSession', () => {
       truncated: false,
       empty: false,
     }));
-    const locator = { kind: 'workspace-file' as const, path: 'data/project.json' };
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'data/project.json' },
+    };
     const runtime = new CanvasHostRuntimeSession({
       identity,
       initialCanvas: {
@@ -197,7 +196,7 @@ describe('CanvasHostRuntimeSession', () => {
             size: { width: 280, height: 180 },
             zIndex: 1,
             data: {
-              path: locator.path,
+              path: locator.file.path,
               title: 'project.json',
               mediaType: 'application/json',
               contentLocator: locator,
@@ -213,10 +212,7 @@ describe('CanvasHostRuntimeSession', () => {
         requestId: 'stale',
         identity,
         nodeId: 'file-1',
-        locator: {
-          kind: 'workspace-file',
-          path: 'data/other.json',
-        },
+        locator: { file: { authority: 'workspace', path: 'data/other.json' } },
       }),
     ).resolves.toEqual({
       requestId: 'stale',
@@ -235,14 +231,14 @@ describe('CanvasHostRuntimeSession', () => {
       identity,
       nodeId: 'file-1',
       locator,
-      path: locator.path,
+      path: locator.file.path,
       mediaType: 'application/json',
     });
     const snapshot = await runtime.getSnapshot();
     expect(snapshot.canvas.nodes[0]).toMatchObject({
       id: 'file-1',
       data: {
-        path: locator.path,
+        path: locator.file.path,
         title: 'project.json',
         mediaType: 'application/json',
         contentLocator: locator,
@@ -298,7 +294,8 @@ describe('CanvasHostRuntimeSession', () => {
       }
       return {
         ...canvas,
-        name: request.locator.kind === 'workspace-file' ? request.locator.path : 'projected',
+        name:
+          request.locator.file.authority === 'workspace' ? request.locator.file.path : 'projected',
       };
     });
     const runtime = new CanvasHostRuntimeSession({
@@ -492,7 +489,7 @@ describe('CanvasHostRuntimeSession', () => {
         identity,
         request: expect.objectContaining({
           kind: 'direct-reference',
-          locator: { kind: 'workspace-file', path: 'media/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
           mediaKind: 'image',
         }),
       }),
@@ -849,7 +846,7 @@ describe('CanvasHostRuntimeSession', () => {
           nodeId: node.id,
           mediaKind: 'image',
           origin: 'referenced',
-          locator: { kind: 'workspace-file', path: 'media/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
         },
       ],
     });
@@ -866,7 +863,7 @@ describe('CanvasHostRuntimeSession', () => {
           nodeId: node.id,
           mediaKind: 'image',
           origin: 'referenced',
-          locator: { kind: 'workspace-file', path: 'media/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
         },
       ],
     });
@@ -1080,7 +1077,7 @@ function directReference(
       canvasId: identity.documentId,
       canvasSessionId: identity.sessionId,
     },
-    locator: { kind: 'workspace-file' as const, path },
+    locator: { file: { authority: 'workspace' as const, path } },
     mediaKind,
   };
 }
@@ -1095,7 +1092,7 @@ function referencedImageNode(): MediaCanvasNode {
     data: {
       assetPath: 'media/cat.png',
       mediaType: 'image',
-      contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+      contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
     },
   };
 }

@@ -13,9 +13,7 @@ import {
 } from './canvas-cut-draft';
 
 const contentLocator = {
-  kind: 'workspace-file' as const,
-  path: 'assets/video-a.mp4',
-  fingerprint: { strategy: 'sha256' as const, value: 'hash-a' },
+  file: { authority: 'workspace' as const, path: 'assets/video-a.mp4' },
 };
 
 describe('canvas cut draft contract', () => {
@@ -24,7 +22,7 @@ describe('canvas cut draft contract', () => {
       units: [
         playbackUnit('shot-a', {
           assetPath: 'assets/shot-a.mp4',
-          contentLocator: { kind: 'workspace-file', path: 'assets/shot-a.mp4' },
+          contentLocator: { file: { authority: 'workspace', path: 'assets/shot-a.mp4' } },
           metadata: {
             sceneId: 'scene-1',
             shotId: 'shot-1',
@@ -90,7 +88,7 @@ describe('canvas cut draft contract', () => {
         {
           role: 'source',
           assetPath: 'assets/shot-a.mp4',
-          contentLocator: { kind: 'workspace-file', path: 'assets/shot-a.mp4' },
+          contentLocator: { file: { authority: 'workspace', path: 'assets/shot-a.mp4' } },
         },
       ],
       cues: expect.arrayContaining([

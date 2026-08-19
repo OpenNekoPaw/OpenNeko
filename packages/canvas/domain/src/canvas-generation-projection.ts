@@ -1,7 +1,9 @@
 import {
+  contentLocatorKey,
   contentLocatorsEqual,
+  isWorkspaceFileContentLocator,
   validateContentLocator,
-  type GeneratedOutputContentLocator,
+  type WorkspaceFileContentLocator,
 } from '@neko/content';
 import {
   isCanvasMaterialGenerationContext,
@@ -30,7 +32,7 @@ export interface CanvasGenerationProjectionSnapshot {
   readonly mediaKind: CanvasMaterialMediaKind;
   readonly summary: CanvasMaterialGenerationContext;
   readonly position?: { readonly x: number; readonly y: number };
-  readonly resultLocators?: readonly GeneratedOutputContentLocator[];
+  readonly resultLocators?: readonly WorkspaceFileContentLocator[];
   readonly failure?: JobFailureSummary;
 }
 
@@ -72,7 +74,11 @@ export function projectGenerationSnapshotToCanvas(
   const outputNodeIds: string[] = [];
   for (const [index, locator] of resultLocators.entries()) {
     const validation = validateContentLocator(locator);
-    if (!validation.ok || validation.locator.kind !== 'generated-output') {
+    if (
+      !validation.ok ||
+      !isWorkspaceFileContentLocator(validation.locator) ||
+      validation.locator.selector !== undefined
+    ) {
       throw new Error(`Generation result locator ${index} is invalid.`);
     }
     const existingOutput = canvas.nodes.find(
@@ -96,7 +102,7 @@ export function projectGenerationSnapshotToCanvas(
       canvas,
       material: {
         locator: validation.locator,
-        title: titleFromPath(validation.locator.path),
+        title: titleFromPath(validation.locator.file.path),
         mediaKind: input.snapshot.mediaKind,
         generation: {
           jobRef: input.snapshot.ref,
@@ -325,8 +331,8 @@ function jobNodeId(ref: CanvasGenerationJobRef): string {
   return `generation-job:${encodeURIComponent(ref.jobId)}`;
 }
 
-function outputNodeId(ref: CanvasGenerationJobRef, locator: GeneratedOutputContentLocator): string {
-  return `generation-output:${encodeURIComponent(ref.jobId)}:${encodeURIComponent(locator.outputId)}:${encodeURIComponent(locator.digest)}`;
+function outputNodeId(ref: CanvasGenerationJobRef, locator: WorkspaceFileContentLocator): string {
+  return `generation-output:${encodeURIComponent(ref.jobId)}:${encodeURIComponent(contentLocatorKey(locator))}`;
 }
 
 function jobPosition(canvas: CanvasData): { readonly x: number; readonly y: number } {

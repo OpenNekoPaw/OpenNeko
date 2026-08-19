@@ -387,7 +387,7 @@ function isGeneratedOutputMediaArtifact(artifact: CanvasWorkspaceProjectionArtif
     artifact.kind !== 'markdown' &&
     artifact.provenance.role === 'output' &&
     (artifact.kind === 'image' || artifact.kind === 'audio' || artifact.kind === 'video') &&
-    artifact.contentLocator.kind === 'generated-output'
+    artifact.generation !== undefined
   );
 }
 

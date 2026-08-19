@@ -265,7 +265,7 @@ export class CanvasProjectAuthoringService {
       );
     }
     return {
-      documentPath: locator.path,
+      documentPath: locator.file.path,
       fingerprint: result.fingerprint,
       canvas: loaded.data,
     };
@@ -299,5 +299,5 @@ function canvasLocator(documentPath: string): WorkspaceFileContentLocator {
       'Canvas project target must be a normalized Workspace-relative .nkc path.',
     );
   }
-  return { kind: 'workspace-file', path: normalized };
+  return { file: { authority: 'workspace', path: normalized } };
 }

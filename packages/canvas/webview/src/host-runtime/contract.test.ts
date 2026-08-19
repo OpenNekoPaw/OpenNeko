@@ -37,7 +37,7 @@ describe('Canvas Host runtime contract', () => {
             canvasId: identity.documentId,
             canvasSessionId: identity.sessionId,
           },
-          locator: { kind: 'workspace-file', path: 'assets/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'assets/cat.png' } },
           mediaKind: 'image',
         },
       },

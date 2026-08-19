@@ -332,10 +332,10 @@ function imageOutput(outputId: string) {
     outputId,
     jobRef: { kind: 'generation' as const, jobId: 'job-image' },
     locator: {
-      kind: 'generated-output' as const,
-      outputId,
-      digest: `sha256:${outputId}`,
-      path: `neko/generated/image/${outputId}.png`,
+      file: {
+        authority: 'workspace' as const,
+        path: `neko/generated/image/${outputId}.png`,
+      },
     },
     kind: 'image' as const,
     recipeInputFingerprint: 'sha256:image-recipe',
@@ -347,10 +347,10 @@ function output(outputId: string, jobId: string, recipeInputFingerprint: string)
     outputId,
     jobRef: { kind: 'generation' as const, jobId },
     locator: {
-      kind: 'generated-output' as const,
-      outputId,
-      digest: `sha256:${outputId}`,
-      path: `neko/generated/prompt/${outputId}.txt`,
+      file: {
+        authority: 'workspace' as const,
+        path: `neko/generated/prompt/${outputId}.txt`,
+      },
     },
     kind: 'prompt' as const,
     recipeInputFingerprint,

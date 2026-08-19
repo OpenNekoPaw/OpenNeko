@@ -22,10 +22,7 @@ const VALID_CANVAS: CanvasData = {
       zIndex: 1,
       data: {
         assetPath: 'assets/video.mp4',
-        contentLocator: {
-          kind: 'workspace-file',
-          path: 'assets/video.mp4',
-        },
+        contentLocator: { file: { authority: 'workspace', path: 'assets/video.mp4' } },
         mediaType: 'video',
       },
     },
@@ -132,13 +129,9 @@ describe('loadNkc', () => {
 
   it('opens a mounted Media Library material locator as one durable workspace-relative fact', () => {
     const mountedLocator = {
-      kind: 'document-entry',
-      source: {
-        kind: 'workspace-file',
-        path: 'neko/assets/Books/story.epub',
-      },
-      entryPath: 'image/cover.jpg',
-    } as const;
+      file: { authority: 'workspace', path: 'neko/assets/Books/story.epub' },
+      selector: { kind: 'entry', path: 'image/cover.jpg' },
+    };
     const result = loadNkc(
       JSON.stringify({
         ...VALID_CANVAS,

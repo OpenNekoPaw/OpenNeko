@@ -152,7 +152,7 @@ export class CutProjectAuthoringService {
       );
     }
     return {
-      documentPath: locator.path,
+      documentPath: locator.file.path,
       fingerprint: result.fingerprint,
       document: parsed.document,
     };
@@ -191,5 +191,5 @@ function cutLocator(documentPath: string): WorkspaceFileContentLocator {
       'Cut project target must be a normalized Workspace-relative .otio path.',
     );
   }
-  return { kind: 'workspace-file', path: normalized };
+  return { file: { authority: 'workspace', path: normalized } };
 }

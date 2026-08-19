@@ -264,7 +264,7 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
           contentFingerprint: lifecycle.revision,
           kind: lifecycle.mediaKind,
           role: 'output' as const,
-          sourceId: lifecycle.contentLocator.outputId,
+          sourceId: asset.id,
           operationId: lifecycle.generation.operationId,
           ...(lifecycle.generation.runId ? { runId: lifecycle.generation.runId } : {}),
           createdAt: asset.generatedAt,
@@ -416,9 +416,8 @@ export function isCanvasWorkspaceProjectionRequest(
       (artifact['kind'] === 'markdown'
         ? typeof artifact['markdown'] === 'string'
         : contentLocator?.ok === true &&
-          (contentLocator.locator.kind === 'generated-output'
-            ? isCanvasGenerationEvidence(artifact['generation'])
-            : artifact['generation'] === undefined) &&
+          (artifact['generation'] === undefined ||
+            isCanvasGenerationEvidence(artifact['generation'])) &&
           artifact['resourceRef'] === undefined &&
           artifact['documentResourceRef'] === undefined &&
           artifact['localPath'] === undefined) &&
@@ -740,24 +739,15 @@ function validateArtifact(
 
   if (artifact['kind'] !== 'markdown') {
     const locator = validateContentLocator(artifact['contentLocator']);
-    const hasGeneration = isCanvasGenerationEvidence(artifact['generation']);
-    if (locator.ok && locator.locator.kind === 'generated-output' && !hasGeneration) {
+    if (
+      locator.ok &&
+      artifact['generation'] !== undefined &&
+      !isCanvasGenerationEvidence(artifact['generation'])
+    ) {
       diagnostics.push(
         diagnostic(
           'missing-projection-identity',
           'Generated output projection requires immutable Generation Job evidence.',
-          [...path, 'generation'],
-        ),
-      );
-    } else if (
-      locator.ok &&
-      locator.locator.kind !== 'generated-output' &&
-      artifact['generation']
-    ) {
-      diagnostics.push(
-        diagnostic(
-          'invalid-content-locator',
-          'Referenced content projection must not carry Generation evidence.',
           [...path, 'generation'],
         ),
       );

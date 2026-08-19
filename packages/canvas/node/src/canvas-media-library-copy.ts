@@ -214,8 +214,10 @@ function mapProjectResult(
     destinationKind: 'project-media-library',
     source: result.source,
     destination: {
-      kind: 'workspace-file',
-      path: `neko/assets/${libraryName}/${result.entryId}`,
+      file: {
+        authority: 'workspace',
+        path: `neko/assets/${libraryName}/${result.entryId}`,
+      },
     },
     byteLength: result.byteLength,
   };

@@ -38,18 +38,21 @@ describe('CanvasFullscreenPreviewOverlay', () => {
       items: [
         expect.objectContaining({
           id: 'canvas-fullscreen:generation:generation-image:output-1',
+          outputId: 'output-1',
           role: 'image',
           previewKind: 'image',
-          contentLocator: expect.objectContaining({ outputId: 'output-1' }),
+          contentLocator: {
+            file: { authority: 'workspace', path: 'neko/generated/output-1.png' },
+          },
         }),
         expect.objectContaining({
           id: 'canvas-fullscreen:generation:generation-image:output-2',
+          outputId: 'output-2',
           role: 'image',
           previewKind: 'image',
-          contentLocator: expect.objectContaining({
-            outputId: 'output-2',
-            digest: 'sha256:selected',
-          }),
+          contentLocator: {
+            file: { authority: 'workspace', path: 'neko/generated/output-2.png' },
+          },
         }),
       ],
     });
@@ -66,7 +69,7 @@ describe('CanvasFullscreenPreviewOverlay', () => {
           expect.objectContaining({
             previewKind: 'video',
             role: 'video-proxy',
-            contentLocator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+            contentLocator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
           }),
         ],
       }),
@@ -78,7 +81,7 @@ describe('CanvasFullscreenPreviewOverlay', () => {
           expect.objectContaining({
             previewKind: 'audio',
             role: 'audio-waveform',
-            contentLocator: { kind: 'workspace-file', path: 'media/voice.mp3' },
+            contentLocator: { file: { authority: 'workspace', path: 'media/voice.mp3' } },
           }),
         ],
       }),
@@ -91,9 +94,8 @@ describe('CanvasFullscreenPreviewOverlay', () => {
       data: {
         ...mediaNode('invalid-node', 'video', 'Books/story.epub/video/preview.mp4').data,
         contentLocator: {
-          kind: 'document-entry',
-          source: { kind: 'workspace-file', path: '/Users/example/private.epub' },
-          entryPath: 'video/preview.mp4',
+          file: { authority: 'workspace', path: '/Users/example/private.epub' },
+          selector: { kind: 'entry', path: 'video/preview.mp4' },
         },
       },
     } as unknown as CanvasNode;
@@ -114,12 +116,7 @@ describe('CanvasFullscreenPreviewOverlay', () => {
           {
             outputId: 'prompt-output',
             jobRef: { kind: 'generation', jobId: 'prompt-job' },
-            locator: {
-              kind: 'generated-output',
-              outputId: 'prompt-output',
-              digest: 'sha256:prompt-output',
-              path: 'neko/generated/prompt-output.txt',
-            },
+            locator: { file: { authority: 'workspace', path: 'neko/generated/prompt-output.txt' } },
             kind: 'prompt',
             recipeInputFingerprint: 'sha256:prompt-recipe',
           },
@@ -296,29 +293,30 @@ function galleryRequest(): CanvasFullscreenPreviewRequest {
 function previewItem(outputId: string, title: string) {
   return {
     id: `canvas-fullscreen:generation:generation-image:${outputId}`,
+    outputId,
     role: 'image' as const,
     previewKind: 'image' as const,
     title,
     asset: { kind: 'asset-identity' as const, mediaType: 'image' as const },
     contentLocator: {
-      kind: 'generated-output' as const,
-      outputId,
-      digest: `sha256:${outputId}`,
-      path: `neko/generated/${outputId}.png`,
+      file: {
+        authority: 'workspace' as const,
+        path: `neko/generated/${outputId}.png`,
+      },
     },
     metadata: {},
   };
 }
 
-function output(outputId: string, digest: string, jobId = 'job-1') {
+function output(outputId: string, _digest: string, jobId = 'job-1') {
   return {
     outputId,
     jobRef: { kind: 'generation', jobId } as const,
     locator: {
-      kind: 'generated-output' as const,
-      outputId,
-      digest,
-      path: `neko/generated/${outputId}.png`,
+      file: {
+        authority: 'workspace' as const,
+        path: `neko/generated/${outputId}.png`,
+      },
     },
     kind: 'image' as const,
     recipeInputFingerprint: 'recipe-fingerprint-1',
@@ -335,7 +333,7 @@ function mediaNode(id: string, mediaType: 'video' | 'audio', path: string): Canv
     data: {
       mediaType,
       assetPath: path,
-      contentLocator: { kind: 'workspace-file', path },
+      contentLocator: { file: { authority: 'workspace', path } },
     },
   };
 }
@@ -352,7 +350,7 @@ function fileNode(nodeId: string, path: string, mediaType: string): CanvasNode {
       path,
       mediaKind: 'document',
       mediaType,
-      contentLocator: { kind: 'workspace-file', path },
+      contentLocator: { file: { authority: 'workspace', path } },
     },
   };
 }

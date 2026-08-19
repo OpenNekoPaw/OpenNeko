@@ -2,9 +2,10 @@ import type { JobRef } from '@neko/shared/job-lifecycle';
 import { isCanvasMaterialGenerationContext, type CanvasMaterialGenerationContext } from './canvas';
 import {
   isProjectDurableContentLocator,
+  isWorkspaceFileContentLocator,
   validateContentLocator,
   type ContentLocator,
-  type GeneratedOutputContentLocator,
+  type WorkspaceFileContentLocator,
 } from '@neko/content';
 import { isEntityRepresentationRole, type EntityRepresentationRole } from '@neko/entity-domain';
 
@@ -35,7 +36,7 @@ export type CanvasMaterialImportConflictPolicy =
 export type CanvasMediaLibraryCopyConflictPolicy =
   (typeof CANVAS_MEDIA_LIBRARY_COPY_CONFLICT_POLICIES)[number];
 export type CanvasGenerationJobRef = JobRef<'generation'>;
-export type CanvasReferencedContentLocator = Exclude<ContentLocator, GeneratedOutputContentLocator>;
+export type CanvasReferencedContentLocator = ContentLocator;
 
 /**
  * Immutable creator-facing evidence for a generated result.
@@ -139,7 +140,7 @@ export type CanvasMaterialAuthoringRequest =
     })
   | (CanvasMaterialAuthoringRequestBase & {
       readonly kind: 'generated-output-commit';
-      readonly locator: GeneratedOutputContentLocator;
+      readonly locator: WorkspaceFileContentLocator;
       readonly generation: CanvasGenerationEvidence;
       readonly mediaKind: CanvasMaterialMediaKind;
       readonly title: string;
@@ -188,7 +189,6 @@ export type CanvasMaterialPersistenceDiagnosticCode =
   | 'canvas-material-content-locator-invalid'
   | 'canvas-material-media-kind-invalid'
   | 'canvas-material-generation-evidence-required'
-  | 'canvas-material-generation-evidence-forbidden'
   | 'canvas-material-entity-evidence-invalid'
   | 'canvas-material-non-serializable-value'
   | 'canvas-material-sensitive-value-forbidden';
@@ -199,12 +199,19 @@ export interface CanvasMaterialPersistenceDiagnostic {
   readonly message: string;
 }
 
-export function deriveCanvasMaterialOrigin(locator: ContentLocator): CanvasMaterialOrigin {
+export function deriveCanvasMaterialOrigin(
+  locator: ContentLocator,
+  generation?: CanvasGenerationEvidence,
+): CanvasMaterialOrigin {
   const result = validateContentLocator(locator);
   if (!result.ok) {
     throw new Error('Canvas material origin requires a valid ContentLocator.');
   }
-  return result.locator.kind === 'generated-output' ? 'generated' : 'referenced';
+  if (generation === undefined) return 'referenced';
+  if (!isCanvasGenerationEvidence(generation)) {
+    throw new Error('Generated Canvas material requires canonical Generation evidence.');
+  }
+  return 'generated';
 }
 
 export function isCanvasGenerationEvidence(value: unknown): value is CanvasGenerationEvidence {
@@ -252,11 +259,7 @@ export function isCanvasMaterialAuthoringRequest(
         return false;
       }
       const locator = validateContentLocator(value['locator']);
-      return (
-        locator.ok &&
-        locator.locator.kind !== 'generated-output' &&
-        isCanvasDurableMaterialContentLocator(locator.locator)
-      );
+      return locator.ok && isCanvasDurableMaterialContentLocator(locator.locator);
     }
     case 'entity-representation-replace': {
       if (
@@ -283,7 +286,6 @@ export function isCanvasMaterialAuthoringRequest(
       const locator = validateContentLocator(value['locator']);
       return (
         locator.ok &&
-        locator.locator.kind !== 'generated-output' &&
         isCanvasDurableMaterialContentLocator(locator.locator) &&
         value['expectedEntity'].entityId === value['entity'].entityId
       );
@@ -346,7 +348,11 @@ export function isCanvasMaterialAuthoringRequest(
         return false;
       }
       const locator = validateContentLocator(value['locator']);
-      return locator.ok && locator.locator.kind === 'generated-output';
+      return (
+        locator.ok &&
+        isWorkspaceFileContentLocator(locator.locator) &&
+        locator.locator.selector === undefined
+      );
     }
     case 'derived-output-commit': {
       if (
@@ -369,9 +375,7 @@ export function isCanvasMaterialAuthoringRequest(
       }
       const locator = validateContentLocator(value['locator']);
       if (!locator.ok || !isCanvasDurableMaterialContentLocator(locator.locator)) return false;
-      return locator.locator.kind === 'generated-output'
-        ? isCanvasGenerationEvidence(value['generation'])
-        : value['generation'] === undefined;
+      return value['generation'] === undefined || isCanvasGenerationEvidence(value['generation']);
     }
     default:
       return false;
@@ -535,21 +539,11 @@ export function validateCanvasMaterialNodePersistence(
     });
   }
 
-  if (durableLocator && locator.locator.kind === 'generated-output') {
-    if (!isCanvasGenerationEvidence(data['generation'])) {
-      diagnostics.push({
-        code: 'canvas-material-generation-evidence-required',
-        target: `${target}.generation`,
-        message:
-          'Generated-output Canvas material requires immutable evidence with JobRef<generation>.',
-      });
-    }
-  } else if (data['generation'] !== undefined) {
+  if (data['generation'] !== undefined && !isCanvasGenerationEvidence(data['generation'])) {
     diagnostics.push({
-      code: 'canvas-material-generation-evidence-forbidden',
+      code: 'canvas-material-generation-evidence-required',
       target: `${target}.generation`,
-      message:
-        'Referenced Canvas material cannot persist Generation evidence or be classified as generated.',
+      message: 'Generated Canvas material requires immutable evidence with JobRef<generation>.',
     });
   }
 
@@ -581,47 +575,9 @@ export function isCanvasDurableMaterialContentLocator(value: unknown): value is 
  * unavailable Canvas node. It is never authorized, resolved, or rewritten.
  */
 export function isSafeUnavailableCanvasMaterialLocator(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  if (value['kind'] === 'workspace-file') {
-    return isSafeUnavailableWorkspaceFileLocator(value);
-  }
-  if (
-    value['kind'] !== 'document-entry' ||
-    !hasOnlyKeys(value, ['kind', 'source', 'entryPath', 'fingerprint']) ||
-    !isRecord(value['source']) ||
-    !isSafeUnavailableWorkspaceFileLocator(value['source'])
-  ) {
-    return false;
-  }
-  return validateContentLocator({
-    ...value,
-    source: { ...value['source'], path: 'unavailable/source' },
-  }).ok;
-}
-
-function isSafeUnavailableWorkspaceFileLocator(value: Record<string, unknown>): boolean {
-  if (!hasOnlyKeys(value, ['kind', 'path', 'fingerprint'])) return false;
-  if (value['kind'] !== 'workspace-file' || !isNormalizedUnavailableProjectPath(value['path'])) {
-    return false;
-  }
-  return validateContentLocator({ ...value, path: 'unavailable/source' }).ok;
-}
-
-function isNormalizedUnavailableProjectPath(value: unknown): value is string {
-  if (typeof value !== 'string' || value.normalize('NFC') !== value) return false;
-  if (!value || value.includes('\0') || value.includes('${') || value.includes('\\')) return false;
-  if (value.startsWith('/') || /^[A-Za-z]:(?:\/|$)/.test(value)) return false;
-  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(value)) return false;
-  return value
-    .split('/')
-    .every(
-      (segment) =>
-        segment.length > 0 &&
-        segment !== '.' &&
-        segment !== '..' &&
-        !segment.startsWith('.') &&
-        !segment.includes(':'),
-    );
+  return (
+    isJsonSafeRecord(value) && !validateContentLocator(value).ok && Object.keys(value).length > 0
+  );
 }
 
 function isCanvasGenerationJobRef(value: unknown): value is CanvasGenerationJobRef {

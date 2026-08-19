@@ -303,6 +303,7 @@ function generationPreviewSource(
   const previewKind = output.kind === 'prompt' ? 'text' : output.kind;
   return {
     id: `canvas-fullscreen:generation:${node.id}:${output.outputId}`,
+    outputId: output.outputId,
     role: previewRole(previewKind),
     previewKind,
     title: node.data.recipe.prompt || t(`node.${output.kind}`),
@@ -375,7 +376,7 @@ function CanvasFullscreenPreviewBody({
       type: 'preview:resolveResource',
       requestId,
       nodeId: request.nodeId,
-      outputId: locator.kind === 'generated-output' ? locator.outputId : request.nodeId,
+      outputId: source.outputId ?? request.nodeId,
       contentLocator: locator,
       contentKind: source.previewKind,
       mediaType: getPreviewMediaType(fileName) ?? defaultMediaType(source.previewKind),
@@ -458,15 +459,7 @@ function basename(value: string | undefined): string | undefined {
 function contentLocatorFileName(
   locator: NonNullable<CanvasFullscreenPreviewSource['contentLocator']>,
 ): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return locator.path;
-    case 'document-entry':
-      return locator.entryPath;
-    case 'package-resource':
-      return locator.resourcePath;
-  }
+  return locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

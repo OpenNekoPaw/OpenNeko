@@ -108,7 +108,7 @@ describe('Canvas text-file preview contract', () => {
         requestId: 'request',
         identity,
         nodeId: 'node',
-        locator: { kind: 'workspace-file', path: 'notes/readme.md' },
+        locator: { file: { authority: 'workspace', path: 'notes/readme.md' } },
         extra: true,
       } as never),
     ).toThrow('unsupported fields');

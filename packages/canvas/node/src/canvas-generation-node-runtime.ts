@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createNodeHostContentReadService } from '@neko/content/node';
-import { type ContentReadService, type GeneratedOutputContentLocator } from '@neko/content';
+import { type ContentReadService, type WorkspaceFileContentLocator } from '@neko/content';
 import {
   beginCanvasGenerationRun,
   bindCanvasGenerationNodeJob,
@@ -282,7 +282,7 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     nodeId: string,
     run: CanvasGenerationRunBinding,
     snapshot: GenerationJobSnapshot,
-    selectedPromptLocator?: GeneratedOutputContentLocator,
+    selectedPromptLocator?: WorkspaceFileContentLocator,
   ): Promise<CanvasGenerationRuntimeProjection> {
     const projection = projectSnapshot(nodeId, run, snapshot);
     if (

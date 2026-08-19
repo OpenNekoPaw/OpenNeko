@@ -31,10 +31,7 @@ describe('SelectionMaterialGenerationBar', () => {
     const node = mediaNode('generated-media', {
       assetPath: 'neko/generated/generation-job-1/result.png',
       contentLocator: {
-        kind: 'generated-output',
-        outputId: 'output-1',
-        digest: 'sha256:generated-output-1',
-        path: 'neko/generated/generation-job-1/result.png',
+        file: { authority: 'workspace', path: 'neko/generated/generation-job-1/result.png' },
       },
       mediaType: 'image',
       generation,
@@ -63,10 +60,7 @@ describe('SelectionMaterialGenerationBar', () => {
     const node = mediaNode('generated-media', {
       assetPath: 'neko/generated/generation-job-1/result.png',
       contentLocator: {
-        kind: 'generated-output',
-        outputId: 'output-1',
-        digest: 'sha256:generated-output-1',
-        path: 'neko/generated/generation-job-1/result.png',
+        file: { authority: 'workspace', path: 'neko/generated/generation-job-1/result.png' },
       },
       mediaType: 'image',
       generation: {
@@ -92,10 +86,7 @@ describe('SelectionMaterialGenerationBar', () => {
         title: 'storyboard.md',
         mediaKind: 'document',
         contentLocator: {
-          kind: 'generated-output',
-          outputId: 'generated-document-1',
-          digest: 'sha256:generated-document-1',
-          path: 'neko/generated/document/storyboard.md',
+          file: { authority: 'workspace', path: 'neko/generated/document/storyboard.md' },
         },
         generation: {
           ...generation,

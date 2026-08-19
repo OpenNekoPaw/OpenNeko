@@ -30,7 +30,7 @@ function media(id: string, parentId?: string): MediaCanvasNode {
     zIndex: 1,
     data: {
       assetPath: `media/${id}.mp4`,
-      contentLocator: { kind: 'workspace-file', path: `media/${id}.mp4` },
+      contentLocator: { file: { authority: 'workspace', path: `media/${id}.mp4` } },
       mediaType: 'video',
       duration: 3,
     },
