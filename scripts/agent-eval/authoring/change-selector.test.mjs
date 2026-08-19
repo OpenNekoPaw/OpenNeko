@@ -242,6 +242,24 @@ describe('Agent Evaluation change-to-suite selector', () => {
     ]);
   });
 
+  it('maps the World DSH Tool vertical slice to creative workflow coverage', () => {
+    const paths = [
+      'packages/world/src/application/world-dsh-tool.ts',
+      'packages/world/dsh-plugin/src/index.ts',
+      'packages/agent/runtime/src/acp/world-host-adapter.ts',
+      'apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers.ts',
+    ];
+    expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
+    expect(selectEvaluationCoverage(paths)).toEqual([
+      {
+        behaviorId: 'creative-media-workflow',
+        suiteId: 'agent-runtime.creative-media-workflow',
+        suiteIds: ['agent-runtime.creative-media-workflow'],
+        changedPaths: paths,
+      },
+    ]);
+  });
+
   it('maps canonical builtin Skill content without a retired Pi execution fixture', () => {
     const paths = ['packages/skills/skills/character-creator/SKILL.md'];
     expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);

@@ -80,6 +80,9 @@ const RULES = Object.freeze([
   rule('creative-media-workflow', 'agent-runtime.creative-media-workflow', [
     'packages/chara/src/application/character-dsh-tool',
     'packages/chara/dsh-plugin/',
+    'packages/world/src/application/world-dsh-tool',
+    'packages/world/dsh-plugin/',
+    'packages/agent/runtime/src/acp/world-host-adapter',
     'packages/cut/domain/src/dsh-tool',
     'packages/cut/dsh-plugin/',
     'packages/agent/runtime/src/acp/character-host-adapter',
@@ -191,6 +194,8 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('packages/cut/dsh-plugin/') ||
     path.startsWith('packages/chara/src/application/character-dsh-tool') ||
     path.startsWith('packages/chara/dsh-plugin/') ||
+    path.startsWith('packages/world/src/application/world-dsh-tool') ||
+    path.startsWith('packages/world/dsh-plugin/') ||
     path === 'packages/content/src/document/read-document-tool.ts' ||
     path === 'packages/content/src/document/read-image-tool.ts' ||
     path.startsWith('scripts/agent-eval/')

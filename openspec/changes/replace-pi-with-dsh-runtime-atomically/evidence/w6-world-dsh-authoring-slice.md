@@ -22,6 +22,9 @@ Deterministic evidence:
 - Desktop typecheck and DSH profile/runtime closure tests passed.
 - `pnpm check:agent-boundaries`, Tool inventory, package roles and product
   reachability passed with one `openneko.world` registration.
+- The Evaluation change-to-suite selector maps World DSH producer, ACP and
+  Desktop delegation files to `agent-runtime.creative-media-workflow` without
+  adding a direct-runtime case.
 
 The visible Provider-backed World case remains `infrastructure-blocked`: the
 current Evaluation Desktop driver cannot create an exact WorldProject authoring
