@@ -215,10 +215,7 @@ async function writeBinding(workspacePath: string): Promise<void> {
             representations: [
               {
                 bindingId: 'binding-a',
-                target: {
-                  kind: 'workspace-file',
-                  path: 'neko/assets/Footage/shot.mov',
-                },
+                target: { file: { authority: 'workspace', path: 'neko/assets/Footage/shot.mov' } },
                 role: 'portrait',
                 source: 'user',
                 acceptedAt: '2026-08-01T00:00:00.000Z',

@@ -10,7 +10,7 @@ describe('media generation type resolution', () => {
     expect(
       resolveImageGenerationType({
         prompt: 'edit',
-        referenceImageLocator: { kind: 'workspace-file', path: 'references/image.png' },
+        referenceImageLocator: { file: { authority: 'workspace', path: 'references/image.png' } },
       }),
     ).toBe('image-to-image');
   });
@@ -19,7 +19,7 @@ describe('media generation type resolution', () => {
     expect(
       resolveImageGenerationType({
         prompt: 'line art',
-        controlImageLocator: { kind: 'workspace-file', path: 'controls/lineart.png' },
+        controlImageLocator: { file: { authority: 'workspace', path: 'controls/lineart.png' } },
       }),
     ).toBe('image-to-image');
   });
@@ -32,7 +32,7 @@ describe('media generation type resolution', () => {
     expect(
       resolveVideoGenerationType({
         prompt: 'animate',
-        startFrameLocator: { kind: 'workspace-file', path: 'frames/start.png' },
+        startFrameLocator: { file: { authority: 'workspace', path: 'frames/start.png' } },
       }),
     ).toBe('image-to-video');
   });
@@ -41,7 +41,7 @@ describe('media generation type resolution', () => {
     expect(
       resolveVideoGenerationType({
         prompt: 'edit',
-        referenceVideoLocator: { kind: 'workspace-file', path: 'videos/source.mp4' },
+        referenceVideoLocator: { file: { authority: 'workspace', path: 'videos/source.mp4' } },
       }),
     ).toBe('video-to-video');
   });

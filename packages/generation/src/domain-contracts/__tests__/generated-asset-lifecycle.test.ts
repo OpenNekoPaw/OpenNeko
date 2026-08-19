@@ -6,14 +6,11 @@ describe('generated asset lifecycle', () => {
     const lifecycle = createLifecycle('draft-1', 'sha256:same', 'operation-1');
 
     expect(lifecycle.contentLocator).toEqual({
-      kind: 'generated-output',
-      outputId: 'draft-1',
-      digest: 'sha256:same',
-      path: 'neko/generated/image/draft-1.png',
+      file: { authority: 'workspace', path: 'neko/generated/image/draft-1.png' },
     });
   });
 
-  it('rejects unsupported fields and mismatched locator identity', () => {
+  it('rejects unsupported fields and non-workspace locator identity', () => {
     const lifecycle = createLifecycle('draft-1', 'sha256:same', 'operation-1');
 
     expect(
@@ -44,14 +41,17 @@ describe('generated asset lifecycle', () => {
       validateGeneratedAssetRevisionRef({
         ...lifecycle,
         contentLocator: {
-          ...lifecycle.contentLocator,
-          outputId: 'different-output',
+          file: {
+            authority: 'package',
+            packageId: 'package-1',
+            revision: 'rev-1',
+            path: 'neko/generated/image/draft-1.png',
+          },
         },
       }),
     ).toEqual({
       ok: false,
-      diagnostic:
-        'Generated asset lifecycle identity does not match its generated-output content locator.',
+      diagnostic: 'Generated asset lifecycle structure is invalid.',
     });
   });
 });

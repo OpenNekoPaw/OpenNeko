@@ -1,4 +1,5 @@
 import type { MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 import type { ResourceBrowserContentEntry } from './ports';
 
 export type ResourceBrowserContentTreeEntryType = 'file' | 'directory' | 'symlink' | 'unknown';
@@ -102,7 +103,7 @@ async function readDirectoryChildren(
       directories.push(absolutePath);
       if (matchesQuery(locatorPath, input.query)) {
         entries.push({
-          locator: { kind: 'workspace-file', path: locatorPath },
+          locator: { file: { authority: 'workspace', path: locatorPath } },
           label: child.name,
           description: portableParentPath(locatorPath),
           availability: 'available',
@@ -122,7 +123,7 @@ async function readDirectoryChildren(
     if (!classification.include) continue;
     const stat = await input.files.stat(absolutePath);
     entries.push({
-      locator: { kind: 'workspace-file', path: locatorPath },
+      locator: { file: { authority: 'workspace', path: locatorPath } },
       label: child.name,
       description: portableParentPath(locatorPath),
       availability: 'available',
@@ -182,9 +183,11 @@ function portableParentPath(locatorPath: string): string {
 function parentLocator(
   locatorPrefix: string,
   relativePath: string,
-): { readonly parentLocator?: { readonly kind: 'workspace-file'; readonly path: string } } {
+): { readonly parentLocator?: WorkspaceFileContentLocator } {
   const segments = relativePath.split('/');
   segments.pop();
   const parentPath = [locatorPrefix, segments.join('/')].filter(Boolean).join('/');
-  return parentPath ? { parentLocator: { kind: 'workspace-file', path: parentPath } } : {};
+  return parentPath
+    ? { parentLocator: { file: { authority: 'workspace', path: parentPath } } }
+    : {};
 }

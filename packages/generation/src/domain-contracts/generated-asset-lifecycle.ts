@@ -1,8 +1,10 @@
 import type { GeneratedAssetMediaKind } from './generated-asset';
 import {
+  createWorkspaceFileContentLocator,
+  isWorkspaceFileContentLocator,
   normalizeWorkspaceContentPath,
   validateContentLocator,
-  type GeneratedOutputContentLocator,
+  type WorkspaceFileContentLocator,
 } from '@neko/content';
 import { hashStableValue } from '@neko/shared';
 
@@ -29,7 +31,7 @@ export interface GeneratedAssetRevisionRef {
   readonly contentDigest: string;
   readonly mediaKind: GeneratedAssetMediaKind;
   readonly mimeType: string;
-  readonly contentLocator: GeneratedOutputContentLocator;
+  readonly contentLocator: WorkspaceFileContentLocator;
   readonly generation: GeneratedAssetGenerationLineage;
 }
 
@@ -68,12 +70,7 @@ export function createGeneratedAssetRevisionRef(
       'Generated asset lifecycle requires a normalized workspace-relative contentPath.',
     );
   }
-  const contentLocator: GeneratedOutputContentLocator = {
-    kind: 'generated-output',
-    outputId: input.assetId,
-    digest: input.contentDigest,
-    path: contentPath,
-  };
+  const contentLocator = createWorkspaceFileContentLocator(contentPath);
   return {
     assetId: input.assetId,
     revision,
@@ -106,18 +103,13 @@ export function validateGeneratedAssetRevisionRef(
     !mediaKind ||
     !generation ||
     !contentLocator.ok ||
-    contentLocator.locator.kind !== 'generated-output'
+    !isWorkspaceFileContentLocator(contentLocator.locator) ||
+    contentLocator.locator.selector !== undefined
   ) {
     return invalidLifecycle('Generated asset lifecycle structure is invalid.');
   }
-  if (
-    revision !== createGeneratedAssetRevision(assetId, contentDigest) ||
-    contentLocator.locator.outputId !== assetId ||
-    contentLocator.locator.digest !== contentDigest
-  ) {
-    return invalidLifecycle(
-      'Generated asset lifecycle identity does not match its generated-output content locator.',
-    );
+  if (revision !== createGeneratedAssetRevision(assetId, contentDigest)) {
+    return invalidLifecycle('Generated asset lifecycle revision does not match its identity.');
   }
   return {
     ok: true,

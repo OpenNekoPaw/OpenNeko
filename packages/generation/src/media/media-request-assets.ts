@@ -34,7 +34,7 @@ export function createContentReadMediaRequestAssetMaterializer(
     });
     if (result.status === 'unavailable') {
       throw new Error(
-        `Media request content materialization failed: ${result.diagnostic.code} (${locator.kind}).`,
+        `Media request content materialization failed: ${result.diagnostic.code} (${locator.file.authority}).`,
       );
     }
     return result;
@@ -156,7 +156,7 @@ async function resolveAsUrl(
 ): Promise<string> {
   if (!materializer?.resolveAsUrl) {
     throw new Error(
-      `Media request video locator requires authorized URL materialization: ${locator.kind}`,
+      `Media request video locator requires authorized URL materialization: ${locator.file.authority}`,
     );
   }
   return signal ? materializer.resolveAsUrl(locator, signal) : materializer.resolveAsUrl(locator);
@@ -168,7 +168,9 @@ async function readAsBase64(
   signal: AbortSignal | undefined,
 ): Promise<string> {
   if (!materializer) {
-    throw new Error(`Media request locator requires host content access: ${locator.kind}`);
+    throw new Error(
+      `Media request locator requires host content access: ${locator.file.authority}`,
+    );
   }
   return signal ? materializer.readAsBase64(locator, signal) : materializer.readAsBase64(locator);
 }

@@ -83,12 +83,14 @@ describe('createNodeGenerationJobOwner', () => {
       phase: 'succeeded',
       resultLocators: [
         {
-          kind: 'generated-output',
-          path: expect.stringMatching(/^neko\/generated\/image\//u),
+          file: {
+            authority: 'workspace',
+            path: expect.stringMatching(/^neko\/generated\/image\//u),
+          },
         },
       ],
     });
-    const outputPath = completed.resultLocators?.[0]?.path;
+    const outputPath = completed.resultLocators?.[0]?.file.path;
     expect(outputPath).toBeDefined();
     await expect(fs.readFile(path.join(workspaceRoot, outputPath!), 'utf8')).resolves.toBe(
       'generated image bytes',
@@ -130,10 +132,12 @@ describe('createNodeGenerationJobOwner', () => {
     const locator = completed.resultLocators?.[0];
 
     expect(locator).toMatchObject({
-      kind: 'generated-output',
-      path: expect.stringMatching(/^neko\/generated\/text\//u),
+      file: {
+        authority: 'workspace',
+        path: expect.stringMatching(/^neko\/generated\/text\//u),
+      },
     });
-    await expect(fs.readFile(path.join(workspaceRoot, locator!.path), 'utf8')).resolves.toBe(
+    await expect(fs.readFile(path.join(workspaceRoot, locator!.file.path), 'utf8')).resolves.toBe(
       '# Generated scene',
     );
     await owner.dispose();
@@ -194,17 +198,19 @@ describe('createNodeGenerationJobOwner', () => {
     const locator = completed.resultLocators?.[0];
 
     expect(locator).toMatchObject({
-      kind: 'generated-output',
-      path: expect.stringMatching(/^neko\/generated\/image\//u),
+      file: {
+        authority: 'workspace',
+        path: expect.stringMatching(/^neko\/generated\/image\//u),
+      },
     });
-    await expect(fs.readFile(path.join(assistantRoot, locator!.path), 'utf8')).resolves.toBe(
+    await expect(fs.readFile(path.join(assistantRoot, locator!.file.path), 'utf8')).resolves.toBe(
       'assistant generated image bytes',
     );
     await expect(fs.stat(path.join(assistantRoot, 'neko', 'project.json'))).rejects.toMatchObject({
       code: 'ENOENT',
     });
-    expect(path.isAbsolute(locator!.path)).toBe(false);
-    expect(locator!.path).not.toContain('.part');
+    expect(path.isAbsolute(locator!.file.path)).toBe(false);
+    expect(locator!.file.path).not.toContain('.part');
 
     await owner.dispose();
 

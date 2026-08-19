@@ -43,10 +43,10 @@ export async function resolveProjectWorkspaceContentLocator(
   context: ProjectContentReadContext,
   locator: WorkspaceFileContentLocator,
 ): Promise<string> {
-  if (parseWorkspaceMediaLibraryPath(locator.path)) {
+  if (parseWorkspaceMediaLibraryPath(locator.file.path)) {
     return resolveProjectMediaLibraryContentPath(context, locator);
   }
-  const requestedPath = path.join(context.workspaceRoot, ...locator.path.split('/'));
+  const requestedPath = path.join(context.workspaceRoot, ...locator.file.path.split('/'));
   const authorization = await authorizeWorkspaceContainedPath({
     workspaceRoot: context.workspaceRoot,
     requestedPath,
@@ -71,8 +71,7 @@ export async function authorizeProjectWorkspaceContentPath(
   const media = parseWorkspaceMediaLibraryPath(portable);
   if (!media) return authorizeWorkspaceContainedPath(input);
   const resolved = await createProjectMediaLibraryContentPathResolver(context).resolve({
-    kind: 'workspace-file',
-    path: portable,
+    file: { authority: 'workspace', path: portable },
   });
   return resolved.ok
     ? { authorized: true }

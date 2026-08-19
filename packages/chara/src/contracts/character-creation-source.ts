@@ -1,5 +1,6 @@
 import {
   contentLocatorKey,
+  isPackageResourceContentLocator,
   validateContentLocator,
   type ContentLocator,
   type PackageResourceContentLocator,
@@ -189,10 +190,10 @@ function parseCharacterAssetRepresentationSource(
   );
   const assetId = requireIdentity(record['assetId'], 'Character representation Asset');
   const resource = validateContentLocator(record['resource']);
-  if (!resource.ok || resource.locator.kind !== 'package-resource') {
+  if (!resource.ok || !isPackageResourceContentLocator(resource.locator)) {
     throw new Error('Character Asset representation requires an exact package-resource locator.');
   }
-  if (resource.locator.packageId !== assetId) {
+  if (resource.locator.file.packageId !== assetId) {
     throw new Error('Character Asset representation package identity mismatch.');
   }
   return {

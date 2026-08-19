@@ -2,7 +2,6 @@ import type {
   EntityBindingAvailabilityProjectionValue,
   ProjectEntityBindingAttentionAction,
 } from '../contracts';
-import { serializeContentReferenceTarget } from '@neko/content';
 
 export interface EntityBindingAvailabilityProjection {
   readonly label: string;
@@ -39,14 +38,11 @@ export function projectEntityBindingAvailabilityText(
 function representationLabel(
   representation: EntityBindingAvailabilityProjectionValue['representation'],
 ): string {
-  switch (representation.kind) {
-    case 'workspace-file':
-      return representation.path;
-    case 'document-entry':
-      return `${serializeContentReferenceTarget(representation.source)}#${representation.entryPath}`;
-    case 'generated-output':
-      return representation.path;
-    case 'package-resource':
-      return `${representation.packageId}/${representation.resourcePath}`;
-  }
+  const fileLabel =
+    representation.file.authority === 'workspace'
+      ? representation.file.path
+      : `${representation.file.packageId}/${representation.file.path}`;
+  return representation.selector?.kind === 'entry'
+    ? `${fileLabel}#${representation.selector.path}`
+    : fileLabel;
 }

@@ -232,7 +232,7 @@ export class AssetCenterNodeRuntime {
               const descriptorId = `descriptor:${previewSessionId}`;
               const projection = await this.previewResources.project({
                 descriptorId,
-                locator: contentLocator,
+                source: contentLocator,
                 displayName: resolved.item.label,
                 requestedMediaType: mediaType,
                 owner: { previewSessionId, identity, resolved },

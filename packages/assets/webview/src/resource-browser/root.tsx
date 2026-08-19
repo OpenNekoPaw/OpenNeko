@@ -540,8 +540,8 @@ export function ResourceBrowserRoot({
       const created = resultProjection.items.find(
         (item) =>
           item.source === 'files' &&
-          item.locator.kind === 'workspace-file' &&
-          item.locator.path === createdPath,
+          item.locator.file.authority === 'workspace' &&
+          item.locator.file.path === createdPath,
       );
       setSelectedIdBySource((current) => ({
         ...current,
@@ -1614,8 +1614,8 @@ function isPackageOwnedProjectStorage(item: ResourceBrowserItem): boolean {
   return (
     item.source === 'files' &&
     'locator' in item &&
-    item.locator.kind === 'workspace-file' &&
-    inspectResourceBrowserProjectStorageMutation(item.locator.path) !== undefined
+    item.locator.file.authority === 'workspace' &&
+    inspectResourceBrowserProjectStorageMutation(item.locator.file.path) !== undefined
   );
 }
 
@@ -1982,18 +1982,18 @@ function resolveCreatedEntryPath(
       ? `${requestedName}${extension}`
       : requestedName.slice(0, requestedName.length - (extension ? extension.length : 0)) +
         extension;
-  if (!item || item.source !== 'files' || item.locator.kind !== 'workspace-file') return name;
-  if (item.kind === 'directory') return `${item.locator.path}/${name}`;
-  const separator = item.locator.path.lastIndexOf('/');
-  return separator < 0 ? name : `${item.locator.path.slice(0, separator)}/${name}`;
+  if (!item || item.source !== 'files' || item.locator.file.authority !== 'workspace') return name;
+  if (item.kind === 'directory') return `${item.locator.file.path}/${name}`;
+  const separator = item.locator.file.path.lastIndexOf('/');
+  return separator < 0 ? name : `${item.locator.file.path.slice(0, separator)}/${name}`;
 }
 
 function isWorkspaceDocument(item: ResourceBrowserItem, extension: '.nkc' | '.otio'): boolean {
   return (
     (item.source === 'files' || item.source === 'media') &&
     item.role !== 'library-root' &&
-    item.locator.kind === 'workspace-file' &&
-    item.locator.path.toLocaleLowerCase().endsWith(extension)
+    item.locator.file.authority === 'workspace' &&
+    item.locator.file.path.toLocaleLowerCase().endsWith(extension)
   );
 }
 

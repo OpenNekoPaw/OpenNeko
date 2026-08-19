@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { serializeContentReferenceTarget, type ContentLocator } from '@neko/content';
+import { type ContentLocator } from '@neko/content';
 import {
   createContentReadMediaRequestAssetMaterializer,
   materializeImageRequestFileUris,
@@ -49,9 +49,7 @@ describe('media request asset materialization', () => {
       encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
     });
 
-    await expect(materializer.readAsBase64(locator)).rejects.toThrow(
-      'content-missing (workspace-file)',
-    );
+    await expect(materializer.readAsBase64(locator)).rejects.toThrow('content-missing (workspace)');
   });
 
   it('materializes image locators through the injected Host port', async () => {
@@ -178,11 +176,9 @@ describe('media request asset materialization', () => {
 });
 
 function workspaceLocator(path: string): ContentLocator {
-  return { kind: 'workspace-file', path };
+  return { file: { authority: 'workspace', path } };
 }
 
 function locatorPath(locator: ContentLocator): string {
-  if (locator.kind === 'package-resource') return locator.resourcePath;
-  if (locator.kind === 'document-entry') return serializeContentReferenceTarget(locator.source);
-  return locator.path;
+  return locator.file.path;
 }

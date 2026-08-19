@@ -351,7 +351,7 @@ describe('Resource Browser controller', () => {
 
   it('reconciles the exact target directory after nested creative document creation', async () => {
     const directory: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References' },
+      locator: { file: { authority: 'workspace', path: 'References' } },
       label: 'References',
       availability: 'available',
       capabilities: ['read'],
@@ -360,7 +360,7 @@ describe('Resource Browser controller', () => {
       depth: 0,
     };
     const board: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References/Board.nkc' },
+      locator: { file: { authority: 'workspace', path: 'References/Board.nkc' } },
       parentLocator: directory.locator,
       label: 'Board.nkc',
       availability: 'available',
@@ -400,7 +400,7 @@ describe('Resource Browser controller', () => {
 
   it('resolves selected directories, selected-file parents, and no selection without fallback', async () => {
     const directory: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References' },
+      locator: { file: { authority: 'workspace', path: 'References' } },
       label: 'References',
       availability: 'available',
       capabilities: ['read'],
@@ -409,7 +409,7 @@ describe('Resource Browser controller', () => {
       depth: 0,
     };
     const file: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References/notes.md' },
+      locator: { file: { authority: 'workspace', path: 'References/notes.md' } },
       parentLocator: directory.locator,
       label: 'notes.md',
       availability: 'available',
@@ -506,7 +506,7 @@ describe('Resource Browser controller', () => {
   it('routes admitted text only to the editor and never falls back to Preview on admission failure', async () => {
     const source = createSource();
     const textEntry: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'notes/story.fountain' },
+      locator: { file: { authority: 'workspace', path: 'notes/story.fountain' } },
       label: 'story.fountain',
       availability: 'available',
       capabilities: ['read', 'preview'],
@@ -605,7 +605,7 @@ describe('Resource Browser controller', () => {
 
   it('loads only direct children for an explicit expandable parent', async () => {
     const parent: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'characters' },
+      locator: { file: { authority: 'workspace', path: 'characters' } },
       label: 'characters',
       availability: 'available',
       capabilities: ['read'],
@@ -614,7 +614,7 @@ describe('Resource Browser controller', () => {
       depth: 0,
     };
     const child: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'characters/hero.glb' },
+      locator: { file: { authority: 'workspace', path: 'characters/hero.glb' } },
       parentLocator: parent.locator,
       label: 'hero.glb',
       availability: 'available',
@@ -656,7 +656,7 @@ describe('Resource Browser controller', () => {
 
   it('re-reads loaded empty directories during authoritative reconciliation', async () => {
     const parent: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References' },
+      locator: { file: { authority: 'workspace', path: 'References' } },
       label: 'References',
       availability: 'available',
       capabilities: ['read'],
@@ -665,7 +665,7 @@ describe('Resource Browser controller', () => {
       depth: 0,
     };
     const child: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References/Board.nkc' },
+      locator: { file: { authority: 'workspace', path: 'References/Board.nkc' } },
       parentLocator: parent.locator,
       label: 'Board.nkc',
       availability: 'available',
@@ -706,7 +706,7 @@ function createSource(): ResourceBrowserProjectionSource & {
   readonly refresh: ReturnType<typeof vi.fn>;
 } {
   const media: ResourceBrowserContentEntry = {
-    locator: { kind: 'workspace-file', path: 'assets/cat.png' },
+    locator: { file: { authority: 'workspace', path: 'assets/cat.png' } },
     label: 'cat.png',
     availability: 'available',
     capabilities: ['read', 'preview', 'bind'],

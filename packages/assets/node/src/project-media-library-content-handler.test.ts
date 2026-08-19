@@ -40,8 +40,10 @@ describe('project Media Library content authorization', () => {
       globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
     });
     const locator = {
-      kind: 'workspace-file' as const,
-      path: 'neko/assets/Footage/shots/hero.txt',
+      file: {
+        authority: 'workspace' as const,
+        path: 'neko/assets/Footage/shots/hero.txt',
+      },
     };
 
     const result = await content.read(locator);
@@ -60,8 +62,10 @@ describe('project Media Library content authorization', () => {
       globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
     });
     const locator = {
-      kind: 'workspace-file' as const,
-      path: 'neko/assets/Footage/shots/hero.txt',
+      file: {
+        authority: 'workspace' as const,
+        path: 'neko/assets/Footage/shots/hero.txt',
+      },
     };
 
     const result = await content.read(locator);
@@ -86,12 +90,11 @@ describe('project Media Library content authorization', () => {
       documentEntryReader: { readEntry },
     });
     const locator = {
-      kind: 'document-entry' as const,
-      source: {
-        kind: 'workspace-file' as const,
+      file: {
+        authority: 'workspace' as const,
         path: 'neko/assets/Footage/shots/hero.txt',
       },
-      entryPath: 'images/cover.jpg',
+      selector: { kind: 'entry' as const, path: 'images/cover.jpg' },
     };
 
     const result = await content.read(locator);
@@ -114,8 +117,7 @@ describe('project Media Library content authorization', () => {
 
     await expect(
       content.read({
-        kind: 'workspace-file',
-        path: 'neko/assets/Footage/shots/hero.txt',
+        file: { authority: 'workspace', path: 'neko/assets/Footage/shots/hero.txt' },
       }),
     ).resolves.toMatchObject({ status: 'ready' });
   });
@@ -133,8 +135,7 @@ describe('project Media Library content authorization', () => {
 
     await expect(
       content.read({
-        kind: 'workspace-file',
-        path: 'neko/assets/Footage/shots/escape.txt',
+        file: { authority: 'workspace', path: 'neko/assets/Footage/shots/escape.txt' },
       }),
     ).resolves.toMatchObject({
       status: 'unavailable',
@@ -171,8 +172,7 @@ async function createFixture() {
             {
               bindingId: 'binding-1',
               target: {
-                kind: 'workspace-file',
-                path: 'neko/assets/Footage/shots/hero.txt',
+                file: { authority: 'workspace', path: 'neko/assets/Footage/shots/hero.txt' },
               },
               role: 'portrait',
               source: 'user',

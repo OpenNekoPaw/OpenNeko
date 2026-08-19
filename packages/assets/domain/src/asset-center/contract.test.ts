@@ -95,7 +95,9 @@ function readyProjection() {
             relativePath: 'shot.png',
             availability: 'available' as const,
           },
-          contentLocator: { kind: 'workspace-file' as const, path: 'shot.png' },
+          contentLocator: {
+            file: { authority: 'workspace' as const, path: 'shot.png' },
+          },
         },
       ],
     },

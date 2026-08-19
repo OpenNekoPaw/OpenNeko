@@ -6,6 +6,7 @@ import { PROJECT_ENTITY_DOCUMENT_WORKSPACE_PATH } from '@neko/entity-domain';
 import { NodeProjectEntityRepresentationReferenceService } from '@neko/entity-node';
 import {
   contentLocatorKey,
+  isWorkspaceFileContentLocator,
   normalizeWorkspaceContentPath,
   parseContentReferenceTarget,
   validateContentLocator,
@@ -236,12 +237,12 @@ function readCutContentLocator(
   ownerId: string,
 ): WorkspaceFileContentLocator {
   const portable = parseContentReferenceTarget(targetUrl);
-  if (portable && parseWorkspaceMediaLibraryPath(portable.path)) return portable;
+  if (portable && parseWorkspaceMediaLibraryPath(portable.file.path)) return portable;
   const targetPath = normalizeWorkspaceContentPath(
     path.posix.normalize(path.posix.join(documentDirectory, targetUrl)),
   );
   if (!targetPath) throw invalidProjectDocument('cut', ownerId);
-  return { kind: 'workspace-file', path: targetPath };
+  return { file: { authority: 'workspace', path: targetPath } };
 }
 
 async function readEntityRepresentationReferences(input: {
@@ -337,13 +338,11 @@ function replaceContentLocator(
   locator: ContentLocator,
   replacements: ReadonlyMap<string, string>,
 ): ContentLocator {
-  if (locator.kind === 'workspace-file') {
+  if (isWorkspaceFileContentLocator(locator)) {
     const replacement = replacements.get(contentLocatorKey(locator));
-    return replacement ? { ...locator, path: replacement } : locator;
-  }
-  if (locator.kind === 'document-entry') {
-    const source = replaceContentLocator(locator.source, replacements);
-    return source.kind === 'workspace-file' ? { ...locator, source } : locator;
+    return replacement
+      ? { ...locator, file: { authority: 'workspace', path: replacement } }
+      : locator;
   }
   return locator;
 }

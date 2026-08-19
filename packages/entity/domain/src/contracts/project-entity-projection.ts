@@ -18,7 +18,6 @@ import {
 export const PROJECT_ENTITY_BINDING_RESOURCE_OWNERS = [
   'workspace-file',
   'document',
-  'generated-output',
   'asset',
 ] as const;
 export const PROJECT_ENTITY_BINDING_AVAILABILITY_STATES = ['available', 'needs-attention'] as const;

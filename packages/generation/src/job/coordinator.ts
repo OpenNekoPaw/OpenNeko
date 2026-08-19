@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { validateContentLocator } from '@neko/content';
+import { isWorkspaceFileContentLocator, validateContentLocator } from '@neko/content';
 import {
   isTerminalJobPhase,
   JobLifecycleError,
@@ -688,18 +688,22 @@ function normalizeProgress(progress: number): number {
 }
 
 function assertResultLocators(
-  resultLocators: readonly import('@neko/content').GeneratedOutputContentLocator[],
+  resultLocators: readonly import('@neko/content').WorkspaceFileContentLocator[],
 ): void {
   if (
     resultLocators.length === 0 ||
     resultLocators.some((locator) => {
       const result = validateContentLocator(locator);
-      return !result.ok || result.locator.kind !== 'generated-output';
+      return (
+        !result.ok ||
+        !isWorkspaceFileContentLocator(result.locator) ||
+        result.locator.selector !== undefined
+      );
     })
   ) {
     throw new GenerationJobError(
       'generation-job-result-unavailable',
-      'Generation completed without valid generated-output ContentLocator results.',
+      'Generation completed without valid workspace ContentLocator results.',
     );
   }
 }

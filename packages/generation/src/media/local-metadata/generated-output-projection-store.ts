@@ -428,7 +428,7 @@ function assertLifecycleMatchesProjectionPath(
   const contentPath = pathKey.startsWith(ownerPrefix)
     ? pathKey.slice(ownerPrefix.length)
     : undefined;
-  if (contentPath !== asset.lifecycle.contentLocator.path) {
+  if (contentPath !== asset.lifecycle.contentLocator.file.path) {
     const ownerLabel = rootVariable === 'WORKSPACE' ? 'workspace' : 'Assistant Space';
     const message = `Generated asset ${asset.id} lifecycle locator does not match its ${ownerLabel} projection path.`;
     if (resourceId) {

@@ -1,5 +1,9 @@
 import { serializeLocalMetadataJson } from '@neko/local-metadata';
-import { isContentLocator, validateContentLocator } from '@neko/content';
+import {
+  isContentLocator,
+  isWorkspaceFileContentLocator,
+  validateContentLocator,
+} from '@neko/content';
 import type { JobFailureSummary, JobPhase } from '@neko/shared/job-lifecycle';
 import {
   GENERATION_JOB_KIND,
@@ -96,7 +100,11 @@ function isGenerationJobSnapshot(value: unknown): value is GenerationJobSnapshot
       (!Array.isArray(resultLocators) ||
         !resultLocators.every((locator) => {
           const result = validateContentLocator(locator);
-          return result.ok && result.locator.kind === 'generated-output';
+          return (
+            result.ok &&
+            isWorkspaceFileContentLocator(result.locator) &&
+            result.locator.selector === undefined
+          );
         }))) ||
     (failure !== undefined && !isFailure(failure))
   ) {

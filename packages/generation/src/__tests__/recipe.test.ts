@@ -72,7 +72,7 @@ describe('Generation Recipe ownership', () => {
         {
           kind: 'image',
           sourceNodeId: 'image-node',
-          locator: { kind: 'workspace-file', path: 'references/portrait.png' },
+          locator: { file: { authority: 'workspace', path: 'references/portrait.png' } },
         },
       ],
     );
@@ -86,7 +86,9 @@ describe('Generation Recipe ownership', () => {
         providerId: 'provider',
         modelId: 'model',
         count: 2,
-        referenceImageLocator: { kind: 'workspace-file', path: 'references/portrait.png' },
+        referenceImageLocator: {
+          file: { authority: 'workspace', path: 'references/portrait.png' },
+        },
       },
     });
   });
@@ -107,7 +109,7 @@ describe('Generation Recipe ownership', () => {
           {
             kind: 'audio',
             sourceNodeId: 'audio-node',
-            locator: { kind: 'workspace-file', path: 'references/voice.wav' },
+            locator: { file: { authority: 'workspace', path: 'references/voice.wav' } },
           },
         ],
       ),

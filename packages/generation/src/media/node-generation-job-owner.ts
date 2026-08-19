@@ -6,7 +6,7 @@ import type {
   MediaGenerationExecutionPort,
   PromptGenerationExecutionPort,
 } from '@neko/generation';
-import type { GeneratedOutputContentLocator } from '@neko/content';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 import { resolveWorkspaceGeneratedAssetRelativeDirectory } from '@neko/generation';
 import {
   GenerationJobCoordinator,
@@ -178,7 +178,7 @@ async function commitGenerationResult(input: {
   readonly generation: GenerationExecutionResult;
   readonly ownerRoot: string;
   readonly generatedAssets: GeneratedAssetIndex;
-}): Promise<readonly GeneratedOutputContentLocator[]> {
+}): Promise<readonly WorkspaceFileContentLocator[]> {
   if (input.generation.type === 'prompt') {
     return commitPromptGenerationResult({
       operationId: input.operationId,
@@ -214,7 +214,7 @@ async function commitPromptGenerationResult(input: {
   readonly operationId: string;
   readonly text: string;
   readonly ownerRoot: string;
-}): Promise<readonly GeneratedOutputContentLocator[]> {
+}): Promise<readonly WorkspaceFileContentLocator[]> {
   const bytes = Buffer.from(input.text, 'utf8');
   const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
   const outputId = createStableGeneratedOutputId(input.operationId, 0, digest);
@@ -222,7 +222,7 @@ async function commitPromptGenerationResult(input: {
   const outputPath = path.join(input.ownerRoot, ...relativePath.split('/'));
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, bytes);
-  return [{ kind: 'generated-output', outputId, digest, path: relativePath }];
+  return [{ file: { authority: 'workspace', path: relativePath } }];
 }
 
 function toGeneratedMediaKind(type: string): GeneratedMediaKind {

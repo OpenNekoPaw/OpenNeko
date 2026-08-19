@@ -1,26 +1,17 @@
 import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
-import type { GeneratedOutputContentLocator, WorkspaceFileContentLocator } from '@neko/content';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 import {
   authorizeWorkspaceContainedPath,
-  createNodeHostContentReadService,
   type WorkspacePathGuardDiagnosticCode,
 } from '@neko/content/node';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 
 export async function resolveWorkspaceContentLocator(
   workspace: AssetWorkspaceResolution,
-  locator: WorkspaceFileContentLocator | GeneratedOutputContentLocator,
+  locator: WorkspaceFileContentLocator,
 ): Promise<string> {
-  if (locator.kind === 'generated-output') {
-    const content = await createNodeHostContentReadService({
-      workspaceRoot: workspace.workspacePath,
-    }).stat(locator);
-    if (content.status !== 'ready') {
-      throw new Error(`Generated output content is unavailable: ${content.diagnostic.code}.`);
-    }
-  }
-  const requestedPath = path.join(workspace.workspacePath, ...locator.path.split('/'));
+  const requestedPath = path.join(workspace.workspacePath, ...locator.file.path.split('/'));
   const authorization = await authorizeWorkspaceContainedPath({
     workspaceRoot: workspace.workspacePath,
     requestedPath,

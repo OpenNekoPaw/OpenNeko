@@ -35,7 +35,9 @@ describe('AssetCenterNodeRuntime', () => {
       revealHomeMediaLibrary: vi.fn(),
       resolveAssetCenterSelection: vi.fn(async () => ({
         item,
-        contentLocator: { kind: 'workspace-file' as const, path: 'shots/shot.png' },
+        contentLocator: {
+          file: { authority: 'workspace' as const, path: 'shots/shot.png' },
+        },
         absolutePath,
       })),
     };
@@ -69,7 +71,7 @@ describe('AssetCenterNodeRuntime', () => {
       identity: {
         owner: { kind: 'asset-center', assetCenterSessionId: identity.assetCenterSessionId },
       },
-      descriptor: { contentLocator: { kind: 'workspace-file', path: 'shots/shot.png' } },
+      descriptor: { contentLocator: { file: { authority: 'workspace', path: 'shots/shot.png' } } },
     });
 
     const detached = await runtime.detachSession(identity);
@@ -352,7 +354,9 @@ function resourceBrowserWithItem(item: ReturnType<typeof mediaItem>, absolutePat
     searchHomeMediaLibraries: vi.fn(async () => ({ items: [item] })),
     resolveAssetCenterSelection: vi.fn(async () => ({
       item,
-      contentLocator: { kind: 'workspace-file' as const, path: item.relativePath },
+      contentLocator: {
+        file: { authority: 'workspace' as const, path: item.relativePath },
+      },
       absolutePath,
     })),
   };

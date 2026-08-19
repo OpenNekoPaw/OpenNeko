@@ -1,5 +1,5 @@
 import type { JobRef, JobSnapshotBase, JobStore } from '@neko/shared/job-lifecycle';
-import type { GeneratedOutputContentLocator } from '@neko/content';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 import type {
   AudioGenerationRequest,
   ImageGenerationRequest,
@@ -63,7 +63,7 @@ export interface GenerationJobSnapshot extends JobSnapshotBase<typeof GENERATION
   readonly request: GenerationJobRequest;
   readonly progress: GenerationJobProgress;
   readonly providerTask?: GenerationProviderTaskRef;
-  readonly resultLocators?: readonly GeneratedOutputContentLocator[];
+  readonly resultLocators?: readonly WorkspaceFileContentLocator[];
 }
 
 export interface GenerationJobReadDiagnostic {
@@ -107,7 +107,7 @@ export interface GenerationJobResultCommitter {
   commit(input: {
     readonly ref: GenerationJobRef;
     readonly generation: GenerationExecutionResult;
-  }): Promise<readonly GeneratedOutputContentLocator[]>;
+  }): Promise<readonly WorkspaceFileContentLocator[]>;
 }
 
 export interface GenerationJobPort {

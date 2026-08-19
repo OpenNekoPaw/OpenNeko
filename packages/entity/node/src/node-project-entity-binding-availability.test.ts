@@ -31,7 +31,7 @@ describe('refreshProjectEntityBindingAvailability', () => {
       bindingId: 'binding-rin',
       entityId: 'character-rin',
       entityKind: 'character',
-      representation: { kind: 'workspace-file', path: 'rin.png' },
+      representation: { file: { authority: 'workspace', path: 'rin.png' } },
       role: 'portrait',
       owner: 'workspace-file',
       availability: 'available',
@@ -134,10 +134,17 @@ describe('refreshProjectEntityBindingAvailability', () => {
           projectId: document.projectId,
         }),
         availability: new ProjectEntityBindingAvailabilityService({
-          workspaceFile: unavailable('content-missing'),
-          documentEntry: unavailable('content-missing'),
-          generatedOutput: unavailable('content-unauthorized'),
-          packageResource: unavailable('content-missing'),
+          content: {
+            stat: vi.fn(async (locator) => {
+              if (locator.file.authority === 'package') {
+                return unavailable('content-missing').stat(locator);
+              }
+              if (locator.file.path === 'neko/generated/rin.png') {
+                return unavailable('content-unauthorized').stat(locator);
+              }
+              return unavailable('content-missing').stat(locator);
+            }),
+          },
         }),
         projections: { list: vi.fn(), replaceSource, insertMissing: vi.fn() },
         partition: {
@@ -191,24 +198,21 @@ function documentWithBindings(): ProjectEntityDocument {
         kind: 'character',
         names: { canonical: 'Rin', aliases: [] },
         representations: [
-          binding('binding-file', { kind: 'workspace-file', path: 'missing.png' }),
+          binding('binding-file', { file: { authority: 'workspace', path: 'missing.png' } }),
           binding('binding-document', {
-            kind: 'document-entry',
-            source: { kind: 'workspace-file', path: 'removed-link.epub' },
-            entryPath: 'images/rin.png',
+            file: { authority: 'workspace', path: 'removed-link.epub' },
+            selector: { kind: 'entry', path: 'images/rin.png' },
           }),
           binding('binding-generated', {
-            kind: 'generated-output',
-            outputId: 'output-rin',
-            digest: 'a'.repeat(64),
-            path: 'neko/generated/rin.png',
+            file: { authority: 'workspace', path: 'neko/generated/rin.png' },
           }),
           binding('binding-asset', {
-            kind: 'package-resource',
-            packageId: 'asset-rin',
-            revision: '4',
-            digest: 'b'.repeat(64),
-            resourcePath: 'model/model.json',
+            file: {
+              authority: 'package',
+              packageId: 'asset-rin',
+              revision: '4',
+              path: 'model/model.json',
+            },
           }),
         ],
         lifecycle: { state: 'active' },

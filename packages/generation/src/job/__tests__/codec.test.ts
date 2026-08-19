@@ -34,14 +34,12 @@ describe('Generation Job codec', () => {
           providerId: 'provider-1',
           modelId: 'image-model',
           referenceImageLocator: {
-            kind: 'workspace-file',
-            path: 'references/source.png',
+            file: { authority: 'workspace', path: 'references/source.png' },
           },
           ipAdapterRefs: [
             {
               imageLocator: {
-                kind: 'workspace-file',
-                path: 'references/appearance.png',
+                file: { authority: 'workspace', path: 'references/appearance.png' },
               },
               mode: 'subject',
             },
@@ -112,8 +110,7 @@ describe('Generation Job codec', () => {
         request: {
           ...snapshot().request.request,
           referenceImageLocator: {
-            kind: 'workspace-file',
-            path: '/tmp/source.png',
+            file: { authority: 'workspace', path: '/tmp/source.png' },
           },
         },
       },

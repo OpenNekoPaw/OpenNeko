@@ -309,9 +309,6 @@ function snapshot(options: { readonly jobId?: string } = {}): GenerationJobSnaps
 
 function resultLocator() {
   return {
-    kind: 'generated-output' as const,
-    outputId: 'generated-1',
-    digest: 'sha256:generated-1',
-    path: 'neko/generated/image/generated-1.png',
+    file: { authority: 'workspace' as const, path: 'neko/generated/image/generated-1.png' },
   };
 }

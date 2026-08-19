@@ -11,8 +11,7 @@ import type { ImageGenerationRequest, VideoGenerationRequest } from '@neko/gener
 
 function contentLocator(id: string) {
   return {
-    kind: 'workspace-file' as const,
-    path: `assets/${id.replaceAll(':', '-')}`,
+    file: { authority: 'workspace' as const, path: `assets/${id.replaceAll(':', '-')}` },
   };
 }
 

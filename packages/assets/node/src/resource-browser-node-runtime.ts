@@ -745,7 +745,7 @@ export class ResourceBrowserNodeRuntime {
     }
     return {
       item,
-      contentLocator: { kind: 'workspace-file', path: relativePath },
+      contentLocator: { file: { authority: 'workspace', path: relativePath } },
       absolutePath,
     };
   }
@@ -1256,11 +1256,6 @@ export function createResourceToCanvasInteraction(options: {
       item.source === 'assets' || item.role === 'library-root' ? undefined : item.locator;
     if (!locator) {
       throw new Error('Resource Browser item has no Canvas representation.');
-    }
-    if (locator.kind === 'generated-output') {
-      throw new Error(
-        'Generated Resource Browser results require the Generation-owned commit path.',
-      );
     }
     commandSequence += 1;
     const commandIdentity = [
