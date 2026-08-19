@@ -7,7 +7,7 @@
 `enforce-thin-desktop-application-root`、`normalize-package-naming-topology`、
 `define-character-chatroom-play-use`、`compose-desktop-workbench-scenes`、
 `add-markdown-workspace-references-and-media-embeds`、
-`integrate-open-source-browser-and-computer-use`、
+`replace-pi-with-dsh-runtime-atomically`、
 `separate-project-facts-local-state-and-media-bindings`、
 `restore-workspace-linked-media-access`、
 `simplify-project-authoring-and-installed-libraries`
@@ -276,7 +276,7 @@ Agent 能力按 owning package 职责分层：
 | `@neko/ai-contracts`         | provider/model configuration contracts                                                                                     |
 | `@neko/ai-sdk`               | provider/AI SDK adapter                                                                                                    |
 | `@neko/host`                 | Host settings、配置解析、credential/file port contract 与应用设置状态机                                                    |
-| `@neko/agent-webview`        | DSH extension management 的 browser-only presentation；不拥有 Agent、Skill、MCP 或 Plugin runtime                        |
+| `@neko/agent-webview`        | DSH Agent 与 Skill/MCP management 的 browser-only presentation；不拥有 Agent、Skill、MCP 或 Plugin runtime              |
 | `@neko/chara-webview`        | Character、Dialogue 与 Chatroom 的 browser-only 产品视图和可丢弃展示状态                                                   |
 | `@neko/world-webview`        | World 管理、目录创作、确定性 Runtime Workbench 与可丢弃展示状态；不实现完整 World Experience                               |
 
@@ -285,13 +285,15 @@ Desktop 的产品级组合位于 `apps/neko-desktop`。Agent contracts/runtime �
 Agent/Session/Skill/MCP/Plugin authority，OpenNeko 只通过 package-owned ACP application port、typed domain
 Tool bridge 与 Desktop trust adapter 协作。
 
+附件输入只通过 ACP content block 进入 DSH。Host/Content/Media owner 负责 sender-bound 资源授权、字节读取和媒体预处理；DSH attachment 当前拥有原生图片持久化。感知配置 owner 负责“当前模型直接处理或显式感知模型生成 evidence”的单一路由，Renderer 只提交授权 resource identity。Agent LLM、感知模型与 Generation 媒体模型/参数必须保持独立 catalog/config owner，不能因 UI 共用选择器而合并事实来源。
+
 Browser Use 与 Computer Use 的控制实现由审核固定的开源 upstream MCP runtime 持有；OpenNeko 不实现
 第二套浏览器、截图、键鼠输入、VLA 或 GUI Agent loop。`@neko/automation-contracts` 是 L0 canonical
-shape owner，`@neko/automation-node` 是 L1 session 与 policy owner。Agent 只通过 canonical Capability、
-Tool Registry 和 Pi Tool Call 消费 package-owned wrapper；automation MCP server 必须禁止 generic raw MCP
-Tool exposure。`@neko/automation-node` 拥有目标发现、脱敏候选、显式选择、选择后 exact revalidation 与
-一次性 grant 语义；Desktop Main 只提供 sender/Window-bound 用户选择 interaction adapter、当前 OS permission
-查询、每 session 独占的受限进程/MCP connection、精确 app/process/window facts 与短生命周期 observation projection。
+shape owner，`@neko/automation-node` 是 L1 target、grant、action policy 与 evidence owner。两者作为官方维护的
+DSH MCP contributions 接入：DSH 子进程拥有 MCP connection、Tool discovery/registration、call 与 cancellation；
+OpenNeko 不保留 MCP Manager、generic Tool Registry 或 Pi Tool Call。`@neko/automation-node` 拥有目标发现、
+脱敏候选、显式选择、选择后 exact revalidation 与一次性 grant 语义；Desktop Main 只提供 sender/Window-bound
+用户选择 interaction adapter、当前 OS permission 查询、精确 app/process/window facts 与短生命周期 observation projection。
 自动化 grant 必须绑定 exact provider/upstream release、browser profile 和 domains 或 computer target、
 mode、timeout、step budget 与 conversation/run/toolCall owner；上游进程启动失败后也不得重放。Renderer
 不得接收截图原始持久字节、真实 HOME/path、secret、process/window handle 或 MCP connection。
@@ -321,7 +323,7 @@ owner，不进入 runtime、协议或 UI；未来若出现真实独立需求，�
 
 Quality 的边界由 [`adr-agent-runtime-single-authority-and-simplification-boundary.md`](adr-agent-runtime-single-authority-and-simplification-boundary.md) 定义：`@neko/quality` 已建立为中立 runtime，拥有 canonical contract validation、evidence freshness、Gate aggregation、evaluator port、provider-neutral model adapter 和通用 ProjectQuality facade orchestration；owning package 继续拥有领域 rubric、目标 materialization、确定性检查、Gate policy、repair 和 apply。跨包 contract 暂留 `@neko/shared`；Desktop Agent composition 只保留 Tool/Capability、purpose-model 和授权资源 materializer 适配。
 
-Capability 是 OpenNeko 产品扩展 seam，领域包提供定义，Host 负责 discovery/trust/lifecycle，Pi bridge 只投影当前 turn 的不可变 Tool snapshot。External Processor 不是 Pi 或平行 Capability 系统；它只能作为 Host 中受管、可取消的 Tool implementation，并继续遵守路径、资源、环境、网络、审批和用户数据边界。
+用户可见扩展 seam 只有 DSH Skill 与 MCP；DSH Plugin 只用于官方内部 composition。Generation、Canvas、Cut、Assets、Character、World 等领域能力以精确 first-party DSH Tool contribution 接入，DSH 拥有 Tool call lifecycle，owning package 拥有 schema、validation、authorization、事务、事实与 Job。不得恢复 OpenNeko Capability Host、generic Tool registry、MCP wrapper 或 External Processor 作为平行成功路径。
 
 ## 保留领域包
 
@@ -347,7 +349,7 @@ Character IP 与 Interactive World 已确定为独立 bounded context，必须�
 
 | 包                                                         | 状态                                           | 聚合主线                                                                                            | 主要职责                                                                                                                                              | 关键边界                                                                                                                                                                              |
 | ---------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@neko/chara` / `@neko/chara-node` / `@neko/chara-webview` | Foundation / Node adapter / browser UI         | `CharacterProject -> CharacterVersion + Storyline authoring + Companion continuity + Dialogue/Room` | 角色背景故事与原生背景设定、角色创作与发布、个人故事线创作、日常角色/关系记忆、Dialogue/Chatroom policy、上下文投影、持久化和 package-owned 产品视图  | 完全复用 AgentSession；Narrative 不绑定外部 Composition/World/Save；Entity、Assets、Voice、Presentation、Media/Game 只通过公共 ref/port/provider 组合，Chara 不拥有外部 facts/runtime |
+| `@neko/chara` / `@neko/chara-node` / `@neko/chara-webview` | Foundation / Node adapter / browser UI         | `CharacterProject -> CharacterVersion + Storyline authoring + Companion continuity + Dialogue/Room` | 角色背景故事与原生背景设定、角色创作与发布、个人故事线创作、日常角色/关系记忆、Dialogue/Chatroom policy、上下文投影、持久化和 package-owned 产品视图  | 复用 Conversation + exact DSH Session binding；Narrative 不绑定外部 Composition/World/Save；Entity、Assets、Voice、Presentation、Media/Game 只通过公共 ref/port/provider 组合，Chara 不拥有外部 facts/runtime |
 | `@neko/world` / `@neko/world-node` / `@neko/world-webview` | Management / authoring / deterministic runtime | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/branch`                                      | 世界书、事实、规则/事件、版本、运行、存档、分支与 WorldView；管理只读投影，目录创作保留 Workspace Primary Main，Runtime Workbench 消费 exact Run 投影 | 只通过精确 Character/Room binding 使用角色；世界局部状态不回写全局角色；创作预览不写 runtime，Foundation runtime 不得冒充 Story/Gameplay/Experience/实时 AI                           |
 
 “顶级”指领域所有权，不指 concrete Composition Root。`apps/neko-desktop` 负责注入具体
@@ -359,7 +361,7 @@ Character core 不导入 World 私有实现；运行期环境交互通过窄 por
 角色互动产品可以按 `single-character | multi-character` topology 与 `dialogue | play` interaction
 组合成单角色对话、多角色对话、单角色 Play 和多角色 Play 预设，但 Play 是 Agent 的通用参与能力，不是 Chara aggregate。Chara 只提供角色身份、策略、授权上下文与参与 ref。预设只组合共享 contract，不建立四套
 session/controller。每个 agent-controlled character 映射独立 CharacterRun 和 primary
-AgentSession；room 只共享带 actor/visibility/revision 的有序 event projection，不共享 responder、
+DSH Session；room 只共享带 actor/visibility/revision 的有序 event projection，不共享 responder、
 transcript、模型配置或 memory view。human-controlled participant 不创建隐藏角色 Agent。
 
 Agent Play 表示 Agent 代表角色或用户进行理解、规划、行动 proposal、代打、陪玩、观战或指导。`commentator` / `coach` 只读，
@@ -369,7 +371,7 @@ Desktop Host 拥有精确 app/process/window binding、OS 权限、授权 observ
 只拥有角色参与策略、稳定 Activity ref 和经筛选的记忆候选，Agent Play 不拥有 Game state。Computer Use 只能作为显式、资格化、
 有 step budget 且可 Pause/Stop/Take over 的 transport，不能在 adapter/API 失败后静默接管键鼠。
 
-Play 的模型分工固定为：LLM/AgentSession 负责角色表达、规则理解、长期策略、协作、记忆和上下文
+Play 的模型分工固定为：LLM/DSH Session 负责角色表达、规则理解、长期策略、协作、记忆和上下文
 编排；VLA 或等价低延迟 control policy 负责实时游戏的短时 observation-to-action chunk；Game
 World Gameplay 或外部 Game owner 负责 action/state/revision/outcome 验证。回合制策略游戏可以只用结构化 LLM
 planning，实时动作游戏使用 VLA 短时闭环，多人游戏增加 seat/team/visibility 和 room coordination，
@@ -398,7 +400,7 @@ userId + CharacterProjectId
 
 CharacterConversationSelection(companion | narrative)
   -> CharacterRun / Dialogue / Room
-  -> one primary AgentSession per agent-controlled participant
+  -> one primary DSH Session per agent-controlled participant
 ```
 
 `CharacterBackgroundStory` 描述角色个人历史，`CharacterOriginSetting` 描述角色原生时代、文化、
@@ -426,14 +428,14 @@ host-* -> public package entry + concrete host adapters
 `core` 不得导入 Agent、Electron、React、Renderer、Device、表现 runtime、Media/Game Activity
 或另一领域私有 runtime。应用 Host 只构造、注入和释放 adapter；Chara application service 拥有
 Character authoring、Storyline publication/context、Companion continuity、Run、Room 和 relationship 编排；
-Agent owner 拥有 Conversation/turn/transcript/provider execution；外部 Context/Presentation、World、Activity
+OpenNeko Agent application 拥有 Conversation catalog/binding，DSH 拥有 turn/transcript/provider execution；外部 Context/Presentation、World、Activity
 owner 拥有各自关联、事实、存档和执行。上述依赖必须通过 public/subpath exports 和
 architecture test 强制执行，不能只依赖目录命名。
 
-同一 agent-controlled CharacterRun 至多一个 primary AgentSession。Narrative participant 只绑定 exact
-CharacterVersion 和可选 Storyline/Version/Node，并拥有独立 AgentSession/RoomView；不得绑定 CompanionContinuity
+同一 agent-controlled CharacterRun 至多一个 primary DSH Session。Narrative participant 只绑定 exact
+CharacterVersion 和可选 Storyline/Version/Node，并拥有独立 DSH Session/RoomView；不得绑定 CompanionContinuity
 或由外部 owner 创建第二个 actor-level Character session。日常路径先解析稳定 CompanionContinuity，再把
-有界角色/关系 memory view 物化给 exact primary AgentSession；多个 Conversation 不共享 mutable responder 或 transcript。
+有界角色/关系 memory view 物化给 exact primary DSH Session；多个 Conversation 不共享 mutable responder 或 transcript。
 
 角色有效能力是 Host permission、workspace trust、CharacterVersion policy、CharacterRun scope、Conversation
 mode 与对应 memory/context policy 的交集。任何层只能收窄授权，副作用
@@ -443,7 +445,7 @@ Character 不直接写外部 store。Companion transcript、RoomEvent、Tool res
 只能以稳定 source ref 产生 CharacterMemoryCandidate 或 RelationshipMemoryCandidate；Chara owner 分别
 接受、纠正、拒绝或删除。Storyline 修改只能进入显式 authoring candidate/draft/publication workflow，
 运行输出不得产生 transition。CharacterVersion canon、CharacterStoryline、CompanionContinuity、
-UserCharacterRelationship、AgentSession transcript 与外部存档必须保持独立。跨 scope 导入默认禁止；Device/Renderer/Media/Game live handle 和本机路径
+UserCharacterRelationship、DSH Session transcript 与外部存档必须保持独立。跨 scope 导入默认禁止；Device/Renderer/Media/Game live handle 和本机路径
 不得进入持久 Character project、version、storyline 或 memory。
 
 ## 路径、缓存与用户数据

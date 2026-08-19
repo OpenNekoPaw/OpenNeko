@@ -1,5 +1,7 @@
 ## Why
 
+> **Successor disposition (2026-08-20):** `replace-pi-with-dsh-runtime-atomically` supersedes this change's OpenNeko Plugin catalog, Skill Host, MCP Manager, Tool Registry, Pi Tool Call and production Automation composition. Browser Use/Cua upstream compatibility, exact target, OS permission, action approval and evidence rules remain input to the successor, but no task or requirement here authorizes a production success path. The successor owns DSH MCP contribution wiring, deletion of old registrations/contracts and new Evaluation evidence.
+
 OpenNeko 已具备 Plugin、Skill、MCP Manager、Pi Tool Call 与 Desktop Host 权限边界，但 Browser Use、
 Computer Use 仍被设计成一套 OpenNeko 专有的发布、资格和权限管理体系。该体系要求固定版本、完整
 Schema 摘要、声明权限接受和多维资格状态，却没有为普通第三方 Plugin、Skill、MCP 提供同等开放的

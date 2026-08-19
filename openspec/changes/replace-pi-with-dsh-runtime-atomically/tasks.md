@@ -74,14 +74,17 @@
 - [x] 5.7 添加路径证明：Generation/Canvas 不经 MCP 包装，DSH call identity 与 domain Job/document mutation identity 精确关联。
 - [ ] 5.8 运行 Generation 和 Canvas 两个独立完整 Desktop vertical slices，并分别记录 exact canonical path evidence。
 
-## 6. W3 DSH-Owned Extension Management (Skill/MCP/Plugin)
+## 6. W3 DSH-Owned Extension Management (Skill/MCP)
 
-- [ ] 6.1 确认 Skill/MCP/Plugin 的实际发现/加载/启停/执行全部由 DSH profile 拥有；OpenNeko 不实现自研 Skill Host、MCP Manager、Plugin runtime。
-- [ ] 6.2 实现 OpenNeko 管理面只通过 bridge 投影 extension inventory/readiness/config/diagnostics 并提交精确管理命令；不得建立本地 extension catalog/config/readiness authority 或直接写 DSH storage。
-- [ ] 6.3 首版只加载随 OpenNeko 发布、官方维护并精确锁定的 DSH profile/plugins；拒绝第三方插件 runtime、第三方 Webview JS、任意第三方 JS 注入 Electron Main/DSH。
+- [ ] 6.1 确认 Skill/MCP 的实际发现/加载/启停/执行与内部 Plugin lifecycle 全部由 DSH profile 拥有；OpenNeko 不实现自研 Skill Host、MCP Manager、Plugin runtime。
+- [ ] 6.2 实现 OpenNeko 管理面只展示 Skill/MCP，并通过 bridge 投影 inventory/readiness/config/diagnostics、提交精确管理命令；不得展示 generic Plugin 管理，不得建立本地 extension catalog/config/readiness authority 或直接写 DSH storage。
+- [ ] 6.3 首版只加载随 OpenNeko 发布、官方维护并精确锁定的 DSH profile/plugins；Plugin 仅是内部 composition unit，拒绝第三方插件 runtime、第三方 Webview JS、任意第三方 JS 注入 Electron Main/DSH。
 - [ ] 6.4 实现单条 extension 注册/加载失败 fail-local：仅该 extension 不可用，sibling extension、Conversation、Workspace 保持可用。
 - [ ] 6.5 添加 extension 管理面 producer/consumer 测试：inventory/readiness/config/diagnostics 可重建、只读、不成为第二 authority。
 - [ ] 6.6 添加 poison 测试：自研 Skill Host、MCP Manager、Plugin runtime、try-next 注册或 wildcard factory 不能提供成功路径。
+- [x] 6.7 审计锁定的 DSH/ACP 公开 Skill、Settings、Plugin inventory、MCP 与 Attachment surface，记录 Skill API 可用、MCP/Settings wire contract 与非图片附件 blocker；证据见 `evidence/w3-dsh-extension-attachment-public-api-audit.md`，该审计不表示 production consumer 已完成。
+- [ ] 6.8 将 Browser Use 与 Computer Use 从旧 OpenNeko Plugin/MCP 资源迁为官方 DSH MCP contributions；DSH 拥有 connection/Tool lifecycle，Automation/Host 只拥有 exact target、OS permission、grant、approval 与 evidence，并删除旧 `resources/extensions/plugins/*` 和相关可达 UI/runtime contract。
+- [ ] 6.9 为公开 DSH Skill/MCP 管理 seam 冻结 secret-safe wire contract。Settings 只有在 descriptor 可证明 fail-closed 或 namespace 经静态资格验证为无 secret 时才可暴露；禁止读取私有模块或用旧 Host `mcp_servers` 配置补齐。
 
 ## 7. W4 Product Contract And Desktop Consumer Cutover
 
@@ -98,6 +101,9 @@
 - [x] 7.12 直接投影 DSH `assistant/chunk` text/reasoning delta，并以 exact Session/turn/step/block identity 在 package-owned projection 中维护有界 transient assembly；使用 DSH `assistant/message` stable identity/final blocks 原子结算且不重复显示，replay 不播放历史 token 动画，`tool-call-delta` 不创建 Tool facts。Bridge producer、sequence/frame、projection assembly/final reconciliation/overflow/sibling isolation、Desktop coalesced snapshot、既有消息 presentation 与真实可见 Desktop provider 已覆盖；`agent-runtime.stream-delivery` 继续作为 Evaluation owner，不新增 direct ACP runner。实现和路径扫描禁止 provider token reader、Renderer direct stream、Pi 或第二 transcript。证据：`evidence/w7-dsh-streaming.md`。
 - [ ] 7.13 恢复既有 Composer `/`、`$`、`@` 触发器：exact DSH Session 的 `commands` / user-invocable Skill catalog 驱动旧菜单；`/` 只调用 DSH command execution 并投影原生 command lifecycle，`$` 在 strict catalog validation 后转换为 DSH `/skill` 用户手势；`@` 只消费 Host-authorized canonical resource projection，并覆盖 Resource Browser files/media/assets；locator-backed 候选作为 ACP resource link，非文件候选以 strict `AgentContextPayload` 随当前消息进入 exact DSH turn context。补 catalog incomplete/stale/unknown、no Prompt fallback、command event、Skill gesture、sender-bound mention、context receipt 与旧 Pi/self-developed runtime poison tests，并通过真实 Desktop Composer 验证三类菜单和提交路径。当前真实 Desktop 已验证 DSH `/` 目录、无参数 Command 执行、15 项 bundled `$` 目录和 Host-authorized `@` 文件目录；确定性测试已覆盖 Asset/Project Entity context receipt、strict submit/no-fallback 与 Conversation 隔离。当前 fixture 没有可见 Asset/Project Entity，Computer Use 又无法在 AX 菜单中完成选择，因此 populated context 像素、选中提交和 provider-backed Skill 最终提交仍未通过真实 Desktop 验证，任务保持未勾选。
 - [ ] 7.10 恢复 exact Window scene selection：应用重开保留持久化 Conversation scene，经 Home catalog/context/binding 精确资格校验后恢复同一 `conversationId`；多 Conversation 不选择 first/recent，单条失效只重置该 Surface 为 Draft 并保留 sibling/catalog。补 Host 与真实 Desktop 重启验证。
+- [ ] 7.14 接通 ACP/DSH 图片附件：Composer 复用既有附件组件，Host 授权并读取 exact resource，bridge 广告 image capability，DSH attachment admission/persistence 产生原生 image block；覆盖 MIME/字节限制、模型 modality、Session replay、单项失败与无文本占位 fallback。
+- [ ] 7.15 接通感知模型与非图片输入：建立独立 perception configuration owner 和单一 modality routing policy；当前模型支持时直接处理，否则由显式感知模型生成 source-attributed structured evidence。音频、视频、文档在 DSH 原生 block 不可用时不得伪装原生附件；覆盖 missing model、失败、取消、证据 identity 和 sibling input 隔离。
+- [ ] 7.16 清理旧 Agent 公共 Prompt/Input/Capability/Perception/Tool contract 与实现残留；每个删除项必须先证明其产品功能已由 DSH system prompt/Skill、exact context injection、DSH attachment/perception 或 first-party domain Tool 接管，禁止直接删除功能或保留 dead public export。
 
 ## 8. W5 Conversation Catalog And Legacy Pi Data Protection
 
@@ -117,14 +123,16 @@
 - [ ] 9.5 迁移 World Tools，添加 owning-domain producer、DSH delegation、业务事务、事实与长任务 Job 测试。Desktop 已先删除旧 `createWorldAuthoringCapabilityProvider` 与 `createGlobalWorldCreationCapabilityProvider` registration；DSH World Tool 尚未实现，故保持未勾选。
 - [ ] 9.6 迁移其余 remaining first-party Capability Tools，并逐项对应 inventory 完成测试。
 - [ ] 9.7 证明所有领域能力均为注册到 DSH 的官方 typed domain tools，不通过 MCP 包装，UI 直接操作不绕 Agent。
+- [ ] 9.8 接通内容创作模型配置：Generation 模型/参数由 `@neko/generation` owner 管理并供直接 UI 与 `openneko.generation` Tool 共用；Agent LLM、感知模型与媒体 Generation 模型目录严格分离，缺少 capability 时 fail-visible。
 
 ## 10. W7 Evaluation And Non-Release Evidence
 
-- [ ] 10.1 更新 `scripts/agent-eval` canonical facts/assertions/reports 到 ACP/DSH Session/turn/call/inbox 路径，不新增 direct runtime runner；change-to-suite selector、local-run fixture 与 canonical path test已切换到 DSH application/ACP/Desktop Session/Permission files。production `runCase` 已断开旧 Pi scenario/driver默认装配，有完整 provider/model/cost授权也会在 Desktop launch前返回 `infrastructure-blocked`；只有显式注入的测试 scenario可继续验证平台编排，不能作为 Agent证据。旧 driver/workflow/evidence assertions与多组 Scenario source仍待原子删除/迁移，继续保持未完成。
+- [ ] 10.1 更新 `scripts/agent-eval` canonical facts/assertions/reports 到 ACP/DSH 路径：只使用 `conversationId`、`dshSessionId`、turn/step/toolCall、permission preset、model receipt、Command/Skill invocation、MCP/Tool provenance、attachment/perception evidence 与 domain Job/artifact identity，不新增 direct runtime runner；change-to-suite selector、local-run fixture 与 canonical path test已切换到 DSH application/ACP/Desktop Session/Permission files。production `runCase` 已断开旧 Pi scenario/driver默认装配，有完整 provider/model/cost授权也会在 Desktop launch前返回 `infrastructure-blocked`；只有显式注入的测试 scenario可继续验证平台编排，不能作为 Agent证据。旧 driver/workflow/evidence assertions与多组 Scenario source仍待原子删除/迁移，继续保持未完成。
 - [ ] 10.2 添加 Evaluation poison assertions：拒绝 Pi、内嵌 Cordis、Remote API、fallback provider、stale projection 与 test-only direct-runtime success。
 - [ ] 10.3 运行 `pnpm test:agent:eval` 证明 key-free harness 与 canonical path assertions 就绪；当前 45 files / 314 tests 与 27 suites / 80 cases dry-run通过。该结果不代表 DSH Agent 行为证据：production runner虽已断开旧 Pi driver默认装配，但现有 schema/facts/cases仍接受或声明 Pi queue/run/branch assertions；完整 canonical UI driver与facts/assertions/reports迁移前保持未勾选。
 - [ ] 10.4 通过用户可操作 composer、Conversation 导航、approval 与领域控件运行真实 Desktop hidden/visible + Provider/API 验证；当前已完成可见 Desktop Composer、Conversation 导航、Workspace binding 和 `nekoapi-chat / gpt-5.6-luna` 双轮真实 API 基线。approval、领域 Tool、应用重开/恢复、hidden batch 与像素证据仍未完成，故不得满足发布门禁。
 - [ ] 10.5 验证正常 turn、session recovery/history、progress、permission、cancel、inbox、Host tool reverse request、crash/restart/fail-local 与多 Conversation 切换。
+- [ ] 10.7 增加附件/感知、Skill/Command、MCP browser/computer 与 Generation/Canvas/Cut/Character/Assets/World Tool 的 Evaluation coverage；visible UI + real provider 验收用户路径，hidden full Desktop + real provider 批量回归，缺少 canonical driver/API 时明确 `infrastructure-blocked`。
 - [ ] 10.6 记录实际验证命令、证据位置、未执行项与 residual risks，不存储 secrets。
 
 ## 11. W8 Deletion Proof And Deterministic Gates
@@ -143,11 +151,12 @@
 - [ ] 11.12 运行 `pnpm --dir apps/neko-desktop run typecheck`、focused Desktop delegation tests 与 `pnpm test:functional:headless`。
 - [ ] 11.13 运行 `pnpm check:agent-boundaries`、`pnpm check:application-boundaries`、`pnpm check:package-boundaries`、`pnpm check:storage-authorities`、`pnpm check:no-internal-versioning`、`pnpm check:legacy-debt`、`pnpm check:unused` 与 retired-path scans。
 - [ ] 11.14 在所有 deterministic/Evaluation 门禁后重跑 legacy-data hashes，要求每个 retired fixture 字节相等。
+- [ ] 11.15 删除旧 Host `mcp_servers`/external-research 执行配置、`plugin_states`、旧 extensions preload/UI handler、`resources/extensions/plugins` 打包资源，以及无生产 consumer 的 Agent public Prompt/Input/Capability/Plugin/Perception contract；路径扫描证明保留 UI 只连接 DSH Skill/MCP 与新的 perception/domain owner。
 
 ## 12. Documentation And Atomic Release
 
-- [ ] 12.1 更新架构文档/ADR，描述最终 DSH 独立子进程 + ACP JSON-RPC stdio + bridge 边界与 OpenNeko retained authority。
-- [ ] 12.2 标记 `adopt-pi-agent-runtime` 为被本变更取代，不吸收独立 `purify-agent-contracts` 或 Agent Evaluation platform ownership。
+- [ ] 12.1 更新架构文档/ADR，描述最终 DSH 独立子进程 + ACP JSON-RPC stdio + bridge 边界、Skill/MCP-only 产品扩展面、内部 Plugin composition、附件/感知、first-party domain Tools、Evaluation 与 OpenNeko retained authority。
+- [ ] 12.2 标记 `adopt-pi-agent-runtime` 与 `integrate-open-source-browser-and-computer-use` 的旧 Pi/Plugin/MCP execution path 为被本变更取代，不吸收独立 `purify-agent-contracts` 或 Agent Evaluation platform ownership；保留 Automation 的 upstream compatibility、target、OS permission、approval 与 evidence 规则。
 - [ ] 12.3 运行 `openspec validate replace-pi-with-dsh-runtime-atomically --strict` 与 `pnpm check:openspec`。
 - [ ] 12.4 运行 `neko-quality-review` workflow，关闭所有 blocking findings，记录 commands、evidence、unexecuted checks 与 residual risks。
 - [ ] 12.5 满足 machine release guard：Q0、W1-W8、deterministic、data-protection、Evaluation/non-release 证据齐备。

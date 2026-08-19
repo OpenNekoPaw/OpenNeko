@@ -145,19 +145,16 @@ CI 只保留本地入口不可达的编排回归证据。
 
 ## Agent Evaluation 证据
 
-影响 AgentSession、多轮流程、Prompt/Skill、capability/tool routing、provider/model、异步任务、
+影响 DSH Session、多轮流程、Prompt/Skill、MCP/Tool routing、provider/model、附件/感知、异步任务、
 产物生成或 Desktop event projection 的变更，应使用
 `.codex/skills/neko-agent-evaluation/SKILL.md` 规划聚焦 evaluation。
 
 `pnpm test:agent:eval` 只验证 strict suite/scenario、runner、assertion/Judge parser、报告和 indexed
 dry-run，是 key-free harness 自测，不等于真实 Agent 行为验收。真实 case 必须复用完整
-Desktop App/session owner，并通过 Desktop Agent input queue 提交消息；直接调用 turn runner、
+Desktop App/session owner，并通过公开 Composer input path 提交消息；直接调用 turn runner、
 替换 runtime assembly 或使用 mock business tool 不能作为证据。
 
-Desktop 已为 `locator-backed-display-projection` 提供首个 complete-session evaluation driver，
-通过公开 Agent bridge、隔离 fixture、terminal facts 和应用关闭释放完成真实路径验收。其他 case
-若尚无 owning Desktop scenario adapter，runner 必须返回 `infrastructure-blocked` 并记录缺失 owner；
-不得回退到已移除的 TUI/headless driver、单元 runner 或只凭最终文本宣称通过。
+DSH canonical evaluation driver 必须通过完整 Desktop owner、ACP/DSH Session、公开 Composer、Conversation navigation、approval 与领域控件驱动。尚无 owning Desktop scenario adapter 的 case 必须返回 `infrastructure-blocked` 并记录缺失 owner；不得回退到已移除的 Pi/TUI/headless direct driver、单元 runner 或只凭最终文本宣称通过。
 
 Agent 验收使用两条本地专用 lane。功能级验收必须从可见 Electron UI 的 composer、PrimarySidebar、
 审批或领域控件发起真实 API 行为，并断言用户可见终态；批量回归必须以无可见 UI 的完整 Desktop
@@ -165,10 +162,9 @@ session owner 驱动同一公开 Agent input path 和真实 API。hidden lane �
 runtime，不能跳过 Desktop composition、持久化或 projection。
 
 基础回归矩阵包含：正常对话、上下文压缩后 continuation、完整重开后的 transcript 恢复、生成
-Job/Tool/产物记录恢复、会话切换展示、会话隔离。AgentSession、持久化、生成 workflow 或 Desktop
+Job/Tool/产物记录恢复、会话切换展示、会话隔离。DSH Session、持久化、生成 workflow 或 Desktop
 projection 变更必须运行受影响子集并记录整套矩阵 disposition；发布验收必须关闭全部适用项。UI
-报告与 batch report 均需记录 provider/model、conversation/turn/run identity、terminal state、
-canonical/no-fallback evidence 和脱敏 artifact refs。
+报告与 batch report 均需记录 provider/model、Conversation/DSH Session/turn/step/toolCall identity、permission preset、Skill/MCP/attachment/perception/domain Job provenance、terminal state、canonical/no-fallback evidence 和脱敏 artifact refs。
 
 原始 Evaluation 报告写入 gitignored `reports/agent-eval/`。长期文档只提交脱敏摘要，保留
 suite/case/run、identity、assertion/artifact refs、failure classification 和 residual risk，

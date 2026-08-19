@@ -2,7 +2,7 @@
 
 Chara 是角色工作区对象、全局角色与不可变领域版本、个人故事线、日常长期记忆、Dialogue/Room 和角色表现语义的 owner。host-neutral domain/application 位于 `packages/chara`，本地持久化 adapter 位于 `packages/chara-node`，browser-only 管理与互动视图位于 `packages/chara-webview`。
 
-Agent 继续唯一拥有 Conversation、AgentSession、turn、queue、Tool、Approval、provider/model 执行、transcript 和 compaction；Desktop 只负责 Electron sender/Window/Scene、typed IPC、本地资源授权和 public Surface 组合。
+OpenNeko Agent application 拥有 Conversation catalog/binding，DSH Session 继续唯一拥有 turn、queue、Tool、Approval、provider/model 执行、transcript 和 compaction；Desktop 只负责 Electron sender/Window/Scene、typed IPC、本地资源授权和 public Surface 组合。
 
 ## 管理、创作与互动入口
 
@@ -34,7 +34,7 @@ userId + CharacterProjectId
 CharacterConversationSelection
   -> companion | narrative
   -> Dialogue(one Character) | Room(multiple Characters)
-  -> independent primary AgentSession per agent-controlled Character
+  -> independent primary DSH Session per agent-controlled Character
 ```
 
 `CharacterStorylineVersion` 是用户管理的领域版本，不是内部 schema/contract 版本。Storyline、StorylineVersion 和 StorylineNode 都有精确身份；旧 Conversation 始终引用原 publication，不解析 latest。
@@ -61,7 +61,7 @@ Character Conversation 创建时必须选择一种模式，已有 Conversation �
 
 一个角色选择创建 Dialogue，多个角色选择创建 Room。Narrative Room 为每个 participant 保存独立的可选 StorylineVersion/Node；不得共享私人故事信息、模型配置或 memory view。
 
-原生模型不是角色 AgentSession 内的 prompt 切换，而是 Companion Workbench 中身份明确、transcript 独立的 AssistantSession。其输出不得作为 Character response、RoomEvent 或已接受记忆提交。
+原生模型不是角色 DSH Session 内的 prompt 切换，而是 Companion Workbench 中身份明确、transcript 独立的 Assistant Conversation/DSH Session。其输出不得作为 Character response、RoomEvent 或已接受记忆提交。
 
 ## 故事线只属于创作
 
@@ -79,7 +79,7 @@ Agent transcript 是完整消息的唯一 owner。Narrative turn 只保存紧凑
 
 ## 日常长期记忆
 
-CompanionContinuity 由精确 `userId + CharacterProjectId` 定位，生命周期独立于 CharacterRun、Conversation、AgentSession 和 CharacterVersion。它分别管理：
+CompanionContinuity 由精确 `userId + CharacterProjectId` 定位，生命周期独立于 CharacterRun、Conversation、DSH Session 和 CharacterVersion。它分别管理：
 
 - CharacterMemory：角色主观经历、感受、个人回忆和认知变化；
 - UserCharacterRelationship：用户偏好、边界、约定和关系里程碑。
@@ -114,7 +114,7 @@ status      -> local diagnostics
 
 Main 不固定为 Avatar，也不尝试 first-compatible renderer。未知、失效或未授权 Surface 只让对应 slot fail-visible，不能切换 provider 或阻止有效 sibling surface。Storyline Timeline 与 RoomEvent Timeline 是不同 owner 的只读投影。
 
-离开场景时 UI Roots 和无保护表现资源卸载；正在运行、排队或等待审批的 Agent task 由精确 AgentSession owner 继续，不得依赖隐藏 React tree。重开必须使用原 Conversation identity，禁止 active/recent fallback。
+离开场景时 UI Roots 和无保护表现资源卸载；正在运行、排队或等待审批的 Agent task 由精确 DSH Session owner 继续，不得依赖隐藏 React tree。重开必须使用原 Conversation identity，禁止 active/recent fallback。
 
 ## 当前状态
 

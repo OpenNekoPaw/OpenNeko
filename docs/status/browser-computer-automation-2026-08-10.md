@@ -1,7 +1,9 @@
 # Browser Use / Computer Use 闭环状态
 
 日期：2026-08-10
-事实来源：当前代码、`integrate-open-source-browser-and-computer-use` OpenSpec、固定 upstream release 与本地 deterministic tests。
+> **状态说明（2026-08-20）：** 本文记录旧 OpenNeko Plugin/MCP/Pi 组合的审计快照，不再定义目标执行路径。`replace-pi-with-dsh-runtime-atomically` 接管 DSH MCP contribution、删除旧 runtime 与新 Evaluation；本文的 upstream compatibility、exact target、OS permission、approval 与 evidence 结论仍可作为输入。
+
+事实来源：2026-08-10 当前代码、`integrate-open-source-browser-and-computer-use` OpenSpec、固定 upstream release 与本地 deterministic tests。
 
 ## 结论
 

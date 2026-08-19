@@ -1,5 +1,7 @@
 ## 1. Canonical MCP and result boundary
 
+> **Successor disposition (2026-08-20):** `replace-pi-with-dsh-runtime-atomically` supersedes this change's OpenNeko Plugin catalog, Skill Host, MCP Manager, Tool Registry, Pi Tool Call and production Automation composition. Browser Use/Cua upstream compatibility, exact target, OS permission, action approval and evidence rules remain input to the successor, but no task or requirement here authorizes a production success path. The successor owns DSH MCP contribution wiring, deletion of old registrations/contracts and new Evaluation evidence.
+
 - [x] 1.1 Replace the handwritten MCP client with the official SDK while retaining the single
       `MCPManager -> ToolRegistry -> Pi` path.
 - [x] 1.2 Preserve Tool annotations, ordered text/image/resource results, cancellation and fail-local diagnostics.

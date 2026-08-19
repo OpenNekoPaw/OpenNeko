@@ -185,6 +185,46 @@ Generation and Canvas SHALL be the first vertical official domain Tool slice reg
 - **THEN** the UI delegates directly to the Generation application service through its typed Desktop port
 - **AND** no Conversation, Agent turn or MCP wrapper is created
 
+### Requirement: Attachments and perception use one capability-negotiated input path
+
+ACP Prompt content blocks SHALL be the sole Desktop-to-DSH message input path. The bridge SHALL advertise only content types it can preserve into the DSH Session and current provider request. Images SHALL use DSH durable image attachments and image blocks after Host authorization and DSH admission. Audio, video, document and other file inputs without a qualified DSH native block SHALL be converted only by their owning media/content service into bounded source-attributed evidence. OpenNeko MUST NOT serialize raw paths, bearer URLs or a second Agent multimodal packet into the Session.
+
+The product SHALL use the selected current model directly when its authoritative model capability includes the input modality. Otherwise it SHALL require an explicitly configured perception model and produce structured evidence before the same DSH turn is submitted. Missing capability, missing perception configuration or failed perception SHALL reject only the affected input visibly; it MUST NOT silently drop the attachment, infer a provider or retry through another model.
+
+#### Scenario: User submits a supported image
+
+- **WHEN** the selected Agent model supports image input and the image passes Host authorization and DSH attachment admission
+- **THEN** the exact DSH Session receives one native image content block with its durable attachment reference
+- **AND** no OpenNeko multimodal runtime or text-placeholder path is used
+
+#### Scenario: Current model cannot perceive the selected media
+
+- **WHEN** an explicitly configured perception model supports the media type
+- **THEN** the owning perception path returns bounded structured evidence with exact source and model identity
+- **AND** that evidence is injected into the same exact turn context before the Agent prompt
+
+#### Scenario: No qualified input path exists
+
+- **WHEN** neither the current model nor the configured perception model can process the selected attachment
+- **THEN** the Composer reports the unsupported input and does not submit the turn
+- **AND** the attachment is not discarded or replaced by fabricated text
+
+### Requirement: DSH lifecycle remains minimal and does not create shadow state
+
+The product lifecycle SHALL use only create, bounded list/revalidation, load/resume, prompt, cancel, close/release and exact-binding reload after restart. OpenNeko MUST NOT mirror Agent handles, Session persistence or pending inbox. A missing public DSH delete or inbox-preserving close seam SHALL remain an explicit capability blocker; `session/close` MUST NOT be treated as deletion and a Host shadow queue MUST NOT be introduced.
+
+#### Scenario: Conversation publication fails after DSH Session creation
+
+- **WHEN** the locked DSH release exposes no public Session delete operation
+- **THEN** the reserved Conversation remains visible with an unavailable diagnostic and the created Session is not deleted through private storage access
+- **AND** the product does not report cleanup success
+
+#### Scenario: Pending inbox cannot survive release
+
+- **WHEN** the public DSH handle lifecycle cannot close while preserving pending inbox
+- **THEN** offline inbox editing remains unavailable or is removed from the release surface
+- **AND** OpenNeko does not retain a shadow queue or leak the DSH owner
+
 ### Requirement: Clear and compact retain one authoritative path
 
 Product clear SHALL create a new Conversation identity bound to a newly created empty DSH Session; it MUST NOT erase or rebind the source Conversation. The new Session SHALL be created and validated before one catalog transaction publishes the complete binding. Pre-publication cleanup MAY target only the exact provisional Session created by that request. Window selection occurs after durable publication and MUST NOT roll back or hide the new record. Compaction SHALL use only the qualified DSH compaction path.
