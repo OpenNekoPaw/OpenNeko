@@ -94,8 +94,6 @@ describe('canonical Canvas Markdown capability contracts', () => {
 
 function createTestContentLocator() {
   return {
-    kind: 'workspace-file' as const,
-    path: 'assets/cover.png',
-    fingerprint: { strategy: 'provider' as const, value: 'cover-fingerprint' },
+    file: { authority: 'workspace' as const, path: 'assets/cover.png' },
   };
 }

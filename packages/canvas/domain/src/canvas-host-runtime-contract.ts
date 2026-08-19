@@ -1,4 +1,8 @@
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import {
+  isWorkspaceFileContentLocator,
+  validateContentLocator,
+  type ContentLocator,
+} from '@neko/content';
 import {
   isCanvasMaterialActionDescriptor,
   isCanvasMaterialActionIntent,
@@ -929,7 +933,11 @@ function parseGenerationProgress(
 
 function requireGeneratedOutputLocator(value: unknown) {
   const result = validateContentLocator(value);
-  if (!result.ok || result.locator.kind !== 'generated-output') {
+  if (
+    !result.ok ||
+    !isWorkspaceFileContentLocator(result.locator) ||
+    result.locator.selector !== undefined
+  ) {
     throw invalidPayload('Canvas Generation output locator is invalid.');
   }
   return result.locator;

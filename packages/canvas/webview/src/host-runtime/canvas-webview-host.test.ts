@@ -85,7 +85,9 @@ describe('createCanvasWebviewHost', () => {
         canvasId: identity.documentId,
         canvasSessionId: identity.sessionId,
       },
-      locator: { kind: 'workspace-file' as const, path: 'media/cat.png' },
+      locator: {
+        file: { authority: 'workspace' as const, path: 'media/cat.png' },
+      },
       mediaKind: 'image' as const,
     }));
     const authorMaterial = vi.fn(async ({ canvas }) => ({
@@ -110,7 +112,7 @@ describe('createCanvasWebviewHost', () => {
       expect.objectContaining({
         request: expect.objectContaining({
           kind: 'direct-reference',
-          locator: { kind: 'workspace-file', path: 'media/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
           position: { x: 320, y: 180 },
         }),
       }),
@@ -118,7 +120,7 @@ describe('createCanvasWebviewHost', () => {
     expect(snapshot.canvas.name).toBe('Projected source');
 
     const dragged = await host.projectContent(
-      { kind: 'workspace-file', path: 'media/dog.png' },
+      { file: { authority: 'workspace', path: 'media/dog.png' } },
       'image',
       { x: 40, y: 50 },
       'dog.png',
@@ -127,7 +129,7 @@ describe('createCanvasWebviewHost', () => {
       expect.objectContaining({
         request: expect.objectContaining({
           kind: 'direct-reference',
-          locator: { kind: 'workspace-file', path: 'media/dog.png' },
+          locator: { file: { authority: 'workspace', path: 'media/dog.png' } },
           mediaKind: 'image',
           title: 'dog.png',
           position: { x: 40, y: 50 },
@@ -337,7 +339,7 @@ describe('createCanvasWebviewHost', () => {
       data: {
         assetPath: 'media/cat.png',
         mediaType: 'image',
-        contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
       },
     };
     const descriptor: CanvasMaterialActionDescriptor = {
@@ -387,7 +389,7 @@ describe('createCanvasWebviewHost', () => {
             nodeId: node.id,
             mediaKind: 'image',
             origin: 'referenced',
-            locator: { kind: 'workspace-file', path: 'media/cat.png' },
+            locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
           },
         ],
       }),
@@ -417,7 +419,7 @@ describe('createCanvasWebviewHost', () => {
       data: {
         assetPath: 'media/cat.png',
         mediaType: 'image',
-        contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
       },
     };
     const descriptor: CanvasMaterialActionDescriptor = {
@@ -506,7 +508,7 @@ describe('createCanvasWebviewHost', () => {
       data: {
         assetPath: 'media/cat.png',
         mediaType: 'image',
-        contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
       },
     };
     const descriptor: CanvasMaterialActionDescriptor = {
@@ -681,7 +683,7 @@ describe('createCanvasWebviewHost', () => {
       data: {
         assetPath: 'media/cat.png',
         mediaType: 'image',
-        contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
       },
     };
     const descriptor: CanvasMaterialActionDescriptor = {

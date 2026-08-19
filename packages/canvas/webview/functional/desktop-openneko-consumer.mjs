@@ -2021,7 +2021,7 @@ function canvasDocument(name, nodeId, path, mediaType, extraNodes = [], connecti
         data: {
           title: `${name} locator-backed node`,
           assetPath: path,
-          contentLocator: { kind: 'workspace-file', path },
+          contentLocator: { file: { authority: 'workspace', path } },
           mediaType,
         },
       },
@@ -2064,7 +2064,7 @@ function cutDocumentNode(nodeId, path) {
       title: path,
       path,
       mediaKind: 'document',
-      contentLocator: { kind: 'workspace-file', path },
+      contentLocator: { file: { authority: 'workspace', path } },
     },
   };
 }
@@ -2080,9 +2080,8 @@ function epubImageNode(nodeId) {
       title: 'EPUB page 1',
       assetPath: 'OEBPS/images/page-1.png',
       contentLocator: {
-        kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'synthetic-document.epub' },
-        entryPath: 'OEBPS/images/page-1.png',
+        file: { authority: 'workspace', path: 'synthetic-document.epub' },
+        selector: { kind: 'entry', path: 'OEBPS/images/page-1.png' },
       },
       mediaType: 'image',
     },

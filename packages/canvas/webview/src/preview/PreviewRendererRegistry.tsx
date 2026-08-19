@@ -235,15 +235,7 @@ function FallbackPreviewRenderer(props: PreviewRendererProps): ReactNode {
 }
 
 function contentLocatorFileName(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return locator.path;
-    case 'document-entry':
-      return locator.entryPath;
-    case 'package-resource':
-      return locator.resourcePath;
-  }
+  return locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path;
 }
 
 function defaultMediaType(kind: 'image' | 'video' | 'audio'): string {

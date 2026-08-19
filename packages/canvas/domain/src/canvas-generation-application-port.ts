@@ -4,7 +4,7 @@ import type {
   CanvasGenerationRunBinding,
 } from './types/canvas-generation-node';
 import type { CanvasHostRuntimeIdentity } from './canvas-host-runtime-contract';
-import type { GeneratedOutputContentLocator } from '@neko/content';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 import type { GenerationJobRef, GenerationJobSnapshot } from '@neko/generation';
 
 export interface CanvasGenerationWorkspace {
@@ -21,7 +21,7 @@ export interface CanvasGenerationRuntimeProjection {
   readonly createdAt?: number;
   readonly updatedAt?: number;
   readonly progress?: GenerationJobSnapshot['progress'];
-  readonly resultLocators?: readonly GeneratedOutputContentLocator[];
+  readonly resultLocators?: readonly WorkspaceFileContentLocator[];
   readonly text?: string;
   readonly recipeStale?: boolean;
   readonly diagnostic?: CanvasGenerationDiagnostic;

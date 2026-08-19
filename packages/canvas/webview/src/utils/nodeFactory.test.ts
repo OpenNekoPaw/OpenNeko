@@ -7,7 +7,7 @@ describe('buildCanvasNode', () => {
     const markdown = createNode('markdown', { content: '# Draft' });
     const media = createNode('media', {
       assetPath: 'media/hero.png',
-      contentLocator: { kind: 'workspace-file', path: 'media/hero.png' },
+      contentLocator: { file: { authority: 'workspace', path: 'media/hero.png' } },
       mediaType: 'image',
     });
     const group = createNode('group', { label: 'Chapter' });
@@ -18,7 +18,7 @@ describe('buildCanvasNode', () => {
     });
     const file = createNode('file', {
       path: 'docs/script.fountain',
-      contentLocator: { kind: 'workspace-file', path: 'docs/script.fountain' },
+      contentLocator: { file: { authority: 'workspace', path: 'docs/script.fountain' } },
     });
     const subcanvas = createNode('canvas-embed', {
       canvasPath: 'boards/chapter.nkc',
@@ -66,7 +66,7 @@ describe('buildCanvasNode', () => {
   it('normalizes canonical node inputs without retaining unknown fields', () => {
     const node = createNode('media', {
       assetPath: 'media/voice.wav',
-      contentLocator: { kind: 'workspace-file', path: 'media/voice.wav' },
+      contentLocator: { file: { authority: 'workspace', path: 'media/voice.wav' } },
       mediaType: 'audio',
       duration: Number.POSITIVE_INFINITY,
       unsupportedPrompt: 'must not survive',

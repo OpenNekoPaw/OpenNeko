@@ -1,4 +1,4 @@
-import { contentLocatorsEqual, type ContentLocator } from '@neko/content';
+import { contentLocatorKey, contentLocatorsEqual, type ContentLocator } from '@neko/content';
 import type { CanvasData } from './types/canvas';
 import type {
   CanvasMaterialActionDescriptor,
@@ -809,7 +809,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
           if (projection.phase === 'succeeded' && projection.resultLocators?.length) {
             const current = requireCanvasGenerationNode(this.canvas, nodeId);
             const outputs = projection.resultLocators.map((locator) => ({
-              outputId: locator.outputId,
+              outputId: contentLocatorKey(locator),
               jobRef: run.jobRef,
               locator,
               kind: current.data.recipe.kind,

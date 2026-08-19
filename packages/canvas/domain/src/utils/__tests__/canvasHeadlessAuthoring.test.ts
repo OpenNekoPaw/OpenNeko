@@ -28,7 +28,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         data: {
           assetPath: 'media/cat.png',
           mediaType: 'image',
-          contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+          contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
         },
       },
     );
@@ -37,7 +37,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
       type: 'media',
       data: {
         assetPath: 'media/cat.png',
-        contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
       },
     });
   });
@@ -52,7 +52,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         data: {
           assetPath: 'media/key.png',
           mediaType: 'image',
-          contentLocator: { kind: 'workspace-file', path: 'media/key.png' },
+          contentLocator: { file: { authority: 'workspace', path: 'media/key.png' } },
         },
       },
       { type: 'group' as const, data: { label: 'References' } },
@@ -69,7 +69,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         data: {
           path: 'docs/brief.pdf',
           title: 'Brief',
-          contentLocator: { kind: 'workspace-file', path: 'docs/brief.pdf' },
+          contentLocator: { file: { authority: 'workspace', path: 'docs/brief.pdf' } },
         },
       },
       {
@@ -169,7 +169,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
             data: {
               assetPath: 'media/result.png',
               mediaType: 'image',
-              contentLocator: { kind: 'workspace-file', path: 'media/result.png' },
+              contentLocator: { file: { authority: 'workspace', path: 'media/result.png' } },
             },
           },
         ],
@@ -199,7 +199,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         data: {
           path: 'docs/target.pdf',
           title: 'Target',
-          contentLocator: { kind: 'workspace-file', path: 'docs/target.pdf' },
+          contentLocator: { file: { authority: 'workspace', path: 'docs/target.pdf' } },
         },
       },
     );
@@ -276,8 +276,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
 
   it('preserves stable ContentLocator identity in File nodes', () => {
     const contentLocator = {
-      kind: 'workspace-file' as const,
-      path: 'docs/reference.pdf',
+      file: { authority: 'workspace' as const, path: 'docs/reference.pdf' },
     };
     const file = planCanvasNodeCreation(
       { canvasData: emptyCanvas(), generateId: ids() },
@@ -299,8 +298,10 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         cachePath: '/tmp/cache.png',
         previewUrl: 'blob:neko-media://preview',
         contentLocator: {
-          kind: 'workspace-file',
-          path: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
+          file: {
+            authority: 'workspace',
+            path: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
+          },
         },
       }).map((diagnostic) => diagnostic.code),
     ).toEqual([

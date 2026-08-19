@@ -66,7 +66,7 @@ describe('PreviewSurface canonical descriptor lifecycle', () => {
       outputId: 'video-1',
       role: 'video-proxy',
       asset: { kind: 'asset-identity', mediaType: 'video' },
-      contentLocator: { kind: 'workspace-file', path: 'media/video.webm' },
+      contentLocator: { file: { authority: 'workspace', path: 'media/video.webm' } },
       metadata: {},
     };
 

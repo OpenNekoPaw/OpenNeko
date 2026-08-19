@@ -52,7 +52,7 @@ describe('useDragDrop lifecycle', () => {
 
     const payload = JSON.stringify(
       createContentLocatorDragData({
-        locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+        locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
         name: 'clip.mp4',
       }),
     );
@@ -72,7 +72,7 @@ describe('useDragDrop lifecycle', () => {
 
     expect(projectContent).toHaveBeenCalledTimes(1);
     expect(projectContent).toHaveBeenCalledWith(
-      { kind: 'workspace-file', path: 'media/clip.mp4' },
+      { file: { authority: 'workspace', path: 'media/clip.mp4' } },
       'video',
       { x: 110, y: 220 },
       'clip.mp4',

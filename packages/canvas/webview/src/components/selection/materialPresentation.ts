@@ -45,7 +45,10 @@ function resolveMaterialPresentation(
         ? node.data.mediaKind
         : undefined;
 
-  const source = deriveCanvasMaterialOrigin(locator.locator);
+  const source = deriveCanvasMaterialOrigin(
+    locator.locator,
+    isCanvasGenerationEvidence(data.generation) ? data.generation : undefined,
+  );
   if (source === 'referenced') {
     if (data.generation !== undefined) return undefined;
     return {

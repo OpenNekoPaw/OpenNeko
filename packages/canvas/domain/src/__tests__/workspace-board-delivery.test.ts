@@ -335,10 +335,10 @@ function generatedBatchDelivery(
         kind: 'image' as const,
         title: `Generated ${index + 1}`,
         contentLocator: {
-          kind: 'generated-output' as const,
-          outputId,
-          digest,
-          path: `neko/generated/image/${outputId}.png`,
+          file: {
+            authority: 'workspace' as const,
+            path: `neko/generated/image/${outputId}.png`,
+          },
         },
         generation: {
           jobRef: {

@@ -1031,7 +1031,9 @@ function projectCutAgentContext(
   const track = view.tracks.find((candidate) => candidate.trackId === selection.trackId);
   if (!track) throw new Error(`Cut Agent target Track '${selection.trackId}' is stale.`);
   const document = {
-    locator: { kind: 'workspace-file' as const, path: entry.identity.documentId },
+    locator: {
+      file: { authority: 'workspace' as const, path: entry.identity.documentId },
+    },
     sessionId: entry.identity.sessionId,
   };
   if (selection.kind === 'track') {

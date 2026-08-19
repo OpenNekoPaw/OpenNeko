@@ -6,16 +6,14 @@ import {
   type CanvasWorkspaceProjectionRequest,
 } from '../../types/canvas-workspace-board';
 import type { CanvasNode } from '../../types/canvas';
-import type { ContentFingerprint, ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content';
 import { createEmptyCanvasData } from '../canvasHeadlessAuthoring';
 import { planCanvasWorkspaceBoardProjection } from '../canvasWorkspaceBoardProjection';
 
 const sourceLocator: ContentLocator = {
-  kind: 'workspace-file',
-  path: 'neko/assets/References/source-image.png',
-  fingerprint: { strategy: 'sha256', value: 'sha256:source-image' },
+  file: { authority: 'workspace', path: 'neko/assets/References/source-image.png' },
 };
-const generatedLocator = generatedOutputLocator('shot-1', 'sha256:shot-1');
+const generatedLocator = generatedOutputLocator('shot-1');
 
 describe('planCanvasWorkspaceBoardProjection', () => {
   it('projects a flat creative-content graph with explicit source relations', () => {
@@ -279,18 +277,16 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     ]);
   });
 
-  it('uses locator fingerprints as exact content identities', () => {
+  it('uses the canonical locator rather than provenance fingerprints as content identity', () => {
     const portablePath = 'references/books/volume-01.epub';
     const weak = sourceDocumentArtifact({
       artifactId: 'source-weak',
       portablePath,
-      fingerprint: undefined,
       contentFingerprint: portablePath,
     });
     const hashedSource = sourceDocumentArtifact({
       artifactId: 'source-hashed',
       portablePath,
-      fingerprint: { strategy: 'sha256', value: 'sha256:volume-01' },
       contentFingerprint: 'sha256:volume-01',
     });
     const hashed = {
@@ -304,18 +300,14 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     );
 
     expect(plan.status).toBe('projected');
-    expect(plan.canvasData.nodes).toHaveLength(2);
-    expect(plan.canvasData.nodes[1]).toMatchObject({
+    expect(plan.canvasData.nodes).toHaveLength(1);
+    expect(plan.canvasData.nodes[0]).toMatchObject({
       type: 'file',
       data: {
-        contentLocator: {
-          kind: 'workspace-file',
-          path: portablePath,
-          fingerprint: { strategy: 'sha256', value: 'sha256:volume-01' },
-        },
+        contentLocator: { file: { authority: 'workspace', path: portablePath } },
       },
     });
-    expect(new Set(plan.nodeIds).size).toBe(2);
+    expect(new Set(plan.nodeIds).size).toBe(1);
   });
 
   it('does not mutate an existing locator when a new content fingerprint arrives', () => {
@@ -323,7 +315,6 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     const weak = sourceDocumentArtifact({
       artifactId: 'source-weak',
       portablePath,
-      fingerprint: undefined,
       contentFingerprint: portablePath,
     });
     const first = planCanvasWorkspaceBoardProjection(
@@ -338,7 +329,6 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     const hashedSource = sourceDocumentArtifact({
       artifactId: 'source-hashed',
       portablePath,
-      fingerprint: { strategy: 'sha256', value: 'sha256:volume-01' },
       contentFingerprint: 'sha256:volume-01',
     });
     const hashed = {
@@ -351,18 +341,17 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       request({ deliveryId: 'delivery:batch-2', artifacts: [hashed] }),
     );
 
-    expect(second.status).toBe('projected');
-    expect(second.canvasData.nodes).toHaveLength(2);
+    expect(second.status).toBe('noop');
+    expect(second.canvasData.nodes).toHaveLength(1);
     expect(second.canvasData.nodes[0]).toMatchObject({
       id: existing.id,
       position: { x: 640, y: 320 },
-      data: { contentLocator: { kind: 'workspace-file', path: portablePath } },
+      data: { contentLocator: { file: { authority: 'workspace', path: portablePath } } },
     });
 
     const changedSource = sourceDocumentArtifact({
       artifactId: 'source-hashed-changed',
       portablePath,
-      fingerprint: { strategy: 'sha256', value: 'sha256:volume-01-changed' },
       contentFingerprint: 'sha256:volume-01-changed',
     });
     const changed = {
@@ -377,8 +366,8 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       request({ deliveryId: 'delivery:batch-3', artifacts: [changed] }),
     );
 
-    expect(third.status).toBe('projected');
-    expect(third.canvasData.nodes).toHaveLength(3);
+    expect(third.status).toBe('noop');
+    expect(third.canvasData.nodes).toHaveLength(1);
     expect(third.canvasData.nodes[0]).toMatchObject({
       id: existing.id,
       position: { x: 640, y: 320 },
@@ -433,14 +422,14 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(second.canvasData.connections).toHaveLength(2);
   });
 
-  it('creates a distinct content node for a changed durable locator fingerprint', () => {
+  it('does not create a distinct content node when only provenance fingerprint changes', () => {
     const first = planCanvasWorkspaceBoardProjection(
       createEmptyCanvasData('Workspace'),
       request({ artifacts: [outputArtifact('delivery:batch-1')] }),
     );
     const changed = {
       ...outputArtifact('delivery:batch-2'),
-      contentLocator: generatedOutputLocator('shot-1', 'sha256:shot-2'),
+      contentLocator: generatedOutputLocator('shot-1'),
       provenance: provenance(
         'delivery:batch-2',
         'shot-1',
@@ -455,9 +444,9 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       request({ deliveryId: 'delivery:batch-2', artifacts: [changed] }),
     );
 
-    expect(second.status).toBe('projected');
-    expect(second.canvasData.nodes).toHaveLength(2);
-    expect(second.canvasData.nodes[0]!.id).not.toBe(second.canvasData.nodes[1]!.id);
+    expect(second.status).toBe('noop');
+    expect(second.canvasData.nodes).toHaveLength(1);
+    expect(second.canvasData.nodes[0]!.id).toBe(first.canvasData.nodes[0]!.id);
   });
 
   it('fails atomically when a canonical content identity is occupied by unrelated data', () => {
@@ -475,7 +464,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
           ...occupied,
           data: {
             ...occupied.data,
-            contentLocator: generatedOutputLocator('other-shot', 'sha256:other-shot'),
+            contentLocator: generatedOutputLocator('other-shot'),
           },
         },
       ],
@@ -599,7 +588,7 @@ function generatedOutputArtifact(
   return {
     ...outputArtifact(deliveryId),
     title: `Generated ${index}`,
-    contentLocator: generatedOutputLocator(outputId, digest),
+    contentLocator: generatedOutputLocator(outputId),
     provenance: provenance(deliveryId, outputId, digest, 'image', 'output'),
   };
 }
@@ -607,17 +596,12 @@ function generatedOutputArtifact(
 function sourceDocumentArtifact(input: {
   readonly artifactId: string;
   readonly portablePath: string;
-  readonly fingerprint: ContentFingerprint | undefined;
   readonly contentFingerprint: string;
 }): CanvasWorkspaceResourceProjectionArtifact {
   return {
     kind: 'file-reference',
     title: input.portablePath,
-    contentLocator: {
-      kind: 'workspace-file',
-      path: input.portablePath,
-      ...(input.fingerprint ? { fingerprint: input.fingerprint } : {}),
-    },
+    contentLocator: { file: { authority: 'workspace', path: input.portablePath } },
     provenance: provenance(
       'delivery:batch-1',
       input.artifactId,
@@ -650,11 +634,6 @@ function provenance(
   };
 }
 
-function generatedOutputLocator(id: string, digest: string): ContentLocator {
-  return {
-    kind: 'generated-output',
-    outputId: id,
-    digest,
-    path: `neko/generated/image/${id}.png`,
-  };
+function generatedOutputLocator(id: string): ContentLocator {
+  return { file: { authority: 'workspace', path: `neko/generated/image/${id}.png` } };
 }

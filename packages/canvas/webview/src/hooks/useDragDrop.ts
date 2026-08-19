@@ -22,6 +22,7 @@ import {
   CONTENT_LOCATOR_DRAG_MIME,
   parseContentLocatorDragData,
   type ContentLocator,
+  type WorkspaceFileContentLocator,
 } from '@neko/content';
 import { isMediaLibraryDragData } from '@neko/assets-domain/contracts';
 import {
@@ -93,9 +94,6 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
         }
         try {
           const payload = parseContentLocatorDragData(result.data);
-          if (payload.locator.kind === 'generated-output') {
-            throw new Error('Generated results require the Generation-owned Canvas commit path.');
-          }
           await projectContent(
             payload.locator,
             inferMaterialMediaKind(payload.name),
@@ -436,7 +434,7 @@ export function applyCanvasAddSourceResult(input: {
 
 function createCanvasDroppedAssetFromAddSourceResult(input: {
   readonly durablePath: string;
-  readonly contentLocator: Extract<ContentLocator, { readonly kind: 'workspace-file' }>;
+  readonly contentLocator: WorkspaceFileContentLocator;
   readonly metadata: ReturnType<typeof readCanvasAddSourceMetadata>;
   readonly sourceNameHint: string;
   readonly mediaTypeHint?: 'image' | 'video' | 'audio';

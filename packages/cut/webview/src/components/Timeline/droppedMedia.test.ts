@@ -40,7 +40,9 @@ describe('dropped Cut media', () => {
           type === CONTENT_LOCATOR_DRAG_MIME
             ? JSON.stringify({
                 type: 'content-locator',
-                locator: { kind: 'workspace-file', path: 'media/shot.mp4' },
+                locator: {
+                  file: { authority: 'workspace', path: 'media/shot.mp4' },
+                },
                 name: 'shot.mp4',
               })
             : '',
@@ -49,7 +51,9 @@ describe('dropped Cut media', () => {
       kind: 'content-locator',
       data: {
         type: 'content-locator',
-        locator: { kind: 'workspace-file', path: 'media/shot.mp4' },
+        locator: {
+          file: { authority: 'workspace', path: 'media/shot.mp4' },
+        },
         name: 'shot.mp4',
       },
     });

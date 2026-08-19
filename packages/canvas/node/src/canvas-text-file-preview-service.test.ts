@@ -3,7 +3,7 @@ import type { ContentReadService } from '@neko/content';
 import { CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES } from '@neko/canvas-domain';
 import { CanvasTextFilePreviewService } from './canvas-text-file-preview-service';
 
-const locator = { kind: 'workspace-file', path: 'data/project.json' } as const;
+const locator = { file: { authority: 'workspace', path: 'data/project.json' } } as const;
 
 describe('CanvasTextFilePreviewService', () => {
   it('uses the canonical bounded content reader and formats JSON', async () => {
@@ -22,7 +22,7 @@ describe('CanvasTextFilePreviewService', () => {
     });
 
     await expect(
-      service.read({ requestId: 'request', nodeId: 'node', locator, path: locator.path }),
+      service.read({ requestId: 'request', nodeId: 'node', locator, path: locator.file.path }),
     ).resolves.toMatchObject({
       status: 'ready',
       kind: 'json',
@@ -61,7 +61,7 @@ describe('CanvasTextFilePreviewService', () => {
       stat: vi.fn<ContentReadService['stat']>(),
     });
     await expect(
-      service.read({ requestId: 'request', nodeId: 'node', locator, path: locator.path }),
+      service.read({ requestId: 'request', nodeId: 'node', locator, path: locator.file.path }),
     ).resolves.toEqual({
       requestId: 'request',
       nodeId: 'node',

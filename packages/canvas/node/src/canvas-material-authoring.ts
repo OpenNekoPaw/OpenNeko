@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { open, realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
@@ -12,6 +12,8 @@ import {
 import type { NekoHostPorts } from '@neko/host/ports';
 import {
   normalizeWorkspaceContentPath,
+  isPackageResourceContentLocator,
+  isWorkspaceFileContentLocator,
   validateContentLocator,
   type ContentLocator,
   type PackageResourceContentLocator,
@@ -201,10 +203,7 @@ export class CanvasMaterialAuthoringService {
         };
       }
       case 'generated-output-commit':
-        await resolveWorkspaceContentLocator(workspace, {
-          kind: 'workspace-file',
-          path: request.locator.path,
-        });
+        await resolveWorkspaceContentLocator(workspace, request.locator);
         return {
           locator: request.locator,
           title: request.title,
@@ -221,14 +220,7 @@ export class CanvasMaterialAuthoringService {
     workspace: AssetWorkspaceResolution,
     request: Extract<CanvasMaterialAuthoringRequest, { readonly kind: 'derived-output-commit' }>,
   ): Promise<ResolvedCanvasMaterialDescriptor> {
-    if (request.locator.kind === 'generated-output') {
-      await resolveWorkspaceContentLocator(workspace, {
-        kind: 'workspace-file',
-        path: request.locator.path,
-      });
-    } else {
-      await this.authorizeReferencedLocator(workspace, request.identity.projectId, request.locator);
-    }
+    await this.authorizeReferencedLocator(workspace, request.identity.projectId, request.locator);
     return {
       locator: request.locator,
       title: request.title,
@@ -244,30 +236,25 @@ export class CanvasMaterialAuthoringService {
     locator: ContentLocator,
   ): Promise<void> {
     const result = validateContentLocator(locator);
-    if (!result.ok || result.locator.kind === 'generated-output') {
-      throw visible('Canvas requires a valid referenced ContentLocator.');
-    }
+    if (!result.ok) throw visible('Canvas requires a valid canonical ContentLocator.');
     const context = {
       projectId,
       workspaceRoot: workspace.workspacePath,
       globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
     };
-    switch (result.locator.kind) {
-      case 'workspace-file':
-        await resolveProjectWorkspaceContentLocator(context, result.locator);
-        return;
-      case 'document-entry':
-        await resolveProjectWorkspaceContentLocator(context, result.locator.source);
-        return;
-      case 'package-resource': {
-        const authorize = this.options.authorizePackageResource;
-        if (!authorize) {
-          throw visible('The package that owns this resource is unavailable.');
-        }
-        await authorize(result.locator, workspace);
-        return;
-      }
+    if (isWorkspaceFileContentLocator(result.locator)) {
+      await resolveProjectWorkspaceContentLocator(context, result.locator);
+      return;
     }
+    if (isPackageResourceContentLocator(result.locator)) {
+      const authorize = this.options.authorizePackageResource;
+      if (!authorize) {
+        throw visible('The package that owns this resource is unavailable.');
+      }
+      await authorize(result.locator, workspace);
+      return;
+    }
+    throw visible('Canvas requires a supported ContentLocator authority.');
   }
 
   private consumeExternalSource(
@@ -291,7 +278,6 @@ export class CanvasMaterialAuthoringService {
   }): Promise<WorkspaceFileContentLocator> {
     const sourceName = requireSafeSourceName(input.sourceName);
     const bytes = await readBoundedFile(input.sourcePath, this.maxImportBytes);
-    const digest = createHash('sha256').update(bytes).digest('hex');
     const relativeDirectory = `neko/imports/${input.mediaKind}`;
     const absoluteDirectory = this.options.host.paths.join(
       input.workspace.workspacePath,
@@ -323,9 +309,10 @@ export class CanvasMaterialAuthoringService {
       throw visible('The selected source could not be imported.');
     }
     return {
-      kind: 'workspace-file',
-      path: `${relativeDirectory}/${destinationName}`,
-      fingerprint: { strategy: 'sha256', value: digest },
+      file: {
+        authority: 'workspace',
+        path: `${relativeDirectory}/${destinationName}`,
+      },
     };
   }
 
@@ -396,13 +383,7 @@ function assertCanvasIdentity(
 
 function titleForLocator(locator: ContentLocator): string {
   const portablePath =
-    locator.kind === 'workspace-file'
-      ? locator.path
-      : locator.kind === 'document-entry'
-        ? locator.entryPath
-        : locator.kind === 'package-resource'
-          ? locator.resourcePath
-          : locator.path;
+    locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path;
   return path.posix.basename(portablePath);
 }
 

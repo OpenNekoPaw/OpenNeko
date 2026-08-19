@@ -195,10 +195,10 @@ function output(
     kind,
     recipeInputFingerprint,
     locator: {
-      kind: 'generated-output' as const,
-      outputId,
-      digest: `sha256:${outputId}`,
-      path: `neko/generated/${outputId}.png`,
+      file: {
+        authority: 'workspace' as const,
+        path: `neko/generated/${outputId}.png`,
+      },
     },
   };
 }

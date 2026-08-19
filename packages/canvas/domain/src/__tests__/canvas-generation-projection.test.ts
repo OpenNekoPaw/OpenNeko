@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type GeneratedOutputContentLocator } from '@neko/content';
+import { type WorkspaceFileContentLocator } from '@neko/content';
 import { createEmptyCanvasData, type CanvasData } from '@neko/canvas-domain';
 import { projectResolvedCanvasMaterialToCanvas } from '../canvas-content-authoring';
 import {
@@ -42,7 +42,7 @@ describe('Canvas Generation Job projection', () => {
     ]);
   });
 
-  it('commits exact generated locators, immutable evidence and Job lineage once', () => {
+  it('commits exact Workspace locators, immutable generation evidence and Job lineage once', () => {
     const succeeded = project(
       emptyWithSource(),
       snapshot({
@@ -59,7 +59,7 @@ describe('Canvas Generation Job projection', () => {
     );
 
     const generated = replayed.nodes.filter(
-      (node) => node.type === 'media' && node.data.contentLocator?.kind === 'generated-output',
+      (node) => node.type === 'media' && node.data.generation !== undefined,
     );
     expect(generated).toHaveLength(2);
     expect(generated[0]?.data).toMatchObject({
@@ -209,20 +209,15 @@ function snapshot(
   };
 }
 
-function resultLocator(outputId: string): GeneratedOutputContentLocator {
-  return {
-    kind: 'generated-output',
-    outputId,
-    digest: `sha256:${outputId}`,
-    path: `neko/generated/${outputId}.png`,
-  };
+function resultLocator(outputId: string): WorkspaceFileContentLocator {
+  return { file: { authority: 'workspace', path: `neko/generated/${outputId}.png` } };
 }
 
 function emptyWithSource(): CanvasData {
   const canvas = projectResolvedCanvasMaterialToCanvas({
     canvas: createEmptyCanvasData('Generation projection fixture'),
     material: {
-      locator: { kind: 'workspace-file', path: 'media/source.png' },
+      locator: { file: { authority: 'workspace', path: 'media/source.png' } },
       title: 'source.png',
       mediaKind: 'image',
     },

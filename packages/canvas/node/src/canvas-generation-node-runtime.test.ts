@@ -429,10 +429,10 @@ function snapshot(input: {
 
 function resultLocator() {
   return {
-    kind: 'generated-output' as const,
-    outputId: 'output-1',
-    digest: 'sha256:output-1',
-    path: 'neko/generated/image/output-1.png',
+    file: {
+      authority: 'workspace' as const,
+      path: 'neko/generated/image/output-1.png',
+    },
   };
 }
 

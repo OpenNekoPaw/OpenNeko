@@ -395,8 +395,7 @@ function resolveActions(
       section: 'utility',
       run: () =>
         void host?.previewResource({
-          kind: 'workspace-file',
-          path,
+          file: { authority: 'workspace', path },
         }),
     });
   }

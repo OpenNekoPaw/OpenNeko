@@ -608,7 +608,9 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
 
   const handleCanvasEmbedOpen = useCallback(
     (canvasPath: string) => {
-      void hostPort.previewResource({ kind: 'workspace-file', path: canvasPath });
+      void hostPort.previewResource({
+        file: { authority: 'workspace', path: canvasPath },
+      });
     },
     [hostPort],
   );

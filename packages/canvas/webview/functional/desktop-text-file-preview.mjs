@@ -221,7 +221,7 @@ function textFileNode(id, path, mediaType, x, y) {
       title: path.split('/').at(-1) ?? path,
       path,
       mediaType,
-      contentLocator: { kind: 'workspace-file', path },
+      contentLocator: { file: { authority: 'workspace', path } },
     },
   };
 }

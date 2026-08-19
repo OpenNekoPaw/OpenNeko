@@ -12,18 +12,16 @@ import {
 } from '../canvas-workspace-board';
 import type { GeneratedImage } from '@neko/generation';
 import { createGeneratedAssetRevisionRef } from '@neko/generation';
-import type { GeneratedOutputContentLocator } from '@neko/content';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 
-const generatedLocator: GeneratedOutputContentLocator = {
-  kind: 'generated-output',
-  outputId: 'shot-1',
-  digest: 'sha256:shot-1',
-  path: 'neko/generated/image/shot-1.png',
+const generatedLocator: WorkspaceFileContentLocator = {
+  file: { authority: 'workspace', path: 'neko/generated/image/shot-1.png' },
 };
 const sourceLocator = {
-  kind: 'workspace-file' as const,
-  path: 'neko/assets/References/source-image.png',
-  fingerprint: { strategy: 'sha256' as const, value: 'sha256:source-image' },
+  file: {
+    authority: 'workspace' as const,
+    path: 'neko/assets/References/source-image.png',
+  },
 };
 
 describe('Canvas Workspace Board delivery contract', () => {
@@ -203,10 +201,7 @@ describe('Canvas Workspace Board delivery contract', () => {
       artifacts: [
         {
           kind: 'image',
-          contentLocator: expect.objectContaining({
-            kind: 'generated-output',
-            outputId: 'shot-1',
-          }),
+          contentLocator: generatedLocator,
           generation: {
             jobRef: { kind: 'generation', jobId: 'operation-1' },
             summary: {
@@ -226,7 +221,7 @@ describe('Canvas Workspace Board delivery contract', () => {
     expect(JSON.stringify(delivery)).not.toContain('/workspace/project/neko/generated');
   });
 
-  it('requires Generation Job evidence only for generated outputs', () => {
+  it('treats Generation evidence as independent provenance beside one locator shape', () => {
     const generatedWithoutEvidence = request({
       artifacts: [{ ...outputArtifact(), generation: undefined }],
     });
@@ -239,12 +234,8 @@ describe('Canvas Workspace Board delivery contract', () => {
       ],
     });
 
-    expect(
-      validateCanvasWorkspaceProjectionRequest(generatedWithoutEvidence).map(({ code }) => code),
-    ).toContain('missing-projection-identity');
-    expect(
-      validateCanvasWorkspaceProjectionRequest(referencedWithEvidence).map(({ code }) => code),
-    ).toContain('invalid-content-locator');
+    expect(validateCanvasWorkspaceProjectionRequest(generatedWithoutEvidence)).toEqual([]);
+    expect(validateCanvasWorkspaceProjectionRequest(referencedWithEvidence)).toEqual([]);
   });
 
   it('rejects runtime handles, cache values, and malformed refs', () => {
