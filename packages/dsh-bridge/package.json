@@ -29,6 +29,7 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "0.25.1",
     "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/dsh-attachment": "0.1.0-rc.7",
     "@deepseek-ai/dsh-agent": "0.1.0-rc.7",
     "@deepseek-ai/dsh-agent-presets": "0.1.0-rc.7",
     "@deepseek-ai/dsh-commands": "0.1.0-rc.7",

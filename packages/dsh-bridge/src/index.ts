@@ -16,10 +16,11 @@ import {
   type Stream,
 } from '@agentclientprotocol/sdk';
 import type { AgentHandle } from '@deepseek-ai/dsh-agent';
+import type { AttachmentStore } from '@deepseek-ai/dsh-attachment';
 import type {} from '@deepseek-ai/dsh-agent-presets';
 import type {} from '@deepseek-ai/dsh-commands';
 import type { Context } from '@deepseek-ai/cordis';
-import { createUserMessage, errorChain } from '@deepseek-ai/dsh-llm';
+import { createUserMessage, errorChain, type ContentBlock } from '@deepseek-ai/dsh-llm';
 import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-session-persistence';
 import { isModelInvocable, isSkillName, isUserInvocable } from '@deepseek-ai/dsh-skill';
@@ -49,6 +50,7 @@ export const inject = [
   'agents',
   'agentPresets',
   'approval',
+  'attachments',
   'commands',
   'permissionPresets',
   'sessions',
@@ -262,7 +264,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
 
   const runPrompt = (
     sessionId: string,
-    content: readonly { readonly type: 'text'; readonly text: string }[],
+    content: readonly ContentBlock[],
     displayText?: string,
   ): Promise<PromptResponse> =>
     promptAdmission.run(sessionId, async () => {
@@ -316,7 +318,11 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           agentInfo: { name: '@neko/dsh-bridge', version: 'development' },
           agentCapabilities: {
             loadSession: true,
-            promptCapabilities: { image: false, audio: false, embeddedContext: false },
+            promptCapabilities: {
+              image: true,
+              audio: false,
+              embeddedContext: false,
+            },
             sessionCapabilities: { list: {}, resume: {}, close: {} },
           },
           authMethods: [],
@@ -449,7 +455,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       async prompt(params) {
         requireOpen();
         requireOwned(params.sessionId);
-        const content = admitPrompt(params.prompt);
+        const content = await admitAcpPrompt(params.prompt, ctx.attachments);
         return runPrompt(params.sessionId, content);
       },
       cancel(params) {
@@ -1246,20 +1252,98 @@ function projectApprovalOutcome(
   return 'unavailable';
 }
 
-function admitPrompt(prompt: readonly AcpContentBlock[]): { type: 'text'; text: string }[] {
+export async function admitAcpPrompt(
+  prompt: readonly AcpContentBlock[],
+  attachments?: Pick<AttachmentStore, 'saveImages'>,
+): Promise<ContentBlock[]> {
   let text = '';
+  const content: Array<ContentBlock | number> = [];
+  const images: Parameters<AttachmentStore['saveImages']>[0][number][] = [];
   for (const block of prompt) {
-    if (block.type === 'text') text += block.text;
-    else if (block.type === 'resource_link') {
-      text += `\n[resource_link name=${JSON.stringify(block.name)} uri=${JSON.stringify(block.uri)}]\n`;
-    } else {
-      throw RequestError.invalidParams(undefined, `Unsupported prompt content: ${block.type}`);
+    if (block.type === 'text') {
+      text += block.text;
+      content.push({ type: 'text', text: block.text });
+      continue;
     }
+    if (block.type === 'resource_link') {
+      const resourceText = `\n[resource_link name=${JSON.stringify(block.name)} uri=${JSON.stringify(block.uri)}]\n`;
+      text += resourceText;
+      content.push({ type: 'text', text: resourceText });
+      continue;
+    }
+    if (block.type === 'image') {
+      if (attachments === undefined) {
+        throw RequestError.invalidParams(
+          undefined,
+          'DSH image attachments are unavailable in the active profile.',
+        );
+      }
+      const mediaType = requireImageMediaType(block.mimeType);
+      content.push(images.length);
+      images.push({
+        data: decodeBase64Image(block.data),
+        mediaType,
+      });
+      continue;
+    }
+    throw RequestError.invalidParams(undefined, `Unsupported prompt content: ${block.type}`);
   }
-  if (text.trim().length === 0) {
+  if (text.trim().length === 0 && images.length === 0) {
     throw RequestError.invalidParams(undefined, 'Prompt must contain non-empty text.');
   }
-  return [{ type: 'text', text }];
+  if (images.length === 0) return content.map(requireAdmittedContentBlock);
+  if (attachments === undefined) {
+    throw RequestError.internalError(undefined, 'DSH attachment admission is unavailable.');
+  }
+  const imageRefs = await attachments.saveImages(images);
+  if (imageRefs.length !== images.length) {
+    throw RequestError.internalError(
+      undefined,
+      'DSH attachment admission returned an incomplete image batch.',
+    );
+  }
+  return content.map((block) => {
+    if (typeof block !== 'number') return block;
+    const attachment = imageRefs[block];
+    if (attachment === undefined) {
+      throw RequestError.internalError(
+        undefined,
+        'DSH attachment admission returned an invalid image order.',
+      );
+    }
+    return { type: 'image', attachment };
+  });
+}
+
+function requireAdmittedContentBlock(block: ContentBlock | number): ContentBlock {
+  if (typeof block !== 'number') return block;
+  throw RequestError.internalError(undefined, 'Image prompt content was not admitted.');
+}
+
+function requireImageMediaType(
+  value: string,
+): 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' {
+  if (
+    value === 'image/png' ||
+    value === 'image/jpeg' ||
+    value === 'image/webp' ||
+    value === 'image/gif'
+  ) {
+    return value;
+  }
+  throw RequestError.invalidParams(undefined, `Unsupported image MIME type: ${value}`);
+}
+
+function decodeBase64Image(value: string): Uint8Array {
+  if (value.length === 0 || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(value)) {
+    throw RequestError.invalidParams(undefined, 'Image data must be canonical base64.');
+  }
+  const bytes = Buffer.from(value, 'base64');
+  if (bytes.length === 0) throw RequestError.invalidParams(undefined, 'Image data is empty.');
+  if (bytes.toString('base64') !== value) {
+    throw RequestError.invalidParams(undefined, 'Image data must be canonical base64.');
+  }
+  return new Uint8Array(bytes);
 }
 
 function projectInbox(record: OwnedSession): Record<string, unknown> {
