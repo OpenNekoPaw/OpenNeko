@@ -60,4 +60,4 @@ Functional accessibility evidence passed. Direct Computer Use screenshot pixels 
 - Scene-attach failure preserves the durable catalog by ordering, but a dedicated Desktop integration assertion remains to be added.
 - Real provider turn, transcript content replay, permission, cancellation, inbox, and Tool behavior were not executed in this step.
 - `pnpm check:no-internal-versioning` remains blocked by generated development-runtime third-party version inventories, existing legacy-data fixtures, and stale allowances; no new finding points to this implementation.
-- `pnpm check:unused` reports the repository's existing seven unused files and 157 unused exports; none of the new Conversation publication files are reported.
+- `pnpm check:unused` reports six unused files and 182 unused exports; none of the new Conversation publication files are reported. The remaining findings are repository-wide public-surface/debt items, not this publication slice.

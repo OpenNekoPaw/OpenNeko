@@ -16,7 +16,7 @@ the inventory.
 | --- | --- | --- | --- | --- |
 | `openneko.generation` | `submit`, `describe` | `@neko/generation` `dsh-tool.ts`; `decodeGenerationDshToolInput` delegates submit validation to the Generation Job codec | ACP permission is owned by `DshPermissionOwner`; reverse Host resolution requires exact DSH Session → Conversation → domain context and exact Workspace grant or configured Assistant Space | `PurposeGenerationJobPort`; durable `GenerationJobStore` and provider task/output facts |
 | `openneko.canvas` | `query`, `create-node` | `@neko/canvas-domain` `dsh-tool.ts`; strict normalized `.nkc` path, fingerprint, node and bounded JSON validation | ACP permission is owned by `DshPermissionOwner`; reverse Host resolution requires an exact Workspace Conversation and exact Workspace grant | `CanvasProjectAuthoringService`; authoritative Canvas workspace document and content fingerprint |
-| `openneko.cut` | `query`, `apply` | `@neko/cut-domain` `dsh-tool.ts`; strict normalized `.otio` path, exact fingerprint and bounded semantic command subset | ACP permission is owned by `DshPermissionOwner`; reverse Host resolution requires an exact Workspace Conversation and exact Workspace grant | `CutProjectAuthoringService`; authoritative Cut workspace document and content fingerprint |
+| `openneko.cut` | `query`, `apply`, `export-submit`, `export-describe`, `export-cancel` | `@neko/cut-domain` `dsh-tool.ts`; strict normalized `.otio` path, exact fingerprint, bounded semantic command subset and container-matched Workspace-relative export target | ACP permission is owned by `DshPermissionOwner`; reverse Host resolution requires an exact Workspace Conversation and exact Workspace grant | `CutProjectAuthoringService + CutExportApplicationService`; authoritative Cut workspace document, content fingerprint and Workspace-scoped ExportJobStore |
 
 All three tools follow the single path:
 
@@ -30,7 +30,8 @@ to call the same owning domain runtime without creating an Agent turn.
 - DSH base tools are third-party runtime capabilities, not OpenNeko first-party domain Tools.
 - Assets and media have no current production DSH registration. Their future operation sets must be
   designed from owning domain contracts, not inferred from deleted Pi code or documentation. Cut export is
-  intentionally excluded until a non-UI durable Export Job owner is composed.
+  included above through the accepted Workspace-scoped Export Job owner; media execution and complete
+  visible Desktop/reopen evidence remain open.
 - Character and World `AgentCapabilityProvider` wrappers were not production-registered. Their remaining
   source files, tests, public exports, old tool-name constants and package dependencies were deleted in this
   work unit. Character/World application services and durable facts remain available for future typed DSH
@@ -40,8 +41,8 @@ to call the same owning domain runtime without creating an Agent turn.
 
 ## Remaining W6 work
 
-The Cut authoring part of task 9.2 is recorded in `w6-cut-dsh-authoring-slice.md`; its media/export Job
-portion remains open. Tasks 9.3–9.6 require independent OpenSpec-constrained vertical slices. Character and World additionally
+The Cut authoring and export Tool part of task 9.2 is recorded in `w6-cut-dsh-authoring-slice.md`; its
+real media execution and complete visible Desktop/reopen evidence remain open. Tasks 9.3–9.6 require independent OpenSpec-constrained vertical slices. Character and World additionally
 need an exact DSH authoring-target binding contract before their domain services can be exposed; no active
 Workspace/Conversation fallback is allowed.
 
@@ -69,8 +70,8 @@ Passed on 2026-08-18:
 - `pnpm test:agent:eval` key-free validation (45 files, 314 tests; 27 suites and 80 dry-run cases after
   adding Cut Tool coverage ownership to the Evaluation selector).
 
-`pnpm check:unused` remains open for W8 task 11.13: after this unit's unlisted workspace dependencies and
-the retired Agent runtime dependency were corrected, the repository still reports seven pre-existing unused
-files and 157 unused exports. None names this inventory, the deleted Character/World providers or their old
+`pnpm check:unused` remains open for W8 task 11.13: after this unit's unlisted workspace dependencies, the
+retired Agent runtime dependency and the unused InputArea barrel were corrected, the repository still reports six
+unused files and 182 unused exports. None names this inventory, the deleted Character/World providers or their old
 tool constants. Real provider/API and visible Desktop Evaluation were not run by explicit development-phase
 direction and remain required before release.

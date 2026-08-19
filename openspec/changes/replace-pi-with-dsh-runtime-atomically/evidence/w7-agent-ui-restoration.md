@@ -13,7 +13,7 @@ Date: 2026-08-19
 ## Implementation Evidence
 
 - `packages/agent/webview/src/index.css` is byte-identical to `HEAD`; the accepted style sheet was not rewritten.
-- `DshAgentView` now mounts the existing `InputArea`, `InputAreaProvider`, `ModelSelector`/configuration menu, `ModeSelector`, `WorkspaceCanvasContextBar`, reference-token and attachment presentation files restored from the accepted UI source. DSH configuration is mapped into the existing component context; no parallel selector or composer implementation remains.
+- `DshAgentView` now mounts the existing `InputArea`, `InputAreaProvider`, `ComposerConfigMenu`, `ModeSelector`, `WorkspaceCanvasContextBar`, reference-token and attachment presentation files restored from the accepted UI source. DSH configuration is mapped into the existing component context; the standalone legacy `ModelSelector` remains covered by its presentation contract test, and no parallel selector or composer implementation remains.
 - Desktop no longer declares a parallel `.desktop-dsh-agent*` style surface.
 - Tool projection retains bounded JSON `rawInput` and `rawOutput` for expandable details. An invalid payload produces `ACP_TOOL_PAYLOAD_INVALID` for that item while sibling events remain available.
 - An unbound Draft keeps the same composer visible. Its first submitted message creates an exact Conversation and prompts only the returned Conversation identity.
@@ -41,6 +41,9 @@ The current local DSH records contain no transcript events, Tool events, or pend
 - Focused Desktop Renderer, Main Host, Application, Shell, and Vite configuration run: 5 files / 118 tests passed. These tests cover exact Conversation refresh, Markdown rendering, Tool detail expansion, Generation/Canvas approval identity, Draft creation, cancel, stale projection rejection, and the accepted Shell composition.
 - Focused Desktop DSH runtime, bootstrap, and preload bridge run: 4 files / 18 tests passed.
 - `pnpm --filter @neko/agent-webview test -- src/dsh-session/root.test.tsx`: 2 files / 8 tests passed.
+- `pnpm --filter @neko/agent-webview test`: 4 files / 22 tests passed, including the restored
+  `WorkspaceCanvasContextBar` and `DropdownOverlayContract` presentation tests for the accepted model,
+  execution-mode, Workspace/Canvas rail and overlay CSS.
 - `@neko/agent-contracts`, `@neko/agent-webview`, `@neko/agent-runtime`, and `@neko/app-desktop` typechecks passed.
 - `pnpm check:agent-boundaries`, `pnpm check:application-boundaries`, `pnpm check:package-boundaries`, and `pnpm check:legacy-debt` passed.
 - `pnpm exec openspec validate replace-pi-with-dsh-runtime-atomically --strict` passed.
@@ -52,4 +55,7 @@ Overall UI validation is `blocked`, not passed. Deterministic component/Desktop 
 
 The DSH Web review session also failed before execution with `QUOTA: Insufficient Balance`; it produced no repository changes and does not count as implementation evidence.
 
-`pnpm check:unused` remains blocked at the previously recorded migration baseline of seven unused files and 157 unused exports. This does not establish a new UI regression, but it continues to block final release readiness.
+`pnpm check:unused` remains blocked at the current migration baseline of six unused files and 182 unused exports.
+The removed unused InputArea barrel is no longer reported, and the restored presentation tests keep the accepted
+model/mode/context components on an intentional test surface. The remaining findings do not establish a new UI
+regression, but they continue to block final release readiness.

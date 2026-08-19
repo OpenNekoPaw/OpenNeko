@@ -94,6 +94,6 @@ Passed on 2026-08-19:
 
 Real provider/API, visible Desktop Agent behavior, package/release smoke and complete media execution/reopen
 evidence were not run. They are not implied by these deterministic results and continue to block task 9.2/release.
-`pnpm check:unused` also remains blocked by the recorded repository-wide seven unused files and 157 unused
+`pnpm check:unused` also remains blocked by the recorded repository-wide six unused files and 182 unused
 exports; none is introduced by this slice. `pnpm check:no-internal-versioning` remains blocked by the W5
 retired Pi data-protection fixture/allowance cleanup and has no new Cut or moved bridge finding.
