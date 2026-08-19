@@ -101,8 +101,6 @@ function runGate(assertion, facts, context) {
       return assertMarkdownPath(assertion, facts);
     case 'artifact':
       return assertArtifact(assertion, facts);
-    case 'content-locator-handoff':
-      return assertContentLocatorHandoff(assertion, facts);
     case 'workspace-board-projection':
       return assertWorkspaceBoardProjection(assertion, facts);
     default:
@@ -432,6 +430,21 @@ function assertToolCall(assertion, facts) {
   ) {
     throw new Error(`tool call ${assertion.name} result did not include the expected contract`);
   }
+  assertRequiredTopLevelFields(
+    matching.arguments,
+    assertion.requiredArgumentFields,
+    `tool call ${assertion.name} arguments`,
+  );
+  assertForbiddenFields(
+    matching.arguments,
+    assertion.forbiddenArgumentFields,
+    `tool call ${assertion.name} arguments`,
+  );
+  assertForbiddenFields(
+    matching.result,
+    assertion.forbiddenResultFields,
+    `tool call ${assertion.name} result`,
+  );
   if (assertion.status === 'success' && matching.resultObservation !== 'available') {
     throw new Error(`tool call ${assertion.name} succeeded without an observed result`);
   }
@@ -712,13 +725,13 @@ function assertResourceDisplayProjection(assertion, facts) {
     (candidate) =>
       candidate?.projectionKind === assertion.projectionKind &&
       candidate?.status === assertion.status &&
-      candidate?.locatorKind === assertion.locatorKind &&
+      candidate?.sourceKind === assertion.sourceKind &&
       candidate?.transport === assertion.transport &&
       candidate?.renderTarget === assertion.renderTarget,
   );
   if (!projection) {
     throw new Error(
-      `Resource display projection ${assertion.projectionKind}/${assertion.status}/${assertion.locatorKind}/${assertion.transport} was not observed`,
+      `Resource display projection ${assertion.projectionKind}/${assertion.status}/${assertion.sourceKind}/${assertion.transport} was not observed`,
     );
   }
   const allowedKeys = new Set([
@@ -726,7 +739,7 @@ function assertResourceDisplayProjection(assertion, facts) {
     'toolCallId',
     'projectionKind',
     'status',
-    'locatorKind',
+    'sourceKind',
     'transport',
     'renderTarget',
     'diagnosticCodes',
@@ -759,7 +772,7 @@ function assertResourceDisplayProjection(assertion, facts) {
     toolCallId: projection.toolCallId,
     projectionKind: projection.projectionKind,
     status: projection.status,
-    locatorKind: projection.locatorKind,
+    sourceKind: projection.sourceKind,
     transport: projection.transport,
     renderTarget: projection.renderTarget,
     diagnosticCodes,
@@ -857,9 +870,14 @@ function assertArtifact(assertion, facts) {
   if (!artifact.provenance?.source) {
     throw new Error(`artifact ${assertion.artifactRef} has no provenance evidence`);
   }
-  if (assertion.contentLocatorKind) {
-    assertContentLocatorEvidence(artifact.contentLocator, assertion.contentLocatorKind);
+  if (assertion.contentFileAuthority) {
+    assertCanonicalContentLocator(artifact.contentLocator, assertion.contentFileAuthority);
   }
+  assertForbiddenFields(
+    artifact,
+    assertion.forbiddenContentFields,
+    `artifact ${artifact.ref}`,
+  );
   if (artifact.kind === 'file' && !artifact.relativePath) {
     throw new Error(`file artifact ${assertion.artifactRef} has no durable relative path`);
   }
@@ -873,106 +891,82 @@ function assertArtifact(assertion, facts) {
     deliveryStatus: artifact.deliveryStatus,
     validatorId: artifact.validator.id,
     validatorStatus: artifact.validator.status,
-    ...(assertion.contentLocatorKind ? { contentLocatorKind: artifact.contentLocator.kind } : {}),
+    ...(assertion.contentFileAuthority
+      ? { contentFileAuthority: artifact.contentLocator.file.authority }
+      : {}),
   };
 }
 
-function assertContentLocatorHandoff(assertion, facts) {
-  assertCompleteEvidence(facts, ['turns', 'turnToolCalls', 'artifacts']);
-  const calls = arrayOrEmpty(facts?.turns).flatMap((turn) => arrayOrEmpty(turn?.toolCalls));
-  const producer = requireSuccessfulToolCall(calls, assertion.producerToolName);
-  const consumer = requireSuccessfulToolCall(calls, assertion.consumerToolName);
-  const producerLocators = collectContentLocators(producer.result, assertion.locatorKind);
-  const consumerLocators = collectContentLocators(consumer.arguments, assertion.locatorKind);
-  if (producerLocators.length !== 1) {
-    throw new Error(
-      `${assertion.producerToolName} exposed ${producerLocators.length} distinct ${assertion.locatorKind} locator(s); expected exactly one`,
-    );
+function assertCanonicalContentLocator(locator, expectedAuthority) {
+  if (!locator || typeof locator !== 'object' || Array.isArray(locator)) {
+    throw new Error('artifact has no canonical content locator evidence');
   }
-  if (consumerLocators.length !== 1) {
-    throw new Error(
-      `${assertion.consumerToolName} consumed ${consumerLocators.length} distinct ${assertion.locatorKind} locator(s); expected exactly one`,
-    );
+  const locatorKeys = Object.keys(locator);
+  if (locatorKeys.some((key) => key !== 'file' && key !== 'selector')) {
+    throw new Error('artifact content locator contains non-canonical fields');
   }
-  const producerLocator = producerLocators[0];
-  const consumerLocator = consumerLocators[0];
-  assertContentLocatorEvidence(producerLocator, assertion.locatorKind);
-  assertContentLocatorEvidence(consumerLocator, assertion.locatorKind);
-  if (stableStringify(producerLocator) !== stableStringify(consumerLocator)) {
-    throw new Error(
-      `${assertion.consumerToolName} did not consume the exact locator returned by ${assertion.producerToolName}`,
-    );
+  const file = locator.file;
+  if (!file || typeof file !== 'object' || Array.isArray(file) || file.authority !== expectedAuthority) {
+    throw new Error(`artifact content file authority is not ${expectedAuthority}`);
   }
-  const matchingArtifacts = arrayOrEmpty(facts?.artifacts).filter(
-    (artifact) =>
-      artifact?.kind === assertion.artifactKind &&
-      artifact?.provenance?.source === assertion.provenanceSource &&
-      artifact?.validator?.id === assertion.validatorId &&
-      artifact?.validator?.status === 'valid' &&
-      artifact?.deliveryStatus === 'delivered' &&
-      stableStringify(artifact?.contentLocator) === stableStringify(producerLocator),
-  );
-  if (matchingArtifacts.length !== 1) {
-    throw new Error(
-      `expected exactly one delivered artifact carrying the handed-off locator; observed ${matchingArtifacts.length}`,
-    );
+  const expectedFileKeys =
+    expectedAuthority === 'workspace'
+      ? ['authority', 'path']
+      : ['authority', 'packageId', 'revision', 'path'];
+  if (
+    Object.keys(file).length !== expectedFileKeys.length ||
+    Object.keys(file).some((key) => !expectedFileKeys.includes(key)) ||
+    !isPortableWorkspacePath(file.path)
+  ) {
+    throw new Error('artifact content file locator is not canonical');
   }
-  return {
-    producerToolCallId: producer.id,
-    consumerToolCallId: consumer.id,
-    artifactRef: matchingArtifacts[0].ref,
-    locatorKind: assertion.locatorKind,
-  };
+  if (
+    expectedAuthority === 'package' &&
+    (!nonEmpty(file.packageId) || !nonEmpty(file.revision))
+  ) {
+    throw new Error('artifact package content locator has incomplete authority');
+  }
+  if (locator.selector !== undefined) {
+    const selector = locator.selector;
+    if (
+      !selector ||
+      typeof selector !== 'object' ||
+      Array.isArray(selector) ||
+      Object.keys(selector).length !== 2 ||
+      selector.kind !== 'entry' ||
+      !isPortableWorkspacePath(selector.path)
+    ) {
+      throw new Error('artifact content selector is not canonical');
+    }
+  }
 }
 
-function requireSuccessfulToolCall(calls, name) {
-  const matching = calls.filter(
-    (call) =>
-      call?.name === name &&
-      matchesToolStatus(call?.status, 'success') &&
-      call?.resultObservation === 'available',
-  );
-  if (matching.length !== 1) {
-    throw new Error(
-      `expected exactly one successful ${name} Tool Call; observed ${matching.length}`,
-    );
+function assertRequiredTopLevelFields(value, requiredFields, label) {
+  if (!Array.isArray(requiredFields) || requiredFields.length === 0) return;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} are unavailable`);
   }
-  return matching[0];
+  const missing = requiredFields.filter((field) => !Object.hasOwn(value, field));
+  if (missing.length > 0) throw new Error(`${label} are missing field(s): ${missing.join(', ')}`);
 }
 
-function collectContentLocators(value, kind) {
-  const locators = new Map();
-  visit(value);
-  return [...locators.values()];
+function assertForbiddenFields(value, forbiddenFields, label) {
+  if (!Array.isArray(forbiddenFields) || forbiddenFields.length === 0) return;
+  const forbidden = new Set(forbiddenFields);
+  const paths = [];
+  visit(value, '$');
+  if (paths.length > 0) throw new Error(`${label} contain forbidden field(s): ${paths.join(', ')}`);
 
-  function visit(candidate) {
+  function visit(candidate, path) {
     if (Array.isArray(candidate)) {
-      candidate.forEach(visit);
+      candidate.forEach((item, index) => visit(item, `${path}[${index}]`));
       return;
     }
     if (!candidate || typeof candidate !== 'object') return;
-    if (candidate.kind === kind) {
-      locators.set(stableStringify(candidate), candidate);
-      return;
-    }
-    Object.values(candidate).forEach(visit);
-  }
-}
-
-function assertContentLocatorEvidence(locator, expectedKind) {
-  if (!locator || typeof locator !== 'object' || locator.kind !== expectedKind) {
-    throw new Error(`artifact has no ${expectedKind} content locator evidence`);
-  }
-  if (expectedKind === 'generated-output') {
-    for (const field of ['outputId', 'revision', 'digest', 'path']) {
-      if (!nonEmpty(locator[field])) {
-        throw new Error(`generated-output content locator is missing ${field}`);
-      }
-    }
-    if (!isPortableWorkspacePath(locator.path)) {
-      throw new Error(
-        'generated-output content locator path is not portable and workspace-relative',
-      );
+    for (const [key, nested] of Object.entries(candidate)) {
+      const nestedPath = `${path}.${key}`;
+      if (forbidden.has(key)) paths.push(nestedPath);
+      visit(nested, nestedPath);
     }
   }
 }

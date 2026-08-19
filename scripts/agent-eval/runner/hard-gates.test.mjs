@@ -363,11 +363,7 @@ describe('M2 typed path hard gates', () => {
     facts.artifacts[0] = {
       ...facts.artifacts[0],
       contentLocator: {
-        kind: 'generated-output',
-        outputId: 'scene-1',
-        revision: HASH,
-        digest: HASH_B,
-        path: 'neko/generated/image/scene-1.png',
+        file: { authority: 'workspace', path: 'neko/generated/image/scene-1.png' },
       },
       provenance: { source: 'generated-output', toolCallId: 'tool-1' },
       validator: { id: 'content-locator', status: 'valid' },
@@ -380,7 +376,7 @@ describe('M2 typed path hard gates', () => {
           artifactKind: 'generated-asset',
           provenanceSource: 'generated-output',
           validatorId: 'content-locator',
-          contentLocatorKind: 'generated-output',
+          contentFileAuthority: 'workspace',
           validatorStatus: 'valid',
           evidenceRef: 'artifact-facts',
         },
@@ -394,88 +390,70 @@ describe('M2 typed path hard gates', () => {
         ref: 'asset:scene-1',
         kind: 'generated-asset',
         validatorStatus: 'valid',
+        contentFileAuthority: 'workspace',
       },
     });
-  });
 
-  it('proves one generated-output locator is passed unchanged between Tools and artifact facts', () => {
-    const locator = {
+    facts.artifacts[0].contentLocator = {
       kind: 'generated-output',
       outputId: 'scene-1',
-      revision: HASH,
       digest: HASH_B,
       path: 'neko/generated/image/scene-1.png',
     };
+    expect(
+      evaluateHardGates(
+        [
+          {
+            id: 'generated-output',
+            kind: 'artifact',
+            artifactKind: 'generated-asset',
+            provenanceSource: 'generated-output',
+            validatorId: 'content-locator',
+            contentFileAuthority: 'workspace',
+            validatorStatus: 'valid',
+            evidenceRef: 'artifact-facts',
+          },
+        ],
+        facts,
+      )[0],
+    ).toMatchObject({ status: 'fail' });
+  });
+
+  it('requires opaque model arguments and rejects representation fields in Tool results', () => {
     const facts = m2Facts();
     facts.turns[1].toolCalls = [
-      {
-        id: 'generate-1',
-        name: 'GenerateImage',
-        status: 'success',
-        arguments: { prompt: 'scene' },
-        result: {
-          attachments: [
-            {
-              contentLocator: locator,
-              assetRef: { assetId: 'scene-1', contentLocator: locator },
-            },
-          ],
-        },
-        resultObservation: 'available',
-        diagnostics: [],
-      },
       {
         id: 'read-1',
         name: 'ReadImage',
         status: 'success',
-        arguments: { images: [{ contentLocator: locator }] },
+        arguments: { image_refs: ['image_opaque1'], analysis: 'describe' },
         result: { analysis: 'visible' },
         resultObservation: 'available',
         diagnostics: [],
       },
     ];
-    facts.artifacts = [
-      {
-        ref: 'scene-1',
-        kind: 'generated-asset',
-        contentLocator: locator,
-        digest: HASH_B,
-        revision: HASH,
-        provenance: { source: 'generated-output', toolCallId: 'generate-1' },
-        deliveryStatus: 'delivered',
-        validator: { id: 'content-locator', status: 'valid' },
-        diagnostics: [],
-      },
-    ];
     const assertion = {
-      id: 'locator-handoff',
-      kind: 'content-locator-handoff',
-      producerToolName: 'GenerateImage',
-      consumerToolName: 'ReadImage',
-      locatorKind: 'generated-output',
-      artifactKind: 'generated-asset',
-      provenanceSource: 'generated-output',
-      validatorId: 'content-locator',
-      evidenceRef: 'artifact-facts',
+      id: 'opaque-read',
+      kind: 'tool-call',
+      name: 'ReadImage',
+      status: 'success',
+      requiredArgumentFields: ['image_refs'],
+      forbiddenArgumentFields: ['contentLocator', 'locator', 'path', 'representationHandle'],
+      forbiddenResultFields: ['representationHandle', 'representationLocator', 'absolutePath'],
+      evidenceRef: 'tool-facts',
     };
 
     expect(evaluateHardGates([assertion], facts)[0]).toMatchObject({
       status: 'pass',
-      details: {
-        producerToolCallId: 'generate-1',
-        consumerToolCallId: 'read-1',
-        artifactRef: 'scene-1',
-        locatorKind: 'generated-output',
-      },
     });
 
-    facts.turns[1].toolCalls[1].arguments.images[0].contentLocator = {
-      ...locator,
-      revision: HASH_B,
+    facts.turns[1].toolCalls[0].result.representationHandle = {
+      kind: 'content-representation-handle',
+      id: 'runtime-only',
     };
     expect(evaluateHardGates([assertion], facts)[0]).toMatchObject({
       status: 'fail',
-      message: expect.stringContaining('did not consume the exact locator'),
+      message: expect.stringContaining('forbidden field'),
     });
   });
 
@@ -661,7 +639,7 @@ function m3Facts() {
       toolCallId: 'tool-1',
       projectionKind: 'tool-result',
       status: 'authorized',
-      locatorKind: 'workspace-file',
+      sourceKind: 'workspace-file',
       transport: 'openneko-resource',
       renderTarget: 'agent-webview',
       diagnosticCodes: [],
@@ -905,7 +883,7 @@ describe('M3 process hard gates', () => {
       kind: 'resource-display-projection',
       projectionKind: 'tool-result',
       status: 'authorized',
-      locatorKind: 'workspace-file',
+      sourceKind: 'workspace-file',
       transport: 'openneko-resource',
       renderTarget: 'agent-webview',
       diagnosticsEmpty: true,
@@ -918,7 +896,7 @@ describe('M3 process hard gates', () => {
       details: {
         projectionKind: 'tool-result',
         status: 'authorized',
-        locatorKind: 'workspace-file',
+        sourceKind: 'workspace-file',
         transport: 'openneko-resource',
         renderTarget: 'agent-webview',
       },

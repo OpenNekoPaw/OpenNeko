@@ -82,7 +82,12 @@
         "status": "completed",
         "jobKind": "generation",
         "jobLifecycleOwner": "generation-job-coordinator",
-        "outputs": [{ "type": "image", "contentLocator": { "kind": "generated-output" } }],
+        "outputs": [
+          {
+            "type": "image",
+            "contentLocator": { "file": { "authority": "workspace" } }
+          }
+        ],
         "routedTo": { "provider": "nekoapi-media", "model": "gpt-image-2" }
       },
       "evidenceRef": "assistant-generation-facts"

@@ -5,12 +5,12 @@
   "caseGroup": "workflow",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Generate one image and observe it as a durable workspace file, a stable generated-output ContentLocator, and an ordinary node on the canonical Workspace Board.",
+    "userBehavior": "Generate one image and observe it as a durable workspace file with Generation-owned provenance and an ordinary node on the canonical Workspace Board.",
     "canonicalPath": [
       "Desktop App session owner",
       "terminal GenerateImage Tool call",
       "neko/generated/image workspace file",
-      "generated-output ContentLocator",
+      "canonical Workspace ContentLocator",
       "Node Workspace Board projection",
       "neko/boards/workspace.nkc"
     ],
@@ -18,7 +18,7 @@
       {
         "ref": "workflow-facts",
         "kind": "runtime-fact",
-        "description": "Terminal Tool result, generated-output ContentLocator identity/revision/digest/path, Workspace Board projection, and terminal idle facts from the canonical Desktop owner.",
+        "description": "Terminal Tool result, canonical Workspace ContentLocator, Generation-owned output identity/provenance, Workspace Board projection, and terminal idle facts from the canonical Desktop owner.",
         "required": true
       },
       {
@@ -28,7 +28,7 @@
         "required": true
       }
     ],
-    "expectedResult": "The GenerateImage Tool materializes a file under neko/generated/image, publishes a valid generated-output ContentLocator, and projects an ordinary locator-backed node into the Workspace Board.",
+    "expectedResult": "The GenerateImage Tool materializes a file under neko/generated/image, publishes a valid canonical Workspace ContentLocator beside Generation-owned provenance, and projects an ordinary locator-backed node into the Workspace Board.",
     "expectedFailure": "Missing file, invalid resource identity, blocked or missing Workspace Board projection, incomplete facts, Asset participation, multi-Board routing, runtime draft participation, or non-idle delivery fails visibly."
   },
   "fixtureRefs": [
@@ -42,7 +42,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$image Generate one image of a small red paper kite resting on a clean white studio table. Wait for the real result, report the delivered generated-output ContentLocator, and keep the result attached to this conversation and its current Workspace Board."
+      "prompt": "$image Generate one image of a small red paper kite resting on a clean white studio table. Wait for the real result, report that the durable Workspace output was delivered, and keep the result attached to this conversation and its current Workspace Board. Do not construct or repeat internal locator fields."
     },
     {
       "id": "idle",
@@ -69,7 +69,14 @@
       "artifactKind": "generated-asset",
       "provenanceSource": "generated-output",
       "validatorId": "content-locator",
-      "contentLocatorKind": "generated-output",
+      "contentFileAuthority": "workspace",
+      "forbiddenContentFields": [
+        "representationHandle",
+        "representationLocator",
+        "absolutePath",
+        "cachePath",
+        "generatorId"
+      ],
       "validatorStatus": "valid",
       "evidenceRef": "workflow-facts"
     },

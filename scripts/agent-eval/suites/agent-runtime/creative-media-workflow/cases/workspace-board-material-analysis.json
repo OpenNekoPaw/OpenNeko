@@ -51,6 +51,20 @@
       "kind": "tool-call",
       "name": "ReadImage",
       "status": "success",
+      "requiredArgumentFields": ["image_refs"],
+      "forbiddenArgumentFields": [
+        "contentLocator",
+        "locator",
+        "path",
+        "representationHandle"
+      ],
+      "forbiddenResultFields": [
+        "representationHandle",
+        "representationLocator",
+        "absolutePath",
+        "cachePath",
+        "generatorId"
+      ],
       "evidenceRef": "workflow-facts"
     },
     {
@@ -58,6 +72,14 @@
       "kind": "artifact",
       "artifactKind": "resource-ref",
       "provenanceSource": "source-file",
+      "contentFileAuthority": "workspace",
+      "forbiddenContentFields": [
+        "representationHandle",
+        "representationLocator",
+        "absolutePath",
+        "cachePath",
+        "generatorId"
+      ],
       "validatorStatus": "valid",
       "evidenceRef": "workflow-facts"
     },
@@ -66,6 +88,14 @@
       "kind": "artifact",
       "artifactKind": "composite-artifact",
       "provenanceSource": "native-image-analysis",
+      "contentFileAuthority": "workspace",
+      "forbiddenContentFields": [
+        "representationHandle",
+        "representationLocator",
+        "absolutePath",
+        "cachePath",
+        "generatorId"
+      ],
       "validatorStatus": "valid",
       "evidenceRef": "workflow-facts"
     },

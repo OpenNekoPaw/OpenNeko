@@ -114,6 +114,20 @@
       "kind": "tool-call",
       "name": "ReadImage",
       "status": "success",
+      "requiredArgumentFields": ["image_refs"],
+      "forbiddenArgumentFields": [
+        "contentLocator",
+        "locator",
+        "path",
+        "representationHandle"
+      ],
+      "forbiddenResultFields": [
+        "representationHandle",
+        "representationLocator",
+        "absolutePath",
+        "cachePath",
+        "generatorId"
+      ],
       "evidenceRef": "tool-result-facts"
     },
     {
@@ -171,19 +185,15 @@
       "artifactKind": "generated-asset",
       "provenanceSource": "generated-output",
       "validatorId": "content-locator",
-      "contentLocatorKind": "generated-output",
+      "contentFileAuthority": "workspace",
+      "forbiddenContentFields": [
+        "representationHandle",
+        "representationLocator",
+        "absolutePath",
+        "cachePath",
+        "generatorId"
+      ],
       "validatorStatus": "valid",
-      "evidenceRef": "tool-result-facts"
-    },
-    {
-      "id": "generated-output-locator-handoff",
-      "kind": "content-locator-handoff",
-      "producerToolName": "GenerateImage",
-      "consumerToolName": "ReadImage",
-      "locatorKind": "generated-output",
-      "artifactKind": "generated-asset",
-      "provenanceSource": "generated-output",
-      "validatorId": "content-locator",
       "evidenceRef": "tool-result-facts"
     },
     {

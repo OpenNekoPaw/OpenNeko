@@ -612,7 +612,7 @@ function assertResourceDisplayProjection(assertion, input) {
     (item) =>
       item.projectionKind === assertion.projectionKind &&
       item.status === assertion.status &&
-      item.locatorKind === assertion.locatorKind &&
+      item.sourceKind === assertion.sourceKind &&
       item.transport === assertion.transport &&
       item.renderTarget === assertion.renderTarget,
   );

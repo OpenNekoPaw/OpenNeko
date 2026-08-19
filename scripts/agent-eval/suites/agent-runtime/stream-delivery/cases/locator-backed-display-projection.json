@@ -100,7 +100,7 @@
       "kind": "resource-display-projection",
       "projectionKind": "tool-result",
       "status": "authorized",
-      "locatorKind": "workspace-file",
+      "sourceKind": "workspace-file",
       "transport": "openneko-resource",
       "renderTarget": "agent-webview",
       "diagnosticsEmpty": true,

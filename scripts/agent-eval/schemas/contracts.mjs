@@ -506,7 +506,13 @@ const ASSERTION_SCHEMA = s.union([
       name: EXTERNAL_ID,
       status: s.enum(['success', 'error', 'absent']),
     },
-    { expectedArguments: s.anyJson(), resultIncludes: s.anyJson() },
+    {
+      expectedArguments: s.anyJson(),
+      resultIncludes: s.anyJson(),
+      requiredArgumentFields: STRING_LIST,
+      forbiddenArgumentFields: STRING_LIST,
+      forbiddenResultFields: STRING_LIST,
+    },
   ),
   s.object({
     ...ASSERTION_COMMON,
@@ -604,12 +610,11 @@ const ASSERTION_SCHEMA = s.union([
     kind: s.literal('resource-display-projection'),
     projectionKind: s.enum(['attachment', 'tool-result', 'perception', 'timeline', 'artifact']),
     status: s.enum(['authorized', 'denied']),
-    locatorKind: s.enum([
+    sourceKind: s.enum([
       'workspace-file',
-      'document-entry',
-      'generated-output',
-      'package-resource',
-      'content-representation',
+      'media-library',
+      'package-file',
+      'representation-handle',
     ]),
     transport: s.enum(['openneko-resource', 'none']),
     renderTarget: s.literal('agent-webview'),
@@ -655,29 +660,10 @@ const ASSERTION_SCHEMA = s.union([
     {
       provenanceSource: EXTERNAL_ID,
       validatorId: ID,
-      contentLocatorKind: s.enum([
-        'workspace-file',
-        'document-entry',
-        'generated-output',
-        'package-resource',
-      ]),
+      contentFileAuthority: s.enum(['workspace', 'package']),
+      forbiddenContentFields: STRING_LIST,
     },
   ),
-  s.object({
-    ...ASSERTION_COMMON,
-    kind: s.literal('content-locator-handoff'),
-    producerToolName: EXTERNAL_ID,
-    consumerToolName: EXTERNAL_ID,
-    locatorKind: s.enum([
-      'workspace-file',
-      'document-entry',
-      'generated-output',
-      'package-resource',
-    ]),
-    artifactKind: s.enum(['content-locator', 'generated-asset']),
-    provenanceSource: EXTERNAL_ID,
-    validatorId: ID,
-  }),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -1116,7 +1102,6 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'structured-output',
     'markdown-path',
     'artifact',
-    'content-locator-handoff',
     'workspace-board-projection',
   ]),
   artifactCheckKinds: new Set([

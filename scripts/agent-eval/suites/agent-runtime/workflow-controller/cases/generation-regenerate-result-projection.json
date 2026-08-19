@@ -83,7 +83,14 @@
       "artifactKind": "generated-asset",
       "provenanceSource": "generated-output",
       "validatorId": "content-locator",
-      "contentLocatorKind": "generated-output",
+      "contentFileAuthority": "workspace",
+      "forbiddenContentFields": [
+        "representationHandle",
+        "representationLocator",
+        "absolutePath",
+        "cachePath",
+        "generatorId"
+      ],
       "validatorStatus": "valid",
       "evidenceRef": "generation-regenerate-facts"
     },

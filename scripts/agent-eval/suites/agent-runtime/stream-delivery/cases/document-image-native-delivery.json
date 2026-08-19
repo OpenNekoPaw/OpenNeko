@@ -29,7 +29,7 @@
         "required": true
       }
     ],
-    "expectedResult": "ReadDocument returns two synthetic page image_refs, ReadImage resolves both to their canonical identities, Desktop authorizes document-entry image display without replacing the locator, and the native multimodal turn identifies both contact-sheet tiles before the final marker.",
+    "expectedResult": "ReadDocument returns two synthetic page image_refs, ReadImage resolves both to canonical file-plus-selector identities, Desktop authorizes their transient display without replacing the durable source locator, and the native multimodal turn identifies both contact-sheet tiles before the final marker.",
     "expectedFailure": "Missing or conflicting entry identity, whole-archive or fabricated-ref loading, denied display authorization, URL/path identity substitution, failed Tool execution, runtime diagnostics, or a missing visual answer fails visibly."
   },
   "fixtureRefs": ["document-image-workspace"],
@@ -49,8 +49,10 @@
           "data": {
             "kind": "authorized-content-reference",
             "locator": {
-              "kind": "workspace-file",
-              "path": "synthetic-document.epub"
+              "file": {
+                "authority": "workspace",
+                "path": "synthetic-document.epub"
+              }
             },
             "mediaType": "document"
           }
@@ -90,29 +92,47 @@
       "kind": "tool-call",
       "name": "ReadDocument",
       "status": "success",
+      "requiredArgumentFields": ["input_ref"],
+      "forbiddenArgumentFields": [
+        "contentLocator",
+        "locator",
+        "path",
+        "representationHandle"
+      ],
+      "forbiddenResultFields": [
+        "representationHandle",
+        "representationLocator",
+        "absolutePath",
+        "cachePath",
+        "generatorId"
+      ],
       "resultIncludes": {
         "imageCount": 2,
         "imageInfo": [
           {
             "entryPath": "OEBPS/images/page-1.png",
             "contentLocator": {
-              "kind": "document-entry",
-              "source": {
-                "kind": "workspace-file",
+              "file": {
+                "authority": "workspace",
                 "path": "synthetic-document.epub"
               },
-              "entryPath": "OEBPS/images/page-1.png"
+              "selector": {
+                "kind": "entry",
+                "path": "OEBPS/images/page-1.png"
+              }
             }
           },
           {
             "entryPath": "OEBPS/images/page-2.png",
             "contentLocator": {
-              "kind": "document-entry",
-              "source": {
-                "kind": "workspace-file",
+              "file": {
+                "authority": "workspace",
                 "path": "synthetic-document.epub"
               },
-              "entryPath": "OEBPS/images/page-2.png"
+              "selector": {
+                "kind": "entry",
+                "path": "OEBPS/images/page-2.png"
+              }
             }
           }
         ]
@@ -124,6 +144,20 @@
       "kind": "tool-call",
       "name": "ReadImage",
       "status": "success",
+      "requiredArgumentFields": ["image_refs"],
+      "forbiddenArgumentFields": [
+        "contentLocator",
+        "locator",
+        "path",
+        "representationHandle"
+      ],
+      "forbiddenResultFields": [
+        "representationHandle",
+        "representationLocator",
+        "absolutePath",
+        "cachePath",
+        "generatorId"
+      ],
       "resultIncludes": {
         "mode": "metadata",
         "analysis": "storyboard",
@@ -132,22 +166,26 @@
         "images": [
           {
             "contentLocator": {
-              "kind": "document-entry",
-              "source": {
-                "kind": "workspace-file",
+              "file": {
+                "authority": "workspace",
                 "path": "synthetic-document.epub"
               },
-              "entryPath": "OEBPS/images/page-1.png"
+              "selector": {
+                "kind": "entry",
+                "path": "OEBPS/images/page-1.png"
+              }
             }
           },
           {
             "contentLocator": {
-              "kind": "document-entry",
-              "source": {
-                "kind": "workspace-file",
+              "file": {
+                "authority": "workspace",
                 "path": "synthetic-document.epub"
               },
-              "entryPath": "OEBPS/images/page-2.png"
+              "selector": {
+                "kind": "entry",
+                "path": "OEBPS/images/page-2.png"
+              }
             }
           }
         ]
@@ -176,7 +214,7 @@
       "kind": "resource-display-projection",
       "projectionKind": "tool-result",
       "status": "authorized",
-      "locatorKind": "document-entry",
+      "sourceKind": "workspace-file",
       "transport": "openneko-resource",
       "renderTarget": "agent-webview",
       "diagnosticsEmpty": true,
