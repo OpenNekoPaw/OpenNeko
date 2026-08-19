@@ -12,7 +12,6 @@ import type {
   ContentFingerprint,
   ContentLocator,
   DocumentEntryContentLocator,
-  GeneratedOutputContentLocator,
   PackageResourceContentLocator,
 } from '../contracts';
 import { NodeWorkspaceContentReadHandler } from './workspace-content-read-handler';
@@ -49,7 +48,6 @@ export function createNodeHostContentReadService(
           options.documentEntryReader,
         )
       : new UnavailableContentReadHandler(),
-    generatedOutput: new NodeGeneratedOutputContentReadHandler(workspaceFile),
     packageResource: options.packageResourceHandler ?? new UnavailableContentReadHandler(),
   });
 }
@@ -104,17 +102,16 @@ export class NodeDocumentEntryContentReadHandler implements ContentReadHandler<D
       }
     | Extract<ContentStat, { status: 'unavailable' }>
   > {
-    const sourceOptions = {
-      ...(locator.source.fingerprint ? { expectedFingerprint: locator.source.fingerprint } : {}),
+    const sourceLocator = { file: locator.file } as const;
+    const source = await this.workspaceFile.stat(sourceLocator, {
       ...(options.signal ? { signal: options.signal } : {}),
-    };
-    const source = await this.workspaceFile.stat(locator.source, sourceOptions);
+    });
     if (source.status === 'unavailable') return unavailable(locator, source.diagnostic.code);
     if (options.signal?.aborted) return unavailable(locator, 'content-cancelled');
 
-    const sourcePath = path.join(this.workspaceRoot, ...locator.source.path.split('/'));
+    const sourcePath = path.join(this.workspaceRoot, ...locator.file.path.split('/'));
     try {
-      const bytes = await this.entryReader.readEntry(sourcePath, locator.entryPath);
+      const bytes = await this.entryReader.readEntry(sourcePath, locator.selector.path);
       if (options.signal?.aborted) return unavailable(locator, 'content-cancelled');
       return {
         status: 'ready',
@@ -124,36 +121,6 @@ export class NodeDocumentEntryContentReadHandler implements ContentReadHandler<D
     } catch (error) {
       return unavailable(locator, diagnosticCodeForReadError(error));
     }
-  }
-}
-
-export class NodeGeneratedOutputContentReadHandler implements ContentReadHandler<GeneratedOutputContentLocator> {
-  constructor(private readonly workspaceFile: NodeWorkspaceContentReadHandler) {}
-
-  async stat(
-    locator: GeneratedOutputContentLocator,
-    options: ContentReadOptions,
-  ): Promise<ContentStat> {
-    return mapWorkspaceResult(
-      locator,
-      await this.workspaceFile.stat(generatedWorkspaceLocator(locator), {
-        ...options,
-        expectedFingerprint: { strategy: 'sha256', value: locator.digest },
-      }),
-    );
-  }
-
-  async read(
-    locator: GeneratedOutputContentLocator,
-    options: ContentReadOptions,
-  ): Promise<ContentBytes> {
-    return mapWorkspaceResult(
-      locator,
-      await this.workspaceFile.read(generatedWorkspaceLocator(locator), {
-        ...options,
-        expectedFingerprint: { strategy: 'sha256', value: locator.digest },
-      }),
-    );
   }
 }
 
@@ -167,21 +134,6 @@ export class UnavailableContentReadHandler<
   async read(locator: TLocator, _options: ContentReadOptions): Promise<ContentBytes> {
     return unavailable(locator, 'content-unsupported');
   }
-}
-
-function generatedWorkspaceLocator(locator: GeneratedOutputContentLocator) {
-  return {
-    kind: 'workspace-file' as const,
-    path: locator.path,
-    fingerprint: { strategy: 'sha256' as const, value: locator.digest },
-  };
-}
-
-function mapWorkspaceResult<T extends ContentStat | ContentBytes>(
-  locator: GeneratedOutputContentLocator,
-  result: T,
-): T {
-  return { ...result, locator };
 }
 
 function sliceRange(

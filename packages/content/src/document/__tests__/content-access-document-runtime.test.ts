@@ -9,8 +9,7 @@ import { DocumentContentAccessRuntime } from '../content-access-document-runtime
 describe('DocumentContentAccessRuntime', () => {
   it('authorizes the source and archive entry through ContentReadService', async () => {
     const source: WorkspaceFileContentLocator = {
-      kind: 'workspace-file',
-      path: 'documents/Library/book.epub',
+      file: { authority: 'workspace', path: 'documents/Library/book.epub' },
     };
     const hostPath = '/external/library/book.epub';
     const contentRead = createContentRead();
@@ -38,18 +37,16 @@ describe('DocumentContentAccessRuntime', () => {
     expect(contentRead.stat).toHaveBeenNthCalledWith(
       2,
       {
-        kind: 'document-entry',
-        source,
-        entryPath: 'OEBPS/images/page.png',
+        file: source.file,
+        selector: { kind: 'entry', path: 'OEBPS/images/page.png' },
       },
       {},
     );
     expect(result.imageInfo?.[0]).toMatchObject({
       entryPath: 'OEBPS/images/page.png',
       contentLocator: {
-        kind: 'document-entry',
-        source,
-        entryPath: 'OEBPS/images/page.png',
+        file: source.file,
+        selector: { kind: 'entry', path: 'OEBPS/images/page.png' },
       },
     });
     expect(JSON.stringify(result)).not.toContain(hostPath);
@@ -57,8 +54,7 @@ describe('DocumentContentAccessRuntime', () => {
 
   it('preserves manifest, range, cursor and stable source semantics without path leakage', async () => {
     const source: WorkspaceFileContentLocator = {
-      kind: 'workspace-file',
-      path: 'books/Blame/book.epub',
+      file: { authority: 'workspace', path: 'books/Blame/book.epub' },
     };
     const hostPath = '/Users/feng/Assets/epub/animation/Blame/book.epub';
     const runtimeSource: DocumentSourceRef = { filePath: hostPath, format: 'epub' };
@@ -100,25 +96,23 @@ describe('DocumentContentAccessRuntime', () => {
 
     expect(result.status).toBe('ready');
     if (result.status !== 'ready') throw new Error('expected ready');
-    expect(result.documentSource.filePath).toBe(source.path);
-    expect(result.cursor?.source.filePath).toBe(source.path);
+    expect(result.documentSource.filePath).toBe(source.file.path);
+    expect(result.cursor?.source.filePath).toBe(source.file.path);
     expect(result.range?.locator).toEqual({
       kind: 'chapter',
       chapterHref: 'Page_1',
       spineIndex: 0,
     });
     expect(result.imageInfo?.[0]?.contentLocator).toEqual({
-      kind: 'document-entry',
-      source,
-      entryPath: 'image/moe-010564.jpg',
+      file: source.file,
+      selector: { kind: 'entry', path: 'image/moe-010564.jpg' },
     });
     expect(JSON.stringify(result)).not.toContain(hostPath);
   });
 
   it('returns safe diagnostics and never invokes the Host resolver after read denial', async () => {
     const source: WorkspaceFileContentLocator = {
-      kind: 'workspace-file',
-      path: 'private/book.pdf',
+      file: { authority: 'workspace', path: 'private/book.pdf' },
     };
     const resolveHostFilePath = vi.fn(() => '/private/user/book.pdf');
     const runtime = new DocumentContentAccessRuntime({

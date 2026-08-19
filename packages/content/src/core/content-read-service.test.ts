@@ -8,23 +8,21 @@ import {
 } from './content-read-service';
 
 const locators = [
-  { kind: 'workspace-file', path: 'media/image.png' },
+  { file: { authority: 'workspace', path: 'media/image.png' } },
   {
-    kind: 'document-entry',
-    source: { kind: 'workspace-file', path: 'books/comic.epub' },
-    entryPath: 'OPS/image.png',
+    file: { authority: 'workspace', path: 'books/comic.epub' },
+    selector: { kind: 'entry', path: 'OPS/image.png' },
   },
   {
-    kind: 'generated-output',
-    outputId: 'image-1',
-    digest: 'sha256:image-1',
-    path: 'neko/generated/image-1.png',
+    file: { authority: 'workspace', path: 'neko/generated/image-1.png' },
   },
   {
-    kind: 'package-resource',
-    packageId: 'avatar-1',
-    revision: 'revision-1',
-    resourcePath: 'model/avatar.model3.json',
+    file: {
+      authority: 'package',
+      packageId: 'avatar-1',
+      revision: 'revision-1',
+      path: 'model/avatar.model3.json',
+    },
   },
 ] as const satisfies readonly ContentLocator[];
 
@@ -42,7 +40,7 @@ describe('ExplicitContentReadService', () => {
     expect(calls).toEqual([
       'workspace-file',
       'document-entry',
-      'generated-output',
+      'workspace-file',
       'package-resource',
     ]);
   });
@@ -106,25 +104,24 @@ describe('ExplicitContentReadService', () => {
   });
 });
 
-function createHandlers(onRead: (kind: ContentLocator['kind']) => void): ContentReadHandlers {
+function createHandlers(onRead: (owner: string) => void): ContentReadHandlers {
   return {
     workspaceFile: handlerFor('workspace-file', onRead),
     documentEntry: handlerFor('document-entry', onRead),
-    generatedOutput: handlerFor('generated-output', onRead),
     packageResource: handlerFor('package-resource', onRead),
   };
 }
 
 function handlerFor<TLocator extends ContentLocator>(
-  kind: TLocator['kind'],
-  onRead: (kind: ContentLocator['kind']) => void,
+  owner: string,
+  onRead: (owner: string) => void,
 ): ContentReadHandler<TLocator> {
   return {
     async stat(locator) {
       return readyStat(locator);
     },
     async read(locator, _options: ContentReadOptions) {
-      onRead(kind);
+      onRead(owner);
       return readyBytes(locator, 0);
     },
   };
@@ -150,12 +147,6 @@ function readyBytes(locator: ContentLocator, offset: number, length = 4): Conten
   };
 }
 
-function fingerprintFor(locator: ContentLocator) {
-  if (locator.kind === 'generated-output') {
-    return { strategy: 'sha256' as const, value: locator.digest };
-  }
-  if (locator.kind === 'package-resource' && locator.digest) {
-    return { strategy: 'sha256' as const, value: locator.digest };
-  }
+function fingerprintFor(_locator: ContentLocator) {
   return { strategy: 'sha256' as const, value: 'sha256:content' };
 }

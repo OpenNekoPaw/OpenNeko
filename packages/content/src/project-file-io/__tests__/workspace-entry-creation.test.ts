@@ -19,7 +19,7 @@ describe('WorkspaceEntryCreationService', () => {
       service.create({ kind: 'file', targetDirectory: 'notes', name: 'Cafe\u0301.md' }),
     ).resolves.toEqual({ status: 'created', kind: 'file', path: 'notes/Caf\u00e9.md' });
     expect(writer.write).toHaveBeenCalledWith(
-      { kind: 'workspace-file', path: 'notes/Caf\u00e9.md' },
+      { file: { authority: 'workspace', path: 'notes/Caf\u00e9.md' } },
       new Uint8Array(),
       { conflict: 'fail-if-exists', maxBytes: 1 },
     );

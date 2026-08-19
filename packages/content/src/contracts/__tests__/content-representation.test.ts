@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CONTENT_REPRESENTATION_KINDS,
-  isContentRepresentationLocator,
+  isContentRepresentationHandle,
   isContentRepresentationSpec,
   type ContentRepresentationResult,
 } from '../content-representation';
@@ -38,53 +38,40 @@ describe('content representation contracts', () => {
     expect(isContentRepresentationSpec({ kind: 'thumbnail', maxWidth: 0 })).toBe(false);
     expect(isContentRepresentationSpec({ kind: 'raster-page', page: 0 })).toBe(false);
     expect(isContentRepresentationSpec({ kind: 'proxy', profile: '' })).toBe(false);
-    expect(
-      isContentRepresentationSpec({ kind: 'loudness', standard: 'ebu-r128', targetLufs: NaN }),
-    ).toBe(false);
   });
 
-  it('keeps ready results storage-neutral', () => {
+  it('returns only an opaque runtime handle', () => {
     const result: ContentRepresentationResult = {
       status: 'ready',
-      locator: {
-        kind: 'content-representation',
-        id: 'representation-1',
-        representationKind: 'thumbnail',
-        source: { kind: 'workspace-file', path: 'media/source.png' },
-        spec: { kind: 'thumbnail', maxWidth: 320, maxHeight: 180, format: 'webp' },
-        generatorId: 'thumbnail-generator',
-        sourceFingerprint: 'sha256:source',
-        specFingerprint: 'sha256:spec',
-      },
-      metadata: {
-        mimeType: 'image/webp',
-        byteLength: 1024,
-        width: 320,
-        height: 180,
-      },
+      handle: { kind: 'content-representation-handle', id: 'representation-1' },
+      metadata: { mimeType: 'image/webp', byteLength: 1024, width: 320, height: 180 },
     };
 
+    expect(isContentRepresentationHandle(result.handle)).toBe(true);
     const serialized = JSON.stringify(result);
-    expect(serialized).not.toContain('cache');
-    expect(serialized).not.toContain('provider');
-    expect(serialized).not.toContain('manifest');
-    expect(serialized).not.toContain('absolutePath');
-    expect(serialized).not.toContain('localPath');
+    for (const forbidden of [
+      'source',
+      'spec',
+      'generatorId',
+      'sourceFingerprint',
+      'specFingerprint',
+      'cache',
+      'localPath',
+    ]) {
+      expect(serialized).not.toContain(forbidden);
+    }
   });
 
-  it('rejects unknown representation fields at the exact locator boundary', () => {
+  it('rejects rich locator fields at the handle boundary', () => {
     expect(
-      isContentRepresentationLocator({
-        kind: 'content-representation',
+      isContentRepresentationHandle({
+        kind: 'content-representation-handle',
         id: 'representation-1',
-        representationKind: 'thumbnail',
-        source: { kind: 'workspace-file', path: 'media/source.png' },
-        spec: { kind: 'thumbnail' },
-        generatorId: 'thumbnail-generator',
-        sourceFingerprint: 'sha256:source',
-        specFingerprint: 'sha256:spec',
-        unexpectedField: 'invalid',
+        source: { file: { authority: 'workspace', path: 'media/source.png' } },
       }),
+    ).toBe(false);
+    expect(
+      isContentRepresentationHandle({ kind: 'content-representation', id: 'representation-1' }),
     ).toBe(false);
   });
 });

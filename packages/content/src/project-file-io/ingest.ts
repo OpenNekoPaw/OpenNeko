@@ -89,7 +89,7 @@ export async function handleProjectSourceAddRequest(
     requestId: request.requestId,
     ok: true,
     durablePath: stored.durablePath,
-    contentLocator: { kind: 'workspace-file', path: stored.durablePath },
+    contentLocator: { file: { authority: 'workspace', path: stored.durablePath } },
     ...(stored.metadata ? { metadata: stored.metadata } : {}),
     diagnostics: [],
   };

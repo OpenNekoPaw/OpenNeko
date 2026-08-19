@@ -1,6 +1,8 @@
-import type { ContentRepresentationLocator } from './content-representation';
+import type { ContentRepresentationHandle } from './content-representation';
 import {
   isContentLocator,
+  isWorkspaceFileContentLocator,
+  type ContentLocator,
   type DocumentEntryContentLocator,
   type WorkspaceFileContentLocator,
 } from './content-locator';
@@ -169,8 +171,8 @@ export interface DocumentImageInfo {
   readonly mimeType?: string;
   readonly byteSize?: number;
   readonly locator?: DocumentLocator;
-  readonly contentLocator?: DocumentEntryContentLocator;
-  readonly representationLocator?: ContentRepresentationLocator;
+  readonly contentLocator?: ContentLocator;
+  readonly representationHandle?: ContentRepresentationHandle;
 }
 
 export interface DocumentExcerpt {
@@ -270,9 +272,8 @@ export function createDocumentEntryContentLocator(
     return undefined;
   }
   const locator: DocumentEntryContentLocator = {
-    kind: 'document-entry',
-    source: input.source.contentLocator,
-    entryPath: input.entryPath,
+    file: input.source.contentLocator.file,
+    selector: { kind: 'entry', path: input.entryPath },
   };
   if (!isContentLocator(locator)) {
     return undefined;
@@ -514,7 +515,7 @@ function readOptionalDocumentSourceContentLocator(
     return undefined;
   }
   const value = record[key];
-  return isContentLocator(value) && value.kind === 'workspace-file' ? value : null;
+  return isContentLocator(value) && isWorkspaceFileContentLocator(value) ? value : null;
 }
 
 function readOptionalStringField(

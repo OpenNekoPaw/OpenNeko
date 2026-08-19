@@ -213,9 +213,11 @@ async function writeAvailableAsset(
   for (let index = 0; index < maxAttempts; index += 1) {
     const candidateName = index === 0 ? `${stem}${ext}` : `${stem}-${index}${ext}`;
     const candidatePath = joinPath(assetDirectory, candidateName);
-    const result = await writer.write({ kind: 'workspace-file', path: candidatePath }, bytes, {
-      conflict: 'fail-if-exists',
-    });
+    const result = await writer.write(
+      { file: { authority: 'workspace', path: candidatePath } },
+      bytes,
+      { conflict: 'fail-if-exists' },
+    );
     if (result.status === 'written') return candidatePath;
     if (result.diagnostic.code !== 'content-conflict') return undefined;
   }

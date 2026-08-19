@@ -16,7 +16,9 @@ describe('NodeAuthorizedWorkspaceWriter', () => {
   it('creates missing parent directories and returns durable freshness without lock residue', async () => {
     const root = await createWorkspace();
     const writer = new NodeAuthorizedWorkspaceWriter({ workspaceRoot: root });
-    const locator = { kind: 'workspace-file' as const, path: 'drafts/chapter/one.md' };
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'drafts/chapter/one.md' },
+    };
 
     const result = await writer.write(locator, new TextEncoder().encode('# One\n'), {
       conflict: 'fail-if-exists',
@@ -35,7 +37,7 @@ describe('NodeAuthorizedWorkspaceWriter', () => {
     const root = await createWorkspace('notes/story.md', 'observed\n');
     const writer = new NodeAuthorizedWorkspaceWriter({ workspaceRoot: root });
     const reader = createNodeHostContentReadService({ workspaceRoot: root });
-    const locator = { kind: 'workspace-file' as const, path: 'notes/story.md' };
+    const locator = { file: { authority: 'workspace' as const, path: 'notes/story.md' } };
     const observed = await reader.read(locator);
     if (observed.status !== 'ready') throw new Error('Expected readable fixture content.');
     await writeFile(path.join(root, 'notes/story.md'), 'external content changed\n');
@@ -58,7 +60,7 @@ describe('NodeAuthorizedWorkspaceWriter', () => {
   it('allows only one concurrent replacement for one observed fingerprint', async () => {
     const root = await createWorkspace('notes/story.md', 'observed\n');
     const reader = createNodeHostContentReadService({ workspaceRoot: root });
-    const locator = { kind: 'workspace-file' as const, path: 'notes/story.md' };
+    const locator = { file: { authority: 'workspace' as const, path: 'notes/story.md' } };
     const observed = await reader.read(locator);
     if (observed.status !== 'ready') throw new Error('Expected readable fixture content.');
 
@@ -96,8 +98,7 @@ describe('Node workspace content path ownership', () => {
       process.platform === 'win32' ? 'junction' : 'dir',
     );
     const locator = {
-      kind: 'workspace-file' as const,
-      path: 'neko/assets/Footage/shot.mov',
+      file: { authority: 'workspace' as const, path: 'neko/assets/Footage/shot.mov' },
     };
 
     const result = await createNodeHostContentReadService({ workspaceRoot: root }).read(locator);
@@ -109,8 +110,7 @@ describe('Node workspace content path ownership', () => {
   it('reads a real directory in the managed media-library namespace but rejects writes', async () => {
     const root = await createWorkspace('neko/assets/Footage/shot.mov', 'project-owned-directory');
     const locator = {
-      kind: 'workspace-file' as const,
-      path: 'neko/assets/Footage/shot.mov',
+      file: { authority: 'workspace' as const, path: 'neko/assets/Footage/shot.mov' },
     };
 
     await expect(
@@ -127,7 +127,7 @@ describe('Node workspace content path ownership', () => {
       locator,
       diagnostic: { code: 'content-unauthorized' },
     });
-    expect(await readFile(path.join(root, ...locator.path.split('/')), 'utf8')).toBe(
+    expect(await readFile(path.join(root, ...locator.file.path.split('/')), 'utf8')).toBe(
       'project-owned-directory',
     );
   });
@@ -150,8 +150,10 @@ describe('Node workspace content path ownership', () => {
       process.platform === 'win32' ? 'junction' : 'dir',
     );
     const locator = {
-      kind: 'workspace-file' as const,
-      path: 'neko/assets/Footage/escape/secret.txt',
+      file: {
+        authority: 'workspace' as const,
+        path: 'neko/assets/Footage/escape/secret.txt',
+      },
     };
 
     await expect(
@@ -196,7 +198,7 @@ describe('Node workspace content path ownership', () => {
   it('reports a broken linked file as missing without leaking its target', async () => {
     const root = await createWorkspace();
     await symlink(path.join(root, 'missing-target.txt'), path.join(root, 'broken.txt'), 'file');
-    const locator = { kind: 'workspace-file' as const, path: 'broken.txt' };
+    const locator = { file: { authority: 'workspace' as const, path: 'broken.txt' } };
 
     const result = await createNodeHostContentReadService({ workspaceRoot: root }).read(locator);
 

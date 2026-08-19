@@ -1,7 +1,6 @@
 export {
   createNodeHostContentReadService,
   NodeDocumentEntryContentReadHandler,
-  NodeGeneratedOutputContentReadHandler,
   UnavailableContentReadHandler,
   type CreateNodeHostContentReadServiceOptions,
   type NodeDocumentEntryReader,

@@ -11,16 +11,14 @@ describe('ContentLocator drag contract', () => {
     expect(
       createContentLocatorDragData({
         locator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/Reference/cat.png',
+          file: { authority: 'workspace', path: 'neko/assets/Reference/cat.png' },
         },
         name: 'cat.png',
       }),
     ).toEqual({
       type: 'content-locator',
       locator: {
-        kind: 'workspace-file',
-        path: 'neko/assets/Reference/cat.png',
+        file: { authority: 'workspace', path: 'neko/assets/Reference/cat.png' },
       },
       name: 'cat.png',
     });
@@ -30,7 +28,7 @@ describe('ContentLocator drag contract', () => {
     expect(() =>
       parseContentLocatorDragData({
         type: 'content-locator',
-        locator: { kind: 'workspace-file', path: '/private/cat.png' },
+        locator: { file: { authority: 'workspace', path: '/private/cat.png' } },
         name: 'cat.png',
       }),
     ).toThrow('workspace-relative');
@@ -38,9 +36,11 @@ describe('ContentLocator drag contract', () => {
       parseContentLocatorDragData({
         type: 'content-locator',
         locator: {
-          kind: 'workspace-file',
-          path: 'media/cat.png',
-          absolutePath: '/private/cat.png',
+          file: {
+            authority: 'workspace',
+            path: 'media/cat.png',
+            absolutePath: '/private/cat.png',
+          },
         },
         name: 'cat.png',
       }),
@@ -49,7 +49,7 @@ describe('ContentLocator drag contract', () => {
       parseContentLocatorDragData({
         unexpectedField: 1,
         type: 'content-locator',
-        locator: { kind: 'workspace-file', path: 'media/cat.png' },
+        locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
         name: 'cat.png',
       }),
     ).toThrow('shape or type');

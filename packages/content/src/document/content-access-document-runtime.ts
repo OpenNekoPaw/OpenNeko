@@ -73,7 +73,6 @@ export class DocumentContentAccessRuntime {
     input: DocumentContentAccessInput,
   ): Promise<DocumentContentAccessResult> {
     const sourceStat = await this.deps.contentRead.stat(input.source, {
-      ...(input.source.fingerprint ? { expectedFingerprint: input.source.fingerprint } : {}),
       ...(input.signal ? { signal: input.signal } : {}),
     });
     if (sourceStat.status === 'unavailable') {
@@ -221,12 +220,11 @@ export class DocumentContentAccessRuntime {
     const visible = imageInfo.slice(0, input.maxImages ?? imageInfo.length);
     const projected = await Promise.all(
       visible.map(async (image) => {
-        const entryPath = image.entryPath ?? image.contentLocator?.entryPath;
+        const entryPath = image.entryPath ?? image.contentLocator?.selector?.path;
         if (!entryPath) return stripDocumentImageRuntimeFields(image);
         const contentLocator: DocumentEntryContentLocator = {
-          kind: 'document-entry',
-          source: input.source,
-          entryPath,
+          file: input.source.file,
+          selector: { kind: 'entry', path: entryPath },
         };
         const entry = await this.deps.contentRead.stat(contentLocator, {
           ...(input.signal ? { signal: input.signal } : {}),
@@ -253,8 +251,8 @@ function createStableDocumentSource(
   fingerprint: string,
 ): DocumentSourceRef {
   return {
-    filePath: input.source.path,
-    format: input.format ?? detectDocumentFormat(input.source.path),
+    filePath: input.source.file.path,
+    format: input.format ?? detectDocumentFormat(input.source.file.path),
     contentLocator: input.source,
     fileId: fingerprint,
     identity: { fileId: fingerprint },
@@ -302,7 +300,7 @@ function stripDocumentImageRuntimeFields(image: DocumentImageInfo): DocumentImag
     ...(image.mimeType ? { mimeType: image.mimeType } : {}),
     ...(image.byteSize !== undefined ? { byteSize: image.byteSize } : {}),
     ...(image.locator ? { locator: image.locator } : {}),
-    ...(image.representationLocator ? { representationLocator: image.representationLocator } : {}),
+    ...(image.representationHandle ? { representationHandle: image.representationHandle } : {}),
   };
 }
 
