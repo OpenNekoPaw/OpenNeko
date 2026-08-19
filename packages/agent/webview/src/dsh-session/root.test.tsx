@@ -103,6 +103,27 @@ describe('DshAgentView content-creation composer', () => {
     );
   });
 
+  it('clears an asynchronously submitted draft while allowing the next draft to be edited', async () => {
+    let resolveSubmission!: (accepted: boolean) => void;
+    const pendingSubmission = new Promise<boolean>((resolve) => {
+      resolveSubmission = resolve;
+    });
+    const onSubmit = vi.fn(() => pendingSubmission);
+    renderAgent(<DshComposerHarness onSubmit={onSubmit} />);
+    const composer = screen.getByLabelText('消息') as HTMLTextAreaElement;
+
+    fireEvent.change(composer, { target: { value: 'first request' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+
+    await waitFor(() => expect(composer.value).toBe(''));
+    expect(composer.disabled).toBe(false);
+    fireEvent.change(composer, { target: { value: 'next request' } });
+    expect(composer.value).toBe('next request');
+
+    await act(async () => resolveSubmission(true));
+    expect(composer.value).toBe('next request');
+  });
+
   it('reuses the retained mention menu for Assets and submits the selected context receipt', async () => {
     const onSubmit = vi.fn(async () => true);
     renderAgent(

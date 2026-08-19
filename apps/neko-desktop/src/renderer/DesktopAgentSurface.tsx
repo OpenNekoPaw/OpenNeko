@@ -268,7 +268,7 @@ export function DesktopAgentSurface({
   const cancelTurn = async (): Promise<void> => {
     const targetConversationId =
       conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined);
-    if (!targetConversationId || submitting) return;
+    if (!targetConversationId) return;
     setOperationError(undefined);
     setSubmitting(true);
     try {

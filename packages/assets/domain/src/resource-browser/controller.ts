@@ -129,6 +129,12 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     const items: ResourceBrowserItem[] = [];
     for (const root of roots) {
       if (items.length >= parsed.limit) break;
+      if (
+        root.libraryStatus.state !== 'available' &&
+        root.libraryStatus.state !== 'unreferenced-local-binding'
+      ) {
+        continue;
+      }
       const children = await this.options.source.media.children({
         identity: this.identity,
         parent: root,

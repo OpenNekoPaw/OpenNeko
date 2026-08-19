@@ -342,6 +342,46 @@ describe('DesktopAgentSurface', () => {
     await waitFor(() => expect(dshSessions.cancel).toHaveBeenCalledWith('conversation-1'));
   });
 
+  it('keeps the draft editable while the DSH submit request is still running', async () => {
+    const idleProjection = { ...projection, currentTurn: undefined };
+    const pendingSubmit = deferred<{
+      readonly requestId: string;
+      readonly projection: DshSessionHostProjection;
+      readonly stopReason: string;
+    }>();
+    dshSessions.getSnapshot.mockResolvedValueOnce(idleProjection);
+    dshPermissions.list.mockResolvedValueOnce([]);
+    dshSessions.submit.mockReturnValueOnce(pendingSubmit.promise);
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+    await screen.findByText('Create a node');
+
+    const composer = screen.getByLabelText('Message') as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: 'first request' } });
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
+    await waitFor(() => expect(dshSessions.submit).toHaveBeenCalledOnce());
+
+    expect(composer.value).toBe('');
+    expect(composer.disabled).toBe(false);
+    expect(screen.getByLabelText('Stop response (Esc)')).toBeTruthy();
+    fireEvent.change(composer, { target: { value: 'next request' } });
+    expect(composer.value).toBe('next request');
+
+    await act(async () =>
+      pendingSubmit.resolve({
+        requestId: 'request-pending',
+        projection: idleProjection,
+        stopReason: 'end_turn',
+      }),
+    );
+  });
+
   it('keeps the existing transcript and draft when a DSH submit fails visibly', async () => {
     dshSessions.getSnapshot.mockResolvedValueOnce({ ...projection, currentTurn: undefined });
     dshPermissions.list.mockResolvedValueOnce([]);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { DshPermissionHostProjection } from '@neko/agent-contracts/dsh-permission-host';
 import type {
   DshConversationCreationTarget,
@@ -225,7 +225,8 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       mentionDiagnostic={props.mentionDiagnostic}
       configuring={props.configuring}
       currentTurn={props.projection?.currentTurn}
-      disabled={props.submitting || !runtimeReady}
+      submitting={props.submitting}
+      disabled={!runtimeReady}
       draft={props.draft}
       onCancel={props.onCancelTurn}
       onDraftChange={props.onDraftChange}
@@ -408,6 +409,7 @@ function DshComposer({
   mentionDiagnostic,
   configuring,
   currentTurn,
+  submitting,
   disabled,
   draft,
   onCancel,
@@ -436,6 +438,7 @@ function DshComposer({
   readonly mentionDiagnostic?: string;
   readonly configuring: boolean;
   readonly currentTurn?: number;
+  readonly submitting: boolean;
   readonly disabled: boolean;
   readonly draft: string;
   readonly onCancel: () => void;
@@ -463,6 +466,7 @@ function DshComposer({
   readonly presentation: 'entry' | 'workspace' | 'conversation';
 }): JSX.Element {
   const [inputDiagnostic, setInputDiagnostic] = useState<string>();
+  const suppressInputDiagnosticClearRef = useRef(false);
   const [contextChips, setContextChips] = useState<readonly AgentContextPayload[]>([]);
   const models: ChatModelOption[] = (configuration?.models ?? []).map((model) => ({
     id: model.id,
@@ -572,7 +576,7 @@ function DshComposer({
   };
   return (
     <InputAreaProvider
-      isBusy={configuring || currentTurn !== undefined}
+      isBusy={configuring || submitting || currentTurn !== undefined}
       modelCatalogStatus={configuration === undefined ? 'loading' : 'ready'}
       selectedModel={configuration?.selectedModelOptionId ?? ''}
       availableModels={models}
@@ -618,12 +622,22 @@ function DshComposer({
         <InputArea
           presentation={presentation}
           inputValue={draft}
-          isThinking={currentTurn !== undefined}
-          isRunActive={currentTurn !== undefined}
+          isThinking={submitting || currentTurn !== undefined}
+          isRunActive={submitting || currentTurn !== undefined}
           queueingEnabled={false}
           onInputChange={(value) => {
-            setInputDiagnostic(undefined);
+            if (suppressInputDiagnosticClearRef.current) {
+              suppressInputDiagnosticClearRef.current = false;
+            } else {
+              setInputDiagnostic(undefined);
+            }
             onDraftChange(value);
+          }}
+          onDraftConsumed={() => {
+            suppressInputDiagnosticClearRef.current = true;
+          }}
+          onRejectedDraftRestored={() => {
+            suppressInputDiagnosticClearRef.current = true;
           }}
           onSend={submitComposerInput}
           onCancel={onCancel}

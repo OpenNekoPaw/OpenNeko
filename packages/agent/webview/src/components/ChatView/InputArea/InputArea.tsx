@@ -106,6 +106,8 @@ interface InputAreaProps {
     fileReferences?: SelectedFileReference[];
     agentModels?: AgentModelSlots;
   }) => boolean | Promise<boolean>;
+  onDraftConsumed?: () => void;
+  onRejectedDraftRestored?: () => void;
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;
@@ -250,6 +252,8 @@ export function InputArea({
   onCancelQueuedMessage,
   onEditQueuedMessage,
   onSend,
+  onDraftConsumed,
+  onRejectedDraftRestored,
   onCancel,
   entryPromptMenu,
   onEntryPromptMenuChange,
@@ -849,6 +853,9 @@ export function InputArea({
     const files = attachedFiles.length > 0 ? attachedFiles : undefined;
     const contextPayloads = contextChips.length > 0 ? contextChips : undefined;
     const submittedInputValue = inputValue;
+    const submittedContextChips = [...contextChips];
+    const submittedFiles = [...attachedFiles];
+    const submittedFileReferences = [...selectedFileReferences];
     const submittedFileIds = new Set(attachedFiles.map((file) => file.id));
     const submittedReferenceKeys = new Set(
       selectedFileReferences.map((reference) => contentLocatorKey(reference.contentLocator)),
@@ -863,10 +870,12 @@ export function InputArea({
       fileReferences: hasSelectedFileReferences ? selectedFileReferences : undefined,
       ...(sessionMode === 'agent' ? buildAgentModelSendConfig(selectedModel, availableModels) : {}),
     });
-    const consumeAcceptedDraft = (accepted: boolean): void => {
-      if (!accepted) return;
+    const clearSubmittedDraft = (): void => {
       if (submittedInputValue.trim()) addToHistory(submittedInputValue);
-      if (inputValueRef.current === submittedInputValue) onInputChange('');
+      if (inputValueRef.current === submittedInputValue) {
+        onDraftConsumed?.();
+        onInputChange('');
+      }
       for (const chip of contextChipsRef.current) {
         if (submittedContextChipIds.has(chip.id)) onRemoveContextChip(chip.id);
       }
@@ -881,11 +890,44 @@ export function InputArea({
       if (onSelectedFileReferencesChange) onSelectedFileReferencesChange(remainingReferences);
       else setInternalSelectedFileReferences(remainingReferences);
     };
+    const restoreRejectedDraft = (): void => {
+      // Preserve a failed submission unless the user has already started a new draft.
+      if (
+        inputValueRef.current !== '' ||
+        contextChipsRef.current.length > 0 ||
+        attachedFilesRef.current.length > 0 ||
+        selectedFileReferencesRef.current.length > 0
+      ) {
+        return;
+      }
+      onRejectedDraftRestored?.();
+      onInputChange(submittedInputValue);
+      if (submittedContextChips.length > 0) {
+        if (!onAddContextChip) {
+          throw new Error('Rejected submission cannot restore context chips without an owner.');
+        }
+        for (const chip of submittedContextChips) onAddContextChip(chip);
+      }
+      if (onAttachedFilesChange) onAttachedFilesChange(submittedFiles);
+      else setInternalAttachedFiles(submittedFiles);
+      if (onSelectedFileReferencesChange) onSelectedFileReferencesChange(submittedFileReferences);
+      else setInternalSelectedFileReferences(submittedFileReferences);
+    };
     if (typeof receipt === 'boolean') {
-      consumeAcceptedDraft(receipt);
+      if (receipt) clearSubmittedDraft();
       return;
     }
-    void receipt.then(consumeAcceptedDraft);
+    // Submission acceptance is asynchronous for DSH turns. Consume this draft
+    // immediately so the textarea can accept the next draft while the turn runs;
+    // restore it only when the owning runtime rejects the request before a new
+    // draft has been entered.
+    clearSubmittedDraft();
+    void receipt.then(
+      (accepted) => {
+        if (!accepted) restoreRejectedDraft();
+      },
+      () => restoreRejectedDraft(),
+    );
   };
 
   const handleRemoveFile = (id: string) => {
