@@ -12,7 +12,7 @@
 > [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
 > 与 [`unify-workspace-resource-and-project-content-browser`](../../openspec/changes/unify-workspace-resource-and-project-content-browser/)
 > 收敛。远程分发、发布、账户与云同步不属于当前 Asset change；未来需要独立 OpenSpec。
-> 项目媒体继续使用 `MediaLibraryContentLocator`、target-free `.neko/media-libraries` binding 与
+> 项目媒体继续使用 Workspace authority 的 canonical `ContentLocator`、target-free `.neko/media-libraries` binding 与
 > 用户全局 Media Library connection。`neko/assets/<libraryName>` 下的受管软链接（Windows 使用
 > directory junction）是由该授权链派生的 Workspace 访问投影，供 Agent 等仅能访问工作区的消费者
 > 使用；它不是媒体身份、项目 binding 或全局登记的替代品。
@@ -31,7 +31,7 @@ Media Library。Character、World、Entity 等语义复用属于对应领域或 
 
 媒体库只负责：
 
-- 从权威项目 `MediaLibraryContentLocator` 引用派生必需库，并检查 target-free binding、全局 connection
+- 从权威项目 `ContentLocator` 引用派生必需库，并检查 target-free binding、全局 connection
   与同名受管 Workspace 链接是否一致；
 - 按 canonical owner-qualified `ContentLocator` 浏览、搜索、打开和诊断文件；
 - 维护可重建的文件树、recent-use、technical metadata 和 availability projection；
@@ -63,7 +63,7 @@ Media Library file 和 provider 已同步到本地目录的文件仍走原 owner
 ## Canonical 模型
 
 ```text
-Project fact: MediaLibraryContentLocator(libraryName, relativePath)
+Project fact: Workspace authority ContentLocator(file.path)
                   |
                   v
 Project local: .neko/media-libraries/<binding>       target-free authorization
@@ -88,8 +88,9 @@ AssetManifest: assetId + immutable revision + digest + dependencies
 
 项目事实只保存逻辑 library name、relative descendant 与可选 fingerprint。项目 `.neko` binding 只保存
 本机已确认的全局 connection identity，不保存物理 target；全局 connection owner 解析 target，并要求
-同名受管 Workspace 链接精确指向该 target。普通项目文件使用 `workspace-file`，外部媒体使用
-`media-library`；只有 Agent handoff 将已授权媒体投影为 `workspace-file:neko/assets/...`。
+同名受管 Workspace 链接精确指向该 target。普通项目文件和外部媒体都使用
+`ContentLocator.file.authority = workspace`；文件内部内容使用可选 selector。只有 Agent handoff
+才能使用受控 `neko/assets/...` Workspace 投影，不能把物理 target 写入项目事实。
 
 ## Link 与安全边界
 
@@ -108,7 +109,7 @@ binding、connection 或 link 不可用时，媒体库显示 safe diagnostic 与
 
 ## 同步、恢复与便携快照
 
-普通 Git 或产品文件夹同步只传输项目事实中的 portable `MediaLibraryContentLocator`，不传输 `.neko`
+普通 Git 或产品文件夹同步只传输项目事实中的 portable `ContentLocator`，不传输 `.neko`
 binding、软链接或 external Media Library 字节。项目打开时，Desktop 从 Canvas、Cut、Entity
 representation 等 owning codec 的权威引用重建必需库；本机授权缺失只影响依赖该库的资源。
 
@@ -207,7 +208,7 @@ Search 只返回 canonical locator。绝对路径、变量路径、cache path �
 | 创建可独立移动的项目 | portable snapshot                 | 复制被引用字节到新项目并重写 staged 项目事实                       |
 | 整理已有文件         | copy to selected writable library | 复制真实字节，保留 source identity                                 |
 | 删除库内文件         | authorized delete                 | 明确修改 external target，需用户确认与 fingerprint precondition    |
-| 保留生成结果         | retain generated                  | generated-output owner 负责 revision/digest/lineage                |
+| 保留生成结果         | retain generated                  | Generation owner 负责 output identity/revision/digest/lineage      |
 | 导入可复用素材包     | Asset import/install              | Asset Library 负责 manifest、revision、digest、dependency 与 trust |
 | 关联创作身份         | bind/rebind                       | Creative Entity owner 只更新 binding fact                          |
 
@@ -216,8 +217,9 @@ link 存在不等于目标可写。复制与删除必须明确选择 library、�
 ## 与 Project Entity 的关系
 
 Project Entity 是 character、scene、object、location 和 style 在项目内唯一的可变语义身份
-authority。`EntityRepresentationBinding` 直接保存 workspace、media-library、document-entry、
-generated-output 或精确 package-resource reference；不得把 `neko/assets/...` 运行时投影写回 binding。
+authority。`EntityRepresentationBinding` 保存 canonical `ContentLocator`；文件内部内容使用 selector，
+Generation output identity/provenance 与 package owner identity 由各自领域记录旁置。项目媒体链接通过其
+授权后的 Workspace 文件地址引用；不得把物理 target、cache path 或 runtime projection 写回 binding。
 
 文件移动或 fingerprint 不匹配时，binding 变为 orphaned。Search 可以给出候选，但只有显式 rebind 可以修改 confirmed binding；不得通过旁路 catalog、fingerprint registry 或文件名猜测自动迁移。
 

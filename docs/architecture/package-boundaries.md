@@ -85,18 +85,17 @@ runtime 入口。
 
 `packages/content` 拥有文档解析、locator/range、entry ref、图片元数据探测和格式识别等跨领域内容语义。
 
-> 项目外部媒体的 portable contract 是 `MediaLibraryContentLocator`。项目到 Agent 的 producer
-> 才把已授权媒体投影为受控软链接下的
-> `workspace-file: neko/assets/<libraryName>/...`；Agent 不感知 Media Library、全局 connection、
-> 物理 target 或 `.neko` binding，其他项目消费者不得持久化该 Agent 专用 Workspace 投影。
+> 项目媒体和普通文件都使用 canonical `ContentLocator`。项目到 Agent 的 producer 才把已授权媒体
+> 投影为受控软链接下的 Workspace 文件；Agent 不感知 Media Library、全局 connection、物理 target
+> 或 `.neko` binding，其他项目消费者不得持久化 Agent 专用运行时投影。
 
 - `@neko/content` 与 `@neko/content/core` 只暴露 renderer-safe contract 和纯语义；文档读取服务必须从
   `@neko/content/document` 显式导入，Node 文件/容器实现必须从 `@neko/content/node` 或
   `@neko/content/document/node` 显式导入。
 - 通过 runtime deps 注入文本、二进制和 container 读取能力。
-- `@neko/content` 分别保留普通项目文件的 `workspace-file` 与外部媒体的
-  `media-library` identity；Host 可读取 Agent 专用的 `neko/assets` Workspace 投影，但 guard 只允许
-  精确 binding-backed managed link 跨越 Workspace realpath，并拒绝普通 symlink 与 nested escape。
+- `@neko/content` 只保留 Workspace/Package file authority 与可选 document-entry selector；Host 可读取
+  Agent 专用的 `neko/assets` Workspace 投影，但 guard 只允许精确 binding-backed managed link 跨越
+  Workspace realpath，并拒绝普通 symlink 与 nested escape。
 - 不管理 cache root、Webview URI、runtime token、workspace 生命周期或 UI 状态。
 - Agent 和领域包复用公共入口，不重新实现 document reader/cache/path/media catalog。
 - 文本实体分析复用 `DocumentAccessService` manifest/cursor/range：PDF page、EPUB chapter、DOCX section/paragraph 的正文只在 transient analysis batch 中存在；Content 分别返回语义 `DocumentLocator` 与内容 `ContentLocator`，不拥有 SQLite projection。
@@ -453,7 +452,7 @@ UserCharacterRelationship、DSH Session transcript 与外部存档必须保持�
 - 跨包与持久内容身份只使用 stable `ContentLocator`；entity/artifact/job/output ID 与 provenance 保持独立。不得并列保存 raw path、旧资源引用、provider URL、base64 或 Webview URI作为第二内容身份。
 - owning package 可在文件操作参数中使用 workspace-relative path 或保留用途的 `${VAR}/path`；Host 派生缓存使用 cache-owned descriptor。二者都不得替代或反向污染跨包 `ContentLocator`。
 - 本机绝对路径只允许存在于本机设置、临时运行时状态或明确 host adapter 内。
-- Cache 是可重建派生数据，不能替代项目、Entity、Media Library locator、generated/package owner 或 Agent 事实。
+- Cache 是可重建派生数据，不能替代项目、Entity、ContentLocator、Generation/package owner 或 Agent 事实。
 - 用户 secret 不写入项目文件、日志、Webview state、prompt 或 Skill。
 - 跨包 mutation 通过 facade/port/command 和明确 error contract，不直接写另一个包的私有存储。
 
@@ -462,16 +461,16 @@ UserCharacterRelationship、DSH Session transcript 与外部存档必须保持�
 Canvas 只拥有节点布局、连接和 durable projection，不拥有素材字节、媒体库 membership、
 Generation recipe、viewer/editor 或 provider execution。素材进入 Canvas 固定为四条路径：
 
-1. 普通工作区文件保存 `WorkspaceFileContentLocator`；项目授权的外部媒体保存
-   `MediaLibraryContentLocator`，二者引用时都不复制字节；
+1. 普通工作区文件和项目授权媒体链接都保存 Workspace authority 的 canonical `ContentLocator`，
+   文件内部内容使用可选 selector，引用时不复制字节；
 2. 全局 Media Library 文件必须先由 Media Library owner 创建项目 binding 和匹配的 Workspace link，
    或由用户显式复制到项目可授权位置；
 3. 任意工作区外文件由 Host 原子复制到 `neko/imports/<kind>/`，再用新的项目 locator 创建节点；
-4. AI 素材先进入 Generation-owned draft/Job，只有 owner 成功提交的
-   `generated-output` locator 才投影为 Media/File 结果节点。
+4. AI 素材先进入 Generation-owned draft/Job；owner 成功提交字节后返回 canonical Workspace
+   `ContentLocator`，output identity、digest、Job 与 lineage 仍由 Generation 记录拥有。
 
-素材来源只能由 validated locator 推导：`workspace-file`、`media-library`、`document-entry`、
-`package-resource` 是 referenced，`generated-output` 是 generated。扩展名、目录名、
+素材地址只由 validated `ContentLocator.file` 与可选 selector 推导；素材是 referenced 还是 generated
+由对应领域 authority/provenance 决定。扩展名、目录名、
 provenance 文本、历史 prompt 和运行时 URL 都不得成为来源 authority。历史生成摘要只用于
 展示；重新生成必须用稳定 `JobRef<'generation'>` 向 Generation owner 解析权威 recipe，
 并创建新的 Job、output identity 和 lineage，不能覆盖旧结果。
