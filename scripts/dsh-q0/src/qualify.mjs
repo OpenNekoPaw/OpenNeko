@@ -14,6 +14,7 @@ import {
 } from './qualification-core.mjs';
 
 const fixtureRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const dshBridgePackageRoot = join(fixtureRoot, '..', '..', 'packages', 'dsh-bridge');
 const profileName = 'openneko-acp-q0';
 const w2ProfileName = 'openneko-w2-q0';
 const promptAdmissionProfileName = 'openneko-prompt-admission-q0';
@@ -149,11 +150,7 @@ async function createIsolatedProfile(dshHome) {
       '\n',
     ),
   );
-  await symlink(
-    join(fixtureRoot, '..', '..', 'packages', 'agent', 'dsh-bridge'),
-    join(nekoNamespaceDir, 'dsh-bridge'),
-    'dir',
-  );
+  await symlink(dshBridgePackageRoot, join(nekoNamespaceDir, 'dsh-bridge'), 'dir');
   await symlink(join(fixtureRoot, 'seed-plugin'), join(q0NamespaceDir, 'dsh-q0-seed'), 'dir');
   return profileDir;
 }
@@ -197,11 +194,7 @@ async function createW2Profile(dshHome) {
       '\n',
     ),
   );
-  await symlink(
-    join(fixtureRoot, '..', '..', 'packages', 'agent', 'dsh-bridge'),
-    join(nekoNamespaceDir, 'dsh-bridge'),
-    'dir',
-  );
+  await symlink(dshBridgePackageRoot, join(nekoNamespaceDir, 'dsh-bridge'), 'dir');
   await symlink(
     join(fixtureRoot, '..', '..', 'packages', 'generation', 'dsh-plugin'),
     join(nekoNamespaceDir, 'generation-dsh-plugin'),
@@ -258,11 +251,7 @@ async function createPromptAdmissionProfile(dshHome) {
       '',
     ].join('\n'),
   );
-  await symlink(
-    join(fixtureRoot, '..', '..', 'packages', 'agent', 'dsh-bridge'),
-    join(nekoNamespaceDir, 'dsh-bridge'),
-    'dir',
-  );
+  await symlink(dshBridgePackageRoot, join(nekoNamespaceDir, 'dsh-bridge'), 'dir');
   await symlink(
     join(fixtureRoot, 'prompt-provider'),
     join(q0NamespaceDir, 'dsh-q0-prompt-provider'),

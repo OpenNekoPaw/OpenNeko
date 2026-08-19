@@ -72,6 +72,7 @@
 - [x] 5.5 将 Canvas Tool 注册到 DSH 官方 Tool 路径，并通过 DSH→Host adapter 调用 Canvas application service，返回 typed mutation/read result。
 - [x] 5.6 添加 Canvas producer、DSH delegation、semantic-negative、authorization/freshness、bounded-result 与 direct-UI-no-Agent 测试。Desktop Canvas Webview→typed Canvas Host→owning Canvas session/runtime 是 direct UI canonical path，不创建 Agent turn；Generation node run/cancel 仍调用同一 package-owned Generation owner；Canvas durable document、historical Generation Job/Media projection 和 material lifecycle restart recovery已有覆盖；通用 ACP approval UI 以 exact Conversation/Session/turn/toolCall identity 覆盖 `openneko.canvas`。
 - [x] 5.7 添加路径证明：Generation/Canvas 不经 MCP 包装，DSH call identity 与 domain Job/document mutation identity 精确关联。
+- [x] 5.7a 将 Generation/Canvas package-owned model-facing 参数 schema 原样注册到 DSH，精确广告 operation envelope、必填字段和 camelCase 参数；截图中的 Canvas `include` 与 Generation 扁平 snake_case 输入在 Host dispatch 前 fail-visible，canonical query/submit 仍通过唯一 reverse Host path。证据见 `evidence/w2-domain-tool-slice-freeze.md`。
 - [ ] 5.8 运行 Generation 和 Canvas 两个独立完整 Desktop vertical slices，并分别记录 exact canonical path evidence。
 
 ## 6. W3 DSH-Owned Extension Management (Skill/MCP)

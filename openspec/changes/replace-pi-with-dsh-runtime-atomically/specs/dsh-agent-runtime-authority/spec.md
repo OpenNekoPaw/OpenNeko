@@ -173,6 +173,13 @@ The canonical product contract SHALL preserve the qualified DSH Session, turn, c
 
 Generation and Canvas SHALL be the first vertical official domain Tool slice registered in DSH; Cut, Assets, Character, World and remaining domain capabilities SHALL follow. DSH SHALL own Tool registration, selection, call identity and execution lifecycle. Each owning package SHALL remain authoritative for the Tool schema, semantic validation, authorization, exact resource identity, business transaction, durable facts and long-running Job. The Host adapter SHALL validate with the package-owned canonical validator before invoking the owning service. Domain capabilities SHALL NOT be wrapped in MCP merely to reach DSH, and direct UI operations SHALL call the same owning application service without creating a hidden Agent turn.
 
+#### Scenario: DSH advertises a first-party domain Tool to the model
+
+- **WHEN** the Generation or Canvas DSH plugin registers its Tool
+- **THEN** it uses the owning package's exact model-facing parameter schema with the canonical operation envelope, required fields and field names
+- **AND** nested operation input rejects undeclared fields before Host dispatch while the Host-owned decoder remains the semantic validation authority
+- **AND** the plugin does not replace the schema with unconstrained JSON, compatibility aliases or prose-only parameter instructions
+
 #### Scenario: DSH emits semantically invalid Canvas arguments
 
 - **WHEN** arguments violate a locator, range, array bound or cross-field invariant

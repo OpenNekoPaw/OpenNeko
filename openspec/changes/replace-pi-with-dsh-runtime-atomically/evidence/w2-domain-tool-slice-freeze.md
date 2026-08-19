@@ -30,6 +30,7 @@ Canvas owns contract/schema/exact document and node identity/freshness/mutation.
 
 - `@neko/generation` exports `dsh-tool` constants, strict decoder, and bounded Job fact projection.
 - `@neko/canvas-domain` exports `dsh-tool` constants, strict decoder, and bounded query/mutation fact projections.
+- Both owning packages export their exact model-facing parameter schema. Their DSH plugins pass that schema directly to official `defineTool`; they do not replace operation input with unconstrained JSON.
 - `@neko/agent-runtime/acp` exports `GenerationDshHostAdapter` and `CanvasDshHostAdapter`, plus the ACP application client with exact `executeGenerationTool` and `executeCanvasTool` handler slots.
 - `@neko/generation-dsh-plugin` is Generation's first-party DSH Tool contribution.
 - `@neko/canvas-dsh-plugin` is Canvas's first-party DSH Tool contribution.
@@ -41,6 +42,8 @@ Canvas owns contract/schema/exact document and node identity/freshness/mutation.
 - A successful long-running Generation response returns the owning-domain `jobId`; DSH call identity references but does not replace that Job identity.
 - A Canvas mutation response returns the exact `fingerprint` and node identity for the written document.
 - Semantic negatives, stale fingerprints, invalid paths, and unknown tool names fail locally as typed failure diagnostics; they do not switch to MCP, another provider, another Tool handler, or Desktop logic.
+
+The model-facing schemas expose the same canonical shape that the Host decoders enforce. Canvas `query` advertises only `documentPath`; `create-node` advertises `documentPath`, `expectedFingerprint`, and `node`. Generation `submit` advertises the purpose-bound envelope and generationType-specific request, including canonical `negativePrompt` and `aspectRatio`; `describe` advertises only `jobId`. Nested operation inputs are closed. The retired/incorrect `include`, `negative_prompt`, and `aspect_ratio` fields are neither advertised nor accepted, and no compatibility mapping was added.
 
 ## Test Evidence
 
@@ -66,3 +69,14 @@ Generation and Canvas use the shared ACP permission owner/UI; they do not duplic
 Direct Canvas Generation uses the native Canvas Webview, typed Canvas Host runtime and package-owned Generation runtime. Architecture poison tests reject an Agent prompt or DSH Tool shortcut from this direct path. Generation Job recovery/cancel and Canvas document/Generation projection restart behavior are covered by owning-package and Desktop runtime tests.
 
 Tasks 5.3 and 5.6 are deterministically complete. The two complete Desktop vertical slices in task 5.8, visible UI acceptance and real provider validation remain incomplete and are not release evidence.
+
+## Model-facing schema correction verification
+
+Evaluation disposition: `update`, owned by `agent-runtime.creative-media-workflow`. The change can affect model Tool argument selection, so deterministic schema tests are necessary but do not replace a real Desktop/provider run. The current W7 suite still contains retired Pi Tool identities and cannot prove the DSH `openneko.generation`/`openneko.canvas` call path until task 10.7 migrates its Tool facts and assertions; that real Evaluation remains `infrastructure-blocked` rather than falling back to a direct runtime runner.
+
+Focused deterministic evidence added on 2026-08-20:
+
+- `@neko/canvas-domain`: package-owned schema contains the exact two operation inputs and does not advertise `include`.
+- `@neko/canvas-dsh-plugin`: canonical query reaches the Host port; the screenshot's `include` input fails DSH argument validation before Host dispatch.
+- `@neko/generation`: package-owned schema advertises the purpose/lifecycle envelope and camelCase request fields, without snake_case aliases.
+- `@neko/generation-dsh-plugin`: canonical image submit reaches the Host port; the screenshot's flattened snake_case input fails DSH argument validation before Host dispatch.
