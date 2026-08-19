@@ -122,6 +122,53 @@ The canonical product contract SHALL preserve the qualified DSH Session, turn, c
 - **THEN** its exact stream applies bounded backpressure or fails locally according to the canonical contract
 - **AND** requests and events for sibling Sessions continue to make progress
 
+#### Scenario: A completed turn displays its processing duration
+
+- **WHEN** DSH publishes matching `turn/start` and `turn/end` events for an exact Session and turn
+- **THEN** the bridge preserves both DSH event timestamps and the package-owned projection derives one canonical `startedAt` and `completedAt`
+- **AND** the existing Agent turn status presentation displays the completed duration from those values for both live and replayed events
+- **AND** Renderer receipt time, local clocks, Tool durations and adjacent turns cannot become replacement timing authorities or replay facts
+
+#### Scenario: An active turn displays live processing state and elapsed time
+
+- **WHEN** the projection identifies `currentTurn` and contains that exact turn's DSH `startedAt`
+- **THEN** the existing Agent turn status presentation displays a transient processing row at the transcript tail and refreshes its elapsed presentation from that DSH start time
+- **AND** the Renderer current clock only drives the transient refresh and is not written to the contract, projection, persistence or completed duration
+- **AND** matching `turn/end` removes the processing row and displays the canonical completed duration
+- **AND** replay without an active `currentTurn` does not display a processing row
+
+#### Scenario: Turn timing is invalid
+
+- **WHEN** a turn end has no matching start, names another turn or precedes the matching start time
+- **THEN** the affected event is rejected with a local diagnostic
+- **AND** sibling events, Sessions and Conversations remain available without a fabricated duration
+
+#### Scenario: DSH streams assistant text and reasoning
+
+- **WHEN** an active DSH step publishes `assistant/chunk` text or reasoning deltas with exact turn, step and block identities
+- **THEN** the bridge projects those deltas through standard ACP message or thought chunks and the package-owned projection incrementally assembles the corresponding existing Agent presentation
+- **AND** DSH remains the only output and transcript authority without a provider token reader, Renderer stream connection, second transcript or Pi path
+- **AND** interleaved blocks remain ordered by their DSH block index and reasoning cannot be merged into visible answer text
+
+#### Scenario: DSH settles a streamed assistant step
+
+- **WHEN** DSH publishes `assistant/message` for a step that already has live text or reasoning assembly
+- **THEN** the stable DSH message identity and final blocks replace the matching transient assembly atomically
+- **AND** the final answer appears exactly once without concatenating the final message after its deltas
+- **AND** Session replay rebuilds the same final presentation through the canonical bridge/projection path without replaying historical token animation
+
+#### Scenario: A streamed frame is invalid or exceeds its bound
+
+- **WHEN** a frame has an invalid or stale sequence, unknown turn or step, invalid block identity, unsupported delta shape or causes the exact live assembly to exceed its fixed bound
+- **THEN** that frame fails locally with an explicit diagnostic and cannot fabricate a final message
+- **AND** sibling streams, Sessions and Conversations continue without switching to a raw Session reader, cached transcript or alternate runtime
+
+#### Scenario: A model streams a Tool call
+
+- **WHEN** DSH emits `tool-call-delta` chunks before the canonical `tool/call` event
+- **THEN** OpenNeko does not expose incomplete arguments or create Tool lifecycle facts from those deltas
+- **AND** the exact DSH `tool/call` and `tool/result` events remain the only Tool presentation authority
+
 ### Requirement: Domain Tools preserve package ownership
 
 Generation and Canvas SHALL be the first vertical official domain Tool slice registered in DSH; Cut, Assets, Character, World and remaining domain capabilities SHALL follow. DSH SHALL own Tool registration, selection, call identity and execution lifecycle. Each owning package SHALL remain authoritative for the Tool schema, semantic validation, authorization, exact resource identity, business transaction, durable facts and long-running Job. The Host adapter SHALL validate with the package-owned canonical validator before invoking the owning service. Domain capabilities SHALL NOT be wrapped in MCP merely to reach DSH, and direct UI operations SHALL call the same owning application service without creating a hidden Agent turn.
@@ -191,3 +238,32 @@ The package-owned Agent application SHALL own the only new-Conversation publicat
 - **THEN** the request fails visibly and the reserved Host Conversation remains visible with a local diagnostic
 - **AND** no raw DSH file deletion, private DSH API, `session/close`-as-delete, Pi path or recent-Session fallback reports success
 - **AND** release readiness remains blocked until exact provisional cleanup is available through a qualified public seam
+
+### Requirement: Composer input triggers use DSH and Host canonical authorities
+
+The retained native Composer SHALL reuse its existing `/`, `$` and `@` presentation components. For an exact loaded DSH Session, slash commands SHALL be discovered and executed through DSH `commands`; user-invocable Skills SHALL be discovered through the DSH Skill catalog and submitted as the DSH-native `/skill-name` user gesture after exact catalog validation. Host mentions SHALL contain only sender-bound, authorized product resources with canonical identities. No trigger may fall back to an ordinary Prompt, Pi, a self-developed Skill/MCP/Plugin runtime, raw filesystem search or an active/recent Workspace.
+
+Product-shipped first-party Skills SHALL be exposed to the DSH `standard` preset only as the exact read-only bundled Skill resource resolved by Desktop and passed through the DSH-supported subprocess environment. DSH SHALL remain the discovery, parsing, catalog and execution authority. OpenNeko MUST NOT scan that directory into a second catalog or mix ordinary Workspace, personal or third-party roots into the bundled resource.
+
+#### Scenario: User executes a DSH slash command
+
+- **WHEN** the user selects or submits `/name args` from the existing Composer menu
+- **THEN** the Host revalidates the exact command against the current DSH Session catalog and invokes DSH command execution without creating a model turn
+- **AND** DSH `command/run` and `command/done` records project as one persistent Command activity with the native result
+- **AND** an unknown or stale command fails visibly without being sent as a Prompt
+
+#### Scenario: User explicitly invokes a DSH Skill
+
+- **WHEN** the user selects or submits `$skill-name args` and that exact Skill is still user-invocable in the current DSH Session catalog
+- **THEN** the typed Session boundary sends `/skill-name args` as the direct user message so DSH performs its canonical Skill injection
+- **AND** the user-facing transcript preserves the original `$skill-name args` intent
+- **AND** a missing, stale, incomplete or non-user-invocable Skill fails visibly without a normal-message fallback
+
+#### Scenario: User opens the mention menu
+
+- **WHEN** the Composer belongs to an exact authorized Workspace or bound product context
+- **THEN** `@` candidates are projected only from canonical Host resource identities authorized for that binding
+- **AND** locator-backed files and media carry exactly one `ContentLocator`, while available Assets and active Project Entities carry exactly one bounded `AgentContextPayload`
+- **AND** selecting a candidate produces the existing reference token/chip presentation
+- **AND** the selected locator is submitted as one ACP resource link or the selected context receipt is appended as untrusted data to the exact DSH turn context
+- **AND** missing authority remains local and cannot search raw paths or infer another Workspace

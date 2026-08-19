@@ -83,6 +83,12 @@ DSH provider 配置只写入每次启动重建的 product-owned profile patch；
 
 Composer 的权限选项直接来自 DSH `permissionPresets` authority，并通过标准 ACP `session/set_mode` 应用于 exact Session。当前 canonical 集合是 `read-only`、`workspace-write` 与 `danger-full-access`；DSH 运行时报告的 `custom` 只可作为当前状态展示，不能在没有可写 canonical preset 时被用户选择。OpenNeko 不再定义 `plan/ask/auto` execution mode；DSH Plan Mode 是 `standard` preset 拥有的独立能力，只有在其 ACP control、审批和产品 UI 投影完成后才能广告为可切换能力。
 
+Composer 输入触发器保留原 `InputArea` 的单一 presentation 路径，不新增 DSH 专用菜单或复制组件。Bridge 在 exact loaded Session 上通过 DSH `ctx.commands.list(agent)` 和 `ctx.skills.snapshot({ cwd, scope: agent })` 生成 typed input catalog；Skill 只广告 `userInvocable` 项，incomplete Skill snapshot 必须返回明确 diagnostic，不能伪装为权威空目录。`/name args` 仅可在目录中 exact 命中后调用 `ctx.commands.execute(agent, line, signal)`，并把 DSH `command/run` / `command/done` 原生 lifecycle 投影成独立 Command activity；Command 不得进入模型 Prompt，也不得伪装成 Tool event。
+
+产品随包发布的第一方 Skill 根由 Desktop 从开发源码或 packaged resource 精确解析，并只通过 DSH 官方 `DSH_BUNDLED_SKILL_DIR` 子进程环境交给 `standard` preset 内的 Skill provider。该目录是只读、受产品控制的发布资源；OpenNeko 不扫描、解析、注册或执行其中 Skill，也不得将普通 Workspace、个人或第三方目录混入该 bundled root。路径只存在于 Desktop-to-DSH 第三方运行边界，不进入 Renderer、ACP Session contract 或 transcript。
+
+OpenNeko 产品使用 `$name args` 作为显式 Skill UI 手势；typed Session boundary 必须对 exact catalog hit 校验后把它转换为 DSH 官方 `tool-skill` 可识别的 `/name args` 用户消息。转换只改变发送给 DSH 的触发前缀，用户 transcript/presentation 仍保留原 `$` 输入；未知、过期或不再 `userInvocable` 的 Skill 必须拒绝当前提交，不得按普通消息发送。`@` 不读取 DSH extension registry，也不恢复旧 Pi file search；候选只能由 Host 对当前 exact Workspace grant、Canvas/Character/World context 和 canonical `ContentLocator` 生成。文件与媒体选择 receipt 必须携带 canonical `ContentLocator` 并作为 ACP resource link 提交；Asset、Canvas、Character、World 或其他非文件上下文必须携带严格校验的 package-owned `AgentContextPayload`，随当前消息注入 exact DSH turn context，禁止伪造 `ContentLocator`。Renderer 只持有可展示的 `MentionItem` 与选择 receipt。无授权目录时入口显示局部 diagnostic 或无候选状态，不能查询 raw path、猜测 active/recent Workspace 或伪造 reference token。
+
 新 Conversation 的开发可用路径由 `@neko/agent-runtime` 的 publication service 拥有：先在 Host catalog 事务中保留 canonical Conversation metadata 与精确领域 context，再调用标准 ACP `session/new`，通过完整 `session/list` 精确复核返回的 DSH Session，最后发布唯一 Conversation-to-Session binding。Desktop Main 只能从 sender-bound 当前 Agent Surface 解析 Workspace/Assistant context，调用该 service，并在 durable publication 成功后调用 Desktop Shell 的 exact draft attach；Renderer 只提交当前 Surface identity，不能提交 Workspace、provider、model、cwd 或 DSH Session identity。Home projection 从 Host catalog、context 与 exact binding 计算，不能从 Renderer、active/recent Window 或 DSH transcript 猜测。
 
 Entry 的项目选择只提交用户选择的稳定 `projectId`，不得把 Renderer 本地 token、Workspace identity 或
@@ -129,6 +135,28 @@ ACP permission 由 `@neko/agent-runtime` 的短生命周期 pending approval own
 Desktop permission IPC 使用单一 `openneko:dsh:permission` request channel 和 changed notification；每个 list/decide/cancel request 均携带 sender-bound Window/renderer session 与 exact Conversation identity，decide/cancel 额外携带 DSH Session/turn/toolCall 四元 identity。Preload 只构造并严格解析该 canonical shape，Renderer 不得提交 ACP 未广告的 option，也不得复用旧 `confirmTool`、`runId` 或 active Conversation fallback。
 
 ### 6. OpenNeko 只拥有产品管理面与 Host adapters
+
+DSH Session event 的 `time` 是回合时间的唯一事实来源。OpenNeko bridge 必须在
+`openneko/session/event` extension 中原样传递该第三方事件时间；`@neko/agent-runtime` 在 exact
+Session/turn scope 内校验并关联 `turn/start` 与 `turn/end`，再向 Desktop projection 提供
+`startedAt`/`completedAt`。Desktop Main/preload 只传递 canonical shape，Renderer 的既有状态行只负责
+格式化处理耗时。活动回合只允许从 `currentTurn` 精确关联同 turn 的 DSH `startedAt`，在 transcript 尾部
+复用既有状态行显示“处理中”并以 Renderer 当前时钟刷新临时 elapsed presentation；该时钟不得进入
+contract、projection、持久化或完成耗时。`turn/end` 到达后临时行消失，完成行与历史 replay 只使用 DSH
+`completedAt - startedAt`。缺失 start、时间倒退或跨 turn 配对只拒绝受影响事件并返回 diagnostic，不得
+使用 Renderer 时钟、ACP 收包时间、Tool duration 或相邻回合时间伪造 canonical timing 或回放结果。
+
+DSH Session 的 `assistant/chunk` 与 `assistant/message` 是助手输出的唯一事实来源。Bridge 必须把
+`text-delta` 和 `reasoning-delta` 投影为标准 ACP message/thought chunk，并在 metadata 中保留 exact
+Session、turn、step 与 block index；不得读取 provider stream、生成本地 token 或建立第二套消息协议。
+`@neko/agent-runtime` 只在该 exact identity 下维护有界、可丢弃的 live assembly，并以 DSH
+`assistant/message` 的稳定 message identity 和最终 blocks 原子结算对应临时输出。最终事件必须替换同 step
+的临时文本而不是追加重复消息；DSH replay 通过同一路径重建最终 presentation，但不重播历史 token 动画。
+reasoning 与 text 分属独立 channel，交错 block 按 DSH block index 组装；`tool-call-delta` 不能成为 Tool
+事实或向 UI 暴露未完成 JSON，正式 `tool/call` 仍是 Tool lifecycle 的唯一入口。非法 identity、越界 block、
+重复或倒退 frame、超过 bounded assembly、final 与未知 step 不匹配时，只拒绝对应 frame 并发布 diagnostic；
+sibling Session/Conversation 保持可用。取消、错误或连接释放不得由 Renderer 猜测完成文本，已收到的部分输出
+只作为可丢弃 presentation，DSH 最终 message/turn terminal state 到达后按 canonical 事件收敛。
 
 OpenNeko 继续拥有 Conversation/Workspace binding、凭据、Host 权限/信任、产品管理 UI/命令入口、短生命周期 projection、领域事实/Job、typed domain tool contracts 和 Host adapters。Skill/MCP/Plugin 的 catalog、configuration、readiness、发现、加载、启停与执行均由 DSH profile 拥有；OpenNeko 管理面只通过 bridge 读取 inventory/readiness/config/diagnostics 和提交精确命令，不保留 extension catalog authority、自研 Skill Host、MCP Manager 或 Plugin runtime。
 
