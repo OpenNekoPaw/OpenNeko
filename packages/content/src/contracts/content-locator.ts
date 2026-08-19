@@ -5,46 +5,48 @@ export interface ContentFingerprint {
   readonly value: string;
 }
 
-export interface WorkspaceFileContentLocator {
-  readonly kind: 'workspace-file';
-  readonly path: string;
-  readonly fingerprint?: ContentFingerprint;
-}
-
-export interface DocumentEntryContentLocator {
-  readonly kind: 'document-entry';
-  readonly source: WorkspaceFileContentLocator;
-  readonly entryPath: string;
-  readonly fingerprint?: ContentFingerprint;
-}
-
-export interface GeneratedOutputContentLocator {
-  readonly kind: 'generated-output';
-  readonly outputId: string;
-  readonly digest: string;
+export interface WorkspaceContentFileLocator {
+  readonly authority: 'workspace';
   readonly path: string;
 }
 
-export interface PackageResourceContentLocator {
-  readonly kind: 'package-resource';
+export interface PackageContentFileLocator {
+  readonly authority: 'package';
   readonly packageId: string;
   readonly revision: string;
-  readonly resourcePath: string;
-  readonly digest?: string;
-  readonly manifestPath?: string;
+  readonly path: string;
 }
 
-export type ContentLocator =
-  | WorkspaceFileContentLocator
-  | DocumentEntryContentLocator
-  | GeneratedOutputContentLocator
-  | PackageResourceContentLocator;
+export type ContentFileLocator = WorkspaceContentFileLocator | PackageContentFileLocator;
+
+export interface ContentEntrySelector {
+  readonly kind: 'entry';
+  readonly path: string;
+}
+
+export type ContentSelector = ContentEntrySelector;
+
+export interface ContentLocator {
+  readonly file: ContentFileLocator;
+  readonly selector?: ContentSelector;
+}
+
+export type WorkspaceFileContentLocator = ContentLocator & {
+  readonly file: WorkspaceContentFileLocator;
+};
+
+export type PackageResourceContentLocator = ContentLocator & {
+  readonly file: PackageContentFileLocator;
+};
+
+export type DocumentEntryContentLocator = WorkspaceFileContentLocator & {
+  readonly selector: ContentEntrySelector;
+};
 
 export type ContentLocatorDiagnosticCode =
+  | 'content-locator-invalid-authority'
   | 'content-locator-invalid-entry-path'
-  | 'content-locator-invalid-fingerprint'
-  | 'content-locator-invalid-identity'
-  | 'content-locator-invalid-kind'
+  | 'content-locator-invalid-shape'
   | 'content-locator-invalid-workspace-path';
 
 export interface ContentLocatorDiagnostic {
@@ -57,103 +59,113 @@ export type ContentLocatorValidationResult =
   | { readonly ok: false; readonly diagnostics: readonly ContentLocatorDiagnostic[] };
 
 export function validateContentLocator(value: unknown): ContentLocatorValidationResult {
-  if (!isRecord(value) || typeof value['kind'] !== 'string') {
-    return invalidLocator('content-locator-invalid-kind', 'Content locator kind is invalid.');
+  if (!isRecord(value) || !hasOnlyKeys(value, CONTENT_LOCATOR_KEYS) || !isRecord(value['file'])) {
+    return invalidLocator('content-locator-invalid-shape', 'Content locator shape is invalid.');
   }
 
-  switch (value['kind']) {
-    case 'workspace-file':
-      return validateWorkspaceFileLocator(value);
-    case 'document-entry':
-      return validateDocumentEntryLocator(value);
-    case 'generated-output':
-      return validateGeneratedOutputLocator(value);
-    case 'package-resource':
-      return validatePackageResourceLocator(value);
-    default:
-      return invalidLocator('content-locator-invalid-kind', 'Content locator kind is invalid.');
-  }
+  const file = validateContentFileLocator(value['file']);
+  if (!file.ok) return file;
+  const selector = validateOptionalContentSelector(value['selector']);
+  if (!selector.ok) return selector;
+  return {
+    ok: true,
+    locator: {
+      file: file.file,
+      ...(selector.selector ? { selector: selector.selector } : {}),
+    },
+  };
 }
 
 export function isContentLocator(value: unknown): value is ContentLocator {
   return validateContentLocator(value).ok;
 }
 
+export function isWorkspaceFileContentLocator(
+  value: ContentLocator,
+): value is WorkspaceFileContentLocator {
+  return value.file.authority === 'workspace';
+}
+
+export function isPackageResourceContentLocator(
+  value: ContentLocator,
+): value is PackageResourceContentLocator {
+  return value.file.authority === 'package';
+}
+
+export function isDocumentEntryContentLocator(
+  value: ContentLocator,
+): value is DocumentEntryContentLocator {
+  return value.file.authority === 'workspace' && value.selector?.kind === 'entry';
+}
+
 export function contentLocatorsEqual(left: ContentLocator, right: ContentLocator): boolean {
-  if (left.kind !== right.kind) return false;
-  switch (left.kind) {
-    case 'workspace-file':
-      return (
-        right.kind === 'workspace-file' &&
-        left.path === right.path &&
-        fingerprintsEqual(left.fingerprint, right.fingerprint)
-      );
-    case 'document-entry':
-      return (
-        right.kind === 'document-entry' &&
-        contentLocatorsEqual(left.source, right.source) &&
-        left.entryPath === right.entryPath &&
-        fingerprintsEqual(left.fingerprint, right.fingerprint)
-      );
-    case 'generated-output':
-      return (
-        right.kind === 'generated-output' &&
-        left.outputId === right.outputId &&
-        left.digest === right.digest &&
-        left.path === right.path
-      );
-    case 'package-resource':
-      return (
-        right.kind === 'package-resource' &&
-        left.packageId === right.packageId &&
-        left.revision === right.revision &&
-        left.resourcePath === right.resourcePath &&
-        left.digest === right.digest &&
-        left.manifestPath === right.manifestPath
-      );
-  }
+  return (
+    contentFileLocatorsEqual(left.file, right.file) && selectorsEqual(left.selector, right.selector)
+  );
 }
 
 export function contentLocatorKey(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-      return JSON.stringify([
-        locator.kind,
-        locator.path,
-        locator.fingerprint?.strategy,
-        locator.fingerprint?.value,
-      ]);
-    case 'document-entry':
-      return JSON.stringify([
-        locator.kind,
-        contentLocatorKey(locator.source),
-        locator.entryPath,
-        locator.fingerprint?.strategy,
-        locator.fingerprint?.value,
-      ]);
-    case 'generated-output':
-      return JSON.stringify([locator.kind, locator.outputId, locator.digest, locator.path]);
-    case 'package-resource':
-      return JSON.stringify([
-        locator.kind,
-        locator.packageId,
-        locator.revision,
-        locator.resourcePath,
-        locator.digest,
-        locator.manifestPath,
-      ]);
+  const fileKey =
+    locator.file.authority === 'workspace'
+      ? [locator.file.authority, locator.file.path]
+      : [locator.file.authority, locator.file.packageId, locator.file.revision, locator.file.path];
+  return JSON.stringify([
+    ...fileKey,
+    locator.selector?.kind,
+    locator.selector?.kind === 'entry' ? locator.selector.path : undefined,
+  ]);
+}
+
+export function createWorkspaceFileContentLocator(path: string): WorkspaceFileContentLocator {
+  const result = validateContentLocator({ file: { authority: 'workspace', path } });
+  if (!result.ok || !isWorkspaceFileContentLocator(result.locator)) {
+    throw invalidLocatorError('Workspace content path', result);
   }
+  return result.locator;
+}
+
+export function createPackageResourceContentLocator(input: {
+  readonly packageId: string;
+  readonly revision: string;
+  readonly path: string;
+}): PackageResourceContentLocator {
+  const result = validateContentLocator({
+    file: {
+      authority: 'package',
+      packageId: input.packageId,
+      revision: input.revision,
+      path: input.path,
+    },
+  });
+  if (!result.ok || !isPackageResourceContentLocator(result.locator)) {
+    throw invalidLocatorError('Package content path', result);
+  }
+  return result.locator;
+}
+
+export function createContentEntryLocator(
+  source: WorkspaceFileContentLocator,
+  entryPath: string,
+): DocumentEntryContentLocator {
+  const result = validateContentLocator({
+    file: source.file,
+    selector: { kind: 'entry', path: entryPath },
+  });
+  if (!result.ok || !isDocumentEntryContentLocator(result.locator)) {
+    throw invalidLocatorError('Document entry path', result);
+  }
+  return result.locator;
 }
 
 export function serializeContentReferenceTarget(locator: WorkspaceFileContentLocator): string {
-  return locator.path;
+  return locator.file.path;
 }
 
 export function parseContentReferenceTarget(
   target: string,
 ): WorkspaceFileContentLocator | undefined {
-  const validation = validateContentLocator({ kind: 'workspace-file', path: target });
-  return validation.ok && validation.locator.kind === 'workspace-file'
+  const validation = validateContentLocator({ file: { authority: 'workspace', path: target } });
+  return validation.ok && isWorkspaceFileContentLocator(validation.locator)
     ? validation.locator
     : undefined;
 }
@@ -180,25 +192,37 @@ export function normalizeWorkspaceContentPath(value: string): string | undefined
   return segments.join('/');
 }
 
-/**
- * Validates a locator that will become a durable Project fact. Workspace Media
- * Library mounts are normalized workspace-relative paths, so a mounted file and
- * an ordinary workspace file share one durable WorkspaceFileContentLocator
- * identity. Mount association, validation, recovery and authorization stay in
- * the mount manager and Host path guard; content consumers do not branch on
- * Media Library ownership.
- */
 export function isProjectDurableContentLocator(value: unknown): value is ContentLocator {
   return validateContentLocator(value).ok;
 }
 
-function validateWorkspaceFileLocator(
+type ContentFileLocatorValidationResult =
+  | { readonly ok: true; readonly file: ContentFileLocator }
+  | { readonly ok: false; readonly diagnostics: readonly ContentLocatorDiagnostic[] };
+
+function validateContentFileLocator(
   value: Record<string, unknown>,
-): ContentLocatorValidationResult {
+): ContentFileLocatorValidationResult {
+  switch (value['authority']) {
+    case 'workspace':
+      return validateWorkspaceContentFileLocator(value);
+    case 'package':
+      return validatePackageContentFileLocator(value);
+    default:
+      return invalidLocator(
+        'content-locator-invalid-authority',
+        'Content file authority is invalid.',
+      );
+  }
+}
+
+function validateWorkspaceContentFileLocator(
+  value: Record<string, unknown>,
+): ContentFileLocatorValidationResult {
   if (!hasOnlyKeys(value, WORKSPACE_FILE_KEYS)) {
     return invalidLocator(
-      'content-locator-invalid-kind',
-      'Workspace file locator contains unsupported fields.',
+      'content-locator-invalid-shape',
+      'Workspace content file contains unsupported fields.',
     );
   }
   const path =
@@ -206,198 +230,106 @@ function validateWorkspaceFileLocator(
   if (!path || path !== value['path']) {
     return invalidLocator(
       'content-locator-invalid-workspace-path',
-      'Workspace file locator path must be normalized and workspace-relative.',
+      'Workspace content path must be normalized and workspace-relative.',
     );
   }
-  const fingerprint = validateOptionalFingerprint(value['fingerprint']);
-  if (!fingerprint.ok) return fingerprint;
-  return {
-    ok: true,
-    locator: {
-      kind: 'workspace-file',
-      path,
-      ...(fingerprint.fingerprint ? { fingerprint: fingerprint.fingerprint } : {}),
-    },
-  };
+  return { ok: true, file: { authority: 'workspace', path } };
 }
 
-function validateDocumentEntryLocator(
+function validatePackageContentFileLocator(
   value: Record<string, unknown>,
-): ContentLocatorValidationResult {
-  if (!hasOnlyKeys(value, DOCUMENT_ENTRY_KEYS)) {
+): ContentFileLocatorValidationResult {
+  if (!hasOnlyKeys(value, PACKAGE_FILE_KEYS)) {
     return invalidLocator(
-      'content-locator-invalid-kind',
-      'Document entry locator contains unsupported fields.',
-    );
-  }
-  const source = validateContentLocator(value['source']);
-  if (!source.ok || source.locator.kind !== 'workspace-file') {
-    return invalidLocator(
-      'content-locator-invalid-kind',
-      'Document entry source must be a Workspace File locator.',
-    );
-  }
-  if (typeof value['entryPath'] !== 'string') {
-    return invalidLocator(
-      'content-locator-invalid-entry-path',
-      'Document entry path must be a normalized archive-relative path.',
-    );
-  }
-  const entryPath = normalizeBundleEntryPath(value['entryPath']);
-  if (!entryPath.ok || entryPath.entryPath !== value['entryPath']) {
-    return invalidLocator(
-      'content-locator-invalid-entry-path',
-      'Document entry path must be a normalized archive-relative path.',
-    );
-  }
-  const fingerprint = validateOptionalFingerprint(value['fingerprint']);
-  if (!fingerprint.ok) return fingerprint;
-  return {
-    ok: true,
-    locator: {
-      kind: 'document-entry',
-      source: source.locator,
-      entryPath: entryPath.entryPath,
-      ...(fingerprint.fingerprint ? { fingerprint: fingerprint.fingerprint } : {}),
-    },
-  };
-}
-
-function validateGeneratedOutputLocator(
-  value: Record<string, unknown>,
-): ContentLocatorValidationResult {
-  if (!hasOnlyKeys(value, GENERATED_OUTPUT_KEYS)) {
-    return invalidLocator(
-      'content-locator-invalid-kind',
-      'Generated output locator contains unsupported fields.',
-    );
-  }
-  const path =
-    typeof value['path'] === 'string' ? normalizeWorkspaceContentPath(value['path']) : undefined;
-  if (
-    !isStableOwnerIdentity(value['outputId']) ||
-    !isDigest(value['digest']) ||
-    !path ||
-    path !== value['path']
-  ) {
-    return invalidLocator(
-      'content-locator-invalid-identity',
-      'Generated output locator requires stable identity, digest, and workspace path.',
-    );
-  }
-  return {
-    ok: true,
-    locator: {
-      kind: 'generated-output',
-      outputId: value['outputId'],
-      digest: value['digest'],
-      path,
-    },
-  };
-}
-
-function validatePackageResourceLocator(
-  value: Record<string, unknown>,
-): ContentLocatorValidationResult {
-  if (!hasOnlyKeys(value, PACKAGE_RESOURCE_KEYS)) {
-    return invalidLocator(
-      'content-locator-invalid-kind',
-      'Package resource locator contains unsupported fields.',
+      'content-locator-invalid-shape',
+      'Package content file contains unsupported fields.',
     );
   }
   if (
     !isStableOwnerIdentity(value['packageId']) ||
     !isStableOwnerIdentity(value['revision']) ||
-    typeof value['resourcePath'] !== 'string'
+    typeof value['path'] !== 'string'
   ) {
     return invalidLocator(
-      'content-locator-invalid-identity',
-      'Package resource locator requires package identity, revision, and resource path.',
+      'content-locator-invalid-authority',
+      'Package content file requires exact package identity and revision.',
     );
   }
-  const resourcePath = normalizeBundleEntryPath(value['resourcePath']);
-  if (!resourcePath.ok || resourcePath.entryPath !== value['resourcePath']) {
+  const path = normalizeBundleEntryPath(value['path']);
+  if (!path.ok || path.entryPath !== value['path']) {
     return invalidLocator(
       'content-locator-invalid-entry-path',
-      'Package resource path must be normalized and package-relative.',
-    );
-  }
-  if (value['digest'] !== undefined && !isDigest(value['digest'])) {
-    return invalidLocator(
-      'content-locator-invalid-identity',
-      'Package resource digest is invalid.',
-    );
-  }
-  const manifestPath =
-    typeof value['manifestPath'] === 'string'
-      ? normalizeWorkspaceContentPath(value['manifestPath'])
-      : undefined;
-  if (
-    value['manifestPath'] !== undefined &&
-    (!manifestPath || manifestPath !== value['manifestPath'])
-  ) {
-    return invalidLocator(
-      'content-locator-invalid-workspace-path',
-      'Package manifest path must be normalized and workspace-relative.',
+      'Package content path must be normalized and package-relative.',
     );
   }
   return {
     ok: true,
-    locator: {
-      kind: 'package-resource',
+    file: {
+      authority: 'package',
       packageId: value['packageId'],
       revision: value['revision'],
-      resourcePath: resourcePath.entryPath,
-      ...(value['digest'] ? { digest: value['digest'] } : {}),
-      ...(manifestPath ? { manifestPath } : {}),
+      path: path.entryPath,
     },
   };
 }
 
-type FingerprintValidationResult =
-  | { readonly ok: true; readonly fingerprint?: ContentFingerprint }
+type ContentSelectorValidationResult =
+  | { readonly ok: true; readonly selector?: ContentSelector }
   | { readonly ok: false; readonly diagnostics: readonly ContentLocatorDiagnostic[] };
 
-function validateOptionalFingerprint(value: unknown): FingerprintValidationResult {
+function validateOptionalContentSelector(value: unknown): ContentSelectorValidationResult {
   if (value === undefined) return { ok: true };
-  if (
-    !isRecord(value) ||
-    !hasOnlyKeys(value, FINGERPRINT_KEYS) ||
-    (value['strategy'] !== 'sha256' &&
-      value['strategy'] !== 'mtime-size' &&
-      value['strategy'] !== 'provider') ||
-    !isNonEmptyString(value['value'])
-  ) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ENTRY_SELECTOR_KEYS) || value['kind'] !== 'entry') {
+    return invalidLocator('content-locator-invalid-shape', 'Content selector is invalid.');
+  }
+  if (typeof value['path'] !== 'string') {
     return invalidLocator(
-      'content-locator-invalid-fingerprint',
-      'Content locator fingerprint is invalid.',
+      'content-locator-invalid-entry-path',
+      'Content entry path must be normalized and file-relative.',
     );
   }
-  return {
-    ok: true,
-    fingerprint: { strategy: value['strategy'], value: value['value'] },
-  };
+  const path = normalizeBundleEntryPath(value['path']);
+  if (!path.ok || path.entryPath !== value['path']) {
+    return invalidLocator(
+      'content-locator-invalid-entry-path',
+      'Content entry path must be normalized and file-relative.',
+    );
+  }
+  return { ok: true, selector: { kind: 'entry', path: path.entryPath } };
 }
 
-function fingerprintsEqual(
-  left: ContentFingerprint | undefined,
-  right: ContentFingerprint | undefined,
+function contentFileLocatorsEqual(left: ContentFileLocator, right: ContentFileLocator): boolean {
+  if (left.authority !== right.authority) return false;
+  if (left.authority === 'workspace') {
+    return right.authority === 'workspace' && left.path === right.path;
+  }
+  return (
+    right.authority === 'package' &&
+    left.packageId === right.packageId &&
+    left.revision === right.revision &&
+    left.path === right.path
+  );
+}
+
+function selectorsEqual(
+  left: ContentSelector | undefined,
+  right: ContentSelector | undefined,
 ): boolean {
-  return left?.strategy === right?.strategy && left?.value === right?.value;
+  if (left === undefined || right === undefined) return left === right;
+  return left.kind === right.kind && left.path === right.path;
 }
 
-const WORKSPACE_FILE_KEYS = ['kind', 'path', 'fingerprint'] as const;
-const DOCUMENT_ENTRY_KEYS = ['kind', 'source', 'entryPath', 'fingerprint'] as const;
-const GENERATED_OUTPUT_KEYS = ['kind', 'outputId', 'digest', 'path'] as const;
-const PACKAGE_RESOURCE_KEYS = [
-  'kind',
-  'packageId',
-  'revision',
-  'resourcePath',
-  'digest',
-  'manifestPath',
-] as const;
-const FINGERPRINT_KEYS = ['strategy', 'value'] as const;
+function invalidLocatorError(label: string, result: ContentLocatorValidationResult): Error {
+  const detail = result.ok
+    ? 'Content locator has the wrong authority or selector.'
+    : result.diagnostics.map((entry) => entry.message).join('; ');
+  return new Error(`${label} is invalid: ${detail}`);
+}
+
+const CONTENT_LOCATOR_KEYS = ['file', 'selector'] as const;
+const WORKSPACE_FILE_KEYS = ['authority', 'path'] as const;
+const PACKAGE_FILE_KEYS = ['authority', 'packageId', 'revision', 'path'] as const;
+const ENTRY_SELECTOR_KEYS = ['kind', 'path'] as const;
 
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
   return Object.keys(value).every((key) => allowed.includes(key));
@@ -416,10 +348,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
-}
-
-function isDigest(value: unknown): value is string {
-  return isNonEmptyString(value) && /^[A-Za-z0-9][A-Za-z0-9:+._-]*$/.test(value);
 }
 
 function isStableOwnerIdentity(value: unknown): value is string {

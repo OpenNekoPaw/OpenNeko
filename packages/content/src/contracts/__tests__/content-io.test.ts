@@ -14,10 +14,9 @@ import {
 import { isHostProjectedRuntimeValue } from '../content-access';
 
 const locator = {
-  kind: 'workspace-file' as const,
-  path: 'documents/Books/comic.epub',
-  fingerprint: { strategy: 'sha256' as const, value: 'sha256:comic-content' },
+  file: { authority: 'workspace' as const, path: 'documents/Books/comic.epub' },
 };
+const fingerprint = { strategy: 'sha256' as const, value: 'sha256:comic-content' };
 
 describe('content I/O contracts', () => {
   it('classifies the current Host-projected resource URI', () => {
@@ -60,7 +59,7 @@ describe('content I/O contracts', () => {
       handle: 'processor-content-handle',
     };
     expect([webview.kind, engine.kind, processor.kind]).toEqual(['webview', 'engine', 'processor']);
-    expect(isContentProjectionOptions({ expectedFingerprint: locator.fingerprint })).toBe(true);
+    expect(isContentProjectionOptions({ expectedFingerprint: fingerprint })).toBe(true);
     expect(isContentProjectionOptions({ target: 'local-path' })).toBe(false);
   });
 
@@ -69,7 +68,7 @@ describe('content I/O contracts', () => {
       isAuthorizedWorkspaceWriteOptions({
         conflict: 'replace',
         maxBytes: 1024,
-        expectedFingerprint: locator.fingerprint,
+        expectedFingerprint: fingerprint,
       }),
     ).toBe(true);
     expect(
@@ -96,7 +95,7 @@ const compileTimeBytes: ContentBytes = {
   locator,
   bytes: new Uint8Array(),
   offset: 0,
-  fingerprint: locator.fingerprint,
+  fingerprint,
   // @ts-expect-error Public read results cannot expose Host physical paths.
   localPath: '/Users/private/source.bin',
 };

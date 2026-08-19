@@ -51,13 +51,13 @@ export class NodeAuthorizedWorkspaceWriter implements AuthorizedWorkspaceWriter 
       );
     }
     if (options.signal?.aborted) return unavailable(locator, 'content-cancelled');
-    if (normalizeWorkspaceContentPath(locator.path) !== locator.path) {
+    if (normalizeWorkspaceContentPath(locator.file.path) !== locator.file.path) {
       return unavailable(locator, 'content-unauthorized');
     }
     const maxBytes = options.maxBytes ?? this.defaultMaxBytes;
     if (bytes.byteLength > maxBytes) return unavailable(locator, 'content-too-large');
 
-    const targetPath = path.join(this.options.workspaceRoot, ...locator.path.split('/'));
+    const targetPath = path.join(this.options.workspaceRoot, ...locator.file.path.split('/'));
     const parentAuthorization = await this.authorizeParent(targetPath);
     if (!parentAuthorization.authorized) {
       return unavailable(locator, guardDiagnosticCode(parentAuthorization.diagnostic.code));

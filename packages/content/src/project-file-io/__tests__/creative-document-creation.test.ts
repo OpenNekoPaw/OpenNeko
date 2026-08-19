@@ -27,7 +27,7 @@ describe('CreativeDocumentCreationService', () => {
     expect(canvas.createBytes).toHaveBeenCalledWith('Storyboard');
     expect(cut.createBytes).not.toHaveBeenCalled();
     expect(writer.write).toHaveBeenCalledWith(
-      { kind: 'workspace-file', path: 'boards/Storyboard.nkc' },
+      { file: { authority: 'workspace', path: 'boards/Storyboard.nkc' } },
       new TextEncoder().encode('{"canvas":true}'),
       { conflict: 'fail-if-exists' },
     );

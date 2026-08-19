@@ -18,7 +18,7 @@ describe('node document raster representation generator', () => {
     const contentRead = {
       read: vi.fn(async () => ({
         status: 'ready' as const,
-        locator: { kind: 'workspace-file' as const, path: 'docs/story.pdf' },
+        locator: { file: { authority: 'workspace' as const, path: 'docs/story.pdf' } },
         bytes: new Uint8Array([37, 80, 68, 70]),
         offset: 0,
         totalByteLength: 4,
@@ -37,13 +37,17 @@ describe('node document raster representation generator', () => {
     });
 
     const result = await generator.generate({
-      source: { kind: 'workspace-file', path: 'docs/story.pdf' },
+      source: { file: { authority: 'workspace', path: 'docs/story.pdf' } },
       spec: { kind: 'raster-page', page: 2, scale: 1.5, format: 'png' },
+      expectedSourceFingerprint: { strategy: 'sha256', value: 'sha256:story' },
     });
 
     expect(contentRead.read).toHaveBeenCalledWith(
-      { kind: 'workspace-file', path: 'docs/story.pdf' },
-      { maxBytes: 512 * 1024 * 1024 },
+      { file: { authority: 'workspace', path: 'docs/story.pdf' } },
+      {
+        maxBytes: 512 * 1024 * 1024,
+        expectedFingerprint: { strategy: 'sha256', value: 'sha256:story' },
+      },
     );
     expect(getScreenshot).toHaveBeenCalledWith({
       partial: [2],
@@ -90,10 +94,28 @@ describe('node document raster representation generator', () => {
     });
 
     await generator.generate({
-      source: { kind: 'workspace-file', path: 'docs/story.docx' },
+      source: { file: { authority: 'workspace', path: 'docs/story.docx' } },
       spec: { kind: 'raster-page', page: 1, format: 'png' },
     });
 
     expect(convertToPdf).toHaveBeenCalledWith({ sourcePath: '/workspace/docs/story.docx' });
+  });
+
+  it('fails visibly instead of claiming an unenforceable Office fingerprint precondition', async () => {
+    const convertToPdf = vi.fn();
+    const generator = createNodeDocumentRasterRepresentationGenerator({
+      workspaceRoot: '/workspace',
+      contentRead: { read: vi.fn() } as unknown as ContentReadService,
+      officeRasterizer: { convertToPdf },
+    });
+
+    await expect(
+      generator.generate({
+        source: { file: { authority: 'workspace', path: 'docs/story.docx' } },
+        spec: { kind: 'raster-page', page: 1, format: 'png' },
+        expectedSourceFingerprint: { strategy: 'sha256', value: 'sha256:story' },
+      }),
+    ).rejects.toThrow('cannot guarantee an expected source fingerprint');
+    expect(convertToPdf).not.toHaveBeenCalled();
   });
 });

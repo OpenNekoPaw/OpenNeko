@@ -1,4 +1,4 @@
-import { isContentLocator, type ContentLocator } from './content-locator';
+import type { ContentFingerprint, ContentLocator } from './content-locator';
 
 export const CONTENT_REPRESENTATION_KINDS = [
   'thumbnail',
@@ -60,19 +60,13 @@ export type ContentRepresentationSpec =
 export interface ContentRepresentationRequest {
   readonly source: ContentLocator;
   readonly spec: ContentRepresentationSpec;
-  readonly expectedSourceFingerprint?: string;
+  readonly expectedSourceFingerprint?: ContentFingerprint;
   readonly signal?: AbortSignal;
 }
 
-export interface ContentRepresentationLocator {
-  readonly kind: 'content-representation';
+export interface ContentRepresentationHandle {
+  readonly kind: 'content-representation-handle';
   readonly id: string;
-  readonly representationKind: ContentRepresentationKind;
-  readonly source: ContentLocator;
-  readonly spec: ContentRepresentationSpec;
-  readonly generatorId: string;
-  readonly sourceFingerprint: string;
-  readonly specFingerprint: string;
 }
 
 export interface ContentRepresentationMetadata {
@@ -103,7 +97,7 @@ export interface ContentRepresentationDiagnostic {
 export type ContentRepresentationResult =
   | {
       readonly status: 'ready';
-      readonly locator: ContentRepresentationLocator;
+      readonly handle: ContentRepresentationHandle;
       readonly metadata: ContentRepresentationMetadata;
     }
   | {
@@ -125,7 +119,7 @@ export interface ContentRepresentationReadOptions {
 export type ContentRepresentationBytes =
   | {
       readonly status: 'ready';
-      readonly locator: ContentRepresentationLocator;
+      readonly handle: ContentRepresentationHandle;
       readonly bytes: Uint8Array;
       readonly offset: number;
       readonly totalByteLength: number;
@@ -133,21 +127,23 @@ export type ContentRepresentationBytes =
     }
   | {
       readonly status: 'unavailable';
-      readonly locator: ContentRepresentationLocator;
+      readonly handle: ContentRepresentationHandle;
       readonly diagnostic: ContentRepresentationDiagnostic;
     };
 
 export interface ContentRepresentationService {
   getRepresentation(request: ContentRepresentationRequest): Promise<ContentRepresentationResult>;
   readRepresentation(
-    locator: ContentRepresentationLocator,
+    handle: ContentRepresentationHandle,
     options?: ContentRepresentationReadOptions,
   ): Promise<ContentRepresentationBytes>;
+  releaseRepresentation(handle: ContentRepresentationHandle): void;
 }
 
 export interface ContentRepresentationGeneratorInput {
   readonly source: ContentLocator;
   readonly spec: ContentRepresentationSpec;
+  readonly expectedSourceFingerprint?: ContentFingerprint;
   readonly signal?: AbortSignal;
 }
 
@@ -164,29 +160,14 @@ export interface ContentRepresentationGenerator {
   ): Promise<ContentRepresentationGeneratorResult>;
 }
 
-export function isContentRepresentationLocator(
+export function isContentRepresentationHandle(
   value: unknown,
-): value is ContentRepresentationLocator {
-  if (
-    !isRecord(value) ||
-    value['kind'] !== 'content-representation' ||
-    !hasOnlyKeys(value, CONTENT_REPRESENTATION_LOCATOR_KEYS)
-  ) {
-    return false;
-  }
-  if (
-    typeof value['id'] !== 'string' ||
-    typeof value['generatorId'] !== 'string' ||
-    typeof value['sourceFingerprint'] !== 'string' ||
-    typeof value['specFingerprint'] !== 'string' ||
-    !isContentLocator(value['source']) ||
-    !isContentRepresentationSpec(value['spec'])
-  ) {
-    return false;
-  }
+): value is ContentRepresentationHandle {
   return (
-    value['representationKind'] === value['spec'].kind &&
-    new Set<unknown>(CONTENT_REPRESENTATION_KINDS).has(value['representationKind'])
+    isRecord(value) &&
+    hasOnlyKeys(value, CONTENT_REPRESENTATION_HANDLE_KEYS) &&
+    value['kind'] === 'content-representation-handle' &&
+    isNonEmptyString(value['id'])
   );
 }
 
@@ -314,13 +295,4 @@ function isOptionalImageFormat(value: unknown): boolean {
   return value === undefined || value === 'png' || value === 'jpeg' || value === 'webp';
 }
 
-const CONTENT_REPRESENTATION_LOCATOR_KEYS = [
-  'kind',
-  'id',
-  'representationKind',
-  'source',
-  'spec',
-  'generatorId',
-  'sourceFingerprint',
-  'specFingerprint',
-] as const;
+const CONTENT_REPRESENTATION_HANDLE_KEYS = ['kind', 'id'] as const;

@@ -61,7 +61,9 @@ export class NodeWorkspaceContentReadHandler implements ContentReadHandler<Works
         byteLength: stats.size,
         fingerprint,
         modifiedAt: new Date(stats.mtimeMs).toISOString(),
-        ...(mimeTypeForPath(locator.path) ? { mimeType: mimeTypeForPath(locator.path) } : {}),
+        ...(mimeTypeForPath(locator.file.path)
+          ? { mimeType: mimeTypeForPath(locator.file.path) }
+          : {}),
       };
     } catch (error) {
       return fileSystemDiagnosticOrThrow(locator, error);
@@ -104,7 +106,9 @@ export class NodeWorkspaceContentReadHandler implements ContentReadHandler<Works
         offset: range.offset,
         totalByteLength: stats.size,
         fingerprint,
-        ...(mimeTypeForPath(locator.path) ? { mimeType: mimeTypeForPath(locator.path) } : {}),
+        ...(mimeTypeForPath(locator.file.path)
+          ? { mimeType: mimeTypeForPath(locator.file.path) }
+          : {}),
       };
     } catch (error) {
       return fileSystemDiagnosticOrThrow(locator, error);
@@ -119,7 +123,7 @@ export class NodeWorkspaceContentReadHandler implements ContentReadHandler<Works
     | { readonly ok: true; readonly filePath: string }
     | { readonly ok: false; readonly code: ContentIoDiagnosticCode }
   > {
-    const requestedPath = path.join(this.options.workspaceRoot, ...locator.path.split('/'));
+    const requestedPath = path.join(this.options.workspaceRoot, ...locator.file.path.split('/'));
     const result = await (this.options.authorize ?? authorizeWorkspaceContainedPath)({
       workspaceRoot: this.options.workspaceRoot,
       requestedPath,
@@ -197,10 +201,10 @@ async function readRange(
 }
 
 function requestedFingerprint(
-  locator: WorkspaceFileContentLocator,
+  _locator: WorkspaceFileContentLocator,
   options: ContentReadOptions,
 ): ContentFingerprint | undefined {
-  return options.expectedFingerprint ?? locator.fingerprint;
+  return options.expectedFingerprint;
 }
 
 function guardDiagnosticCode(

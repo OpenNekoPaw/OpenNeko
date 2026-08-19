@@ -12,10 +12,12 @@ import {
 } from '../contracts';
 import {
   contentLocatorsEqual,
+  isDocumentEntryContentLocator,
+  isPackageResourceContentLocator,
+  isWorkspaceFileContentLocator,
   type ContentFingerprint,
   type ContentLocator,
   type DocumentEntryContentLocator,
-  type GeneratedOutputContentLocator,
   type PackageResourceContentLocator,
   type WorkspaceFileContentLocator,
 } from '../contracts';
@@ -28,7 +30,6 @@ export interface ContentReadHandler<TLocator extends ContentLocator> {
 export interface ContentReadHandlers {
   readonly workspaceFile: ContentReadHandler<WorkspaceFileContentLocator>;
   readonly documentEntry: ContentReadHandler<DocumentEntryContentLocator>;
-  readonly generatedOutput: ContentReadHandler<GeneratedOutputContentLocator>;
   readonly packageResource: ContentReadHandler<PackageResourceContentLocator>;
 }
 
@@ -46,8 +47,7 @@ export class ExplicitContentReadService implements ContentReadService {
     const result = await this.dispatchStat(locator, options);
     assertHandlerResult(locator, result, isContentStat);
     if (options.signal?.aborted) return unavailable(locator, 'content-cancelled');
-    return result.status === 'ready' &&
-      !fingerprintPreconditionMatches(locator, result.fingerprint, options)
+    return result.status === 'ready' && !fingerprintPreconditionMatches(result.fingerprint, options)
       ? unavailable(locator, 'content-changed')
       : result;
   }
@@ -76,48 +76,46 @@ export class ExplicitContentReadService implements ContentReadService {
         );
       }
     }
-    return result.status === 'ready' &&
-      !fingerprintPreconditionMatches(locator, result.fingerprint, options)
+    return result.status === 'ready' && !fingerprintPreconditionMatches(result.fingerprint, options)
       ? unavailable(locator, 'content-changed')
       : result;
   }
 
   private dispatchStat(locator: ContentLocator, options: ContentReadOptions): Promise<ContentStat> {
-    switch (locator.kind) {
-      case 'workspace-file':
-        return this.handlers.workspaceFile.stat(locator, options);
-      case 'document-entry':
-        return this.handlers.documentEntry.stat(locator, options);
-      case 'generated-output':
-        return this.handlers.generatedOutput.stat(locator, options);
-      case 'package-resource':
-        return this.handlers.packageResource.stat(locator, options);
+    if (isPackageResourceContentLocator(locator)) {
+      return this.handlers.packageResource.stat(locator, options);
     }
+    if (isDocumentEntryContentLocator(locator)) {
+      return this.handlers.documentEntry.stat(locator, options);
+    }
+    if (isWorkspaceFileContentLocator(locator)) {
+      return this.handlers.workspaceFile.stat(locator, options);
+    }
+    throw invalidHandlerResult('Content locator does not resolve to one read handler.');
   }
 
   private dispatchRead(
     locator: ContentLocator,
     options: ContentReadOptions,
   ): Promise<ContentBytes> {
-    switch (locator.kind) {
-      case 'workspace-file':
-        return this.handlers.workspaceFile.read(locator, options);
-      case 'document-entry':
-        return this.handlers.documentEntry.read(locator, options);
-      case 'generated-output':
-        return this.handlers.generatedOutput.read(locator, options);
-      case 'package-resource':
-        return this.handlers.packageResource.read(locator, options);
+    if (isPackageResourceContentLocator(locator)) {
+      return this.handlers.packageResource.read(locator, options);
     }
+    if (isDocumentEntryContentLocator(locator)) {
+      return this.handlers.documentEntry.read(locator, options);
+    }
+    if (isWorkspaceFileContentLocator(locator)) {
+      return this.handlers.workspaceFile.read(locator, options);
+    }
+    throw invalidHandlerResult('Content locator does not resolve to one read handler.');
   }
 }
 
 function fingerprintPreconditionMatches(
-  locator: ContentLocator,
   actual: ContentFingerprint,
   options: ContentReadOptions,
 ): boolean {
-  const expected = options.expectedFingerprint ?? locatorFingerprintPrecondition(locator);
+  const expected = options.expectedFingerprint;
   return expected === undefined || fingerprintsEqual(expected, actual);
 }
 
@@ -128,19 +126,6 @@ function assertHandlerResult<T extends ContentStat | ContentBytes>(
 ): asserts result is T {
   if (!guard(result) || !contentLocatorsEqual(locator, result.locator)) {
     throw invalidHandlerResult('Content read handler returned an invalid result.');
-  }
-}
-
-function locatorFingerprintPrecondition(locator: ContentLocator): ContentFingerprint | undefined {
-  switch (locator.kind) {
-    case 'workspace-file':
-      return locator.fingerprint;
-    case 'document-entry':
-      return locator.fingerprint;
-    case 'generated-output':
-      return { strategy: 'sha256', value: locator.digest };
-    case 'package-resource':
-      return locator.digest ? { strategy: 'sha256', value: locator.digest } : undefined;
   }
 }
 

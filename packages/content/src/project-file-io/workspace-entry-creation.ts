@@ -92,19 +92,18 @@ export class WorkspaceEntryCreationService {
       };
     }
     const locator: WorkspaceFileContentLocator = {
-      kind: 'workspace-file',
-      path: entryPath,
+      file: { authority: 'workspace', path: entryPath },
     };
     const result = await this.options.writer.write(locator, new Uint8Array(), {
       conflict: 'fail-if-exists',
       maxBytes: 1,
     });
     return result.status === 'written'
-      ? { status: 'created', kind: request.kind, path: result.locator.path }
+      ? { status: 'created', kind: request.kind, path: result.locator.file.path }
       : {
           status: 'unavailable',
           kind: request.kind,
-          path: result.locator.path,
+          path: result.locator.file.path,
           diagnostic: result.diagnostic,
         };
   }

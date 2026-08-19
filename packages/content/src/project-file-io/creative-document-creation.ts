@@ -64,16 +64,18 @@ export class CreativeDocumentCreationService {
     if (!owner.validateBytes(bytes)) {
       throw new Error(`${request.kind} document owner produced invalid bytes.`);
     }
-    const locator: WorkspaceFileContentLocator = { kind: 'workspace-file', path: entryPath };
+    const locator: WorkspaceFileContentLocator = {
+      file: { authority: 'workspace', path: entryPath },
+    };
     const result = await this.options.writer.write(locator, bytes, {
       conflict: 'fail-if-exists',
     });
     return result.status === 'written'
-      ? { status: 'created', kind: request.kind, path: result.locator.path }
+      ? { status: 'created', kind: request.kind, path: result.locator.file.path }
       : {
           status: 'unavailable',
           kind: request.kind,
-          path: result.locator.path,
+          path: result.locator.file.path,
           diagnostic: result.diagnostic,
         };
   }

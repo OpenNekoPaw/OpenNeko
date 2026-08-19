@@ -78,7 +78,7 @@ export const RUNTIME_REF_KINDS: readonly ContentRuntimeRefKind[] = [
 ] as const;
 
 export function isRuntimeOnlyContentRef(ref: ContentSourceRef): ref is ContentRuntimeRef {
-  return ref.kind === 'runtime';
+  return 'kind' in ref && ref.kind === 'runtime';
 }
 
 export function isCacheOrRuntimeOnlyContentRef(ref: ContentSourceRef): boolean {

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   contentLocatorKey,
   contentLocatorsEqual,
+  createContentEntryLocator,
+  createWorkspaceFileContentLocator,
   isProjectDurableContentLocator,
   normalizeWorkspaceContentPath,
   parseContentReferenceTarget,
@@ -11,144 +13,64 @@ import {
 } from '../content-locator';
 
 describe('content locator contracts', () => {
-  it('rejects the retired Media Library content locator kind', () => {
-    expect(
-      validateContentLocator({
-        kind: 'media-library',
-        libraryName: 'Characters',
-        relativePath: 'portraits/alice.png',
-      }).ok,
-    ).toBe(false);
+  it('addresses a Workspace file with one file authority and no owner lifecycle', () => {
+    const locator = {
+      file: { authority: 'workspace', path: 'neko/assets/Characters/portraits/alice.png' },
+    } as const;
+    expect(validateContentLocator(locator)).toEqual({ ok: true, locator });
+    expect(isProjectDurableContentLocator(locator)).toBe(true);
   });
 
-  it('accepts a mounted Media Library file as one durable workspace-relative identity', () => {
-    expect(
-      validateContentLocator({
-        kind: 'workspace-file',
-        path: 'neko/assets/Characters/portraits/alice.png',
-      }),
-    ).toEqual({
-      ok: true,
-      locator: {
-        kind: 'workspace-file',
-        path: 'neko/assets/Characters/portraits/alice.png',
-      },
+  it('addresses a file-internal entry with one selector', () => {
+    const source = createWorkspaceFileContentLocator('books/story.epub');
+    const locator = createContentEntryLocator(source, 'images/cover.png');
+    expect(locator).toEqual({
+      file: { authority: 'workspace', path: 'books/story.epub' },
+      selector: { kind: 'entry', path: 'images/cover.png' },
     });
-    expect(
-      isProjectDurableContentLocator({
-        kind: 'workspace-file',
-        path: 'neko/assets/Characters/portraits/alice.png',
-      }),
-    ).toBe(true);
-    expect(
-      isProjectDurableContentLocator({
-        kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'neko/assets/Books/story.epub' },
-        entryPath: 'cover.png',
-      }),
-    ).toBe(true);
+    expect(isProjectDurableContentLocator(locator)).toBe(true);
   });
 
-  it('accepts document, generated output, and package resource locators', () => {
-    const values = [
-      {
-        kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'books/comic.epub' },
-        entryPath: 'OPS/images/page-1.jpg',
-      },
-      {
-        kind: 'generated-output',
-        outputId: 'output-1',
-        digest: 'sha256:generated-content',
-        path: 'neko/generated/image/output-1.png',
-      },
-      {
-        kind: 'package-resource',
+  it('addresses an exact package file without manifest or digest metadata', () => {
+    const locator = {
+      file: {
+        authority: 'package',
         packageId: 'live2d-alice',
         revision: 'release-one',
-        resourcePath: 'textures/texture_00.png',
-        manifestPath: 'neko/packages/live2d-alice/manifest.json',
+        path: 'textures/texture_00.png',
       },
-    ];
-
-    expect(values.map(validateContentLocator)).toEqual(
-      values.map((locator) => ({ ok: true, locator })),
-    );
+    } as const;
+    expect(validateContentLocator(locator)).toEqual({ ok: true, locator });
   });
 
-  it('compares canonical locators without depending on object property order', () => {
+  it('compares only file authority, path and selector', () => {
     const first = {
-      kind: 'workspace-file' as const,
-      path: 'neko/assets/Characters/portraits/alice.png',
-      fingerprint: { strategy: 'sha256' as const, value: 'alice-content' },
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'images/cover.png' },
     };
     const reordered = {
-      fingerprint: { value: 'alice-content', strategy: 'sha256' as const },
-      path: 'neko/assets/Characters/portraits/alice.png',
-      kind: 'workspace-file' as const,
+      selector: { path: 'images/cover.png', kind: 'entry' as const },
+      file: { path: 'books/story.epub', authority: 'workspace' as const },
     };
     expect(contentLocatorsEqual(first, reordered)).toBe(true);
     expect(contentLocatorKey(first)).toBe(contentLocatorKey(reordered));
     expect(
       contentLocatorsEqual(first, {
         ...reordered,
-        path: 'neko/assets/Characters/portraits/alice-edited.png',
+        selector: { kind: 'entry', path: 'images/page-1.png' },
       }),
     ).toBe(false);
   });
 
-  it('round-trips portable workspace content-reference targets', () => {
-    expect(parseContentReferenceTarget('neko/assets/Characters/portrait.png')).toEqual({
-      kind: 'workspace-file',
-      path: 'neko/assets/Characters/portrait.png',
-    });
-    expect(
-      parseContentReferenceTarget(
-        serializeContentReferenceTarget({
-          kind: 'workspace-file',
-          path: 'neko/assets/Characters/portrait.png',
-        }),
-      ),
-    ).toEqual({
-      kind: 'workspace-file',
-      path: 'neko/assets/Characters/portrait.png',
-    });
-    expect(parseContentReferenceTarget('notes/story.md')).toEqual({
-      kind: 'workspace-file',
-      path: 'notes/story.md',
-    });
+  it('round-trips portable Workspace content-reference targets', () => {
+    const locator = createWorkspaceFileContentLocator('notes/story.md');
+    expect(parseContentReferenceTarget(serializeContentReferenceTarget(locator))).toEqual(locator);
     expect(parseContentReferenceTarget('media-library:Characters')).toBeUndefined();
     expect(parseContentReferenceTarget('../private.png')).toBeUndefined();
     expect(parseContentReferenceTarget('/Users/private.png')).toBeUndefined();
   });
 
-  it('rejects local, legacy, absolute, provider, connection, cache, and runtime values', () => {
-    const invalidPaths = [
-      '.neko/binding.json',
-      'folder/.neko/binding.json',
-      '/Users/private/image.png',
-      'C:/private/image.png',
-      '../private.png',
-      'cache:entry',
-      '${MEDIA}/image.png',
-    ];
-    for (const path of invalidPaths) {
-      expect(validateContentLocator({ kind: 'workspace-file', path }).ok, path).toBe(false);
-    }
-
-    for (const forbiddenField of ['connectionId', 'provider', 'cachePath', 'runtimeUrl']) {
-      expect(
-        validateContentLocator({
-          kind: 'workspace-file',
-          path: 'portraits/alice.png',
-          [forbiddenField]: 'private',
-        }).ok,
-        forbiddenField,
-      ).toBe(false);
-    }
-  });
-
-  it('rejects absolute, URI, variable, traversal, and cache/runtime paths', () => {
+  it('rejects absolute, URI, variable, traversal and hidden runtime paths', () => {
     const paths = [
       '/Users/private/image.png',
       'C:/private/image.png',
@@ -157,48 +79,66 @@ describe('content locator contracts', () => {
       '${MEDIA}/image.png',
       'neko/assets/../private.png',
       '.runtime/resources/image.png',
-      'neko-media://panel/image.png',
     ];
-
     for (const path of paths) {
-      const result = validateContentLocator({ kind: 'workspace-file', path });
-      expect(result.ok, path).toBe(false);
+      expect(validateContentLocator({ file: { authority: 'workspace', path } }).ok, path).toBe(
+        false,
+      );
     }
   });
 
-  it('normalizes separators but requires persisted locators to already be canonical', () => {
+  it('normalizes separators but requires persisted paths to already be canonical', () => {
     expect(normalizeWorkspaceContentPath('books\\comic.epub')).toBe('books/comic.epub');
-    expect(validateContentLocator({ kind: 'workspace-file', path: 'books\\comic.epub' }).ok).toBe(
-      false,
-    );
+    expect(
+      validateContentLocator({ file: { authority: 'workspace', path: 'books\\comic.epub' } }).ok,
+    ).toBe(false);
   });
 
-  it('rejects unsafe archive and package entry paths', () => {
+  it('rejects unsafe entry and package member paths', () => {
     expect(
       validateContentLocator({
-        kind: 'document-entry',
-        source: {
-          kind: 'document-entry',
-          source: { kind: 'workspace-file', path: 'books/comic.epub' },
-          entryPath: 'nested.cbz',
+        file: { authority: 'workspace', path: 'books/comic.epub' },
+        selector: { kind: 'entry', path: '../outside.jpg' },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateContentLocator({
+        file: {
+          authority: 'package',
+          packageId: 'pkg',
+          revision: 'release-one',
+          path: '/absolute.bin',
         },
-        entryPath: 'outside.jpg',
       }).ok,
     ).toBe(false);
-    expect(
-      validateContentLocator({
+  });
+
+  it('poisons replaced lifecycle, freshness and representation locator shapes', () => {
+    const replaced = [
+      { kind: 'workspace-file', path: 'notes/story.md' },
+      {
+        file: { authority: 'workspace', path: 'notes/story.md' },
+        fingerprint: { strategy: 'sha256', value: 'content' },
+      },
+      {
+        kind: 'generated-output',
+        outputId: 'output-1',
+        digest: 'sha256:content',
+        path: 'neko/generated/image/output-1.png',
+      },
+      {
         kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'books/comic.epub' },
-        entryPath: '../outside.jpg',
-      }).ok,
-    ).toBe(false);
-    expect(
-      validateContentLocator({
-        kind: 'package-resource',
-        packageId: 'pkg',
-        revision: 'release-one',
-        resourcePath: '/absolute.bin',
-      }).ok,
-    ).toBe(false);
+        source: { kind: 'workspace-file', path: 'books/story.epub' },
+        entryPath: 'images/cover.png',
+      },
+      {
+        kind: 'content-representation',
+        id: 'representation-1',
+        source: { kind: 'workspace-file', path: 'books/story.pdf' },
+      },
+    ];
+    expect(replaced.map((value) => validateContentLocator(value).ok)).toEqual(
+      replaced.map(() => false),
+    );
   });
 });

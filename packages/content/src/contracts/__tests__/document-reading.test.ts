@@ -131,7 +131,7 @@ describe('document reading contracts', () => {
       filePath: '${BOOKS}/comic.epub',
       format: 'epub',
       fileId: 'comic-edition',
-      contentLocator: { kind: 'workspace-file', path: 'books/comic.epub' },
+      contentLocator: { file: { authority: 'workspace', path: 'books/comic.epub' } },
     };
     const contentLocator = createDocumentEntryContentLocator({
       source,
@@ -144,11 +144,14 @@ describe('document reading contracts', () => {
     };
 
     expect(imageInfo.path).toBeUndefined();
-    expect(imageInfo.contentLocator?.source).toEqual({
-      kind: 'workspace-file',
+    expect(imageInfo.contentLocator?.file).toEqual({
+      authority: 'workspace',
       path: 'books/comic.epub',
     });
-    expect(imageInfo.contentLocator?.entryPath).toBe('image/page-1.jpg');
+    expect(imageInfo.contentLocator?.selector).toEqual({
+      kind: 'entry',
+      path: 'image/page-1.jpg',
+    });
     expect(imageInfo.locator?.kind).toBe('chapter');
     expect(JSON.stringify(imageInfo)).not.toMatch(/cachePath|resourceRef/u);
   });
@@ -158,15 +161,14 @@ describe('document reading contracts', () => {
       source: {
         filePath: '${BOOKS}/comic.cbz',
         format: 'cbz',
-        contentLocator: { kind: 'workspace-file', path: 'books/comic.cbz' },
+        contentLocator: { file: { authority: 'workspace', path: 'books/comic.cbz' } },
       },
       entryPath: 'page-1.png',
     });
 
     expect(locator).toEqual({
-      kind: 'document-entry',
-      source: { kind: 'workspace-file', path: 'books/comic.cbz' },
-      entryPath: 'page-1.png',
+      file: { authority: 'workspace', path: 'books/comic.cbz' },
+      selector: { kind: 'entry', path: 'page-1.png' },
     });
     expect(isContentLocator(locator)).toBe(true);
     expect(
@@ -174,14 +176,15 @@ describe('document reading contracts', () => {
         source: {
           filePath: '${BOOKS}/comic.cbz',
           format: 'cbz',
-          contentLocator: { kind: 'workspace-file', path: 'neko/assets/Books/comic.cbz' },
+          contentLocator: {
+            file: { authority: 'workspace', path: 'neko/assets/Books/comic.cbz' },
+          },
         },
         entryPath: 'page-1.png',
       }),
     ).toEqual({
-      kind: 'document-entry',
-      source: { kind: 'workspace-file', path: 'neko/assets/Books/comic.cbz' },
-      entryPath: 'page-1.png',
+      file: { authority: 'workspace', path: 'neko/assets/Books/comic.cbz' },
+      selector: { kind: 'entry', path: 'page-1.png' },
     });
     expect(
       createDocumentEntryContentLocator({

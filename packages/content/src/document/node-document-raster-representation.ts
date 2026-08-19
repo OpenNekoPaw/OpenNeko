@@ -70,6 +70,9 @@ export function createNodeDocumentRasterRepresentationGenerator(
       if (PDF_EXTENSIONS.has(extension)) {
         const source = await options.contentRead.read(input.source, {
           maxBytes: MAX_DOCUMENT_SOURCE_BYTES,
+          ...(input.expectedSourceFingerprint
+            ? { expectedFingerprint: input.expectedSourceFingerprint }
+            : {}),
           ...(input.signal ? { signal: input.signal } : {}),
         });
         if (source.status !== 'ready') {
@@ -77,6 +80,11 @@ export function createNodeDocumentRasterRepresentationGenerator(
         }
         pdfBytes = source.bytes;
       } else if (OFFICE_EXTENSIONS.has(extension)) {
+        if (input.expectedSourceFingerprint) {
+          throw new Error(
+            'Office raster conversion cannot guarantee an expected source fingerprint.',
+          );
+        }
         pdfBytes = await officeRasterizer.convertToPdf({
           sourcePath: resolveWorkspaceSource(options.workspaceRoot, input),
           ...(input.signal ? { signal: input.signal } : {}),
@@ -147,8 +155,8 @@ function readRasterRequest(input: ContentRepresentationGeneratorInput): {
 }
 
 function sourceExtension(input: ContentRepresentationGeneratorInput): string {
-  return input.source.kind === 'workspace-file'
-    ? path.extname(input.source.path).toLowerCase()
+  return input.source.file.authority === 'workspace' && input.source.selector === undefined
+    ? path.extname(input.source.file.path).toLowerCase()
     : '';
 }
 
@@ -156,10 +164,10 @@ function resolveWorkspaceSource(
   workspaceRoot: string,
   input: ContentRepresentationGeneratorInput,
 ): string {
-  if (input.source.kind !== 'workspace-file') {
+  if (input.source.file.authority !== 'workspace' || input.source.selector !== undefined) {
     throw new Error('Office raster source must be a workspace file.');
   }
-  const resolved = path.resolve(workspaceRoot, input.source.path);
+  const resolved = path.resolve(workspaceRoot, input.source.file.path);
   const relative = path.relative(workspaceRoot, resolved);
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error('Office raster source escapes the workspace.');
