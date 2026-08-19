@@ -116,7 +116,31 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     this.requireActive();
     const parsed = parseResourceBrowserSearchRequest(request);
     assertResourceBrowserIdentity(this.identity, parsed.identity);
-    return this.readProjection(parsed.source, parsed.query, parsed.limit);
+    const projection = await this.readProjection(parsed.source, parsed.query, parsed.limit);
+    if (parsed.source !== 'media' || parsed.query.trim().length > 0) return projection;
+
+    // Read-only empty media queries are used by Composer mentions. The media
+    // browser's canonical empty projection contains library roots so the
+    // browser can navigate them, while mentions need selectable content rows.
+    const roots = projection.items.filter(
+      (item): item is ResourceBrowserMediaLibraryRootItem =>
+        item.source === 'media' && item.role === 'library-root',
+    );
+    const items: ResourceBrowserItem[] = [];
+    for (const root of roots) {
+      if (items.length >= parsed.limit) break;
+      const children = await this.options.source.media.children({
+        identity: this.identity,
+        parent: root,
+        limit: parsed.limit - items.length,
+      });
+      items.push(
+        ...children.map((entry) =>
+          presentBrowsableEntry(entry, 'media', this.options.canvasAvailable),
+        ),
+      );
+    }
+    return parseResourceBrowserProjection({ ...projection, items: items.slice(0, parsed.limit) });
   }
 
   async children(request: ResourceBrowserChildrenRequest): Promise<ResourceBrowserProjection> {

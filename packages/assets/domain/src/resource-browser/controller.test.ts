@@ -11,6 +11,7 @@ import { ResourceBrowserController } from './controller';
 import type {
   ResourceBrowserInteractionPort,
   ResourceBrowserContentEntry,
+  ResourceBrowserMediaLibraryRootEntry,
   ResourceBrowserProjectionSource,
 } from './ports';
 
@@ -143,6 +144,61 @@ describe('Resource Browser controller', () => {
     expect(queried).toMatchObject({ source: 'media', query: 'scene' });
     expect(await controller.getSnapshot()).toBe(active);
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('projects selectable media children for an empty read-only query', async () => {
+    const source = createSource();
+    const root: ResourceBrowserMediaLibraryRootEntry = {
+      label: 'References',
+      role: 'library-root',
+      depth: 0,
+      libraryName: 'References',
+      libraryStatus: {
+        libraryName: 'References',
+        state: 'available',
+        referenceCount: 1,
+        missingCount: 0,
+        operationFingerprint: 'fingerprint-references',
+      },
+    };
+    const child: ResourceBrowserContentEntry = {
+      locator: { kind: 'workspace-file', path: 'References/scene.png' },
+      label: 'scene.png',
+      availability: 'available',
+      capabilities: ['read', 'preview', 'bind'],
+      metadata: { mediaType: 'image' },
+      role: 'content',
+      depth: 1,
+      libraryName: 'References',
+    };
+    source.media.search = vi.fn(async () => [root]);
+    source.media.children = vi.fn(async () => [child]);
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions: createInteractions(),
+    });
+
+    const queried = await controller.query(
+      createResourceBrowserSearchRequest({
+        requestId: 'composer-empty-media-query',
+        identity,
+        source: 'media',
+        query: '',
+      }),
+    );
+
+    expect(queried.items).toHaveLength(1);
+    expect(queried.items[0]).toMatchObject({
+      source: 'media',
+      role: 'content',
+      label: 'scene.png',
+    });
+    expect(source.media.children).toHaveBeenCalledWith({
+      identity,
+      parent: expect.objectContaining({ role: 'library-root', libraryName: 'References' }),
+      limit: 100,
+    });
   });
 
   it('allows Rescan only after an observation failure and clears the local diagnostic', async () => {
