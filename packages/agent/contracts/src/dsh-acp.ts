@@ -1,5 +1,6 @@
 export const DSH_ACP_EXTENSION_METHODS = {
   setSessionContext: 'openneko/session/context/set',
+  readPermissionPresets: 'openneko/session/permissions/read',
   readInbox: 'openneko/session/inbox/read',
   replaceInboxMessage: 'openneko/session/inbox/replace',
   removeInboxMessage: 'openneko/session/inbox/remove',
@@ -24,6 +25,54 @@ export interface DshAcpModelConfiguration {
 export interface DshAcpSessionContextSetRequest {
   readonly sessionId: string;
   readonly text: string;
+}
+
+export interface DshAcpPermissionPresetOption {
+  readonly value: string;
+  readonly name: string;
+  readonly description?: string;
+}
+
+export interface DshAcpPermissionPresetProjection {
+  readonly options: readonly DshAcpPermissionPresetOption[];
+  readonly currentValue: string;
+}
+
+export function decodeDshAcpPermissionPresetProjection(
+  input: Record<string, unknown>,
+): DshAcpPermissionPresetProjection {
+  decodeDshAcpJsonPayload(input, 'permission preset projection');
+  requireExactKeys(input, ['options', 'currentValue'], 'permission preset projection');
+  if (!Array.isArray(input.options) || input.options.length === 0) {
+    throw new Error('DSH ACP permission preset options must be a non-empty array.');
+  }
+  const options = input.options.map((value, index) => {
+    const option = requireRecord(value, `permission preset options[${index}]`);
+    const keys =
+      option.description === undefined ? ['value', 'name'] : ['value', 'name', 'description'];
+    requireExactKeys(option, keys, `permission preset options[${index}]`);
+    return {
+      value: requireNonEmptyString(option.value, `permission preset options[${index}].value`),
+      name: requireNonEmptyString(option.name, `permission preset options[${index}].name`),
+      ...(option.description === undefined
+        ? {}
+        : {
+            description: requireNonEmptyString(
+              option.description,
+              `permission preset options[${index}].description`,
+            ),
+          }),
+    };
+  });
+  const values = new Set(options.map((option) => option.value));
+  if (values.size !== options.length) {
+    throw new Error('DSH ACP permission preset options must use unique values.');
+  }
+  const currentValue = requireNonEmptyString(input.currentValue, 'permission preset currentValue');
+  if (!values.has(currentValue)) {
+    throw new Error(`DSH ACP current permission preset '${currentValue}' is not advertised.`);
+  }
+  return { options, currentValue };
 }
 
 export function decodeDshAcpSessionContextSetRequest(

@@ -178,6 +178,25 @@ describe('OpenNeko DSH ACP bridge projections', () => {
 
     expect(projectSessionEvent('session-1', todo)).toEqual([]);
   });
+
+  it('does not project DSH runtime-context snapshots as user messages', () => {
+    const session = Session.create(SessionId('session-1'));
+    const context = session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'Current runtime context.' }],
+        source: {
+          kind: 'plugin',
+          plugin: '@deepseek-ai/dsh-system-prompt',
+          form: 'snapshot',
+          sections: [{ name: 'openneko:product-context', text: 'Product context' }],
+        },
+      }),
+      { surfaceOp: 'append' },
+    );
+
+    expect(projectSessionEvent('session-1', context)).toEqual([]);
+  });
 });
 
 describe('OpenNeko DSH ACP bridge boundaries', () => {
@@ -199,7 +218,8 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
 
     expect(manifest.dependencies).not.toHaveProperty('@deepseek-ai/dsh-acp');
     expect(profile).not.toMatch(/\bdsh-acp\b/);
-    expect(profile.match(/^\s*- id:/gm)).toHaveLength(1);
+    expect(profile.match(/^\s*- id:/gm)?.length).toBeGreaterThan(2);
+    expect(profile).toContain('id: agent-presets');
     expect(profile).toContain("name: '@neko/dsh-bridge'");
   });
 
@@ -247,7 +267,7 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toMatch(/params\.configId !== DSH_ACP_MODEL_CONFIG_ID/u);
     expect(source).toMatch(/current\.handle\.agent\.status !== 'idle'/u);
     expect(source).toMatch(
-      /replaceOwnedAgent\(ctx, owned, params\.sessionId, current, configuration\)/u,
+      /replaceOwnedAgent\(ctx, owned, params\.sessionId, current, configuration, preset\)/u,
     );
     expect(source).toMatch(/resumeSessionId: sessionId/u);
     expect(source).toMatch(/isSameModelConfiguration\(current\.configuration, configuration\)/u);
@@ -261,8 +281,32 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toMatch(/decodeDshAcpSessionContextSetRequest\(params\)/u);
     expect(source).toMatch(/agentCtx\.systemPrompt\.context\(/u);
     expect(source).toMatch(/name: 'openneko:product-context'/u);
-    expect(source).toMatch(/setup: setupSessionRuntimeContext\(current\.runtimeContext\)/u);
+    expect(source).toMatch(
+      /setup: setupSessionRuntimeContext\(ctx, preset, current\.runtimeContext\)/u,
+    );
+    expect(source).toMatch(/ctx\.agentPresets\.mount\(agentCtx, preset\)/u);
     expect(source).toMatch(/createOwnedSession\(handle, configuration, current\.runtimeContext\)/u);
     expect(source).toMatch(/record\.handle\.agent\.status !== 'idle'/u);
+  });
+
+  it('selects the official standard DSH preset in the ACP profile', () => {
+    expect(readPackageFile('cordis.patch.yml')).toContain('default: standard');
+    expect(readPackageFile('cordis.patch.yml')).toContain('agentPreset: standard');
+    expect(readPackageFile('src/index.ts')).toContain("Schema.string().default('standard')");
+    expect(readPackageFile('src/index.ts')).toContain("config.agentPreset ?? 'standard'");
+    for (const id of [
+      'tool-bash',
+      'tool-fs',
+      'tool-skill',
+      'tool-goal',
+      'plan-mode',
+      'tool-subagent',
+      'tool-workflow',
+      'tool-web',
+    ]) {
+      expect(readPackageFile('cordis.patch.yml')).toMatch(
+        new RegExp(`- id: ${id}\\n  disabled: true`, 'u'),
+      );
+    }
   });
 });

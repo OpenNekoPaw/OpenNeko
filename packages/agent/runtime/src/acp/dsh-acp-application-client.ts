@@ -30,12 +30,14 @@ import {
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
   decodeDshAcpInboxSnapshot,
+  decodeDshAcpPermissionPresetProjection,
   decodeDshAcpSessionContextSetRequest,
   decodeDshAcpSessionEventNotification,
   type DshAcpContentBlock,
   type DshAcpDomainToolRequest,
   type DshAcpDomainToolResponse,
   type DshAcpInboxSnapshot,
+  type DshAcpPermissionPresetProjection,
 } from '@neko/agent-contracts/dsh-acp';
 import { CANVAS_DSH_TOOL_NAME } from '@neko/canvas-domain';
 import { CUT_DSH_TOOL_NAME } from '@neko/cut-domain';
@@ -231,6 +233,16 @@ export class DshAcpApplicationClient {
   }): Promise<void> {
     const request = decodeDshAcpSessionContextSetRequest({ ...input });
     await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.setSessionContext, { ...request });
+  }
+
+  async readPermissionPresets(sessionId?: string): Promise<DshAcpPermissionPresetProjection> {
+    const response = await this.connection.extMethod(
+      DSH_ACP_EXTENSION_METHODS.readPermissionPresets,
+      {
+        ...(sessionId === undefined ? {} : { sessionId }),
+      },
+    );
+    return decodeDshAcpPermissionPresetProjection(response);
   }
 
   async readInbox(sessionId: string): Promise<DshAcpInboxSnapshot> {

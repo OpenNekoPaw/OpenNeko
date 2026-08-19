@@ -8,7 +8,11 @@ import type {
   SetSessionConfigOptionResponse,
   SetSessionModeResponse,
 } from '@agentclientprotocol/sdk';
-import type { DshAcpContentBlock, DshAcpInboxSnapshot } from '@neko/agent-contracts/dsh-acp';
+import type {
+  DshAcpContentBlock,
+  DshAcpInboxSnapshot,
+  DshAcpPermissionPresetProjection,
+} from '@neko/agent-contracts/dsh-acp';
 
 import type { ConversationDshSessionBindingService } from './conversation-dsh-session-binding';
 import type { ConversationDshSessionActivation } from './conversation-dsh-session-activation';
@@ -29,6 +33,7 @@ export interface ConversationDshSessionAcpClient {
   prompt(input: PromptRequest): Promise<PromptResponse>;
   cancel(sessionId: string): Promise<void>;
   setSessionContext(input: { readonly sessionId: string; readonly text: string }): Promise<void>;
+  readPermissionPresets(sessionId?: string): Promise<DshAcpPermissionPresetProjection>;
   readInbox(sessionId: string): Promise<DshAcpInboxSnapshot>;
   replaceInboxMessage(input: {
     readonly sessionId: string;
@@ -61,6 +66,7 @@ export interface ConversationDshSessionBoundClient {
   ): Promise<PromptResponse>;
   cancel(conversationId: string): Promise<void>;
   setSessionContext(conversationId: string, text: string): Promise<void>;
+  readPermissionPresets(conversationId: string): Promise<DshAcpPermissionPresetProjection>;
   readInbox(conversationId: string): Promise<DshAcpInboxSnapshot>;
   replaceInboxMessage(input: {
     readonly conversationId: string;
@@ -129,6 +135,10 @@ export function createConversationDshSessionBoundClient(
     async setSessionContext(conversationId, text) {
       const dshSessionId = await resolveForOperation(options, conversationId);
       await options.client.setSessionContext({ sessionId: dshSessionId, text });
+    },
+    async readPermissionPresets(conversationId) {
+      const dshSessionId = await resolveForOperation(options, conversationId);
+      return options.client.readPermissionPresets(dshSessionId);
     },
     async readInbox(conversationId) {
       const dshSessionId = await resolveForOperation(options, conversationId);

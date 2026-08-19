@@ -365,6 +365,7 @@ function createClient(
     prompt: async () => unsupported(),
     cancel: async () => unsupported(),
     setSessionContext: async () => unsupported(),
+    readPermissionPresets: async () => unsupported(),
     readInbox: async () => unsupported(),
     replaceInboxMessage: async () => unsupported(),
     removeInboxMessage: async () => unsupported(),

@@ -16,19 +16,22 @@ import {
   type Stream,
 } from '@agentclientprotocol/sdk';
 import type { AgentHandle } from '@deepseek-ai/dsh-agent';
+import type {} from '@deepseek-ai/dsh-agent-presets';
 import type { Context } from '@deepseek-ai/cordis';
 import { createUserMessage, errorChain } from '@deepseek-ai/dsh-llm';
 import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-session-persistence';
 import type {} from '@deepseek-ai/dsh-system-prompt';
+import type {} from '@deepseek-ai/dsh-permission-presets';
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
-import { setApprovalPolicy, type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval';
+import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval';
 import Schema from '@deepseek-ai/schemastery';
 import {
   DSH_ACP_MODEL_CONFIG_ID,
   DSH_ACP_EXTENSION_METHODS,
   decodeDshAcpModelConfiguration,
   decodeDshAcpSessionContextSetRequest,
+  decodeDshAcpPermissionPresetProjection,
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
   encodeDshAcpModelConfiguration,
@@ -37,7 +40,15 @@ import {
 import { PromptAdmission } from './prompt-admission.js';
 
 export const name = 'openneko-acp';
-export const inject = ['agents', 'approval', 'sessions', 'sessionPersistence', 'systemPrompt'];
+export const inject = [
+  'agents',
+  'agentPresets',
+  'approval',
+  'permissionPresets',
+  'sessions',
+  'sessionPersistence',
+  'systemPrompt',
+];
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -57,7 +68,7 @@ export const Config = Schema.object({
   provider: Schema.string(),
   model: Schema.string(),
   maxTokens: Schema.number(),
-  agentPreset: Schema.string().default('openneko'),
+  agentPreset: Schema.string().default('standard'),
 });
 
 interface OwnedSession {
@@ -76,7 +87,6 @@ interface DshSessionConfiguration {
   readonly provider?: string;
   readonly model?: string;
   readonly maxTokens?: number;
-  readonly mode: 'ask' | 'auto';
 }
 
 interface InflightPrompt {
@@ -97,7 +107,7 @@ interface Deferred<T> {
 export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
   const owned = new Map<string, OwnedSession>();
   const promptAdmission = new PromptAdmission<PromptResponse>();
-  const preset = config.agentPreset ?? 'openneko';
+  const preset = config.agentPreset ?? 'standard';
   const virtualCwd = process.cwd();
   let connection: AcpConnection;
   let closed = false;
@@ -221,7 +231,6 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
   ctx.on('approval/request', async (request, next) => {
     const record = owned.get(request.agent.id);
     if (record === undefined || record.handle.agent !== request.agent) return next();
-    if (record.configuration.mode === 'auto') return 'allowed-once';
     if (request.callId === undefined) return 'unavailable';
     const turn = findToolCallTurn(request.agent.session.events, request.callId);
     const response = await connection.requestPermission({
@@ -268,16 +277,17 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           sessionId,
           meta: { cwd: params.cwd, agentPreset: preset },
           agentOptions: agentOptions(configuration),
-          setup: setupSessionRuntimeContext(runtimeContext),
+          setup: setupSessionRuntimeContext(ctx, preset, runtimeContext),
         });
         if (closed) {
           await handle.dispose();
           throw RequestError.internalError(undefined, 'Connection closed during session/new.');
         }
-        owned.set(sessionId, createOwnedSession(handle, configuration, runtimeContext));
+        const record = createOwnedSession(handle, configuration, runtimeContext);
+        owned.set(sessionId, record);
         return {
           sessionId,
-          modes: projectModeState(configuration.mode),
+          modes: projectModeState(ctx, record),
           configOptions: projectModelConfigOptions(configuration),
         };
       },
@@ -309,7 +319,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
         for (const event of record.handle.agent.session.events)
           await publishEvent(params.sessionId, event);
         return {
-          modes: projectModeState(record.configuration.mode),
+          modes: projectModeState(ctx, record),
           configOptions: projectModelConfigOptions(record.configuration),
         };
       },
@@ -325,7 +335,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           preset,
         );
         return {
-          modes: projectModeState(record.configuration.mode),
+          modes: projectModeState(ctx, record),
           configOptions: projectModelConfigOptions(record.configuration),
         };
       },
@@ -344,15 +354,10 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       async setSessionMode(params) {
         requireOpen();
         const record = requireOwned(params.sessionId);
-        if (params.modeId !== 'ask' && params.modeId !== 'auto') {
+        if (!ctx.permissionPresets.names.includes(params.modeId)) {
           throw RequestError.invalidParams(undefined, `Unsupported Session mode: ${params.modeId}`);
         }
-        const configuration: DshSessionConfiguration = {
-          ...record.configuration,
-          mode: params.modeId,
-        };
-        setApprovalPolicy(record.handle.agent.session, 'ask');
-        owned.set(params.sessionId, { ...record, configuration });
+        ctx.permissionPresets.set(record.handle.agent.session, params.modeId);
         return {};
       },
       async setSessionConfigOption(params) {
@@ -375,12 +380,11 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           provider: selected.providerId,
           model: selected.modelId,
           maxTokens: selected.maxTokens,
-          mode: current.configuration.mode,
         };
         if (isSameModelConfiguration(current.configuration, configuration)) {
           return { configOptions: projectModelConfigOptions(current.configuration) };
         }
-        await replaceOwnedAgent(ctx, owned, params.sessionId, current, configuration);
+        await replaceOwnedAgent(ctx, owned, params.sessionId, current, configuration, preset);
         return { configOptions: projectModelConfigOptions(configuration) };
       },
       async prompt(params) {
@@ -442,6 +446,28 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             }
             record.runtimeContext.text = request.text;
             return {};
+          }
+          case DSH_ACP_EXTENSION_METHODS.readPermissionPresets: {
+            const keys = Object.keys(params);
+            if (keys.some((key) => key !== 'sessionId')) {
+              throw RequestError.invalidParams(
+                undefined,
+                'Permission preset read accepts only an optional sessionId.',
+              );
+            }
+            const sessionId = params.sessionId;
+            if (sessionId !== undefined && typeof sessionId !== 'string') {
+              throw RequestError.invalidParams(
+                undefined,
+                'Permission preset sessionId must be a string.',
+              );
+            }
+            return {
+              ...projectPermissionPresets(
+                ctx,
+                sessionId === undefined ? undefined : requireOwned(sessionId),
+              ),
+            };
           }
           case 'openneko/session/inbox/read': {
             const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
@@ -577,6 +603,7 @@ export function projectSessionEvent(
 ): readonly SessionNotification[] {
   switch (event.type) {
     case 'user/message':
+      if (event.data.source.kind !== 'user') return [];
       return projectMessage(sessionId, 'user_message_chunk', event.data.content).map(
         (notification) => withOpenNekoMeta(notification, event.seq),
       );
@@ -704,7 +731,7 @@ async function resumeOwnedSession(
   const handle = await ctx.agents.resume({
     resumeSessionId: sessionId,
     agentOptions: agentOptions(configuration),
-    setup: setupSessionRuntimeContext(runtimeContext),
+    setup: setupSessionRuntimeContext(ctx, preset, runtimeContext),
   });
   const record = createOwnedSession(handle, configuration, runtimeContext);
   owned.set(rawSessionId, record);
@@ -717,6 +744,7 @@ async function replaceOwnedAgent(
   rawSessionId: string,
   current: OwnedSession,
   configuration: DshSessionConfiguration,
+  preset: string,
 ): Promise<OwnedSession> {
   const sessionId = SessionId(rawSessionId);
   owned.delete(rawSessionId);
@@ -726,7 +754,7 @@ async function replaceOwnedAgent(
   const handle = await ctx.agents.resume({
     resumeSessionId: sessionId,
     agentOptions: agentOptions(configuration),
-    setup: setupSessionRuntimeContext(current.runtimeContext),
+    setup: setupSessionRuntimeContext(ctx, preset, current.runtimeContext),
   });
   const next = createOwnedSession(handle, configuration, current.runtimeContext);
   owned.set(rawSessionId, next);
@@ -751,8 +779,13 @@ function createSessionRuntimeContext(): DshSessionRuntimeContext {
   return { text: '' };
 }
 
-function setupSessionRuntimeContext(runtimeContext: DshSessionRuntimeContext) {
-  return (agentCtx: Context): void => {
+function setupSessionRuntimeContext(
+  ctx: Context,
+  preset: string,
+  runtimeContext: DshSessionRuntimeContext,
+) {
+  return async (agentCtx: Context): Promise<void> => {
+    await ctx.agentPresets.mount(agentCtx, preset);
     agentCtx.systemPrompt.context({
       name: 'openneko:product-context',
       order: 0,
@@ -782,7 +815,6 @@ function defaultSessionConfiguration(config: OpenNekoDshBridgeConfig): DshSessio
     ...(config.provider === undefined ? {} : { provider: config.provider }),
     ...(config.model === undefined ? {} : { model: config.model }),
     ...(config.maxTokens === undefined ? {} : { maxTokens: config.maxTokens }),
-    mode: 'ask',
   };
 }
 
@@ -798,18 +830,33 @@ function agentOptions(configuration: DshSessionConfiguration): {
   };
 }
 
-function projectModeState(mode: DshSessionConfiguration['mode']): SessionModeState {
+function projectModeState(ctx: Context, record: OwnedSession): SessionModeState {
+  const projection = projectPermissionPresets(ctx, record);
   return {
-    currentModeId: mode,
-    availableModes: [
-      { id: 'ask', name: 'Ask', description: 'Request approval before protected operations.' },
-      {
-        id: 'auto',
-        name: 'Auto',
-        description: 'Allow protected operations once for this Session.',
-      },
-    ],
+    currentModeId: projection.currentValue,
+    availableModes: projection.options.map((option) => ({
+      id: option.value,
+      name: option.name,
+      ...(option.description === undefined ? {} : { description: option.description }),
+    })),
   };
+}
+
+function projectPermissionPresets(
+  ctx: Context,
+  record?: OwnedSession,
+): ReturnType<typeof decodeDshAcpPermissionPresetProjection> {
+  const currentValue =
+    record === undefined
+      ? ctx.permissionPresets.defaultPreset
+      : ctx.permissionPresets.current(record.handle.agent.session.events);
+  const names = ctx.permissionPresets.names;
+  const values =
+    currentValue === 'custom' && !names.includes(currentValue) ? [...names, currentValue] : names;
+  return decodeDshAcpPermissionPresetProjection({
+    currentValue,
+    options: values.map((value) => ctx.permissionPresets.optionOf(value)),
+  });
 }
 
 function projectModelConfigOptions(configuration: DshSessionConfiguration): SessionConfigOption[] {
