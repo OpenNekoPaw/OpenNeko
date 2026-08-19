@@ -97,7 +97,11 @@ export class DesktopTextEditorRuntime {
   }): Promise<TextEditorHostResult> {
     this.requireActive();
     const locator = input.item.locator;
-    if (locator.kind !== 'workspace-file' || !input.item.capabilities.includes('edit-text')) {
+    if (
+      locator.file.authority !== 'workspace' ||
+      locator.selector !== undefined ||
+      !input.item.capabilities.includes('edit-text')
+    ) {
       throw new Error('Desktop Text Editor requires an admitted Workspace File.');
     }
     const shell = await this.options.shell.getProjection(input.identity.windowId);
@@ -110,7 +114,7 @@ export class DesktopTextEditorRuntime {
       (binding) =>
         binding.runtimeIdentity.windowId === input.identity.windowId &&
         binding.runtimeIdentity.workspaceId === input.identity.workspaceId &&
-        binding.runtimeIdentity.documentId === locator.path,
+        binding.runtimeIdentity.documentId === locator.file.path,
     );
     if (existing) {
       const workbench = openOrFocusMainView(
@@ -126,7 +130,7 @@ export class DesktopTextEditorRuntime {
       return readyResult(`text-editor-open:${this.createIdentity()}`, existing);
     }
 
-    const documentId = locator.path;
+    const documentId = locator.file.path;
     const workspace = await this.options.shell.resolveAgentWorkspace(input.identity.workspaceId);
     const binding = await this.createBinding({
       projectId: input.identity.projectId,
@@ -448,7 +452,9 @@ export class DesktopTextEditorRuntime {
     readonly workspacePath: string;
   }): Promise<TextEditorBinding> {
     const sessionId = `text-document:${this.createIdentity()}`;
-    const locator = { kind: 'workspace-file' as const, path: input.documentId };
+    const locator = {
+      file: { authority: 'workspace' as const, path: input.documentId },
+    };
     const session = await TextDocumentSession.open(
       {
         owner: { kind: 'window', windowId: input.windowId, projectId: input.projectId },

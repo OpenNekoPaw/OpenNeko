@@ -57,10 +57,7 @@ describe('CanvasMaterialAuthoringService', () => {
       workspace: fixture.workspace,
       request: directRequest(
         fixture.identity,
-        {
-          kind: 'workspace-file',
-          path: 'media/cat.png',
-        },
+        { file: { authority: 'workspace', path: 'media/cat.png' } },
         'image',
       ),
     });
@@ -70,10 +67,7 @@ describe('CanvasMaterialAuthoringService', () => {
       workspace: fixture.workspace,
       request: directRequest(
         fixture.identity,
-        {
-          kind: 'workspace-file',
-          path: 'neko/assets/Editorial/shots/clip.mp4',
-        },
+        { file: { authority: 'workspace', path: 'neko/assets/Editorial/shots/clip.mp4' } },
         'video',
       ),
     });
@@ -83,11 +77,7 @@ describe('CanvasMaterialAuthoringService', () => {
       workspace: fixture.workspace,
       request: directRequest(
         fixture.identity,
-        {
-          kind: 'document-entry',
-          source: { kind: 'workspace-file', path: 'documents/story.epub' },
-          entryPath: 'chapters/one.xhtml',
-        },
+        { file: { authority: 'workspace', path: 'documents/story.epub' }, selector: { kind: 'entry', path: 'chapters/one.xhtml' } },
         'document',
       ),
     });
@@ -97,14 +87,7 @@ describe('CanvasMaterialAuthoringService', () => {
       workspace: fixture.workspace,
       request: directRequest(
         fixture.identity,
-        {
-          kind: 'document-entry',
-          source: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Editorial/books/story.epub',
-          },
-          entryPath: 'chapters/two.xhtml',
-        },
+        { file: { authority: 'workspace', path: 'neko/assets/Editorial/books/story.epub' }, selector: { kind: 'entry', path: 'chapters/two.xhtml' } },
         'document',
       ),
     });
@@ -114,41 +97,17 @@ describe('CanvasMaterialAuthoringService', () => {
       workspace: fixture.workspace,
       request: directRequest(
         fixture.identity,
-        {
-          kind: 'package-resource',
-          packageId: 'character-pack',
-          revision: '1',
-          resourcePath: 'models/hero.glb',
-        },
+        { file: { authority: 'package', packageId: 'character-pack', revision: '1', path: 'models/hero.glb' } },
         'model',
       ),
     });
 
     expect(canvas.nodes.map(contentLocatorOf)).toEqual([
-      { kind: 'workspace-file', path: 'media/cat.png' },
-      {
-        kind: 'workspace-file',
-        path: 'neko/assets/Editorial/shots/clip.mp4',
-      },
-      {
-        kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'documents/story.epub' },
-        entryPath: 'chapters/one.xhtml',
-      },
-      {
-        kind: 'document-entry',
-        source: {
-          kind: 'workspace-file',
-          path: 'neko/assets/Editorial/books/story.epub',
-        },
-        entryPath: 'chapters/two.xhtml',
-      },
-      {
-        kind: 'package-resource',
-        packageId: 'character-pack',
-        revision: '1',
-        resourcePath: 'models/hero.glb',
-      },
+      { file: { authority: 'workspace', path: 'media/cat.png' } },
+      { file: { authority: 'workspace', path: 'neko/assets/Editorial/shots/clip.mp4' } },
+      { file: { authority: 'workspace', path: 'documents/story.epub' }, selector: { kind: 'entry', path: 'chapters/one.xhtml' } },
+      { file: { authority: 'workspace', path: 'neko/assets/Editorial/books/story.epub' }, selector: { kind: 'entry', path: 'chapters/two.xhtml' } },
+      { file: { authority: 'package', packageId: 'character-pack', revision: '1', path: 'models/hero.glb' } },
     ]);
     expect(authorizePackageResource).toHaveBeenCalledOnce();
     expect(await readFile(path.join(linkedRoot, 'shots/clip.mp4'), 'utf8')).toBe('clip');
@@ -192,15 +151,8 @@ describe('CanvasMaterialAuthoringService', () => {
 
     const expectedDigest = createHash('sha256').update('first').digest('hex');
     expect(canvas.nodes.map(contentLocatorOf)).toEqual([
-      {
-        kind: 'workspace-file',
-        path: 'neko/imports/video/clip.mp4',
-        fingerprint: { strategy: 'sha256', value: expectedDigest },
-      },
-      expect.objectContaining({
-        kind: 'workspace-file',
-        path: 'neko/imports/video/clip 2.mp4',
-      }),
+      { file: { authority: 'workspace', path: 'neko/imports/video/clip.mp4' } },
+      expect.objectContaining({ file: { authority: 'workspace', path: 'neko/imports/video/clip 2.mp4' } }),
     ]);
     expect(
       await readFile(
@@ -266,10 +218,7 @@ describe('CanvasMaterialAuthoringService', () => {
     });
     expect(copied.nodes).toHaveLength(1);
     expect(contentLocatorOf(copied.nodes[0])).toEqual(
-      expect.objectContaining({
-        kind: 'workspace-file',
-        path: 'neko/imports/image/frame.png',
-      }),
+      expect.objectContaining({ file: { authority: 'workspace', path: 'neko/imports/image/frame.png' } }),
     );
     expect(
       await readFile(
@@ -347,7 +296,7 @@ describe('CanvasMaterialAuthoringService', () => {
       workspace: fixture.workspace,
       request: directRequest(
         fixture.identity,
-        { kind: 'workspace-file', path: 'media/source.png' },
+        { file: { authority: 'workspace', path: 'media/source.png' } },
         'image',
       ),
     });
@@ -361,10 +310,7 @@ describe('CanvasMaterialAuthoringService', () => {
       request: {
         kind: 'derived-output-commit',
         identity: materialIdentity(fixture.identity),
-        locator: {
-          kind: 'workspace-file',
-          path: 'neko/derived/crop/source-cropped.png',
-        },
+        locator: { file: { authority: 'workspace', path: 'neko/derived/crop/source-cropped.png' } },
         mediaKind: 'image',
         title: 'source-cropped.png',
         sourceNodeIds: [sourceNode.id],
@@ -373,10 +319,7 @@ describe('CanvasMaterialAuthoringService', () => {
 
     expect(derived.nodes).toHaveLength(2);
     expect(derived.nodes[0]).toEqual(sourceNode);
-    expect(contentLocatorOf(derived.nodes[1])).toEqual({
-      kind: 'workspace-file',
-      path: 'neko/derived/crop/source-cropped.png',
-    });
+    expect(contentLocatorOf(derived.nodes[1])).toEqual({ file: { authority: 'workspace', path: 'neko/derived/crop/source-cropped.png' } });
     expect(derived.nodes[1]?.data).not.toHaveProperty('generation');
     expect(derived.connections).toEqual([
       expect.objectContaining({
@@ -412,7 +355,7 @@ describe('CanvasMaterialAuthoringService', () => {
       request: {
         ...directRequest(
           fixture.identity,
-          { kind: 'workspace-file', path: 'characters/neko-original.png' },
+          { file: { authority: 'workspace', path: 'characters/neko-original.png' } },
           'image',
         ),
         entity: originalEntity,
@@ -432,7 +375,7 @@ describe('CanvasMaterialAuthoringService', () => {
           identity: materialIdentity(fixture.identity),
           nodeId: node.id,
           expectedEntity: { ...originalEntity, bindingId: 'stale-binding' },
-          locator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
+          locator: { file: { authority: 'workspace', path: 'characters/neko-replacement.png' } },
           mediaKind: 'image',
           title: 'neko-replacement.png',
           entity: {
@@ -452,7 +395,7 @@ describe('CanvasMaterialAuthoringService', () => {
         identity: materialIdentity(fixture.identity),
         nodeId: node.id,
         expectedEntity: originalEntity,
-        locator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
+        locator: { file: { authority: 'workspace', path: 'characters/neko-replacement.png' } },
         mediaKind: 'image',
         title: 'neko-replacement.png',
         entity: {
@@ -466,7 +409,7 @@ describe('CanvasMaterialAuthoringService', () => {
     expect(replaced.nodes[0]).toMatchObject({
       id: node.id,
       data: {
-        contentLocator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'characters/neko-replacement.png' } },
         entityRepresentation: {
           entityId: 'character-neko',
           bindingId: 'binding-neko-replacement',

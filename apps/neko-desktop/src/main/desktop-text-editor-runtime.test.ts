@@ -806,7 +806,7 @@ function textItem(relativePath: string) {
     depth: 0,
     kind: 'file' as const,
     label: path.basename(relativePath),
-    locator: { kind: 'workspace-file' as const, path: relativePath },
+    locator: { file: { authority: 'workspace' as const, path: relativePath } },
     capabilities: ['edit-text', 'preview', 'reveal'] as const,
   };
 }

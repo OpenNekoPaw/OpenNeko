@@ -101,8 +101,7 @@ export class DesktopCutRuntime {
       authorizeSession: async (windowId, identity) => {
         const grant = await options.shell.resolveCutViewGrant(windowId, identity);
         const documentPath = await resolveWorkspaceContentLocator(grant.workspace, {
-          kind: 'workspace-file',
-          path: identity.documentId,
+          file: { authority: 'workspace', path: identity.documentId },
         });
         return {
           documentPath,
@@ -137,8 +136,8 @@ export class DesktopCutRuntime {
       },
       resolveResourcePath: async (identity, locator) => {
         const workspace = await options.shell.resolveAgentWorkspace(identity.workspaceId);
-        if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
-          return resolveWorkspaceContentLocator(workspace, locator);
+        if (locator.file.authority === 'workspace' && locator.selector === undefined) {
+          return resolveWorkspaceContentLocator(workspace, { file: locator.file });
         }
         throw new Error('Desktop Cut resource has no directly resolvable Host file path.');
       },
@@ -195,8 +194,9 @@ export class DesktopCutRuntime {
     if (item.source !== 'files' && item.source !== 'media') return false;
     if (item.role === 'library-root') return false;
     return (
-      item.locator.kind === 'workspace-file' &&
-      item.locator.path.toLocaleLowerCase().endsWith('.otio')
+      item.locator.file.authority === 'workspace' &&
+      item.locator.selector === undefined &&
+      item.locator.file.path.toLocaleLowerCase().endsWith('.otio')
     );
   }
 
@@ -579,7 +579,7 @@ export class DesktopCutRuntime {
         view.kind === 'cut' &&
         view.projectId === project.projectId &&
         view.workspaceId === project.workspaceId &&
-        view.documentId === locator.path,
+        view.documentId === locator.file.path,
     );
     const viewId = existing?.viewId ?? `cut:${tab.viewId}:${randomUUID()}`;
     const ownerId = existing?.ownerId ?? createCutHostSessionId(viewId, tab.viewInstanceId);
@@ -591,7 +591,7 @@ export class DesktopCutRuntime {
       kind: 'cut' as const,
       ownerId,
       displayLabel: input.item.label,
-      documentId: locator.path,
+      documentId: locator.file.path,
     };
     const workbench = openOrFocusCutView(workspaceWorkbench.layout, view);
     await this.options.shell.updateWorkbench(
@@ -833,7 +833,10 @@ function createCutDocumentStorage(
     },
     async write(documentUri, bytes, options) {
       assertOtioDocument(documentUri);
-      const result = await writer.write({ kind: 'workspace-file', path: documentId }, bytes, {
+      const result = await writer.write(
+        { file: { authority: 'workspace', path: documentId } },
+        bytes,
+        {
         conflict: options.expectedFingerprint === undefined ? 'fail-if-exists' : 'replace',
         ...(options.expectedFingerprint === undefined
           ? {}
@@ -843,7 +846,8 @@ function createCutDocumentStorage(
                 value: options.expectedFingerprint,
               },
             }),
-      });
+        },
+      );
       if (result.status !== 'written') {
         throw new Error(`Desktop Cut authorized project write failed: ${result.diagnostic.code}`);
       }

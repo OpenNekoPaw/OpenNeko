@@ -258,7 +258,7 @@ export class DesktopPreviewRuntime {
     const source = await resolvePreviewSource({ absolutePath: input.absolutePath }, mediaType);
     const projected = await this.previewResources.project({
       descriptorId,
-      locator: resolvePreviewContentLocator(input.item),
+      source: resolvePreviewContentLocator(input.item),
       displayName: input.item.label,
       owner: {
         source,
@@ -281,6 +281,11 @@ export class DesktopPreviewRuntime {
       projected.lease.release();
       throw new Error('Desktop quick Preview descriptor kind does not match its item.');
     }
+    if (!projected.descriptor.contentLocator) {
+      projected.lease.release();
+      throw new Error('Desktop quick Preview requires a durable content locator.');
+    }
+    const contentLocator = projected.descriptor.contentLocator;
     try {
       this.sessions.registerTransient(input.identity.windowId, previewSessionId);
     } catch (error) {
@@ -289,7 +294,7 @@ export class DesktopPreviewRuntime {
     }
     return {
       previewSessionId,
-      descriptor: { ...projected.descriptor, contentKind },
+      descriptor: { ...projected.descriptor, contentLocator, contentKind },
     };
   }
 
@@ -455,7 +460,7 @@ export class DesktopPreviewRuntime {
       source.abortController.signal.throwIfAborted();
       const projected = await this.previewResources.project({
         descriptorId: source.descriptorId,
-        locator: source.contentLocator,
+        source: source.contentLocator,
         displayName: source.displayName,
         owner: {
           source: source.source,

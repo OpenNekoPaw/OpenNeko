@@ -95,7 +95,9 @@ export function parseDesktopCanvasWorkspaceDocumentOpenRequest(
     'Desktop Canvas workspace document open request',
   );
   const canvasId = requireString(value['canvasId'], 'canvasId');
-  const locator = validateContentLocator({ kind: 'workspace-file', path: canvasId });
+  const locator = validateContentLocator({
+    file: { authority: 'workspace', path: canvasId },
+  });
   if (!locator.ok || !canvasId.toLocaleLowerCase('en-US').endsWith('.nkc')) {
     throw new Error(
       'Desktop Canvas workspace document open requires a Workspace-file NKC identity.',

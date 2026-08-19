@@ -78,7 +78,7 @@ describe('DesktopPreviewRuntime', () => {
       if (projection.status !== 'ready') throw new Error('Expected a ready Preview.');
 
       expect(projection.descriptor).toMatchObject({
-        contentLocator: { kind: 'workspace-file', path: label },
+        contentLocator: { file: { authority: 'workspace', path: label } },
         contentKind,
         mediaType,
         byteLength: 13,
@@ -109,9 +109,8 @@ describe('DesktopPreviewRuntime', () => {
       createIdentity: () => 'document-entry-image',
     });
     const locator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
-      entryPath: 'OPS/images/cover.png',
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/images/cover.png' },
     };
     const bytes = new TextEncoder().encode('embedded-image');
 
@@ -778,7 +777,7 @@ function createItem(label: string, resourceId: string) {
     depth: 0,
     kind: 'file' as const,
     label,
-    locator: { kind: 'workspace-file' as const, path: label },
+    locator: { file: { authority: 'workspace' as const, path: label } },
     capabilities: ['preview', 'reveal'] as const,
   };
 }

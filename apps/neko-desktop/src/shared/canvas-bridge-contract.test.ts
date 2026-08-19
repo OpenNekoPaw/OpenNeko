@@ -52,12 +52,7 @@ describe('Desktop Canvas bridge contract', () => {
       requestId: 'embedded-1',
       nodeId: 'generation-1',
       outputId: 'output-1',
-      locator: {
-        kind: 'generated-output' as const,
-        outputId: 'output-1',
-        digest: 'sha256:output-1',
-        path: 'neko/generated/output-1.png',
-      },
+      locator: { file: { authority: 'workspace' as const, path: 'neko/generated/output-1.png' } },
       contentKind: 'image' as const,
       mediaType: 'image/png',
       displayName: 'Output 1',

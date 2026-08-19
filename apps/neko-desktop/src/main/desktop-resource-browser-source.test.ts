@@ -115,10 +115,7 @@ describe('Desktop Resource Browser source', () => {
             representations: [
               {
                 bindingId: 'binding-footage',
-                target: {
-                  kind: 'workspace-file',
-                  path: 'neko/assets/Footage/shot.mov',
-                },
+                target: { file: { authority: 'workspace', path: 'neko/assets/Footage/shot.mov' } },
                 role: 'portrait',
                 source: 'user',
                 acceptedAt: '2026-08-01T00:00:00.000Z',
@@ -371,7 +368,7 @@ describe('Desktop Resource Browser source', () => {
     await expect(source.files.list({ identity, query: 'brief', limit: 20 })).resolves.toEqual([
       expect.objectContaining({
         label: 'brief.md',
-        locator: { kind: 'workspace-file', path: 'brief.md' },
+        locator: { file: { authority: 'workspace', path: 'brief.md' } },
       }),
     ]);
   });
@@ -411,18 +408,15 @@ describe('Desktop Resource Browser source', () => {
     expect(media).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          locator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Voice/voice.wav',
-          },
+          locator: { file: { authority: 'workspace', path: 'neko/assets/Voice/voice.wav' } },
         }),
       ]),
     );
     const voice = media.find(
       (entry) =>
         entry.role !== 'library-root' &&
-        entry.locator.kind === 'workspace-file' &&
-        entry.locator.path === 'neko/assets/Voice/voice.wav',
+        entry.locator.file.authority === 'workspace' &&
+        entry.locator.file.path === 'neko/assets/Voice/voice.wav',
     );
     if (!voice || voice.role === 'library-root') {
       throw new Error('Missing external media fixture.');
@@ -451,24 +445,24 @@ describe('Desktop Resource Browser source', () => {
       allMedia.some(
         (entry) =>
           entry.role !== 'library-root' &&
-          entry.locator.kind === 'workspace-file' &&
-          entry.locator.path === 'index.ts',
+          entry.locator.file.authority === 'workspace' &&
+          entry.locator.file.path === 'index.ts',
       ),
     ).toBe(false);
     expect(
       allMedia.some(
         (entry) =>
           entry.role !== 'library-root' &&
-          entry.locator.kind === 'workspace-file' &&
-          entry.locator.path === 'coverage/favicon.png',
+          entry.locator.file.authority === 'workspace' &&
+          entry.locator.file.path === 'coverage/favicon.png',
       ),
     ).toBe(false);
     expect(
       allMedia.some(
         (entry) =>
           entry.role !== 'library-root' &&
-          entry.locator.kind === 'workspace-file' &&
-          entry.locator.path === 'workspace-only.mp4',
+          entry.locator.file.authority === 'workspace' &&
+          entry.locator.file.path === 'workspace-only.mp4',
       ),
     ).toBe(false);
     expect(JSON.stringify({ media, assets })).not.toContain(fixture.root);
@@ -499,7 +493,7 @@ describe('Desktop Resource Browser source', () => {
       depth: 0,
       kind: 'image' as const,
       label: 'cat.png',
-      locator: { kind: 'workspace-file' as const, path: 'assets/cat.png' },
+      locator: { file: { authority: 'workspace' as const, path: 'assets/cat.png' } },
       capabilities: ['preview', 'reveal'] as const,
     };
 
@@ -537,10 +531,7 @@ describe('Desktop Resource Browser source', () => {
         item: {
           ...item,
           resourceId: 'content:escape',
-          locator: {
-            kind: 'workspace-file',
-            path: 'escape/secret.png',
-          },
+          locator: { file: { authority: 'workspace', path: 'escape/secret.png' } },
         },
       }),
     ).rejects.toThrow('crosses an unmanaged symlink');
@@ -568,8 +559,7 @@ describe('Desktop Resource Browser source', () => {
           kind: 'image',
           label: 'missing.png',
           locator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Missing Library/missing.png',
+            file: { authority: 'workspace', path: 'neko/assets/Missing Library/missing.png' },
           },
           capabilities: ['preview'],
         },
@@ -587,7 +577,7 @@ describe('Desktop Resource Browser source', () => {
           depth: 0,
           kind: 'image',
           label: 'local.png',
-          locator: { kind: 'workspace-file', path: 'local.png' },
+          locator: { file: { authority: 'workspace', path: 'local.png' } },
           capabilities: ['preview'],
         },
         descriptor,
@@ -629,8 +619,8 @@ describe('Desktop Resource Browser source', () => {
     const cut = media.find(
       (entry) =>
         entry.role !== 'library-root' &&
-        entry.locator.kind === 'workspace-file' &&
-        entry.locator.path === 'neko/assets/Editorial/story.otio',
+        entry.locator.file.authority === 'workspace' &&
+        entry.locator.file.path === 'neko/assets/Editorial/story.otio',
     );
 
     expect(cut).toMatchObject({
@@ -656,7 +646,7 @@ describe('Desktop Resource Browser source', () => {
         depth: 0,
         kind: 'file',
         label: 'story.otio',
-        locator: { kind: 'workspace-file', path: 'story.otio' },
+        locator: { file: { authority: 'workspace', path: 'story.otio' } },
         capabilities: ['open-creative-document', 'reveal'],
       },
     });
@@ -900,10 +890,7 @@ describe('Desktop Resource Browser source', () => {
       expect.arrayContaining([
         expect.objectContaining({
           label: 'test.glb',
-          locator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Models/test.glb',
-          },
+          locator: { file: { authority: 'workspace', path: 'neko/assets/Models/test.glb' } },
           capabilities: expect.arrayContaining(['preview']),
           metadata: expect.objectContaining({ mediaType: 'model' }),
         }),
@@ -955,8 +942,8 @@ describe('Desktop Resource Browser source', () => {
     const mediaDirectory = rootChildren.find(
       (entry) =>
         entry.role === 'directory' &&
-        entry.locator.kind === 'workspace-file' &&
-        entry.locator.path === 'neko/assets/Assets/Media',
+        entry.locator.file.authority === 'workspace' &&
+        entry.locator.file.path === 'neko/assets/Assets/Media',
     );
     if (!mediaDirectory || mediaDirectory.role !== 'directory') {
       throw new Error('Missing nested Media directory fixture.');
@@ -971,14 +958,8 @@ describe('Desktop Resource Browser source', () => {
     ).resolves.toEqual([
       expect.objectContaining({
         label: 'clip.mp4',
-        locator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/Assets/Media/clip.mp4',
-        },
-        parentLocator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/Assets/Media',
-        },
+        locator: { file: { authority: 'workspace', path: 'neko/assets/Assets/Media/clip.mp4' } },
+        parentLocator: { file: { authority: 'workspace', path: 'neko/assets/Assets/Media' } },
       }),
     ]);
   });
@@ -1078,8 +1059,10 @@ async function writeMediaRequirement(
             {
               bindingId: `binding-${libraryName.toLocaleLowerCase().replaceAll(' ', '-')}`,
               target: {
-                kind: 'workspace-file',
-                path: `neko/assets/${libraryName}/${relativePath}`,
+                file: {
+                  authority: 'workspace',
+                  path: `neko/assets/${libraryName}/${relativePath}`,
+                },
               },
               role: 'portrait',
               source: 'user',

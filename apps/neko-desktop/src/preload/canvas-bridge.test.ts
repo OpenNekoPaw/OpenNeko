@@ -126,7 +126,7 @@ describe('Desktop Canvas preload bridge', () => {
       requestId: 'text-preview-1',
       identity: textPreviewIdentity,
       nodeId: 'file-1',
-      locator: { kind: 'workspace-file' as const, path: 'data/project.json' },
+      locator: { file: { authority: 'workspace' as const, path: 'data/project.json' } },
     };
     const bridge = electron.bridge;
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
