@@ -21,12 +21,6 @@
       "targetKind": "workflow"
     },
     {
-      "suiteId": "agent-runtime.media-library-content",
-      "path": "media-library-content/suite.json",
-      "ownerId": "media-library-content",
-      "targetKind": "capability"
-    },
-    {
       "suiteId": "agent-runtime.model-binding",
       "path": "model-binding/suite.json",
       "ownerId": "session-model-binding",

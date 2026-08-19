@@ -16,31 +16,23 @@
       {
         "ref": "perception-facts",
         "kind": "runtime-fact",
-        "description": "Exact main model, terminal image result, absence of ReadImage and external perception Tool, and explicit unavailable response.",
+        "description": "Exact main model, terminal image result, absence of read_image and external perception Tool, and explicit unavailable response.",
         "required": true
       }
     ],
     "expectedResult": "The Agent reports that image understanding is unavailable without claiming visual analysis.",
-    "expectedFailure": "ReadImage, external perception, provider fallback, or guessed image analysis fails."
+    "expectedFailure": "read_image, external perception, provider fallback, or guessed image analysis fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "deepseek-missing-image-understanding"
-  ],
+  "modelProfileIds": ["deepseek-missing-image-understanding"],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "生成一张猫玩红球的图片，然后分析真实图像。当前若没有可用的图像理解能力，不要调用 ReadImage，不要猜测画面，也不要切换 provider/model；请明确回复“图像理解能力不可用”。"
+      "prompt": "生成一张猫玩红球的图片，然后分析真实图像。当前若没有可用的图像理解能力，不要调用 read_image，不要猜测画面，也不要切换 provider/model；请明确回复“图像理解能力不可用”。"
     },
-    {
-      "id": "idle",
-      "kind": "wait-for-idle",
-      "timeoutMs": 1200000
-    }
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 1200000 }
   ],
   "assertions": [
     {
@@ -66,7 +58,7 @@
     {
       "id": "no-read-image",
       "kind": "tool-call",
-      "name": "ReadImage",
+      "name": "read_image",
       "status": "absent",
       "evidenceRef": "perception-facts"
     },
@@ -74,24 +66,16 @@
       "id": "unavailable-answer",
       "kind": "final-answer",
       "mode": "contains",
-      "text": [
-        "图像理解能力不可用"
-      ],
+      "text": ["图像理解能力不可用"],
       "evidenceRef": "perception-facts"
     },
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "perception-facts"
     }
   ],
   "artifactChecks": [],
-  "budget": {
-    "timeoutMs": 1200000,
-    "repetitions": 1
-  }
+  "budget": { "timeoutMs": 1200000, "repetitions": 1 }
 }

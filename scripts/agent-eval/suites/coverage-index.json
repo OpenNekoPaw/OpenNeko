@@ -241,8 +241,11 @@
     {
       "kind": "agent-runtime-capability",
       "id": "media-library-content",
-      "disposition": "suite",
-      "suiteIds": ["agent-runtime.media-library-content", "agent-runtime.stream-delivery"]
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --filter @neko/content test -- --run && pnpm --filter @neko/agent-runtime exec vitest run src/acp/document-host-adapter.test.ts",
+        "reason": "The retired Pi media-library document/image scenarios cannot execute against DSH. Canonical document decoding and exact Host delegation are covered deterministically until a DSH-native complete-session case is authored."
+      }
     },
     {
       "kind": "agent-runtime-capability",

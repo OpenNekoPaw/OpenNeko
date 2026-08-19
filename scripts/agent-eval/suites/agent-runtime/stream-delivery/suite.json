@@ -53,30 +53,6 @@
       "visibility": "public"
     },
     {
-      "id": "read-document-tool-result",
-      "file": "cases/read-document-tool-result.json",
-      "group": "regression",
-      "visibility": "public"
-    },
-    {
-      "id": "directory-format-routing",
-      "file": "cases/directory-format-routing.json",
-      "group": "regression",
-      "visibility": "public"
-    },
-    {
-      "id": "document-image-native-delivery",
-      "file": "cases/document-image-native-delivery.json",
-      "group": "regression",
-      "visibility": "public"
-    },
-    {
-      "id": "locator-backed-display-projection",
-      "file": "cases/locator-backed-display-projection.json",
-      "group": "regression",
-      "visibility": "public"
-    },
-    {
       "id": "active-stream-cancellation",
       "file": "cases/active-stream-cancellation.json",
       "group": "failure",

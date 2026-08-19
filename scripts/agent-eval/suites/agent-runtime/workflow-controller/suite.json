@@ -51,12 +51,6 @@
       "visibility": "public"
     },
     {
-      "id": "media-tool-terminal-result",
-      "file": "cases/media-tool-terminal-result.json",
-      "group": "workflow",
-      "visibility": "public"
-    },
-    {
       "id": "detached-generation-job-observation",
       "file": "cases/detached-generation-job-observation.json",
       "group": "workflow",
