@@ -158,6 +158,26 @@ Product clear SHALL create a new Conversation identity bound to a newly created 
 
 The package-owned Agent application SHALL own the only new-Conversation publication path. It SHALL reserve canonical Host Conversation metadata and exact domain context, create one DSH Session through standard ACP `session/new`, revalidate that exact Session through the complete bounded `session/list` path, and publish one Conversation-to-Session binding. Desktop Main SHALL resolve the exact sender-bound Agent Surface and attach the published Conversation to that draft only after durable publication. Renderer MUST NOT provide Workspace authority, provider/model facts, cwd or a DSH Session identity, and no active/recent Conversation fallback is allowed.
 
+#### Scenario: Entry creates a Project-bound Conversation
+
+- **WHEN** the user selects a stable Project in the unbound Entry and submits its first prompt
+- **THEN** Renderer submits only that Project choice with the exact Agent Surface identity
+- **AND** Desktop Main resolves the Project to its exact Workspace, signs a process-scoped grant, publishes a Workspace Conversation and attaches the original Draft before prompting
+- **AND** it does not publish an Assistant Conversation or switch Scene when the Project is merely selected
+
+#### Scenario: Persisted Workspace Conversation reattaches after restart
+
+- **WHEN** an exact persisted Workspace Conversation is opened in a new Desktop process
+- **THEN** its current sender-bound Agent Surface restores the same `workspaceGrantId` for the same Window and Workspace before composer projection or prompt
+- **AND** a missing Workspace or failed restore disables only that Conversation with an explicit diagnostic
+- **AND** no replacement grant, active/recent Workspace or Assistant context is used
+
+#### Scenario: Persisted DSH Session belongs to a retired preset
+
+- **WHEN** the Conversation binding references a DSH Session that canonical `session/list` does not advertise for the current profile
+- **THEN** the Conversation remains visible and locally unavailable with its original binding preserved
+- **AND** OpenNeko does not load it through a compatibility preset, rebind it or create a replacement Session
+
 #### Scenario: User creates a Conversation from an exact Workspace Agent Surface
 
 - **WHEN** the user activates the create control on an unbound Workspace Agent Surface

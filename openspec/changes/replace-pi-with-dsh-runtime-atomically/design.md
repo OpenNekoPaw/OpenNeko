@@ -81,6 +81,19 @@ Composer 的权限选项直接来自 DSH `permissionPresets` authority，并通�
 
 新 Conversation 的开发可用路径由 `@neko/agent-runtime` 的 publication service 拥有：先在 Host catalog 事务中保留 canonical Conversation metadata 与精确领域 context，再调用标准 ACP `session/new`，通过完整 `session/list` 精确复核返回的 DSH Session，最后发布唯一 Conversation-to-Session binding。Desktop Main 只能从 sender-bound 当前 Agent Surface 解析 Workspace/Assistant context，调用该 service，并在 durable publication 成功后调用 Desktop Shell 的 exact draft attach；Renderer 只提交当前 Surface identity，不能提交 Workspace、provider、model、cwd 或 DSH Session identity。Home projection 从 Host catalog、context 与 exact binding 计算，不能从 Renderer、active/recent Window 或 DSH transcript 猜测。
 
+Entry 的项目选择只提交用户选择的稳定 `projectId`，不得把 Renderer 本地 token、Workspace identity 或
+`workspaceGrantId` 当作 authority。首次 `create` 时 Desktop Main 必须同时校验 exact sender-bound
+Window、Workbench、Agent Surface 与 Draft，通过稳定 Project catalog 解析 Workspace，并在同一创建链内签发
+process-scoped grant、发布 Workspace Conversation、attach 原 Draft。未选择项目的普通对话只发布 Assistant
+Conversation；不得因为 Entry UI token 未进入 Main authority 而静默创建 Assistant Conversation，也不得在选择
+项目时提前切换 Workspace scene。
+
+持久 Workspace Conversation 重开后，当前 Agent Surface 的 composer attach 是恢复 process-scoped grant 的
+唯一边界。Desktop Main 必须用 exact `windowId + workspaceGrantId + workspaceId` 调用 canonical
+`restore()`，再投影模型、上下文栏并允许 prompt；不得要求旧进程内 grant 仍存在，也不得生成替代 identity。
+恢复失败只禁用当前 Conversation并返回 owner-qualified diagnostic。DSH `session/list` 不可解析的旧 preset
+Session 同样保持可见但不可执行；不得把它改绑到另一 DSH Session、自动新建 Session 或兼容加载旧 preset。
+
 当前 rc.7 没有公开 `session/delete` 或等价 persistence seam，因此 `session/new` 成功但 binding publication 失败时，Host 必须保留已创建的 Conversation catalog 记录并显示局部 diagnostic，不能删除 raw DSH 文件、调用私有模块、将 `session/close` 冒充删除或返回成功。该开发路径可以用于暴露和验证后续缺口，但不能完成 2.5、不能满足发布门禁；完整 provisional cleanup 与 provider/model publication 仍须等待公开 seam 或独立接受的边界变更。
 
 Window 的当前 scene/presentation snapshot 必须保存并恢复 exact Conversation identity。应用进程重开时，Host 只能用已持久化 scene 中的 `conversationId` 和 owner 对 Home catalog/context/binding 做资格校验；合法记录原样恢复，单条失效只把该 Surface 重置为新的 canonical Draft 并保留 catalog diagnostic。禁止在重开时无条件进入 Entry，也禁止选择 first/active/recent Conversation。Renderer reload 只重建当前 Root，不改变 durable scene selection。
