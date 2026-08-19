@@ -3910,7 +3910,7 @@ async function inspectWorkspaceResourceChrome(evaluate) {
     const sourceLabels = sources.map((item) => item.textContent?.trim() ?? '');
     if (
       refreshCount !== 0 ||
-      initialLibraryControlCount !== 0 ||
+      initialLibraryControlCount !== 1 ||
       panelCloseCount !== 0 ||
       sources.length !== 3
     ) {
