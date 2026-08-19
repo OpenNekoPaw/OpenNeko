@@ -156,6 +156,23 @@ export function runDesktopHardGate(assertion, facts, context) {
 
 function assertCanonicalFacts(input) {
   const { facts, identity, authorization } = input;
+  if (facts.runtimePath?.runtime === 'dsh-agent') {
+    if (
+      facts.identity?.conversationId !== identity.conversationId ||
+      facts.identity?.dshSessionId !== identity.dshSessionId ||
+      facts.identity?.turn !== identity.turn
+    ) {
+      throw new Error('DSH terminal facts identity is stale or mismatched.');
+    }
+    if (facts.persistence?.checkpoint !== 'observed' || facts.disposal?.status !== 'disposed') {
+      throw new Error('DSH persistence or disposal facts are incomplete.');
+    }
+    if ((facts.diagnostics?.droppedCount ?? 0) !== 0) {
+      throw new Error('DSH diagnostic facts were truncated.');
+    }
+    assertFactsContainNoRenderUrl(facts);
+    return;
+  }
   if (
     facts.identity.conversationId !== identity.conversationId ||
     facts.identity.turnId !== identity.turnId ||
@@ -208,6 +225,12 @@ function assertRuntimeErrorsEmpty(facts) {
 function assertFullyIdle(input) {
   if (!input.workflow.terminalIdle?.identity) {
     throw new Error('Desktop Agent workflow did not reach terminal idle.');
+  }
+  if (input.facts.runtimePath?.runtime === 'dsh-agent') {
+    if (input.facts.projection?.currentTurn !== undefined) {
+      throw new Error('DSH Desktop Session still has an active turn.');
+    }
+    return { fullyIdle: true, terminalState: 'completed' };
   }
   if (!['completed', 'cancelled'].includes(input.facts.projection.terminalState)) {
     throw new Error(`Desktop Agent terminal state is ${input.facts.projection.terminalState}.`);

@@ -7,9 +7,9 @@
   "evidenceContract": {
     "userBehavior": "Run an Agent turn with an explicitly selected chat provider and model.",
     "canonicalPath": [
-      "flat agent.main profile",
-      "Desktop Agent runtime assembly",
-      "Pi provider/model registration",
+      "DSH standard profile",
+      "Desktop DSH Session assembly",
+      "DSH provider/model registration",
       "effective configuration facts"
     ],
     "observables": [
@@ -28,7 +28,7 @@
   ],
   "runtimeProfileId": "canonical-default",
   "modelProfileIds": [
-    "nekoapi-gpt-5.5"
+    "nekoapi-gpt-5.6-luna"
   ],
   "steps": [
     {
@@ -51,7 +51,7 @@
     {
       "id": "model",
       "kind": "model",
-      "profileId": "nekoapi-gpt-5.5",
+      "profileId": "nekoapi-gpt-5.6-luna",
       "evidenceRef": "model-facts"
     },
     {

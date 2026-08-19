@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { parse as parseToml } from 'smol-toml';
 import { openFixtureWorkspace } from '../../desktop-functional/desktop-operations.mjs';
 import { evaluateArtifactChecks } from '../runner/artifact-checks.mjs';
-import { createDesktopAgentDriver } from './driver.mjs';
+import { createDshDesktopAgentDriver } from './dsh-driver.mjs';
 import { requiresOpenNekoResourceObservation } from './evidence.mjs';
 import { executeDesktopAgentWorkflow } from './workflow.mjs';
 
@@ -97,7 +97,7 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         waitForDesktopBridge,
         waitForSelector,
       });
-      const driver = createDesktopAgentDriver({
+      const driver = createDshDesktopAgentDriver({
         evaluate,
         waitForRenderer: async () => {
           await waitForDesktopBridge(30_000);
@@ -140,10 +140,7 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
       const conversationId = workflow.conversationId;
       const identity = workflow.terminalIdle.identity;
       const finalInteraction = await readActiveAgentInteraction(evaluate);
-      let resumed = await driver.resume({
-        conversationId,
-        timeoutMs: executionCase.budget.timeoutMs,
-      });
+      let resumed = await driver.resume(conversationId);
       const projection = await driver.readProjection(conversationId);
       const pendingFacts = await driver.readFacts(identity);
       const lifecycle = {};
@@ -154,7 +151,7 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
           timeoutMs: executionCase.budget.timeoutMs,
         });
         workflowDriver.setConnection(restored.connection);
-        resumed = { accepted: true, snapshot: restored.snapshot };
+        resumed = { accepted: true, snapshot: restored.snapshot ?? restored };
         lifecycle.rendererReload = {
           status: 'restored',
           connection: restored.connection,
@@ -190,7 +187,10 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         identity,
         projection,
         snapshot: resumed.snapshot,
-        facts: closed.facts,
+        facts: {
+          ...pendingFacts.facts,
+          ...(closed.facts?.disposal === undefined ? {} : { disposal: closed.facts.disposal }),
+        },
         workflow,
         artifactChecks,
         mediaObservationRequired,

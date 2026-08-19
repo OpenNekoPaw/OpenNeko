@@ -3,11 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { resolveExecutionCase, runCase, runCaseRepeated } from './run-case.mjs';
 
 describe('Desktop Agent evaluation driver boundary', () => {
-  it('keeps the retired Pi scenario disconnected from the production runner', async () => {
+  it('assembles the canonical DSH scenario in the production runner', async () => {
     const source = await readFile(new URL('./run-case.mjs', import.meta.url), 'utf8');
-    expect(source).not.toContain('createDesktopAgentEvaluationScenario');
-    expect(source).not.toContain("from '../desktop/scenario.mjs'");
-    expect(source).toContain('the retired Pi driver is disconnected');
+    expect(source).toContain('createDesktopAgentEvaluationScenario');
+    expect(source).toContain("from '../desktop/scenario.mjs'");
+    expect(source).not.toContain('retired Pi driver');
   });
 
   it('requires explicit provider/model/cost authorization before launch', async () => {
@@ -93,7 +93,7 @@ describe('Desktop Agent evaluation driver boundary', () => {
     expect(runDesktop).toHaveBeenCalledOnce();
   });
 
-  it('blocks the retired Pi Desktop driver before launching an authorized real case', async () => {
+  it('uses the canonical DSH Desktop scenario when no factory is injected', async () => {
     const runDesktop = vi.fn();
 
     await expect(
@@ -106,11 +106,10 @@ describe('Desktop Agent evaluation driver boundary', () => {
         },
         runDesktop,
       }),
-    ).rejects.toMatchObject({
-      code: 'infrastructure-blocked',
-      message: expect.stringContaining('canonical DSH composer/Conversation/approval driver'),
+    ).rejects.not.toMatchObject({
+      message: expect.stringContaining('retired Pi driver'),
     });
-    expect(runDesktop).not.toHaveBeenCalled();
+    expect(runDesktop).toHaveBeenCalledOnce();
   });
 
   it('launches one isolated Desktop sample through the injected functional boundary', async () => {
