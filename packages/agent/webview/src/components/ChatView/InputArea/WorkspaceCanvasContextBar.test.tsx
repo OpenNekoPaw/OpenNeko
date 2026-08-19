@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import type { AgentComposerCanvasPresentation } from '../../ComposerWorkspaceContext';
 import { I18nProvider } from '../../../i18n/I18nContext';
 import { WorkspaceCanvasContextBar } from './WorkspaceCanvasContextBar';
-import type { AgentComposerCanvasPresentation } from '../../ComposerWorkspaceContext';
 
 const translations: Record<string, string> = {
   'chat.input.workspaceCanvas.board': 'Workspace Board',

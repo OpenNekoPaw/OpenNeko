@@ -16,7 +16,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neko/agent-contracts": "workspace:*",
     "@neko/content": "workspace:*",
     "@neko/entity-domain": "workspace:*",
     "@neko/shared": "workspace:*",

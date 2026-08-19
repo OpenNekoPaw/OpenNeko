@@ -246,7 +246,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       const assetPreviewScreenshot = await screenshot('asset-management-with-preview-large');
       checkpoint('asset-management-with-preview-large', { ...assetPreview, assetPreviewResize });
 
-      await clickApplicationNavigation(evaluate, click, 4);
+      await clickApplicationNavigation(evaluate, click, 2);
       await waitForSelector('.agent-extension-management-root');
       const extensionsGrid = await inspectExtensionsManagement(evaluate);
       assertExtensionsCatalogOnly(extensionsGrid, 'grid', 'skills');
@@ -265,7 +265,8 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         '.agent-extension-management-root .agent-extension-catalog-row .management-surface-row__select',
       );
       await waitForSelector('[data-workbench-main-panel="extension-detail"]');
-      await waitForSelector('[data-automation-local-runtime-management="true"]');
+      await waitForSelector('[data-automation-endpoint-management="true"]');
+      await waitForSelector('[data-automation-permission-management="true"]');
       const extensionsConfiguration = await inspectExtensionsManagement(evaluate);
       assertExtensionsManagement(extensionsConfiguration, 'list', 'extensions');
       const extensionsResize = await exerciseManagementMainSplit(evaluate, drag);
@@ -278,11 +279,11 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       };
       checkpoint('extension-management-configuration-large', extensions);
 
-      await clickApplicationNavigation(evaluate, click, 5);
+      await clickApplicationNavigation(evaluate, click, 3);
       await waitForSelector('.project-management-catalog');
       const projects = await inspectWorkbench(evaluate, 'management', 'project-management');
       assertManagementMain(projects, 'project-management');
-      assertSharedManagementPanel(projects, 'creative-management');
+      assertSharedManagementPanel(projects, 'project-management');
       assertBoundedManagement(projects, 'project-management');
       const projectsScreenshot = await screenshot('project-management-main-large');
       checkpoint('project-management-main-large', projects);
@@ -322,20 +323,13 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         screenshotLabel: 'workspace-draft-mention-large',
       });
       const workspaceAgentActivation = await inspectActivatedWorkspaceAgent(evaluate);
+      const workspaceResourceChrome = await inspectWorkspaceResourceChrome(evaluate);
+      const workspaceScreenshot = await screenshot('workspace-large');
       const workspaceComposer = await inspectComposerPresentation(evaluate);
       assertWorkspaceComposer(workspaceComposer, 'workspace');
       if (workspaceComposer.ownerWidth >= 400 || !workspaceComposer.toolbarFitsSurface) {
         throw new Error('Agent composer did not qualify the narrow Workspace dock presentation.');
       }
-      const workspaceAgentContextScreenshot = await screenshot('workspace-agent-context-large');
-      checkpoint('workspace-agent-context-large', {
-        ...workspace,
-        workspaceActivation,
-        workspaceAgentActivation,
-        workspaceComposer,
-      });
-      const workspaceResourceChrome = await inspectWorkspaceResourceChrome(evaluate);
-      const workspaceScreenshot = await screenshot('workspace-large');
       const workspaceDockResize = await exerciseWorkspaceDockResize(
         evaluate,
         drag,
@@ -418,13 +412,13 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         },
       });
 
-      await waitForNavigationButton(evaluate, 5);
-      await clickApplicationNavigation(evaluate, click, 5);
+      await waitForNavigationButton(evaluate, 3);
+      await clickApplicationNavigation(evaluate, click, 3);
       await waitForSelector(
         `${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .project-management-catalog .management-surface-row`,
       );
       const projectCatalog = await inspectWorkbench(evaluate, 'management', 'project-management');
-      assertSharedManagementPanel(projectCatalog, 'creative-management');
+      assertSharedManagementPanel(projectCatalog, 'project-management');
       if (
         projectCatalog.projectDetailInSecondary ||
         projectCatalog.mainPanelIds.includes('project-detail') ||
@@ -445,8 +439,8 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       );
       checkpoint('project-management-direct-open-exact-restore', catalogDirectRestore);
 
-      await waitForNavigationButton(evaluate, 3);
-      await clickApplicationNavigation(evaluate, click, 3);
+      await waitForNavigationButton(evaluate, 1);
+      await clickApplicationNavigation(evaluate, click, 1);
       await waitForSelector('[data-owner-root="asset-management"]');
       await openProjectWorkspace(evaluate, workspaceActivation.projectId);
       await waitForSelector('.desktop-scene-workbench--workspace');
@@ -495,8 +489,8 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         agentFailure: reloadAgentFailure,
       });
 
-      await waitForNavigationButton(evaluate, 3);
-      await clickApplicationNavigation(evaluate, click, 3);
+      await waitForNavigationButton(evaluate, 1);
+      await clickApplicationNavigation(evaluate, click, 1);
       await waitForSelector('[data-owner-root="asset-management"]');
       const retainedMediaLibrary = await openPersistedFixtureAssetPreview(evaluate);
       checkpoint('asset-management-media-library-restart-restore', retainedMediaLibrary);
@@ -584,7 +578,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           `Assistant endpoint replacement emitted identity errors: ${JSON.stringify(projectionEndpointErrors)}`,
         );
       }
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 1);
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('.home-conversation-link');
       await openAssistantConversation(evaluate, assistantActivation.conversationId);
@@ -646,7 +640,6 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           projectsScreenshot,
           settingsScreenshot,
           projectCatalogScreenshot,
-          workspaceAgentContextScreenshot,
           workspaceScreenshot,
           workspaceMention.screenshot,
           workspacePreviewScreenshot,
@@ -1891,7 +1884,7 @@ export const desktopConversationNavigationScenario = Object.freeze({
       );
       checkpoint('assistant-conversation-group-lifecycle', groupLifecycle);
 
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 1);
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('.home-conversation-link');
       await openAssistantConversation(evaluate, initialSession.conversationId);
@@ -2686,7 +2679,7 @@ async function exerciseProjectConversationGroups({
         document.querySelector(${JSON.stringify(cleanupGroupSelector)}) !== null,
     };
   })()`);
-  await clickApplicationNavigation(evaluate, click, 5);
+  await clickApplicationNavigation(evaluate, click, 3);
   await waitForCondition(
     evaluate,
     `(() => {
@@ -3910,7 +3903,7 @@ async function inspectWorkspaceResourceChrome(evaluate) {
     const sourceLabels = sources.map((item) => item.textContent?.trim() ?? '');
     if (
       refreshCount !== 0 ||
-      initialLibraryControlCount !== 1 ||
+      initialLibraryControlCount !== 0 ||
       panelCloseCount !== 0 ||
       sources.length !== 3
     ) {
@@ -5101,9 +5094,7 @@ async function inspectAgentDraftControls(evaluate) {
     composerCount: document.querySelectorAll('.agent-composer-shell').length,
     textareaCount: document.querySelectorAll('.agent-composer-textarea').length,
     toolButtonCount: document.querySelectorAll('.agent-composer-tool-button').length,
-    hasWorkspaceChoice: Boolean(
-      document.querySelector('[data-entry-context-action="project"]'),
-    ),
+    hasWorkspaceChoice: Boolean(document.querySelector('.agent-composer-workspace-button')),
     hasLegacyWorkspaceToolbar: Boolean(document.querySelector('.desktop-assistant-agent__toolbar')),
     hasMode: Boolean(document.querySelector('.agent-control-chip-mode')),
     hasModel: Boolean(document.querySelector('.agent-model-config-trigger')),
@@ -5111,15 +5102,6 @@ async function inspectAgentDraftControls(evaluate) {
     hasApproval: Boolean(document.querySelector('.agent-execution-mode-trigger')),
     hasCommandShortcut: Boolean(document.querySelector('.agent-composer-tool-button-text')),
     sessionTabsVisible: Boolean(document.querySelector('[data-testid="conversation-tabs"]')),
-    entryModeTabCount: document.querySelectorAll(
-      '.agent-entry-experience-selector [role="tab"]',
-    ).length,
-    selectedEntryModeTabCount: document.querySelectorAll(
-      '.agent-entry-experience-selector [role="tab"][aria-selected="true"]',
-    ).length,
-    entryContextActionKinds: [
-      ...document.querySelectorAll('[data-entry-context-action]'),
-    ].map((element) => element.getAttribute('data-entry-context-action')),
   }))()`);
   return { ...controls, composer: await inspectComposerPresentation(evaluate) };
 }
@@ -5178,18 +5160,14 @@ async function inspectComposerPresentation(evaluate) {
     const activeSurface = activeSurfaces[0];
     const shell = activeSurface?.querySelector('.agent-composer-shell');
     const toolbar = activeSurface?.querySelector('.agent-composer-toolbar');
-    const entryContextBar = activeSurface?.querySelector('.agent-entry-binding-bar');
-    const workspaceContextBar = activeSurface?.querySelector(
-      '.agent-workspace-canvas-context-bar',
-    );
-    const contextBar = entryContextBar ?? workspaceContextBar;
+    const workspace = activeSurface?.querySelector('.agent-composer-workspace');
     const emptyPanel = activeSurface?.querySelector(
       '.agent-empty-state--desktop-dock .agent-empty-panel',
     );
     const owner = shell?.closest('[data-dock-owner="agent"], [data-primary-surface="agent"]');
     if (activeSurfaces.length !== 1 || !(shell instanceof HTMLElement) ||
         !(toolbar instanceof HTMLElement) ||
-        !(contextBar instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
+        !(workspace instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
       throw new Error('Agent composer presentation is incomplete.');
     }
     const shellRect = shell.getBoundingClientRect();
@@ -5198,18 +5176,9 @@ async function inspectComposerPresentation(evaluate) {
     const emptyPanelRect = emptyPanel instanceof HTMLElement ? emptyPanel.getBoundingClientRect() : undefined;
     const style = getComputedStyle(shell);
     return {
-      contextLabel: contextBar.textContent?.trim() ?? '',
-      contextKind:
-        entryContextBar instanceof HTMLElement
-          ? 'entry'
-          : workspaceContextBar instanceof HTMLElement
-            ? 'workspace-canvas'
-            : undefined,
-      contextInToolbar: toolbar.contains(contextBar),
-      contextBorderBottomWidth: getComputedStyle(contextBar).borderBottomWidth,
-      projectContextActionCount: contextBar.querySelectorAll(
-        '[data-entry-context-action="project"]',
-      ).length,
+      workspaceLabel: workspace.textContent?.trim() ?? '',
+      workspaceInToolbar: toolbar.contains(workspace),
+      workspaceBorderBottomWidth: getComputedStyle(workspace).borderBottomWidth,
       hasShadow: style.boxShadow !== 'none',
       shellWidth: shellRect.width,
       ownerWidth: ownerRect.width,
@@ -6004,8 +5973,8 @@ async function inspectExtensionsManagement(evaluate) {
       configurationKind: secondary
         ?.querySelector('[data-extension-configuration-kind]')
         ?.getAttribute('data-extension-configuration-kind'),
-      localRuntimeConfigurationVisible: Boolean(
-        secondary?.querySelector('[data-automation-local-runtime-management="true"]'),
+      endpointConfigurationVisible: Boolean(
+        secondary?.querySelector('[data-automation-endpoint-management="true"]'),
       ),
       permissionConfigurationVisible: Boolean(
         secondary?.querySelector('[data-automation-permission-management="true"]'),
@@ -6020,17 +5989,14 @@ function assertAgentDraftControls(detail) {
     detail.composerCount !== 1 ||
     detail.textareaCount !== 1 ||
     detail.toolButtonCount < 1 ||
-    detail.hasWorkspaceChoice ||
+    !detail.hasWorkspaceChoice ||
     detail.hasLegacyWorkspaceToolbar ||
     detail.hasMode ||
     !detail.hasModel ||
     !detail.modelLabel.includes('Functional Chat') ||
-    !detail.hasApproval ||
+    detail.hasApproval ||
     detail.hasCommandShortcut ||
-    detail.sessionTabsVisible ||
-    detail.entryModeTabCount !== 2 ||
-    detail.selectedEntryModeTabCount !== 1 ||
-    JSON.stringify(detail.entryContextActionKinds) !== JSON.stringify(['character', 'world'])
+    detail.sessionTabsVisible
   ) {
     throw new Error(
       `Agent draft did not retain the complete launch-safe Workspace Agent controls: ${JSON.stringify(detail)}`,
@@ -6069,14 +6035,13 @@ function assertWorkspaceComposer(detail, scope) {
     !detail.hasShadow ||
     detail.shellWidth > 820 ||
     !detail.fitsSurface ||
+    !detail.emptyPanelAligned ||
     detail.emptyPanelWidth > 820 ||
     detail.branchMetadataCount !== 0 ||
-    detail.contextInToolbar ||
-    detail.contextBorderBottomWidth !== '0px' ||
-    (scope === 'assistant' &&
-      (detail.contextKind !== 'entry' || detail.contextLabel.length === 0)) ||
-    (scope === 'workspace' &&
-      (detail.contextKind !== 'workspace-canvas' || !detail.contextLabel.includes('workspace')))
+    !detail.workspaceInToolbar ||
+    detail.workspaceBorderBottomWidth !== '0px' ||
+    (scope === 'assistant' && !detail.workspaceLabel.includes('打开项目')) ||
+    (scope === 'workspace' && detail.workspaceLabel !== 'workspace')
   ) {
     throw new Error(
       `Agent ${scope} composer did not preserve its compact Workspace presentation: ${JSON.stringify(detail)}`,
@@ -6154,9 +6119,9 @@ function assertExtensionsManagement(detail, view, tab) {
     detail.configurationKind !== tab ||
     detail.selectedCount !== 1 ||
     (tab === 'skills' &&
-      (detail.localRuntimeConfigurationVisible || detail.permissionConfigurationVisible)) ||
+      (detail.endpointConfigurationVisible || detail.permissionConfigurationVisible)) ||
     (tab === 'extensions' &&
-      (!detail.localRuntimeConfigurationVisible || detail.permissionConfigurationVisible))
+      (!detail.endpointConfigurationVisible || !detail.permissionConfigurationVisible))
   ) {
     throw new Error(
       `Extensions management did not preserve its catalog/configuration contract: ${JSON.stringify(detail)}`,
@@ -6173,7 +6138,7 @@ function assertExtensionsCatalogOnly(detail, view, tab) {
     detail.activeTab !== tab ||
     detail.selectedCount !== 0 ||
     detail.configurationKind !== undefined ||
-    detail.localRuntimeConfigurationVisible ||
+    detail.endpointConfigurationVisible ||
     detail.permissionConfigurationVisible
   ) {
     throw new Error(
@@ -6233,9 +6198,8 @@ function assertSingleWorkbench(detail) {
   }
   if (
     !detail.recentNavigationVisible ||
-    detail.recentSectionCount !== 4 ||
-    JSON.stringify(detail.navigationSectionIds) !==
-      JSON.stringify(['projects', 'conversations', 'characters', 'worlds'])
+    detail.recentSectionCount !== 2 ||
+    JSON.stringify(detail.navigationSectionIds) !== JSON.stringify(['projects', 'conversations'])
   ) {
     throw new Error(
       'PrimarySidebar did not preserve one authoritative grouped navigation surface.',

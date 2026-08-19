@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import {
   consumeDesktopFunctionalWorkspaceSelection,
-  resolveDesktopAgentAutomationLaunch,
   resolveDesktopFunctionalCutExport,
   resolveDesktopFunctionalWorkspace,
   resolveDesktopFunctionalWindowMode,
@@ -251,25 +250,4 @@ describe('Desktop functional fixture home', () => {
     }
   });
 
-  it('enables Agent automation only for an explicit fixture Workspace', () => {
-    const fixtureHome = '/private/tmp/openneko-desktop-functional-agent';
-    expect(
-      resolveDesktopAgentAutomationLaunch({
-        argv: [],
-        workspace: `${fixtureHome}/workspace`,
-      }),
-    ).toBe(false);
-    expect(
-      resolveDesktopAgentAutomationLaunch({
-        argv: ['--openneko-functional-fixture'],
-        workspace: `${fixtureHome}/workspace`,
-      }),
-    ).toBe(true);
-    expect(() =>
-      resolveDesktopAgentAutomationLaunch({
-        argv: ['--openneko-functional-fixture'],
-        workspace: undefined,
-      }),
-    ).toThrow('isolated fixture Workspace');
-  });
 });

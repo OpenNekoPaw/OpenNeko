@@ -158,7 +158,7 @@ export const zhCN = {
   'home.revision': '修订 {revision}',
   'home.noActivity': '暂无 Agent 动态',
   'home.capabilities.eyebrow': '全局目录',
-  'home.capabilities.description': '管理全局 Skill 以及 OpenNeko 与 Pi Agent 支持的扩展。',
+  'home.capabilities.description': '管理 OpenNeko DSH profile 提供的全局 Skill 与扩展。',
   'home.capabilities.search': '搜索 Skill 或扩展',
   'home.capabilities.tabs': '扩展目录',
   'home.capabilities.skills': 'Skill',

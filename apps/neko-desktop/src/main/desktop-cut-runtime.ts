@@ -19,6 +19,7 @@ import {
   type CutHostRuntimeSnapshot,
 } from '@neko/cut-domain';
 import { CutApplicationRuntime, type CutApplicationRuntimeOptions } from '@neko/cut-node';
+import type { CutExportApplicationService, ExportJobStore } from '@neko/cut-node';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type {
   ResourceBrowserContentItem,
@@ -73,6 +74,7 @@ export interface DesktopCutRuntimeOptions {
   readonly createAuthoringMediaAdapter?: CutApplicationRuntimeOptions['createAuthoringMediaAdapter'];
   readonly createPreviewMediaAdapter?: CutApplicationRuntimeOptions['createPreviewMediaAdapter'];
   readonly createExportMediaAdapter?: CutApplicationRuntimeOptions['createExportMediaAdapter'];
+  readonly createExportJobStore?: (workspaceId: string) => ExportJobStore;
   readonly selectExportDestination?: CutApplicationRuntimeOptions['selectExportDestination'];
   readonly selectMediaFiles?: CutApplicationRuntimeOptions['selectMediaFiles'];
   readonly selectDraftDestination?: (input: {
@@ -164,6 +166,9 @@ export class DesktopCutRuntime {
       ...(options.createExportMediaAdapter === undefined
         ? {}
         : { createExportMediaAdapter: options.createExportMediaAdapter }),
+      ...(options.createExportJobStore === undefined
+        ? {}
+        : { createExportJobStore: options.createExportJobStore }),
       ...(options.selectExportDestination === undefined
         ? {}
         : { selectExportDestination: options.selectExportDestination }),
@@ -615,6 +620,23 @@ export class DesktopCutRuntime {
   getSnapshot(windowId: string, identity: CutHostRuntimeIdentity): Promise<CutHostRuntimeSnapshot> {
     this.requireActive();
     return this.application.getSnapshot(windowId, identity);
+  }
+
+  recoverExportJobs(input: {
+    readonly workspaceId: string;
+    readonly workspacePath: string;
+  }): Promise<void> {
+    this.requireActive();
+    return this.application.recoverExportJobs(input);
+  }
+
+  resolveExportService(input: {
+    readonly workspaceId: string;
+    readonly workspacePath: string;
+    readonly authoring: Pick<import('@neko/cut-domain').CutProjectAuthoringService, 'query'>;
+  }): CutExportApplicationService {
+    this.requireActive();
+    return this.application.resolveExportService(input);
   }
 
   execute(

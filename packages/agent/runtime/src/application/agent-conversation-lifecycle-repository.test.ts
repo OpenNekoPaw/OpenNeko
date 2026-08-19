@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
+import type {
+  AgentConfigurationPolicyProjection,
+  AgentConfigurationRequest,
+} from '@neko/agent-contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentConversationLifecycleRecord } from './agent-conversation-lifecycle-service';
 import {
@@ -10,7 +14,6 @@ import {
   createPersistentAgentConversationLifecycleRepository,
   initializeAgentConversationLifecycleTables,
 } from './agent-conversation-lifecycle-repository';
-import { projectAgentConfigurationPolicy } from './agent-launch-service';
 
 const roots: string[] = [];
 
@@ -378,29 +381,7 @@ function createRecord(
     maximumOutputTokens: 4096,
     thinkingBudget: 0,
   };
-  const projection = projectAgentConfigurationPolicy({
-    models: [
-      {
-        id: request.modelCatalogEntryId,
-        label: 'GPT-5',
-        providerId: request.providerId,
-        modelId: request.modelId,
-        modelType: 'llm',
-        contextWindow: 128_000,
-        maximumOutputTokens: 16_384,
-        purposeCapabilities: ['agent.main'],
-        availability: { status: 'available' },
-      },
-    ],
-    request,
-    source: 'conversation',
-    defaults: {
-      executionMode: 'ask',
-      temperature: 0.7,
-      maximumOutputTokens: 4096,
-      thinkingBudget: 0,
-    },
-  });
+  const projection = configurationProjection(request);
   return {
     conversationId,
     context: {
@@ -438,5 +419,38 @@ function createRecord(
       },
     },
     scratchArtifacts: [],
+  };
+}
+
+function configurationProjection(
+  request: AgentConfigurationRequest,
+): AgentConfigurationPolicyProjection {
+  const source = 'conversation' as const;
+  const editable = { status: 'editable' as const, owner: 'agent-config' };
+  return {
+    request,
+    fields: {
+      model: {
+        effectiveValue: {
+          modelCatalogEntryId: request.modelCatalogEntryId,
+          providerId: request.providerId,
+          modelId: request.modelId,
+        },
+        source,
+        policy: editable,
+      },
+      executionMode: { effectiveValue: request.executionMode, source, policy: editable },
+      temperature: { effectiveValue: request.temperature ?? 0.7, source, policy: editable },
+      maximumOutputTokens: {
+        effectiveValue: request.maximumOutputTokens ?? 4096,
+        source,
+        policy: editable,
+      },
+      thinkingBudget: {
+        effectiveValue: request.thinkingBudget ?? 0,
+        source,
+        policy: editable,
+      },
+    },
   };
 }

@@ -17,7 +17,7 @@ describe('desktop-only topology guard', () => {
         pnpmWorkspacePatterns: ['apps/*', 'packages/*', 'packages/*/*'],
         productionSourceEntries: [
           {
-            path: 'packages/agent/webview/src/root.tsx',
+            path: 'packages/agent/webview/src/extension-management/root.tsx',
             content: "import { createRoot } from 'react-dom/client';",
           },
         ],

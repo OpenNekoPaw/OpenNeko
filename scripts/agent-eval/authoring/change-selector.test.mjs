@@ -18,7 +18,7 @@ function decision(behaviorId, suiteId) {
     userBehavior: `Exercise ${behaviorId} through the canonical Agent path.`,
     evidenceContract: {
       userBehavior: `Exercise ${behaviorId} through the canonical Agent path.`,
-      canonicalPath: ['Desktop App', 'sender-bound controller', 'Pi Conversation runtime'],
+      canonicalPath: ['Desktop App', 'sender-bound DSH bridge', 'ACP Session runtime'],
       observables: [
         {
           ref: 'runtime-facts',
@@ -52,27 +52,24 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/automation/node/src/index.ts',
         'packages/agent/runtime/src/runtime/capability/capability-runtime-bindings.ts',
         'packages/host/src/settings/config-manager.ts',
-        'packages/agent/runtime/src/application/agent-launch-service.ts',
+        'packages/agent/runtime/src/application/conversation-dsh-session-application.ts',
         'packages/agent/runtime/src/session/agent-session.ts',
         'packages/agent/runtime/src/subagent/task-tool.ts',
-        'packages/agent/runtime/src/runtime/session/execution-ownership.ts',
+        'packages/agent/runtime/src/acp/dsh-acp-application-client.ts',
         'packages/generation/src/media/media-generation-executor.ts',
         'packages/generation/src/media/generated-output-adoption.ts',
         'packages/content/src/document/read-document-tool.ts',
         'packages/content/src/document/read-image-tool.ts',
-        'packages/agent/runtime/src/pi/event-projector.ts',
-        'packages/agent/runtime/src/pi/timeline-projector.ts',
+        'packages/agent/runtime/src/acp/dsh-acp-projection.ts',
+        'packages/agent/runtime/src/acp/dsh-acp-projection.ts',
         'packages/agent/runtime/src/runtime/turn/multimodal-context-packet.ts',
         'packages/agent/runtime/src/runtime/capability/capability-runtime-bindings.ts',
-        'packages/agent/runtime/src/runtime/projection/conversation-projection-store.ts',
-        'packages/agent/contracts/src/conversation-projection.ts',
-        'packages/agent/webview/src/render-runtime/conversation-projection-replica.ts',
-        'apps/neko-desktop/src/main/desktop-agent-bridge-runtime.ts',
-        'packages/agent/runtime/src/runtime/projection/agent-resource-display-projector.ts',
+        'packages/agent/runtime/src/acp/dsh-acp-projection.ts',
+        'packages/agent/contracts/src/dsh-session-host.ts',
+        'apps/neko-desktop/src/main/desktop-dsh-session-host.ts',
         'packages/agent/runtime/src/input/message-resource-projector.ts',
-        'packages/agent/webview/src/presenters/resource-display-uri.ts',
-        'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts',
-        'apps/neko-desktop/src/preload/desktop-agent-event-cursor.ts',
+        'apps/neko-desktop/src/main/desktop-dsh-agent-runtime.ts',
+        'apps/neko-desktop/src/preload/dsh-session-bridge.test.ts',
         'scripts/agent-eval/schemas/contracts.mjs',
       ]),
     ).toEqual(
@@ -151,11 +148,11 @@ describe('Agent Evaluation change-to-suite selector', () => {
     );
   });
 
-  it('maps Desktop Agent composition files to the owning runtime suite', () => {
+  it('maps Desktop DSH composition files to the owning runtime suite', () => {
     const paths = [
-      'apps/neko-desktop/src/main/desktop-agent-app-host-composition.ts',
-      'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts',
-      'apps/neko-desktop/src/main/desktop-agent-launch-runtime.ts',
+      'packages/agent/runtime/src/application/conversation-dsh-session-application.ts',
+      'apps/neko-desktop/src/main/desktop-dsh-agent-runtime.ts',
+      'apps/neko-desktop/src/main/desktop-dsh-permission-host.ts',
       'apps/neko-desktop/src/renderer/DesktopAgentSurface.tsx',
     ];
     expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
@@ -165,15 +162,17 @@ describe('Agent Evaluation change-to-suite selector', () => {
           behaviorId: 'launch-domain-binding',
           suiteId: 'agent-runtime.launch-binding',
           suiteIds: ['agent-runtime.launch-binding', 'agent-runtime.skill-runtime'],
-          changedPaths: ['apps/neko-desktop/src/main/desktop-agent-launch-runtime.ts'],
+          changedPaths: [
+            'packages/agent/runtime/src/application/conversation-dsh-session-application.ts',
+          ],
         },
         {
           behaviorId: 'session-workflows',
           suiteId: 'agent-runtime.workflow-controller',
           suiteIds: ['agent-runtime.workflow-controller'],
           changedPaths: [
-            'apps/neko-desktop/src/main/desktop-agent-app-host-composition.ts',
-            'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts',
+            'apps/neko-desktop/src/main/desktop-dsh-agent-runtime.ts',
+            'apps/neko-desktop/src/main/desktop-dsh-permission-host.ts',
             'apps/neko-desktop/src/renderer/DesktopAgentSurface.tsx',
           ],
         },
@@ -181,39 +180,59 @@ describe('Agent Evaluation change-to-suite selector', () => {
     );
   });
 
-  it('maps canonical builtin Skill content and its current execution path', () => {
+  it('maps Desktop DSH projection consumers to existing workflow and stream suites', () => {
     const paths = [
-      'packages/skills/skills/character-creator/SKILL.md',
-      'packages/agent/runtime/src/pi/skill-host.ts',
-      'packages/agent/runtime/src/pi/conversation-runtime.ts',
-      'packages/agent/contracts/src/character-creation-handoff.ts',
-      'packages/agent/webview/src/components/ConversationController.tsx',
+      'apps/neko-desktop/src/renderer/DesktopAgentSurface.tsx',
+      'apps/neko-desktop/src/preload/dsh-session-bridge.test.ts',
+      'apps/neko-desktop/src/preload/dsh-permission-bridge.test.ts',
     ];
     expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
     expect(selectEvaluationCoverage(paths)).toEqual([
       {
-        behaviorId: 'launch-domain-binding',
-        suiteId: 'agent-runtime.launch-binding',
-        suiteIds: ['agent-runtime.launch-binding', 'agent-runtime.skill-runtime'],
+        behaviorId: 'desktop-event-projection',
+        suiteId: 'agent-runtime.stream-delivery',
+        suiteIds: ['agent-runtime.external-automation', 'agent-runtime.stream-delivery'],
         changedPaths: [
-          'packages/agent/contracts/src/character-creation-handoff.ts',
-          'packages/agent/webview/src/components/ConversationController.tsx',
+          'apps/neko-desktop/src/preload/dsh-session-bridge.test.ts',
+          'apps/neko-desktop/src/preload/dsh-permission-bridge.test.ts',
         ],
       },
+      {
+        behaviorId: 'session-workflows',
+        suiteId: 'agent-runtime.workflow-controller',
+        suiteIds: ['agent-runtime.workflow-controller'],
+        changedPaths: ['apps/neko-desktop/src/renderer/DesktopAgentSurface.tsx'],
+      },
+    ]);
+  });
+
+  it('maps the Cut DSH Tool vertical slice to creative media workflow coverage', () => {
+    const paths = [
+      'packages/cut/domain/src/dsh-tool.ts',
+      'packages/cut/dsh-plugin/src/index.ts',
+      'packages/agent/runtime/src/acp/cut-host-adapter.ts',
+      'apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers.ts',
+    ];
+    expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
+    expect(selectEvaluationCoverage(paths)).toEqual([
+      {
+        behaviorId: 'creative-media-workflow',
+        suiteId: 'agent-runtime.creative-media-workflow',
+        suiteIds: ['agent-runtime.creative-media-workflow'],
+        changedPaths: paths,
+      },
+    ]);
+  });
+
+  it('maps canonical builtin Skill content without a retired Pi execution fixture', () => {
+    const paths = ['packages/skills/skills/character-creator/SKILL.md'];
+    expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
+    expect(selectEvaluationCoverage(paths)).toEqual([
       {
         behaviorId: 'portable-skill-content',
         suiteId: 'skill.character-creator',
         suiteIds: ['skill.character-creator'],
         changedPaths: ['packages/skills/skills/character-creator/SKILL.md'],
-      },
-      {
-        behaviorId: 'skill-runtime',
-        suiteId: 'agent-runtime.skill-runtime',
-        suiteIds: ['agent-runtime.skill-runtime', 'skill.storyboard'],
-        changedPaths: [
-          'packages/agent/runtime/src/pi/skill-host.ts',
-          'packages/agent/runtime/src/pi/conversation-runtime.ts',
-        ],
       },
     ]);
   });

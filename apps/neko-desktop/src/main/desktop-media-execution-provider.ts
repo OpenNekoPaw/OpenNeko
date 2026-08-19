@@ -1,10 +1,9 @@
-import type { AgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import type { MediaExecutionProviderResolver, MediaProvider } from '@neko/generation/media';
-import type { ConfigManager } from '@neko/host/settings';
+import type { ConfigManager, ProviderCredentialReader } from '@neko/host/settings';
 
 export function createDesktopMediaExecutionProviderResolver(input: {
   readonly config: Pick<ConfigManager, 'getProvider'>;
-  readonly credentials: Pick<AgentCredentialRuntime['credentials'], 'read'>;
+  readonly credentials: ProviderCredentialReader;
 }): MediaExecutionProviderResolver {
   return Object.freeze({
     resolveProvider: async (providerId: string): Promise<MediaProvider | undefined> => {
@@ -16,9 +15,6 @@ export function createDesktopMediaExecutionProviderResolver(input: {
 
       const credential = await input.credentials.read(providerId);
       if (credential === undefined) return undefined;
-      if (credential.type !== 'api_key') {
-        throw new Error(`Media provider '${providerId}' requires an API-key credential.`);
-      }
       return Object.freeze({ ...provider, apiKey: credential.key });
     },
   });

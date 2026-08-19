@@ -21,22 +21,16 @@ describe('World production path boundaries', () => {
   });
 
   it('does not promote a Foundation Run into complete World Experience availability', () => {
-    const entryService = readFileSync(
-      resolve(repositoryRoot, 'apps/neko-desktop/src/main/desktop-agent-runtime-entry-service.ts'),
-      'utf8',
-    );
     const shellService = readFileSync(
       resolve(repositoryRoot, 'packages/host/src/desktop-shell-service.ts'),
       'utf8',
     );
 
-    for (const source of [entryService, shellService]) {
-      expect(source).toContain('World Experience');
-      expect(source).toContain('unavailable');
-      expect(source).not.toMatch(
-        /WorldRun.*WorldExperienceVersion|WorldExperienceVersion.*WorldRun/su,
-      );
-    }
+    expect(shellService).toContain('World Experience');
+    expect(shellService).toContain('unavailable');
+    expect(shellService).not.toMatch(
+      /WorldRun.*WorldExperienceVersion|WorldExperienceVersion.*WorldRun/su,
+    );
   });
 
   it('keeps production management off the broad Foundation snapshot and command path', () => {

@@ -69,7 +69,7 @@ import { isOptimisticQueuedMessageItem } from '../../../presenters/message-queue
 import { projectClipboardTextToContextPayload } from '../../../presenters/clipboard-context-presenter';
 import { type ChatModelOption } from '@neko/ai-contracts';
 import { contentLocatorKey, type ContentLocator } from '@neko/content';
-import type { AgentContextPayload } from '@neko/agent-contracts';
+import type { AgentContextPayload, ShellExecutionMode } from '@neko/agent-contracts';
 import { projectContentLocatorPath } from '../../../presenters/content-locator-presenter';
 import type { AgentModelSlots, AgentQueuedMessageItem, SessionMode } from '@neko/agent-contracts';
 import {
@@ -111,11 +111,13 @@ interface InputAreaProps {
   disabled?: boolean;
   submissionBlocked?: boolean;
   submissionBlockedReason?: string;
+  availableExecutionModes?: Readonly<Record<ShellExecutionMode, boolean>>;
   /** Session-bound attached files (managed by parent for conversation isolation) */
   attachedFiles?: MessageAttachment[];
   /** Callback to update attached files (when managed externally) */
   onAttachedFilesChange?: (files: MessageAttachment[]) => void;
   onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
+  attachmentsDisabled?: boolean;
   entryContextActions?: readonly {
     readonly kind: 'project' | 'character' | 'world';
     readonly label: string;
@@ -243,9 +245,11 @@ export function InputArea({
   disabled = false,
   submissionBlocked = false,
   submissionBlockedReason,
+  availableExecutionModes,
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
   onAuthorizeResource,
+  attachmentsDisabled = false,
   entryContextActions = [],
   entryWorkspaceTarget,
   workspaceCanvas,
@@ -1051,6 +1055,7 @@ export function InputArea({
             className="agent-entry-binding-bar"
             aria-label={t('chat.entryContext.bindingBar')}
             data-entry-binding-bar="true"
+            data-entry-context-actions="true"
           >
             {entryContextActions.map((action) => (
               <EntryContextActionButton
@@ -1160,6 +1165,7 @@ export function InputArea({
           <div className="agent-composer-input-row">
             <textarea
               ref={textareaRef}
+              aria-label={t('chat.input.message')}
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -1195,7 +1201,7 @@ export function InputArea({
                 }
                 fileInputRef.current?.click();
               }}
-              disabled={attachmentInputDisabled}
+              disabled={attachmentInputDisabled || attachmentsDisabled}
               className="agent-composer-tool-button"
               title={t('chat.input.attach')}
             >
@@ -1291,6 +1297,7 @@ export function InputArea({
                       ? executionModePolicy.reason
                       : undefined
                   }
+                  availableModes={availableExecutionModes}
                 />
               </ComposerMenuRuntimeProvider>
             )}

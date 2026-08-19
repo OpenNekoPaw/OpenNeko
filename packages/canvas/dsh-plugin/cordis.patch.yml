@@ -1,0 +1,3 @@
+- insert:
+    - id: openneko-canvas-tools
+      name: '@neko/canvas-dsh-plugin'

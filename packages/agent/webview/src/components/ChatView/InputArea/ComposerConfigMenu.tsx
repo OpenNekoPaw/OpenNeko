@@ -565,6 +565,7 @@ function ModelRadio({
       type="button"
       role="radio"
       aria-checked={checked}
+      aria-label={label}
       className={`agent-model-config-radio agent-model-option-row ${
         checked ? 'agent-model-config-radio-selected' : ''
       } ${muted ? 'agent-model-config-radio-muted' : ''}`}

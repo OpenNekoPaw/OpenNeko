@@ -86,7 +86,7 @@ describe('Project Entity document contract', () => {
         ]),
       ),
     ).toBeTruthy();
-    const legacyDocument: unknown = {
+    const retiredDocumentShape: unknown = {
       ...createDocument([]),
       entities: [
         {
@@ -104,7 +104,9 @@ describe('Project Entity document contract', () => {
         },
       ],
     };
-    expect(() => assertProjectEntityDocument(legacyDocument)).toThrow(ProjectEntityContractError);
+    expect(() => assertProjectEntityDocument(retiredDocumentShape)).toThrow(
+      ProjectEntityContractError,
+    );
   });
 
   it('diagnoses unsupported document fields and rejects former facts and provenance authority', () => {

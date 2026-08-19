@@ -168,7 +168,7 @@ describe('neko-chara architecture boundaries', () => {
     expect(applicationEntry).toContain("export * from './character-storyline-service';");
   });
 
-  it('keeps CharacterVersion, Storyline and Conversation branch graphs as separate projections', () => {
+  it('keeps CharacterVersion and Storyline graphs separate from the retired Pi authority', () => {
     const repositoryRoot = resolve(packageRoot, '../..');
     const versionGraph = readFileSync(
       resolve(packageRoot, 'src/application/character-version-graph-service.ts'),
@@ -182,9 +182,9 @@ describe('neko-chara architecture boundaries', () => {
       resolve(repositoryRoot, 'packages/chara-webview/src/character-version-workspace.tsx'),
       'utf8',
     );
-    const conversationBranches = readFileSync(
-      resolve(repositoryRoot, 'packages/agent/runtime/src/pi/node-conversation-authority.ts'),
-      'utf8',
+    const retiredConversationAuthority = resolve(
+      repositoryRoot,
+      'packages/agent/runtime/src/pi/node-conversation-authority.ts',
     );
 
     expect(versionGraph).not.toMatch(/CharacterStoryline|ConversationBranch|ConversationTimeline/u);
@@ -192,8 +192,8 @@ describe('neko-chara architecture boundaries', () => {
     expect(versionWorkspace).not.toMatch(
       /CharacterStoryline|ConversationBranch|ConversationTimeline/u,
     );
-    expect(conversationBranches).not.toMatch(/CharacterVersionGraph|CharacterStoryline/u);
-    expect(`${versionGraph}\n${storyline}\n${conversationBranches}`).not.toMatch(
+    expect(existsSync(retiredConversationAuthority)).toBe(false);
+    expect(`${versionGraph}\n${storyline}`).not.toMatch(
       /Unified(?:Character)?(?:Graph|Timeline)|CrossGraphMutation/u,
     );
   });
@@ -226,7 +226,7 @@ describe('neko-chara architecture boundaries', () => {
     );
   });
 
-  it('keeps quick creation on one Composer and one Character capability provider path', () => {
+  it('keeps Desktop composition and Agent Webview detached from Character application runtime', () => {
     const repositoryRoot = resolve(packageRoot, '../..');
     const productionFiles = listTypeScriptFiles(repositoryRoot).filter(
       (file) => !file.endsWith('.test.ts') && !file.endsWith('.test.tsx'),
@@ -246,11 +246,8 @@ describe('neko-chara architecture boundaries', () => {
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n');
 
-    expect(composerOwners).toEqual(['packages/agent/webview/src/root.tsx']);
-    expect(characterProviderOwners).toEqual([
-      'apps/neko-desktop/src/main/index.ts',
-      'packages/chara/src/application/character-authoring-capability-provider.ts',
-    ]);
+    expect(composerOwners).toEqual([]);
+    expect(characterProviderOwners).toEqual([]);
     expect(agentWebviewSources).not.toMatch(
       /@neko\/chara\/application|CharacterAuthoringCapabilityProvider/u,
     );
