@@ -94,7 +94,7 @@ describe('DshAgentView content-creation composer', () => {
           references: [
             {
               label: 'scene.md',
-              contentLocator: { kind: 'workspace-file', path: 'notes/scene.md' },
+              contentLocator: { file: { authority: 'workspace', path: 'notes/scene.md' } },
             },
           ],
           contextPayloads: [],

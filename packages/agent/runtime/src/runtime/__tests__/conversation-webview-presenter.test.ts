@@ -31,8 +31,7 @@ describe('conversation-host-message', () => {
 
   it('projects active conversation resources through a locator resolver', async () => {
     const contentLocator = {
-      kind: 'workspace-file' as const,
-      path: 'images/out.png',
+      file: { authority: 'workspace' as const, path: 'images/out.png' },
     };
     const toolCall: ToolCall = {
       id: 'tool-1',
@@ -101,8 +100,7 @@ describe('conversation-host-message', () => {
 });
 
 function previewDescriptor(contentLocator: {
-  readonly kind: 'workspace-file';
-  readonly path: string;
+  readonly file: { readonly authority: 'workspace'; readonly path: string };
 }) {
   return {
     descriptorId: 'agent-display:attachment-1:image-1',

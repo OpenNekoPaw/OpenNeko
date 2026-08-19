@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { DocumentDshHostAdapter } from './document-host-adapter';
 
-const source = { kind: 'workspace-file' as const, path: 'books/story.epub' };
+const source = { file: { authority: 'workspace' as const, path: 'books/story.epub' } };
 
 describe('Document DSH Host adapter', () => {
   it('delegates the canonical read operation to Content access', async () => {

@@ -66,7 +66,7 @@ describe('Agent resolved Entity context contract', () => {
 describe('Agent authorized content reference contract', () => {
   const reference = {
     kind: AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND,
-    locator: { kind: 'workspace-file', path: 'books/story.epub' },
+    locator: { file: { authority: 'workspace', path: 'books/story.epub' } },
     mediaType: 'document',
     source: 'workspace',
   } as const;
@@ -89,7 +89,7 @@ describe('Agent authorized content reference contract', () => {
     expect(
       isAgentAuthorizedContentReferenceContextData({
         ...reference,
-        locator: { kind: 'workspace-file', path: '../story.epub' },
+        locator: { file: { authority: 'workspace', path: '../story.epub' } },
       }),
     ).toBe(false);
     expect(

@@ -15,7 +15,7 @@ describe('multimodal message contracts', () => {
         id: 'reference:story.fountain',
         label: 'story.fountain',
         mediaType: 'text',
-        contentLocator: { kind: 'workspace-file', path: 'story.fountain' },
+        contentLocator: { file: { authority: 'workspace', path: 'story.fountain' } },
         navigationData: { source: 'workspace' },
       }),
     ).toEqual({
@@ -23,7 +23,7 @@ describe('multimodal message contracts', () => {
       id: 'reference:story.fountain',
       label: 'story.fountain',
       mediaType: 'text',
-      contentLocator: { kind: 'workspace-file', path: 'story.fountain' },
+      contentLocator: { file: { authority: 'workspace', path: 'story.fountain' } },
       navigationData: { source: 'workspace' },
     });
   });
