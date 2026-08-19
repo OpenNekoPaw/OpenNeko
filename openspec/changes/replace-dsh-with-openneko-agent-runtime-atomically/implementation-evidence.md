@@ -47,7 +47,7 @@
 
 - Authoritative runtime: isolated real Electron Desktop through `desktop-workbench-scenes`.
 - Report:
-  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-19T03-05-53.197Z-desktop-workbench-scenes-development/report.json`.
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-19T03-15-23.571Z-desktop-workbench-scenes-development/report.json`.
 - Passed Agent inventory: one Sidebar and one Agent Root; Conversation/Creation mode selector; Character
   and World context actions; fixture model selector; approval control; large and small Entry composer fit;
   management-scene round trip; exact Project open; Workspace + Canvas context bar; narrow Workspace
@@ -56,10 +56,11 @@
   `screenshots/03-agent-only-large.png`, `screenshots/04-agent-only-small.png` and
   `screenshots/13-workspace-agent-context-large.png` under the report directory. Controls are visible and
   readable without overlap, clipping or text escape in the inspected states.
-- The overall scenario remains `failed`, so UI validation is not globally passed. It proceeds through the
-  Agent checkpoints and then stops at an adjacent stale Resource Browser chrome assertion: the canonical
-  UI exposes one library management control while the old assertion expects zero. This unrelated assertion
-  was left fail-visible instead of changing product UI or reporting a pass.
+- The corrected Resource Browser control inventory let the scenario complete 19 checkpoints, including
+  Workspace Resource Browser, Workspace/Canvas display modes, two-Workspace exact restore, Project catalog
+  direct open and recent-Project restore. The overall scenario remains `failed`, so UI validation is not
+  globally passed: after application restart, the Window returns to Agent Entry instead of restoring the
+  exact Workspace. No global alert or renderer exception was reported at that failure boundary.
 
 ### Remaining risk
 
@@ -67,5 +68,6 @@
   record-local unsupported diagnostics remain unverified and task 5.1 stays open.
 - Real provider/domain-Tool behavior, visible approval, terminal response and artifact delivery remain
   unverified while API validation is deferred; task 5.3 stays open.
-- The full adjacent Character/Canvas UI inventory has not completed after the Resource Browser assertion;
-  task 4.2 stays open even though the Agent Entry and Workspace Agent checkpoints passed.
+- The full adjacent Character/Canvas UI inventory has not completed after the application-restart restore
+  failure; task 4.2 stays open even though the Agent Entry, Workspace Agent, Resource Browser and Canvas
+  display-mode checkpoints passed.
