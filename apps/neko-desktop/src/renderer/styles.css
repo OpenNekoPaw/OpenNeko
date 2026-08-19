@@ -3465,7 +3465,19 @@ code {
     z-index: 5;
     top: 0;
     bottom: 0;
-    width: min(360px, calc(100% - 56px));
+    width: min(var(--neko-controlled-left-dock-width), calc(100% - 56px));
+    padding: 0;
+    border-radius: 0;
+    background: var(--neko-desktop-surface);
+    box-shadow: var(--neko-desktop-shadow-overlay);
+  }
+
+  .project-workspace > .neko-controlled-workbench-interaction[data-presentation='docked'] {
+    position: absolute;
+    z-index: 5;
+    top: 0;
+    bottom: 0;
+    width: min(var(--neko-controlled-left-dock-width), calc(100% - 56px));
     padding: 0;
     border-radius: 0;
     background: var(--neko-desktop-surface);
@@ -3483,6 +3495,18 @@ code {
 
   .project-workspace .neko-controlled-workbench-dock--right[data-presentation='docked'] {
     right: 0;
+    width: min(var(--neko-controlled-right-dock-width), calc(100% - 56px));
+  }
+
+  .project-workspace
+    > .neko-controlled-workbench-interaction[data-position='left'][data-presentation='docked'] {
+    left: var(--neko-controlled-primary-width);
+  }
+
+  .project-workspace
+    > .neko-controlled-workbench-interaction[data-position='right'][data-presentation='docked'] {
+    right: 0;
+    width: min(var(--neko-controlled-right-dock-width), calc(100% - 56px));
   }
 }
 
