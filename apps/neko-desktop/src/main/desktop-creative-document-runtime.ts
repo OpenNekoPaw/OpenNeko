@@ -19,8 +19,9 @@ export async function openDesktopCanvasDocument(input: {
   const locator = input.item.locator;
   if (
     input.item.source !== 'files' ||
-    locator.kind !== 'workspace-file' ||
-    !locator.path.toLocaleLowerCase('en-US').endsWith('.nkc')
+    locator.file.authority !== 'workspace' ||
+    locator.selector !== undefined ||
+    !locator.file.path.toLocaleLowerCase('en-US').endsWith('.nkc')
   ) {
     throw new Error('Desktop Canvas requires a Workspace-file NKC ContentLocator.');
   }
@@ -42,7 +43,7 @@ export async function openDesktopCanvasDocument(input: {
     throw new Error('Desktop Canvas Resource owner is stale.');
   }
   const workspace = await input.shell.resolveAgentWorkspace(project.workspaceId);
-  const resolvedPath = await resolveWorkspaceContentLocator(workspace, locator);
+  const resolvedPath = await resolveWorkspaceContentLocator(workspace, { file: locator.file });
   if (resolvedPath !== input.absolutePath) {
     throw new Error('Desktop Canvas Resource path does not match its authorized ContentLocator.');
   }
@@ -52,7 +53,7 @@ export async function openDesktopCanvasDocument(input: {
     rendererSessionId: input.identity.rendererSessionId,
     projectId: project.projectId,
     workspaceId: project.workspaceId,
-    documentId: locator.path,
+    documentId: locator.file.path,
     displayLabel: input.item.label,
   });
 }

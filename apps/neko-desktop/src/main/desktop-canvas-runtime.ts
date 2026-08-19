@@ -462,8 +462,7 @@ export class DesktopCanvasRuntime {
       identity.documentId === CANVAS_WORKSPACE_BOARD_PATH
         ? this.options.host.paths.join(grant.workspace.workspacePath, identity.documentId)
         : await resolveWorkspaceContentLocator(grant.workspace, {
-            kind: 'workspace-file',
-            path: identity.documentId,
+            file: { authority: 'workspace', path: identity.documentId },
           });
     const initialCanvas = await this.loadDocument(documentPath, grant.workspace.displayName);
     const textFilePreview = new CanvasTextFilePreviewService(
@@ -487,7 +486,7 @@ export class DesktopCanvasRuntime {
             identity: requestIdentity,
             workspace: grant.workspace,
             locator,
-            ...(locator.kind === 'workspace-file' || locator.kind === 'generated-output'
+            ...(locator.file.authority === 'workspace' && locator.selector === undefined
               ? {
                   absolutePath: await this.resolveContentPath(
                     requestIdentity.projectId,
@@ -525,8 +524,8 @@ export class DesktopCanvasRuntime {
       ...(this.options.host.external?.revealPath
         ? {
             resolveReveal: async ({ target }: { readonly target: CanvasMaterialActionTarget }) =>
-              target.locator.kind === 'workspace-file' ||
-              target.locator.kind === 'generated-output',
+              target.locator.file.authority === 'workspace' &&
+              target.locator.selector === undefined,
             reveal: ({ identity: requestIdentity, target }) =>
               revealEffect(requestIdentity, target.locator),
           }
@@ -891,8 +890,8 @@ export class DesktopCanvasRuntime {
     workspace: DesktopCanvasViewGrant['workspace'],
     locator: ContentLocator,
   ): Promise<string> {
-    if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
-      return resolveWorkspaceContentLocator(workspace, locator);
+    if (locator.file.authority === 'workspace' && locator.selector === undefined) {
+      return resolveWorkspaceContentLocator(workspace, { file: locator.file });
     }
     throw new Error('Canvas material has no directly resolvable Host file path.');
   }
@@ -1021,15 +1020,7 @@ function materialIdentity(identity: CanvasHostRuntimeIdentity) {
 }
 
 function materialFileName(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return portableBaseName(locator.path);
-    case 'document-entry':
-      return portableBaseName(locator.entryPath);
-    case 'package-resource':
-      return portableBaseName(locator.resourcePath);
-  }
+  return portableBaseName(locator.selector?.path ?? locator.file.path);
 }
 
 function portableBaseName(value: string): string {

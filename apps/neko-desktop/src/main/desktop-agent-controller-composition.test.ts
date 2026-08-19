@@ -303,7 +303,7 @@ describe('Agent controller composition', () => {
             {
               id: 'file:forbidden',
               label: 'forbidden.md',
-              contentLocator: { kind: 'workspace-file', path: 'forbidden.md' },
+              contentLocator: { file: { authority: 'workspace', path: 'forbidden.md' } },
               mediaType: 'text',
             },
           ],
@@ -360,7 +360,7 @@ describe('Agent controller composition', () => {
       {
         id: 'file:brief',
         label: 'brief.md',
-        contentLocator: { kind: 'workspace-file' as const, path: 'docs/brief.md' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'docs/brief.md' } },
         mediaType: 'text' as const,
       },
     ];
@@ -1414,9 +1414,8 @@ describe('Agent controller composition', () => {
     const workspace = createWorkspace();
     await workspace.createConversation('conversation-image-history');
     const locator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
-      entryPath: 'OPS/images/cover.png',
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/images/cover.png' },
     };
     const bytes = new Uint8Array([137, 80, 78, 71]);
     vi.mocked(workspace.readConversationEntries).mockResolvedValue(
@@ -1959,7 +1958,7 @@ describe('Agent controller composition', () => {
           {
             id: 'file:companion-source',
             label: 'source.md',
-            contentLocator: { kind: 'workspace-file', path: 'source.md' },
+            contentLocator: { file: { authority: 'workspace', path: 'source.md' } },
             mediaType: 'text',
           },
         ],
@@ -2861,10 +2860,7 @@ function createWorkspace(
 }
 
 function restoredReadImageEntries(
-  contentLocator: Extract<
-    import('@neko/content').ContentLocator,
-    { readonly kind: 'document-entry' }
-  >,
+  contentLocator: import('@neko/content').DocumentEntryContentLocator,
 ): PiConversationTranscriptEntry[] {
   const assistantMessage: Extract<PiConversationTranscriptEntry, { type: 'message' }> = {
     type: 'message',
@@ -2947,12 +2943,12 @@ function createLocatorBackedProjection(): ConversationProjectionSnapshot {
         id: 'tool-call-1',
         name: 'ReadDocument',
         arguments: {
-          contentLocator: { kind: 'workspace-file', path: 'documents/source.pdf' },
+          contentLocator: { file: { authority: 'workspace', path: 'documents/source.pdf' } },
         },
         result: {
           success: true,
           data: {
-            contentLocator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+            contentLocator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
             mimeType: 'video/mp4',
           },
         },

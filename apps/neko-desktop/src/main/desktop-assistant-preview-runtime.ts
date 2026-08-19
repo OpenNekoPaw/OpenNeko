@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { readFile, realpath, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { realpath, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import type { AgentScratchArtifactRef, AssistantResourceIdentity } from '@neko/agent-contracts';
 import type { AssistantResourcePreviewPort } from '@neko/agent-runtime/application';
@@ -79,8 +79,6 @@ export function createDesktopAssistantPreviewRuntime(options: {
         );
         const file = await stat(absolutePath);
         if (!file.isFile()) throw new Error('Assistant Scratch Preview source is not a file.');
-        const bytes = await readFile(absolutePath);
-        const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
         const sourceFingerprint = `${file.mtimeMs}:${file.size}`;
         const lease = await options.resources.registerFile(
           {
@@ -97,12 +95,6 @@ export function createDesktopAssistantPreviewRuntime(options: {
           descriptor: {
             descriptorId: `descriptor:${previewSessionId}`,
             sourceFingerprint,
-            contentLocator: {
-              kind: 'generated-output',
-              outputId: artifact.scratchArtifactId,
-              digest,
-              path: artifact.label,
-            },
             url: lease.url,
             contentKind,
             mediaType,

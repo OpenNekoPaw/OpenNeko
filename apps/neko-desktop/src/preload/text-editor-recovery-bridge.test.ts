@@ -125,7 +125,7 @@ function projection(sessionId: string, documentId = 'notes/readme.md'): TextDocu
       owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
       workspaceId: 'workspace-1',
       documentId,
-      locator: { kind: 'workspace-file', path: documentId },
+      locator: { file: { authority: 'workspace', path: documentId } },
     },
     sessionId,
     editSequence: 0,

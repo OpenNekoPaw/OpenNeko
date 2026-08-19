@@ -665,7 +665,7 @@ describe('DesktopTextEditorRuntime', () => {
       ).resolves.toMatchObject({
         success: true,
         data: {
-          contentLocator: { kind: 'workspace-file', path: relativePath },
+          contentLocator: { file: { authority: 'workspace', path: relativePath } },
           operation: 'replace',
         },
       });
@@ -824,7 +824,7 @@ function textItem(relativePath: string) {
     depth: 0,
     kind: 'file' as const,
     label: path.basename(relativePath),
-    locator: { kind: 'workspace-file' as const, path: relativePath },
+    locator: { file: { authority: 'workspace' as const, path: relativePath } },
     capabilities: ['edit-text', 'preview', 'reveal'] as const,
   };
 }

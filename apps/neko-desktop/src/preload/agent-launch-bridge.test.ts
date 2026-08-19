@@ -222,7 +222,7 @@ describe('Desktop Agent launch preload bridge', () => {
       filter: 'hero',
       files: [
         {
-          locator: { kind: 'workspace-file' as const, path: 'hero.md' },
+          locator: { file: { authority: 'workspace' as const, path: 'hero.md' } },
           name: 'hero.md',
           type: 'file' as const,
           referenceReceipt: {

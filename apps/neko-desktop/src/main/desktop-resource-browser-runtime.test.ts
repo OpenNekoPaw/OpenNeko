@@ -100,7 +100,7 @@ describe('createResourceToCanvasInteraction', () => {
         depth: 0,
         kind: 'image',
         label: 'cat.png',
-        locator: { kind: 'workspace-file', path: 'media/cat.png' },
+        locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
         capabilities: ['preview', 'reveal', 'add-to-canvas'],
       },
       target: {
@@ -129,7 +129,7 @@ describe('createResourceToCanvasInteraction', () => {
                 canvasView.viewInstanceId,
               ),
             },
-            locator: { kind: 'workspace-file', path: 'media/cat.png' },
+            locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
             mediaKind: 'image',
             title: 'cat.png',
           },
@@ -162,7 +162,7 @@ describe('createResourceToCanvasInteraction', () => {
           depth: 0,
           kind: 'image',
           label: 'cat.png',
-          locator: { kind: 'workspace-file', path: 'media/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
           capabilities: ['add-to-canvas'],
         },
         target: {

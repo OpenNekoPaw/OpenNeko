@@ -43,7 +43,7 @@ describe('Desktop Character creation source authority', () => {
       authority.content.requireReadable({
         sourceWorkspaceId: 'workspace:story',
         sourceWorkspaceGrantId: 'grant:story',
-        locator: { kind: 'workspace-file', path: 'evidence/lin.md' },
+        locator: { file: { authority: 'workspace', path: 'evidence/lin.md' } },
       }),
     ).resolves.toBeUndefined();
     await expect(
@@ -91,7 +91,7 @@ describe('Desktop Character creation source authority', () => {
       authority.content.requireReadable({
         sourceWorkspaceId: 'workspace:story',
         sourceWorkspaceGrantId: 'grant:story',
-        locator: { kind: 'workspace-file', path: 'missing.md' },
+        locator: { file: { authority: 'workspace', path: 'missing.md' } },
       }),
     ).rejects.toThrow('content-missing');
     await expect(
@@ -105,12 +105,7 @@ describe('Desktop Character creation source authority', () => {
     await expect(
       authority.assets.requireRepresentation({
         assetId: 'asset:live2d',
-        resource: {
-          kind: 'package-resource',
-          packageId: 'asset:live2d',
-          revision: 'publication:one',
-          resourcePath: 'avatar/model.model3.json',
-        },
+        resource: { file: { authority: 'package', packageId: 'asset:live2d', revision: 'publication:one', path: 'avatar/model.model3.json' } },
         representationId: 'representation:avatar',
         representationKind: 'live2d',
       }),

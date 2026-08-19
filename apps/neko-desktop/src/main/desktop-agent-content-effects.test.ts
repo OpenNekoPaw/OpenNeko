@@ -45,7 +45,7 @@ describe('Desktop Agent content effects', () => {
       filter: 'guide',
       files: [
         {
-          locator: { kind: 'workspace-file', path: 'docs/guide.md' },
+          locator: { file: { authority: 'workspace', path: 'docs/guide.md' } },
           name: 'guide.md',
           type: 'file',
           source: 'workspace',
@@ -53,7 +53,7 @@ describe('Desktop Agent content effects', () => {
           mediaType: 'text',
         },
         {
-          locator: { kind: 'workspace-file', path: 'src/guide.ts' },
+          locator: { file: { authority: 'workspace', path: 'src/guide.ts' } },
           name: 'guide.ts',
           type: 'file',
           source: 'workspace',
@@ -85,7 +85,7 @@ describe('Desktop Agent content effects', () => {
             representations: [
               {
                 bindingId: 'binding-xiaoju-portrait',
-                target: { kind: 'workspace-file', path: 'assets/小橘.png' },
+                target: { file: { authority: 'workspace', path: 'assets/小橘.png' } },
                 role: 'portrait',
                 source: 'user',
                 acceptedAt: '2026-07-29T00:00:00.000Z',
@@ -119,14 +119,14 @@ describe('Desktop Agent content effects', () => {
       filter: '小',
       files: [
         {
-          locator: { kind: 'workspace-file', path: 'assets/小橘.png' },
+          locator: { file: { authority: 'workspace', path: 'assets/小橘.png' } },
           name: '小橘.png',
           type: 'file',
           source: 'workspace',
           mediaType: 'image',
         },
         {
-          locator: { kind: 'workspace-file', path: 'docs/小橘设定.md' },
+          locator: { file: { authority: 'workspace', path: 'docs/小橘设定.md' } },
           name: '小橘设定.md',
           type: 'file',
           source: 'workspace',
@@ -142,10 +142,7 @@ describe('Desktop Agent content effects', () => {
           summary: 'Character: 小橘',
           searchText: '小橘 橘猫 character char_小橘',
           source: 'entity-graph',
-          contentLocator: {
-            kind: 'workspace-file',
-            path: 'assets/小橘.png',
-          },
+          contentLocator: { file: { authority: 'workspace', path: 'assets/小橘.png' } },
           entityType: 'character',
           navigationData: {
             entityId: 'char_小橘',
@@ -188,8 +185,7 @@ describe('Desktop Agent content effects', () => {
         files: [
           expect.objectContaining({
             locator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Reference/shots/hero.png',
+              file: { authority: 'workspace', path: 'neko/assets/Reference/shots/hero.png' },
             },
             source: 'workspace',
             mediaType: 'image',
@@ -225,10 +221,7 @@ describe('Desktop Agent content effects', () => {
   it('resolves stable content identities inside the grant for open and reveal effects', async () => {
     const fixture = await createFixture();
     await writeWorkspaceFile(fixture.workspace.workspacePath, 'docs/guide.pdf', 'fixture');
-    const contentLocator = {
-      kind: 'workspace-file' as const,
-      path: 'docs/guide.pdf',
-    };
+    const contentLocator = { file: { authority: 'workspace' as const, path: 'docs/guide.pdf' } };
     const locator = { kind: 'page' as const, pageNumber: 3, pageIndex: 2 };
 
     await fixture.effects.openFile(
@@ -283,10 +276,12 @@ describe('Desktop Agent content effects', () => {
       fixture.effects.openFile(
         {
           contentLocator: {
-            kind: 'package-resource',
-            packageId: 'plugin.example',
-            revision: '1',
-            resourcePath: 'secret.txt',
+            file: {
+              authority: 'package',
+              packageId: 'plugin.example',
+              revision: '1',
+              path: 'secret.txt',
+            },
           },
         },
         fixture.context,
@@ -295,10 +290,7 @@ describe('Desktop Agent content effects', () => {
     await expect(
       fixture.effects.openFile(
         {
-          contentLocator: {
-            kind: 'workspace-file',
-            path: 'linked-outside/secret.txt',
-          },
+          contentLocator: { file: { authority: 'workspace', path: 'linked-outside/secret.txt' } },
         },
         fixture.context,
       ),

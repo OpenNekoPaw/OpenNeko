@@ -948,7 +948,7 @@ describe('DesktopAppHost', () => {
       filter: 'hero',
       files: [
         {
-          locator: { kind: 'workspace-file', path: 'hero.md' },
+          locator: { file: { authority: 'workspace', path: 'hero.md' } },
           name: 'hero.md',
           type: 'file',
           referenceReceipt: {
@@ -4442,7 +4442,9 @@ describe('DesktopAppHost', () => {
                 },
                 workspaceId: request.identity.workspaceId,
                 documentId: request.identity.documentId,
-                locator: { kind: 'workspace-file' as const, path: request.identity.documentId },
+                locator: {
+                  file: { authority: 'workspace' as const, path: request.identity.documentId },
+                },
               },
               sessionId: restoredIdentity.sessionId,
               editSequence: 0,

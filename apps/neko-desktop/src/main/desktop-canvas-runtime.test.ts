@@ -147,7 +147,7 @@ describe('DesktopCanvasRuntime', () => {
               path: 'data/project.json',
               title: 'project.json',
               mediaType: 'application/json',
-              contentLocator: { kind: 'workspace-file', path: 'data/project.json' },
+              contentLocator: { file: { authority: 'workspace', path: 'data/project.json' } },
             },
           },
         ],
@@ -162,7 +162,7 @@ describe('DesktopCanvasRuntime', () => {
         requestId: 'preview-ready',
         identity,
         nodeId: 'file-json',
-        locator: { kind: 'workspace-file', path: 'data/project.json' },
+        locator: { file: { authority: 'workspace', path: 'data/project.json' } },
       }),
     ).resolves.toEqual({
       requestId: 'preview-ready',
@@ -178,7 +178,7 @@ describe('DesktopCanvasRuntime', () => {
         requestId: 'preview-stale',
         identity,
         nodeId: 'file-json',
-        locator: { kind: 'workspace-file', path: 'data/other.json' },
+        locator: { file: { authority: 'workspace', path: 'data/other.json' } },
       }),
     ).resolves.toMatchObject({
       status: 'unavailable',
@@ -303,12 +303,8 @@ describe('DesktopCanvasRuntime', () => {
     const documentPath = path.join(workspacePath, identity.documentId);
     await mkdir(path.dirname(documentPath), { recursive: true });
     const mountedLocator = {
-      kind: 'document-entry',
-      source: {
-        kind: 'workspace-file',
-        path: 'neko/assets/Books/story.epub',
-      },
-      entryPath: 'image/cover.jpg',
+      file: { authority: 'workspace', path: 'neko/assets/Books/story.epub' },
+      selector: { kind: 'entry', path: 'image/cover.jpg' },
     } as const;
     await writeFile(
       documentPath,
@@ -425,7 +421,7 @@ describe('DesktopCanvasRuntime', () => {
           request: {
             kind: 'direct-reference',
             identity: materialIdentity(identity),
-            locator: { kind: 'workspace-file', path: 'media/cat.png' },
+            locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
             mediaKind: 'image',
           },
         },
@@ -439,7 +435,7 @@ describe('DesktopCanvasRuntime', () => {
         type: 'media',
         data: expect.objectContaining({
           assetPath: 'media/cat.png',
-          contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+          contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
           mediaType: 'image',
         }),
       }),
@@ -490,7 +486,7 @@ describe('DesktopCanvasRuntime', () => {
           request: {
             kind: 'direct-reference',
             identity: materialIdentity(identity),
-            locator: { kind: 'workspace-file', path: 'media/cat.png' },
+            locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
             mediaKind: 'image',
           },
         },
@@ -536,7 +532,7 @@ describe('DesktopCanvasRuntime', () => {
     expect(previewResource).toHaveBeenCalledWith({
       identity,
       workspace: expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
-      locator: { kind: 'workspace-file', path: 'media/cat.png' },
+      locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
       absolutePath: await realpath(path.join(workspacePath, 'media/cat.png')),
     });
     await runtime.dispose();
@@ -549,9 +545,8 @@ describe('DesktopCanvasRuntime', () => {
     roots.push(workspacePath);
     const identity = createIdentity();
     const locator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
-      entryPath: 'OPS/images/cover.jpg',
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/images/cover.jpg' },
     };
     await writeFixtureFile(
       workspacePath,
@@ -693,7 +688,7 @@ describe('DesktopCanvasRuntime', () => {
           request: {
             kind: 'direct-reference',
             identity: materialIdentity(identity),
-            locator: { kind: 'workspace-file', path: 'media/cat.png' },
+            locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
             mediaKind: 'image',
           },
         },
@@ -745,7 +740,7 @@ describe('DesktopCanvasRuntime', () => {
       workspace: expect.objectContaining({ workspacePath }),
       target: expect.objectContaining({
         nodeId: node.id,
-        locator: { kind: 'workspace-file', path: 'media/cat.png' },
+        locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
       }),
       suggestedFileName: 'cat.png',
     });
@@ -799,7 +794,7 @@ describe('DesktopCanvasRuntime', () => {
           request: {
             kind: 'direct-reference',
             identity: materialIdentity(identity),
-            locator: { kind: 'workspace-file', path: 'cuts/story.otio' },
+            locator: { file: { authority: 'workspace', path: 'cuts/story.otio' } },
             mediaKind: 'document',
           },
         },
@@ -813,7 +808,7 @@ describe('DesktopCanvasRuntime', () => {
       nodeId: node.id,
       mediaKind: 'document',
       origin: 'referenced',
-      locator: { kind: 'workspace-file', path: 'cuts/story.otio' },
+      locator: { file: { authority: 'workspace', path: 'cuts/story.otio' } },
     });
     const absolutePath = await realpath(path.join(workspacePath, 'cuts/story.otio'));
 
@@ -904,7 +899,7 @@ describe('DesktopCanvasRuntime', () => {
           request: {
             kind: 'direct-reference',
             identity: materialIdentity(identity),
-            locator: { kind: 'workspace-file', path: 'notes/scene.md' },
+            locator: { file: { authority: 'workspace', path: 'notes/scene.md' } },
             mediaKind: 'document',
           },
         },
@@ -917,7 +912,7 @@ describe('DesktopCanvasRuntime', () => {
       nodeId: node.id,
       mediaKind: 'document' as const,
       origin: 'referenced' as const,
-      locator: { kind: 'workspace-file' as const, path: 'notes/scene.md' },
+      locator: { file: { authority: 'workspace' as const, path: 'notes/scene.md' } },
     };
 
     const resolution = await runtime.resolveMaterialActions('window-1', {
@@ -1007,7 +1002,7 @@ describe('DesktopCanvasRuntime', () => {
           request: {
             kind: 'direct-reference',
             identity: materialIdentity(identity),
-            locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+            locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
             mediaKind: 'video',
           },
         },
@@ -1062,7 +1057,7 @@ describe('DesktopCanvasRuntime', () => {
       target: expect.objectContaining({
         nodeId: node.id,
         mediaKind: 'video',
-        locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+        locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
       }),
       executionPayload,
     });
@@ -1091,7 +1086,7 @@ describe('DesktopCanvasRuntime', () => {
       target: expect.objectContaining({
         nodeId: node.id,
         mediaKind: 'video',
-        locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+        locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
       }),
       executionPayload,
     });
@@ -1125,10 +1120,7 @@ describe('DesktopCanvasRuntime', () => {
                   outputId: 'video-output-1',
                   jobRef: { kind: 'generation', jobId: 'generation-job-1' },
                   locator: {
-                    kind: 'generated-output',
-                    outputId: 'video-output-1',
-                    digest: 'sha256:video-output-1',
-                    path: 'neko/generated/video-output-1.mp4',
+                    file: { authority: 'workspace', path: 'neko/generated/video-output-1.mp4' },
                   },
                   kind: 'video',
                   recipeInputFingerprint: 'recipe-fingerprint-1',
@@ -1188,12 +1180,7 @@ describe('DesktopCanvasRuntime', () => {
         nodeId: 'video-generation-1',
         mediaKind: 'video',
         origin: 'generated',
-        locator: {
-          kind: 'generated-output',
-          outputId: 'video-output-1',
-          digest: 'sha256:video-output-1',
-          path: 'neko/generated/video-output-1.mp4',
-        },
+        locator: { file: { authority: 'workspace', path: 'neko/generated/video-output-1.mp4' } },
       },
     });
     await runtime.dispose();
@@ -1207,12 +1194,9 @@ describe('DesktopCanvasRuntime', () => {
     const identity = createIdentity();
     const contents = 'generated-image';
     const locator = {
-      kind: 'generated-output' as const,
-      outputId: 'image-output-1',
-      digest: `sha256:${createHash('sha256').update(contents).digest('hex')}`,
-      path: 'neko/generated/image-output-1.png',
+      file: { authority: 'workspace' as const, path: 'neko/generated/image-output-1.png' },
     };
-    await writeFixtureFile(workspacePath, locator.path, contents);
+    await writeFixtureFile(workspacePath, locator.file.path, contents);
     await writeFixtureFile(
       workspacePath,
       identity.documentId,
@@ -1227,7 +1211,7 @@ describe('DesktopCanvasRuntime', () => {
             size: { width: 240, height: 160 },
             zIndex: 1,
             data: {
-              assetPath: locator.path,
+              assetPath: locator.file.path,
               mediaType: 'image',
               contentLocator: locator,
               generation: {
@@ -1304,7 +1288,7 @@ describe('DesktopCanvasRuntime', () => {
       identity,
       workspace: expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
       locator,
-      absolutePath: await realpath(path.join(workspacePath, locator.path)),
+      absolutePath: await realpath(path.join(workspacePath, locator.file.path)),
     });
     await runtime.dispose();
   });
@@ -1316,13 +1300,11 @@ describe('DesktopCanvasRuntime', () => {
     roots.push(workspacePath);
     const identity = createIdentity();
     const contents = 'generation-image-output';
+    const outputId = 'image-output-1';
     const locator = {
-      kind: 'generated-output' as const,
-      outputId: 'image-output-1',
-      digest: `sha256:${createHash('sha256').update(contents).digest('hex')}`,
-      path: 'neko/generated/image-output-1.png',
+      file: { authority: 'workspace' as const, path: 'neko/generated/image-output-1.png' },
     };
-    await writeFixtureFile(workspacePath, locator.path, contents);
+    await writeFixtureFile(workspacePath, locator.file.path, contents);
     await writeFixtureFile(
       workspacePath,
       identity.documentId,
@@ -1340,14 +1322,14 @@ describe('DesktopCanvasRuntime', () => {
               recipe: { kind: 'image', prompt: '' },
               outputs: [
                 {
-                  outputId: locator.outputId,
+                  outputId,
                   jobRef: { kind: 'generation', jobId: 'generation-job-1' },
                   locator,
                   kind: 'image',
                   recipeInputFingerprint: 'recipe-fingerprint-1',
                 },
               ],
-              selectedOutputId: locator.outputId,
+              selectedOutputId: outputId,
             },
           },
         ],
@@ -1411,7 +1393,7 @@ describe('DesktopCanvasRuntime', () => {
       identity,
       workspace: expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
       locator,
-      absolutePath: await realpath(path.join(workspacePath, locator.path)),
+      absolutePath: await realpath(path.join(workspacePath, locator.file.path)),
     });
     await runtime.dispose();
   });
@@ -1481,9 +1463,7 @@ describe('DesktopCanvasRuntime', () => {
         data: expect.objectContaining({
           path: 'neko/imports/model/character.glb',
           contentLocator: expect.objectContaining({
-            kind: 'workspace-file',
-            path: 'neko/imports/model/character.glb',
-            fingerprint: expect.objectContaining({ strategy: 'sha256' }),
+            file: { authority: 'workspace', path: 'neko/imports/model/character.glb' },
           }),
         }),
       }),
@@ -1498,7 +1478,7 @@ describe('DesktopCanvasRuntime', () => {
     const identity = createIdentity();
     const requestSource = vi.fn(async () => ({
       kind: 'workspace-reference' as const,
-      locator: { kind: 'workspace-file' as const, path: 'media/cat.png' },
+      locator: { file: { authority: 'workspace' as const, path: 'media/cat.png' } },
       title: 'cat.png',
     }));
     const runtime = new DesktopCanvasRuntime({
@@ -1552,7 +1532,7 @@ describe('DesktopCanvasRuntime', () => {
         type: 'media',
         position: { x: 32, y: 48 },
         data: expect.objectContaining({
-          contentLocator: { kind: 'workspace-file', path: 'media/cat.png' },
+          contentLocator: { file: { authority: 'workspace', path: 'media/cat.png' } },
           assetPath: 'media/cat.png',
         }),
       }),
@@ -1674,7 +1654,7 @@ describe('DesktopCanvasRuntime', () => {
           request: {
             kind: 'direct-reference',
             identity: materialIdentity(identity),
-            locator: { kind: 'workspace-file', path: 'escape/secret.png' },
+            locator: { file: { authority: 'workspace', path: 'escape/secret.png' } },
             mediaKind: 'image',
           },
         },
@@ -1693,16 +1673,10 @@ describe('DesktopCanvasRuntime', () => {
     roots.push(workspacePath);
     const identity = createIdentity();
     const firstLocator = {
-      kind: 'generated-output' as const,
-      outputId: 'output-1',
-      digest: 'sha256:output-1',
-      path: 'neko/generated/output-1.png',
+      file: { authority: 'workspace' as const, path: 'neko/generated/output-1.png' },
     };
     const secondLocator = {
-      kind: 'generated-output' as const,
-      outputId: 'output-2',
-      digest: 'sha256:output-2',
-      path: 'neko/generated/output-2.png',
+      file: { authority: 'workspace' as const, path: 'neko/generated/output-2.png' },
     };
     await writeFixtureFile(
       workspacePath,
@@ -1761,11 +1735,11 @@ describe('DesktopCanvasRuntime', () => {
     let registrationIndex = 0;
     const registerPreviewResource = vi.fn(
       async ({ locator }: { readonly locator: ContentLocator }) => {
-        const outputId = locator.kind === 'generated-output' ? locator.outputId : 'unknown';
+        const sourcePath = locator.file.path;
         const index = registrationIndex++;
         return {
-          url: `openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/${outputId}-${index}`,
-          sourceFingerprint: `sha256-${outputId}`,
+          url: `openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/${sourcePath}-${index}`,
+          sourceFingerprint: `sha256-${sourcePath}`,
           byteLength: 42,
           mediaType: 'image/png',
           release: releases[index]!,
@@ -2052,12 +2026,9 @@ describe('DesktopCanvasRuntime', () => {
     roots.push(workspacePath);
     const identity = createIdentity();
     const locator = {
-      kind: 'generated-output' as const,
-      outputId: 'output-frame-1',
-      digest: 'sha256:generated-frame-1',
-      path: 'neko/generated/frame-1.png',
+      file: { authority: 'workspace' as const, path: 'neko/generated/frame-1.png' },
     };
-    await writeFixtureFile(workspacePath, locator.path, 'generated-image');
+    await writeFixtureFile(workspacePath, locator.file.path, 'generated-image');
     await writeFixtureFile(
       workspacePath,
       identity.documentId,
@@ -2086,7 +2057,7 @@ describe('DesktopCanvasRuntime', () => {
             size: { width: 320, height: 240 },
             zIndex: 1,
             data: {
-              assetPath: locator.path,
+              assetPath: locator.file.path,
               mediaType: 'image',
               contentLocator: locator,
               generation: {
@@ -2230,15 +2201,15 @@ describe('DesktopCanvasRuntime', () => {
       request: {
         kind: 'direct-reference',
         identity: materialIdentity(identity),
-        locator: { kind: 'workspace-file', path: 'cases/test.png' },
+        locator: { file: { authority: 'workspace', path: 'cases/test.png' } },
         mediaKind: 'image',
       },
     });
     const referencedSource = snapshot.canvas.nodes.find(
       (node) =>
         (node.type === 'media' || node.type === 'file') &&
-        node.data.contentLocator?.kind === 'workspace-file' &&
-        node.data.contentLocator.path === 'cases/test.png',
+        node.data.contentLocator?.file.authority === 'workspace' &&
+        node.data.contentLocator.file.path === 'cases/test.png',
     );
     if (!referencedSource) throw new Error('Referenced source node was not created.');
 
@@ -2248,8 +2219,7 @@ describe('DesktopCanvasRuntime', () => {
         kind: 'direct-reference',
         identity: materialIdentity(identity),
         locator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/linked-media/clips/linked.mp4',
+          file: { authority: 'workspace', path: 'neko/assets/linked-media/clips/linked.mp4' },
         },
         mediaKind: 'video',
       },
@@ -2275,10 +2245,7 @@ describe('DesktopCanvasRuntime', () => {
       request: {
         kind: 'derived-output-commit',
         identity: materialIdentity(identity),
-        locator: {
-          kind: 'workspace-file',
-          path: 'neko/derived/crop/test-cropped.png',
-        },
+        locator: { file: { authority: 'workspace', path: 'neko/derived/crop/test-cropped.png' } },
         mediaKind: 'image',
         title: 'test-cropped.png',
         sourceNodeIds: [referencedSource.id],
@@ -2290,38 +2257,34 @@ describe('DesktopCanvasRuntime', () => {
         expect.objectContaining({
           id: referencedSource.id,
           data: expect.objectContaining({
-            contentLocator: { kind: 'workspace-file', path: 'cases/test.png' },
+            contentLocator: { file: { authority: 'workspace', path: 'cases/test.png' } },
           }),
         }),
         expect.objectContaining({
           data: expect.objectContaining({
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/linked-media/clips/linked.mp4',
+              file: { authority: 'workspace', path: 'neko/assets/linked-media/clips/linked.mp4' },
             },
           }),
         }),
         expect.objectContaining({
           data: expect.objectContaining({
             contentLocator: expect.objectContaining({
-              kind: 'workspace-file',
-              path: 'neko/imports/image/global-frame.png',
+              file: { authority: 'workspace', path: 'neko/imports/image/global-frame.png' },
             }),
           }),
         }),
         expect.objectContaining({
           data: expect.objectContaining({
             contentLocator: expect.objectContaining({
-              kind: 'workspace-file',
-              path: 'neko/imports/image/outside.png',
+              file: { authority: 'workspace', path: 'neko/imports/image/outside.png' },
             }),
           }),
         }),
         expect.objectContaining({
           data: expect.objectContaining({
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/derived/crop/test-cropped.png',
+              file: { authority: 'workspace', path: 'neko/derived/crop/test-cropped.png' },
             },
           }),
         }),

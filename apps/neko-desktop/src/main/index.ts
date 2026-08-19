@@ -1228,12 +1228,9 @@ async function startDesktop(): Promise<void> {
   };
   const canvasPreviewResources =
     createPreviewResourceProjectionService<CanvasPreviewProjectionOwner>({
-      resolveSource: async ({ locator, requestedMediaType, owner }) => {
-        if (locator.kind === 'content-representation') {
-          throw new Error('Canvas Preview requires a canonical ContentLocator.');
-        }
-        const contentType = requireCanvasPreviewContentType(locator, requestedMediaType);
-        if (locator.kind === 'workspace-file' || locator.kind === 'generated-output') {
+      resolveSource: async ({ source, requestedMediaType, owner }) => {
+        const contentType = requireCanvasPreviewContentType(source, requestedMediaType);
+        if (source.file.authority === 'workspace' && source.selector === undefined) {
           if (owner.purpose === 'viewer-source' && isCanvasTextContentType(contentType)) {
             const contentRead = createNodeHostContentReadService({
               workspaceRoot: owner.workspace.workspacePath,
@@ -1242,7 +1239,7 @@ async function startDesktop(): Promise<void> {
                   canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
               },
             });
-            const loaded = await contentRead.read(locator, {
+            const loaded = await contentRead.read(source, {
               maxBytes: CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES,
             });
             if (loaded.status !== 'ready') {
@@ -1252,7 +1249,9 @@ async function startDesktop(): Promise<void> {
             }
             return readyCanvasPreviewBytes(loaded.bytes, loaded.mimeType ?? contentType);
           }
-          const absolutePath = await resolveWorkspaceContentLocator(owner.workspace, locator);
+          const absolutePath = await resolveWorkspaceContentLocator(owner.workspace, {
+            file: source.file,
+          });
           if (owner.purpose === 'viewer-source' || contentType.startsWith('image/')) {
             const metadata = await lstat(absolutePath);
             return {
@@ -1280,7 +1279,7 @@ async function startDesktop(): Promise<void> {
               canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
           },
         });
-        const loaded = await contentRead.read(locator, {
+        const loaded = await contentRead.read(source, {
           maxBytes:
             owner.purpose === 'viewer-source' && isCanvasTextContentType(contentType)
               ? CANVAS_TEXT_FILE_PREVIEW_MAX_BYTES
@@ -1396,8 +1395,10 @@ async function startDesktop(): Promise<void> {
         return {
           kind: 'workspace-reference',
           locator: {
-            kind: 'workspace-file',
-            path: relativePath.split(path.sep).join('/'),
+            file: {
+              authority: 'workspace',
+              path: relativePath.split(path.sep).join('/'),
+            },
           },
           title: path.basename(selectedPath),
         };
@@ -1514,10 +1515,14 @@ async function startDesktop(): Promise<void> {
       });
     },
     resolveEditText: async ({ target }) =>
-      target.locator.kind === 'workspace-file' &&
-      modeForTextDocument(target.locator.path) !== undefined,
+      target.locator.file.authority === 'workspace' &&
+      target.locator.selector === undefined &&
+      modeForTextDocument(target.locator.file.path) !== undefined,
     editText: async ({ identity, target }) => {
-      if (target.locator.kind !== 'workspace-file') {
+      if (
+        target.locator.file.authority !== 'workspace' ||
+        target.locator.selector !== undefined
+      ) {
         throw new Error('Canvas Text Editor requires a Workspace File locator.');
       }
       await textEditorRuntime.open({
@@ -1535,7 +1540,7 @@ async function startDesktop(): Promise<void> {
           role: 'content',
           depth: 0,
           kind: 'document',
-          label: path.posix.basename(target.locator.path),
+          label: path.posix.basename(target.locator.file.path),
           locator: target.locator,
           capabilities: ['edit-text', 'preview', 'reveal'],
         },
@@ -1580,8 +1585,8 @@ async function startDesktop(): Promise<void> {
       createCutCanvasHandoffPayload(await cutRuntime.resolveCanvasHandoffTarget(identity)),
     addToCut: async ({ identity, target, executionPayload }) => {
       const label =
-        target.locator.kind === 'workspace-file' || target.locator.kind === 'generated-output'
-          ? path.posix.basename(target.locator.path)
+        target.locator.file.authority === 'workspace'
+          ? path.posix.basename(target.locator.file.path)
           : target.nodeId;
       await cutRuntime.addCanvasMaterial({
         identity,
@@ -1593,8 +1598,8 @@ async function startDesktop(): Promise<void> {
     },
     separateAudioInCut: async ({ identity, target, executionPayload }) => {
       const label =
-        target.locator.kind === 'workspace-file' || target.locator.kind === 'generated-output'
-          ? path.posix.basename(target.locator.path)
+        target.locator.file.authority === 'workspace'
+          ? path.posix.basename(target.locator.file.path)
           : target.nodeId;
       await cutRuntime.addCanvasMaterialAndSeparateAudio({
         identity,
@@ -1615,7 +1620,7 @@ async function startDesktop(): Promise<void> {
     }) =>
       canvasPreviewResources.project({
         descriptorId,
-        locator,
+        source: locator,
         displayName,
         owner: { identity, workspace, purpose },
         requestedMediaType: requireCanvasPreviewContentType(locator, mediaType),
@@ -3743,12 +3748,7 @@ function requireCanvasPreviewContentType(
   declared: string | undefined,
 ): string {
   if (declared?.includes('/')) return declared;
-  const sourcePath =
-    locator.kind === 'document-entry'
-      ? locator.entryPath
-      : locator.kind === 'package-resource'
-        ? locator.resourcePath
-        : locator.path;
+  const sourcePath = locator.selector?.path ?? locator.file.path;
   switch (path.posix.extname(sourcePath).toLocaleLowerCase()) {
     case '.png':
       return 'image/png';
@@ -3800,15 +3800,7 @@ function isCanvasTextContentType(contentType: string): boolean {
 }
 
 function canvasContentDisplayName(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return path.posix.basename(locator.path);
-    case 'document-entry':
-      return path.posix.basename(locator.entryPath);
-    case 'package-resource':
-      return path.posix.basename(locator.resourcePath);
-  }
+  return path.posix.basename(locator.selector?.path ?? locator.file.path);
 }
 
 function createDesktopGlobalLibraryThumbnailFactory(): ResourceBrowserNodeRuntimeOptions['createGlobalLibraryThumbnail'] {

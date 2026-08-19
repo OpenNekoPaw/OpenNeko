@@ -2889,8 +2889,7 @@ export class DesktopAppHost {
       request.workspaceId,
     );
     await resolveWorkspaceContentLocator(resolution.workspace, {
-      kind: 'workspace-file',
-      path: request.canvasId,
+      file: { authority: 'workspace', path: request.canvasId },
     });
     const projection = await this.shell.getProjection(window.windowId);
     const project = projection.catalog.projects.find(

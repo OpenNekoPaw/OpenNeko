@@ -200,7 +200,7 @@ describe('DesktopCutRuntime', () => {
       identity,
       nodeId: 'video-node-1',
       label: 'clip.mp4',
-      locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+      locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
       target,
     });
     const existingTarget = await harness.runtime.resolveCanvasHandoffTarget(identity);
@@ -208,7 +208,7 @@ describe('DesktopCutRuntime', () => {
       identity,
       nodeId: 'video-node-1',
       label: 'clip.mp4',
-      locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+      locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
       target: existingTarget,
     });
 
@@ -252,7 +252,7 @@ describe('DesktopCutRuntime', () => {
       identity,
       nodeId: 'video-node-1',
       label: 'clip.mp4',
-      locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+      locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
       target,
     });
 
@@ -298,7 +298,7 @@ describe('DesktopCutRuntime', () => {
         identity,
         nodeId: 'video-node-1',
         label: 'clip.mp4',
-        locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+        locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
         target: staleTarget,
       }),
     ).rejects.toThrow('target changed before execution');
@@ -340,7 +340,7 @@ describe('DesktopCutRuntime', () => {
         identity,
         nodeId: 'unsupported-node',
         label: 'unsupported.bin',
-        locator: { kind: 'workspace-file', path: 'media/unsupported.bin' },
+        locator: { file: { authority: 'workspace', path: 'media/unsupported.bin' } },
         target,
       }),
     ).rejects.toThrow('no supported video or audio stream');
@@ -737,7 +737,7 @@ describe('DesktopCutRuntime', () => {
       depth: 0,
       kind: 'file' as const,
       label: 'story.otio',
-      locator: { kind: 'workspace-file' as const, path: documentId },
+      locator: { file: { authority: 'workspace' as const, path: documentId } },
       capabilities: ['open-creative-document'] as const,
     };
 
@@ -747,7 +747,7 @@ describe('DesktopCutRuntime', () => {
         ...item,
         resourceId: 'resource-video',
         label: 'video.mp4',
-        locator: { kind: 'workspace-file', path: 'media/video.mp4' },
+        locator: { file: { authority: 'workspace', path: 'media/video.mp4' } },
       }),
     ).toBe(false);
 
@@ -785,7 +785,7 @@ describe('DesktopCutRuntime', () => {
       ...item,
       resourceId: 'resource-alternate',
       label: 'alternate.otio',
-      locator: { kind: 'workspace-file' as const, path: secondDocumentId },
+      locator: { file: { authority: 'workspace' as const, path: secondDocumentId } },
     };
     await runtime.openAlongsideCanvas({
       identity,
@@ -1325,7 +1325,7 @@ describe('DesktopCutRuntime', () => {
       depth: 0,
       kind: 'video' as const,
       label: 'clip.mp4',
-      locator: { kind: 'workspace-file' as const, path: 'media/clip.mp4' },
+      locator: { file: { authority: 'workspace' as const, path: 'media/clip.mp4' } },
       capabilities: ['preview', 'add-to-cut'] as const,
     };
     const target = {
@@ -1376,7 +1376,7 @@ describe('DesktopCutRuntime', () => {
           kind: 'content-locator',
           data: {
             type: 'content-locator',
-            locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+            locator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
             name: 'clip.mp4',
           },
         },

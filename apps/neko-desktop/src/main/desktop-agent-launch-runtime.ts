@@ -65,12 +65,12 @@ export function createDesktopAgentConversationReferenceResolver(input: {
 
   function resolveReference(reference: AgentFileReference): AgentContextPayload {
     const locator = reference.contentLocator;
-    if (locator.kind !== 'workspace-file') {
+    if (locator.file.authority !== 'workspace' || locator.selector !== undefined) {
       throw new Error(
         `Agent reference '${reference.label}' must use an authorized Workspace file locator.`,
       );
     }
-    const portableLocation = `workspace-file:${locator.path}`;
+    const portableLocation = `workspace-file:${locator.file.path}`;
     return {
       type: 'file',
       id: reference.id,
@@ -493,8 +493,8 @@ function projectReferenceMessageContext(
       id: referenceId,
       label: file.name,
       summary:
-        file.locator.kind === 'workspace-file'
-          ? file.locator.path
+        file.locator.file.authority === 'workspace'
+          ? file.locator.file.path
           : file.name,
       ...(file.mediaType === undefined ? {} : { mediaType: file.mediaType }),
       contentLocator: file.locator,

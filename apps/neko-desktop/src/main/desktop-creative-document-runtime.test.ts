@@ -125,7 +125,7 @@ describe('openDesktopCanvasDocument', () => {
         depth: 1,
         kind: 'document' as const,
         label: 'story.nkc',
-        locator: { kind: 'workspace-file' as const, path: documentId },
+        locator: { file: { authority: 'workspace' as const, path: documentId } },
         capabilities: ['open-creative-document'] as const,
       },
       absolutePath,

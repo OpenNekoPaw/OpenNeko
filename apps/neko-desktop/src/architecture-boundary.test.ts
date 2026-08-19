@@ -272,7 +272,8 @@ describe('Desktop architecture boundaries', () => {
       true,
     );
     expect(contentLocatorContract).not.toContain('MediaLibraryContentLocator');
-    expect(contentLocatorContract).toContain('readonly source: WorkspaceFileContentLocator');
+    expect(contentLocatorContract).toContain('readonly file: ContentFileLocator');
+    expect(contentLocatorContract).toContain('readonly selector?: ContentSelector');
     expect(contentLocatorContract).not.toContain('media-library');
     expect(bridgeContract).not.toContain('absolutePath');
     expect(bridgeContract).not.toContain('selectedDirectory');

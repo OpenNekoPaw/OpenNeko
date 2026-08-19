@@ -46,7 +46,7 @@ describe('Electron Resource Browser Host runtime', () => {
           descriptor: {
             descriptorId: 'descriptor-1',
             sourceFingerprint: 'fingerprint-1',
-            contentLocator: { kind: 'workspace-file' as const, path: 'media/clip.mp4' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'media/clip.mp4' } },
             url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
             contentKind: 'video' as const,
             mediaType: 'video/mp4',

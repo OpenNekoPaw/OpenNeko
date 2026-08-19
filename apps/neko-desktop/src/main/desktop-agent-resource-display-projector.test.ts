@@ -89,7 +89,7 @@ describe('Desktop Agent resource display projector', () => {
       toolCallId: 'tool-call-1',
       projectionKind: 'tool-result',
       status: 'authorized',
-      locatorKind: 'workspace-file',
+      sourceKind: 'workspace-file',
       transport: 'openneko-resource',
       renderTarget: 'agent-webview',
       diagnosticCodes: [],
@@ -107,10 +107,7 @@ describe('Desktop Agent resource display projector', () => {
 
     const projected = await projector.project(
       snapshotFrame({
-        contentLocator: {
-          kind: 'workspace-file',
-          path: 'missing/video.mp4',
-        },
+        contentLocator: { file: { authority: 'workspace', path: 'missing/video.mp4' } },
         url: 'neko-media://desktop/unsupported-video',
         videoUrl: 'file:///private/tmp/video.mp4',
         audioUrl: 'data:audio/wav;base64,AA==',
@@ -127,10 +124,7 @@ describe('Desktop Agent resource display projector', () => {
     expect(JSON.stringify(data)).not.toContain('file:');
     expect(JSON.stringify(data)).not.toContain('data:');
     expect(data).toMatchObject({
-      contentLocator: {
-        kind: 'workspace-file',
-        path: 'missing/video.mp4',
-      },
+      contentLocator: { file: { authority: 'workspace', path: 'missing/video.mp4' } },
       resourceProjectionDiagnostics: expect.arrayContaining([
         expect.objectContaining({
           code: 'agent-preview-content-unavailable',
@@ -172,12 +166,11 @@ describe('Desktop Agent resource display projector', () => {
     await expect(projector.project(snapshotFrame({}))).rejects.toThrow('disposed');
   });
 
-  it('publishes document-entry bytes without replacing their stable locator', async () => {
+  it('publishes selected document bytes without replacing their stable locator', async () => {
     const root = await createTemporaryRoot();
     const locator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
-      entryPath: 'OPS/images/cover.png',
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/images/cover.png' },
     };
     const bytes = new Uint8Array([137, 80, 78, 71]);
     const release = vi.fn();
@@ -226,14 +219,14 @@ describe('Desktop Agent resource display projector', () => {
     expect(String((data.previewDescriptor as { descriptorId: string }).descriptorId)).not.toContain(
       'story.epub',
     );
-    expect(loadDisplayAsset).toHaveBeenCalledWith({ locator, maxBytes: 64 * 1024 * 1024 });
+    expect(loadDisplayAsset).toHaveBeenCalledWith({ source: locator, maxBytes: 64 * 1024 * 1024 });
     expect(registerBytes).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'connection-1' }),
       expect.objectContaining({ bytes, mediaType: 'image/png' }),
     );
     expect(recordProjection).toHaveBeenCalledWith(
       expect.objectContaining({
-        locatorKind: 'document-entry',
+        sourceKind: 'workspace-file',
         status: 'authorized',
         transport: 'openneko-resource',
       }),
@@ -245,9 +238,8 @@ describe('Desktop Agent resource display projector', () => {
   it('reauthorizes persisted ReadImage messages through the same Host projector', async () => {
     const root = await createTemporaryRoot();
     const locator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
-      entryPath: 'OPS/images/cover.png',
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/images/cover.png' },
     };
     const bytes = new Uint8Array([137, 80, 78, 71]);
     const registerBytes = vi.fn(async () => ({
@@ -343,9 +335,8 @@ describe('Desktop Agent resource display projector', () => {
   it('keeps restored locators and exposes a diagnostic when Host preview loading fails', async () => {
     const root = await createTemporaryRoot();
     const locator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
-      entryPath: 'OPS/images/cover.png',
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/images/cover.png' },
     };
     const projector = createProjector(root, {}, 'connection-history-failure', undefined, {
       loadDisplayAsset: vi.fn(async () => ({ status: 'failed' })),
@@ -434,29 +425,25 @@ describe('Desktop Agent resource display projector', () => {
     expect(JSON.stringify(projected)).not.toMatch(/(?:data|file|content):/u);
   });
 
-  it('keeps representation identity and isolates an unreadable sibling', async () => {
+  it('uses an opaque representation handle and isolates an unreadable sibling', async () => {
     const root = await createTemporaryRoot();
-    const representationLocator = {
-      kind: 'content-representation' as const,
+    const representationSource = {
+      file: { authority: 'workspace' as const, path: 'books/story.pdf' },
+    };
+    const representationHandle = {
+      kind: 'content-representation-handle' as const,
       id: 'page-1',
-      representationKind: 'raster-page' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/story.pdf' },
-      spec: { kind: 'raster-page' as const, page: 1, format: 'png' as const },
-      generatorId: 'document-raster',
-      sourceFingerprint: 'sha256:source',
-      specFingerprint: 'sha256:spec',
     };
     const missingLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
-      entryPath: 'OPS/images/missing.png',
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/images/missing.png' },
     };
     const registerBytes = vi.fn(async () => ({
       url: 'openneko://resource/dddddddddddddddddddddddddddddddd/content',
       release: vi.fn(),
     }));
-    const loadDisplayAsset = vi.fn(async ({ locator }) =>
-      locator.kind === 'content-representation'
+    const loadDisplayAsset = vi.fn(async ({ representationHandle: handle }) =>
+      handle?.id === representationHandle.id
         ? {
             status: 'ready',
             bytes: new Uint8Array([137, 80, 78, 71]),
@@ -471,7 +458,11 @@ describe('Desktop Agent resource display projector', () => {
     const projected = await projector.project(
       snapshotFrame({
         images: [
-          { representationLocator, mimeType: 'image/png' },
+          {
+            contentLocator: representationSource,
+            representationHandle,
+            mimeType: 'image/png',
+          },
           { contentLocator: missingLocator, mimeType: 'image/png' },
         ],
       }),
@@ -484,9 +475,9 @@ describe('Desktop Agent resource display projector', () => {
     expect(data).toMatchObject({
       images: [
         {
-          representationLocator,
+          contentLocator: representationSource,
           previewDescriptor: {
-            contentLocator: representationLocator.source,
+            contentLocator: representationSource,
             url: 'openneko://resource/dddddddddddddddddddddddddddddddd/content',
             displayName: 'story.pdf',
             mediaType: 'image/png',
@@ -503,6 +494,12 @@ describe('Desktop Agent resource display projector', () => {
       ],
     });
     expect(registerBytes).toHaveBeenCalledOnce();
+    expect(loadDisplayAsset).toHaveBeenCalledWith({
+      source: representationSource,
+      representationHandle,
+      maxBytes: 64 * 1024 * 1024,
+    });
+    expect(JSON.stringify(data)).not.toContain(representationHandle.id);
   });
 
   it('isolates display leases across exact renderer connections', async () => {
@@ -599,10 +596,7 @@ function snapshotFrame(data: unknown): ConversationProjectionAttachmentHostFrame
         id: 'tool-call-1',
         name: 'ReadDocument',
         arguments: {
-          contentLocator: {
-            kind: 'workspace-file',
-            path: 'documents/source.pdf',
-          },
+          contentLocator: { file: { authority: 'workspace', path: 'documents/source.pdf' } },
         },
         result: {
           success: true,
@@ -647,10 +641,7 @@ async function createFixture(relativePath: string) {
   await writeFile(absolutePath, 'fixture');
   return {
     root,
-    locator: {
-      kind: 'workspace-file' as const,
-      path: relativePath,
-    },
+    locator: { file: { authority: 'workspace' as const, path: relativePath } },
   };
 }
 

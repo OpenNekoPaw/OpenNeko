@@ -264,7 +264,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       filter: 'hero',
       files: [
         {
-          locator: { kind: 'workspace-file', path: 'hero.md' },
+          locator: { file: { authority: 'workspace', path: 'hero.md' } },
           name: 'hero.md',
           type: 'file',
           referenceReceipt: {
@@ -301,7 +301,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       filter: 'hero',
       files: [
         {
-          locator: { kind: 'workspace-file', path: 'hero.md' },
+          locator: { file: { authority: 'workspace', path: 'hero.md' } },
           name: 'hero.md',
           type: 'file',
           referenceReceipt: {
@@ -332,7 +332,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
       purpose: 'entry',
       files: [
         {
-          locator: { kind: 'workspace-file', path: 'hero.md' },
+          locator: { file: { authority: 'workspace', path: 'hero.md' } },
           name: 'hero.md',
           type: 'file',
           referenceReceipt: {

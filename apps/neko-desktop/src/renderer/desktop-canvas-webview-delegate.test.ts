@@ -35,10 +35,7 @@ describe('Desktop Canvas Webview delegate', () => {
       descriptorId: 'canvas-preview-session-1-output-1',
       sourceFingerprint: 'sha256-output-1',
       contentLocator: {
-        kind: 'generated-output' as const,
-        outputId: 'output-1',
-        digest: 'sha256:output-1',
-        path: 'neko/generated/output-1.png',
+        file: { authority: 'workspace' as const, path: 'neko/generated/output-1.png' },
       },
       url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       contentKind: 'image' as const,
@@ -99,7 +96,7 @@ describe('Desktop Canvas Webview delegate', () => {
   });
 
   it('forwards an embedded text Preview request without reclassifying it as a document', async () => {
-    const locator = { kind: 'workspace-file' as const, path: 'notes/scene.md' };
+    const locator = { file: { authority: 'workspace' as const, path: 'notes/scene.md' } };
     const descriptor = {
       descriptorId: 'canvas-text-preview-notes',
       sourceFingerprint: 'sha256-notes',

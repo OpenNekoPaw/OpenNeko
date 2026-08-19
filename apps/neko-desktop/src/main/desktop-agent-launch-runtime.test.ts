@@ -24,39 +24,38 @@ describe('Desktop Agent launch native adapter', () => {
           {
             id: 'file:brief',
             label: 'brief.md',
-            contentLocator: { kind: 'workspace-file', path: 'docs/brief.md' },
+            contentLocator: { file: { authority: 'workspace', path: 'docs/brief.md' } },
             mediaType: 'text',
           },
           {
             id: 'file:screenplay',
             label: 'test.fountain',
-            contentLocator: { kind: 'workspace-file', path: 'scripts/test.fountain' },
+            contentLocator: { file: { authority: 'workspace', path: 'scripts/test.fountain' } },
             mediaType: 'document',
           },
           {
             id: 'file:book',
             label: 'book.epub',
-            contentLocator: { kind: 'workspace-file', path: 'books/book.epub' },
+            contentLocator: { file: { authority: 'workspace', path: 'books/book.epub' } },
             mediaType: 'document',
           },
           {
             id: 'file:comic',
             label: 'comic.cbz',
-            contentLocator: { kind: 'workspace-file', path: 'books/comic.cbz' },
+            contentLocator: { file: { authority: 'workspace', path: 'books/comic.cbz' } },
             mediaType: 'document',
           },
           {
             id: 'file:report',
             label: 'report.pdf',
-            contentLocator: { kind: 'workspace-file', path: 'docs/report.pdf' },
+            contentLocator: { file: { authority: 'workspace', path: 'docs/report.pdf' } },
             mediaType: 'document',
           },
           {
             id: 'file:reference-image',
             label: 'reference.png',
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/References/reference.png',
+              file: { authority: 'workspace', path: 'neko/assets/References/reference.png' },
             },
             mediaType: 'image',
             source: 'media-library',
@@ -64,7 +63,7 @@ describe('Desktop Agent launch native adapter', () => {
           {
             id: 'file:draft',
             label: 'draft.docx',
-            contentLocator: { kind: 'workspace-file', path: 'docs/draft.docx' },
+            contentLocator: { file: { authority: 'workspace', path: 'docs/draft.docx' } },
             mediaType: 'document',
           },
         ],
@@ -74,35 +73,35 @@ describe('Desktop Agent launch native adapter', () => {
         id: 'file:brief',
         data: expect.objectContaining({
           kind: 'authorized-content-reference',
-          locator: { kind: 'workspace-file', path: 'docs/brief.md' },
+          locator: { file: { authority: 'workspace', path: 'docs/brief.md' } },
           mediaType: 'text',
         }),
       }),
       expect.objectContaining({
         id: 'file:screenplay',
         data: expect.objectContaining({
-          locator: { kind: 'workspace-file', path: 'scripts/test.fountain' },
+          locator: { file: { authority: 'workspace', path: 'scripts/test.fountain' } },
           mediaType: 'document',
         }),
       }),
       expect.objectContaining({
         id: 'file:book',
         data: expect.objectContaining({
-          locator: { kind: 'workspace-file', path: 'books/book.epub' },
+          locator: { file: { authority: 'workspace', path: 'books/book.epub' } },
           mediaType: 'document',
         }),
       }),
       expect.objectContaining({
         id: 'file:comic',
         data: expect.objectContaining({
-          locator: { kind: 'workspace-file', path: 'books/comic.cbz' },
+          locator: { file: { authority: 'workspace', path: 'books/comic.cbz' } },
           mediaType: 'document',
         }),
       }),
       expect.objectContaining({
         id: 'file:report',
         data: expect.objectContaining({
-          locator: { kind: 'workspace-file', path: 'docs/report.pdf' },
+          locator: { file: { authority: 'workspace', path: 'docs/report.pdf' } },
           mediaType: 'document',
         }),
       }),
@@ -110,8 +109,7 @@ describe('Desktop Agent launch native adapter', () => {
         id: 'file:reference-image',
         data: expect.objectContaining({
           locator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/References/reference.png',
+            file: { authority: 'workspace', path: 'neko/assets/References/reference.png' },
           },
           mediaType: 'image',
         }),
@@ -119,7 +117,7 @@ describe('Desktop Agent launch native adapter', () => {
       expect.objectContaining({
         id: 'file:draft',
         data: expect.objectContaining({
-          locator: { kind: 'workspace-file', path: 'docs/draft.docx' },
+          locator: { file: { authority: 'workspace', path: 'docs/draft.docx' } },
           mediaType: 'document',
         }),
       }),
@@ -500,7 +498,7 @@ describe('Desktop Agent launch native adapter', () => {
       filter,
       files: [
         {
-          locator: { kind: 'workspace-file' as const, path: 'hero.md' },
+          locator: { file: { authority: 'workspace' as const, path: 'hero.md' } },
           name: 'hero.md',
           type: 'file' as const,
           mediaType: 'text' as const,
@@ -581,7 +579,7 @@ describe('Desktop Agent launch native adapter', () => {
         label: 'hero.md',
         summary: 'hero.md',
         mediaType: 'text',
-        contentLocator: { kind: 'workspace-file', path: 'hero.md' },
+        contentLocator: { file: { authority: 'workspace', path: 'hero.md' } },
       },
     ]);
     runtime.commitReferences(catalog.connection, 'conversation:one', [referenceReceipt]);
