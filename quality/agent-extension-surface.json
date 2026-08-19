@@ -36,16 +36,6 @@
       "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
     ]
   },
-  "pluginState": {
-    "classification": "sqlite-local-application-state",
-    "packageBytesAuthority": false,
-    "requiredForPortableSkill": false,
-    "evidence": [
-      "packages/local-metadata/src/plugin-state.ts",
-      "packages/local-metadata/src/sqlite/plugin-state-schema.ts",
-      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
-    ]
-  },
   "extensionManagement": {
     "classification": "dsh-projection-only",
     "runtimeContributionAuthority": false,

@@ -1,9 +1,3 @@
-import type {
-  AgentExtensionCatalogItem,
-  AgentExtensionDiagnosticCode,
-  AgentExtensionStatus,
-} from './extension-catalog';
-
 export interface AgentExtensionManagementSessionIdentity {
   readonly windowId: string;
 }
@@ -12,47 +6,34 @@ export interface AgentManagedSkillItem {
   readonly id: string;
   readonly name: string;
   readonly description: string;
-  readonly source: 'personal' | 'plugin';
-  readonly sourceId: string;
-  readonly managementId: string;
-  readonly canOpenInEditor: boolean;
-  readonly canShowInFolder: boolean;
-  readonly canRemove: boolean;
+  readonly source: string;
+  readonly provider: string;
+  readonly userInvocable: boolean;
+  readonly modelInvocable: boolean;
+}
+
+export interface AgentManagedMcpItem {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly status: 'ready' | 'unsupported' | 'error';
+  readonly diagnosticCode: string;
 }
 
 export interface AgentExtensionManagementProjection {
   readonly identity: AgentExtensionManagementSessionIdentity;
   readonly skills: readonly AgentManagedSkillItem[];
-  readonly skillDiscovery: {
-    readonly diagnostics: readonly {
-      readonly code:
-        'file_info_failed' | 'list_failed' | 'read_failed' | 'parse_failed' | 'invalid_metadata';
-      readonly source: AgentManagedSkillItem['source'];
-      readonly count: number;
-    }[];
-    readonly duplicateCount: number;
-  };
-  readonly extensions: readonly AgentExtensionCatalogItem[];
-  readonly extensionDiscovery: {
-    readonly diagnostics: readonly {
-      readonly code: AgentExtensionDiagnosticCode;
-      readonly count: number;
-    }[];
-  };
+  readonly mcp: readonly AgentManagedMcpItem[];
+  readonly diagnostics: readonly {
+    readonly code:
+      'skill_catalog_incomplete' | 'mcp_management_unsupported' | 'runtime_unavailable';
+    readonly count: number;
+  }[];
 }
 
 export interface AgentExtensionManagementRuntime {
   readonly identity: AgentExtensionManagementSessionIdentity;
   getSnapshot(): Promise<AgentExtensionManagementProjection>;
-  installLocalPlugin(): Promise<void>;
-  enablePlugin(pluginId: string): Promise<void>;
-  disablePlugin(pluginId: string): Promise<void>;
-  removePlugin(pluginId: string): Promise<void>;
-  rescanSources(): Promise<void>;
-  installPersonalSkill(): Promise<void>;
-  openPersonalSkill(managementId: string): Promise<void>;
-  showPersonalSkillInFolder(managementId: string): Promise<void>;
-  removePersonalSkill(managementId: string): Promise<void>;
   dispose(): void;
 }
 
@@ -61,352 +42,88 @@ export function parseAgentExtensionManagementProjection(
 ): AgentExtensionManagementProjection {
   const record = requireExactRecord(
     value,
-    ['identity', 'skills', 'skillDiscovery', 'extensions', 'extensionDiscovery'],
-    'Agent Extension Management projection is invalid.',
+    ['identity', 'skills', 'mcp', 'diagnostics'],
+    'DSH extension management projection is invalid.',
   );
-  if (!Array.isArray(record['skills']) || !Array.isArray(record['extensions'])) {
-    throw new Error('Agent Extension Management catalog is invalid.');
+  if (
+    !Array.isArray(record.skills) ||
+    !Array.isArray(record.mcp) ||
+    !Array.isArray(record.diagnostics)
+  ) {
+    throw new Error('DSH extension management catalogs are invalid.');
   }
   return {
-    identity: parseAgentExtensionManagementSessionIdentity(record['identity']),
-    skills: record['skills'].map(parseManagedSkill),
-    skillDiscovery: parseSkillDiscovery(record['skillDiscovery']),
-    extensions: record['extensions'].map(parseExtension),
-    extensionDiscovery: parseExtensionDiscovery(record['extensionDiscovery']),
+    identity: parseIdentity(record.identity),
+    skills: record.skills.map(parseSkill),
+    mcp: record.mcp.map(parseMcp),
+    diagnostics: record.diagnostics.map(parseDiagnostic),
   };
 }
 
 export function parseAgentExtensionManagementSessionIdentity(
   value: unknown,
 ): AgentExtensionManagementSessionIdentity {
+  const record = requireExactRecord(value, ['windowId'], 'DSH extension identity is invalid.');
+  return { windowId: requireNonEmptyString(record.windowId, 'DSH extension Window identity') };
+}
+
+function parseIdentity(value: unknown): AgentExtensionManagementSessionIdentity {
+  return parseAgentExtensionManagementSessionIdentity(value);
+}
+
+function parseSkill(value: unknown): AgentManagedSkillItem {
   const record = requireExactRecord(
     value,
-    ['windowId'],
-    'Agent Extension Management identity is invalid.',
+    ['id', 'name', 'description', 'source', 'provider', 'userInvocable', 'modelInvocable'],
+    'DSH Skill item is invalid.',
   );
   return {
-    windowId: requireNonEmptyString(
-      record['windowId'],
-      'Agent Extension Management Window identity is required.',
-    ),
+    id: requireNonEmptyString(record.id, 'DSH Skill id'),
+    name: requireNonEmptyString(record.name, 'DSH Skill name'),
+    description: requireString(record.description, 'DSH Skill description'),
+    source: requireNonEmptyString(record.source, 'DSH Skill source'),
+    provider: requireNonEmptyString(record.provider, 'DSH Skill provider'),
+    userInvocable: requireBoolean(record.userInvocable, 'DSH Skill user invocation flag'),
+    modelInvocable: requireBoolean(record.modelInvocable, 'DSH Skill model invocation flag'),
   };
 }
 
-function parseManagedSkill(value: unknown): AgentManagedSkillItem {
+function parseMcp(value: unknown): AgentManagedMcpItem {
   const record = requireExactRecord(
     value,
-    [
-      'id',
-      'name',
-      'description',
-      'source',
-      'sourceId',
-      'managementId',
-      'canOpenInEditor',
-      'canShowInFolder',
-      'canRemove',
-    ],
-    'Agent Extension Management Skill item is invalid.',
+    ['id', 'name', 'description', 'status', 'diagnosticCode'],
+    'DSH MCP item is invalid.',
   );
-  const source = requireSkillSource(record['source']);
-  const sourceId = requireNonEmptyString(
-    record['sourceId'],
-    'Agent Extension Management Skill source identity is required.',
-  );
-  const managementId = requireString(
-    record['managementId'],
-    'Agent Extension Management Skill management identity must be a string.',
-  );
-  const canRemove = requireBoolean(
-    record['canRemove'],
-    'Agent Extension Management Skill removal capability is invalid.',
-  );
-  const canOpenInEditor = requireBoolean(
-    record['canOpenInEditor'],
-    'Agent Extension Management Skill editor capability is invalid.',
-  );
-  const canShowInFolder = requireBoolean(
-    record['canShowInFolder'],
-    'Agent Extension Management Skill folder capability is invalid.',
-  );
-  if (source === 'plugin') {
-    requirePluginId(sourceId);
-  } else if (sourceId !== 'personal') {
-    throw new Error('Agent Extension Management Skill source identity is inconsistent.');
+  const status = record.status;
+  if (status !== 'ready' && status !== 'unsupported' && status !== 'error') {
+    throw new Error('DSH MCP status is invalid.');
   }
-  const isManagedPersonalSkill = source === 'personal' && managementId.length > 0;
+  return {
+    id: requireNonEmptyString(record.id, 'DSH MCP id'),
+    name: requireNonEmptyString(record.name, 'DSH MCP name'),
+    description: requireString(record.description, 'DSH MCP description'),
+    status,
+    diagnosticCode: requireString(record.diagnosticCode, 'DSH MCP diagnostic code'),
+  };
+}
+
+function parseDiagnostic(
+  value: unknown,
+): AgentExtensionManagementProjection['diagnostics'][number] {
+  const record = requireExactRecord(
+    value,
+    ['code', 'count'],
+    'DSH extension diagnostic is invalid.',
+  );
+  const code = record.code;
   if (
-    canRemove !== isManagedPersonalSkill ||
-    canOpenInEditor !== isManagedPersonalSkill ||
-    canShowInFolder !== isManagedPersonalSkill
+    code !== 'skill_catalog_incomplete' &&
+    code !== 'mcp_management_unsupported' &&
+    code !== 'runtime_unavailable'
   ) {
-    throw new Error('Agent Extension Management Skill capabilities are inconsistent.');
+    throw new Error('DSH extension diagnostic code is invalid.');
   }
-  if (canRemove) requireManagementId(managementId);
-  const id = requireNonEmptyString(
-    record['id'],
-    'Agent Extension Management Skill id is required.',
-  );
-  if (!id.startsWith(`${source}:${sourceId}:`)) {
-    throw new Error('Agent Extension Management Skill identity is inconsistent.');
-  }
-  return {
-    id,
-    name: requireNonEmptyString(
-      record['name'],
-      'Agent Extension Management Skill name is required.',
-    ),
-    description: requireString(
-      record['description'],
-      'Agent Extension Management Skill description must be a string.',
-    ),
-    source,
-    sourceId,
-    managementId,
-    canOpenInEditor,
-    canShowInFolder,
-    canRemove,
-  };
-}
-
-function parseSkillDiscovery(value: unknown): AgentExtensionManagementProjection['skillDiscovery'] {
-  const record = requireExactRecord(
-    value,
-    ['diagnostics', 'duplicateCount'],
-    'Agent Extension Management Skill discovery projection is invalid.',
-  );
-  if (!Array.isArray(record['diagnostics'])) {
-    throw new Error('Agent Extension Management Skill diagnostics are invalid.');
-  }
-  return {
-    diagnostics: record['diagnostics'].map((value) => {
-      const diagnostic = requireExactRecord(
-        value,
-        ['code', 'source', 'count'],
-        'Agent Extension Management Skill diagnostic is invalid.',
-      );
-      return {
-        code: requireSkillDiagnosticCode(diagnostic['code']),
-        source: requireSkillSource(diagnostic['source']),
-        count: requirePositiveInteger(
-          diagnostic['count'],
-          'Agent Extension Management Skill diagnostic count is invalid.',
-        ),
-      };
-    }),
-    duplicateCount: requireNonNegativeInteger(
-      record['duplicateCount'],
-      'Agent Extension Management duplicate count is invalid.',
-    ),
-  };
-}
-
-function parseExtension(value: unknown): AgentExtensionCatalogItem {
-  const record = requireExactRecord(
-    value,
-    [
-      'id',
-      'name',
-      'displayName',
-      'description',
-      'localization',
-      'version',
-      'developer',
-      'enabled',
-      'canEnable',
-      'canDisable',
-      'canRemove',
-      'deliverySource',
-      'agentStatus',
-      'runtimeDiagnosticCode',
-      'componentReadiness',
-      'iconDataUrl',
-      'mcpServerIds',
-      'hasSkills',
-      'appIds',
-    ],
-    'Agent Extension Management extension item is invalid.',
-  );
-  const name = requireCanonicalPluginId(
-    record['name'],
-    'Agent Extension Management extension name is invalid.',
-  );
-  const id = requireNonEmptyString(
-    record['id'],
-    'Agent Extension Management extension id is required.',
-  );
-  if (id !== name) {
-    throw new Error('Agent Extension Management extension identity is inconsistent.');
-  }
-  const enabled = requireBoolean(
-    record['enabled'],
-    'Agent Extension Management enabled flag is invalid.',
-  );
-  const canRemove = requireBoolean(
-    record['canRemove'],
-    'Agent Extension Management removal flag is invalid.',
-  );
-  const canEnable = requireBoolean(
-    record['canEnable'],
-    'Agent Extension Management enable flag is invalid.',
-  );
-  const canDisable = requireBoolean(
-    record['canDisable'],
-    'Agent Extension Management disable flag is invalid.',
-  );
-  const deliverySource = requireOneOf(
-    record['deliverySource'],
-    ['bundled', 'local'] as const,
-    'Agent Extension Management delivery source is invalid.',
-  );
-  const agentStatus = requireExtensionStatus(record['agentStatus']);
-  if (
-    canEnable !== (!enabled && agentStatus !== 'error') ||
-    canDisable !== enabled ||
-    canRemove !== (!enabled && deliverySource === 'local')
-  ) {
-    throw new Error('Agent Extension Management extension flags are inconsistent.');
-  }
-  if (!enabled && agentStatus !== 'disabled' && agentStatus !== 'error') {
-    throw new Error('Agent Extension Management extension status is inconsistent.');
-  }
-  return {
-    id,
-    name,
-    displayName: requireNonEmptyString(
-      record['displayName'],
-      'Agent Extension Management display name is required.',
-    ),
-    description: requireString(
-      record['description'],
-      'Agent Extension Management description must be a string.',
-    ),
-    localization: parseExtensionLocalization(record['localization']),
-    version: requireString(
-      record['version'],
-      'Agent Extension Management version must be a string.',
-    ),
-    developer: requireString(
-      record['developer'],
-      'Agent Extension Management developer must be a string.',
-    ),
-    enabled,
-    canEnable,
-    canDisable,
-    canRemove,
-    deliverySource,
-    agentStatus,
-    runtimeDiagnosticCode: requireDiagnosticValue(record['runtimeDiagnosticCode']),
-    componentReadiness: parseComponentReadinessSet(record['componentReadiness']),
-    iconDataUrl: requireIconDataUrl(record['iconDataUrl']),
-    mcpServerIds: requireUniqueIdentifiers(
-      record['mcpServerIds'],
-      'Agent Extension Management MCP Server ids are invalid.',
-    ),
-    hasSkills: requireBoolean(
-      record['hasSkills'],
-      'Agent Extension Management Skill contribution flag is invalid.',
-    ),
-    appIds: requireUniqueIdentifiers(
-      record['appIds'],
-      'Agent Extension Management App ids are invalid.',
-    ),
-  };
-}
-
-function parseExtensionLocalization(value: unknown): AgentExtensionCatalogItem['localization'] {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error('Agent Extension Management localization is invalid.');
-  }
-  const entries = Object.entries(value).map(([locale, localized]) => {
-    if (!isLocalizationLocale(locale)) {
-      throw new Error('Agent Extension Management localization locale is invalid.');
-    }
-    const record = requireExactRecord(
-      localized,
-      ['description'],
-      'Agent Extension Management localized description is invalid.',
-    );
-    return [
-      locale,
-      {
-        description: requireNonEmptyString(
-          record['description'],
-          'Agent Extension Management localized description is invalid.',
-        ),
-      },
-    ] as const;
-  });
-  return Object.fromEntries(entries);
-}
-
-function parseComponentReadinessSet(
-  value: unknown,
-): AgentExtensionCatalogItem['componentReadiness'] {
-  const record = requireExactRecord(
-    value,
-    ['skills', 'mcp', 'apps'],
-    'Agent Extension Management component readiness is invalid.',
-  );
-  return {
-    skills: parseComponentReadiness(record['skills']),
-    mcp: parseComponentReadiness(record['mcp']),
-    apps: parseComponentReadiness(record['apps']),
-  };
-}
-
-function parseComponentReadiness(
-  value: unknown,
-): AgentExtensionCatalogItem['componentReadiness']['skills'] {
-  const record = requireExactRecord(
-    value,
-    ['status', 'diagnosticCode'],
-    'Agent Extension Management component readiness is invalid.',
-  );
-  const status = record['status'];
-  if (status !== 'absent') requireExtensionStatus(status);
-  return {
-    status: status as AgentExtensionCatalogItem['componentReadiness']['skills']['status'],
-    diagnosticCode: requireDiagnosticValue(record['diagnosticCode']),
-  };
-}
-
-function isLocalizationLocale(value: string): boolean {
-  const [language, ...subtags] = value.split('-');
-  return (
-    language !== undefined &&
-    /^[a-z]{2,3}$/u.test(language) &&
-    subtags.every((subtag) => /^[a-z0-9]{2,8}$/u.test(subtag))
-  );
-}
-
-function parseExtensionDiscovery(
-  value: unknown,
-): AgentExtensionManagementProjection['extensionDiscovery'] {
-  const record = requireExactRecord(
-    value,
-    ['diagnostics'],
-    'Agent Extension Management extension discovery projection is invalid.',
-  );
-  if (!Array.isArray(record['diagnostics'])) {
-    throw new Error('Agent Extension Management extension diagnostics are invalid.');
-  }
-  return {
-    diagnostics: record['diagnostics'].map((value) => {
-      const diagnostic = requireExactRecord(
-        value,
-        ['code', 'count'],
-        'Agent Extension Management extension diagnostic is invalid.',
-      );
-      return {
-        code: requireExtensionDiagnosticCode(diagnostic['code']),
-        count: requirePositiveInteger(
-          diagnostic['count'],
-          'Agent Extension Management extension diagnostic count is invalid.',
-        ),
-      };
-    }),
-  };
+  return { code, count: requirePositiveInteger(record.count, 'DSH extension diagnostic count') };
 }
 
 function requireExactRecord(
@@ -425,151 +142,25 @@ function requireExactRecord(
   return record;
 }
 
-function requirePluginId(value: unknown): string {
-  const id = requireNonEmptyString(value, 'Agent Extension Management plugin id is required.');
-  return requireCanonicalPluginId(id, 'Agent Extension Management plugin id is invalid.');
-}
-
-function requireCanonicalPluginId(value: unknown, message: string): string {
-  const id = requireNonEmptyString(value, message);
-  if (!/^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/u.test(id) || id.includes('..')) {
-    throw new Error(message);
-  }
-  return id;
-}
-
-function requireManagementId(value: unknown): string {
-  const id = requireNonEmptyString(
-    value,
-    'Agent Extension Management Skill management id is required.',
-  );
-  if (!/^skill:[0-9a-f]{64}$/u.test(id)) {
-    throw new Error('Agent Extension Management Skill management id is invalid.');
-  }
-  return id;
-}
-
-function requireUniqueIdentifiers(value: unknown, message: string): readonly string[] {
-  if (!Array.isArray(value)) throw new Error(message);
-  const identifiers = value.map((item) => requireIdentifier(item, message));
-  if (new Set(identifiers).size !== identifiers.length) throw new Error(message);
-  return identifiers;
-}
-
-function requireIdentifier(value: unknown, message: string): string {
-  const identifier = requireNonEmptyString(value, message);
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u.test(identifier)) throw new Error(message);
-  return identifier;
-}
-
-function requireDiagnosticValue(value: unknown): string {
-  const code = requireString(
-    value,
-    'Agent Extension Management runtime diagnostic code must be a string.',
-  );
-  if (code !== '' && !/^[a-z][a-z0-9._-]*$/u.test(code)) {
-    throw new Error('Agent Extension Management runtime diagnostic code is invalid.');
-  }
-  return code;
-}
-
-function requireIconDataUrl(value: unknown): string {
-  const dataUrl = requireString(
-    value,
-    'Agent Extension Management icon data URL must be a string.',
-  );
-  if (
-    dataUrl !== '' &&
-    !/^data:image\/(?:png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/u.test(dataUrl)
-  ) {
-    throw new Error('Agent Extension Management icon data URL is invalid.');
-  }
-  return dataUrl;
-}
-
-function requireSkillSource(value: unknown): AgentManagedSkillItem['source'] {
-  if (value !== 'personal' && value !== 'plugin') {
-    throw new Error('Agent Extension Management Skill source is invalid.');
-  }
+function requireNonEmptyString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0)
+    throw new Error(`${label} is required.`);
   return value;
 }
 
-function requireSkillDiagnosticCode(
-  value: unknown,
-): AgentExtensionManagementProjection['skillDiscovery']['diagnostics'][number]['code'] {
-  if (
-    value !== 'file_info_failed' &&
-    value !== 'list_failed' &&
-    value !== 'read_failed' &&
-    value !== 'parse_failed' &&
-    value !== 'invalid_metadata'
-  ) {
-    throw new Error('Agent Extension Management Skill diagnostic code is invalid.');
+function requireString(value: unknown, label: string): string {
+  if (typeof value !== 'string') throw new Error(`${label} must be a string.`);
+  return value;
+}
+
+function requireBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`${label} must be boolean.`);
+  return value;
+}
+
+function requirePositiveInteger(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`${label} must be a positive integer.`);
   }
-  return value;
-}
-
-function requireExtensionDiagnosticCode(value: unknown): AgentExtensionDiagnosticCode {
-  if (
-    value !== 'repository_unavailable' &&
-    value !== 'repository_failed' &&
-    value !== 'repository_invalid' &&
-    value !== 'state_invalid' &&
-    value !== 'manifest_invalid' &&
-    value !== 'contribution_invalid' &&
-    value !== 'runtime_unsupported' &&
-    value !== 'runtime_failed' &&
-    value !== 'skill_invalid'
-  ) {
-    throw new Error('Agent Extension Management extension diagnostic code is invalid.');
-  }
-  return value;
-}
-
-function requireExtensionStatus(value: unknown): AgentExtensionStatus {
-  if (
-    value !== 'disabled' &&
-    value !== 'ready' &&
-    value !== 'partial' &&
-    value !== 'unsupported' &&
-    value !== 'error'
-  ) {
-    throw new Error('Agent Extension Management extension status is invalid.');
-  }
-  return value;
-}
-
-function requireNonEmptyString(value: unknown, message: string): string {
-  const text = requireString(value, message);
-  if (text.length === 0) throw new Error(message);
-  return text;
-}
-
-function requireString(value: unknown, message: string): string {
-  if (typeof value !== 'string') throw new Error(message);
-  return value;
-}
-
-function requireBoolean(value: unknown, message: string): boolean {
-  if (typeof value !== 'boolean') throw new Error(message);
-  return value;
-}
-
-function requireOneOf<const T extends readonly string[]>(
-  value: unknown,
-  allowed: T,
-  message: string,
-): T[number] {
-  if (typeof value !== 'string' || !allowed.includes(value)) throw new Error(message);
-  return value;
-}
-
-function requirePositiveInteger(value: unknown, message: string): number {
-  if (!Number.isInteger(value) || typeof value !== 'number' || value <= 0) throw new Error(message);
-  return value;
-}
-
-function requireNonNegativeInteger(value: unknown, message: string): number {
-  if (!Number.isInteger(value) || typeof value !== 'number' || value < 0) throw new Error(message);
   return value;
 }

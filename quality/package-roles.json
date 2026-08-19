@@ -58,9 +58,9 @@
       "path": "packages/automation/webview",
       "name": "@neko/automation-webview",
       "family": "automation",
-      "roles": ["webview"],
-      "runtimes": ["browser"],
-      "productStatus": "active-product",
+      "roles": ["content-only"],
+      "runtimes": ["content"],
+      "productStatus": "content-only",
       "architectureState": "converged"
     },
     {

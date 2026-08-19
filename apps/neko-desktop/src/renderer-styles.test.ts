@@ -492,10 +492,7 @@ describe('Desktop renderer styles', () => {
       /\.management-surface-list\.is-grid \.management-surface-row\s*\{[\s\S]*?min-height\s*:\s*132px[\s\S]*?flex-direction\s*:\s*column/u,
     );
     expect(styles).toMatch(
-      /\.agent-extension-management-root \.agent-extension-catalog-row\[data-selected='true'\]\s*\{[^}]*border-color[^}]*background/u,
-    );
-    expect(styles).not.toMatch(
-      /\.agent-extension-management-root [^{]*\[data-selected='true'\][^{]*\{[^}]*box-shadow\s*:\s*inset/u,
+      /\.agent-extension-management-root \.agent-extension-catalog-row\s*\{[^}]*background:\s*var\(--neko-desktop-surface-raised\)/u,
     );
     expect(styles).toMatch(
       /\.desktop-workbench-main-panel\[data-panel-size='compact'\] \.management-surface-list\.is-grid\s*\{[\s\S]*?grid-template-columns\s*:\s*1fr/u,

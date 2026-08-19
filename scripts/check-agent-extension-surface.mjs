@@ -18,7 +18,6 @@ export function validateSurfaceStructure(surface) {
   const skillAuthoring = requireRecord(surface, 'skillAuthoringMetadata', findings);
   const allowedTools = requireRecord(skillAuthoring, 'allowedTools', findings);
   const composition = requireRecord(surface, 'compositionPackage', findings);
-  const pluginState = requireRecord(surface, 'pluginState', findings);
   const management = requireRecord(surface, 'extensionManagement', findings);
   const mcp = requireRecord(surface, 'mcp', findings);
   const capability = requireRecord(surface, 'hostCapability', findings);
@@ -72,12 +71,6 @@ export function validateSurfaceStructure(surface) {
   );
   expectEqual(composition?.mcpContributionOptional, true, 'MCP contribution optional', findings);
 
-  expectFalse(pluginState?.packageBytesAuthority, 'pluginState.packageBytesAuthority', findings);
-  expectFalse(
-    pluginState?.requiredForPortableSkill,
-    'pluginState.requiredForPortableSkill',
-    findings,
-  );
   expectEqual(
     management?.classification,
     'dsh-projection-only',

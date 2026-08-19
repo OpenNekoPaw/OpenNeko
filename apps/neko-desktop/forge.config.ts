@@ -21,7 +21,6 @@ const config: ForgeConfig = {
     },
     extraResource: [
       resolveDesktopBuiltinSkillSourceRoot(fileURLToPath(new URL('.', import.meta.url))),
-      fileURLToPath(new URL('./resources/extensions', import.meta.url)),
       fileURLToPath(new URL('./.vite/runtime-stage/dsh-runtime', import.meta.url)),
     ],
     executableName: 'OpenNeko',

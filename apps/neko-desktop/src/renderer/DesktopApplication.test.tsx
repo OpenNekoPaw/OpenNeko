@@ -75,10 +75,8 @@ vi.mock('@neko/chara-webview/avatar', () => ({
 
 vi.mock('./DesktopExtensionManagementSurface', () => ({
   DesktopExtensionManagementSurface: ({
-    onDetailVisibilityChange,
     runtime,
   }: {
-    readonly onDetailVisibilityChange: (visible: boolean) => void;
     readonly runtime: DesktopExtensionManagementRuntime;
   }) => {
     rendererInstrumentation.extensionRootRender(runtime.identity.windowId);
@@ -87,16 +85,6 @@ vi.mock('./DesktopExtensionManagementSurface', () => ({
         <div
           data-extension-management-root="agent"
           data-extension-management-window={runtime.identity.windowId}
-        />
-        <button
-          data-select-extension-detail="true"
-          type="button"
-          onClick={() => onDetailVisibilityChange(true)}
-        />
-        <button
-          data-clear-extension-detail="true"
-          type="button"
-          onClick={() => onDetailVisibilityChange(false)}
         />
       </>
     );
@@ -1558,7 +1546,7 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('mounts an edge-to-edge Extensions detail split only after exact selection', async () => {
+  it('keeps the DSH extension catalog as a single read-only surface', async () => {
     const projection = withActiveScene(createProjection(), extensionsScene());
     installBridge({ projection });
     const { container, root } = await renderApplication();
@@ -1574,29 +1562,6 @@ describe('DesktopApplication scene lifecycle', () => {
         ?.getAttribute('data-panel-size'),
     ).toBe('full');
 
-    const select = container.querySelector<HTMLButtonElement>('[data-select-extension-detail]');
-    await act(async () => select?.click());
-    expect(shell?.dataset.mainSplit).toBe('columns');
-    expect(shell?.dataset.mainComposition).toBe('continuous');
-    expect(container.querySelector('[data-workbench-slot="secondaryMain"]')).not.toBeNull();
-    expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
-    expect(container.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
-    expect(
-      container
-        .querySelector('[data-workbench-main-panel="extension-management"]')
-        ?.getAttribute('data-panel-size'),
-    ).toBe('compact');
-
-    const clear = container.querySelector<HTMLButtonElement>('[data-clear-extension-detail]');
-    await act(async () => clear?.click());
-    expect(shell?.dataset.mainSplit).toBe('none');
-    expect(container.querySelector('[data-workbench-slot="secondaryMain"]')).toBeNull();
-    expect(container.querySelector('[aria-label="Resize Main split"]')).toBeNull();
-    expect(
-      container
-        .querySelector('[data-workbench-main-panel="extension-management"]')
-        ?.getAttribute('data-panel-size'),
-    ).toBe('full');
     await act(async () => root.unmount());
   });
 

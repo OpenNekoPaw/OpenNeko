@@ -16,6 +16,7 @@ const surface = JSON.parse(
 
 test('accepts the canonical minimal extension surface', () => {
   assert.deepEqual(validateSurfaceStructure(surface), []);
+  assert.equal('pluginState' in surface, false);
 });
 
 test('rejects coupling portable Skills to Host packaging or MCP', () => {
