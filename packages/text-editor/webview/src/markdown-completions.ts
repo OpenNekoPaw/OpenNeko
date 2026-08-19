@@ -204,9 +204,7 @@ function sameDocumentIdentity(left: TextDocumentIdentity, right: TextDocumentIde
   return (
     left.workspaceId === right.workspaceId &&
     left.documentId === right.documentId &&
-    left.locator.kind === 'workspace-file' &&
-    right.locator.kind === 'workspace-file' &&
-    left.locator.path === right.locator.path &&
+    left.locator.file.path === right.locator.file.path &&
     left.owner.kind === 'window' &&
     right.owner.kind === 'window' &&
     left.owner.windowId === right.owner.windowId &&

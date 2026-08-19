@@ -88,9 +88,8 @@ describe('semantic document extraction', () => {
 
   it('returns embedded media only as resource references', async () => {
     const contentLocator: DocumentEntryContentLocator = {
-      kind: 'document-entry',
-      source: { kind: 'workspace-file', path: 'book.epub' },
-      entryPath: 'images/portrait.png',
+      file: { authority: 'workspace', path: 'book.epub' },
+      selector: { kind: 'entry', path: 'images/portrait.png' },
     };
     const result = await extractSemanticDocument({
       source: source('epub'),
@@ -217,7 +216,7 @@ function readResult(
       ? {
           imageInfo: [
             {
-              path: unit.contentLocator.entryPath,
+              path: unit.contentLocator.selector.path,
               contentLocator: unit.contentLocator,
             },
           ],

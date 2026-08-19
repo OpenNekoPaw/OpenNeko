@@ -157,7 +157,7 @@ export function assertExternalPerceptionTarget(target: QualityTarget): ContentLo
     target.kind === 'project-artifact' ||
     target.projectRef ||
     !target.contentLocator ||
-    target.contentLocator.kind === 'document-entry'
+    target.contentLocator.selector !== undefined
   ) {
     throw new Error(
       'invalid-quality-target: External perception cannot receive project archives or project paths; use an owning-package ContentLocator.',

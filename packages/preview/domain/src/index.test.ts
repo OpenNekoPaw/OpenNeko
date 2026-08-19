@@ -58,7 +58,9 @@ describe('Preview Host runtime contract', () => {
   });
 
   it('creates the shared source-model staging used by VS Code and Desktop hosts', () => {
-    const source = { kind: 'workspace-file' as const, path: 'models/asset-1.glb' };
+    const source = {
+      file: { authority: 'workspace' as const, path: 'models/asset-1.glb' },
+    };
 
     expect(
       createSourceModelStaging('session-1', {
@@ -83,7 +85,7 @@ describe('Preview Host runtime contract', () => {
         descriptor: {
           descriptorId: 'descriptor-1',
           sourceFingerprint: 'content-2',
-          contentLocator: { kind: 'workspace-file', path: 'models/cat.glb' },
+          contentLocator: { file: { authority: 'workspace', path: 'models/cat.glb' } },
           url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
           contentKind: 'model',
           mediaType: 'model/gltf-binary',
@@ -121,7 +123,7 @@ describe('Preview Host runtime contract', () => {
       parsePreviewMediaDescriptor({
         descriptorId: 'descriptor-1',
         sourceFingerprint: 'content-2',
-        contentLocator: { kind: 'workspace-file', path: 'scenes/scene.nkc' },
+        contentLocator: { file: { authority: 'workspace', path: 'scenes/scene.nkc' } },
         url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         contentKind: 'canvas',
         mediaType: 'application/json',
@@ -145,7 +147,7 @@ describe('Preview Host runtime contract', () => {
       parsePreviewMediaDescriptor({
         descriptorId: 'descriptor-1',
         sourceFingerprint: 'content-2',
-        contentLocator: { kind: 'workspace-file', path: 'models/cat.gltf' },
+        contentLocator: { file: { authority: 'workspace', path: 'models/cat.gltf' } },
         url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv/cat.gltf',
         resourceUris: {
           'cat.gltf': 'openneko://resource/0123456789abcdefghijklmnopqrstuv/cat.gltf',

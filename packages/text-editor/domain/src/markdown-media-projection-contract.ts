@@ -1,5 +1,6 @@
 import {
   isHostProjectedRuntimeValue,
+  isWorkspaceFileContentLocator,
   normalizeWorkspaceContentPath,
   validateContentLocator,
 } from '@neko/content';
@@ -294,8 +295,9 @@ function assertDocumentAssociation(identity: unknown, sessionId: unknown): void 
   const locator = validateContentLocator(identity.locator);
   if (
     !locator.ok ||
-    locator.locator.kind !== 'workspace-file' ||
-    locator.locator.path !== identity.documentId
+    !isWorkspaceFileContentLocator(locator.locator) ||
+    locator.locator.selector !== undefined ||
+    locator.locator.file.path !== identity.documentId
   ) {
     throw new TextEditorMarkdownMediaContractError(
       'Text Editor Markdown media document locator does not match its identity.',
@@ -307,7 +309,7 @@ function sameDocumentIdentity(left: TextDocumentIdentity, right: TextDocumentIde
   return (
     left.workspaceId === right.workspaceId &&
     left.documentId === right.documentId &&
-    left.locator.path === right.locator.path &&
+    left.locator.file.path === right.locator.file.path &&
     left.owner.windowId === right.owner.windowId &&
     left.owner.projectId === right.owner.projectId
   );

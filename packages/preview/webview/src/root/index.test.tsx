@@ -32,8 +32,7 @@ const identity: PreviewRuntimeIdentity = {
 };
 
 const previewContentLocator = {
-  kind: 'workspace-file' as const,
-  path: 'preview/fixture.bin',
+  file: { authority: 'workspace' as const, path: 'preview/fixture.bin' },
 };
 
 afterEach(() => {

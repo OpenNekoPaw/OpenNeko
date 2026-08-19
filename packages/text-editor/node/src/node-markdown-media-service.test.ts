@@ -291,7 +291,7 @@ function mediaRequest(source: string, target: string): PrepareTextEditorMarkdown
       owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
       workspaceId: 'workspace-1',
       documentId: 'notes/readme.md',
-      locator: { kind: 'workspace-file', path: 'notes/readme.md' },
+      locator: { file: { authority: 'workspace', path: 'notes/readme.md' } },
     },
     sessionId: 'session-1',
     editSequence: 0,

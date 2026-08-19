@@ -211,11 +211,12 @@ describe('3D reference contracts', () => {
 
 function packageResource(id: string) {
   return {
-    kind: 'package-resource' as const,
-    packageId: 'neko-three-reference',
-    revision: '1',
-    resourcePath: `references/${id}.png`,
-    digest: `sha256:${id}`,
+    file: {
+      authority: 'package' as const,
+      packageId: 'neko-three-reference',
+      revision: '1',
+      path: `references/${id}.png`,
+    },
   };
 }
 

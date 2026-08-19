@@ -11,9 +11,7 @@ import {
 import { createMultimodalPerceptionEvaluator } from '../model/index';
 
 const contentLocator = {
-  kind: 'workspace-file' as const,
-  path: 'assets/hero.png',
-  fingerprint: { strategy: 'sha256' as const, value: 'sha256:hero-content' },
+  file: { authority: 'workspace' as const, path: 'assets/hero.png' },
 };
 
 function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
@@ -185,8 +183,7 @@ describe('canonical quality gate runtime', () => {
   it('rejects invalid absolute-path locators from external perception', () => {
     const invalid = target();
     Reflect.set(invalid, 'contentLocator', {
-      kind: 'workspace-file',
-      path: '/tmp/untrusted.png',
+      file: { authority: 'workspace', path: '/tmp/untrusted.png' },
     });
     expect(() => assertExternalPerceptionTarget(invalid)).toThrow('content-locator-invalid');
   });

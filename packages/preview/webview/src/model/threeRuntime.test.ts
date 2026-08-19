@@ -27,7 +27,7 @@ import {
 describe('Three model runtime helpers', () => {
   it('resolves only exact authorized URLs and rejects network or undeclared probes', () => {
     const resolve = createExactUrlModifier({
-      source: { kind: 'workspace-file', path: 'model/scene.gltf' },
+      source: { file: { authority: 'workspace', path: 'model/scene.gltf' } },
       sourceFingerprint: 'source',
       format: 'gltf',
       entryUri: 'http://127.0.0.1:43125/resource-sets/token/scene.gltf',

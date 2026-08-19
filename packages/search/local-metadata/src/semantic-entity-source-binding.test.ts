@@ -179,7 +179,9 @@ function commitRequest(): SemanticEntitySourceCommitRequest {
         evidenceId: 'evidence:nova',
         owner: 'workspace' as const,
         sourceId: source.sourceId,
-        locator: { kind: 'workspace-file' as const, path: source.relativePath },
+        locator: {
+          file: { authority: 'workspace' as const, path: source.relativePath },
+        },
       },
     ],
   };

@@ -177,7 +177,7 @@ export interface PreviewRuntimeIdentity {
 export interface PreviewMediaDescriptor {
   readonly descriptorId: string;
   readonly sourceFingerprint: string;
-  readonly contentLocator: ContentLocator;
+  readonly contentLocator?: ContentLocator;
   readonly url: string;
   readonly resourceUris?: Readonly<Record<string, string>>;
   readonly contentKind: PreviewContentKind;
@@ -278,8 +278,11 @@ export function parsePreviewRuntimeIdentity(value: unknown): PreviewRuntimeIdent
 
 export function parsePreviewMediaDescriptor(value: unknown): PreviewMediaDescriptor {
   const record = requireRecord(value, 'Preview media descriptor must be an object.');
-  const contentLocator = validateContentLocator(record['contentLocator']);
-  if (!contentLocator.ok) {
+  const contentLocator =
+    record['contentLocator'] === undefined
+      ? undefined
+      : validateContentLocator(record['contentLocator']);
+  if (contentLocator && !contentLocator.ok) {
     throw invalidPayload(
       `Preview media descriptor contentLocator is invalid: ${contentLocator.diagnostics
         .map((diagnostic) => diagnostic.message)
@@ -295,7 +298,7 @@ export function parsePreviewMediaDescriptor(value: unknown): PreviewMediaDescrip
       record['sourceFingerprint'],
       'Preview descriptor source fingerprint is required.',
     ),
-    contentLocator: contentLocator.locator,
+    ...(contentLocator?.ok ? { contentLocator: contentLocator.locator } : {}),
     url: requireOpenNekoResourceUrl(record['url']),
     ...(record['resourceUris'] === undefined
       ? {}

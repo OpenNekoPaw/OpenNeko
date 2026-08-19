@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { TextDocumentError } from './contracts';
 import { TextDocumentSession, TextDocumentSessionManager } from './text-document-session';
 
-const locator = { kind: 'workspace-file' as const, path: 'scripts/main.fountain' };
+const locator = {
+  file: { authority: 'workspace' as const, path: 'scripts/main.fountain' },
+};
 const identity = {
   owner: { kind: 'window' as const, windowId: 'window-1', projectId: 'project-1' },
   workspaceId: 'workspace-1',
@@ -49,7 +51,7 @@ describe('TextDocumentSession', () => {
     const jsonIdentity = {
       ...identity,
       documentId: 'data.json',
-      locator: { ...locator, path: 'data.json' },
+      locator: { ...locator, file: { ...locator.file, path: 'data.json' } },
     };
     const session = await TextDocumentSession.open(jsonIdentity, {
       ...state,
@@ -79,7 +81,7 @@ describe('TextDocumentSession', () => {
     const textIdentity = {
       ...identity,
       documentId: 'note.txt',
-      locator: { ...locator, path: 'note.txt' },
+      locator: { ...locator, file: { ...locator.file, path: 'note.txt' } },
     };
     const session = await TextDocumentSession.open(textIdentity, {
       ...state,
@@ -111,7 +113,7 @@ describe('TextDocumentSession', () => {
     const textIdentity = {
       ...identity,
       documentId: 'note.txt',
-      locator: { ...locator, path: 'note.txt' },
+      locator: { ...locator, file: { ...locator.file, path: 'note.txt' } },
     };
     const session = await TextDocumentSession.open(textIdentity, {
       ...state,
@@ -133,7 +135,7 @@ describe('TextDocumentSession', () => {
     const textIdentity = {
       ...identity,
       documentId: 'note.txt',
-      locator: { ...locator, path: 'note.txt' },
+      locator: { ...locator, file: { ...locator.file, path: 'note.txt' } },
     };
     const session = await TextDocumentSession.open(textIdentity, {
       ...state,
@@ -162,7 +164,7 @@ describe('TextDocumentSession', () => {
     const textIdentity = {
       ...identity,
       documentId: 'note.txt',
-      locator: { ...locator, path: 'note.txt' },
+      locator: { ...locator, file: { ...locator.file, path: 'note.txt' } },
     };
     const session = await TextDocumentSession.open(textIdentity, {
       ...state,
@@ -183,7 +185,7 @@ describe('TextDocumentSession', () => {
     const textIdentity = {
       ...identity,
       documentId: 'note.txt',
-      locator: { ...locator, path: 'note.txt' },
+      locator: { ...locator, file: { ...locator.file, path: 'note.txt' } },
     };
     const session = await TextDocumentSession.open(textIdentity, {
       ...state,
@@ -213,7 +215,7 @@ describe('TextDocumentSession', () => {
     const textIdentity = {
       ...identity,
       documentId: 'note.txt',
-      locator: { ...locator, path: 'note.txt' },
+      locator: { ...locator, file: { ...locator.file, path: 'note.txt' } },
     };
     const manager = new TextDocumentSessionManager({ ...state, createSessionId: () => 'text-1' });
     const first = await manager.open(textIdentity);
@@ -237,13 +239,13 @@ describe('TextDocumentSession', () => {
     const first = await manager.open({
       ...identity,
       documentId: 'note.txt',
-      locator: { ...locator, path: 'note.txt' },
+      locator: { ...locator, file: { ...locator.file, path: 'note.txt' } },
     });
     const second = await manager.open({
       ...identity,
       owner: { ...identity.owner, projectId: 'project-2' },
       documentId: 'note.txt',
-      locator: { ...locator, path: 'note.txt' },
+      locator: { ...locator, file: { ...locator.file, path: 'note.txt' } },
     });
 
     expect(second.sessionId).not.toBe(first.sessionId);

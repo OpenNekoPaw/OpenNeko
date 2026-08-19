@@ -428,6 +428,9 @@ function ViewerDiagnostic({
 function createModelSourceDescriptor(
   descriptor: PreviewMediaDescriptor,
 ): ModelPreviewSourceDescriptor {
+  if (!descriptor.contentLocator) {
+    throw new Error('Model Preview requires a durable content locator.');
+  }
   return {
     source: descriptor.contentLocator,
     sourceFingerprint: descriptor.sourceFingerprint,

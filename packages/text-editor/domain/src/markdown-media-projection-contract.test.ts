@@ -13,7 +13,7 @@ const request: PrepareTextEditorMarkdownMediaRequest = {
     owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
     workspaceId: 'workspace-1',
     documentId: 'notes/draft.md',
-    locator: { kind: 'workspace-file', path: 'notes/draft.md' },
+    locator: { file: { authority: 'workspace', path: 'notes/draft.md' } },
   },
   sessionId: 'session-1',
   editSequence: 4,
@@ -95,7 +95,7 @@ describe('Text Editor Markdown media projection contract', () => {
         ...request,
         identity: {
           ...request.identity,
-          locator: { kind: 'workspace-file', path: 'notes/other.md' },
+          locator: { file: { authority: 'workspace', path: 'notes/other.md' } },
         },
       }),
     ).toThrow('document locator does not match');

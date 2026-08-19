@@ -43,7 +43,7 @@ describe('Project local authoring Host contract', () => {
               evidenceId: 'evidence-story',
               sourceWorkspaceId: 'workspace-1',
               sourceWorkspaceGrantId: 'grant-1',
-              locator: { kind: 'workspace-file', path: 'story.md' },
+              locator: { file: { authority: 'workspace', path: 'story.md' } },
               observedAt: '2026-08-12T00:00:00.000Z',
             },
           ],
@@ -51,10 +51,12 @@ describe('Project local authoring Host contract', () => {
             {
               assetId: 'asset:portrait-main',
               resource: {
-                kind: 'package-resource',
-                packageId: 'asset:portrait-main',
-                revision: 'publication:one',
-                resourcePath: 'portrait/main.png',
+                file: {
+                  authority: 'package',
+                  packageId: 'asset:portrait-main',
+                  revision: 'publication:one',
+                  path: 'portrait/main.png',
+                },
               },
               representationId: 'portrait-main',
               representationKind: 'portrait',

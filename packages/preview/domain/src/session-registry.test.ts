@@ -78,7 +78,9 @@ function readyProjection(
     descriptor: {
       descriptorId: `descriptor:${runtimeIdentity.sessionId}`,
       sourceFingerprint: 'fixture:1',
-      contentLocator: { kind: 'workspace-file', path: runtimeIdentity.documentId },
+      contentLocator: {
+        file: { authority: 'workspace', path: runtimeIdentity.documentId },
+      },
       url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       contentKind: 'image',
       mediaType: 'image/png',
