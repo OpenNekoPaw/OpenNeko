@@ -77,6 +77,23 @@ Because the official `dsh-acp` rc.7 bridge is automation-only, OpenNeko SHALL sh
 - **THEN** qualification fails and production consumer cutover stops
 - **AND** the bridge is not expanded into a second runtime to satisfy the surface
 
+### Requirement: The official standard preset is the sole general Agent capability composition
+
+The official OpenNeko DSH profile SHALL compose every executable Agent through the shipped DSH `standard` preset using the public agent-preset roster. File editing, Shell, filesystem and web search, Skills, planning, goals, subagents and workflows SHALL come from that preset and its canonical Host services. The profile MUST disable the corresponding process-global model-facing rows inherited from `dsh-base`, and OpenNeko MUST NOT register aliases, copied tools or fallback implementations for those capabilities. Official OpenNeko domain Tools MAY contribute to the same DSH layered Tool registry without replacing the standard preset.
+
+#### Scenario: Create or resume an executable Conversation
+
+- **WHEN** the bridge creates, loads, resumes or rebuilds the exact DSH Agent
+- **THEN** it mounts the shipped `standard` preset before publishing the Agent
+- **AND** a missing or broken preset rejects only that Session operation with an explicit diagnostic
+- **AND** no empty Agent, process-global duplicate Tool path or OpenNeko fallback is used
+
+#### Scenario: A standard capability lacks its Host dependency
+
+- **WHEN** web search lacks its provider credential or another standard capability lacks a required Host service
+- **THEN** that exact capability fails visibly through the DSH-owned error path
+- **AND** OpenNeko does not hide the capability failure, invent a result or route to a self-developed implementation
+
 ### Requirement: DSH lifecycle events project precise identities and stop semantics
 
 The canonical product contract SHALL preserve the qualified DSH Session, turn, call, request and inbox identities. Permission, cancellation, close and progress SHALL target those exact identities. Bidirectional JSON-RPC SHALL use bounded payloads and fair backpressure across Sessions. A long-running domain operation SHALL additionally retain the owning-domain Job identity; a DSH call identity MUST NOT replace or infer that Job identity. Late events after cancel, close or disconnect SHALL be contained to their exact operation and SHALL NOT reopen settled work or block sibling Sessions.

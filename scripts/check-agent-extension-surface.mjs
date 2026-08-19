@@ -364,7 +364,7 @@ async function checkCanonicalSourceEvidence(root, findings) {
       ],
       mcpContributions: [],
       plugins: [bridgeProfile, generationProfile, canvasProfile, cutProfile].flatMap(
-        readProfilePluginNames,
+        readOpenNekoProfilePluginNames,
       ),
     }),
   );
@@ -406,8 +406,10 @@ function rejectDuplicateIdentities(identities, label, findings) {
   }
 }
 
-function readProfilePluginNames(source) {
-  return [...source.matchAll(/^\s+name:\s+['"]([^'"]+)['"]\s*$/gmu)].map((match) => match[1]);
+export function readOpenNekoProfilePluginNames(source) {
+  return [...source.matchAll(/^\s+name:\s+['"](@neko\/[^'"]+)['"]\s*$/gmu)].map(
+    (match) => match[1],
+  );
 }
 
 function countMatches(source, pattern) {

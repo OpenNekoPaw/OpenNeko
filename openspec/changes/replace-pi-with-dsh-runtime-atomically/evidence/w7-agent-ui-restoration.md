@@ -21,37 +21,40 @@ Date: 2026-08-19
 
 ## Authoritative Desktop UI Evidence
 
-Runtime: the real development Electron product at `http://localhost:5173/`, backed by the verified local DSH development closure.
+The Desktop was restarted from the product entry with its verified development DSH closure. The replacement process tree used Electron plus the staged product Node/DSH runtime; the stale pre-restart Main bundle was terminated before review. Normal user-visible controls then established the following:
 
-Observed through normal user-visible Desktop controls:
+- The Entry Draft renders the accepted localized composer with no raw `chat.*` keys. The selected chat model is `GPT 5.6 Luna`.
+- The chat-model panel contains only LLM choices. The image panel contains `GPT Image 2` and does not contain an LLM choice.
+- The runtime mode menu is sourced from DSH and exposes `Read Only`, `Workspace Write`, and `Full access`. Switching to `Read Only` and back to `Workspace Write` updates the exact Draft configuration without creating a Session.
+- Conversation mode loads the Character and World catalogs through the product Host. Selecting one exact Character version and one exact World version produces the existing reference-token presentation; clearing each token returns to the empty context rail.
+- Authoring mode replaces Character/World actions with Project selection. Selecting `Blame` produces the existing Project token, clearing it succeeds, and returning to Conversation mode does not retain the Project token.
+- The standard 960 x 680 Electron window shows the accepted entry composition, model control, runtime-mode control, context rail and quick-action panel without raw protocol UI, clipping or overlap.
+- Invalid retained records fail locally. One legacy publication without a DSH binding is disabled in the sidebar; stale DSH Session and expired Workspace-grant records produce their exact diagnostic without stopping the runtime or sibling navigation.
 
-- Workspace Agent Draft: localized centered title, accepted composer shell, circular send control, and no protocol-debug empty state.
-- Personal Assistant Draft: the same presentation renders in the full Agent scene without a separate UI implementation.
-- Standard maximized window: the title and composer remain centered, readable, and free of clipping or overlap.
-- Narrow dock: the title wraps and the composer contracts without horizontal overflow or overlap.
-- Composer interaction: entering a draft enables Send; clearing it disables Send again. No message was submitted.
-- Existing Pi-only records remain visible and locally disabled with their binding diagnostic; they do not prevent valid DSH sibling records or Draft scenes from opening.
+The current Computer Use screenshot stream can lag the Electron accessibility tree by one compositor frame after mode and overlay changes. Repeated accessibility reads proved the current selected mode and menu contents, while the corresponding narrow-window pixels remained stale. Narrow-window visual settlement is therefore `blocked`, not failed or passed.
 
-The current local DSH records contain no transcript events, Tool events, or pending approval. Therefore real Electron pixels for populated Markdown, expandable Tool details, approval, and runtime-error states remain blocked rather than inferred from component tests.
+No safe populated DSH transcript fixture exists in the retained local catalog: available records are empty, missing a DSH binding, reference a stale DSH Session, or reference an expired Workspace grant. Real provider submission is intentionally skipped. Populated Markdown, expandable Tool details, approval and active runtime-error pixels therefore remain blocked; deterministic component/Desktop tests are supporting evidence only.
 
 ## Deterministic Verification
 
 - `pnpm --filter @neko/agent-contracts exec vitest run src/dsh-session-host.test.ts`: 1 file / 9 tests passed. The contract tests cover bounded Tool payload decode and exact canonical event shape.
 - `pnpm --filter @neko/agent-runtime exec vitest run src/acp/dsh-acp-projection.test.ts`: 1 file / 15 tests passed. The projection tests cover Tool input/output accumulation and sibling event preservation.
-- Focused Desktop Renderer, Main Host, Application, Shell, and Vite configuration run: 5 files / 118 tests passed. These tests cover exact Conversation refresh, Markdown rendering, Tool detail expansion, Generation/Canvas approval identity, Draft creation, cancel, stale projection rejection, and the accepted Shell composition.
-- Focused Desktop DSH runtime, bootstrap, and preload bridge run: 4 files / 18 tests passed.
-- `pnpm --filter @neko/agent-webview test -- src/dsh-session/root.test.tsx`: 2 files / 8 tests passed.
-- `pnpm --filter @neko/agent-webview test`: 4 files / 22 tests passed, including the restored
+- Focused Desktop Renderer, Main Host, Application, Shell, runtime and preload run with one worker: 7 files / 136 tests passed. These tests cover exact Conversation refresh, Markdown rendering, Tool detail expansion, Generation/Canvas approval identity, Draft creation, cancel, stale projection rejection, model/media filtering, DSH permission presets and the accepted Shell composition.
+- `pnpm --filter @neko/agent-contracts test`: 41 files / 217 tests passed.
+- `pnpm --filter @neko/agent-runtime test`: 47 files / 362 tests passed.
+- `pnpm --filter @neko/dsh-bridge test`: 2 files / 18 tests passed.
+- `pnpm --filter @neko/agent-webview test`: 4 files / 26 tests passed, including the restored
   `WorkspaceCanvasContextBar` and `DropdownOverlayContract` presentation tests for the accepted model,
   execution-mode, Workspace/Canvas rail and overlay CSS.
-- `@neko/agent-contracts`, `@neko/agent-webview`, `@neko/agent-runtime`, and `@neko/app-desktop` typechecks passed.
-- `pnpm check:agent-boundaries`, `pnpm check:application-boundaries`, `pnpm check:package-boundaries`, and `pnpm check:legacy-debt` passed.
+- `@neko/agent-contracts`, `@neko/agent-webview`, `@neko/agent-runtime`, `@neko/dsh-bridge`, and `@neko/app-desktop` typechecks passed.
+- `pnpm check:agent-boundaries`, `pnpm check:application-boundaries`, `pnpm check:package-boundaries`, and `pnpm check:storage-authorities` passed.
 - `pnpm exec openspec validate replace-pi-with-dsh-runtime-atomically --strict` passed.
 - The Vite renderer dependency list no longer requests retired `@tanstack/react-virtual`, `mermaid`, or `prism-react-renderer` packages.
+- `pnpm check:no-internal-versioning` remains blocked by the repository baseline: the scanner traverses the ignored staged `.dsh-development-runtime` third-party closure, four allowance entries are stale, and retained third-party/user-domain version names are reported. No generated runtime file is tracked by Git.
 
 ## Result And Remaining Risk
 
-Overall UI validation is `blocked`, not passed. Deterministic component/Desktop tests now cover the restored controls and DSH adapter, but populated transcript, Tool, approval, error states and real Electron pixels still require the authoritative runtime lane. Task 7.7 remains open until that evidence is captured.
+Overall UI validation is `blocked`, not passed. The authoritative Desktop lane now passes the empty Entry Draft, localized old composer, model/media filtering, DSH permission modes, and Character/World/Project selection cycles. Narrow-window settled pixels and populated transcript/Tool/approval/error states remain blocked. Character/World reference selection also does not by itself prove that the later DSH domain-Tool workstream consumed those references; that behavior remains part of W6/W7 rather than this presentation result. Task 7.7 stays open.
 
 The DSH Web review session also failed before execution with `QUOTA: Insufficient Balance`; it produced no repository changes and does not count as implementation evidence.
 

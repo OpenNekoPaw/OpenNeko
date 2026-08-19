@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   findForbiddenArchitectureClaims,
   findRetiredAgentSkillToolClaims,
+  readOpenNekoProfilePluginNames,
   validateCanonicalAgentRegistrationGraph,
   validateSurfaceStructure,
 } from './check-agent-extension-surface.mjs';
@@ -67,4 +68,15 @@ test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrat
   assert.ok(findings.some((finding) => finding.includes('duplicate Tool identity')));
   assert.ok(findings.some((finding) => finding.includes('duplicate MCP contribution identity')));
   assert.ok(findings.some((finding) => finding.includes('wildcard Plugin identity')));
+});
+
+test('keeps third-party DSH infrastructure outside the OpenNeko Plugin identity set', () => {
+  assert.deepEqual(
+    readOpenNekoProfilePluginNames(`
+      name: '@deepseek-ai/dsh-agent-presets'
+      name: '@neko/dsh-bridge'
+      name: '@neko/generation-dsh-plugin'
+    `),
+    ['@neko/dsh-bridge', '@neko/generation-dsh-plugin'],
+  );
 });
