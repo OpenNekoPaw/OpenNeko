@@ -57,7 +57,11 @@ export class TextDocumentSession {
     if (result.status !== 'ready') {
       throw new TextDocumentError({ code: 'text-document-read-failed', severity: 'error' });
     }
-    const admitted = admitTextDocument(identity.locator.path, result.bytes, result.fingerprint);
+    const admitted = admitTextDocument(
+      identity.locator.file.path,
+      result.bytes,
+      result.fingerprint,
+    );
     return new TextDocumentSession(
       identity,
       dependencies.createSessionId?.() ?? defaultSessionId(identity),
@@ -152,7 +156,7 @@ export class TextDocumentSession {
       throw new TextDocumentError({ code: 'text-document-read-failed', severity: 'error' });
     }
     const admitted = admitTextDocument(
-      this.identity.locator.path,
+      this.identity.locator.file.path,
       result.bytes,
       result.fingerprint,
     );
@@ -186,7 +190,11 @@ export class TextDocumentSession {
 
     let admitted: ReturnType<typeof admitTextDocument>;
     try {
-      admitted = admitTextDocument(this.identity.locator.path, result.bytes, result.fingerprint);
+      admitted = admitTextDocument(
+        this.identity.locator.file.path,
+        result.bytes,
+        result.fingerprint,
+      );
     } catch (error) {
       if (!(error instanceof TextDocumentError)) throw error;
       return this.projectExternalChangeUnavailable();
@@ -365,7 +373,7 @@ function identityKey(identity: TextDocumentIdentity): string {
     [identity.owner.kind, identity.owner.windowId, identity.owner.projectId],
     identity.workspaceId,
     identity.documentId,
-    identity.locator.path,
+    identity.locator.file.path,
   ]);
 }
 

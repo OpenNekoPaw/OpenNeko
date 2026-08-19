@@ -6,7 +6,7 @@ describe('source Model Viewer host', () => {
     const host = createSourceModelViewerHost({
       sessionId: 'session-1',
       source: {
-        source: { kind: 'workspace-file', path: 'models/descriptor-1.glb' },
+        source: { file: { authority: 'workspace', path: 'models/descriptor-1.glb' } },
         sourceFingerprint: 'fingerprint-1',
         format: 'glb',
         entryUri: 'http://127.0.0.1:43125/resources/descriptor-1',
@@ -44,7 +44,9 @@ describe('source Model Viewer host', () => {
     const host = createSourceModelViewerHost({
       sessionId: 'session-strict',
       source: {
-        source: { kind: 'workspace-file', path: 'models/descriptor-strict.glb' },
+        source: {
+          file: { authority: 'workspace', path: 'models/descriptor-strict.glb' },
+        },
         sourceFingerprint: 'fingerprint-strict',
         format: 'glb',
         entryUri: 'http://127.0.0.1:43125/resources/descriptor-strict',
@@ -122,7 +124,7 @@ function createHost(sessionId: string, path: string, sourceFingerprint: string) 
   return createSourceModelViewerHost({
     sessionId,
     source: {
-      source: { kind: 'workspace-file', path: `models/${path}` },
+      source: { file: { authority: 'workspace', path: `models/${path}` } },
       sourceFingerprint,
       format: 'glb',
       entryUri: `openneko://resource/${'a'.repeat(32)}`,

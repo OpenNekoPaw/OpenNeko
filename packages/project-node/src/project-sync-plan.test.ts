@@ -34,8 +34,7 @@ describe('Project sync plan', () => {
       path.join(root, 'board.nkc'),
       JSON.stringify({
         contentLocator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/Footage/shots/a.mov',
+          file: { authority: 'workspace', path: 'neko/assets/Footage/shots/a.mov' },
         },
       }),
     );

@@ -1,4 +1,8 @@
-import { parseContentReferenceTarget, validateContentLocator } from '@neko/content';
+import {
+  isWorkspaceFileContentLocator,
+  parseContentReferenceTarget,
+  validateContentLocator,
+} from '@neko/content';
 import type { TextDocumentIdentity } from './contracts';
 
 export type TextEditorMarkdownReferenceQueryKind = 'mention' | 'resource-link' | 'resource-embed';
@@ -221,8 +225,9 @@ function assertTextDocumentIdentity(identity: TextDocumentIdentity): void {
   const locator = validateContentLocator(identity.locator);
   if (
     !locator.ok ||
-    locator.locator.kind !== 'workspace-file' ||
-    locator.locator.path !== identity.documentId
+    !isWorkspaceFileContentLocator(locator.locator) ||
+    locator.locator.selector !== undefined ||
+    locator.locator.file.path !== identity.documentId
   ) {
     throw new TextEditorMarkdownReferenceContractError(
       'Text Editor Markdown reference document locator does not match its identity.',

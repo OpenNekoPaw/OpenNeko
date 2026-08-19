@@ -1,8 +1,7 @@
 import {
-  isContentRepresentationLocator,
   isHostProjectedRuntimeValue,
+  isProjectDurableContentLocator,
   type ContentLocator,
-  type ContentRepresentationLocator,
 } from '@neko/content';
 import {
   type QualityDiagnostic,
@@ -31,7 +30,7 @@ export interface ProjectQualitySnapshot {
 
 export interface ProjectQualityPreview {
   readonly project: QualityProjectRef;
-  readonly previewLocator: ContentRepresentationLocator;
+  readonly sourceLocator: ContentLocator;
   readonly sessionRenderUri?: string;
   readonly createdAt: string;
 }
@@ -124,12 +123,12 @@ export function validateProjectQualityPreview(
   preview: ProjectQualityPreview,
 ): ProjectQualityContractValidationResult {
   const diagnostics: QualityDiagnostic[] = [];
-  if (!isContentRepresentationLocator(preview.previewLocator)) {
+  if (!isProjectDurableContentLocator(preview.sourceLocator)) {
     diagnostics.push({
       code: 'invalid-quality-gate-result',
       severity: 'error',
-      message: 'ProjectQuality preview requires a valid ContentRepresentationLocator.',
-      path: ['previewLocator'],
+      message: 'ProjectQuality preview requires a valid durable source locator.',
+      path: ['sourceLocator'],
     });
   }
   if (preview.sessionRenderUri && !isHostProjectedRuntimeValue(preview.sessionRenderUri)) {

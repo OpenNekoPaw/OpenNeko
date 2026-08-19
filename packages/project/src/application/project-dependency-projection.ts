@@ -103,8 +103,8 @@ export function deriveProjectDependencySnapshot(input: {
 }
 
 function contentDependency(locator: ContentLocator): readonly ProjectPublicationDependencyRef[] {
-  if (locator.kind === 'workspace-file') {
-    const segments = locator.path.split('/');
+  if (locator.file.authority === 'workspace') {
+    const segments = locator.file.path.split('/');
     if (segments[0] === 'neko' && segments[1] === 'assets' && segments.length >= 4) {
       const libraryName = segments[2];
       const relativePath = segments.slice(3).join('/');
@@ -113,18 +113,18 @@ function contentDependency(locator: ContentLocator): readonly ProjectPublication
       }
     }
   }
-  if (locator.kind === 'package-resource') {
+  if (locator.file.authority === 'package') {
     return [
       {
         kind: 'asset-revision',
-        assetId: locator.packageId,
-        revision: locator.revision,
+        assetId: locator.file.packageId,
+        revision: locator.file.revision,
       },
       {
         kind: 'package-resource',
-        packageId: locator.packageId,
-        revision: locator.revision,
-        resourcePath: locator.resourcePath,
+        packageId: locator.file.packageId,
+        revision: locator.file.revision,
+        resourcePath: locator.file.path,
       },
     ];
   }

@@ -277,8 +277,7 @@ function candidateFromObservation(
       ...(input.source.rootKind === 'workspace' || input.source.rootKind === 'document'
         ? {
             locator: {
-              kind: 'workspace-file' as const,
-              path: input.source.relativePath,
+              file: { authority: 'workspace' as const, path: input.source.relativePath },
             },
           }
         : {}),

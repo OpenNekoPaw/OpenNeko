@@ -16,9 +16,7 @@ const target: QualityTarget = {
   contentDigest: project.contentDigest,
 };
 const snapshotLocator = {
-  kind: 'workspace-file' as const,
-  path: 'edit.otio',
-  fingerprint: { strategy: 'sha256' as const, value: project.contentDigest ?? 'digest' },
+  file: { authority: 'workspace' as const, path: 'edit.otio' },
 };
 
 describe('collectProjectQualityEvidence', () => {

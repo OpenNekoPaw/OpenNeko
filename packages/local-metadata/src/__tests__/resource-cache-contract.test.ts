@@ -39,9 +39,8 @@ describe('resource cache contracts', () => {
   };
 
   const contentLocator = {
-    kind: 'document-entry' as const,
-    source: { kind: 'workspace-file' as const, path: 'books/comic.epub' },
-    entryPath: 'OPS/page-1.jpg',
+    file: { authority: 'workspace' as const, path: 'books/comic.epub' },
+    selector: { kind: 'entry' as const, path: 'OPS/page-1.jpg' },
   };
 
   it('validates enum-like resource cache fields', () => {
@@ -80,6 +79,7 @@ describe('resource cache contracts', () => {
     expect(
       isResourceCacheEntryDescriptor({
         ...ref,
+        // Poison the replaced locator shape; current cache contracts must reject it.
         contentLocator: { kind: 'document-entry', source: { kind: 'bad' } },
       }),
     ).toBe(false);

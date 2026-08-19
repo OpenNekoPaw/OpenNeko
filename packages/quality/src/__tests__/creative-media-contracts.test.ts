@@ -23,9 +23,7 @@ import {
 
 function contentLocator(path = 'assets/hero.png') {
   return {
-    kind: 'workspace-file' as const,
-    path,
-    fingerprint: { strategy: 'sha256' as const, value: 'sha256:hero-content' },
+    file: { authority: 'workspace' as const, path },
   };
 }
 
@@ -173,25 +171,16 @@ describe('creative media shared contracts', () => {
         documentUri: 'file:///workspace/edit.otio',
         contentDigest: 'sha256:edit-current',
       },
-      previewLocator: {
-        kind: 'content-representation' as const,
-        id: 'preview-1',
-        representationKind: 'preview' as const,
-        source: contentLocator(),
-        spec: { kind: 'preview' as const },
-        generatorId: 'cut-preview',
-        sourceFingerprint: 'source-content',
-        specFingerprint: 'preview-spec',
-      },
+      sourceLocator: contentLocator(),
       sessionRenderUri: 'file:///workspace/render.png',
       createdAt: '2026-07-12T00:00:00.000Z',
     };
-    Reflect.set(invalidPreview, 'previewLocator', {
-      kind: 'content-representation',
-      source: { kind: 'runtime', value: 'blob:runtime-preview' },
+    Reflect.set(invalidPreview, 'sourceLocator', {
+      kind: 'content-representation-handle',
+      id: 'preview-1',
     });
     expect(validateProjectQualityPreview(invalidPreview).diagnostics).toEqual([
-      expect.objectContaining({ path: ['previewLocator'] }),
+      expect.objectContaining({ path: ['sourceLocator'] }),
       expect.objectContaining({ path: ['sessionRenderUri'] }),
     ]);
   });

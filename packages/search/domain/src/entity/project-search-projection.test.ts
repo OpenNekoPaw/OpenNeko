@@ -96,7 +96,9 @@ describe('Entity project search projections', () => {
                       evidenceId: 'evidence:小橘',
                       owner: 'workspace' as const,
                       sourceId: 'workspace:cases/test.fountain',
-                      locator: { kind: 'workspace-file' as const, path: 'cases/test.fountain' },
+                      locator: {
+                        file: { authority: 'workspace' as const, path: 'cases/test.fountain' },
+                      },
                     },
                   ],
                 },
@@ -180,7 +182,9 @@ describe('Entity project search projections', () => {
                   bindingId: 'binding-rin',
                   entityId: 'character-rin',
                   entityKind: 'character' as const,
-                  representation: { kind: 'workspace-file' as const, path: 'rin.png' },
+                  representation: {
+                    file: { authority: 'workspace' as const, path: 'rin.png' },
+                  },
                   role: 'portrait' as const,
                   owner: 'workspace-file' as const,
                   availability: 'needs-attention' as const,
@@ -229,7 +233,7 @@ function projectEntity(
           {
             bindingId: 'binding-rin',
             role: 'portrait' as const,
-            target: { kind: 'workspace-file' as const, path: 'rin.png' },
+            target: { file: { authority: 'workspace' as const, path: 'rin.png' } },
             source: 'user' as const,
             acceptedAt: '2026-07-19T00:00:00.000Z',
           },

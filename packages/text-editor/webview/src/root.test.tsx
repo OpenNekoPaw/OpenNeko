@@ -1053,7 +1053,7 @@ function textProjection(
       owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
       workspaceId: 'workspace-1',
       documentId,
-      locator: { kind: 'workspace-file', path: documentId },
+      locator: { file: { authority: 'workspace', path: documentId } },
     },
     sessionId: 'session-1',
     editSequence: 0,
@@ -1075,7 +1075,7 @@ function fountainProjection(source: string): TextDocumentProjection {
     identity: {
       ...textProjection('fountain', source).identity,
       documentId: 'story.fountain',
-      locator: { kind: 'workspace-file', path: 'story.fountain' },
+      locator: { file: { authority: 'workspace', path: 'story.fountain' } },
     },
     screenplay: {
       sourceId: 'story.fountain',
