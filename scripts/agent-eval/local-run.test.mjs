@@ -62,7 +62,7 @@ describe('Agent Evaluation local runner', () => {
     ]);
   });
 
-  it('selects Desktop DSH composition coverage', async () => {
+  it('selects Desktop Agent composition coverage', async () => {
     const suites = await discoverSuites();
     await expect(
       selectSuiteIds(
@@ -70,8 +70,8 @@ describe('Agent Evaluation local runner', () => {
         suites,
         {
           changedPaths: [
-            'apps/neko-desktop/src/main/desktop-dsh-agent-runtime.ts',
-            'apps/neko-desktop/src/main/desktop-dsh-permission-host.ts',
+            'apps/neko-desktop/src/main/desktop-agent-app-host-composition.ts',
+            'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts',
           ],
         },
       ),

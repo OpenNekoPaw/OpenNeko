@@ -5,7 +5,14 @@ import {
   type ContentLocator,
   type ContentRepresentationLocator,
 } from '@neko/content';
-import type { Message, ToolCall } from '@neko/agent-contracts';
+import type {
+  AgentTurnTimelineItem,
+  AgentTurnTimelineOperation,
+  ConversationProjectionPatch,
+  ConversationProjectionSnapshot,
+  Message,
+  ToolCall,
+} from '@neko/agent-contracts';
 import type { PreviewMediaDescriptor } from '@neko/preview-domain';
 
 const MEDIA_FILE_EXTENSIONS = [
@@ -99,6 +106,37 @@ export async function projectMessageForResourceDisplay(
   return projectedMessage;
 }
 
+export async function projectConversationProjectionSnapshotForResourceDisplay(
+  snapshot: ConversationProjectionSnapshot,
+  options: MessageResourceProjectionOptions = {},
+): Promise<ConversationProjectionSnapshot> {
+  return {
+    ...snapshot,
+    turns: await Promise.all(
+      snapshot.turns.map(async (turn) => ({
+        ...turn,
+        items: await Promise.all(
+          turn.items.map((item) => projectTimelineItemForResourceDisplay(item, options)),
+        ),
+      })),
+    ),
+  };
+}
+
+export async function projectConversationProjectionPatchForResourceDisplay(
+  patch: ConversationProjectionPatch,
+  options: MessageResourceProjectionOptions = {},
+): Promise<ConversationProjectionPatch> {
+  return {
+    ...patch,
+    operations: await Promise.all(
+      patch.operations.map((operation) =>
+        projectTimelineOperationForResourceDisplay(operation, options),
+      ),
+    ),
+  };
+}
+
 export async function projectResourceValue(
   value: unknown,
   options: MessageResourceProjectionOptions = {},
@@ -109,6 +147,52 @@ export async function projectResourceValue(
 function hasToolCallArray(message: Message): message is Message & { toolCalls: ToolCall[] } {
   const value = (message as { toolCalls?: unknown }).toolCalls;
   return Array.isArray(value);
+}
+
+async function projectTimelineItemForResourceDisplay(
+  item: AgentTurnTimelineItem,
+  options: MessageResourceProjectionOptions,
+): Promise<AgentTurnTimelineItem> {
+  if (item.kind !== 'tool_call') return item;
+  return {
+    ...item,
+    payload: {
+      ...item.payload,
+      toolCall: await projectToolCallForResourceDisplay(item.payload.toolCall, options),
+    },
+  };
+}
+
+async function projectTimelineOperationForResourceDisplay(
+  operation: AgentTurnTimelineOperation,
+  options: MessageResourceProjectionOptions,
+): Promise<AgentTurnTimelineOperation> {
+  switch (operation.operation) {
+    case 'complete':
+    case 'append':
+    case 'replace':
+      return operation;
+    case 'snapshot':
+      return {
+        ...operation,
+        item: await projectTimelineItemForResourceDisplay(operation.item, options),
+      };
+    case 'upsert':
+      if (operation.item.kind !== 'tool_call') return operation;
+      return {
+        ...operation,
+        item: {
+          ...operation.item,
+          payload: {
+            ...operation.item.payload,
+            toolCall: await projectToolCallForResourceDisplay(
+              operation.item.payload.toolCall,
+              options,
+            ),
+          },
+        },
+      };
+  }
 }
 
 async function projectToolCallForResourceDisplay(

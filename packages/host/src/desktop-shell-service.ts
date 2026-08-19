@@ -341,10 +341,21 @@ export class DesktopShellService {
           restoredSceneReconciliation.diagnostic,
         ];
       }
+      const entryScene = createDefaultDesktopAgentScene(windowId, `draft:${this.createIdentity()}`);
+      const entryWindow = replaceActiveDesktopWorkbench(
+        {
+          ...qualifiedWindow,
+          activeTarget: { kind: 'home' },
+        },
+        {
+          layout: createDefaultDesktopWorkbenchLayout(windowId),
+          scene: entryScene,
+        },
+      );
       await this.options.stateRepository.commit({
         ...state,
         windows: state.windows.map((window) =>
-          window.windowId === windowId ? qualifiedWindow : window,
+          window.windowId === windowId ? entryWindow : window,
         ),
       });
       this.installWindowRuntime(windowId);

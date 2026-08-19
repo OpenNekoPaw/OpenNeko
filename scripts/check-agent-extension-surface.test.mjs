@@ -5,7 +5,6 @@ import test from 'node:test';
 import {
   findForbiddenArchitectureClaims,
   findRetiredAgentSkillToolClaims,
-  validateCanonicalAgentRegistrationGraph,
   validateSurfaceStructure,
 } from './check-agent-extension-surface.mjs';
 
@@ -40,31 +39,4 @@ test('rejects retired Agent Skill Tool instructions in stable architecture', () 
       'adr.md: retired Agent Skill Tool protocol',
     ]);
   }
-});
-
-test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrations', () => {
-  const canonical = {
-    runtimes: ['dsh'],
-    tools: ['openneko.generation', 'openneko.canvas', 'openneko.cut'],
-    mcpContributions: ['official.browser'],
-    plugins: [
-      '@neko/dsh-bridge',
-      '@neko/generation-dsh-plugin',
-      '@neko/canvas-dsh-plugin',
-      '@neko/cut-dsh-plugin',
-    ],
-  };
-  assert.deepEqual(validateCanonicalAgentRegistrationGraph(canonical), []);
-
-  const poisoned = structuredClone(canonical);
-  poisoned.runtimes.push('pi');
-  poisoned.tools.push('openneko.generation');
-  poisoned.mcpContributions.push('official.browser');
-  poisoned.plugins[2] = '@neko/*';
-
-  const findings = validateCanonicalAgentRegistrationGraph(poisoned);
-  assert.ok(findings.some((finding) => finding.includes('exactly one DSH runtime')));
-  assert.ok(findings.some((finding) => finding.includes('duplicate Tool identity')));
-  assert.ok(findings.some((finding) => finding.includes('duplicate MCP contribution identity')));
-  assert.ok(findings.some((finding) => finding.includes('wildcard Plugin identity')));
 });

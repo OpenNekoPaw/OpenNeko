@@ -43,8 +43,8 @@ export interface AgentHomeNavigationIdentity {
 export interface AgentHomeActivitySummary {
   readonly kind: AgentHomeActivityKind;
   readonly occurredAt: string;
-  readonly dshSessionId?: string;
-  readonly turn?: number;
+  readonly turnId?: string;
+  readonly runId?: string;
   readonly toolCallId?: string;
   readonly generationJob?: {
     readonly jobId: string;
@@ -273,7 +273,7 @@ function parseActivity(value: unknown): AgentHomeActivitySummary {
   const record = requireRecord(value, 'Agent Home activity must be an object.');
   requireAllowedKeys(
     record,
-    ['kind', 'occurredAt', 'dshSessionId', 'turn', 'toolCallId', 'generationJob'],
+    ['kind', 'occurredAt', 'turnId', 'runId', 'toolCallId', 'generationJob'],
     ['kind', 'occurredAt'],
     'Agent Home activity',
   );
@@ -298,47 +298,14 @@ function parseActivity(value: unknown): AgentHomeActivitySummary {
       phase: requireIdentity(job['phase'], 'Generation Job phase'),
     });
   }
-  const dshSessionId = optionalIdentityValue(record, 'dshSessionId', 'DSH Session');
-  const turn = optionalNonNegativeInteger(record, 'turn', 'DSH turn');
-  const toolCallId = optionalIdentityValue(record, 'toolCallId', 'Agent Tool Call');
-  if (kind === 'conversation-updated') {
-    if (dshSessionId !== undefined || turn !== undefined || toolCallId !== undefined) {
-      throw invalid('Conversation-updated activity cannot claim DSH execution identity.');
-    }
-  } else {
-    if (dshSessionId === undefined || turn === undefined) {
-      throw invalid(`${kind} activity requires exact DSH Session and turn identity.`);
-    }
-    if (kind === 'tool-confirmation-required' && toolCallId === undefined) {
-      throw invalid('Tool confirmation activity requires exact Tool Call identity.');
-    }
-  }
   return Object.freeze({
     kind,
     occurredAt: requireIsoDateString(record['occurredAt'], 'Agent Home activity occurredAt'),
-    ...(dshSessionId === undefined ? {} : { dshSessionId }),
-    ...(turn === undefined ? {} : { turn }),
-    ...(toolCallId === undefined ? {} : { toolCallId }),
+    ...optionalIdentity(record, 'turnId', 'Agent Turn'),
+    ...optionalIdentity(record, 'runId', 'Agent Run'),
+    ...optionalIdentity(record, 'toolCallId', 'Agent Tool Call'),
     ...(generationJob === undefined ? {} : { generationJob }),
   });
-}
-
-function optionalIdentityValue(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-  label: string,
-): string | undefined {
-  const value = record[key];
-  return value === undefined ? undefined : requireIdentity(value, label);
-}
-
-function optionalNonNegativeInteger(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-  label: string,
-): number | undefined {
-  const value = record[key];
-  return value === undefined ? undefined : requireNonNegativeInteger(value, label);
 }
 
 function parseAttention(value: unknown): AgentHomeAttentionStatus {

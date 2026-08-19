@@ -14,4 +14,3 @@ export * from './user-diagnostics';
 export * from './creative-document-owner';
 export * from './cut-project-authoring-service';
 export * from './cut-draft-application-service';
-export * from './dsh-tool';

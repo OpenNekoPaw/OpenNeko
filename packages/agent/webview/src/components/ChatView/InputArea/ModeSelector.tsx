@@ -20,7 +20,6 @@ interface ModeSelectorProps {
   onChange: (mode: ShellExecutionMode) => void;
   disabled?: boolean;
   disabledReason?: string;
-  availableModes?: Readonly<Record<ShellExecutionMode, boolean>>;
 }
 
 export function ModeSelector({
@@ -28,7 +27,6 @@ export function ModeSelector({
   onChange,
   disabled = false,
   disabledReason,
-  availableModes,
 }: ModeSelectorProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useComposerControlMenu('execution-mode');
@@ -80,7 +78,6 @@ export function ModeSelector({
         }}
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        aria-label={t('chat.executionMode.title')}
         className="agent-control-chip agent-execution-mode-trigger"
         title={disabledReason ?? `${t('chat.executionMode.title')} (Shift+Tab)`}
       >
@@ -111,9 +108,7 @@ export function ModeSelector({
                 mode === option.value ? 'agent-dropdown-item-selected' : ''
               }`}
               role="menuitemradio"
-              aria-label={t(option.labelKey)}
               aria-checked={mode === option.value}
-              disabled={availableModes?.[option.value] === false}
             >
               <div>{t(option.labelKey)}</div>
               <div className="agent-dropdown-item-description">{t(option.descriptionKey)}</div>

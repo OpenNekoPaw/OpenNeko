@@ -1196,7 +1196,7 @@ describe('DesktopApplication scene lifecycle', () => {
       activeScene(projection).sceneId,
     );
     expect(getSnapshot).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain('Hi, start creating with a conversation');
+    expect(container.textContent).toContain('Connecting to Agent');
     await act(async () => root.unmount());
   });
 
@@ -2995,46 +2995,13 @@ function installBridge({
         })),
       },
       textEditor: { execute: textEditorExecute, subscribe: vi.fn(() => () => undefined) },
-      dshSessions: {
-        create: vi.fn(),
-        getSnapshot: vi.fn(async (conversationId: string) => ({
-          conversationId,
-          dshSessionId: `dsh:${conversationId}`,
-          events: [],
-        })),
-        prompt: vi.fn(),
-        cancel: vi.fn(),
-        getComposerConfiguration: vi.fn(async () => ({
-          models: [
-            {
-              id: 'deepseek-official:deepseek-v4',
-              label: 'DeepSeek V4',
-              providerId: 'deepseek-official',
-              modelId: 'deepseek-v4',
-            },
-          ],
-          selectedModelOptionId: 'deepseek-official:deepseek-v4',
-          executionMode: 'ask' as const,
-          modes: [
-            { id: 'plan' as const, available: false, diagnostic: 'Plan is unavailable.' },
-            { id: 'ask' as const, available: true },
-            { id: 'auto' as const, available: true },
-          ],
-        })),
-        selectComposerModel: vi.fn(),
-        selectComposerMode: vi.fn(),
-        subscribe: vi.fn(() => () => undefined),
-      },
-      dshRuntime: {
-        getStatus: vi.fn(async () => ({ status: 'running' as const })),
-        restart: vi.fn(async () => ({ status: 'running' as const })),
-        subscribe: vi.fn(() => () => undefined),
-      },
-      dshPermissions: {
-        list: vi.fn(async () => []),
-        decide: vi.fn(async () => []),
-        cancel: vi.fn(async () => []),
-        subscribe: vi.fn(() => () => undefined),
+      agentLaunch: {
+        attach: vi.fn(() => new Promise(() => undefined)),
+        authorizeResource: vi.fn(),
+        bindTarget: vi.fn(),
+        searchWorkspaceMentions: vi.fn(),
+        submitDraft: vi.fn(),
+        detach: vi.fn(),
       },
       projectPortability,
     },

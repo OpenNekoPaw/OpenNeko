@@ -41,14 +41,21 @@ describe('Desktop media execution provider resolver', () => {
     expect(read).toHaveBeenCalledTimes(2);
   });
 
-  it('does not read a credential for a disabled provider', async () => {
-    const read = vi.fn(async () => ({ type: 'api_key' as const, key: 'must-not-be-read' }));
+  it('fails visibly for a non-API-key credential instead of changing provider', async () => {
     const resolver = createDesktopMediaExecutionProviderResolver({
-      config: { getProvider: () => ({ ...configuredProvider, enabled: false }) },
-      credentials: { read },
+      config: { getProvider: () => configuredProvider },
+      credentials: {
+        read: async () => ({
+          type: 'oauth',
+          access: 'access-token',
+          refresh: 'refresh-token',
+          expires: Date.now() + 60_000,
+        }),
+      },
     });
 
-    await expect(resolver.resolveProvider(configuredProvider.id)).resolves.toBeUndefined();
-    expect(read).not.toHaveBeenCalled();
+    await expect(resolver.resolveProvider(configuredProvider.id)).rejects.toThrow(
+      "Media provider 'image-provider' requires an API-key credential.",
+    );
   });
 });

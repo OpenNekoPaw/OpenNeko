@@ -14,3 +14,11 @@ export {
   type NekoContentSource,
   type NekoContentSubdir,
 } from './neko-content-layout';
+
+export {
+  AGENT_SKILL_ROOT_DIR,
+  AGENT_SKILL_SUBDIR,
+  resolveAgentSkillsDir,
+  resolvePersonalAgentSkillsDir,
+  resolveProjectAgentSkillsDir,
+} from './agent-skill-layout';

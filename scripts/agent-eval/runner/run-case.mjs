@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { runAutomatedDesktopFunctional } from '../../desktop-functional/runner.mjs';
 import { assertDesktopEvidenceSupport } from '../desktop/evidence.mjs';
+import { createDesktopAgentEvaluationScenario } from '../desktop/scenario.mjs';
 import { createAggregateReport, writeAggregateReport } from '../reports/aggregate-report.mjs';
 import { validateScenarioForExecution } from '../schemas/contracts.mjs';
 import { runEvaluationPipeline } from './evaluation-pipeline.mjs';
@@ -14,13 +15,10 @@ export async function runCase(selection, options = {}) {
   const authorization = readProviderAuthorization(options.providerAuthorization, options.env ?? {});
   assertAuthorizedModelProfiles(executionCase.modelProfiles, authorization);
   const runDesktop = options.runDesktop ?? runAutomatedDesktopFunctional;
-  const scenarioFactory = options.createScenario;
-  if (scenarioFactory === undefined) {
-    throw infrastructureBlocker(
-      'Desktop Agent Evaluation requires the canonical DSH composer/Conversation/approval driver; the retired Pi driver is disconnected.',
-    );
-  }
-  const scenario = scenarioFactory(executionCase, authorization);
+  const scenario = (options.createScenario ?? createDesktopAgentEvaluationScenario)(
+    executionCase,
+    authorization,
+  );
   const runId = options.runId ?? `${executionCase.caseId}-${Date.now().toString(36)}`;
   const outputRoot = resolve(options.outputRoot ?? 'reports/agent-eval');
   const startedAt = Date.now();
