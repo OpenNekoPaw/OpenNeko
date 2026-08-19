@@ -20,7 +20,7 @@ DSH 官方 `dsh-acp` rc.7 是 automation-only：它提供 ACP 自动化能力，
 - 用薄的 OpenNeko-owned bridge plugin/profile 补齐 `dsh-acp` rc.7 automation-only 缺口，且不实现第二套 Agent loop、Session store、queue、tool registry、Skill/MCP/Plugin runtime。
 - Generation+Canvas 作为首批纵向官方领域 Tool slice 迁移；Cut、Assets、Character、World 等随后迁移。
 - 保留旧 Pi 用户数据原始字节，局部显示不可执行状态，不增加 legacy reader、迁移器或 fallback。
-- 通过待建立或重建的 `scripts/dsh-q0` 非发布 fixture 验证子进程边界；真实 provider/API 行为暂时跳过且不是发布证据，不阻塞 W1–W6 开发但阻塞发布。
+- 通过 `scripts/dsh-q0` 非发布 fixture 验证子进程边界；真实 Provider 基线另由可见 Desktop UI 通过产品 Composer、DSH/ACP 和真实 API 验证，不能由 Q0 或 mock 替代。完整发布矩阵仍 fail-closed。
 
 **Non-Goals:**
 
@@ -77,6 +77,10 @@ DSH 子进程/profile 拥有 Session/transcript、实际 model context、turn/ca
 
 模型与模式的 canonical 路径是 `@neko/host/settings` selection → sender-bound Desktop Host projection/validation → exact Conversation-to-DSH-Session binding → 标准 ACP `session/set_config_option` / `session/set_mode` → DSH Agent。DSH bridge 必须在 `session/new`、`session/load` 和 `session/resume` 响应中广告真实支持的 mode/config state，并在 set operation 中拒绝未知值、运行中不可安全切换的状态和未绑定 Session。DSH `Agent.options` 创建后只读，因此 model/provider/maxTokens 变化必须在 exact idle Session 上释放并按同一 Session identity 从 authoritative log 恢复 Agent；失败后该 Session 局部不可用并返回 diagnostic，不得继续使用旧模型、DSH profile 默认值或另一 provider。Host 在每次 prompt 前重申当前 exact configuration，使 subprocess 重启后也不会以默认 Agent 配置形成隐藏成功路径。
 
+Provider 的 canonical 可执行路径是 `@neko/host/settings` 的 enabled Provider/LLM Model 与 `ProviderCredentialAuthority` → Desktop 启动边界的一次性 DSH execution projection → DSH 官方 `llm-pi-ai` adapter route → exact Agent configuration。产品 Provider/Model identity 不改名；DSH route 使用同一 Provider identity，产品 Model identity 在投影目录中精确解析为唯一 API model name。Desktop 只把可由 DSH 官方 adapter 明确表达、具有唯一 API model name 且满足凭据要求的模型投影给 Composer；unsupported protocol、缺失凭据、重复 API model name 或无对应启动投影的选择必须 fail-local 且不可提交给 ACP。不得把 `deepseek-chat` 隐式改写为 `deepseek-official`，不得失败后切换 provider，也不得让 DSH 默认模型成为成功路径。
+
+DSH provider 配置只写入每次启动重建的 product-owned profile patch；它不写入或覆盖 DSH durable `settings.yaml`。API key 不进入 patch、ACP、Session、日志、Renderer 或 Evaluation facts，而是由 Desktop 从 exact Provider credential owner 读取后，以仅对该 DSH 子进程可见的独立 credential reference 注入。普通父进程环境仍按 allowlist 隔离，任意未授权 secret 不得进入 DSH。当前运行中的 provider catalog 是启动快照；Provider/Model/credential authority 发生变化时必须显式重建同一 DSH runtime generation 后再广告新模型，不得在旧 generation 中假装配置已生效。
+
 Composer 的权限选项直接来自 DSH `permissionPresets` authority，并通过标准 ACP `session/set_mode` 应用于 exact Session。当前 canonical 集合是 `read-only`、`workspace-write` 与 `danger-full-access`；DSH 运行时报告的 `custom` 只可作为当前状态展示，不能在没有可写 canonical preset 时被用户选择。OpenNeko 不再定义 `plan/ask/auto` execution mode；DSH Plan Mode 是 `standard` preset 拥有的独立能力，只有在其 ACP control、审批和产品 UI 投影完成后才能广告为可切换能力。
 
 新 Conversation 的开发可用路径由 `@neko/agent-runtime` 的 publication service 拥有：先在 Host catalog 事务中保留 canonical Conversation metadata 与精确领域 context，再调用标准 ACP `session/new`，通过完整 `session/list` 精确复核返回的 DSH Session，最后发布唯一 Conversation-to-Session binding。Desktop Main 只能从 sender-bound 当前 Agent Surface 解析 Workspace/Assistant context，调用该 service，并在 durable publication 成功后调用 Desktop Shell 的 exact draft attach；Renderer 只提交当前 Surface identity，不能提交 Workspace、provider、model、cwd 或 DSH Session identity。Home projection 从 Host catalog、context 与 exact binding 计算，不能从 Renderer、active/recent Window 或 DSH transcript 猜测。
@@ -128,11 +132,11 @@ Desktop permission IPC 使用单一 `openneko:dsh:permission` request channel �
 
 OpenNeko 继续拥有 Conversation/Workspace binding、凭据、Host 权限/信任、产品管理 UI/命令入口、短生命周期 projection、领域事实/Job、typed domain tool contracts 和 Host adapters。Skill/MCP/Plugin 的 catalog、configuration、readiness、发现、加载、启停与执行均由 DSH profile 拥有；OpenNeko 管理面只通过 bridge 读取 inventory/readiness/config/diagnostics 和提交精确命令，不保留 extension catalog authority、自研 Skill Host、MCP Manager 或 Plugin runtime。
 
-Provider credential 的 host-neutral owner 是 `@neko/host/settings` public entry。它只接受精确 normalized provider identity，优先读取 `ProviderCredentialSource` 中的 config-owned API key；invalid config 必须在读取 SecretStorage 前失败。非 config-owned credential 只通过注入的 `HostSecretPort` 访问，Desktop concrete adapter 使用 Electron `safeStorage` 和独立 `provider-credentials.json`。新 authority 不读取、迁移、删除或重写旧 `agent-credentials.json` 与 `openneko.agent.pi.credential:*` keys。Desktop Main 只构造 authority 并把 reader 注入 direct-UI Generation。DSH rc.7 的公开 `CredentialProvider` seam 可由 OpenNeko bridge 实现，并允许 provider 在每次 operation 重新解析 credential；bridge bundle 必须禁用 base 中同一 `credentials` entry 后提供唯一 service，不得与 `@deepseek-ai/dsh-credentials-local` 并存。但 credential ref 本身不携带 OpenNeko provider identity，且当前生产没有 `session/new` consumer；因此 reverse credential 必须依赖 2.5 的 Conversation→DSH Session publication，先把 exact OpenNeko provider/model 绑定传给 Session 创建，再允许该 Session 的 provider resolve 单个 credential。不得把 DSH base 默认 `deepseek-official`、环境变量名或 credential ref 猜测为 OpenNeko provider identity，也不得在缺少 publication 时读取 environment、DSH settings 或旧 Pi store。
+Provider credential 的 host-neutral owner 是 `@neko/host/settings` public entry。它只接受精确 normalized provider identity，优先读取 `ProviderCredentialSource` 中的 config-owned API key；invalid config 必须在读取 SecretStorage 前失败。非 config-owned credential 只通过注入的 `HostSecretPort` 访问，Desktop concrete adapter 使用 Electron `safeStorage` 和独立 `provider-credentials.json`。新 authority 不读取、迁移、删除或重写旧 `agent-credentials.json` 与 `openneko.agent.pi.credential:*` keys。Desktop Main 只构造 authority；direct-UI Generation 继续使用 reader，DSH execution projection 则在 subprocess 启动前逐 Provider 读取同一 reader，并为 DSH 官方 `llm-pi-ai` route 生成独立、进程内 credential reference。profile patch 只保存 provider endpoint、protocol、bounded LLM catalog 与 reference name，不保存 secret；subprocess environment 只包含该 projection 明确生成的 credential values 和既有 shell allowlist。单个 credential 读取失败只排除对应 Provider 并产生 diagnostic，sibling Provider 保持可用；不得把 DSH base 默认 `deepseek-official`、父进程任意环境、DSH durable settings 或旧 Pi store 当作替代 credential/provider authority。
 
 ### 7. Q0 是子进程资格 fixture，不重复安装验证
 
-已知 dsh CLI 可正常使用，因此不重复安装验证。待建立或重建的 `scripts/dsh-q0` 非发布 fixture 必须验证：subprocess lifecycle、stdout purity、handshake/capability、session recovery/history、progress、permission、cancel、inbox、Host tool reverse requests、extension management、crash/restart/fail-local。用户暂时要求跳过真实 provider/API 行为验证；对应任务保持未完成并清楚标注“不是发布证据”。这不阻塞通过确定性 Q0 后进入 W1–W6 开发，但统一发布门禁仍 fail-closed。Q0 fixture 的产物不得被提升为 Desktop 发布产物。
+已知 dsh CLI 可正常使用，因此不重复安装验证。`scripts/dsh-q0` 非发布 fixture 必须验证：subprocess lifecycle、stdout purity、handshake/capability、session recovery/history、progress、permission、cancel、inbox、Host tool reverse requests、extension management、crash/restart/fail-local。真实 Provider 基线已通过可见 Desktop UI、产品 Composer、DSH/ACP 和真实 API 验证，并保留 exact provider/model、turn terminal 与 no-fallback 证据；Q0 结果仍不得冒充该证据，也不得被提升为 Desktop 发布产物。完整发布矩阵仍 fail-closed。
 
 ### 8. 删除优先、原子发布与并行工作流
 
@@ -146,7 +150,7 @@ D0 只删除仓库代码和依赖，不得读取、修改或删除旧 Pi Session
 
 ### 10. 统一集成门禁决定原子发布
 
-发布门禁必须同时证明：DSH 子进程/profile 精确锁定；ACP stdio 是唯一生产通信路径；无 Pi/Cordis 内嵌/fallback；bridge 未实现第二套 runtime；Generation+Canvas 首批 Tools 已通过完整 Desktop 路径；所有 consumer 已切换；旧路径/导出/依赖已删除；旧 Pi 数据未改写；extension 管理面 fail-local；`scripts/dsh-q0` 确定性证据与本变更要求的真实 Desktop/provider 证据均存在。真实 provider 跳过项即使已明确标注也不能满足发布门禁。任一缺项时 release guard fail-closed。
+发布门禁必须同时证明：DSH 子进程/profile 精确锁定；ACP stdio 是唯一生产通信路径；无 Pi/Cordis 内嵌/fallback；bridge 未实现第二套 runtime；Generation+Canvas 首批 Tools 已通过完整 Desktop 路径；所有 consumer 已切换；旧路径/导出/依赖已删除；旧 Pi 数据未改写；extension 管理面 fail-local；`scripts/dsh-q0` 确定性证据与本变更要求的真实 Desktop/provider 证据均存在。当前聚焦 Provider 基线不能替代尚未执行的完整 Provider/Model、approval、领域 Tool、恢复与发布矩阵。任一缺项时 release guard fail-closed。
 
 ## Risks / Trade-offs
 
@@ -164,7 +168,7 @@ D0 只删除仓库代码和依赖，不得读取、修改或删除旧 Pi Session
 
 1. 修订并接受本变更，关闭或取代 `adopt-pi-agent-runtime`；建立 integration-only release policy。
 2. 关闭 release guard，记录旧用户数据 fixture hash，然后执行 D0：先删除 Pi runtime、Tool registry、queue、projectors、Skill Host、MCP Manager、Plugin runtime、生产注册/public exports/direct dependencies 与平行 client 路径；运行类型检查和边界扫描生成 replacement inventory，不增加 stub 或兼容路径。
-3. 完成 Q0/contract freeze：建立或重建 `scripts/dsh-q0` 并验证子进程/ACP 边界；真实 provider 当前跳过并标注非发布证据。
+3. 完成 Q0/contract freeze：用 `scripts/dsh-q0` 验证子进程/ACP 边界，并用可见 Desktop UI 单独验证真实 Provider 基线；两类证据不得互相替代。
 4. 并行实现 W1–W6，按 W1 → W2/W3/W5/W6 → W4 顺序进入同一集成分支；每个新 producer 必须关闭对应 replacement inventory 项。
 5. W7 在完整集成路径上更新 Evaluation/non-release 证据；W8 证明旧路径删除完整、无残留 consumer，并关闭全部 replacement inventory。
 6. 运行 deterministic gates、package typecheck/build/test、Desktop hidden/visible 验证、Session reopen、Tool/Job、extension failure isolation 与旧数据保护矩阵；真实 provider 若跳过，必须在记录中明确不是发布证据。
@@ -177,4 +181,4 @@ D0 只删除仓库代码和依赖，不得读取、修改或删除旧 Pi Session
 - `dsh-acp` rc.7 的 ACP method/event 精确集合与 bridge 需要补齐的最小 extension 最终 shape；由 Q0 证据和 contract freeze 确定。
 - 虚拟 cwd 配置如何在不暴露真实 Workspace path 的情况下满足 DSH rc.7 absolute-cwd contract；由 W1 contract 与完整 Desktop fixture 冻结。`DSH_HOME=userData/dsh`、`sessions/` authority、只读 closure 与可写官方 profile materialization 已冻结，不再作为开放设计项。
 - 首批纵向 Tool slice 之外的后续领域迁移顺序与每个 domain 的 typed tool contract 冻结范围；W6 按 inventory 逐项推进。
-- 真实 provider/API 行为验证何时恢复执行；本轮暂跳过且不阻塞实现，但本变更发布前仍必须补齐，除非另一个被接受的 OpenSpec 明确重定义发布门禁。
+- 完整 Provider/Model、approval、领域 Tool、应用重开与恢复矩阵的执行范围和成本预算；当前仅完成 `nekoapi-chat / gpt-5.6-luna` 的可见 Desktop 双轮基线，不改变其余发布门禁。
