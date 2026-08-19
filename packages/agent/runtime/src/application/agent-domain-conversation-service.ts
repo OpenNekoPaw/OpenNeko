@@ -89,6 +89,11 @@ export function createAgentDomainConversationService(options: {
         if (!context) {
           throw new Error(`Agent Conversation '${conversationId}' has no reserved domain owner.`);
         }
+        if (context.kind === 'authoring') {
+          throw new Error(
+            `Agent Conversation '${conversationId}' uses a DSH authoring context and is not handled by the retired domain conversation service.`,
+          );
+        }
         const configuration =
           await options.configuration.createInitialConfiguration(conversationId);
         await options.lifecycle.firstSubmit({

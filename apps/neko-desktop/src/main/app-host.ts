@@ -140,6 +140,7 @@ import type { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspac
 import type { AgentConversationContextAuthorityPort } from '@neko/agent-runtime/application';
 import {
   isSameAgentConversationOwner,
+  projectAgentConversationSurfaceBinding,
   type AgentConversationOwnerRef,
 } from '@neko/agent-contracts';
 import {
@@ -1526,7 +1527,10 @@ export class DesktopAppHost {
           `Desktop Conversation '${navigation.conversationId}' has no durable context.`,
         );
       }
-      return this.shell.restoreAgentConversation({ request, context });
+      return this.shell.restoreAgentConversation({
+        request,
+        context: projectAgentConversationSurfaceBinding(context),
+      });
     }
     if (request.intent.kind === 'open-character-authoring') {
       const resolution = await this.workspaceGrants.resolve(

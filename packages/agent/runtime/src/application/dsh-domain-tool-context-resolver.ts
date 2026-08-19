@@ -1,4 +1,4 @@
-import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
+import type { AgentConversationContext } from '@neko/agent-contracts';
 
 import type { AgentConversationContextAuthorityPort } from './agent-conversation-lifecycle-repository';
 import type { ConversationDshSessionBindingStore } from './conversation-dsh-session-binding';
@@ -6,7 +6,7 @@ import type { ConversationDshSessionBindingStore } from './conversation-dsh-sess
 export interface DshDomainToolContext {
   readonly conversationId: string;
   readonly dshSessionId: string;
-  readonly binding: AgentBoundDomainBinding;
+  readonly binding: AgentConversationContext;
 }
 
 export type DshDomainToolContextErrorCode =

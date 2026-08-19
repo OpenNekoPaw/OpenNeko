@@ -1,4 +1,7 @@
-import { parseAgentBoundDomainBinding, type AgentBoundDomainBinding } from '@neko/agent-contracts';
+import {
+  parseAgentConversationContext,
+  type AgentConversationContext,
+} from '@neko/agent-contracts';
 import {
   LocalMetadataError,
   initializeLocalMetadataTables,
@@ -12,7 +15,7 @@ export interface DshConversationCatalogRecord {
   readonly title: string;
   readonly createdAt: string;
   readonly updatedAt: string;
-  readonly context: AgentBoundDomainBinding;
+  readonly context: AgentConversationContext;
 }
 
 export interface DshConversationCatalogDiagnostic {
@@ -125,9 +128,9 @@ export function createPersistentDshConversationCatalogStore(options: {
 
 function decodeCatalogRow(row: LocalMetadataSqlRow): DshConversationCatalogRecord {
   const contextJson = requireString(row['context_json'], 'context_json');
-  let context: AgentBoundDomainBinding;
+  let context: AgentConversationContext;
   try {
-    context = parseAgentBoundDomainBinding(JSON.parse(contextJson));
+    context = parseAgentConversationContext(JSON.parse(contextJson));
   } catch (error) {
     throw persistenceError(
       'decode-dsh-conversation-catalog',
@@ -158,7 +161,7 @@ function parseCatalogRecord(input: DshConversationCatalogRecord): DshConversatio
     title: requireIdentity(input.title, 'Conversation title'),
     createdAt,
     updatedAt,
-    context: parseAgentBoundDomainBinding(input.context),
+    context: parseAgentConversationContext(input.context),
   });
 }
 

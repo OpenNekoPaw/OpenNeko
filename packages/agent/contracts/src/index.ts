@@ -20,6 +20,7 @@ export {
   type AgentPurposeModelRef,
 } from './agent-purpose-model';
 export * from './agent-conversation-context';
+export * from './agent-conversation-binding';
 export * from './agent-draft-submit';
 export * from './agent-llm-configuration';
 export * from './agent-entry-intent';

@@ -14,7 +14,7 @@ import {
   type ResourceBrowserIdentity,
   type ResourceBrowserProjection,
 } from '@neko/assets-domain/resource-browser/contract';
-import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
+import type { AgentConversationContext } from '@neko/agent-contracts';
 import type { ProjectEntityRecord } from '@neko/entity-domain';
 import type {
   AgentConversationContextAuthorityPort,
@@ -25,7 +25,7 @@ import type { DesktopDshExecutionCatalog } from './desktop-dsh-provider-runtime'
 
 interface ComposerSurfaceScope {
   readonly windowId: string;
-  readonly binding: AgentBoundDomainBinding;
+  readonly binding: AgentConversationContext;
   readonly conversationId?: string;
   readonly mentionIdentity?: ResourceBrowserIdentity;
 }
@@ -89,13 +89,13 @@ export function createDesktopDshComposerConfiguration(options: {
 }) {
   let mentionRequestSequence = 0;
   const resolveConfiguration = async (
-    binding: AgentBoundDomainBinding,
+    binding: AgentConversationContext,
     windowId: string,
   ): Promise<{
     readonly config: ComposerConfigManager;
     readonly context?: DshComposerContextProjection;
   }> => {
-    if (binding.kind !== 'workspace') {
+    if (binding.kind !== 'workspace' && binding.kind !== 'authoring') {
       return { config: options.configuration.getApplicationConfig() };
     }
     const resolution = await options.workspaceGrants.restore(
@@ -146,7 +146,10 @@ export function createDesktopDshComposerConfiguration(options: {
       input: ComposerSurfaceIdentity & { readonly filter: string },
     ): Promise<readonly DshComposerMentionProjection[]> {
       const scope = await options.resolveSurface(input);
-      if (scope.binding.kind !== 'workspace' || scope.mentionIdentity === undefined) {
+      if (
+        (scope.binding.kind !== 'workspace' && scope.binding.kind !== 'authoring') ||
+        scope.mentionIdentity === undefined
+      ) {
         throw new Error('Composer mentions require an exact Workspace-bound Agent Surface.');
       }
       const mentionIdentity = scope.mentionIdentity;

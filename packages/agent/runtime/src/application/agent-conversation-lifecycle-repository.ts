@@ -1,5 +1,6 @@
 import {
   parseAgentBoundDomainBinding,
+  parseAgentConversationContext,
   parseAgentConversationConfiguration,
   parseAgentConversationTurnConfigurationSnapshot,
   parseAgentTurnCapabilityConstraint,
@@ -10,6 +11,7 @@ import {
   parseMessageContextReference,
   parseAgentScratchArtifactRef,
   type AgentBoundDomainBinding,
+  type AgentConversationContext,
 } from '@neko/agent-contracts';
 import {
   LocalMetadataError,
@@ -47,9 +49,9 @@ export function initializeAgentConversationLifecycleTables(
 }
 
 export interface AgentConversationContextAuthorityPort {
-  bindContext(conversationId: string, context: AgentBoundDomainBinding): Promise<void>;
+  bindContext(conversationId: string, context: AgentConversationContext): Promise<void>;
   releaseContext(conversationId: string): Promise<void>;
-  readContext(conversationId: string): Promise<AgentBoundDomainBinding | undefined>;
+  readContext(conversationId: string): Promise<AgentConversationContext | undefined>;
 }
 
 export function createPersistentAgentConversationContextAuthority(options: {
@@ -63,7 +65,7 @@ export function createPersistentAgentConversationContextAuthority(options: {
           await commitContext(
             sql,
             requireContextIdentity(conversationId),
-            parseAgentBoundDomainBinding(context),
+            parseAgentConversationContext(context),
             'bind-agent-conversation-context',
           );
         },
@@ -262,7 +264,7 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
               `Agent Conversation '${conversationId}' resolves to multiple contexts.`,
             );
           }
-          return rows.length === 0 ? undefined : decodeContextRow(rows[0]!);
+          return rows.length === 0 ? undefined : decodeBoundContextRow(rows[0]!);
         },
       ),
     addScratchArtifact: (conversationId, artifact) =>
@@ -335,9 +337,9 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
 async function commitContext(
   sql: LocalMetadataSqlExecutor,
   conversationId: string,
-  context: ReturnType<typeof parseAgentBoundDomainBinding>,
+  context: AgentConversationContext,
   operation: string,
-): Promise<ReturnType<typeof parseAgentBoundDomainBinding>> {
+): Promise<AgentConversationContext> {
   await sql.run(
     `INSERT INTO agent_conversation_authority(conversation_id, context_json)
      VALUES (?, ?)
@@ -362,7 +364,20 @@ async function commitContext(
 
 function decodeContextRow(
   row: LocalMetadataSqlRow,
-): ReturnType<typeof parseAgentBoundDomainBinding> {
+): ReturnType<typeof parseAgentConversationContext> {
+  const source = readString(row, 'context_json');
+  try {
+    return parseAgentConversationContext(JSON.parse(source));
+  } catch (error) {
+    if (error instanceof LocalMetadataError) throw error;
+    throw persistenceError(
+      'decode-agent-conversation-context',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+function decodeBoundContextRow(row: LocalMetadataSqlRow): AgentBoundDomainBinding {
   const source = readString(row, 'context_json');
   try {
     return parseAgentBoundDomainBinding(JSON.parse(source));

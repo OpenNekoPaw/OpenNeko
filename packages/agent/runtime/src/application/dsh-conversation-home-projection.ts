@@ -1,6 +1,6 @@
 import {
   parseAgentHomeProjection,
-  type AgentBoundDomainBinding,
+  type AgentConversationContext,
   type AgentHomeConversationSummary,
   type AgentHomeDiagnostic,
   type AgentConversationOwnerRef,
@@ -113,11 +113,13 @@ export function createDshConversationHomeProjection(options: {
   });
 }
 
-function conversationOwner(context: AgentBoundDomainBinding): AgentConversationOwnerRef {
+function conversationOwner(context: AgentConversationContext): AgentConversationOwnerRef {
   switch (context.kind) {
     case 'assistant':
       return { kind: 'assistant', assistantSpaceId: context.assistantSpaceId };
     case 'workspace':
+      return { kind: 'workspace', workspaceId: context.workspaceId };
+    case 'authoring':
       return { kind: 'workspace', workspaceId: context.workspaceId };
     case 'room':
       return { kind: 'room', roomId: context.roomId, roomRunId: context.roomRunId };
