@@ -149,6 +149,7 @@ describe('Desktop DSH profile materializer', () => {
 async function createFixture(): Promise<{
   readonly userDataRoot: string;
   readonly runtime: DesktopDshRuntimeResource;
+  readonly profilePatchEntries: readonly Readonly<Record<string, unknown>>[];
 }> {
   const userDataRoot = await realpath(await createRoot('openneko-dsh-user-data-'));
   const runtimeRoot = await realpath(await createRoot('openneko-dsh-runtime-'));
@@ -180,6 +181,7 @@ async function createFixture(): Promise<{
   }
   return {
     userDataRoot,
+    profilePatchEntries: [],
     runtime: {
       runtimeRoot,
       executable: join(runtimeRoot, 'payload', 'bin', 'node'),

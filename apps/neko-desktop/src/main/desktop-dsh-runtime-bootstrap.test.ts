@@ -23,6 +23,10 @@ describe('Desktop DSH runtime bootstrap', () => {
       isPackaged: false,
       resourcesPath: userDataRoot,
       userDataRoot,
+      providers: providerProjection({
+        profilePatchEntries: [{ id: 'llm-pi-ai', config: { providers: {} } }],
+        credentialEnvironment: { OPENNEKO_DSH_PROVIDER_CREDENTIAL_0: 'provider-secret' },
+      }),
       environment: {
         NEKO_DSH_RUNTIME_ROOT: runtimeRoot,
         PATH: '/usr/bin:/bin',
@@ -44,6 +48,7 @@ describe('Desktop DSH runtime bootstrap', () => {
       DSH_HOME: join(canonicalUserData, 'dsh'),
       HOME: join(canonicalUserData, 'dsh'),
       DSH_TELEMETRY_DISABLED: '1',
+      OPENNEKO_DSH_PROVIDER_CREDENTIAL_0: 'provider-secret',
     });
     expect(prepared.environment).not.toHaveProperty('SECRET');
     expect(prepared.environment).not.toHaveProperty('ELECTRON_RUN_AS_NODE');
@@ -62,6 +67,7 @@ describe('Desktop DSH runtime bootstrap', () => {
         isPackaged: false,
         resourcesPath: userDataRoot,
         userDataRoot,
+        providers: providerProjection(),
         environment: { NEKO_DSH_RUNTIME_ROOT: runtimeRoot },
       }),
     ).rejects.toThrow(/checksum mismatch/u);
@@ -79,6 +85,7 @@ describe('Desktop DSH runtime bootstrap', () => {
         isPackaged: false,
         resourcesPath: userDataRoot,
         userDataRoot,
+        providers: providerProjection(),
         environment: { NEKO_DSH_RUNTIME_ROOT: runtimeRoot },
       }),
     ).rejects.toThrow(/fingerprint does not match/u);
@@ -96,6 +103,18 @@ describe('Desktop DSH runtime bootstrap', () => {
     expect(source).not.toMatch(/handlers\s*\?\?/u);
   });
 });
+
+function providerProjection(overrides?: {
+  readonly profilePatchEntries?: readonly Readonly<Record<string, unknown>>[];
+  readonly credentialEnvironment?: Readonly<Record<string, string>>;
+}) {
+  return {
+    profilePatchEntries: overrides?.profilePatchEntries ?? [],
+    credentialEnvironment: overrides?.credentialEnvironment ?? {},
+    executionCatalog: { resolve: () => undefined },
+    diagnostics: [],
+  };
+}
 
 async function createRuntimeClosure(): Promise<string> {
   const root = await createRoot('openneko-dsh-runtime-');

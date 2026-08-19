@@ -241,6 +241,7 @@ import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-co
 import { DesktopDshSessionHost } from './desktop-dsh-session-host';
 import { resolveDesktopDshConversationContext } from './desktop-dsh-conversation-context';
 import { DesktopDshRuntimeHost } from './desktop-dsh-runtime-host';
+import { createDesktopDshProviderRuntimeProjection } from './desktop-dsh-provider-runtime';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -1881,11 +1882,25 @@ async function startDesktop(): Promise<void> {
       if (!owner.isDestroyed()) owner.webContents.send(DSH_RUNTIME_CHANGED_CHANNEL, projection);
     }
   };
+  const applicationAgentConfig = workspaceConfigAuthority.getApplicationConfig();
+  const dshProviderRuntime = await createDesktopDshProviderRuntimeProjection({
+    providers: applicationAgentConfig.getEnabledProviders(),
+    models: applicationAgentConfig.getEnabledModels(),
+    credentials: providerCredentials,
+  });
+  for (const diagnostic of dshProviderRuntime.diagnostics) {
+    logger.warn('DSH provider is unavailable.', {
+      providerId: diagnostic.providerId,
+      ...(diagnostic.modelId === undefined ? {} : { modelId: diagnostic.modelId }),
+      message: diagnostic.message,
+    });
+  }
   const dshProduct = await startDesktopDshProductRuntime({
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
     userDataRoot: userData,
     environment: process.env,
+    providers: dshProviderRuntime,
     metadataStore: localMetadataStore,
     onStderr: (chunk) => logger.warn('DSH runtime diagnostic.', { message: chunk.trimEnd() }),
     createHandlers: ({ bindings }) => {
@@ -1980,6 +1995,7 @@ async function startDesktop(): Promise<void> {
     workspaceGrants: workspaceGrantAuthority,
     configuration: workspaceConfigAuthority,
     sessions: dshProduct.runtime.conversations.conversations,
+    executionCatalog: dshProviderRuntime.executionCatalog,
     permissions: {
       read: (conversationId) =>
         conversationId === undefined

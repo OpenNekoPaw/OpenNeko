@@ -14,6 +14,7 @@ import type {
   ConversationDshSessionBoundClient,
 } from '@neko/agent-runtime/application';
 import type { ConfigManager } from '@neko/host/settings';
+import type { DesktopDshExecutionCatalog } from './desktop-dsh-provider-runtime';
 
 interface ComposerSurfaceScope {
   readonly windowId: string;
@@ -56,6 +57,7 @@ export function createDesktopDshComposerConfiguration(options: {
     }): ComposerConfigManager;
   };
   readonly sessions: Pick<ConversationDshSessionBoundClient, 'setSessionConfigOption'>;
+  readonly executionCatalog: DesktopDshExecutionCatalog;
   readonly permissions: {
     read(conversationId?: string): Promise<DshAcpPermissionPresetProjection>;
     set(
@@ -94,7 +96,7 @@ export function createDesktopDshComposerConfiguration(options: {
   };
 
   const apply = async (conversationId: string, config: ComposerConfigManager): Promise<void> => {
-    const effective = requireEffectiveConfiguration(config);
+    const effective = requireEffectiveConfiguration(config, options.executionCatalog);
     await options.sessions.setSessionConfigOption(
       conversationId,
       DSH_ACP_MODEL_CONFIG_ID,
@@ -108,6 +110,7 @@ export function createDesktopDshComposerConfiguration(options: {
       const resolved = await resolveConfiguration(scope.binding, scope.windowId);
       return projectConfiguration(
         resolved.config,
+        options.executionCatalog,
         await options.permissions.read(scope.conversationId),
         resolved.context,
       );
@@ -128,6 +131,11 @@ export function createDesktopDshComposerConfiguration(options: {
       }
       const selected = matches[0];
       if (!selected) throw new Error(`Composer model '${input.modelOptionId}' is unavailable.`);
+      if (options.executionCatalog.resolve(selected.providerId, selected.modelId) === undefined) {
+        throw new Error(
+          `Composer model '${selected.providerId}/${selected.modelId}' is not executable by the current DSH runtime.`,
+        );
+      }
       await config.setAssistantSettings({
         selectedProviderId: selected.providerId,
         selectedModelId: selected.modelId,
@@ -135,6 +143,7 @@ export function createDesktopDshComposerConfiguration(options: {
       if (scope.conversationId !== undefined) await apply(scope.conversationId, config);
       return projectConfiguration(
         config,
+        options.executionCatalog,
         await options.permissions.read(scope.conversationId),
         resolved.context,
       );
@@ -155,7 +164,12 @@ export function createDesktopDshComposerConfiguration(options: {
         scope.conversationId === undefined
           ? { ...current, currentValue: input.permissionPresetId }
           : await options.permissions.set(scope.conversationId, input.permissionPresetId);
-      return projectConfiguration(resolved.config, projection, resolved.context);
+      return projectConfiguration(
+        resolved.config,
+        options.executionCatalog,
+        projection,
+        resolved.context,
+      );
     },
 
     async selectMediaModel(
@@ -187,6 +201,7 @@ export function createDesktopDshComposerConfiguration(options: {
       });
       return projectConfiguration(
         config,
+        options.executionCatalog,
         await options.permissions.read(scope.conversationId),
         resolved.context,
       );
@@ -213,11 +228,18 @@ function mediaPurpose(
 
 function projectConfiguration(
   config: ComposerConfigManager,
+  executionCatalog: DesktopDshExecutionCatalog,
   permissionPresets: DshAcpPermissionPresetProjection,
   context?: DshComposerContextProjection,
 ): DshComposerConfigurationProjection {
   const state = config.getAssistantConfigState();
-  const models = state.chatModelOptions.map(projectModel);
+  const models = state.chatModelOptions
+    .filter(
+      (model) =>
+        (model.category !== undefined && model.category !== 'llm') ||
+        executionCatalog.resolve(model.providerId, model.modelId) !== undefined,
+    )
+    .map(projectModel);
   const modelIds = new Set<string>();
   for (const model of models) {
     if (modelIds.has(model.id)) throw new Error(`Composer model '${model.id}' is duplicated.`);
@@ -229,7 +251,7 @@ function projectConfiguration(
   );
   const diagnostic =
     state.configDiagnostic?.message ??
-    (selected === undefined ? 'No configured chat model is selected.' : undefined);
+    (selected === undefined ? 'The selected chat model is not executable by DSH.' : undefined);
   return {
     models,
     ...(selected === undefined ? {} : { selectedModelOptionId: selected.id }),
@@ -246,7 +268,10 @@ function projectConfiguration(
   };
 }
 
-function requireEffectiveConfiguration(config: ComposerConfigManager): {
+function requireEffectiveConfiguration(
+  config: ComposerConfigManager,
+  executionCatalog: DesktopDshExecutionCatalog,
+): {
   readonly model: {
     readonly providerId: string;
     readonly modelId: string;
@@ -263,10 +288,16 @@ function requireEffectiveConfiguration(config: ComposerConfigManager): {
   }
   const model = selected[0];
   if (!model) throw new Error('Composer selected model is unavailable.');
+  const execution = executionCatalog.resolve(model.providerId, model.modelId);
+  if (execution === undefined) {
+    throw new Error(
+      `Composer model '${model.providerId}/${model.modelId}' is not executable by the current DSH runtime.`,
+    );
+  }
   return {
     model: {
-      providerId: model.providerId,
-      modelId: model.modelId,
+      providerId: execution.providerId,
+      modelId: execution.apiModelName,
       maxTokens: state.maxTokens,
     },
   };

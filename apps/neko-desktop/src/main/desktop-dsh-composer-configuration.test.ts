@@ -48,6 +48,7 @@ describe('Desktop DSH composer configuration', () => {
         getWorkspaceConfig: vi.fn(() => workspaceConfig),
       },
       sessions: { setSessionConfigOption },
+      executionCatalog: createExecutionCatalog(),
       permissions: {
         read: vi.fn(async () => permissionPresets('workspace-write')),
         set: setPermissionPreset,
@@ -85,7 +86,7 @@ describe('Desktop DSH composer configuration', () => {
     expect(setSessionConfigOption).toHaveBeenCalledWith(
       'conversation-1',
       'model',
-      '["openai","gpt-5",8192]',
+      '["openai","gpt-5-api",8192]',
     );
     expect(applicationConfig.setAssistantSettings).not.toHaveBeenCalled();
 
@@ -140,6 +141,7 @@ describe('Desktop DSH composer configuration', () => {
       sessions: {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
       },
+      executionCatalog: createExecutionCatalog(),
       permissions: {
         read: vi.fn(async () => permissionPresets('workspace-write')),
         set: vi.fn(async () => permissionPresets('workspace-write')),
@@ -158,7 +160,73 @@ describe('Desktop DSH composer configuration', () => {
       /no authoritative domain context/u,
     );
   });
+
+  it('hides non-executable LLMs without removing media models and rejects their selection', async () => {
+    const config = createConfig();
+    const executionCatalog = createExecutionCatalog({ includeDeepSeek: false });
+    const service = createDesktopDshComposerConfiguration({
+      resolveSurface: vi.fn(async () => ({
+        windowId: 'window-1',
+        binding: { kind: 'assistant' as const, assistantSpaceId: 'assistant-1', baseGrantIds: [] },
+      })),
+      contexts: { readContext: vi.fn(async () => undefined) },
+      workspaceGrants: {
+        restore: vi.fn(async () => {
+          throw new Error('Workspace resolution must not run.');
+        }),
+      },
+      configuration: {
+        getApplicationConfig: () => config,
+        getWorkspaceConfig: () => config,
+      },
+      sessions: {
+        setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
+      },
+      executionCatalog,
+      permissions: {
+        read: vi.fn(async () => permissionPresets('workspace-write')),
+        set: vi.fn(async () => permissionPresets('workspace-write')),
+      },
+    });
+
+    const projected = await service.project({
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+    });
+    expect(projected.models.map((model) => model.id)).toEqual([
+      'openai:gpt-5',
+      'nekoapi-media:gpt-image-2',
+    ]);
+    expect(projected.selectedModelOptionId).toBeUndefined();
+    expect(projected.diagnostic).toBe('The selected chat model is not executable by DSH.');
+
+    await expect(
+      service.selectModel({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        modelOptionId: 'deepseek-official:deepseek-v4',
+      }),
+    ).rejects.toThrow(/not executable by the current DSH runtime/u);
+    expect(config.setAssistantSettings).not.toHaveBeenCalled();
+  });
 });
+
+function createExecutionCatalog(options: { readonly includeDeepSeek?: boolean } = {}) {
+  const models = new Map<string, Map<string, string>>([
+    ['openai', new Map([['gpt-5', 'gpt-5-api']])],
+  ]);
+  if (options.includeDeepSeek !== false) {
+    models.set('deepseek-official', new Map([['deepseek-v4', 'deepseek-v4-api']]));
+  }
+  return {
+    resolve(providerId: string, productModelId: string) {
+      const apiModelName = models.get(providerId)?.get(productModelId);
+      return apiModelName === undefined ? undefined : { providerId, productModelId, apiModelName };
+    },
+  };
+}
 
 function permissionPresets(currentValue: string) {
   return {

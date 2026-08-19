@@ -29,6 +29,7 @@ export interface DesktopDshProfileMaterialization {
 export async function materializeDesktopDshProfile(options: {
   readonly userDataRoot: string;
   readonly runtime: DesktopDshRuntimeResource;
+  readonly profilePatchEntries: readonly Readonly<Record<string, unknown>>[];
 }): Promise<DesktopDshProfileMaterialization> {
   if (!isAbsolute(options.userDataRoot)) {
     throw new Error('Desktop DSH userData root must be absolute.');
@@ -40,7 +41,8 @@ export async function materializeDesktopDshProfile(options: {
 
   const templateProfileRoot = join(profileTemplateRoot, 'profiles', options.runtime.profileName);
   const manifest = await readCanonicalProfileManifest(join(templateProfileRoot, 'package.json'));
-  const patch = await readFile(join(templateProfileRoot, 'cordis.patch.yml'), 'utf8');
+  await assertCanonicalTemplatePatch(join(templateProfileRoot, 'cordis.patch.yml'));
+  const patch = `${JSON.stringify(options.profilePatchEntries, null, 2)}\n`;
   const packageTargets = await resolveOfficialPackageTargets(runtimeRoot);
 
   const dshHome = join(userDataRoot, 'dsh');
@@ -111,6 +113,19 @@ export async function materializeDesktopDshProfile(options: {
       DSH_TELEMETRY_DISABLED: '1',
     }),
   });
+}
+
+async function assertCanonicalTemplatePatch(path: string): Promise<void> {
+  const source = await readFile(path, 'utf8');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch (error) {
+    throw new Error('Packaged OpenNeko DSH profile patch is not canonical JSON.', { cause: error });
+  }
+  if (!Array.isArray(parsed) || parsed.length !== 0) {
+    throw new Error('Packaged OpenNeko DSH profile patch must be the canonical empty template.');
+  }
 }
 
 async function moveCurrentFile(path: string, replacement: string): Promise<boolean> {

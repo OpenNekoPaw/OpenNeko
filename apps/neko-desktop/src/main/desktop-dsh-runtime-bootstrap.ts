@@ -18,6 +18,7 @@ import {
   type DesktopDshRuntimeResource,
 } from './desktop-dsh-runtime-resource';
 import { DesktopDshSubprocessSupervisor } from './desktop-dsh-subprocess-supervisor';
+import type { DesktopDshProviderRuntimeProjection } from './desktop-dsh-provider-runtime';
 
 const DSH_SHELL_ENVIRONMENT_KEYS = Object.freeze(['PATH', 'TMPDIR', 'LANG', 'LC_ALL']);
 
@@ -34,18 +35,21 @@ export async function prepareDesktopDshRuntime(options: {
   readonly resourcesPath: string;
   readonly userDataRoot: string;
   readonly environment: Readonly<Record<string, string | undefined>>;
+  readonly providers: DesktopDshProviderRuntimeProjection;
   readonly onStderr?: (chunk: string) => void;
 }): Promise<PreparedDesktopDshRuntime> {
   const resource = resolveDesktopDshRuntimeResource(options);
   const profile = await materializeDesktopDshProfile({
     userDataRoot: options.userDataRoot,
     runtime: resource,
+    profilePatchEntries: options.providers.profilePatchEntries,
   });
   const workingDirectory = join(profile.dshHome, 'workspace');
   await mkdir(workingDirectory, { recursive: true });
   const environment = Object.freeze({
     ...selectDshShellEnvironment(options.environment),
     ...profile.environment,
+    ...options.providers.credentialEnvironment,
   });
   return Object.freeze({
     resource,
@@ -67,6 +71,7 @@ export async function startDesktopDshProductRuntime(options: {
   readonly resourcesPath: string;
   readonly userDataRoot: string;
   readonly environment: Readonly<Record<string, string | undefined>>;
+  readonly providers: DesktopDshProviderRuntimeProjection;
   readonly metadataStore: LocalMetadataStore;
   readonly createHandlers: (input: {
     readonly bindings: ConversationDshSessionBindingStore;
