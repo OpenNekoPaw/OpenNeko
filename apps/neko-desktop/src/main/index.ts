@@ -87,7 +87,6 @@ import { closeDesktopWindows } from './window-lifecycle';
 import {
   DESKTOP_STATE_AUTHORITY_KEYS,
   initializeAssetLibraryMembershipTables,
-  initializePluginStateTables,
   resolveManagedLogFile,
   resolveGlobalStorageLayout,
   SqliteJsonStateRepository,
@@ -362,7 +361,6 @@ async function startDesktop(): Promise<void> {
       (rejection): rejection is InvalidJsonStateRejection => rejection !== undefined,
     );
     await initializeAssetLibraryMembershipTables(localMetadataStore);
-    await initializePluginStateTables(localMetadataStore);
     await initializeAgentConversationLifecycleTables(localMetadataStore);
     await initializeCharacterRuntimePersistenceTables(localMetadataStore);
     await initializeWorldRuntimePersistenceTables(localMetadataStore);

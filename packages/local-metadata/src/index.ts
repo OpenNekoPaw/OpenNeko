@@ -9,8 +9,6 @@ export * from './secret-boundary';
 export * from './storage';
 export * from './project-local-state';
 export * from './project-storage-path';
-export * from './plugin-state';
 export * from './table-initialization';
 export * from './json-state-repository';
 export { initializeAssetLibraryMembershipTables } from './sqlite/asset-library-membership-schema';
-export { initializePluginStateTables } from './sqlite/plugin-state-schema';
