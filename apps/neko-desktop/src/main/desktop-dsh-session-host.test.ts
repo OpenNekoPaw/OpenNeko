@@ -208,7 +208,7 @@ describe('Desktop DSH Session Host', () => {
         id: 'files:scene',
         kind: 'file' as const,
         label: 'scene.md',
-        contentLocator: { kind: 'workspace-file' as const, path: 'notes/scene.md' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'notes/scene.md' } },
         source: 'workspace' as const,
         mediaType: 'text' as const,
       },

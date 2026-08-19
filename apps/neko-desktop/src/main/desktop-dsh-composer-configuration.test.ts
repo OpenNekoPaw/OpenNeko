@@ -217,8 +217,8 @@ describe('Desktop DSH composer configuration', () => {
             depth: 0,
             locator:
               source === 'files'
-                ? { kind: 'workspace-file' as const, path: 'notes/scene.md' }
-                : { kind: 'workspace-file' as const, path: 'media/scene.png' },
+                ? { file: { authority: 'workspace' as const, path: 'notes/scene.md' } }
+                : { file: { authority: 'workspace' as const, path: 'media/scene.png' } },
           },
         ],
       };
@@ -278,7 +278,7 @@ describe('Desktop DSH composer configuration', () => {
         id: 'files:scene-file',
         kind: 'file',
         label: 'scene.md',
-        contentLocator: { kind: 'workspace-file', path: 'notes/scene.md' },
+        contentLocator: { file: { authority: 'workspace', path: 'notes/scene.md' } },
         source: 'workspace',
         mediaType: 'text',
       },
@@ -286,7 +286,7 @@ describe('Desktop DSH composer configuration', () => {
         id: 'media:scene-image',
         kind: 'media',
         label: 'scene.png',
-        contentLocator: { kind: 'workspace-file', path: 'media/scene.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/scene.png' } },
         source: 'media-library',
         mediaType: 'image',
       },

@@ -1,5 +1,5 @@
 import type {
-  ContentRepresentationLocator,
+  ContentRepresentationHandle,
   ContentLocator,
   DocumentBatchCursor,
   DocumentImageInfo,
@@ -81,7 +81,7 @@ export interface AgentProviderAssetResult extends AgentContentAccessOperationRes
 export interface AgentContentAccessRuntime {
   resolveDocumentContent(input: AgentDocumentContentInput): Promise<AgentDocumentContentResult>;
   loadRepresentationAsset?(input: {
-    readonly locator: ContentRepresentationLocator;
+    readonly handle: ContentRepresentationHandle;
     readonly maxBytes: number;
   }): Promise<AgentProviderAssetResult>;
   loadContentAsset(input: {

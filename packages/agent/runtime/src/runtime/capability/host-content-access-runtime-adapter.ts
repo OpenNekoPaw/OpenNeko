@@ -2,7 +2,6 @@ import { DocumentContentAccessRuntime, type IDocumentAccessService } from '@neko
 import {
   type ContentReadService,
   type ContentLocator,
-  type ContentRepresentationLocator,
   type ContentRepresentationService,
   type WorkspaceFileContentLocator,
   isWorkspaceFileContentLocator,
@@ -98,7 +97,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
   }
 
   async loadRepresentationAsset(input: {
-    readonly locator: ContentRepresentationLocator;
+    readonly handle: import('@neko/content').ContentRepresentationHandle;
     readonly maxBytes: number;
   }): Promise<AgentProviderAssetResult> {
     const service = this.services.contentRepresentation;
@@ -113,7 +112,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
         ],
       };
     }
-    const loaded = await service.readRepresentation(input.locator, { maxBytes: input.maxBytes });
+    const loaded = await service.readRepresentation(input.handle, { maxBytes: input.maxBytes });
     if (loaded.status !== 'ready') {
       return {
         status: 'failed',
@@ -210,7 +209,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
             ...(represented.metadata.byteLength !== undefined
               ? { byteSize: represented.metadata.byteLength }
               : {}),
-            representationLocator: represented.locator,
+            representationHandle: represented.handle,
           };
         }),
       );

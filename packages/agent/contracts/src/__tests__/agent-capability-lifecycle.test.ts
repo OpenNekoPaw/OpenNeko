@@ -189,8 +189,6 @@ describe('agent capability lifecycle contracts', () => {
 
 function createTestContentLocator() {
   return {
-    kind: 'workspace-file' as const,
-    path: 'assets/cover.png',
-    fingerprint: { strategy: 'provider' as const, value: 'cover-current' },
+    file: { authority: 'workspace' as const, path: 'assets/cover.png' },
   };
 }
