@@ -3770,7 +3770,6 @@ function createProjectDockResizeBinding({
   return {
     label,
     minSize: DESKTOP_WORKBENCH_LIMITS.dockWidth.min,
-    maxSize: DESKTOP_WORKBENCH_LIMITS.dockWidth.max,
     onResizeEnd: (width: number) => {
       const currentWidth =
         dock.owner === 'agent' ? workbench.display.chatWidth : workbench.resourceDock.width;

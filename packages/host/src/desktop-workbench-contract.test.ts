@@ -41,6 +41,24 @@ describe('Desktop Workbench contract', () => {
     expect(parseDesktopWorkbenchLayout(current)).toEqual(current);
   });
 
+  it('keeps dock widths lower-bounded without imposing an artificial upper bound', () => {
+    const current = createDefaultDesktopWorkbenchLayout('window-1');
+    const resized = parseDesktopWorkbenchLayout({
+      ...current,
+      resourceDock: { presentation: 'docked', width: 720 },
+      display: { mode: 'chat-main', chatPosition: 'left', chatWidth: 680 },
+    });
+
+    expect(resized.resourceDock.width).toBe(720);
+    expect(resized.display.chatWidth).toBe(680);
+    expect(() =>
+      parseDesktopWorkbenchLayout({
+        ...current,
+        display: { mode: 'chat-main', chatPosition: 'left', chatWidth: 279 },
+      }),
+    ).toThrow('Desktop Workbench Chat width is invalid.');
+  });
+
   it('opens, focuses and splits Main Views without changing Chat presentation', () => {
     const initial = {
       ...createDefaultDesktopWorkbenchLayout('window-1'),

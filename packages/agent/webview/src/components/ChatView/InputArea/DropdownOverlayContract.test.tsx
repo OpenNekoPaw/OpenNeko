@@ -226,8 +226,13 @@ describe('dropdown overlay presentation contract', () => {
     expect(shellRule).toContain('max-width: 820px');
     expect(shellRule).toContain('margin-inline: auto');
     expect(transcriptRailRule).toContain('width: calc(100% - 24px)');
+    expect(transcriptRailRule).toContain('min-width: 0');
     expect(transcriptRailRule).toContain('max-width: 820px');
     expect(transcriptRailRule).toContain('margin-inline: auto');
+    const activityRule = css.match(/\.agent-turn-activity\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    expect(activityRule).toContain('width: min(760px, calc(100% - 28px))');
+    expect(activityRule).toContain('min-width: 0');
+    expect(css).toMatch(/\.dsh-agent-view,\s*\.agent-message-list\s*\{[\s\S]*?min-width: 0/u);
     expect(railRule).toContain('padding: 0 12px 12px');
     expect(css).not.toMatch(/@media \(max-width: 560px\)\s*\{\s*\.agent-transcript-rail/u);
     expect(narrowRule).toContain('.agent-composer-toolbar');

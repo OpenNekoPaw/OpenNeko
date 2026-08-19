@@ -981,7 +981,7 @@ function DshToolEvent({
               onClick={() => setExpanded((value) => !value)}
             >
               {icon}
-              <span className="shrink-0 font-medium text-[var(--agent-fg)]">
+              <span className="min-w-0 max-w-[70%] truncate font-medium text-[var(--agent-fg)]">
                 {event.title ?? event.toolCallId}
               </span>
               <span className="flex-1 truncate font-mono text-[10px] text-[var(--agent-fg-secondary)]">
@@ -1043,7 +1043,7 @@ function DshCommandEvent({
               onClick={() => setExpanded((value) => !value)}
             >
               {icon}
-              <span className="shrink-0 font-medium text-[var(--agent-fg)]">
+              <span className="min-w-0 max-w-[70%] truncate font-medium text-[var(--agent-fg)]">
                 /{event.name}
                 {event.args === undefined ? '' : ` ${event.args}`}
               </span>

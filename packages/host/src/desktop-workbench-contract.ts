@@ -4,7 +4,7 @@ export const DESKTOP_PRIMARY_MAIN_GROUP_ID = 'main:primary';
 export const DESKTOP_SECONDARY_MAIN_GROUP_ID = 'main:secondary';
 
 export const DESKTOP_WORKBENCH_LIMITS = {
-  dockWidth: { min: 280, max: 520 },
+  dockWidth: { min: 280 },
   cutPanelHeight: { min: 280, max: 680 },
   mainViewCount: { min: 0, max: 8 },
   mainGroupCount: { min: 1, max: 2 },
@@ -1077,14 +1077,14 @@ function readOptionalNonEmptyString(value: unknown, message: string): string | u
 
 function requireBoundedNumber(
   value: unknown,
-  bounds: { readonly min: number; readonly max: number },
+  bounds: { readonly min: number; readonly max?: number },
   message: string,
 ): number {
   if (
     typeof value !== 'number' ||
     !Number.isFinite(value) ||
     value < bounds.min ||
-    value > bounds.max
+    (bounds.max !== undefined && value > bounds.max)
   ) {
     throw invalidPayload(message);
   }
