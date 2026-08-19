@@ -19,6 +19,7 @@ import {
 } from '@neko/agent-runtime/acp';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
+import type { DshAcpExtensionProjection } from '@neko/agent-contracts/dsh-acp';
 
 import type {
   DesktopDshSubprocessHandle,
@@ -29,6 +30,7 @@ export interface DesktopDshAgentClient
   extends ConversationDshSessionAcpClient, DshSessionCatalogAcpClient, DshSessionCreationClient {
   readonly closed: Promise<void>;
   readonly projection: DshAcpProjection;
+  readExtensions(): Promise<DshAcpExtensionProjection>;
 }
 
 export interface DesktopDshAgentRuntime {
@@ -289,6 +291,9 @@ function createStableDesktopDshAgentClient(
     },
     async invokeSkill(input) {
       return requireClient().invokeSkill(input);
+    },
+    async readExtensions() {
+      return requireClient().readExtensions();
     },
     async readInbox(sessionId) {
       return requireClient().readInbox(sessionId);

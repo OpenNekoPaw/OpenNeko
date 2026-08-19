@@ -242,6 +242,7 @@ import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-co
 import { DesktopDshSessionHost } from './desktop-dsh-session-host';
 import { resolveDesktopDshConversationContext } from './desktop-dsh-conversation-context';
 import { DesktopDshRuntimeHost } from './desktop-dsh-runtime-host';
+import { DesktopDshExtensionManagementHost } from './desktop-dsh-extension-management-host';
 import { createDesktopDshProviderRuntimeProjection } from './desktop-dsh-provider-runtime';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 
@@ -2122,11 +2123,16 @@ async function startDesktop(): Promise<void> {
     runtime: dshProduct.runtime,
     windows: appHost.windows,
   });
+  const dshExtensionManagementHost = new DesktopDshExtensionManagementHost({
+    runtime: dshProduct.runtime,
+    windows: appHost.windows,
+  });
   const unsubscribeDshRuntimeStatus = dshProduct.runtime.subscribe(publishDshRuntimeChanged);
   const disposeIpc = registerDesktopIpc(appHost, {
     dshPermissions: dshPermissionHost,
     dshRuntime: dshRuntimeHost,
     dshSessions: dshSessionHost,
+    dshExtensions: dshExtensionManagementHost,
     saveCharacterPackage: async (event, produce) => {
       const owner = BrowserWindow.fromWebContents(event.sender);
       if (!owner) throw new Error('Character package export requires a registered BrowserWindow.');

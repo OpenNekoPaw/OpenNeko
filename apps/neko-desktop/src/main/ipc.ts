@@ -38,6 +38,8 @@ import { DSH_SESSION_HOST_CHANNEL } from '@neko/agent-contracts/dsh-session-host
 import type { DesktopDshSessionHost } from './desktop-dsh-session-host';
 import { DSH_RUNTIME_HOST_CHANNEL } from '@neko/agent-contracts/dsh-runtime-host';
 import type { DesktopDshRuntimeHost } from './desktop-dsh-runtime-host';
+import { AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL } from '@neko/agent-contracts/extension-management-host';
+import type { DesktopDshExtensionManagementHost } from './desktop-dsh-extension-management-host';
 
 export function registerDesktopIpc(
   appHost: DesktopAppHost,
@@ -45,6 +47,7 @@ export function registerDesktopIpc(
     readonly dshPermissions?: DesktopDshPermissionHost;
     readonly dshRuntime?: DesktopDshRuntimeHost;
     readonly dshSessions?: DesktopDshSessionHost;
+    readonly dshExtensions?: DesktopDshExtensionManagementHost;
     readonly selectContentWorkspace: (event: IpcMainInvokeEvent) => Promise<string | undefined>;
     readonly selectWorkspaceGrant: (
       event: IpcMainInvokeEvent,
@@ -74,6 +77,11 @@ export function registerDesktopIpc(
   if (options.dshRuntime) {
     ipcMain.handle(DSH_RUNTIME_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
       options.dshRuntime?.execute(requireSender(event), payload),
+    );
+  }
+  if (options.dshExtensions) {
+    ipcMain.handle(AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+      options.dshExtensions?.execute(requireSender(event), payload),
     );
   }
   ipcMain.handle(CHARACTER_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
@@ -512,6 +520,7 @@ export function registerDesktopIpc(
       ...(options.dshPermissions ? [DSH_PERMISSION_HOST_CHANNEL] : []),
       ...(options.dshRuntime ? [DSH_RUNTIME_HOST_CHANNEL] : []),
       ...(options.dshSessions ? [DSH_SESSION_HOST_CHANNEL] : []),
+      ...(options.dshExtensions ? [AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL] : []),
     ]) {
       ipcMain.removeHandler(channel);
     }

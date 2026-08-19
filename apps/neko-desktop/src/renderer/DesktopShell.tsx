@@ -1175,7 +1175,6 @@ function DesktopSceneWorkbench({
   const [managementSplitRatios, setManagementSplitRatios] = useState<ReadonlyMap<string, number>>(
     () => new Map(),
   );
-  const [extensionDetailOwner, setExtensionDetailOwner] = useState<string>();
   const [portalTargets, setPortalTargets] = useState<ReadonlyMap<string, HTMLDivElement>>(
     () => new Map(),
   );
@@ -1484,26 +1483,8 @@ function DesktopSceneWorkbench({
   const managementSplitRatio =
     managementSplitRatios.get(activeWorkbench.workbenchInstanceId) ??
     MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO;
-  const extensionSceneOwner =
-    scene.context.kind === 'extensions'
-      ? `${activeWorkbench.workbenchInstanceId}:${scene.sceneId}`
-      : undefined;
-  const extensionDetailVisible =
-    extensionSceneOwner !== undefined &&
-    extensionDetailOwner === extensionSceneOwner &&
-    scene.slots.secondaryMain?.kind === 'extension-detail';
-  const onExtensionDetailVisibilityChange = useCallback(
-    (visible: boolean) => {
-      if (!extensionSceneOwner) return;
-      setExtensionDetailOwner((current) => {
-        if (visible) return extensionSceneOwner;
-        return current === extensionSceneOwner ? undefined : current;
-      });
-    },
-    [extensionSceneOwner],
-  );
   const mainSplit =
-    assetPreviewVisible || characterDetailVisible || worldDetailVisible || extensionDetailVisible
+    assetPreviewVisible || characterDetailVisible || worldDetailVisible
       ? ('columns' as const)
       : workspaceScene
         ? (activeWorkbench.layout.main.split?.axis ?? 'none')
@@ -1512,10 +1493,9 @@ function DesktopSceneWorkbench({
     assetPreviewVisible ||
     characterDetailVisible ||
     worldDetailVisible ||
-    extensionDetailVisible ||
     Boolean(workspaceScene && activeWorkbench.layout.main.groups[1]);
   const mainSplitResize: ControlledWorkbenchResizeBinding | undefined =
-    assetPreviewVisible || characterDetailVisible || worldDetailVisible || extensionDetailVisible
+    assetPreviewVisible || characterDetailVisible || worldDetailVisible
       ? createManagementMainSplitResizeBinding({
           label: t('workspace.resizeMainSplit'),
           onResizeEnd: (ratio) => {
@@ -1691,8 +1671,7 @@ function DesktopSceneWorkbench({
         mainSplitRatio={
           assetPreviewVisible ||
           characterDetailVisible ||
-          worldDetailVisible ||
-          extensionDetailVisible
+          worldDetailVisible
             ? managementSplitRatio
             : activeWorkbench.layout.main.split?.ratio
         }
@@ -1737,9 +1716,7 @@ function DesktopSceneWorkbench({
           actions={actions}
           characterManagement={characterManagement}
           composition={activeWorkbench}
-          extensionDetailVisible={extensionDetailVisible}
           interactive={interactive}
-          onExtensionDetailVisibilityChange={onExtensionDetailVisibilityChange}
           portalTargets={portalTargets}
           projection={projection}
           roomWorkbench={roomWorkbench}
@@ -1796,9 +1773,7 @@ function DesktopWorkbenchRuntimePortals({
   actions,
   characterManagement,
   composition,
-  extensionDetailVisible,
   interactive,
-  onExtensionDetailVisibilityChange,
   portalTargets,
   projection,
   roomWorkbench,
@@ -1810,9 +1785,7 @@ function DesktopWorkbenchRuntimePortals({
   readonly actions: ShellActions;
   readonly characterManagement: CharacterManagementRuntime;
   readonly composition: DesktopWindowCompositionProjection;
-  readonly extensionDetailVisible: boolean;
   readonly interactive: boolean;
-  readonly onExtensionDetailVisibilityChange: (visible: boolean) => void;
   readonly portalTargets: ReadonlyMap<string, HTMLDivElement>;
   readonly projection: DesktopShellProjection;
   readonly roomWorkbench: ReturnType<typeof useCharacterRoomWorkbenchRuntime>;
@@ -1894,12 +1867,6 @@ function DesktopWorkbenchRuntimePortals({
     typeof assetPreviewSession === 'string' && assetCenter.projection ? (
       <DesktopAssetCenterMainSurface projection={assetCenter.projection} />
     ) : undefined;
-  const extensionDetailTarget =
-    scene.context.kind === 'extensions' && scene.slots.secondaryMain?.kind === 'extension-detail'
-      ? portalTargets.get(
-          createDesktopWorkbenchPortalTargetKey(composition.workbenchInstanceId, 'secondaryMain'),
-        )
-      : undefined;
   const mainContent =
     settingsSection !== undefined ? (
       <DesktopSettingsMainSurface section={settingsSection} />
@@ -1910,10 +1877,7 @@ function DesktopWorkbenchRuntimePortals({
     ) : scene.context.kind === 'extensions' ? (
       extensionManagement ? (
         <DesktopExtensionManagementSurface
-          detailLabel={t('home.capabilities.overview')}
-          detailTarget={extensionDetailTarget}
           interactive={interactive}
-          onDetailVisibilityChange={onExtensionDetailVisibilityChange}
           runtime={extensionManagement}
         />
       ) : null
@@ -2011,7 +1975,7 @@ function DesktopWorkbenchRuntimePortals({
         label={t('home.capabilities')}
         panelId="extension-management"
         role="management"
-        size={extensionDetailVisible ? 'compact' : 'full'}
+        size="full"
       >
         {mainContent}
       </StaticWorkbenchMainPanelSurface>

@@ -369,6 +369,7 @@ function createClient(
     readInputCatalog: async () => unsupported(),
     executeCommand: async () => unsupported(),
     invokeSkill: async () => unsupported(),
+    readExtensions: async () => unsupported(),
     readInbox: async () => unsupported(),
     replaceInboxMessage: async () => unsupported(),
     removeInboxMessage: async () => unsupported(),

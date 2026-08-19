@@ -12,7 +12,6 @@ import { desktopTextEditorScenario } from '../../packages/text-editor/webview/fu
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
 import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
-import { desktopExtensionLocalizationScenario } from './desktop-extension-localization.mjs';
 import { domainManagementWorkbenchScenario } from './domain-management-workbench.mjs';
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import { projectContentScenario } from './project-content.mjs';
@@ -37,7 +36,6 @@ const scenarios = new Map(
     desktopAgentProviderUiScenario,
     desktopAgentDiagnosticPortalScenario,
     desktopInvalidWindowConvergenceScenario,
-    desktopExtensionLocalizationScenario,
     domainManagementWorkbenchScenario,
     desktopAgentEntryWorkspaceSkillScenario,
     desktopAgentLinkedMediaMentionScenario,

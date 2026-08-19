@@ -13,6 +13,97 @@ export const DSH_ACP_EXTENSION_METHODS = {
   cancelDomainTool: 'openneko/domain-tool/cancel',
 } as const;
 
+export interface DshAcpExtensionSkill {
+  readonly name: string;
+  readonly description: string;
+  readonly source: string;
+  readonly provider: string;
+  readonly userInvocable: boolean;
+  readonly modelInvocable: boolean;
+}
+
+export interface DshAcpExtensionMcp {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly status: 'ready' | 'unsupported' | 'error';
+  readonly diagnosticCode: string;
+}
+
+export interface DshAcpExtensionProjection {
+  readonly skills: readonly DshAcpExtensionSkill[];
+  readonly mcp: readonly DshAcpExtensionMcp[];
+  readonly diagnostics: readonly {
+    readonly code: 'skill_catalog_incomplete' | 'mcp_management_unsupported';
+    readonly count: number;
+  }[];
+}
+
+export function decodeDshAcpExtensionProjection(
+  input: Record<string, unknown>,
+): DshAcpExtensionProjection {
+  decodeDshAcpJsonPayload(input, 'extension projection');
+  requireExactKeys(input, ['skills', 'mcp', 'diagnostics'], 'extension projection');
+  if (
+    !Array.isArray(input.skills) ||
+    !Array.isArray(input.mcp) ||
+    !Array.isArray(input.diagnostics)
+  ) {
+    throw new Error('DSH ACP extension projection arrays are invalid.');
+  }
+  const skills = input.skills.map((value, index) => {
+    const skill = requireRecord(value, `extensions.skills[${index}]`);
+    requireExactKeys(
+      skill,
+      ['name', 'description', 'source', 'provider', 'userInvocable', 'modelInvocable'],
+      `extensions.skills[${index}]`,
+    );
+    return {
+      name: requireNonEmptyString(skill.name, 'Skill name'),
+      description: requireString(skill.description, 'Skill description'),
+      source: requireNonEmptyString(skill.source, 'Skill source'),
+      provider: requireNonEmptyString(skill.provider, 'Skill provider'),
+      userInvocable: requireBoolean(skill.userInvocable, 'Skill userInvocable'),
+      modelInvocable: requireBoolean(skill.modelInvocable, 'Skill modelInvocable'),
+    };
+  });
+  const mcp: DshAcpExtensionMcp[] = input.mcp.map((value, index) => {
+    const item = requireRecord(value, `extensions.mcp[${index}]`);
+    requireExactKeys(
+      item,
+      ['id', 'name', 'description', 'status', 'diagnosticCode'],
+      `extensions.mcp[${index}]`,
+    );
+    if (item.status !== 'ready' && item.status !== 'unsupported' && item.status !== 'error') {
+      throw new Error('DSH ACP MCP status is invalid.');
+    }
+    return {
+      id: requireNonEmptyString(item.id, 'MCP id'),
+      name: requireNonEmptyString(item.name, 'MCP name'),
+      description: requireString(item.description, 'MCP description'),
+      status: item.status,
+      diagnosticCode: requireString(item.diagnosticCode, 'MCP diagnostic code'),
+    };
+  });
+  const diagnostics: DshAcpExtensionProjection['diagnostics'][number][] = input.diagnostics.map(
+    (value, index) => {
+      const diagnostic = requireRecord(value, `extensions.diagnostics[${index}]`);
+      requireExactKeys(diagnostic, ['code', 'count'], `extensions.diagnostics[${index}]`);
+      if (
+        diagnostic.code !== 'skill_catalog_incomplete' &&
+        diagnostic.code !== 'mcp_management_unsupported'
+      ) {
+        throw new Error('DSH ACP extension diagnostic code is invalid.');
+      }
+      return {
+        code: diagnostic.code,
+        count: requirePositiveInteger(diagnostic.count, 'extension diagnostic count'),
+      };
+    },
+  );
+  return { skills, mcp, diagnostics };
+}
+
 export const DSH_ACP_EXTENSION_NOTIFICATIONS = {
   sessionEvent: 'openneko/session/event',
 } as const;
@@ -489,6 +580,11 @@ function requireExactKeys(
 
 function requireString(input: unknown, field: string): string {
   if (typeof input !== 'string') throw new Error(`DSH ACP ${field} must be a string.`);
+  return input;
+}
+
+function requireBoolean(input: unknown, field: string): boolean {
+  if (typeof input !== 'boolean') throw new Error(`DSH ACP ${field} must be boolean.`);
   return input;
 }
 

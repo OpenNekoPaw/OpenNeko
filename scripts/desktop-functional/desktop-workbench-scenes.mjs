@@ -260,24 +260,18 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       const extensionsListScreenshot = await screenshot('extension-management-skills-list-large');
       checkpoint('extension-management-skills-list-large', extensionsList);
 
-      await click('[data-extension-catalog-tab="extensions"]');
-      await click(
-        '.agent-extension-management-root .agent-extension-catalog-row .management-surface-row__select',
-      );
-      await waitForSelector('[data-workbench-main-panel="extension-detail"]');
-      await waitForSelector('[data-automation-endpoint-management="true"]');
-      await waitForSelector('[data-automation-permission-management="true"]');
-      const extensionsConfiguration = await inspectExtensionsManagement(evaluate);
-      assertExtensionsManagement(extensionsConfiguration, 'list', 'extensions');
+      await click('[data-extension-catalog-tab="mcp"]');
+      const extensionsMcp = await inspectExtensionsManagement(evaluate);
+      assertExtensionsCatalogOnly(extensionsMcp, 'list', 'mcp');
       const extensionsResize = await exerciseManagementMainSplit(evaluate, drag);
-      const extensionsScreenshot = await screenshot('extension-management-configuration-large');
+      const extensionsScreenshot = await screenshot('extension-management-mcp-list-large');
       const extensions = {
         grid: extensionsGrid,
         list: extensionsList,
-        configuration: extensionsConfiguration,
+        mcp: extensionsMcp,
         resize: extensionsResize,
       };
-      checkpoint('extension-management-configuration-large', extensions);
+      checkpoint('extension-management-mcp-list-large', extensions);
 
       await clickApplicationNavigation(evaluate, click, 3);
       await waitForSelector('.project-management-catalog');
@@ -5962,23 +5956,12 @@ async function inspectExtensionsManagement(evaluate) {
   const workbench = await inspectWorkbench(evaluate, 'management', 'extension-management');
   const catalog = await evaluate(`(() => {
     const root = document.querySelector('.agent-extension-management-root');
-    const secondary = document.querySelector('${ACTIVE_WORKBENCH_SECONDARY_MAIN_TARGET_SELECTOR}');
     return {
       view: root?.getAttribute('data-catalog-view'),
       activeTab: root
         ?.querySelector('[data-extension-catalog-tab][aria-pressed="true"]')
         ?.getAttribute('data-extension-catalog-tab'),
-      selectedCount:
-        root?.querySelectorAll('.agent-extension-catalog-row[data-selected="true"]').length ?? 0,
-      configurationKind: secondary
-        ?.querySelector('[data-extension-configuration-kind]')
-        ?.getAttribute('data-extension-configuration-kind'),
-      endpointConfigurationVisible: Boolean(
-        secondary?.querySelector('[data-automation-endpoint-management="true"]'),
-      ),
-      permissionConfigurationVisible: Boolean(
-        secondary?.querySelector('[data-automation-permission-management="true"]'),
-      ),
+      selectedCount: root?.querySelectorAll('.agent-extension-catalog-row[data-selected="true"]').length ?? 0,
     };
   })()`);
   return { ...workbench, ...catalog };
@@ -6110,25 +6093,6 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
   }
 }
 
-function assertExtensionsManagement(detail, view, tab) {
-  assertManagementDetailSplit(detail, 'extension-management', 'extension-detail');
-  if (
-    !detail.compactPanelIds.includes('extension-detail') ||
-    detail.view !== view ||
-    detail.activeTab !== tab ||
-    detail.configurationKind !== tab ||
-    detail.selectedCount !== 1 ||
-    (tab === 'skills' &&
-      (detail.endpointConfigurationVisible || detail.permissionConfigurationVisible)) ||
-    (tab === 'extensions' &&
-      (!detail.endpointConfigurationVisible || !detail.permissionConfigurationVisible))
-  ) {
-    throw new Error(
-      `Extensions management did not preserve its catalog/configuration contract: ${JSON.stringify(detail)}`,
-    );
-  }
-}
-
 function assertExtensionsCatalogOnly(detail, view, tab) {
   assertSingleWorkbench(detail);
   assertManagementMain(detail, 'extension-management');
@@ -6136,10 +6100,7 @@ function assertExtensionsCatalogOnly(detail, view, tab) {
   if (
     detail.view !== view ||
     detail.activeTab !== tab ||
-    detail.selectedCount !== 0 ||
-    detail.configurationKind !== undefined ||
-    detail.endpointConfigurationVisible ||
-    detail.permissionConfigurationVisible
+    detail.selectedCount !== 0
   ) {
     throw new Error(
       `Extensions management reserved configuration without a selection: ${JSON.stringify(detail)}`,

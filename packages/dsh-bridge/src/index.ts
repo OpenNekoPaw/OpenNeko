@@ -22,7 +22,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import { createUserMessage, errorChain } from '@deepseek-ai/dsh-llm';
 import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-session-persistence';
-import { isSkillName, isUserInvocable } from '@deepseek-ai/dsh-skill';
+import { isModelInvocable, isSkillName, isUserInvocable } from '@deepseek-ai/dsh-skill';
 import type {} from '@deepseek-ai/dsh-system-prompt';
 import type {} from '@deepseek-ai/dsh-permission-presets';
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
@@ -476,6 +476,47 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             }
             record.runtimeContext.text = request.text;
             return {};
+          }
+          case DSH_ACP_EXTENSION_METHODS.readExtensions: {
+            if (Object.keys(params).length !== 0) {
+              throw RequestError.invalidParams(
+                undefined,
+                'Extension catalog read does not accept parameters.',
+              );
+            }
+            const snapshot = await ctx.skills.snapshot({ cwd: virtualCwd });
+            return {
+              skills: snapshot.skills.map((skill) => ({
+                name: skill.name,
+                description: skill.description,
+                source: skill.source,
+                provider: skill.provider,
+                userInvocable: isUserInvocable(skill),
+                modelInvocable: isModelInvocable(skill),
+              })),
+              mcp: [
+                {
+                  id: 'browser-use',
+                  name: 'Browser Use',
+                  description:
+                    'Official DSH MCP contribution; upstream management API is unavailable.',
+                  status: 'unsupported',
+                  diagnosticCode: 'dsh-mcp-management-api-unavailable',
+                },
+                {
+                  id: 'computer-use',
+                  name: 'Computer Use',
+                  description:
+                    'Official DSH MCP contribution; upstream management API is unavailable.',
+                  status: 'unsupported',
+                  diagnosticCode: 'dsh-mcp-management-api-unavailable',
+                },
+              ],
+              diagnostics: [
+                ...(snapshot.complete ? [] : [{ code: 'skill_catalog_incomplete', count: 1 }]),
+                { code: 'mcp_management_unsupported', count: 1 },
+              ],
+            };
           }
           case DSH_ACP_EXTENSION_METHODS.readPermissionPresets: {
             const keys = Object.keys(params);

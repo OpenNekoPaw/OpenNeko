@@ -32,7 +32,6 @@ export * from './dsh-permission-host';
 export * from './dsh-runtime-host';
 export * from './dsh-session-host';
 export * from './effective-agent-configuration';
-export * from './extension-catalog';
 export * from './extension-management';
 export * from './extension-management-host';
 export * from './message-attachment';
