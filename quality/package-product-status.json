@@ -4,36 +4,5 @@
     "apps/neko-desktop/src/preload/index.ts",
     "apps/neko-desktop/src/renderer/main.tsx"
   ],
-  "dynamicEdges": [
-    {
-      "kind": "non-literal-runtime-import",
-      "source": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.ts",
-      "targetPackage": "@neko/dsh-bridge",
-      "owner": "Desktop DSH profile materializer",
-      "reason": "The packaged DSH subprocess loads the exact bridge bundle declared by the verified profile rather than through an Electron value import.",
-      "validationPath": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.test.ts",
-      "reviewCondition": "Remove when the product-status graph derives exact packaged DSH profile bundle edges directly.",
-      "expiresOn": "2027-08-19"
-    },
-    {
-      "kind": "non-literal-runtime-import",
-      "source": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.ts",
-      "targetPackage": "@neko/canvas-dsh-plugin",
-      "owner": "Desktop DSH profile materializer",
-      "reason": "The packaged DSH subprocess loads the exact Canvas Tool bundle declared by the verified profile rather than through an Electron value import.",
-      "validationPath": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.test.ts",
-      "reviewCondition": "Remove when the product-status graph derives exact packaged DSH profile bundle edges directly.",
-      "expiresOn": "2027-08-19"
-    },
-    {
-      "kind": "non-literal-runtime-import",
-      "source": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.ts",
-      "targetPackage": "@neko/cut-dsh-plugin",
-      "owner": "Desktop DSH profile materializer",
-      "reason": "The packaged DSH subprocess loads the exact Cut Tool bundle declared by the verified profile rather than through an Electron value import.",
-      "validationPath": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.test.ts",
-      "reviewCondition": "Remove when the product-status graph derives exact packaged DSH profile bundle edges directly.",
-      "expiresOn": "2027-08-19"
-    }
-  ]
+  "dynamicEdges": []
 }

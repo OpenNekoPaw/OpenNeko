@@ -1,0 +1,28 @@
+import type { MessageBundle } from '@neko/ui/i18n';
+
+export const toolCalls = {
+  'toolCalls.executing': '执行中',
+  'toolCalls.completed': '已完成',
+  'toolCalls.failed': '失败',
+  'toolCalls.awaitingApproval': '等待确认',
+  'toolCalls.pendingApprovals': '待审批（{count}）',
+  'toolCalls.approve': '允许',
+  'toolCalls.deny': '拒绝',
+  'toolCalls.tool': '工具',
+  'toolCalls.args': '参数',
+  'toolCalls.success': '成功',
+  'toolCalls.generation.title': '生成任务',
+  'toolCalls.generation.model': '模型',
+  'toolCalls.generation.job': '任务',
+  'toolCalls.generation.prompt': '提示词',
+  'toolCalls.generation.progress': '生成进度',
+  'toolCalls.generation.result': '生成素材',
+  'toolCalls.generation.queued': '等待执行',
+  'toolCalls.generation.submitting': '正在提交',
+  'toolCalls.generation.generating': '正在生成',
+  'toolCalls.generation.saving': '正在保存',
+  'toolCalls.generation.cancelled': '已取消',
+  'toolCalls.generation.boardPending': '已保存到本地，等待写入 Board',
+  'toolCalls.generation.boardSaved': '已保存到本地和 Board',
+  'toolCalls.generation.boardBlocked': '已保存到本地，但未能写入 Board',
+} as const satisfies MessageBundle;

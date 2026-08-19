@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LocalMetadataError } from '@neko/local-metadata';
-import type {
-  AgentConfigurationPolicyProjection,
-  AgentConfigurationRequest,
-} from '@neko/agent-contracts';
 import {
   AgentConversationLifecycleUnavailableError,
   createAgentConversationLifecycleService,
@@ -11,6 +7,7 @@ import {
   projectAgentConversationInitialMessage,
   projectAgentConversationTitle,
 } from './agent-conversation-lifecycle-service';
+import { projectAgentConfigurationPolicy } from './agent-launch-service';
 
 describe('Agent Conversation lifecycle service', () => {
   it('commits Workspace context and the initial turn once before provider execution', async () => {
@@ -649,40 +646,29 @@ function configuration(providerId = 'openai', modelId = 'gpt-5') {
   };
   return {
     request,
-    projection: configurationProjection(request, 'draft-request'),
-  };
-}
-
-function configurationProjection(
-  request: AgentConfigurationRequest,
-  source: 'draft-request' | 'conversation',
-): AgentConfigurationPolicyProjection {
-  const editable = { status: 'editable' as const, owner: 'agent-config' };
-  return {
-    request,
-    fields: {
-      model: {
-        effectiveValue: {
-          modelCatalogEntryId: request.modelCatalogEntryId,
+    projection: projectAgentConfigurationPolicy({
+      models: [
+        {
+          id: request.modelCatalogEntryId,
+          label: 'GPT-5',
           providerId: request.providerId,
           modelId: request.modelId,
+          modelType: 'llm',
+          contextWindow: 128_000,
+          maximumOutputTokens: 16_384,
+          purposeCapabilities: ['agent.main'],
+          availability: { status: 'available' },
         },
-        source,
-        policy: editable,
+      ],
+      request,
+      source: 'draft-request',
+      defaults: {
+        executionMode: 'ask',
+        temperature: 0.7,
+        maximumOutputTokens: 4096,
+        thinkingBudget: 0,
       },
-      executionMode: { effectiveValue: request.executionMode, source, policy: editable },
-      temperature: { effectiveValue: request.temperature ?? 0.7, source, policy: editable },
-      maximumOutputTokens: {
-        effectiveValue: request.maximumOutputTokens ?? 4096,
-        source,
-        policy: editable,
-      },
-      thinkingBudget: {
-        effectiveValue: request.thinkingBudget ?? 0,
-        source,
-        policy: editable,
-      },
-    },
+    }),
   };
 }
 

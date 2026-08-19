@@ -1,0 +1,28 @@
+import type { MessageBundle } from '@neko/ui/i18n';
+
+export const toolCalls = {
+  'toolCalls.executing': 'Executing',
+  'toolCalls.completed': 'Completed',
+  'toolCalls.failed': 'Failed',
+  'toolCalls.awaitingApproval': 'Awaiting approval',
+  'toolCalls.pendingApprovals': 'Approvals ({count})',
+  'toolCalls.approve': 'Approve',
+  'toolCalls.deny': 'Deny',
+  'toolCalls.tool': 'Tool',
+  'toolCalls.args': 'Args',
+  'toolCalls.success': 'Success',
+  'toolCalls.generation.title': 'Generation',
+  'toolCalls.generation.model': 'Model',
+  'toolCalls.generation.job': 'Job',
+  'toolCalls.generation.prompt': 'Prompt',
+  'toolCalls.generation.progress': 'Generation progress',
+  'toolCalls.generation.result': 'Generated media',
+  'toolCalls.generation.queued': 'Queued',
+  'toolCalls.generation.submitting': 'Submitting',
+  'toolCalls.generation.generating': 'Generating',
+  'toolCalls.generation.saving': 'Saving',
+  'toolCalls.generation.cancelled': 'Cancelled',
+  'toolCalls.generation.boardPending': 'Saved locally, waiting for Board delivery',
+  'toolCalls.generation.boardSaved': 'Saved locally and to Board',
+  'toolCalls.generation.boardBlocked': 'Saved locally, but Board delivery failed',
+} as const satisfies MessageBundle;

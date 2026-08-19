@@ -11,6 +11,8 @@ import {
   AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
   parseAutomationPermissionManagementHostRequest,
 } from '@neko/automation-contracts/permission-management';
+import { DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS } from '../shared/automation-target-selection-contract';
+import { DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS } from '../shared/automation-session-control-contract';
 
 const electron = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,
@@ -209,4 +211,114 @@ describe('Desktop Extension Management preload bridge', () => {
     );
   });
 
+  it('routes exact Conversation target selection and exposes only a generic changed event', async () => {
+    const request = {
+      requestId: 'target-selection-1',
+      connection: {
+        applicationInstanceId: 'application-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        viewId: 'view-1',
+        connectionId: 'connection-1',
+      },
+      conversationId: 'conversation-1',
+      route: 'pending.list' as const,
+    };
+    electron.invoke.mockImplementation(async (channel: string) => {
+      expect(channel).toBe(DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.execute);
+      return { requestId: request.requestId, route: request.route, pending: [] };
+    });
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(bridge.automationTargetSelection.execute(request)).resolves.toEqual({
+      requestId: request.requestId,
+      route: request.route,
+      pending: [],
+    });
+    const listener = vi.fn();
+    const unsubscribe = bridge.automationTargetSelection.subscribe(listener);
+    const registration = electron.on.mock.calls.find(
+      ([channel]) => channel === DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.changed,
+    );
+    const handler = registration?.[1] as
+      ((event: Electron.IpcRendererEvent, value: unknown) => void) | undefined;
+    if (!handler) throw new Error('Target selection changed listener was not registered.');
+    handler({} as Electron.IpcRendererEvent, { kind: 'changed' });
+    expect(listener).toHaveBeenCalledOnce();
+    expect(() =>
+      handler({} as Electron.IpcRendererEvent, {
+        kind: 'changed',
+        targetKey: 'must-not-cross-generic-event',
+      }),
+    ).toThrow('unsupported or missing fields');
+    unsubscribe();
+    expect(electron.removeListener).toHaveBeenCalledWith(
+      DESKTOP_AUTOMATION_TARGET_SELECTION_CHANNELS.changed,
+      handler,
+    );
+  });
+
+  it('routes exact Conversation session control and keeps changed events data-free', async () => {
+    const request = {
+      requestId: 'session-control-1',
+      connection: {
+        applicationInstanceId: 'application-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        viewId: 'view-1',
+        connectionId: 'connection-1',
+      },
+      conversationId: 'conversation-1',
+      route: 'session.control' as const,
+      command: {
+        sessionId: 'session-1',
+        owner: {
+          conversationId: 'conversation-1',
+          runId: 'run-1',
+          toolCallId: 'tool-call-1',
+        },
+        action: 'take-over' as const,
+      },
+    };
+    electron.invoke.mockImplementation(async (channel: string) => {
+      expect(channel).toBe(DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.execute);
+      return { requestId: request.requestId, route: request.route, controls: [] };
+    });
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(bridge.automationSessionControl.execute(request)).resolves.toEqual({
+      requestId: request.requestId,
+      route: request.route,
+      controls: [],
+    });
+    const listener = vi.fn();
+    const unsubscribe = bridge.automationSessionControl.subscribe(listener);
+    const registration = electron.on.mock.calls.find(
+      ([channel]) => channel === DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.changed,
+    );
+    const handler = registration?.[1] as
+      ((event: Electron.IpcRendererEvent, value: unknown) => void) | undefined;
+    if (!handler) throw new Error('Session control changed listener was not registered.');
+    handler({} as Electron.IpcRendererEvent, { kind: 'changed' });
+    expect(listener).toHaveBeenCalledOnce();
+    expect(() =>
+      handler({} as Electron.IpcRendererEvent, {
+        kind: 'changed',
+        sessionId: 'must-not-cross-generic-event',
+      }),
+    ).toThrow('unsupported or missing fields');
+    unsubscribe();
+    expect(electron.removeListener).toHaveBeenCalledWith(
+      DESKTOP_AUTOMATION_SESSION_CONTROL_CHANNELS.changed,
+      handler,
+    );
+  });
 });

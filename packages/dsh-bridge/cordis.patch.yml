@@ -1,5 +1,0 @@
-- insert:
-    - id: openneko-acp
-      name: '@neko/dsh-bridge'
-      config:
-        agentPreset: openneko

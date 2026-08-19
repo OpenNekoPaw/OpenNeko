@@ -31,18 +31,32 @@ const RULES = Object.freeze([
     'apps/neko-desktop/src/shared/automation-target-selection-contract',
   ]),
   rule('timeline-projection-authority', 'agent-runtime.stream-delivery', [
-    'packages/agent/runtime/src/acp/dsh-acp-projection',
-    'packages/agent/contracts/src/dsh-session-host',
+    'packages/agent/contracts/src/agent-turn-timeline.ts',
+    'packages/agent/contracts/src/conversation-projection.ts',
+    'packages/agent/runtime/src/pi/timeline-projector.ts',
+    'packages/agent/runtime/src/runtime/projection/',
+    'packages/agent/runtime/src/runtime/index.ts',
+    'packages/agent/runtime/src/runtime/turn/message-runtime.ts',
+    'packages/agent/runtime/src/runtime/turn/multimodal-context-packet.ts',
+    'packages/agent/runtime/src/runtime/turn/timeline-context-runtime.ts',
+    'packages/agent/runtime/src/runtime/__tests__/message-runtime.test.ts',
+    'packages/agent/runtime/src/runtime/__tests__/multimodal-context-packet.test.ts',
+    'packages/agent/runtime/src/runtime/__tests__/timeline-context-runtime.test.ts',
+    'packages/agent/webview/src/presenters/conversation-projection-presenter.ts',
+    'packages/agent/webview/src/presenters/timeline-projection-presenter.ts',
+    'packages/agent/webview/src/render-runtime/',
   ]),
   rule('tool-result-delivery', 'agent-runtime.stream-delivery', [
     'packages/content/src/document/read-document-tool.ts',
     'packages/content/src/document/read-image-tool.ts',
-    'packages/agent/runtime/src/acp/dsh-acp-projection',
-    'packages/agent/runtime/src/runtime/turn/multimodal-context-packet',
-    'apps/neko-desktop/src/main/desktop-dsh-session-host',
+    'packages/agent/runtime/src/pi/event-projector.ts',
+    'apps/neko-desktop/src/main/desktop-agent-bridge-runtime.ts',
   ]),
   rule('resource-display-projection', 'agent-runtime.stream-delivery', [
     'packages/agent/runtime/src/input/message-resource-projector.ts',
+    'packages/agent/webview/src/presenters/resource-display-uri.ts',
+    'packages/agent/webview/src/components/ChatView/MediaPreview/',
+    'packages/agent/runtime/src/runtime/projection/agent-resource-display-projector.ts',
   ]),
   regexRule(
     'portable-skill-content',
@@ -77,36 +91,29 @@ const RULES = Object.freeze([
     'packages/host/src/settings/',
     'packages/ai/sdk/src/',
   ]),
-  rule('creative-media-workflow', 'agent-runtime.creative-media-workflow', [
-    'packages/cut/domain/src/dsh-tool',
-    'packages/cut/dsh-plugin/',
-    'packages/agent/runtime/src/acp/cut-host-adapter',
-    'apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers',
-  ]),
   rule('launch-domain-binding', 'agent-runtime.launch-binding', [
     'packages/agent/contracts/src/agent-draft-submit',
     'packages/agent/contracts/src/character-creation-handoff',
     'packages/agent/contracts/src/agent-interaction-binding',
+    'packages/agent/contracts/src/agent-launch',
     'packages/agent/runtime/src/application/agent-domain-binding-service',
-    'packages/agent/runtime/src/application/conversation-dsh-session-binding',
-    'packages/agent/runtime/src/application/conversation-dsh-session-application',
+    'packages/agent/runtime/src/application/agent-launch-service',
+    'packages/agent/runtime/src/application/agent-launch-submit-service',
+    'apps/neko-desktop/src/main/desktop-agent-launch-runtime',
+    'apps/neko-desktop/src/renderer/desktop-agent-launch-host-runtime-adapter',
+    'packages/agent/webview/src/components/ConversationController',
   ]),
   rule('session-workflows', 'agent-runtime.workflow-controller', [
     'packages/agent/runtime/src/session/',
     'packages/agent/runtime/src/subagent/',
-    'packages/dsh-bridge/',
-    'packages/agent/runtime/src/acp/dsh-acp-application-client',
-    'packages/agent/runtime/src/application/conversation-dsh-session-client',
-    'packages/agent/runtime/src/application/dsh-permission-owner',
-    'apps/neko-desktop/src/main/desktop-dsh-agent-runtime',
-    'apps/neko-desktop/src/main/desktop-dsh-runtime-bootstrap',
-    'apps/neko-desktop/src/main/desktop-dsh-permission-host',
+    'apps/neko-desktop/src/main/desktop-agent-app-host-composition',
+    'apps/neko-desktop/src/main/desktop-agent-controller-composition',
     'apps/neko-desktop/src/renderer/DesktopAgentSurface',
   ]),
   rule('tool-call-lifecycle', 'agent-runtime.workflow-controller', [
     'packages/agent/runtime/src/task/',
     'packages/agent/runtime/src/runtime/continuation',
-    'packages/agent/runtime/src/acp/dsh-acp-application-client',
+    'packages/agent/runtime/src/runtime/session/execution-ownership',
     'packages/agent/contracts/src/agent-message-queue',
     'packages/agent/runtime/src/tools/generation/media-agent-tools',
     'packages/generation/src/media/media-generation-executor',
@@ -116,10 +123,8 @@ const RULES = Object.freeze([
     'packages/generation/src/media/',
   ]),
   rule('desktop-event-projection', 'agent-runtime.stream-delivery', [
-    'packages/agent/contracts/src/dsh-session-host',
-    'packages/agent/contracts/src/dsh-permission-host',
-    'apps/neko-desktop/src/preload/dsh-session-bridge',
-    'apps/neko-desktop/src/preload/dsh-permission-bridge',
+    'apps/neko-desktop/src/preload/desktop-agent-event-cursor',
+    'apps/neko-desktop/src/renderer/desktop-agent-host-runtime-adapter',
   ]),
 ]);
 
@@ -168,24 +173,19 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('packages/skills/skills/') ||
     path.startsWith('packages/agent/runtime/src/') ||
     path.startsWith('packages/agent/contracts/src/') ||
-    path.startsWith('packages/dsh-bridge/') ||
     path.startsWith('packages/automation/') ||
     path.startsWith('packages/ai/sdk/src/') ||
     path.startsWith('apps/neko-desktop/src/main/desktop-agent') ||
-    path.startsWith('apps/neko-desktop/src/main/desktop-dsh-') ||
     path.startsWith('apps/neko-desktop/src/main/desktop-automation-') ||
     path.startsWith('apps/neko-desktop/src/main/desktop-browser-use-') ||
     path.startsWith('apps/neko-desktop/src/main/desktop-cua-driver-') ||
     path.startsWith('apps/neko-desktop/src/preload/desktop-agent') ||
-    path.startsWith('apps/neko-desktop/src/preload/dsh-') ||
     path.startsWith('apps/neko-desktop/src/renderer/DesktopAgent') ||
     path.startsWith('apps/neko-desktop/src/renderer/desktop-agent') ||
     path.startsWith('apps/neko-desktop/src/renderer/desktop-automation-') ||
     path.startsWith('apps/neko-desktop/src/shared/automation-target-selection-contract') ||
     path.startsWith('packages/agent/webview/src/') ||
     path.startsWith('packages/host/src/settings/') ||
-    path.startsWith('packages/cut/domain/src/dsh-tool') ||
-    path.startsWith('packages/cut/dsh-plugin/') ||
     path === 'packages/content/src/document/read-document-tool.ts' ||
     path === 'packages/content/src/document/read-image-tool.ts' ||
     path.startsWith('scripts/agent-eval/')

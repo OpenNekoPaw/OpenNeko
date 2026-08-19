@@ -11,17 +11,21 @@ describe('first-level Webview smoke discovery', () => {
     const webviews = discoverWebviews(repositoryRoot);
 
     assert.deepEqual(webviews.map((webview) => path.relative(repositoryRoot, webview.dir)).sort(), [
+      'packages/agent/webview',
       'packages/assets/webview',
       'packages/canvas/webview',
       'packages/cut/webview',
       'packages/preview/webview',
-      'packages/text-editor/webview',
     ]);
   });
 
-  it('does not classify package-only browser presentation as standalone builds', () => {
+  it('filters by package identity without restoring nested discovery', () => {
     const webviews = discoverWebviews(repositoryRoot, new Set(['@neko/agent-webview']));
 
-    assert.deepEqual(webviews, []);
+    assert.deepEqual(
+      webviews.map((webview) => webview.name),
+      ['@neko/agent-webview'],
+    );
+    assert.equal(webviews[0]?.dir.includes(`${path.sep}packages${path.sep}webview`), false);
   });
 });

@@ -1,0 +1,307 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { cp, lstat, mkdir, readdir, realpath, rename, rm } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+
+import { createNodePiSkillHost, type SkillHostRecord } from './skill-host';
+
+const MAX_SKILL_FILES = 2_000;
+const MAX_SKILL_BYTES = 20_000_000;
+
+export interface PersonalSkillManager {
+  install(
+    windowId: string,
+  ): Promise<
+    { readonly status: 'cancelled' } | { readonly status: 'installed'; readonly name: string }
+  >;
+  remove(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{ readonly name: string }>;
+  openInEditor(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{ readonly name: string }>;
+  showInFolder(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{ readonly name: string }>;
+  projectManagement(
+    records: readonly SkillHostRecord[],
+  ): Promise<readonly PersonalSkillManagementRecord[]>;
+}
+
+export interface PersonalSkillManagementRecord {
+  readonly managementId: string;
+  readonly name: string;
+  readonly fingerprint: string;
+}
+
+export function createPersonalSkillManager(options: {
+  readonly personalSkillRoot: string;
+  readonly selectDirectory: (windowId: string) => Promise<string | undefined>;
+  readonly trashItem: (absolutePath: string) => Promise<void>;
+  readonly openFile: (absolutePath: string) => Promise<void>;
+  readonly revealFile: (absolutePath: string) => void | Promise<void>;
+}): PersonalSkillManager {
+  return new DefaultPersonalSkillManager(options);
+}
+
+class DefaultPersonalSkillManager implements PersonalSkillManager {
+  private readonly personalSkillRoot: string;
+
+  constructor(
+    private readonly options: {
+      readonly personalSkillRoot: string;
+      readonly selectDirectory: (windowId: string) => Promise<string | undefined>;
+      readonly trashItem: (absolutePath: string) => Promise<void>;
+      readonly openFile: (absolutePath: string) => Promise<void>;
+      readonly revealFile: (absolutePath: string) => void | Promise<void>;
+    },
+  ) {
+    if (!isAbsolute(options.personalSkillRoot)) {
+      throw new Error('Personal Skill root must be absolute.');
+    }
+    this.personalSkillRoot = resolve(options.personalSkillRoot);
+  }
+
+  async install(
+    windowId: string,
+  ): Promise<
+    { readonly status: 'cancelled' } | { readonly status: 'installed'; readonly name: string }
+  > {
+    if (windowId.trim().length === 0) throw new Error('Desktop Window id is required.');
+    const selected = await this.options.selectDirectory(windowId);
+    if (selected === undefined) return { status: 'cancelled' };
+    if (!isAbsolute(selected)) throw new Error('Selected Skill directory must be absolute.');
+    const sourceRoot = await requireContainedDirectory(selected);
+    await mkdir(dirname(this.personalSkillRoot), { recursive: true });
+    const stagingRoot = join(
+      dirname(this.personalSkillRoot),
+      `.openneko-skill-staging-${randomUUID()}`,
+    );
+    const stagedPackage = join(stagingRoot, basename(sourceRoot));
+    try {
+      await mkdir(stagingRoot, { recursive: false });
+      await cp(sourceRoot, stagedPackage, {
+        recursive: true,
+        force: false,
+        errorOnExist: true,
+        preserveTimestamps: true,
+      });
+      await validatePackageTree(stagedPackage);
+      const snapshot = await createNodePiSkillHost({
+        cwd: stagingRoot,
+        policy: {
+          isTrusted: () => true,
+          isEnabled: () => true,
+        },
+      }).discover([{ path: stagingRoot, source: { kind: 'personal' } }]);
+      if (
+        snapshot.records.length !== 1 ||
+        snapshot.diagnostics.length > 0 ||
+        snapshot.warnings.length > 0
+      ) {
+        throw new Error('Selected directory must contain exactly one valid Skill package.');
+      }
+      const record = snapshot.records[0];
+      if (!record || !isSafeSkillDirectoryName(record.name)) {
+        throw new Error('Selected Skill has an invalid package name.');
+      }
+      await mkdir(this.personalSkillRoot, { recursive: true });
+      const canonicalPersonalRoot = await requireRegularDirectory(this.personalSkillRoot);
+      const target = join(canonicalPersonalRoot, record.name);
+      try {
+        await lstat(target);
+        throw new Error(`Personal Skill '${record.name}' is already installed.`);
+      } catch (error) {
+        if (!isMissingFileError(error)) throw error;
+      }
+      await rename(stagedPackage, target);
+      return { status: 'installed', name: record.name };
+    } finally {
+      await rm(stagingRoot, { recursive: true, force: true });
+    }
+  }
+
+  async remove(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{ readonly name: string }> {
+    const resolved = await this.resolveCurrentManagedSkill(managementId, records);
+    await this.options.trashItem(resolved.skillRoot);
+    return { name: resolved.record.name };
+  }
+
+  async openInEditor(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{ readonly name: string }> {
+    const resolved = await this.resolveCurrentManagedSkill(managementId, records);
+    await this.options.openFile(resolved.skillFile);
+    return { name: resolved.record.name };
+  }
+
+  async showInFolder(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{ readonly name: string }> {
+    const resolved = await this.resolveCurrentManagedSkill(managementId, records);
+    await this.options.revealFile(resolved.skillFile);
+    return { name: resolved.record.name };
+  }
+
+  private async resolveCurrentManagedSkill(
+    managementId: string,
+    records: readonly PersonalSkillManagementRecord[],
+  ): Promise<{
+    readonly record: PersonalSkillManagementRecord;
+    readonly skillRoot: string;
+    readonly skillFile: string;
+  }> {
+    requireManagementId(managementId);
+    const candidates = records.filter((record) => record.managementId === managementId);
+    if (candidates.length !== 1) {
+      throw new Error('Personal Skill management identity is stale or unknown.');
+    }
+    const record = candidates[0];
+    if (!record) throw new Error('Personal Skill management identity is stale or unknown.');
+    const skillRoot = await this.resolveManagedDirectory(record.name);
+    if (!skillRoot) throw new Error('Personal Skill package is unavailable.');
+    const current = await createNodePiSkillHost({
+      cwd: this.personalSkillRoot,
+      policy: { isTrusted: () => true, isEnabled: () => true },
+    }).discover([{ path: this.personalSkillRoot, source: { kind: 'personal' } }]);
+    const currentRecord = current.records.find((candidate) => candidate.name === record.name);
+    if (!currentRecord || currentRecord.fingerprint !== record.fingerprint) {
+      throw new Error('Personal Skill management identity is stale or unknown.');
+    }
+    const configuredSkillFile = join(skillRoot, 'SKILL.md');
+    const [skillFile, skillFileInfo] = await Promise.all([
+      realpath(configuredSkillFile),
+      lstat(configuredSkillFile),
+    ]);
+    if (
+      !skillFileInfo.isFile() ||
+      skillFileInfo.isSymbolicLink() ||
+      !isInside(skillRoot, skillFile)
+    ) {
+      throw new Error('Personal Skill file is unavailable.');
+    }
+    return { record, skillRoot, skillFile };
+  }
+
+  async projectManagement(
+    records: readonly SkillHostRecord[],
+  ): Promise<readonly PersonalSkillManagementRecord[]> {
+    const projected: PersonalSkillManagementRecord[] = [];
+    for (const record of records) {
+      if (record.source.kind !== 'personal') continue;
+      if (!(await this.resolveManagedDirectory(record.name))) continue;
+      projected.push(
+        Object.freeze({
+          managementId: createPersonalSkillManagementId(record),
+          name: record.name,
+          fingerprint: record.fingerprint,
+        }),
+      );
+    }
+    return Object.freeze(projected);
+  }
+
+  private async resolveManagedDirectory(name: string): Promise<string | undefined> {
+    if (!isSafeSkillDirectoryName(name)) return undefined;
+    const configured = join(this.personalSkillRoot, name);
+    try {
+      const [canonicalRoot, canonicalTarget, info, rootInfo] = await Promise.all([
+        realpath(this.personalSkillRoot),
+        realpath(configured),
+        lstat(configured),
+        lstat(this.personalSkillRoot),
+      ]);
+      if (
+        rootInfo.isSymbolicLink() ||
+        !rootInfo.isDirectory() ||
+        !isInside(canonicalRoot, canonicalTarget) ||
+        !info.isDirectory() ||
+        info.isSymbolicLink()
+      ) {
+        return undefined;
+      }
+      return canonicalTarget;
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+export function createPersonalSkillManagementId(
+  record: Pick<SkillHostRecord, 'name' | 'fingerprint' | 'source'>,
+): string {
+  if (record.source.kind !== 'personal') {
+    throw new Error('Only personal Skills have a management identity.');
+  }
+  return `skill:${createHash('sha256')
+    .update(`${record.name}\0${record.fingerprint}`)
+    .digest('hex')}`;
+}
+
+async function requireContainedDirectory(path: string): Promise<string> {
+  const [canonical, info] = await Promise.all([realpath(path), lstat(path)]);
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error('Selected Skill package must be a regular directory.');
+  }
+  return canonical;
+}
+
+async function requireRegularDirectory(path: string): Promise<string> {
+  const [canonical, info] = await Promise.all([realpath(path), lstat(path)]);
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error('Personal Skill root must be a regular directory.');
+  }
+  return canonical;
+}
+
+async function validatePackageTree(root: string): Promise<void> {
+  let fileCount = 0;
+  let totalBytes = 0;
+  const pending = [root];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current) continue;
+    const entries = await readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const path = join(current, entry.name);
+      const info = await lstat(path);
+      if (info.isSymbolicLink()) throw new Error('Skill packages cannot contain symbolic links.');
+      if (info.isDirectory()) {
+        pending.push(path);
+        continue;
+      }
+      if (!info.isFile()) throw new Error('Skill packages can contain only files and directories.');
+      fileCount += 1;
+      totalBytes += info.size;
+      if (fileCount > MAX_SKILL_FILES || totalBytes > MAX_SKILL_BYTES) {
+        throw new Error('Skill package exceeds the supported size limit.');
+      }
+    }
+  }
+}
+
+function requireManagementId(value: string): void {
+  if (!/^skill:[0-9a-f]{64}$/u.test(value)) {
+    throw new Error('Personal Skill management identity is invalid.');
+  }
+}
+
+function isSafeSkillDirectoryName(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(value) && value !== '.' && value !== '..';
+}
+
+function isInside(root: string, target: string): boolean {
+  const fromRoot = relative(resolve(root), resolve(target));
+  return fromRoot !== '' && !fromRoot.startsWith('..') && !isAbsolute(fromRoot);
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}

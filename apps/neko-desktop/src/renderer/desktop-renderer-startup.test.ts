@@ -4,36 +4,46 @@ import type { DesktopBootstrapProjection } from '../shared/bridge-contract';
 import { initializeDesktopRendererBridge } from './desktop-renderer-startup';
 
 describe('Desktop renderer startup', () => {
-  it('waits for bootstrap and settings before exposing settings to React', async () => {
+  it('waits for bootstrap, settings, and the Agent module before exposing settings to React', async () => {
     const started: string[] = [];
     const bootstrap = deferred<DesktopBootstrapProjection>();
     const settings = deferred<DesktopApplicationSettingsProjection>();
-    const result = initializeDesktopRendererBridge({
-      bootstrap: {
-        get: vi.fn(() => {
-          started.push('bootstrap');
-          return bootstrap.promise;
+    const agentModule = deferred<unknown>();
+    const result = initializeDesktopRendererBridge(
+      {
+        bootstrap: {
+          get: vi.fn(() => {
+            started.push('bootstrap');
+            return bootstrap.promise;
+          }),
+        },
+        settings: {
+          get: vi.fn(() => {
+            started.push('settings');
+            return settings.promise;
+          }),
+        },
+      },
+      {
+        preloadAgentModule: vi.fn(() => {
+          started.push('agent-module');
+          return agentModule.promise;
         }),
       },
-      settings: {
-        get: vi.fn(() => {
-          started.push('settings');
-          return settings.promise;
-        }),
-      },
-    });
+    );
     let settled = false;
     void result.then(() => {
       settled = true;
     });
 
-    expect(started).toEqual(['bootstrap', 'settings']);
+    expect(started).toEqual(['bootstrap', 'settings', 'agent-module']);
 
     settings.resolve(createSettings());
+    bootstrap.resolve(createBootstrap());
     await Promise.resolve();
     expect(settled).toBe(false);
 
-    bootstrap.resolve(createBootstrap());
+    agentModule.resolve({});
     await expect(result).resolves.toEqual(createSettings());
   });
 });

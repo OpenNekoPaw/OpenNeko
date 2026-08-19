@@ -9,7 +9,9 @@
     "fixedRoots": ["packages/skills/skills", ".agents/skills", "~/.agents/skills"],
     "evidence": [
       "packages/skills/README.md",
-      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
+      "packages/agent/runtime/src/pi/skill-host.ts",
+      "packages/agent/runtime/src/workspace/agent-skill-layout.ts",
+      "packages/agent/runtime/src/pi/__tests__/builtin-skills.test.ts"
     ]
   },
   "skillAuthoringMetadata": {
@@ -21,19 +23,20 @@
     },
     "evidence": [
       "packages/agent/contracts/src/portable-skill.ts",
-      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
+      "packages/agent/runtime/src/pi/skill-package-creation-service.ts",
+      "packages/agent/runtime/src/pi/skill-host.ts"
     ]
   },
   "compositionPackage": {
-    "classification": "official-dsh-profile",
+    "classification": "portable-plugin-subset",
     "manifest": "plugin.json",
-    "requiredOnlyFor": "dsh-extension-composition",
+    "requiredOnlyFor": "shared-install-lifecycle",
     "skillContributionOptional": true,
     "mcpContributionOptional": true,
     "appContributionStatus": "unsupported",
     "evidence": [
-      "packages/dsh-bridge/cordis.patch.yml",
-      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
+      "packages/agent/runtime/src/extensions/extension-manager.ts",
+      "packages/agent/runtime/src/extensions/plugin-runtime.ts"
     ]
   },
   "pluginState": {
@@ -43,48 +46,43 @@
     "evidence": [
       "packages/local-metadata/src/plugin-state.ts",
       "packages/local-metadata/src/sqlite/plugin-state-schema.ts",
-      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
+      "packages/agent/runtime/src/extensions/extension-manager.ts"
     ]
   },
   "extensionManagement": {
-    "classification": "dsh-projection-only",
+    "classification": "management-only",
     "runtimeContributionAuthority": false,
     "evidence": [
       "packages/agent/contracts/src/extension-management.ts",
-      "packages/agent/contracts/src/dsh-acp.ts"
+      "packages/agent/runtime/src/extensions/extension-manager.ts"
     ]
   },
   "mcp": {
     "standard": "Model Context Protocol",
-    "classification": "dsh-owned",
-    "supportedCapability": "dsh-profile",
+    "classification": "partial-optional-adapter",
+    "supportedCapability": "tools",
     "supportedTransports": ["stdio", "streamable-http-https"],
     "skillDiscoveryDependency": false,
     "skillCreationDependency": false,
     "hostCapabilityDependency": false,
     "connectionFailureIsolation": "contribution",
     "evidence": [
-      "packages/dsh-bridge/cordis.patch.yml",
-      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
+      "packages/agent/runtime/src/mcp/mcp-client.ts",
+      "packages/agent/runtime/src/extensions/plugin-runtime.ts"
     ]
   },
   "hostCapability": {
-    "classification": "host-domain-tool-adapter",
+    "classification": "internal-executable-composition",
     "mcpRequired": false,
-    "runtimeAuthority": "owning-domain-application-service",
+    "runtimeAuthority": "package-owned-capability-provider",
     "evidence": [
       "packages/agent/contracts/src/capability.ts",
-      "packages/agent/contracts/src/dsh-acp.ts",
-      "packages/dsh-bridge/src/index.ts",
-      "packages/generation/dsh-plugin/src/index.ts",
-      "packages/canvas/dsh-plugin/src/index.ts",
-      "packages/cut/dsh-plugin/src/index.ts",
-      "openspec/changes/replace-pi-with-dsh-runtime-atomically/evidence/w2-domain-tool-slice-freeze.md"
+      "packages/agent/runtime/src/pi/capability-tool-bridge.ts"
     ]
   },
   "standardsSupport": {
-    "agentSkills": "dsh-owned",
-    "agentPlugins": "official-first-party-only",
-    "mcp": "dsh-owned"
+    "agentSkills": "core-supported",
+    "agentPlugins": "not-conformant-host-extension-only",
+    "mcp": "partial-tools-client"
   }
 }

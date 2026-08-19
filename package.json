@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "build": "pnpm --recursive --if-present --sort run build",
-    "build:ui": "pnpm --filter @neko/cut-webview --filter @neko/preview-webview --filter @neko/canvas-webview run build",
+    "build:ui": "pnpm --filter @neko/cut-webview --filter @neko/preview-webview --filter @neko/agent-webview --filter @neko/canvas-webview run build",
     "typecheck": "pnpm --recursive --if-present --sort run typecheck",
     "typecheck:desktop": "pnpm --dir apps/neko-desktop run typecheck",
     "validate:media-matrix": "tsx scripts/validate-node-media-matrix.mts",
@@ -45,7 +45,7 @@
     "check:content-access-boundaries": "node scripts/check-content-access-boundaries.mjs",
     "check:application-boundaries": "node scripts/check-application-boundaries.mjs --self-test && node scripts/check-application-boundaries.mjs",
     "check:product-brand": "node scripts/check-product-brand.mjs",
-    "check:agent-boundaries": "node --test scripts/check-agent-extension-surface.test.mjs scripts/check-neko-agent-boundaries.test.mjs && tsx --test scripts/check-agent-tool-inventory.test.mts && node scripts/check-agent-extension-surface.mjs && node scripts/check-neko-agent-boundaries.mjs",
+    "check:agent-boundaries": "node --test scripts/check-agent-extension-surface.test.mjs && node scripts/check-agent-extension-surface.mjs && node scripts/check-neko-agent-boundaries.mjs",
     "check:canvas-playback-boundary": "node scripts/check-canvas-playback-boundary.mjs",
     "check:engine-retirement-boundary": "node scripts/check-engine-retirement-boundary.mjs",
     "check:automation-runtime-inputs": "node scripts/automation-runtime-release-inputs.mjs",
@@ -98,14 +98,12 @@
     "@img/sharp-wasm32": "^0.34.5"
   },
   "devDependencies": {
+    "@earendil-works/pi-agent-core": "^0.80.7",
     "@eslint/js": "^9.39.4",
     "@fission-ai/openspec": "1.3.1",
-    "@neko/canvas-domain": "workspace:*",
     "@neko/chara": "workspace:*",
     "@neko/chara-node": "workspace:*",
-    "@neko/cut-domain": "workspace:*",
     "@neko/entity-domain": "workspace:*",
-    "@neko/generation": "workspace:*",
     "@neko/local-metadata": "workspace:*",
     "@neko/media": "workspace:*",
     "@zip.js/zip.js": "^2.8.26",

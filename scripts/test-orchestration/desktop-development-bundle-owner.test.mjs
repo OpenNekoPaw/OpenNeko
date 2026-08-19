@@ -107,11 +107,8 @@ describe('Desktop development bundle ownership', () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'openneko-development-owner-launch-'));
     try {
       const appRoot = join(fixtureRoot, 'app');
-      const runtimeRoot = join(fixtureRoot, 'runtime');
-      await Promise.all([mkdir(appRoot), mkdir(runtimeRoot)]);
-      const canonicalAppRoot = await realpath(appRoot);
+      await mkdir(appRoot);
       const calls = [];
-      let prepareCount = 0;
       const result = runDesktopDevelopment({
         appRoot,
         temporaryDirectory: fixtureRoot,
@@ -119,12 +116,6 @@ describe('Desktop development bundle ownership', () => {
         argv: ['--openneko-functional-fixture'],
         pid: 505,
         token: 'owner-launch',
-        environment: { OPENNEKO_TEST_ENV: 'preserved' },
-        prepareRuntime({ appRoot: preparedAppRoot }) {
-          prepareCount += 1;
-          assert.equal(preparedAppRoot, canonicalAppRoot);
-          return runtimeRoot;
-        },
         spawnProcess(command, args, options) {
           calls.push({ command, args, options });
           const child = new EventEmitter();
@@ -134,7 +125,6 @@ describe('Desktop development bundle ownership', () => {
       });
 
       assert.equal(await result, 7);
-      assert.equal(prepareCount, 1);
       assert.equal(calls.length, 1);
       assert.equal(calls[0].command, 'pnpm');
       assert.deepEqual(calls[0].args, [
@@ -146,86 +136,9 @@ describe('Desktop development bundle ownership', () => {
       ]);
       assert.equal(calls[0].options.cwd, await realpath(resolve(appRoot)));
       assert.equal(calls[0].options.stdio, 'inherit');
-      assert.equal(calls[0].options.env.OPENNEKO_TEST_ENV, 'preserved');
-      assert.equal(calls[0].options.env.NEKO_DSH_RUNTIME_ROOT, await realpath(runtimeRoot));
       await assert.rejects(() => stat(resolveDesktopDevelopmentOwnerPath(appRoot, fixtureRoot)), {
         code: 'ENOENT',
       });
-    } finally {
-      await rm(fixtureRoot, { recursive: true, force: true });
-    }
-  });
-
-  it('qualifies an explicit runtime and never replaces invalid explicit configuration', async () => {
-    const fixtureRoot = await mkdtemp(join(tmpdir(), 'openneko-development-runtime-explicit-'));
-    try {
-      const appRoot = join(fixtureRoot, 'app');
-      const runtimeRoot = join(fixtureRoot, 'runtime');
-      await Promise.all([mkdir(appRoot), mkdir(runtimeRoot)]);
-      const canonicalRuntimeRoot = await realpath(runtimeRoot);
-      const launches = [];
-      let prepareCount = 0;
-      let qualifyCount = 0;
-      const spawnProcess = (_command, _args, options) => {
-        launches.push(options);
-        const child = new EventEmitter();
-        void Promise.resolve().then(() => child.emit('exit', 0, null));
-        return child;
-      };
-
-      assert.equal(
-        await runDesktopDevelopment({
-          appRoot,
-          temporaryDirectory: fixtureRoot,
-          pid: 506,
-          token: 'owner-explicit-valid',
-          environment: { NEKO_DSH_RUNTIME_ROOT: runtimeRoot },
-          prepareRuntime() {
-            prepareCount += 1;
-            return runtimeRoot;
-          },
-          qualifyRuntime(root) {
-            qualifyCount += 1;
-            assert.equal(root, canonicalRuntimeRoot);
-          },
-          spawnProcess,
-        }),
-        0,
-      );
-      assert.equal(prepareCount, 0);
-      assert.equal(qualifyCount, 1);
-      assert.equal(launches[0].env.NEKO_DSH_RUNTIME_ROOT, await realpath(runtimeRoot));
-
-      for (const [configured, qualifyRuntime, message] of [
-        ['relative/runtime', () => undefined, /must be absolute/u],
-        [
-          runtimeRoot,
-          () => {
-            throw new Error('runtime closure is damaged');
-          },
-          /closure is damaged/u,
-        ],
-      ]) {
-        await assert.rejects(
-          () =>
-            runDesktopDevelopment({
-              appRoot,
-              temporaryDirectory: fixtureRoot,
-              pid: 507,
-              token: `owner-explicit-invalid-${launches.length}`,
-              environment: { NEKO_DSH_RUNTIME_ROOT: configured },
-              prepareRuntime() {
-                prepareCount += 1;
-                return runtimeRoot;
-              },
-              qualifyRuntime,
-              spawnProcess,
-            }),
-          message,
-        );
-      }
-      assert.equal(prepareCount, 0);
-      assert.equal(launches.length, 1);
     } finally {
       await rm(fixtureRoot, { recursive: true, force: true });
     }

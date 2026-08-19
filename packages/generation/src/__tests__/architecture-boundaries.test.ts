@@ -46,7 +46,7 @@ describe('@neko/generation architecture boundaries', () => {
   it('keeps Desktop and domain entry points on the canonical GenerationJob path', () => {
     const sources = new Map(
       [
-        'packages/agent/runtime/src/acp/generation-host-adapter.ts',
+        'packages/agent/runtime/src/tools/generation/media-agent-tools.ts',
         'packages/canvas/node/src/canvas-generation-node-runtime.ts',
         'packages/generation/src/media/node-generation-job-owner.ts',
         'apps/neko-desktop/src/main/desktop-cut-runtime.ts',
@@ -56,7 +56,7 @@ describe('@neko/generation architecture boundaries', () => {
     );
     const allEntrySource = [...sources.values()].join('\n');
     const agentToolSource = sources.get(
-      'packages/agent/runtime/src/acp/generation-host-adapter.ts',
+      'packages/agent/runtime/src/tools/generation/media-agent-tools.ts',
     );
     const canvasGenerationSource = sources.get(
       'packages/canvas/node/src/canvas-generation-node-runtime.ts',
@@ -69,8 +69,7 @@ describe('@neko/generation architecture boundaries', () => {
     const cutExportRegistrySource = sources.get('packages/cut/node/src/CutExportTaskRegistry.ts');
 
     expect(agentToolSource).toContain('jobs.submitGeneration');
-    expect(agentToolSource).toContain('jobs.describeGeneration');
-    expect(agentToolSource).toContain('decodeGenerationDshToolInput');
+    expect(agentToolSource).toContain('jobs.observeGeneration');
     expect(agentToolSource).not.toMatch(/\bmedia\.generate(?:Image|Video|Audio)\s*\(/u);
     expect(
       existsSync(resolve(workspaceRoot, 'packages/generation/src/media/media-turn-dispatcher.ts')),
@@ -115,6 +114,7 @@ describe('@neko/generation architecture boundaries', () => {
       'packages/generation/src/job/contracts.ts',
       'packages/canvas/domain/src/types/canvas-workspace-board.ts',
       'packages/canvas/domain/src/utils/canvasWorkspaceBoardProjection.ts',
+      'packages/agent/runtime/src/runtime/turn/creator-visible-artifact-collector.ts',
     ];
     const forbiddenImports = [
       /from ['"][^'"]*resource-cache['"]/u,

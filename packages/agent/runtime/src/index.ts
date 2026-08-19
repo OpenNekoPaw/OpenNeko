@@ -1,8 +1,30 @@
 /**
  * @neko/agent-runtime - Agent Application Package
  *
- * Host-neutral Agent application and OpenNeko product-boundary integrations.
+ * Host-neutral Pi conversation runtime and OpenNeko product-boundary integrations.
  */
+
+// Re-export Agent contract types for convenience.
+export type {
+  ToolCallInfo,
+  // Tool types
+  IToolRegistry,
+  Tool,
+  ToolResult,
+  ToolCategory,
+  ToolCallRequest,
+  ChatMessage,
+} from '@neko/agent-contracts';
+
+export type {
+  IMCPClient,
+  IMCPManager,
+  MCPPrompt,
+  MCPResource,
+  MCPServerConfig,
+  MCPToolDefinition,
+  MCPToolResult,
+} from '@neko/agent-contracts';
 
 export {
   composeProviderImageBatches,
@@ -27,11 +49,80 @@ export {
   type ProviderReadyAssetPayload,
   type VisionPreprocessPolicy,
 } from './provider/multimodal-message-projection';
+export * from './tools/search/project-search-capability-provider';
+
+export {
+  PERCEPTION_AUDIO_TRANSCRIBE_METADATA,
+  PERCEPTION_IMAGE_SIMILARITY_METADATA,
+  PERCEPTION_IMAGE_CLASSIFY_METADATA,
+  PERCEPTION_DESCRIBE_INPUT_METADATA,
+  PERCEPTION_VIDEO_DETECT_SHOTS_METADATA,
+  PerceptionAudioTranscribeTool,
+  PerceptionImageSimilarityTool,
+  PerceptionImageClassifyTool,
+  PerceptionDescribeInputTool,
+  PerceptionVideoDetectShotsTool,
+  createPerceptionTools,
+  type PerceptionAudioTranscribeToolConfig,
+  type PerceptionImageSimilarityToolConfig,
+  type PerceptionImageClassifyToolConfig,
+  type PerceptionToolMetadata,
+  type PerceptionToolResult,
+  type PerceptionClassifyClient,
+  type PerceptionDetectShotsClient,
+  type PerceptionSimilarityClient,
+  type PerceptionTranscribeClient,
+  BuiltinTool,
+  createTool,
+  ToolRegistry,
+  createToolRegistry,
+  // Core file/system tools
+  ReadTool,
+  WriteTool,
+  BashTool,
+  type BashToolOptions,
+  ListDirectoryTool,
+  GrepTool,
+  type GrepToolOptions,
+  MemoryWriteTool,
+  createCoreTools,
+  type CoreToolsOptions,
+  createContentReadCapabilityProvider,
+  createImageUnderstandingCapabilityProvider,
+} from './tools';
+
 // Export logger
 export { setRootLogger, getLogger as getAgentLogger } from './utils/logger';
 
 // Export errors
 export { AgentError, type AgentErrorCategory, type AgentErrorInfo } from './errors';
+
+// Export executor
+
+// Export MCP
+export {
+  StdioMCPClient,
+  HttpMCPClient,
+  createMCPClient,
+  MCPManager,
+  MCPTool,
+  connectMCPServersRuntime,
+  createMcpToolCreationOptionsForExternalResearch,
+  createMCPTools,
+  createAllMCPTools,
+  MCPTestService,
+  getMCPTestService,
+  type MCPToolCallManager,
+  type MCPToolDiscoveryManager,
+  type MCPRuntimeBootstrapLogger,
+  type MCPRuntimeBootstrapOptions,
+  type MCPRuntimeBootstrapResult,
+  type MCPRuntimeConnectionFailure,
+  type MCPRuntimeManager,
+  type MCPRuntimeToolRegistry,
+  type MCPTestConfig,
+  type MCPTestResult,
+} from './mcp';
 
 // Export prompt file projection
 export {

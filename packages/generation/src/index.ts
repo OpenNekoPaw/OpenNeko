@@ -36,4 +36,3 @@ export type {
 export { GenerationExecutionOutcomeUnknownError } from './execution';
 export * from './job/contracts';
 export * from './domain-contracts/index';
-export * from './dsh-tool';

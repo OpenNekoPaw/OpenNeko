@@ -170,9 +170,9 @@ instance。Workspace 只能由显式 Project identity 或 sender/Window-bound op
 取消授权保持原 scene，且不得创建 Workspace 或 conversation。
 
 PrimarySidebar 是 Desktop 唯一用户级 Project context 与 conversation switcher。Project group 可见性是
-轻量导航 projection，不表示对应 Workspace Root、媒体资源或 Agent runtime 驻留。Desktop 原生 Agent surface
-只按 exact Conversation identity 消费 DSH Session/Permission projection，不拥有 controller、transcript、queue
-或 Agent runtime。Project header 不恢复 first/active/recent conversation；
+轻量导航 projection，不表示对应 Workspace Root、媒体资源或 Agent runtime 驻留。Agent Webview 在 Desktop
+dock 中保留完整 controller/composer/runtime 能力，但隐藏 package 内部 Tab、新建和 History 导航，防止只
+切换 transcript 而不切换完整 owner-qualified Scene。Project header 不恢复 first/active/recent conversation；
 conversation restore 与 delete 都验证完整 owner identity。Character/Room Conversation 必须恢复到 exact
 `character-interaction` scene；缺失的 Run、Avatar、World 或 Room command 只在对应 owning Surface 返回
 带 exact owner identity 的 unavailable，不得降级为 Assistant 或 Workspace。

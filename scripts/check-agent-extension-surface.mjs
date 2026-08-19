@@ -54,13 +54,13 @@ export function validateSurfaceStructure(surface) {
 
   expectEqual(
     composition?.classification,
-    'official-dsh-profile',
+    'portable-plugin-subset',
     'compositionPackage.classification',
     findings,
   );
   expectEqual(
     composition?.requiredOnlyFor,
-    'dsh-extension-composition',
+    'shared-install-lifecycle',
     'compositionPackage.requiredOnlyFor',
     findings,
   );
@@ -78,20 +78,15 @@ export function validateSurfaceStructure(surface) {
     'pluginState.requiredForPortableSkill',
     findings,
   );
-  expectEqual(
-    management?.classification,
-    'dsh-projection-only',
-    'management classification',
-    findings,
-  );
+  expectEqual(management?.classification, 'management-only', 'management classification', findings);
   expectFalse(
     management?.runtimeContributionAuthority,
     'extensionManagement.runtimeContributionAuthority',
     findings,
   );
 
-  expectEqual(mcp?.classification, 'dsh-owned', 'mcp.classification', findings);
-  expectEqual(mcp?.supportedCapability, 'dsh-profile', 'mcp.supportedCapability', findings);
+  expectEqual(mcp?.classification, 'partial-optional-adapter', 'mcp.classification', findings);
+  expectEqual(mcp?.supportedCapability, 'tools', 'mcp.supportedCapability', findings);
   for (const key of [
     'skillDiscoveryDependency',
     'skillCreationDependency',
@@ -101,26 +96,14 @@ export function validateSurfaceStructure(surface) {
   }
   expectEqual(mcp?.connectionFailureIsolation, 'contribution', 'MCP failure isolation', findings);
   expectFalse(capability?.mcpRequired, 'hostCapability.mcpRequired', findings);
-  expectEqual(
-    capability?.classification,
-    'host-domain-tool-adapter',
-    'hostCapability.classification',
-    findings,
-  );
-  expectEqual(
-    capability?.runtimeAuthority,
-    'owning-domain-application-service',
-    'hostCapability.runtimeAuthority',
-    findings,
-  );
-  expectEqual(standardsSupport?.agentSkills, 'dsh-owned', 'Agent Skills support', findings);
+  expectEqual(standardsSupport?.agentSkills, 'core-supported', 'Agent Skills support', findings);
   expectEqual(
     standardsSupport?.agentPlugins,
-    'official-first-party-only',
+    'not-conformant-host-extension-only',
     'Agent Plugins support',
     findings,
   );
-  expectEqual(standardsSupport?.mcp, 'dsh-owned', 'MCP support', findings);
+  expectEqual(standardsSupport?.mcp, 'partial-tools-client', 'MCP support', findings);
 
   collectForbiddenVersionFields(surface, '', findings);
   return findings;
@@ -145,40 +128,6 @@ export function findRetiredAgentSkillToolClaims(source, path = '<document>') {
   return /\b(?:GetContext|ActivateSkill|DeactivateSkill)\b/u.test(source)
     ? [`${path}: retired Agent Skill Tool protocol`]
     : [];
-}
-
-export function validateCanonicalAgentRegistrationGraph(graph) {
-  const findings = [];
-  if (!isRecord(graph)) return ['Agent registration graph must be an object'];
-  const runtimes = readIdentityList(graph.runtimes, 'runtime', findings);
-  const tools = readIdentityList(graph.tools, 'Tool', findings);
-  const mcpContributions = readIdentityList(graph.mcpContributions, 'MCP contribution', findings);
-  const plugins = readIdentityList(graph.plugins, 'Plugin', findings);
-
-  if (runtimes.length !== 1 || runtimes[0] !== 'dsh') {
-    findings.push(
-      'Agent registration graph must contain exactly one DSH runtime and no Pi runtime',
-    );
-  }
-  expectExactIdentitySet(
-    tools,
-    ['openneko.canvas', 'openneko.cut', 'openneko.generation'],
-    'Tool',
-    findings,
-  );
-  rejectDuplicateIdentities(mcpContributions, 'MCP contribution', findings);
-  expectExactIdentitySet(
-    plugins,
-    [
-      '@neko/canvas-dsh-plugin',
-      '@neko/cut-dsh-plugin',
-      '@neko/dsh-bridge',
-      '@neko/generation-dsh-plugin',
-    ],
-    'Plugin',
-    findings,
-  );
-  return findings;
 }
 
 export async function checkAgentExtensionSurface(root = repositoryRoot) {
@@ -257,161 +206,38 @@ async function checkPortableSkillPackage(root, findings) {
 }
 
 async function checkCanonicalSourceEvidence(root, findings) {
-  const retiredAuthorities = [
-    'packages/agent/runtime/src/pi/skill-host.ts',
-    'packages/agent/runtime/src/pi/capability-tool-bridge.ts',
-    'packages/agent/runtime/src/extensions/extension-manager.ts',
-    'packages/agent/runtime/src/extensions/plugin-runtime.ts',
-    'packages/agent/runtime/src/mcp/mcp-client.ts',
-  ];
-  for (const path of retiredAuthorities) {
-    try {
-      await access(resolve(root, path));
-      findings.push(`${path}: retired OpenNeko runtime authority must remain deleted`);
-    } catch (error) {
-      if (!isMissingPathError(error)) throw error;
-    }
+  const skillHost = await readFile(
+    resolve(root, 'packages/agent/runtime/src/pi/skill-host.ts'),
+    'utf8',
+  );
+  if (!skillHost.includes('loadSourcedSkills')) {
+    findings.push('Pi SkillHost no longer uses the canonical portable Skill loader');
+  }
+  if (/from ['"][^'"]*\/mcp(?:\/|['"])/u.test(skillHost)) {
+    findings.push('Pi SkillHost imports MCP and no longer preserves Skill/MCP independence');
   }
 
-  const bridgeSource = await readFile(
-    resolve(root, 'packages/dsh-bridge/src/index.ts'),
+  const extensionManager = await readFile(
+    resolve(root, 'packages/agent/runtime/src/extensions/extension-manager.ts'),
     'utf8',
   );
-  const bridgeManifest = JSON.parse(
-    await readFile(resolve(root, 'packages/dsh-bridge/package.json'), 'utf8'),
-  );
-  const bridgeProfile = await readFile(
-    resolve(root, 'packages/dsh-bridge/cordis.patch.yml'),
-    'utf8',
-  );
-  if (!bridgeSource.includes("ctx.provide('opennekoHostTools'")) {
-    findings.push('DSH bridge no longer provides the canonical reverse Host Tool port');
+  if (!extensionManager.includes("resolve(pluginRoot, 'mcp.json')")) {
+    findings.push('Extension parser no longer discovers the fixed optional MCP document');
   }
-  const generationToolsSource = await readFile(
-    resolve(root, 'packages/generation/dsh-plugin/src/index.ts'),
-    'utf8',
-  );
-  const canvasToolsSource = await readFile(
-    resolve(root, 'packages/canvas/dsh-plugin/src/index.ts'),
-    'utf8',
-  );
-  const cutToolsSource = await readFile(
-    resolve(root, 'packages/cut/dsh-plugin/src/index.ts'),
-    'utf8',
-  );
-  const generationProfile = await readFile(
-    resolve(root, 'packages/generation/dsh-plugin/cordis.patch.yml'),
-    'utf8',
-  );
-  const canvasProfile = await readFile(
-    resolve(root, 'packages/canvas/dsh-plugin/cordis.patch.yml'),
-    'utf8',
-  );
-  const cutProfile = await readFile(
-    resolve(root, 'packages/cut/dsh-plugin/cordis.patch.yml'),
-    'utf8',
-  );
-  if (/ctx\.tools\.register\s*\(/u.test(bridgeSource)) {
-    findings.push('DSH bridge must not register domain Tools');
+  if (!extensionManager.includes("resolve(pluginRoot, 'skills')")) {
+    findings.push('Extension parser no longer discovers the fixed optional Skill root');
   }
-  if (
-    !generationToolsSource.includes('GENERATION_DSH_TOOL_NAME') ||
-    !generationToolsSource.includes("from '@neko/generation'") ||
-    !/ctx\.tools\.register\s*\(/u.test(generationToolsSource)
-  ) {
-    findings.push('Generation DSH plugin does not register exact openneko.generation');
-  }
-  if (
-    !canvasToolsSource.includes('CANVAS_DSH_TOOL_NAME') ||
-    !canvasToolsSource.includes("from '@neko/canvas-domain'") ||
-    !/ctx\.tools\.register\s*\(/u.test(canvasToolsSource)
-  ) {
-    findings.push('Canvas DSH plugin does not register exact openneko.canvas');
-  }
-  if (
-    !cutToolsSource.includes('CUT_DSH_TOOL_NAME') ||
-    !cutToolsSource.includes("from '@neko/cut-domain'") ||
-    !/ctx\.tools\.register\s*\(/u.test(cutToolsSource)
-  ) {
-    findings.push('Cut DSH plugin does not register exact openneko.cut');
-  }
-  if (
-    /openneko\.(?:assets|character|world|plugin|skill|mcp)\b/u.test(
-      `${generationToolsSource}\n${canvasToolsSource}\n${cutToolsSource}`,
-    )
-  ) {
-    findings.push('Official DSH plugins register an unsupported domain Tool name');
-  }
-  if (bridgeManifest.dependencies?.['@deepseek-ai/dsh-acp'] !== undefined) {
-    findings.push(
-      'DSH bridge must remain the sole ACP plugin instead of mounting upstream dsh-acp',
-    );
-  }
-  if (!bridgeProfile.includes("name: '@neko/dsh-bridge'")) {
-    findings.push('DSH bridge profile no longer mounts the canonical OpenNeko bridge');
-  }
-  findings.push(
-    ...validateCanonicalAgentRegistrationGraph({
-      runtimes: ['dsh'],
-      tools: [
-        ...Array(countMatches(generationToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
-          'openneko.generation',
-        ),
-        ...Array(countMatches(canvasToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
-          'openneko.canvas',
-        ),
-        ...Array(countMatches(cutToolsSource, /ctx\.tools\.register\s*\(/gu)).fill('openneko.cut'),
-      ],
-      mcpContributions: [],
-      plugins: [bridgeProfile, generationProfile, canvasProfile, cutProfile].flatMap(
-        readProfilePluginNames,
-      ),
-    }),
-  );
-}
 
-function readIdentityList(value, label, findings) {
-  if (!Array.isArray(value)) {
-    findings.push(`Agent registration graph ${label} identities must be an array`);
-    return [];
+  const pluginRuntime = await readFile(
+    resolve(root, 'packages/agent/runtime/src/extensions/plugin-runtime.ts'),
+    'utf8',
+  );
+  if (!pluginRuntime.includes('state.skillReady || state.connectedServerIds.length > 0')) {
+    findings.push('Plugin readiness no longer proves Skill and MCP can become ready independently');
   }
-  const identities = [];
-  for (const identity of value) {
-    if (typeof identity !== 'string' || identity.trim().length === 0 || identity.includes('*')) {
-      findings.push(`Agent registration graph contains an invalid or wildcard ${label} identity`);
-      continue;
-    }
-    identities.push(identity);
+  if (!pluginRuntime.includes("state.failures.push('mcp-connect-failed')")) {
+    findings.push('Plugin runtime no longer exposes MCP connection failure locally');
   }
-  return identities;
-}
-
-function expectExactIdentitySet(actual, expected, label, findings) {
-  rejectDuplicateIdentities(actual, label, findings);
-  const normalized = [...new Set(actual)].sort();
-  if (JSON.stringify(normalized) !== JSON.stringify(expected)) {
-    findings.push(
-      `Agent registration graph ${label} identities must be ${JSON.stringify(expected)}`,
-    );
-  }
-}
-
-function rejectDuplicateIdentities(identities, label, findings) {
-  const seen = new Set();
-  for (const identity of identities) {
-    if (seen.has(identity)) {
-      findings.push(`Agent registration graph contains duplicate ${label} identity ${identity}`);
-    }
-    seen.add(identity);
-  }
-}
-
-function readProfilePluginNames(source) {
-  return [...source.matchAll(/^\s+name:\s+['"]([^'"]+)['"]\s*$/gmu)].map((match) => match[1]);
-}
-
-function countMatches(source, pattern) {
-  return [...source.matchAll(pattern)].length;
 }
 
 async function collectFiles(directory) {
@@ -488,10 +314,6 @@ function expectEqual(actual, expected, label, findings) {
 
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isMissingPathError(error) {
-  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
 
 function normalize(value) {

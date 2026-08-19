@@ -270,20 +270,20 @@ Agent 能力按 owning package 职责分层：
 | 子包                         | 职责                                                                                                                       |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `@neko/agent-contracts`      | Agent/Main/preload/renderer contract、effective configuration、facts 和状态投影                                            |
-| `@neko/agent-runtime`        | DSH Session application、Conversation binding、ACP event projection 与 host-neutral ports                                |
+| `@neko/agent-runtime`        | Pi product runtime、conversation identity、permission、Skill Host、Capability Tool bridge、facts projector 与 host effects |
 | `@neko/automation-contracts` | Browser/Computer provider、profile、exact target/session grant、action、evidence 与 diagnostic 的 L0 contract              |
 | `@neko/automation-node`      | 自动化 session/target/mode/budget/approval policy、reviewed MCP provider wrapper 与 transient observation 编排             |
 | `@neko/ai-contracts`         | provider/model configuration contracts                                                                                     |
 | `@neko/ai-sdk`               | provider/AI SDK adapter                                                                                                    |
 | `@neko/host`                 | Host settings、配置解析、credential/file port contract 与应用设置状态机                                                    |
-| `@neko/agent-webview`        | DSH extension management 的 browser-only presentation；不拥有 Agent、Skill、MCP 或 Plugin runtime                        |
+| `@neko/agent-webview`        | Chat/Agent UI、消息投影和用户输入                                                                                          |
 | `@neko/chara-webview`        | Character、Dialogue 与 Chatroom 的 browser-only 产品视图和可丢弃展示状态                                                   |
 | `@neko/world-webview`        | World 管理、目录创作、确定性 Runtime Workbench 与可丢弃展示状态；不实现完整 World Experience                               |
 
 Desktop 的产品级组合位于 `apps/neko-desktop`。Agent contracts/runtime 与 Host 不导入 Electron、React
-或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Desktop Main。DSH 独立子进程拥有
-Agent/Session/Skill/MCP/Plugin authority，OpenNeko 只通过 package-owned ACP application port、typed domain
-Tool bridge 与 Desktop trust adapter 协作。
+或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Desktop Main。Prompt、Skill、
+capability/tool schema 和宿主副作用按各自边界维护。Pi 只接收已经解析好的
+model/prompt/tool snapshot，不接收 `ConfigManager`、领域 service 或 Host process adapter。
 
 Browser Use 与 Computer Use 的控制实现由审核固定的开源 upstream MCP runtime 持有；OpenNeko 不实现
 第二套浏览器、截图、键鼠输入、VLA 或 GUI Agent loop。`@neko/automation-contracts` 是 L0 canonical

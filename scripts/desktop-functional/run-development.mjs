@@ -12,11 +12,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-import { assertDshRuntimeDirectory } from '../dsh-runtime-closure.mjs';
-import { prepareDshDevelopmentRuntime } from '../prepare-dsh-development-runtime.mjs';
 
 const desktopAppRoot = resolve(fileURLToPath(new URL('../../apps/neko-desktop/', import.meta.url)));
 
@@ -86,18 +83,12 @@ export async function runDesktopDevelopment(options = {}) {
   try {
     const command = (options.platform ?? process.platform) === 'win32' ? 'pnpm.cmd' : 'pnpm';
     const argv = normalizeForwardedArguments(options.argv ?? process.argv.slice(2));
-    const environment = resolveDesktopDevelopmentEnvironment({
-      appRoot,
-      environment: options.environment ?? process.env,
-      ...(options.prepareRuntime === undefined ? {} : { prepareRuntime: options.prepareRuntime }),
-      ...(options.qualifyRuntime === undefined ? {} : { qualifyRuntime: options.qualifyRuntime }),
-    });
     const child = (options.spawnProcess ?? spawn)(
       command,
       ['exec', 'electron-forge', 'start', '--', ...argv],
       {
         cwd: appRoot,
-        env: environment,
+        env: options.environment ?? process.env,
         stdio: 'inherit',
       },
     );
@@ -106,33 +97,6 @@ export async function runDesktopDevelopment(options = {}) {
     process.off('exit', releaseOnExit);
     ownership.release();
   }
-}
-
-function resolveDesktopDevelopmentEnvironment(options) {
-  const environment = { ...options.environment };
-  const configuredRuntimeRoot = environment.NEKO_DSH_RUNTIME_ROOT;
-  let runtimeRoot;
-  if (configuredRuntimeRoot === undefined) {
-    runtimeRoot = (options.prepareRuntime ?? prepareDshDevelopmentRuntime)({
-      appRoot: options.appRoot,
-    });
-    if (!isAbsolute(runtimeRoot)) {
-      throw new Error('Desktop development runtime builder must return an absolute path.');
-    }
-    runtimeRoot = realpathSync(runtimeRoot);
-  } else {
-    if (!isAbsolute(configuredRuntimeRoot)) {
-      throw new Error('NEKO_DSH_RUNTIME_ROOT must be absolute when explicitly configured.');
-    }
-    runtimeRoot = realpathSync(configuredRuntimeRoot);
-    (options.qualifyRuntime ?? qualifyDshDevelopmentRuntime)(runtimeRoot);
-  }
-  environment.NEKO_DSH_RUNTIME_ROOT = runtimeRoot;
-  return environment;
-}
-
-function qualifyDshDevelopmentRuntime(runtimeRoot) {
-  assertDshRuntimeDirectory(runtimeRoot, 'darwin-arm64', { qualify: true, verifyTree: true });
 }
 
 function writeOwnerRecord(lockPath, record) {
