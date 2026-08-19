@@ -10,6 +10,7 @@ import type {
 } from '@neko/cut-domain';
 import type { PurposeGenerationJobPort } from '@neko/generation/job';
 import type { CharacterDshAuthoringService } from '@neko/chara/application';
+import type { WorldDshAuthoringService } from '@neko/world/application';
 import type { AgentContentAccessRuntime } from '../runtime/capability/agent-content-access-runtime';
 
 import type {
@@ -21,6 +22,7 @@ import { CutDshHostAdapter } from './cut-host-adapter';
 import { GenerationDshHostAdapter } from './generation-host-adapter';
 import { DocumentDshHostAdapter } from './document-host-adapter';
 import { CharacterDshHostAdapter } from './character-host-adapter';
+import { WorldDshHostAdapter } from './world-host-adapter';
 
 export interface DshDomainToolHandlers {
   executeGenerationTool(
@@ -40,6 +42,10 @@ export interface DshDomainToolHandlers {
     signal: AbortSignal,
   ): Promise<DshAcpDomainToolResponse>;
   executeCharacterTool(
+    request: DshAcpDomainToolRequest,
+    signal: AbortSignal,
+  ): Promise<DshAcpDomainToolResponse>;
+  executeWorldTool(
     request: DshAcpDomainToolRequest,
     signal: AbortSignal,
   ): Promise<DshAcpDomainToolResponse>;
@@ -91,6 +97,13 @@ export function createDshDomainToolHandlers(options: {
         readonly binding: Extract<DshDomainToolContext['binding'], { readonly kind: 'authoring' }>;
       },
     ): Promise<Pick<CharacterDshAuthoringService, 'query' | 'fillDraft'>>;
+  };
+  readonly world?: {
+    resolveService(
+      context: DshDomainToolContext & {
+        readonly binding: Extract<DshDomainToolContext['binding'], { readonly kind: 'authoring' }>;
+      },
+    ): Promise<Pick<WorldDshAuthoringService, 'query' | 'fillDraft'>>;
   };
 }): DshDomainToolHandlers {
   return Object.freeze({
@@ -153,6 +166,28 @@ export function createDshDomainToolHandlers(options: {
           );
         }
         return options.character.resolveService({ ...context, binding: context.binding });
+      }).execute(request, signal);
+    },
+
+    async executeWorldTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
+      return new WorldDshHostAdapter(async () => {
+        const context = await options.contexts.resolve(request.sessionId);
+        if (
+          context.binding.kind !== 'authoring' ||
+          context.binding.target?.kind !== 'world-project'
+        ) {
+          throw diagnosticError(
+            'WORLD_DSH_CONTEXT_UNSUPPORTED',
+            'World authoring requires an exact WorldProject Conversation target.',
+          );
+        }
+        if (options.world === undefined) {
+          throw diagnosticError(
+            'WORLD_DSH_SERVICE_UNAVAILABLE',
+            'World DSH authoring service is not composed by Desktop.',
+          );
+        }
+        return options.world.resolveService({ ...context, binding: context.binding });
       }).execute(request, signal);
     },
   });

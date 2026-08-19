@@ -213,7 +213,7 @@ export class WorldAuthoringService {
   }
 }
 
-function isFreshWorldCreationTarget(project: WorldProject): boolean {
+export function isFreshWorldCreationTarget(project: WorldProject): boolean {
   const { draft } = project;
   return (
     project.reviewStatus === 'draft' &&

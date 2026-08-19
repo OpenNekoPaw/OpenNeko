@@ -12,6 +12,7 @@ import {
   CHARACTER_DSH_TOOL_NAME,
   CHARACTER_DSH_TOOL_OPERATIONS,
 } from '@neko/chara/application';
+import { WORLD_DSH_TOOL_NAME, WORLD_DSH_TOOL_OPERATIONS } from '@neko/world/application';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 
@@ -34,6 +35,7 @@ test('production Agent Tool inventory matches every DSH plugin registration', as
   assert.deepEqual(
     inventory.tools.map((entry) => [entry.tool, entry.operations]),
     [
+      [WORLD_DSH_TOOL_NAME, [...WORLD_DSH_TOOL_OPERATIONS]],
       [CHARACTER_DSH_TOOL_NAME, [...CHARACTER_DSH_TOOL_OPERATIONS]],
       [DOCUMENT_DSH_TOOL_NAME, [...DOCUMENT_DSH_TOOL_OPERATIONS]],
       [GENERATION_DSH_TOOL_NAME, [...GENERATION_DSH_TOOL_OPERATIONS]],

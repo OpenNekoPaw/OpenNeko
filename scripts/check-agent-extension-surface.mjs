@@ -175,6 +175,7 @@ export function validateCanonicalAgentRegistrationGraph(graph) {
       '@neko/cut-dsh-plugin',
       '@neko/dsh-bridge',
       '@neko/generation-dsh-plugin',
+      '@neko/world-dsh-plugin',
     ],
     'Plugin',
     findings,
@@ -316,6 +317,10 @@ async function checkCanonicalSourceEvidence(root, findings) {
     resolve(root, 'packages/chara/dsh-plugin/cordis.patch.yml'),
     'utf8',
   );
+  const worldProfile = await readFile(
+    resolve(root, 'packages/world/dsh-plugin/cordis.patch.yml'),
+    'utf8',
+  );
   const canvasProfile = await readFile(
     resolve(root, 'packages/canvas/dsh-plugin/cordis.patch.yml'),
     'utf8',
@@ -347,6 +352,19 @@ async function checkCanonicalSourceEvidence(root, findings) {
   }
   if (!characterProfile.includes('@neko/chara-dsh-plugin')) {
     findings.push('Character DSH plugin profile patch is missing its canonical contribution');
+  }
+  const worldToolsSource = await readFile(
+    resolve(root, 'packages/world/dsh-plugin/src/index.ts'),
+    'utf8',
+  );
+  if (
+    !worldToolsSource.includes('WORLD_DSH_TOOL_NAME') ||
+    !/ctx\.tools\.register\s*\(/u.test(worldToolsSource)
+  ) {
+    findings.push('World DSH plugin does not register exact openneko.world');
+  }
+  if (!worldProfile.includes('@neko/world-dsh-plugin')) {
+    findings.push('World DSH plugin profile patch is missing its canonical contribution');
   }
   if (
     !canvasToolsSource.includes('CANVAS_DSH_TOOL_NAME') ||
@@ -406,6 +424,7 @@ async function checkCanonicalSourceEvidence(root, findings) {
       plugins: [
         bridgeProfile,
         characterProfile,
+        worldProfile,
         generationProfile,
         canvasProfile,
         cutProfile,

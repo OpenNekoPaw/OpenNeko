@@ -22,6 +22,7 @@ import {
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
 import type { ConfigManager, WorkspaceConfigManagerAuthority } from '@neko/host/settings';
 import type { CharacterDshAuthoringService } from '@neko/chara/application';
+import type { WorldDshAuthoringService } from '@neko/world/application';
 
 export function createDesktopDshDomainToolHandlers(options: {
   readonly bindings: Pick<ConversationDshSessionBindingStore, 'getByDshSessionId'>;
@@ -50,6 +51,14 @@ export function createDesktopDshDomainToolHandlers(options: {
       readonly projectId: string;
       readonly characterProjectId: string;
     }): Promise<Pick<CharacterDshAuthoringService, 'query' | 'fillDraft'>>;
+  };
+  readonly world?: {
+    resolveService(input: {
+      readonly workspaceId: string;
+      readonly workspacePath: string;
+      readonly projectId: string;
+      readonly worldProjectId: string;
+    }): Promise<Pick<WorldDshAuthoringService, 'query' | 'fillDraft'>>;
   };
 }): DshDomainToolHandlers {
   const contexts = createDshDomainToolContextResolver({
@@ -213,6 +222,29 @@ export function createDesktopDshDomainToolHandlers(options: {
           workspacePath: resolution.workspace.workspacePath,
           projectId: context.binding.authority.projectId,
           characterProjectId: context.binding.target.characterProjectId,
+        });
+      },
+    },
+    world: {
+      resolveService: async (context) => {
+        if (context.binding.kind !== 'authoring' || context.binding.target?.kind !== 'world-project') {
+          throw diagnosticError('WORLD_DSH_CONTEXT_UNSUPPORTED', 'World authoring requires an exact WorldProject Conversation target.');
+        }
+        const resolution = await options.workspaceGrants.resolveAuthorizedWorkspace(
+          context.binding.workspaceGrantId,
+          context.binding.workspaceId,
+        );
+        if (resolution.workspace.workspaceId !== context.binding.workspaceId) {
+          throw diagnosticError('WORLD_DSH_WORKSPACE_MISMATCH', 'World authoring Workspace authority does not match the Conversation binding.');
+        }
+        if (options.world === undefined) {
+          throw diagnosticError('WORLD_DSH_SERVICE_UNAVAILABLE', 'World DSH authoring service is not composed by Desktop.');
+        }
+        return options.world.resolveService({
+          workspaceId: resolution.workspace.workspaceId,
+          workspacePath: resolution.workspace.workspacePath,
+          projectId: context.binding.authority.projectId,
+          worldProjectId: context.binding.target.worldProjectId,
         });
       },
     },

@@ -10,6 +10,7 @@ export { CutDshHostAdapter } from './cut-host-adapter';
 export { GenerationDshHostAdapter } from './generation-host-adapter';
 export { DocumentDshHostAdapter } from './document-host-adapter';
 export { CharacterDshHostAdapter } from './character-host-adapter';
+export { WorldDshHostAdapter } from './world-host-adapter';
 export {
   createDshDomainToolHandlers,
   type DshDomainToolHandlers,

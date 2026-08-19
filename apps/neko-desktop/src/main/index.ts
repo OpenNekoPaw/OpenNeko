@@ -112,6 +112,7 @@ import {
   WorldAuthoringHostService,
   createWorldFoundationActionHandlers,
   WorldAuthoringService,
+  WorldDshAuthoringService,
   WorldGlobalCatalogService,
   WorldManagementService,
   WorldPortablePackageService,
@@ -1940,6 +1941,21 @@ async function startDesktop(): Promise<void> {
               characterProjectId: input.characterProjectId,
               catalog: repository,
               authoring: new CharacterAuthoringService({ repository, lineage: repository }),
+            });
+          },
+        },
+        world: {
+          resolveService: async (input) => {
+            requireProjectIdentity(input.workspaceId, input.projectId);
+            const repository = createWorldAuthoringFileRepository({
+              workspaceRoot: input.workspacePath,
+              scope: { kind: 'project', projectId: input.projectId },
+            });
+            return new WorldDshAuthoringService({
+              scope: { kind: 'project', projectId: input.projectId },
+              worldProjectId: input.worldProjectId,
+              catalog: repository,
+              authoring: new WorldAuthoringService({ repository }),
             });
           },
         },

@@ -7,4 +7,5 @@ export * from './world-global-catalog-service';
 export * from './world-runtime-service';
 export * from './world-runtime-workbench-service';
 export * from './world-durable-catalog';
+export * from './world-dsh-tool';
 export * from './world-foundation-actions';

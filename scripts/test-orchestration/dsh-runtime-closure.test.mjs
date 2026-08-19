@@ -88,6 +88,7 @@ function createFixtureRuntime() {
             '@deepseek-ai/dsh-base',
             '@neko/dsh-bridge',
             '@neko/chara-dsh-plugin',
+            '@neko/world-dsh-plugin',
             '@neko/generation-dsh-plugin',
             '@neko/canvas-dsh-plugin',
             '@neko/cut-dsh-plugin',

@@ -28,6 +28,16 @@
     {
       "kind": "non-literal-runtime-import",
       "source": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.ts",
+      "targetPackage": "@neko/world-dsh-plugin",
+      "owner": "Desktop DSH profile materializer",
+      "reason": "The packaged DSH subprocess loads the exact World Tool bundle declared by the verified profile rather than through an Electron value import.",
+      "validationPath": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.test.ts",
+      "reviewCondition": "Remove when the product-status graph derives exact packaged DSH profile bundle edges directly.",
+      "expiresOn": "2027-08-19"
+    },
+    {
+      "kind": "non-literal-runtime-import",
+      "source": "apps/neko-desktop/src/main/desktop-dsh-profile-materializer.ts",
       "targetPackage": "@neko/content-dsh-plugin",
       "owner": "Desktop DSH profile materializer",
       "reason": "The packaged DSH subprocess loads the exact Document Tool bundle declared by the verified profile rather than through an Electron value import.",

@@ -172,6 +172,15 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/world/dsh-plugin",
+      "name": "@neko/world-dsh-plugin",
+      "family": "world",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/chara-webview",
       "name": "@neko/chara-webview",
       "family": "chara",

@@ -62,6 +62,7 @@ test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrat
       '@neko/cut-dsh-plugin',
       '@neko/content-dsh-plugin',
       '@neko/chara-dsh-plugin',
+      '@neko/world-dsh-plugin',
     ],
   };
   assert.deepEqual(validateCanonicalAgentRegistrationGraph(canonical), []);

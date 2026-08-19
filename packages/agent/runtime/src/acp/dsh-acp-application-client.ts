@@ -54,6 +54,7 @@ import { CUT_DSH_TOOL_NAME } from '@neko/cut-domain';
 import { GENERATION_DSH_TOOL_NAME } from '@neko/generation';
 import { DOCUMENT_DSH_TOOL_NAME } from '@neko/content/document';
 import { CHARACTER_DSH_TOOL_NAME } from '@neko/chara/application';
+import { WORLD_DSH_TOOL_NAME } from '@neko/world/application';
 import { DshAcpProjection } from './dsh-acp-projection';
 
 export interface DshAcpApplicationClientHandlers {
@@ -82,6 +83,10 @@ export interface DshAcpApplicationClientHandlers {
     signal: AbortSignal,
   ) => Promise<DshAcpDomainToolResponse>;
   readonly executeCharacterTool: (
+    request: DshAcpDomainToolRequest,
+    signal: AbortSignal,
+  ) => Promise<DshAcpDomainToolResponse>;
+  readonly executeWorldTool?: (
     request: DshAcpDomainToolRequest,
     signal: AbortSignal,
   ) => Promise<DshAcpDomainToolResponse>;
@@ -596,6 +601,11 @@ class HostToolAdmission {
     if (tool === CUT_DSH_TOOL_NAME) return this.handlers.executeCutTool;
     if (tool === DOCUMENT_DSH_TOOL_NAME) return this.handlers.executeDocumentTool;
     if (tool === CHARACTER_DSH_TOOL_NAME) return this.handlers.executeCharacterTool;
+    if (tool === WORLD_DSH_TOOL_NAME) {
+      if (this.handlers.executeWorldTool === undefined)
+        throw new Error('DSH ACP World Tool handler is unavailable.');
+      return this.handlers.executeWorldTool;
+    }
     throw new Error(`DSH ACP requested unsupported domain tool ${tool}.`);
   }
 }

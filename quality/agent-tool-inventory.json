@@ -1,6 +1,17 @@
 {
   "tools": [
     {
+      "tool": "openneko.world",
+      "operations": ["query", "fill-draft"],
+      "registration": "packages/world/dsh-plugin/src/index.ts",
+      "schemaOwner": "packages/world/src/application/world-dsh-tool.ts",
+      "validator": "decodeWorldDshToolInput",
+      "permissionOwner": "packages/agent/runtime/src/application/dsh-permission-owner.ts",
+      "authorizationOwner": "apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers.ts",
+      "applicationService": "WorldDshAuthoringService + WorldAuthoringService",
+      "durableOwner": "World project authority"
+    },
+    {
       "tool": "openneko.character",
       "operations": ["query", "fill-draft"],
       "registration": "packages/chara/dsh-plugin/src/index.ts",
