@@ -787,11 +787,13 @@ function createRuntime(itemOrItems: GlobalLibraryItem | readonly GlobalLibraryIt
         const item = items.find((candidate) => candidate.id === itemId);
         if (!item) throw new Error(`Missing fixture item '${itemId}'.`);
         return {
-          kind: 'workspace-file',
-          path:
-            item.owner === 'media-library' && item.kind === 'file'
-              ? item.relativePath
-              : `${itemId.replaceAll(':', '-')}.bin`,
+          file: {
+            authority: 'workspace',
+            path:
+              item.owner === 'media-library' && item.kind === 'file'
+                ? item.relativePath
+                : `${itemId.replaceAll(':', '-')}.bin`,
+          },
         };
       },
     }),

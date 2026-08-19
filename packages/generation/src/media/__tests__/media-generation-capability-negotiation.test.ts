@@ -97,7 +97,6 @@ function keyframeRequest(provider: Provider) {
 
 function workspaceLocator(path: string): ContentLocator {
   return {
-    kind: 'workspace-file',
-    path,
+    file: { authority: 'workspace', path },
   };
 }

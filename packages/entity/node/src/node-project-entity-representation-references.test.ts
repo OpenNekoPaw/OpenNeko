@@ -21,8 +21,8 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
     const before = await service.inspect();
     expect(before).toMatchObject({
       references: [
-        { kind: 'workspace-file', path: 'neko/assets/Library/rin.png' },
-        { kind: 'generated-output', outputId: 'output-rin', digest: 'a'.repeat(64) },
+        { file: { authority: 'workspace', path: 'neko/assets/Library/rin.png' } },
+        { file: { authority: 'workspace', path: 'generated/rin.png' } },
       ],
     });
 
@@ -30,8 +30,7 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
       replacements: new Map([
         [
           contentLocatorKey({
-            kind: 'workspace-file',
-            path: 'neko/assets/Library/rin.png',
+            file: { authority: 'workspace', path: 'neko/assets/Library/rin.png' },
           }),
           'media/rin.png',
         ],
@@ -39,13 +38,20 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
     });
     expect(after).toMatchObject({
       references: [
-        { kind: 'workspace-file', path: 'media/rin.png' },
-        { kind: 'generated-output', outputId: 'output-rin' },
+        { file: { authority: 'workspace', path: 'media/rin.png' } },
+        { file: { authority: 'workspace', path: 'generated/rin.png' } },
       ],
     });
     expect(after.fingerprint).not.toBe(before.fingerprint);
     await expect(createRepository(workspacePath).load()).resolves.toMatchObject({
-      entities: [{ representations: [{ target: { path: 'media/rin.png' } }, expect.anything()] }],
+      entities: [
+        {
+          representations: [
+            { target: { file: { authority: 'workspace', path: 'media/rin.png' } } },
+            expect.anything(),
+          ],
+        },
+      ],
     });
   });
 
@@ -70,8 +76,8 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
 
     await expect(createService(workspacePath).inspect()).resolves.toMatchObject({
       references: [
-        { kind: 'workspace-file', path: 'neko/assets/Library/rin.png' },
-        { kind: 'generated-output', outputId: 'output-rin' },
+        { file: { authority: 'workspace', path: 'neko/assets/Library/rin.png' } },
+        { file: { authority: 'workspace', path: 'generated/rin.png' } },
       ],
       diagnostics: [{ code: 'invalid-project-entity-document', entityId: 'character-invalid' }],
     });
@@ -122,8 +128,7 @@ async function writeCanonicalDocument(workspacePath: string): Promise<void> {
             bindingId: 'workspace-binding',
             role: 'portrait',
             target: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Library/rin.png',
+              file: { authority: 'workspace', path: 'neko/assets/Library/rin.png' },
             },
             source: 'user',
             acceptedAt: '2026-08-05T00:00:00.000Z',
@@ -132,10 +137,7 @@ async function writeCanonicalDocument(workspacePath: string): Promise<void> {
             bindingId: 'generated-binding',
             role: 'reference',
             target: {
-              kind: 'generated-output',
-              outputId: 'output-rin',
-              digest: 'a'.repeat(64),
-              path: 'generated/rin.png',
+              file: { authority: 'workspace', path: 'generated/rin.png' },
             },
             source: 'agent',
             acceptedAt: '2026-08-05T00:00:00.000Z',

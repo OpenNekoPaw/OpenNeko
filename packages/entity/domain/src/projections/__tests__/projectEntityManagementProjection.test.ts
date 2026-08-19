@@ -74,7 +74,7 @@ const DOCUMENT: ProjectEntityDocument = {
         {
           bindingId: 'binding-rin',
           role: 'portrait',
-          target: { kind: 'workspace-file', path: 'rin.png' },
+          target: { file: { authority: 'workspace', path: 'rin.png' } },
           source: 'user',
           acceptedAt: '2026-08-05T00:00:00.000Z',
         },
@@ -99,7 +99,7 @@ const ATTENTION: EntityBindingAvailabilityProjectionValue = {
   bindingId: 'binding-rin',
   entityId: 'character-rin',
   entityKind: 'character',
-  representation: { kind: 'workspace-file', path: 'rin.png' },
+  representation: { file: { authority: 'workspace', path: 'rin.png' } },
   role: 'portrait',
   owner: 'workspace-file',
   availability: 'needs-attention',

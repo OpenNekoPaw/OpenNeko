@@ -375,7 +375,9 @@ function binding(bindingId: string, isDefault = false) {
   return {
     bindingId,
     role: 'portrait' as const,
-    target: { kind: 'workspace-file' as const, path: `${bindingId}.png` },
+    target: {
+      file: { authority: 'workspace' as const, path: `${bindingId}.png` },
+    },
     source: 'user' as const,
     ...(isDefault ? { isDefault: true } : {}),
     acceptedAt: NOW,

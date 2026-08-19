@@ -150,10 +150,7 @@ export class NodeProjectEntityProjectionRuntime {
       semantic,
       repository,
       availability: new ProjectEntityBindingAvailabilityService({
-        workspaceFile: stat,
-        documentEntry: stat,
-        generatedOutput: stat,
-        packageResource: stat,
+        content: stat,
       }),
     };
     this.states.set(workspace.workspaceId, state);

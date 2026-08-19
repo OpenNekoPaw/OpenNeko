@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { ContentLocator } from '@neko/content';
 import type { GlobalLibraryBrowserRuntime } from '../global-library';
 import { AssetCenterController } from './controller';
 import { AssetCenterSession } from './session';
@@ -8,8 +9,7 @@ describe('AssetCenterController', () => {
   it('owns catalog filters and resolves exact selection through its Assets port', async () => {
     const source = libraryRuntime();
     const resolve = vi.fn(async () => ({
-      kind: 'workspace-file' as const,
-      path: 'shots/shot.png',
+      file: { authority: 'workspace' as const, path: 'shots/shot.png' },
     }));
     const controller = createController(source, resolve);
     await controller.refresh();
@@ -27,16 +27,14 @@ describe('AssetCenterController', () => {
       itemId: 'media-library:item-1',
     });
     expect(selected.selection?.contentLocator).toEqual({
-      kind: 'workspace-file',
-      path: 'shots/shot.png',
+      file: { authority: 'workspace', path: 'shots/shot.png' },
     });
   });
 
   it('keeps selection facts while a filter refresh is pending', async () => {
     const source = libraryRuntime();
     const controller = createController(source, async () => ({
-      kind: 'workspace-file',
-      path: 'shots/shot.png',
+      file: { authority: 'workspace', path: 'shots/shot.png' },
     }));
     await controller.refresh();
     const selected = await controller.select({
@@ -54,8 +52,7 @@ describe('AssetCenterController', () => {
   it('projects source failures as typed unavailable without clearing selection', async () => {
     const source = libraryRuntime();
     const controller = createController(source, async () => ({
-      kind: 'workspace-file',
-      path: 'shots/shot.png',
+      file: { authority: 'workspace', path: 'shots/shot.png' },
     }));
     await controller.refresh();
     await controller.select({
@@ -98,7 +95,7 @@ describe('AssetCenterController', () => {
     const controller = new AssetCenterController(
       createMediaSession(),
       source,
-      { resolve: async () => ({ kind: 'workspace-file', path: 'shots/shot.png' }) },
+      { resolve: async () => ({ file: { authority: 'workspace', path: 'shots/shot.png' } }) },
       {
         contentAuthorization: { authorize },
         previewSessions: { create, release: vi.fn() },
@@ -117,7 +114,7 @@ describe('AssetCenterController', () => {
       },
       owner: 'media-library',
       itemId: 'media-library:item-1',
-      contentLocator: { kind: 'workspace-file', path: 'shots/shot.png' },
+      contentLocator: { file: { authority: 'workspace', path: 'shots/shot.png' } },
     });
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -147,7 +144,7 @@ describe('AssetCenterController', () => {
     const controller = new AssetCenterController(
       createMediaSession(),
       source,
-      { resolve: async () => ({ kind: 'workspace-file', path: 'hero.png' }) },
+      { resolve: async () => ({ file: { authority: 'workspace', path: 'hero.png' } }) },
       {
         contentAuthorization: {
           authorize: async () => ({ status: 'ready', descriptor: previewDescriptor() }),
@@ -200,7 +197,7 @@ function createController(
     readonly identity: { readonly assetCenterSessionId: string; readonly windowId: string };
     readonly owner: 'global-asset-library' | 'media-library';
     readonly itemId: string;
-  }) => Promise<{ readonly kind: 'workspace-file'; readonly path: string }>,
+  }) => Promise<ContentLocator>,
 ): AssetCenterController {
   return new AssetCenterController(createMediaSession(), source, { resolve });
 }
@@ -249,7 +246,9 @@ function previewDescriptor() {
   return {
     descriptorId: 'descriptor-1',
     sourceFingerprint: 'fingerprint-1',
-    contentLocator: { kind: 'workspace-file' as const, path: 'shots/shot.png' },
+    contentLocator: {
+      file: { authority: 'workspace' as const, path: 'shots/shot.png' },
+    },
     url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     contentKind: 'image' as const,
     mediaType: 'image/png',

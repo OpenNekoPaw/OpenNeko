@@ -55,7 +55,7 @@ export class ProjectMediaLibraryContentPathResolver {
   async resolve(
     locator: WorkspaceFileContentLocator,
   ): Promise<ProjectMediaLibraryContentPathResolution> {
-    const parsed = parseWorkspaceMediaLibraryPath(locator.path);
+    const parsed = parseWorkspaceMediaLibraryPath(locator.file.path);
     if (!parsed) return { ok: false, code: 'content-unauthorized' };
     const root = await this.resolveLibraryRoot(parsed.libraryName);
     if (!root.ok) return root;

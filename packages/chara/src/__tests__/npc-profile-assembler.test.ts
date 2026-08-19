@@ -65,8 +65,10 @@ describe('NpcProfileAssembler', () => {
             {
               bindingId: 'binding-portrait',
               target: {
-                kind: 'workspace-file',
-                path: 'neko/assets/Characters/xiaoju-portrait.png',
+                file: {
+                  authority: 'workspace',
+                  path: 'neko/assets/Characters/xiaoju-portrait.png',
+                },
               },
               role: 'portrait',
               source: 'user',
@@ -86,8 +88,10 @@ describe('NpcProfileAssembler', () => {
       expect.objectContaining({
         role: 'portrait',
         representation: {
-          kind: 'workspace-file',
-          path: 'neko/assets/Characters/xiaoju-portrait.png',
+          file: {
+            authority: 'workspace',
+            path: 'neko/assets/Characters/xiaoju-portrait.png',
+          },
         },
         isDefault: true,
       }),
@@ -139,8 +143,10 @@ describe('NpcProfileAssembler', () => {
             {
               bindingId: 'binding-voice',
               target: {
-                kind: 'workspace-file',
-                path: 'neko/assets/Characters/xiaoju-voice.wav',
+                file: {
+                  authority: 'workspace',
+                  path: 'neko/assets/Characters/xiaoju-voice.wav',
+                },
               },
               role: 'voice',
               source: 'user',

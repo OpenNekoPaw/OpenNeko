@@ -10,8 +10,10 @@ describe('binding availability projection', () => {
         entityKind: 'character',
         role: 'portrait',
         representation: {
-          kind: 'workspace-file',
-          path: 'neko/assets/Characters/missing-portrait.png',
+          file: {
+            authority: 'workspace',
+            path: 'neko/assets/Characters/missing-portrait.png',
+          },
         },
         owner: 'workspace-file',
         availability: 'needs-attention',

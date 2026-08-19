@@ -65,7 +65,7 @@ describe('CharacterCreationSourceService', () => {
             evidenceId: 'evidence:file',
             sourceWorkspaceId: 'workspace:story',
             sourceWorkspaceGrantId: 'grant:story',
-            locator: { kind: 'workspace-file', path: 'characters/lin.md' },
+            locator: { file: { authority: 'workspace', path: 'characters/lin.md' } },
             excerpt: 'Lin guards the archive.',
             observedAt,
           },
@@ -83,11 +83,12 @@ describe('CharacterCreationSourceService', () => {
           {
             assetId: 'asset:lin-live2d',
             resource: {
-              kind: 'package-resource',
-              packageId: 'asset:lin-live2d',
-              revision: 'publication:summer',
-              resourcePath: 'avatar/lin.model3.json',
-              digest: 'sha256:lin-model',
+              file: {
+                authority: 'package',
+                packageId: 'asset:lin-live2d',
+                revision: 'publication:summer',
+                path: 'avatar/lin.model3.json',
+              },
             },
             representationId: 'representation:live2d-main',
             representationKind: 'live2d',
@@ -100,7 +101,7 @@ describe('CharacterCreationSourceService', () => {
       {
         sourceWorkspaceId: 'workspace:story',
         sourceWorkspaceGrantId: 'grant:story',
-        locator: { kind: 'workspace-file', path: 'characters/lin.md' },
+        locator: { file: { authority: 'workspace', path: 'characters/lin.md' } },
       },
       undefined,
     );
@@ -117,8 +118,10 @@ describe('CharacterCreationSourceService', () => {
       expect.objectContaining({
         assetId: 'asset:lin-live2d',
         resource: expect.objectContaining({
-          kind: 'package-resource',
-          resourcePath: 'avatar/lin.model3.json',
+          file: expect.objectContaining({
+            authority: 'package',
+            path: 'avatar/lin.model3.json',
+          }),
         }),
       }),
       undefined,
@@ -198,10 +201,12 @@ describe('CharacterCreationSourceService', () => {
             {
               assetId: 'asset:missing',
               resource: {
-                kind: 'package-resource',
-                packageId: 'asset:missing',
-                revision: 'publication:missing',
-                resourcePath: 'avatar/missing.model3.json',
+                file: {
+                  authority: 'package',
+                  packageId: 'asset:missing',
+                  revision: 'publication:missing',
+                  path: 'avatar/missing.model3.json',
+                },
               },
               representationId: 'representation:missing',
               representationKind: 'live2d',
@@ -248,7 +253,9 @@ describe('CharacterCreationSourceService', () => {
       evidenceId: 'evidence:duplicate',
       sourceWorkspaceId: 'workspace:story',
       sourceWorkspaceGrantId: 'grant:story',
-      locator: { kind: 'workspace-file' as const, path: 'characters/lin.md' },
+      locator: {
+        file: { authority: 'workspace' as const, path: 'characters/lin.md' },
+      },
       observedAt,
     };
 

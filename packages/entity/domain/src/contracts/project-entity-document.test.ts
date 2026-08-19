@@ -10,8 +10,6 @@ import {
   type ProjectEntityRecord,
 } from './project-entity-document';
 
-const DIGEST_A = 'a'.repeat(64);
-
 describe('Project Entity document contract', () => {
   it('round-trips every supported Project Entity kind', () => {
     const kinds = ['character', 'scene', 'object', 'location', 'style'] as const;
@@ -31,7 +29,7 @@ describe('Project Entity document contract', () => {
     );
   });
 
-  it('keeps exact package revision and digest in an accepted representation binding', () => {
+  it('keeps exact package authority in an accepted representation binding', () => {
     const entity = createEntity({ entityId: 'character-rin', kind: 'character', canonical: 'Rin' });
     const document = createDocument([
       {
@@ -41,11 +39,12 @@ describe('Project Entity document contract', () => {
             bindingId: 'binding-rin-portrait',
             role: 'portrait',
             target: {
-              kind: 'package-resource',
-              packageId: 'asset-rin',
-              revision: 'revision-7',
-              digest: DIGEST_A,
-              resourcePath: 'portraits/rin.png',
+              file: {
+                authority: 'package',
+                packageId: 'asset-rin',
+                revision: 'revision-7',
+                path: 'portraits/rin.png',
+              },
             },
             source: 'import',
             isDefault: true,
@@ -77,8 +76,10 @@ describe('Project Entity document contract', () => {
               {
                 ...representation,
                 target: {
-                  kind: 'workspace-file',
-                  path: 'neko/assets/Characters/portraits/rin.png',
+                  file: {
+                    authority: 'workspace',
+                    path: 'neko/assets/Characters/portraits/rin.png',
+                  },
                 },
               },
             ],
@@ -167,7 +168,7 @@ describe('Project Entity document contract', () => {
     const binding = {
       bindingId: 'binding-shared',
       role: 'portrait' as const,
-      target: { kind: 'workspace-file' as const, path: 'portraits/rin.png' },
+      target: { file: { authority: 'workspace' as const, path: 'portraits/rin.png' } },
       source: 'user' as const,
       acceptedAt: '2026-08-05T01:00:00.000Z',
     };
@@ -192,7 +193,7 @@ describe('Project Entity document contract', () => {
     });
   });
 
-  it('requires package bindings to include an exact digest', () => {
+  it('does not require package digest metadata in the content address', () => {
     const entity = createEntity({ entityId: 'character-rin', kind: 'character', canonical: 'Rin' });
     const document = createDocument([
       {
@@ -202,10 +203,12 @@ describe('Project Entity document contract', () => {
             bindingId: 'binding-rin-portrait',
             role: 'portrait',
             target: {
-              kind: 'package-resource',
-              packageId: 'asset-rin',
-              revision: 'revision-7',
-              resourcePath: 'portraits/rin.png',
+              file: {
+                authority: 'package',
+                packageId: 'asset-rin',
+                revision: 'revision-7',
+                path: 'portraits/rin.png',
+              },
             },
             source: 'import',
             acceptedAt: '2026-08-05T01:00:00.000Z',
@@ -214,11 +217,7 @@ describe('Project Entity document contract', () => {
       },
     ]);
 
-    expect(decodeProjectEntityDocument(document)).toMatchObject({
-      ok: true,
-      document: { entities: [] },
-      diagnostics: [{ code: 'invalid-project-entity-document' }],
-    });
+    expect(decodeProjectEntityDocument(document)).toEqual({ ok: true, document, diagnostics: [] });
   });
 
   it('validates lifecycle references within the exact document', () => {
@@ -327,7 +326,7 @@ describe('Project Entity document contract', () => {
             evidenceId: 'evidence-script-rin',
             owner: 'document',
             sourceId: 'script-main',
-            locator: { kind: 'workspace-file', path: 'scripts/main.fountain' },
+            locator: { file: { authority: 'workspace', path: 'scripts/main.fountain' } },
             observedAt: '2026-08-05T03:00:00.000Z',
           },
           {

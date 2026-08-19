@@ -3,6 +3,7 @@ import {
   GenerationExecutionOutcomeUnknownError,
   type MediaGenerationResult,
 } from '../../execution';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 import { GenerationJobCoordinator } from '../coordinator';
 import { createInMemoryGenerationJobStore } from '../store';
 
@@ -480,9 +481,7 @@ describe('GenerationJobCoordinator', () => {
 function createCoordinator(
   execution: ReturnType<typeof createExecution>,
   resultCommitter: {
-    commit: (
-      input: unknown,
-    ) => Promise<readonly import('@neko/content').GeneratedOutputContentLocator[]>;
+    commit: (input: unknown) => Promise<readonly WorkspaceFileContentLocator[]>;
   },
 ) {
   let id = 0;
@@ -557,12 +556,9 @@ function generationResult(): MediaGenerationResult {
   };
 }
 
-function createResultLocator(id: string) {
+function createResultLocator(id: string): WorkspaceFileContentLocator {
   return {
-    kind: 'generated-output' as const,
-    outputId: id,
-    digest: `sha256:${id}`,
-    path: `neko/generated/image/${id}.png`,
+    file: { authority: 'workspace', path: `neko/generated/image/${id}.png` },
   };
 }
 

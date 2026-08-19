@@ -49,7 +49,7 @@ describe('Resource Browser Workspace File mutations', () => {
       label: 'references',
       role: 'directory' as const,
       depth: 0,
-      locator: { kind: 'workspace-file' as const, path: 'references' },
+      locator: { file: { authority: 'workspace' as const, path: 'references' } },
       capabilities: [],
     };
 
@@ -73,7 +73,7 @@ describe('Resource Browser Workspace File mutations', () => {
       label: 'references',
       role: 'directory' as const,
       depth: 0,
-      locator: { kind: 'workspace-file' as const, path: 'references' },
+      locator: { file: { authority: 'workspace' as const, path: 'references' } },
       capabilities: [],
     };
     await rm(path.join(workspacePath, 'references'), { recursive: true });
@@ -178,7 +178,7 @@ describe('Resource Browser Workspace File mutations', () => {
       label: 'notes.txt',
       role: 'content' as const,
       depth: 0,
-      locator: { kind: 'workspace-file' as const, path: 'notes.txt' },
+      locator: { file: { authority: 'workspace' as const, path: 'notes.txt' } },
       capabilities: [],
     };
     await writeFile(path.join(workspacePath, 'notes.txt'), 'notes', 'utf8');
@@ -207,7 +207,7 @@ describe('Resource Browser Workspace File mutations', () => {
       label: 'neko',
       role: 'directory' as const,
       depth: 0,
-      locator: { kind: 'workspace-file' as const, path: 'neko' },
+      locator: { file: { authority: 'workspace' as const, path: 'neko' } },
       capabilities: [],
     };
     const factsFile = {
@@ -217,7 +217,7 @@ describe('Resource Browser Workspace File mutations', () => {
       label: 'project.json',
       role: 'content' as const,
       depth: 0,
-      locator: { kind: 'workspace-file' as const, path: 'neko/project.json' },
+      locator: { file: { authority: 'workspace' as const, path: 'neko/project.json' } },
       capabilities: [],
     };
     const localStateFile = {
@@ -227,7 +227,7 @@ describe('Resource Browser Workspace File mutations', () => {
       label: 'local.json',
       role: 'content' as const,
       depth: 0,
-      locator: { kind: 'workspace-file' as const, path: '.neko/local.json' },
+      locator: { file: { authority: 'workspace' as const, path: '.neko/local.json' } },
       capabilities: [],
     };
 

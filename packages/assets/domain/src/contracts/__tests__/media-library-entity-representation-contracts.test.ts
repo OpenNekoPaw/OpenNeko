@@ -7,29 +7,19 @@ import {
 import { decodeProjectEntityDocument, type ProjectEntityDocument } from '@neko/entity-domain';
 
 const representations = [
+  { file: { authority: 'workspace', path: 'neko/assets/Characters/alice.png' } },
   {
-    kind: 'workspace-file',
-    path: 'neko/assets/Characters/alice.png',
-    fingerprint: { strategy: 'sha256', value: 'sha256:alice' },
+    file: { authority: 'workspace', path: 'references/comic.epub' },
+    selector: { kind: 'entry', path: 'OPS/images/page-1.jpg' },
   },
+  { file: { authority: 'workspace', path: 'neko/generated/images/alice.png' } },
   {
-    kind: 'document-entry',
-    source: { kind: 'workspace-file', path: 'references/comic.epub' },
-    entryPath: 'OPS/images/page-1.jpg',
-  },
-  {
-    kind: 'generated-output',
-    outputId: 'generated-alice',
-    digest: 'sha256:generated-alice',
-    path: 'neko/generated/images/alice.png',
-  },
-  {
-    kind: 'package-resource',
-    packageId: 'live2d-alice',
-    revision: 'revision-1',
-    resourcePath: 'model/alice.model3.json',
-    digest: 'sha256:live2d-alice',
-    manifestPath: 'neko/packages/live2d-alice/manifest.json',
+    file: {
+      authority: 'package',
+      packageId: 'live2d-alice',
+      revision: 'revision-1',
+      path: 'model/alice.model3.json',
+    },
   },
 ] as const;
 

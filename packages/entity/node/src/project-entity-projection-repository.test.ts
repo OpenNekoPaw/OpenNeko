@@ -240,8 +240,7 @@ describe('Project Entity projection repository', () => {
             entityId: 'char_rin',
             entityKind: 'character',
             representation: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Characters/rin.png',
+              file: { authority: 'workspace', path: 'neko/assets/Characters/rin.png' },
             },
             role: 'portrait',
             owner: 'workspace-file',

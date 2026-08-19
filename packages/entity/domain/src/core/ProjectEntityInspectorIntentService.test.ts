@@ -23,7 +23,7 @@ describe('ProjectEntityInspectorIntentService', () => {
       entityId: 'entity-rin',
       binding: {
         role: 'portrait',
-        target: { kind: 'workspace-file', path: 'rin.png' },
+        target: { file: { authority: 'workspace', path: 'rin.png' } },
         isDefault: true,
       },
     });

@@ -396,9 +396,6 @@ function parseRepresentation(value: unknown): ProjectEntityRepresentationBinding
   ) {
     return undefined;
   }
-  if (target.locator.kind === 'package-resource' && target.locator.digest === undefined) {
-    return undefined;
-  }
   return {
     bindingId: value['bindingId'],
     role: value['role'],

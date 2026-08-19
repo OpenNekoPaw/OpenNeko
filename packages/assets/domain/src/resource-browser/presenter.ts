@@ -130,9 +130,10 @@ function presentContentCapabilities(
   const result: ResourceBrowserCapability[] = [];
   if (
     source === 'files' &&
-    locator.kind === 'workspace-file' &&
+    locator.file.authority === 'workspace' &&
+    locator.selector === undefined &&
     capabilities.includes('read') &&
-    modeForTextDocument(locator.path)
+    modeForTextDocument(locator.file.path)
   ) {
     result.push('edit-text');
   }

@@ -5,7 +5,7 @@ import type { ResourceBrowserContentEntry } from './ports';
 describe('Resource Browser presenter', () => {
   it('projects portable media identity without leaking a host path', () => {
     const entry: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'assets/cat.png' },
+      locator: { file: { authority: 'workspace', path: 'assets/cat.png' } },
       label: 'cat.png',
       availability: 'available',
       capabilities: ['read', 'preview', 'bind'],
@@ -50,7 +50,7 @@ describe('Resource Browser presenter', () => {
   it('offers Cut handoff only for bindable video or audio media', () => {
     const video = presentResourceBrowserContentItem(
       {
-        locator: { kind: 'workspace-file', path: 'media/shot.mp4' },
+        locator: { file: { authority: 'workspace', path: 'media/shot.mp4' } },
         label: 'shot.mp4',
         availability: 'available',
         capabilities: ['read', 'preview', 'bind'],
@@ -62,7 +62,7 @@ describe('Resource Browser presenter', () => {
     );
     const document = presentResourceBrowserContentItem(
       {
-        locator: { kind: 'workspace-file', path: 'docs/story.pdf' },
+        locator: { file: { authority: 'workspace', path: 'docs/story.pdf' } },
         label: 'story.pdf',
         availability: 'available',
         capabilities: ['read', 'preview', 'bind'],
@@ -80,7 +80,7 @@ describe('Resource Browser presenter', () => {
   it('projects editable Workspace text only through the canonical admission registry', () => {
     const markdown = presentResourceBrowserContentItem(
       {
-        locator: { kind: 'workspace-file', path: 'notes/readme.md' },
+        locator: { file: { authority: 'workspace', path: 'notes/readme.md' } },
         label: 'readme.md',
         availability: 'available',
         capabilities: ['read', 'preview'],
@@ -92,7 +92,7 @@ describe('Resource Browser presenter', () => {
     );
     const unsupported = presentResourceBrowserContentItem(
       {
-        locator: { kind: 'workspace-file', path: 'data/archive.bin' },
+        locator: { file: { authority: 'workspace', path: 'data/archive.bin' } },
         label: 'archive.bin',
         availability: 'available',
         capabilities: ['read', 'preview'],

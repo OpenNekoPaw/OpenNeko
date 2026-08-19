@@ -639,18 +639,6 @@ async function buildSnapshotEntries(input: {
           'Portable snapshot requirement has no authoritative source locator.',
         );
       }
-      const declaredFingerprints = new Set(
-        matchingReferences
-          .map((reference) => reference.locator.fingerprint)
-          .filter((fingerprint) => fingerprint !== undefined)
-          .map((fingerprint) => `${fingerprint.strategy}:${fingerprint.value}`),
-      );
-      if (declaredFingerprints.size > 1) {
-        throw new PortableMediaLibrarySnapshotError(
-          'snapshot-content-unavailable',
-          'Authoritative references disagree about a linked media fingerprint.',
-        );
-      }
       const destinationPath = `media/collected/${requirement.libraryName}/${descendant}`;
       if (await optionalLstat(path.join(input.workspacePath, ...destinationPath.split('/')))) {
         throw new PortableMediaLibrarySnapshotError(

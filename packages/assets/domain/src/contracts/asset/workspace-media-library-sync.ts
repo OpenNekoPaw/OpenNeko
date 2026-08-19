@@ -1,5 +1,6 @@
 import {
   contentLocatorKey,
+  isWorkspaceFileContentLocator,
   normalizeWorkspaceContentPath,
   validateContentLocator,
   type ContentLocator,
@@ -422,8 +423,10 @@ function workspaceMediaLibraryReference(
   if (!validated.ok) {
     throw new Error(`Project content owner '${owner.ownerId}' returned an invalid ContentLocator.`);
   }
-  if (validated.locator.kind !== 'workspace-file') return undefined;
-  const segments = validated.locator.path.split('/');
+  if (!isWorkspaceFileContentLocator(validated.locator) || validated.locator.selector) {
+    return undefined;
+  }
+  const segments = validated.locator.file.path.split('/');
   if (segments[0] !== 'neko' || segments[1] !== 'assets' || segments.length < 4) return undefined;
   const libraryName = segments[2];
   const descendantPath = segments.slice(3).join('/');

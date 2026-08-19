@@ -113,7 +113,7 @@ describe('Resource Browser contract', () => {
           depth: 0,
           kind: 'image',
           label: 'cat.png',
-          locator: { kind: 'workspace-file', path: 'assets/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'assets/cat.png' } },
           capabilities: ['preview', 'reveal', 'add-to-canvas', 'add-to-cut'],
           thumbnail: {
             descriptorId: 'thumbnail-1',
@@ -167,7 +167,7 @@ describe('Resource Browser contract', () => {
           depth: 0,
           kind: 'directory',
           label: 'media',
-          locator: { kind: 'workspace-file', path: 'media' },
+          locator: { file: { authority: 'workspace', path: 'media' } },
           capabilities: ['reveal'],
         },
         {
@@ -178,7 +178,7 @@ describe('Resource Browser contract', () => {
           depth: 1,
           kind: 'image',
           label: 'cat.png',
-          locator: { kind: 'workspace-file', path: 'media/cat.png' },
+          locator: { file: { authority: 'workspace', path: 'media/cat.png' } },
           capabilities: ['preview'],
         },
       ]),
@@ -230,7 +230,7 @@ describe('Resource Browser contract', () => {
             source: 'files',
             kind: 'file',
             label: 'secret',
-            locator: { kind: 'workspace-file', path: '/Users/private/secret.txt' },
+            locator: { file: { authority: 'workspace', path: '/Users/private/secret.txt' } },
             capabilities: ['reveal'],
           },
         ]),
@@ -254,7 +254,7 @@ describe('Resource Browser contract', () => {
       descriptor: {
         descriptorId: 'descriptor-1',
         sourceFingerprint: 'fingerprint-1',
-        contentLocator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+        contentLocator: { file: { authority: 'workspace', path: 'media/clip.mp4' } },
         url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         contentKind: 'video',
         mediaType: 'video/mp4',
@@ -314,7 +314,7 @@ describe('Resource Browser contract', () => {
             kind: 'directory',
             label: 'Footage',
             libraryName: 'Footage',
-            locator: { kind: 'workspace-file', path: 'neko/assets/Footage' },
+            locator: { file: { authority: 'workspace', path: 'neko/assets/Footage' } },
             capabilities: [],
             libraryStatus: {
               libraryName: 'Footage',

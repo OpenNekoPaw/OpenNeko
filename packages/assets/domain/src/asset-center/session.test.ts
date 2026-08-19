@@ -21,7 +21,7 @@ describe('AssetCenterSession', () => {
       owner: 'media-library',
       itemId: 'media-library:item-1',
       item: fileEntry().item,
-      contentLocator: { kind: 'workspace-file', path: 'shots/shot.png' },
+      contentLocator: { file: { authority: 'workspace', path: 'shots/shot.png' } },
     });
     expect(JSON.stringify(selected)).not.toContain('/private/');
   });
@@ -101,7 +101,9 @@ function fileEntry() {
       relativePath: 'shots/shot.png',
       availability: 'available' as const,
     },
-    contentLocator: { kind: 'workspace-file' as const, path: 'shots/shot.png' },
+    contentLocator: {
+      file: { authority: 'workspace' as const, path: 'shots/shot.png' },
+    },
   };
 }
 

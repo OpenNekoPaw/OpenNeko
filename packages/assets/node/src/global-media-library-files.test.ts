@@ -161,7 +161,7 @@ describe('Desktop global Media Library connections', () => {
       sourceDirectory,
       locationKind: 'local',
     });
-    const source: ContentLocator = { kind: 'workspace-file', path: 'shots/source.mp4' };
+    const source: ContentLocator = { file: { authority: 'workspace', path: 'shots/source.mp4' } };
 
     const result = await copyDesktopGlobalMediaLibraryContent({
       mediaLibraryRoot: registry,
@@ -197,7 +197,7 @@ describe('Desktop global Media Library connections', () => {
       sourceDirectory,
       locationKind: 'nas',
     });
-    const source: ContentLocator = { kind: 'workspace-file', path: 'incoming/shot.mp4' };
+    const source: ContentLocator = { file: { authority: 'workspace', path: 'incoming/shot.mp4' } };
 
     await expect(
       copyDesktopGlobalMediaLibraryContent({
@@ -246,7 +246,7 @@ describe('Desktop global Media Library connections', () => {
       sourceDirectory,
       locationKind: 'cloud',
     });
-    const source: ContentLocator = { kind: 'workspace-file', path: 'incoming/shot.mp4' };
+    const source: ContentLocator = { file: { authority: 'workspace', path: 'incoming/shot.mp4' } };
 
     await expect(
       copyDesktopGlobalMediaLibraryContent({

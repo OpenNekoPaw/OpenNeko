@@ -47,7 +47,7 @@ describe('Node workspace-linked media libraries', () => {
     });
 
     const result = await content.read(
-      { kind: 'workspace-file', path: 'neko/assets/Footage/referenced.mov' },
+      { file: { authority: 'workspace', path: 'neko/assets/Footage/referenced.mov' } },
       { maxBytes: 1024 },
     );
 

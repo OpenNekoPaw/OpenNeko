@@ -75,10 +75,7 @@ describe('Project Media Library mention search', () => {
     });
 
     expect(locators).toEqual([
-      {
-        kind: 'workspace-file',
-        path: 'neko/assets/Reference/shots/hero.png',
-      },
+      { file: { authority: 'workspace', path: 'neko/assets/Reference/shots/hero.png' } },
     ]);
     expect(JSON.stringify(locators)).not.toContain(libraryTarget);
     expect(JSON.stringify(locators)).not.toContain('secret.png');
