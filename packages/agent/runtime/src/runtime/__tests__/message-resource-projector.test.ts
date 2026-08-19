@@ -98,7 +98,7 @@ describe('message resource projector', () => {
             timestamp: 1,
             toolCall: {
               id: 'tool-1',
-              name: 'ReadImage',
+              name: 'openneko.document',
               arguments: { contentLocator },
               result: {
                 success: true,
@@ -124,7 +124,7 @@ describe('message resource projector', () => {
       timestamp: 1,
       toolCall: {
         id: 'tool-1',
-        name: 'ReadImage',
+        name: 'openneko.document',
         arguments: { contentLocator },
         result: {
           success: true,

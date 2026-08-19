@@ -26,8 +26,8 @@ describe('attachment projection helpers', () => {
       'book.epub',
       '${A}/books/book.epub',
     );
-    expect(documentReference).toContain('Use ReadDocument');
-    expect(documentReference).toContain('source={"kind":"file","path":"${A}/books/book.epub"}');
+    expect(documentReference).toContain('Use openneko.document');
+    expect(documentReference).not.toContain('ReadDocument');
     expect(
       formatMediaAttachmentReference({
         type: 'video',
@@ -37,7 +37,7 @@ describe('attachment projection helpers', () => {
     ).toBe('\n\n[Attached video: clip.mp4] (path: /tmp/clip.mp4)');
   });
 
-  it('localizes document attachment references while preserving ReadDocument contracts', () => {
+  it('localizes document attachment references while preserving the DSH document contract', () => {
     const documentReference = formatDocumentAttachmentReference(
       'book.epub',
       '${A}/books/book.epub',
@@ -45,9 +45,9 @@ describe('attachment projection helpers', () => {
     );
 
     expect(documentReference).toContain('[已附加 文档: book.epub]');
-    expect(documentReference).toContain('分析该文档前，先调用 ReadDocument');
-    expect(documentReference).toContain('source={"kind":"file","path":"${A}/books/book.epub"}');
-    expect(documentReference).not.toContain('Use ReadDocument with source=');
+    expect(documentReference).toContain('分析该文档前，先调用 openneko.document');
+    expect(documentReference).not.toContain('ReadDocument');
+    expect(documentReference).not.toContain('source={"kind":"file"');
   });
 
   it('extracts file reference chip paths from a message', () => {
@@ -94,7 +94,7 @@ describe('attachment projection helpers', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('projects document attachments as ReadDocument references without reading them', async () => {
+  it('projects document attachments as DSH document references without reading them', async () => {
     const readTextFile = vi.fn(async () => {
       throw new Error('document should not be read as text');
     });
@@ -117,8 +117,8 @@ describe('attachment projection helpers', () => {
 
     expect(readTextFile).not.toHaveBeenCalled();
     expect(result.textContent).toContain('[已附加 文档: book.epub]');
-    expect(result.textContent).toContain('分析该文档前，先调用 ReadDocument');
-    expect(result.textContent).toContain('source={"kind":"file","path":"${A}/books/book.epub"}');
+    expect(result.textContent).toContain('分析该文档前，先调用 openneko.document');
+    expect(result.textContent).not.toContain('ReadDocument');
     expect(result.textContent).not.toContain('document should not be read');
   });
 

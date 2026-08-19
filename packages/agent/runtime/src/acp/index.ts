@@ -8,6 +8,7 @@ export {
 export { CanvasDshHostAdapter } from './canvas-host-adapter';
 export { CutDshHostAdapter } from './cut-host-adapter';
 export { GenerationDshHostAdapter } from './generation-host-adapter';
+export { DocumentDshHostAdapter } from './document-host-adapter';
 export {
   createDshDomainToolHandlers,
   type DshDomainToolHandlers,

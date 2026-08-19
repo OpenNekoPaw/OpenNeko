@@ -21,3 +21,9 @@ export {
   type WorkspacePathGuardDiagnosticCode,
   type WorkspacePathGuardResult,
 } from './workspace-path-guard';
+export {
+  createNodeDocumentAccessService,
+  loadNodeDocumentModule,
+  NODE_DOCUMENT_MODULE_NAMES,
+  type CreateNodeDocumentAccessServiceOptions,
+} from '../document/node';

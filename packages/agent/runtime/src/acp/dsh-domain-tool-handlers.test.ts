@@ -20,6 +20,7 @@ describe('DSH domain Tool handlers', () => {
       generation: { resolveJobs },
       canvas: { resolveService: vi.fn() },
       cut: { resolveService: vi.fn() },
+      document: { resolveRuntime: vi.fn() },
     });
 
     await expect(
@@ -48,6 +49,7 @@ describe('DSH domain Tool handlers', () => {
       generation: { resolveJobs: vi.fn() },
       canvas: { resolveService },
       cut: { resolveService: vi.fn() },
+      document: { resolveRuntime: vi.fn() },
     });
 
     await expect(
@@ -75,6 +77,7 @@ describe('DSH domain Tool handlers', () => {
       generation: { resolveJobs },
       canvas: { resolveService: vi.fn() },
       cut: { resolveService: vi.fn() },
+      document: { resolveRuntime: vi.fn() },
     });
 
     await expect(
@@ -108,6 +111,7 @@ describe('DSH domain Tool handlers', () => {
       generation: { resolveJobs: vi.fn() },
       canvas: { resolveService: vi.fn() },
       cut: { resolveService },
+      document: { resolveRuntime: vi.fn() },
     });
 
     await expect(

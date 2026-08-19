@@ -16,6 +16,34 @@ afterEach(async () => {
 });
 
 describe('Desktop DSH domain Tool handlers', () => {
+  it('resolves the exact Workspace grant for the canonical document Tool', async () => {
+    const root = await createRoot();
+    await writeFile(join(root, 'notes.md'), '# Story');
+    const resolveAuthorizedWorkspace = vi.fn(async () => workspaceResolution(root));
+    const handlers = createDesktopDshDomainToolHandlers({
+      bindings: {
+        async getByDshSessionId() {
+          return sessionBinding();
+        },
+      },
+      contexts: {
+        async readContext() {
+          return workspaceContext();
+        },
+      },
+      workspaceGrants: { resolveAuthorizedWorkspace },
+      generationRuntime: { getJobs: vi.fn() },
+      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      assistant: { assistantSpaceId: 'assistant:one', root },
+      cutRuntime: undefined,
+    });
+
+    await expect(
+      handlers.executeDocumentTool(documentRequest(), new AbortController().signal),
+    ).resolves.toMatchObject({ outcome: 'success', result: { text: '# Story' } });
+    expect(resolveAuthorizedWorkspace).toHaveBeenCalledWith('workspace-grant:one', 'workspace:one');
+  });
+
   it('resolves exact Workspace grant and purpose model for Generation', async () => {
     const root = await createRoot();
     const resolveAuthorizedWorkspace = vi.fn(async () => workspaceResolution(root));
@@ -165,10 +193,7 @@ describe('Desktop DSH domain Tool handlers', () => {
     await expect(
       handlers.executeCutTool(exportDescribeRequest(), new AbortController().signal),
     ).resolves.toMatchObject({ outcome: 'success', jobId: 'job:one' });
-    expect(resolveAuthorizedWorkspace).toHaveBeenCalledWith(
-      'workspace-grant:one',
-      'workspace:one',
-    );
+    expect(resolveAuthorizedWorkspace).toHaveBeenCalledWith('workspace-grant:one', 'workspace:one');
     expect(resolveExportService).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: 'workspace:one',
@@ -349,6 +374,17 @@ function canvasRequest(): DshAcpDomainToolRequest {
     tool: 'openneko.canvas',
     operation: 'query',
     input: { documentPath: 'boards/main.nkc' },
+  };
+}
+
+function documentRequest(): DshAcpDomainToolRequest {
+  return {
+    sessionId: 'dsh-session:one',
+    turn: 1,
+    toolCallId: 'call:document',
+    tool: 'openneko.document',
+    operation: 'read',
+    input: { source: { kind: 'workspace-file', path: 'notes.md' } },
   };
 }
 

@@ -10,12 +10,14 @@ const OPENNEKO_PROFILE_BUNDLES = Object.freeze([
   '@neko/generation-dsh-plugin',
   '@neko/canvas-dsh-plugin',
   '@neko/cut-dsh-plugin',
+  '@neko/content-dsh-plugin',
 ]);
 const OPENNEKO_PACKAGES = Object.freeze([
   '@neko/dsh-bridge',
   '@neko/generation-dsh-plugin',
   '@neko/canvas-dsh-plugin',
   '@neko/cut-dsh-plugin',
+  '@neko/content-dsh-plugin',
 ]);
 const EMPTY_DSH_PATCH = '[]\n';
 

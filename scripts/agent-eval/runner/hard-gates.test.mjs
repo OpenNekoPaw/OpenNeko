@@ -428,7 +428,7 @@ describe('M2 typed path hard gates', () => {
       },
       {
         id: 'read-1',
-        name: 'ReadImage',
+        name: 'read_image',
         status: 'success',
         arguments: { images: [{ contentLocator: locator }] },
         result: { analysis: 'visible' },
@@ -453,7 +453,7 @@ describe('M2 typed path hard gates', () => {
       id: 'locator-handoff',
       kind: 'content-locator-handoff',
       producerToolName: 'GenerateImage',
-      consumerToolName: 'ReadImage',
+      consumerToolName: 'read_image',
       locatorKind: 'generated-output',
       artifactKind: 'generated-asset',
       provenanceSource: 'generated-output',

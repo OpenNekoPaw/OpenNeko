@@ -118,7 +118,7 @@ export {
   formatDocumentAttachmentReference,
   formatFileAttachmentContent,
   formatMediaAttachmentReference,
-  formatReadDocumentInstruction,
+  formatDocumentReadInstruction,
   formatUnreadableFileAttachment,
   normalizeAgentRuntimePromptLocale,
   parseBase64DataUrl,

@@ -53,6 +53,10 @@ function createHandlers(): DshAcpApplicationClientHandlers {
       outcome: 'success' as const,
       result: {},
     })),
+    executeDocumentTool: vi.fn(async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
+      outcome: 'success' as const,
+      result: {},
+    })),
     onSessionUpdate: vi.fn(),
     onSessionEvent: vi.fn(),
   };

@@ -63,6 +63,7 @@ export function createDesktopDshProductHandlers(options: {
     executeGenerationTool: (request, signal) => domainTools.executeGenerationTool(request, signal),
     executeCanvasTool: (request, signal) => domainTools.executeCanvasTool(request, signal),
     executeCutTool: (request, signal) => domainTools.executeCutTool(request, signal),
+    executeDocumentTool: (request, signal) => domainTools.executeDocumentTool(request, signal),
     onSessionUpdate: options.onSessionUpdate,
     onSessionEvent: options.onSessionEvent,
   };

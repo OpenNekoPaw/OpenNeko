@@ -1,6 +1,17 @@
 {
   "tools": [
     {
+      "tool": "openneko.document",
+      "operations": ["read", "continue", "read-images"],
+      "registration": "packages/content/dsh-plugin/src/index.ts",
+      "schemaOwner": "packages/content/src/document/dsh-tool.ts",
+      "validator": "decodeDocumentDshToolInput",
+      "permissionOwner": "packages/agent/runtime/src/application/dsh-permission-owner.ts",
+      "authorizationOwner": "apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers.ts",
+      "applicationService": "AgentContentAccessRuntime + DocumentAccessService",
+      "durableOwner": "Content document authority"
+    },
+    {
       "tool": "openneko.generation",
       "operations": ["submit", "describe"],
       "registration": "packages/generation/dsh-plugin/src/index.ts",

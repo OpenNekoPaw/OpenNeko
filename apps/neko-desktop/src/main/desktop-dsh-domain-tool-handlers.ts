@@ -2,13 +2,16 @@ import type {
   AgentConversationContextAuthorityPort,
   ConversationDshSessionBindingStore,
 } from '@neko/agent-runtime/application';
+import { createHostAgentContentAccessRuntime } from '@neko/agent-runtime/runtime';
 import { createDshDomainToolContextResolver } from '@neko/agent-runtime/application';
 import { createDshDomainToolHandlers, type DshDomainToolHandlers } from '@neko/agent-runtime/acp';
 import { CanvasProjectAuthoringService } from '@neko/canvas-domain';
 import {
   createNodeHostContentReadService,
+  createNodeDocumentAccessService,
   NodeAuthorizedWorkspaceWriter,
 } from '@neko/content/node';
+import { join } from 'node:path';
 import { CutProjectAuthoringService } from '@neko/cut-domain';
 import type { CutExportApplicationService } from '@neko/cut-node';
 import {
@@ -136,6 +139,33 @@ export function createDesktopDshDomainToolHandlers(options: {
           describe: exportService.describe.bind(exportService),
           cancel: exportService.cancel.bind(exportService),
         };
+      },
+    },
+    document: {
+      resolveRuntime: async (context) => {
+        const root =
+          context.binding.kind === 'assistant'
+            ? options.assistant.root
+            : context.binding.kind === 'workspace'
+              ? (
+                  await options.workspaceGrants.resolveAuthorizedWorkspace(
+                    context.binding.workspaceGrantId,
+                    context.binding.workspaceId,
+                  )
+                ).workspace.workspacePath
+              : (() => {
+                  throw Object.assign(
+                    new Error(
+                      `Document access is unavailable for ${context.binding.kind} Conversation context.`,
+                    ),
+                    { code: 'DOCUMENT_DSH_CONTEXT_UNSUPPORTED' },
+                  );
+                })();
+        return createHostAgentContentAccessRuntime({
+          contentRead: createNodeHostContentReadService({ workspaceRoot: root }),
+          documentAccess: createNodeDocumentAccessService(),
+          resolveDocumentHostFilePath: (source) => join(root, ...source.path.split('/')),
+        });
       },
     },
   });

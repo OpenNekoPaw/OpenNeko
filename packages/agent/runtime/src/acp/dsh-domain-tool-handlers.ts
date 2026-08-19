@@ -9,6 +9,7 @@ import type {
   CutProjectAuthoringService,
 } from '@neko/cut-domain';
 import type { PurposeGenerationJobPort } from '@neko/generation/job';
+import type { AgentContentAccessRuntime } from '../runtime/capability/agent-content-access-runtime';
 
 import type {
   DshDomainToolContext,
@@ -17,6 +18,7 @@ import type {
 import { CanvasDshHostAdapter } from './canvas-host-adapter';
 import { CutDshHostAdapter } from './cut-host-adapter';
 import { GenerationDshHostAdapter } from './generation-host-adapter';
+import { DocumentDshHostAdapter } from './document-host-adapter';
 
 export interface DshDomainToolHandlers {
   executeGenerationTool(
@@ -28,6 +30,10 @@ export interface DshDomainToolHandlers {
     signal: AbortSignal,
   ): Promise<DshAcpDomainToolResponse>;
   executeCutTool(
+    request: DshAcpDomainToolRequest,
+    signal: AbortSignal,
+  ): Promise<DshAcpDomainToolResponse>;
+  executeDocumentTool(
     request: DshAcpDomainToolRequest,
     signal: AbortSignal,
   ): Promise<DshAcpDomainToolResponse>;
@@ -70,6 +76,9 @@ export function createDshDomainToolHandlers(options: {
       }
     >;
   };
+  readonly document: {
+    resolveRuntime(context: DshDomainToolContext): Promise<AgentContentAccessRuntime>;
+  };
 }): DshDomainToolHandlers {
   return Object.freeze({
     async executeGenerationTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
@@ -108,6 +117,13 @@ export function createDshDomainToolHandlers(options: {
           );
         }
         return options.cut.resolveService({ ...context, binding: context.binding });
+      }).execute(request, signal);
+    },
+
+    async executeDocumentTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
+      return new DocumentDshHostAdapter(async () => {
+        const context = await options.contexts.resolve(request.sessionId);
+        return options.document.resolveRuntime(context);
       }).execute(request, signal);
     },
   });

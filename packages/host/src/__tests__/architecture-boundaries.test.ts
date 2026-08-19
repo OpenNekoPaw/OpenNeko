@@ -33,8 +33,7 @@ describe('@neko/host architecture boundaries', () => {
       /BrowserWindow/,
       /Workbench(Contribution|Feature|Webview)/,
       /AgentHostRuntime/,
-      /ReadDocument/,
-      /ReadImage/,
+      /ReadDocument|ReadImage/,
     ];
 
     for (const file of files) {

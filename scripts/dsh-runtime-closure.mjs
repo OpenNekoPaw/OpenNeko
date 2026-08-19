@@ -60,6 +60,7 @@ export function assertDshRuntimeDirectory(runtimeRoot, target, options = {}) {
         '@neko/generation-dsh-plugin',
         '@neko/canvas-dsh-plugin',
         '@neko/cut-dsh-plugin',
+        '@neko/content-dsh-plugin',
       ])
   ) {
     throw new Error('DSH runtime profile manifest does not declare the canonical OpenNeko bundles.');

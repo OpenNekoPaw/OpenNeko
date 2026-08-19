@@ -1,0 +1,5 @@
+- insert:
+    - id: openneko-content-tools
+      name: '@neko/content-dsh-plugin'
+      plugin: '@neko/content-dsh-plugin'
+      apply: apply

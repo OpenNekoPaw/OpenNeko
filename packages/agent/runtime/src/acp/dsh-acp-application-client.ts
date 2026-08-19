@@ -52,6 +52,7 @@ import {
 import { CANVAS_DSH_TOOL_NAME } from '@neko/canvas-domain';
 import { CUT_DSH_TOOL_NAME } from '@neko/cut-domain';
 import { GENERATION_DSH_TOOL_NAME } from '@neko/generation';
+import { DOCUMENT_DSH_TOOL_NAME } from '@neko/content/document';
 import { DshAcpProjection } from './dsh-acp-projection';
 
 export interface DshAcpApplicationClientHandlers {
@@ -72,6 +73,10 @@ export interface DshAcpApplicationClientHandlers {
     signal: AbortSignal,
   ) => Promise<DshAcpDomainToolResponse>;
   readonly executeCutTool: (
+    request: DshAcpDomainToolRequest,
+    signal: AbortSignal,
+  ) => Promise<DshAcpDomainToolResponse>;
+  readonly executeDocumentTool: (
     request: DshAcpDomainToolRequest,
     signal: AbortSignal,
   ) => Promise<DshAcpDomainToolResponse>;
@@ -584,6 +589,7 @@ class HostToolAdmission {
     if (tool === GENERATION_DSH_TOOL_NAME) return this.handlers.executeGenerationTool;
     if (tool === CANVAS_DSH_TOOL_NAME) return this.handlers.executeCanvasTool;
     if (tool === CUT_DSH_TOOL_NAME) return this.handlers.executeCutTool;
+    if (tool === DOCUMENT_DSH_TOOL_NAME) return this.handlers.executeDocumentTool;
     throw new Error(`DSH ACP requested unsupported domain tool ${tool}.`);
   }
 }

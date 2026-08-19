@@ -90,6 +90,7 @@ function createFixtureRuntime() {
             '@neko/generation-dsh-plugin',
             '@neko/canvas-dsh-plugin',
             '@neko/cut-dsh-plugin',
+            '@neko/content-dsh-plugin',
           ],
         },
       },

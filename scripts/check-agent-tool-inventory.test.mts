@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import { CANVAS_DSH_TOOL_NAME, CANVAS_DSH_TOOL_OPERATIONS } from '@neko/canvas-domain';
 import { CUT_DSH_TOOL_NAME, CUT_DSH_TOOL_OPERATIONS } from '@neko/cut-domain';
 import { GENERATION_DSH_TOOL_NAME, GENERATION_DSH_TOOL_OPERATIONS } from '@neko/generation';
+import { DOCUMENT_DSH_TOOL_NAME, DOCUMENT_DSH_TOOL_OPERATIONS } from '@neko/content/document';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 
@@ -29,6 +30,7 @@ test('production Agent Tool inventory matches every DSH plugin registration', as
   assert.deepEqual(
     inventory.tools.map((entry) => [entry.tool, entry.operations]),
     [
+      [DOCUMENT_DSH_TOOL_NAME, [...DOCUMENT_DSH_TOOL_OPERATIONS]],
       [GENERATION_DSH_TOOL_NAME, [...GENERATION_DSH_TOOL_OPERATIONS]],
       [CANVAS_DSH_TOOL_NAME, [...CANVAS_DSH_TOOL_OPERATIONS]],
       [CUT_DSH_TOOL_NAME, [...CUT_DSH_TOOL_OPERATIONS]],

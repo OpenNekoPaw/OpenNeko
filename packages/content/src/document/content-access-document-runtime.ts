@@ -164,7 +164,7 @@ export class DocumentContentAccessRuntime {
     stableSource: DocumentSourceRef,
     input: DocumentContentAccessInput,
   ): Promise<DocumentReadyOutput> {
-    if (!input.range) throw new Error('ReadDocument range mode requires a range.');
+    if (!input.range) throw new Error('openneko.document range mode requires a range.');
     const result = await this.deps.documentAccess.readRange(source, {
       ...input.range,
       limit: {
@@ -180,7 +180,7 @@ export class DocumentContentAccessRuntime {
     stableSource: DocumentSourceRef,
     input: DocumentContentAccessInput,
   ): Promise<DocumentReadyOutput> {
-    if (!input.cursor) throw new Error('ReadDocument next mode requires a cursor.');
+    if (!input.cursor) throw new Error('openneko.document continue mode requires a cursor.');
     const hostFilePath = await this.deps.resolveHostFilePath(input.source);
     if (!hostFilePath) throw new Error('Document source is unavailable.');
     const result = await this.deps.documentAccess.readNext({

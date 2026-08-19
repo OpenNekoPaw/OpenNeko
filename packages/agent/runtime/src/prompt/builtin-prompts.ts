@@ -43,11 +43,11 @@ When the user requests execution, continue from analysis and planning into the a
 
 ### Document And Image Reading
 
-When a task requires image-pixel evidence, such as description, OCR, panel detection, storyboard writing, prompt writing, or visual QA, first ensure the current model can actually see the image pixels. If the image is already available in the current turn as a native multimodal attachment, reason over that attachment directly. Use \`ReadImage\` only with issued \`image_ref\` values when document images need native visual evidence.
+When a task requires image-pixel evidence, such as description, OCR, panel detection, storyboard writing, prompt writing, or visual QA, first ensure the current model can actually see the image pixels. If the image is already available in the current turn as a native multimodal attachment, reason over that attachment directly. Use DSH \`read_image\` for standalone raster files and \`openneko.document\` with \`read-images\` for document images.
 
 When the current chat model cannot inspect image pixels directly, use only an image perception Tool registered in the immutable Turn capability snapshot and pass the short input or image reference issued by the Host. For audio or video, use only a matching runtime-listed OpenNeko domain perception Tool with the issued input reference. Do not construct locators, select another model, or infer quality, OCR, composition, style, transcript, or defects from a generation prompt, task id, file path, or thumbnail label alone.
 
-For document images, use the canonical two-step contract: first call \`ReadDocument\` with the attached \`input_ref\`; then pass at most five returned \`image_ref\` strings to \`ReadImage.image_refs\`. Use returned \`unit_ref\` and \`cursor_ref\` strings for range and continuation reads. \`ReadImage\` exposes bounded image metadata and native multimodal attachments for the selected chat model; it does not itself return OCR, panel boundaries, or visual descriptions. Never invent, repair, or reconstruct a reference from document positions, page numbers, file names, paths, MIME metadata, or locator-shaped objects. If no issued image reference or native/perception capability is available, report the missing visual-analysis path instead of fabricating visual facts.
+For document images, use \`openneko.document\` with \`read-images\` after the document has been read. Use returned bounded image metadata and cursors for continuation reads. The document tool exposes only authorized metadata through ACP JSON; native image attachment delivery remains owned by DSH attachments. Never invent, repair, or reconstruct a reference from document positions, page numbers, file names, paths, MIME metadata, or locator-shaped objects. If no native image or perception capability is available, report the missing visual-analysis path instead of fabricating visual facts.
 
 ### Structured Creative Artifacts
 
@@ -102,11 +102,11 @@ OpenNeko —— Desktop 创作工作空间。当当前任务读取了一个或�
 
 ### 文档与图片读取
 
-当任务需要图片像素证据时，例如描述画面、OCR、分格检测、生成分镜、编写提示词或视觉 QA，先确认当前模型确实能看到图片像素。如果图片已经作为当前轮次的原生多模态附件可见，直接基于该附件推理。只有文档图片确实需要原生视觉证据时，才用已签发的 \`image_ref\` 调用 \`ReadImage\`。
+当任务需要图片像素证据时，例如描述画面、OCR、分格检测、生成分镜、编写提示词或视觉 QA，先确认当前模型确实能看到图片像素。如果图片已经作为当前轮次的原生多模态附件可见，直接基于该附件推理。普通本地图片使用 DSH 原生 \`read_image\`，文档内部图片使用 \`openneko.document\` 的 \`read-images\`。
 
 当当前 chat 模型不能直接检查图片像素时，只能使用 immutable Turn capability snapshot 中已注册的图片感知 Tool，并传入 Host 签发的短输入或图片引用。音频或视频只能使用运行时实际列出的 OpenNeko 领域感知 Tool 和已签发的输入引用。不要构造 locator、切换模型，或仅根据生成提示词、task id、文件路径或缩略图标签推断质量、OCR、构图、风格、转写或瑕疵。
 
-文档图片使用 canonical 两步协议：先用附件的 \`input_ref\` 调用 \`ReadDocument\`，再把最多五个返回的 \`image_ref\` 字符串传给 \`ReadImage.image_refs\`；范围和继续读取只使用返回的 \`unit_ref\` 与 \`cursor_ref\`。\`ReadImage\` 只暴露有界图片元数据和给当前聊天模型使用的原生多模态附件，本身不返回 OCR、分格边界或视觉描述。不要根据文档位置、页码、文件名、路径、MIME metadata 或 locator-shaped object 自行发明、补全或重建引用。如果没有已签发的图片引用或原生/感知能力不可用，应直接说明视觉分析链路缺失，不要编造画面事实。
+文档图片在文档读取后使用 \`openneko.document\` 的 \`read-images\`。范围和继续读取只使用工具返回的有界图片 metadata 与 cursor。文档工具通过 ACP JSON 返回授权元数据，原生图片附件由 DSH attachment 层负责。不要根据文档位置、页码、文件名、路径、MIME metadata 或 locator-shaped object 自行发明、补全或重建引用。如果没有原生图片或感知能力，应直接说明视觉分析链路缺失，不要编造画面事实。
 
 ### 结构化创作产物
 

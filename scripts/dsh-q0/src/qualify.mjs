@@ -171,6 +171,7 @@ async function createW2Profile(dshHome) {
           '@neko/dsh-bridge': '*',
           '@neko/generation-dsh-plugin': '*',
           '@neko/canvas-dsh-plugin': '*',
+          '@neko/content-dsh-plugin': '*',
           '@openneko/dsh-w2-seed': '*',
         },
         dsh: {
@@ -180,6 +181,7 @@ async function createW2Profile(dshHome) {
               '@neko/dsh-bridge',
               '@neko/generation-dsh-plugin',
               '@neko/canvas-dsh-plugin',
+              '@neko/content-dsh-plugin',
             ],
           },
         },
@@ -203,6 +205,11 @@ async function createW2Profile(dshHome) {
   await symlink(
     join(fixtureRoot, '..', '..', 'packages', 'canvas', 'dsh-plugin'),
     join(nekoNamespaceDir, 'canvas-dsh-plugin'),
+    'dir',
+  );
+  await symlink(
+    join(fixtureRoot, '..', '..', 'packages', 'content', 'dsh-plugin'),
+    join(nekoNamespaceDir, 'content-dsh-plugin'),
     'dir',
   );
   await symlink(join(fixtureRoot, 'w2-seed-plugin'), join(q0NamespaceDir, 'dsh-w2-seed'), 'dir');

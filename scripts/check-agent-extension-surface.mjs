@@ -155,7 +155,7 @@ export function validateCanonicalAgentRegistrationGraph(graph) {
   }
   expectExactIdentitySet(
     tools,
-    ['openneko.canvas', 'openneko.cut', 'openneko.generation'],
+    ['openneko.canvas', 'openneko.cut', 'openneko.document', 'openneko.generation'],
     'Tool',
     findings,
   );
@@ -164,6 +164,7 @@ export function validateCanonicalAgentRegistrationGraph(graph) {
     plugins,
     [
       '@neko/canvas-dsh-plugin',
+      '@neko/content-dsh-plugin',
       '@neko/cut-dsh-plugin',
       '@neko/dsh-bridge',
       '@neko/generation-dsh-plugin',
@@ -292,6 +293,10 @@ async function checkCanonicalSourceEvidence(root, findings) {
     resolve(root, 'packages/cut/dsh-plugin/src/index.ts'),
     'utf8',
   );
+  const documentToolsSource = await readFile(
+    resolve(root, 'packages/content/dsh-plugin/src/index.ts'),
+    'utf8',
+  );
   const generationProfile = await readFile(
     resolve(root, 'packages/generation/dsh-plugin/cordis.patch.yml'),
     'utf8',
@@ -302,6 +307,10 @@ async function checkCanonicalSourceEvidence(root, findings) {
   );
   const cutProfile = await readFile(
     resolve(root, 'packages/cut/dsh-plugin/cordis.patch.yml'),
+    'utf8',
+  );
+  const documentProfile = await readFile(
+    resolve(root, 'packages/content/dsh-plugin/cordis.patch.yml'),
     'utf8',
   );
   if (/ctx\.tools\.register\s*\(/u.test(bridgeSource)) {
@@ -329,8 +338,15 @@ async function checkCanonicalSourceEvidence(root, findings) {
     findings.push('Cut DSH plugin does not register exact openneko.cut');
   }
   if (
+    !documentToolsSource.includes('DOCUMENT_DSH_TOOL_NAME') ||
+    !documentToolsSource.includes("from '@neko/content/document'") ||
+    !/ctx\.tools\.register\s*\(/u.test(documentToolsSource)
+  ) {
+    findings.push('Document DSH plugin does not register exact openneko.document');
+  }
+  if (
     /openneko\.(?:assets|character|world|plugin|skill|mcp)\b/u.test(
-      `${generationToolsSource}\n${canvasToolsSource}\n${cutToolsSource}`,
+      `${generationToolsSource}\n${canvasToolsSource}\n${cutToolsSource}\n${documentToolsSource}`,
     )
   ) {
     findings.push('Official DSH plugins register an unsupported domain Tool name');
@@ -354,9 +370,12 @@ async function checkCanonicalSourceEvidence(root, findings) {
           'openneko.canvas',
         ),
         ...Array(countMatches(cutToolsSource, /ctx\.tools\.register\s*\(/gu)).fill('openneko.cut'),
+        ...Array(countMatches(documentToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
+          'openneko.document',
+        ),
       ],
       mcpContributions: [],
-      plugins: [bridgeProfile, generationProfile, canvasProfile, cutProfile].flatMap(
+      plugins: [bridgeProfile, generationProfile, canvasProfile, cutProfile, documentProfile].flatMap(
         readOpenNekoProfilePluginNames,
       ),
     }),

@@ -38,3 +38,16 @@ export {
   type DocumentContentAccessResult,
   type DocumentContentAccessRuntimeDeps,
 } from './content-access-document-runtime';
+export {
+  DOCUMENT_DSH_TOOL_NAME,
+  DOCUMENT_DSH_TOOL_OPERATIONS,
+  DOCUMENT_DSH_TOOL_PARAMETERS,
+  decodeDocumentDshToolInput,
+  documentDshJsonValue,
+  type DocumentDshJsonValue,
+  type DocumentDshContinueInput,
+  type DocumentDshReadImagesInput,
+  type DocumentDshReadInput,
+  type DocumentDshToolInput,
+  type DocumentDshToolOperation,
+} from './dsh-tool';

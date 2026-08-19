@@ -385,6 +385,7 @@ function createHandlers(): DshAcpApplicationClientHandlers {
     executeGenerationTool: async () => unsupported(),
     executeCanvasTool: async () => unsupported(),
     executeCutTool: async () => unsupported(),
+    executeDocumentTool: async () => unsupported(),
     onSessionUpdate: unsupported,
     onSessionEvent: unsupported,
   };

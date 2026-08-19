@@ -208,6 +208,7 @@ function canonicalProfileManifest(): object {
           '@neko/generation-dsh-plugin',
           '@neko/canvas-dsh-plugin',
           '@neko/cut-dsh-plugin',
+          '@neko/content-dsh-plugin',
         ],
       },
     },
@@ -220,6 +221,7 @@ function officialPackages(): readonly string[] {
     '@neko/generation-dsh-plugin',
     '@neko/canvas-dsh-plugin',
     '@neko/cut-dsh-plugin',
+    '@neko/content-dsh-plugin',
   ];
 }
 

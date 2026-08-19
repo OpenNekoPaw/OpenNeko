@@ -32,6 +32,7 @@ const packageInputs = Object.freeze([
   }),
   Object.freeze({ name: '@neko/canvas-dsh-plugin', path: 'packages/canvas/dsh-plugin' }),
   Object.freeze({ name: '@neko/cut-dsh-plugin', path: 'packages/cut/dsh-plugin' }),
+  Object.freeze({ name: '@neko/content-dsh-plugin', path: 'packages/content/dsh-plugin' }),
 ]);
 const profileBundles = Object.freeze([
   '@deepseek-ai/dsh-base',
