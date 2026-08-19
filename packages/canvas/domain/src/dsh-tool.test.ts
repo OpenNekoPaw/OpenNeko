@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CANVAS_DSH_TOOL_NAME,
+  CANVAS_DSH_TOOL_PARAMETERS,
   decodeCanvasDshToolInput,
   projectCanvasCreateNodeResult,
   projectCanvasQuerySnapshot,
@@ -12,6 +13,17 @@ import type {
 } from './canvas-project-authoring-service';
 
 describe('Canvas DSH tool contract', () => {
+  it('owns the exact model-facing query and create-node parameter schema', () => {
+    expect(CANVAS_DSH_TOOL_PARAMETERS.input.oneOf).toHaveLength(2);
+    expect(JSON.stringify(CANVAS_DSH_TOOL_PARAMETERS)).toContain('expectedFingerprint');
+    expect(JSON.stringify(CANVAS_DSH_TOOL_PARAMETERS)).not.toContain('include');
+    expect(CANVAS_DSH_TOOL_PARAMETERS.input.oneOf[0]).toMatchObject({
+      title: 'query input',
+      additionalProperties: false,
+      properties: { documentPath: { required: true } },
+    });
+  });
+
   it('exposes exactly query and create-node with normalized nkc paths', () => {
     expect(CANVAS_DSH_TOOL_NAME).toBe('openneko.canvas');
     expect(decodeCanvasDshToolInput('query', { documentPath: 'boards/story.nkc' })).toEqual({

@@ -1,7 +1,7 @@
 import type { DshAcpHostToolPort, DshAcpJsonValue } from '@neko/agent-contracts/dsh-acp';
 import type { Context } from '@deepseek-ai/cordis';
 import { defineTool, type JsonValue, type ToolRunContext } from '@deepseek-ai/dsh-tools';
-import { CANVAS_DSH_TOOL_NAME, CANVAS_DSH_TOOL_OPERATIONS } from '@neko/canvas-domain';
+import { CANVAS_DSH_TOOL_NAME, CANVAS_DSH_TOOL_PARAMETERS } from '@neko/canvas-domain';
 
 export const name = 'openneko-canvas-tools';
 export const inject = ['opennekoHostTools', 'tools'];
@@ -19,14 +19,7 @@ export function apply(ctx: Context): void {
         defineTool({
           name: CANVAS_DSH_TOOL_NAME,
           description: 'Query and create nodes in an OpenNeko Canvas document.',
-          parameters: {
-            operation: {
-              type: 'string',
-              enum: [...CANVAS_DSH_TOOL_OPERATIONS],
-              required: true,
-            },
-            input: { type: 'json', required: true },
-          },
+          parameters: CANVAS_DSH_TOOL_PARAMETERS,
           output: {
             schema: { type: 'json' },
             render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],

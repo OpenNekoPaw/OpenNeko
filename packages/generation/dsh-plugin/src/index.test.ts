@@ -9,6 +9,7 @@ describe('OpenNeko Generation DSH plugin', () => {
     let definition:
       | {
           readonly name: string;
+          readonly parameters: unknown;
           readonly execute: (args: unknown, execution: unknown) => Promise<unknown>;
         }
       | undefined;
@@ -27,6 +28,23 @@ describe('OpenNeko Generation DSH plugin', () => {
     apply(ctx as never);
     if (definition === undefined) throw new Error('Generation DSH Tool was not registered.');
     expect(definition.name).toBe('openneko.generation');
+    expect(definition.parameters).toMatchObject({
+      type: 'object',
+      properties: {
+        operation: { enum: ['submit', 'describe'] },
+        input: {
+          oneOf: expect.arrayContaining([
+            expect.objectContaining({ title: 'describe input', required: ['jobId'] }),
+            expect.objectContaining({
+              title: 'image submit input',
+              required: ['purpose', 'lifecycleMode', 'generationType', 'request'],
+              additionalProperties: false,
+            }),
+          ]),
+        },
+      },
+      required: ['operation', 'input'],
+    });
     await expect(
       definition.execute({ operation: 'describe', input: { jobId: 'job-1' } }, {}),
     ).resolves.toEqual({ jobId: 'job-1' });
@@ -38,6 +56,61 @@ describe('OpenNeko Generation DSH plugin', () => {
       },
       {},
     );
+    await expect(
+      definition.execute(
+        {
+          operation: 'submit',
+          input: {
+            purpose: 'image.generate',
+            generationType: 'text-to-image',
+            lifecycleMode: 'detached',
+            request: {
+              prompt: 'A quiet harbor',
+              negativePrompt: 'text',
+              operation: 'generate',
+              count: 1,
+              aspectRatio: '4:3',
+            },
+          },
+        },
+        {},
+      ),
+    ).resolves.toEqual({ jobId: 'job-1' });
+    expect(execute).toHaveBeenLastCalledWith(
+      {
+        tool: 'openneko.generation',
+        operation: 'submit',
+        input: {
+          purpose: 'image.generate',
+          generationType: 'text-to-image',
+          lifecycleMode: 'detached',
+          request: {
+            prompt: 'A quiet harbor',
+            negativePrompt: 'text',
+            operation: 'generate',
+            count: 1,
+            aspectRatio: '4:3',
+          },
+        },
+      },
+      {},
+    );
+    await expect(
+      definition.execute(
+        {
+          operation: 'submit',
+          input: {
+            prompt: 'A quiet harbor',
+            negative_prompt: 'text',
+            operation: 'generate',
+            count: 1,
+            aspect_ratio: '4:3',
+          },
+        },
+        {},
+      ),
+    ).rejects.toThrow(/input.*oneOf|oneOf/i);
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
   it('uses only the public DSH ToolRuntime and Host port', async () => {

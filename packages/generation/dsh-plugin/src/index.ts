@@ -1,7 +1,7 @@
 import type { DshAcpHostToolPort, DshAcpJsonValue } from '@neko/agent-contracts/dsh-acp';
 import type { Context } from '@deepseek-ai/cordis';
 import { defineTool, type JsonValue, type ToolRunContext } from '@deepseek-ai/dsh-tools';
-import { GENERATION_DSH_TOOL_NAME, GENERATION_DSH_TOOL_OPERATIONS } from '@neko/generation';
+import { GENERATION_DSH_TOOL_NAME, GENERATION_DSH_TOOL_PARAMETERS } from '@neko/generation';
 
 export const name = 'openneko-generation-tools';
 export const inject = ['opennekoHostTools', 'tools'];
@@ -19,14 +19,7 @@ export function apply(ctx: Context): void {
         defineTool({
           name: GENERATION_DSH_TOOL_NAME,
           description: 'Submit and describe durable OpenNeko Generation Jobs.',
-          parameters: {
-            operation: {
-              type: 'string',
-              enum: [...GENERATION_DSH_TOOL_OPERATIONS],
-              required: true,
-            },
-            input: { type: 'json', required: true },
-          },
+          parameters: GENERATION_DSH_TOOL_PARAMETERS,
           output: {
             schema: { type: 'json' },
             render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],

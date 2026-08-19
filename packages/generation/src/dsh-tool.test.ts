@@ -2,12 +2,24 @@ import { describe, expect, it } from 'vitest';
 
 import {
   GENERATION_DSH_TOOL_NAME,
+  GENERATION_DSH_TOOL_PARAMETERS,
   decodeGenerationDshToolInput,
   projectGenerationJobSnapshot,
 } from './dsh-tool';
 import type { GenerationJobSnapshot } from './job/contracts';
 
 describe('Generation DSH tool contract', () => {
+  it('owns the exact model-facing operation envelope and camelCase request fields', () => {
+    expect(GENERATION_DSH_TOOL_PARAMETERS.input.oneOf).toHaveLength(5);
+    const serialized = JSON.stringify(GENERATION_DSH_TOOL_PARAMETERS);
+    expect(serialized).toContain('negativePrompt');
+    expect(serialized).toContain('aspectRatio');
+    expect(serialized).toContain('purpose');
+    expect(serialized).toContain('lifecycleMode');
+    expect(serialized).not.toContain('negative_prompt');
+    expect(serialized).not.toContain('aspect_ratio');
+  });
+
   it('exposes exactly submit and describe with the exact tool name', () => {
     expect(GENERATION_DSH_TOOL_NAME).toBe('openneko.generation');
     expect(
@@ -33,6 +45,9 @@ describe('Generation DSH tool contract', () => {
     expect(() => decodeGenerationDshToolInput('cancel', { jobId: 'job-1' })).toThrow(
       /must be one of submit, describe/,
     );
+    expect(() =>
+      decodeGenerationDshToolInput('describe', { jobId: 'job-1', include: 'result' }),
+    ).toThrow(/input.include is not supported/);
   });
 
   it('rejects semantic negatives before any Job is created', () => {

@@ -9,6 +9,7 @@ describe('OpenNeko Canvas DSH plugin', () => {
     let definition:
       | {
           readonly name: string;
+          readonly parameters: unknown;
           readonly execute: (args: unknown, execution: unknown) => Promise<unknown>;
         }
       | undefined;
@@ -27,6 +28,27 @@ describe('OpenNeko Canvas DSH plugin', () => {
     apply(ctx as never);
     if (definition === undefined) throw new Error('Canvas DSH Tool was not registered.');
     expect(definition.name).toBe('openneko.canvas');
+    expect(definition.parameters).toMatchObject({
+      type: 'object',
+      properties: {
+        operation: { enum: ['query', 'create-node'] },
+        input: {
+          oneOf: [
+            {
+              title: 'query input',
+              required: ['documentPath'],
+              additionalProperties: false,
+            },
+            {
+              title: 'create-node input',
+              required: ['documentPath', 'expectedFingerprint', 'node'],
+              additionalProperties: false,
+            },
+          ],
+        },
+      },
+      required: ['operation', 'input'],
+    });
     await expect(
       definition.execute({ operation: 'query', input: { documentPath: 'boards/story.nkc' } }, {}),
     ).resolves.toEqual({ nodeId: 'node-1' });
@@ -38,6 +60,16 @@ describe('OpenNeko Canvas DSH plugin', () => {
       },
       {},
     );
+    await expect(
+      definition.execute(
+        {
+          operation: 'query',
+          input: { documentPath: 'boards/story.nkc', include: 'summary' },
+        },
+        {},
+      ),
+    ).rejects.toThrow(/input.*oneOf/i);
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('uses only the public DSH ToolRuntime and Host port', async () => {

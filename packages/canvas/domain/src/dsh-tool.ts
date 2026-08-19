@@ -4,7 +4,12 @@ import {
   type ContentFingerprint,
 } from '@neko/content';
 
-import { isCanvasNodeType, type CanvasNode, type CanvasNodeType } from './types/canvas';
+import {
+  CANVAS_NODE_TYPES,
+  isCanvasNodeType,
+  type CanvasNode,
+  type CanvasNodeType,
+} from './types/canvas';
 import type {
   CanvasProjectNodeMutationResult,
   CanvasProjectSnapshot,
@@ -14,6 +19,83 @@ export const CANVAS_DSH_TOOL_NAME = 'openneko.canvas' as const;
 export const CANVAS_DSH_TOOL_OPERATIONS = ['query', 'create-node'] as const;
 
 export type CanvasDshToolOperation = (typeof CANVAS_DSH_TOOL_OPERATIONS)[number];
+
+export const CANVAS_DSH_TOOL_PARAMETERS = {
+  operation: {
+    type: 'string',
+    enum: [...CANVAS_DSH_TOOL_OPERATIONS],
+    description:
+      'Use query with { documentPath }; use create-node with { documentPath, expectedFingerprint, node }.',
+    required: true,
+  },
+  input: {
+    oneOf: [
+      {
+        type: 'object',
+        title: 'query input',
+        description:
+          'Input for the query operation. The result already contains bounded summary facts.',
+        properties: {
+          documentPath: {
+            type: 'string',
+            description: 'Normalized Workspace-relative .nkc path.',
+            required: true,
+          },
+        },
+        additionalProperties: false,
+      },
+      {
+        type: 'object',
+        title: 'create-node input',
+        description: 'Input for the create-node operation.',
+        properties: {
+          documentPath: {
+            type: 'string',
+            description: 'Normalized Workspace-relative .nkc path.',
+            required: true,
+          },
+          expectedFingerprint: {
+            type: 'object',
+            description: 'Exact fingerprint returned by the latest query operation.',
+            properties: {
+              strategy: {
+                type: 'string',
+                enum: ['sha256', 'mtime-size', 'provider'],
+                required: true,
+              },
+              value: { type: 'string', required: true },
+            },
+            additionalProperties: false,
+            required: true,
+          },
+          node: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: [...CANVAS_NODE_TYPES] },
+              position: {
+                type: 'object',
+                properties: {
+                  x: { type: 'number', required: true },
+                  y: { type: 'number', required: true },
+                },
+                additionalProperties: false,
+              },
+              data: {
+                type: 'object',
+                description: 'Node-type-specific JSON data.',
+                additionalProperties: true,
+              },
+            },
+            additionalProperties: false,
+            required: true,
+          },
+        },
+        additionalProperties: false,
+      },
+    ],
+    required: true,
+  },
+} as const;
 
 export type CanvasDshToolJsonValue =
   | null
