@@ -395,6 +395,24 @@ importers:
       '@neko/agent-contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@neko/ai-contracts':
+        specifier: workspace:*
+        version: link:../../ai/contracts
+      '@neko/canvas-domain':
+        specifier: workspace:*
+        version: link:../../canvas/domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../../content
+      '@neko/media':
+        specifier: workspace:*
+        version: link:../../media
+      '@neko/preview-domain':
+        specifier: workspace:*
+        version: link:../../preview/domain
+      '@neko/shared':
+        specifier: workspace:*
+        version: link:../../shared
       '@neko/ui':
         specifier: workspace:*
         version: link:../../ui

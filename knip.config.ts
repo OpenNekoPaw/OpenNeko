@@ -190,6 +190,7 @@ const config: KnipConfig = {
     },
     'scripts/dsh-q0': {
       entry: [
+        'prompt-provider/index.mjs',
         'seed-plugin/index.mjs',
         'src/qualify.mjs',
         'w2-seed-plugin/index.mjs',
