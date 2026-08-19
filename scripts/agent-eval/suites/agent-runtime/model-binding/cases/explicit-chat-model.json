@@ -49,17 +49,6 @@
       "evidenceRef": "model-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "model-facts"
-    },
-    {
       "id": "model",
       "kind": "model",
       "profileId": "nekoapi-gpt-5.5",

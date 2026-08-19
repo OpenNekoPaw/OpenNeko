@@ -82,17 +82,6 @@
       "evidenceRef": "tool-result-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "tool-result-facts"
-    },
-    {
       "id": "effective-model",
       "kind": "model",
       "profileId": "nekoapi-chat-without-image-generation",

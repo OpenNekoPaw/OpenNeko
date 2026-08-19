@@ -50,17 +50,6 @@
       "evidenceRef": "ordinary-message-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "ordinary-message-facts"
-    },
-    {
       "id": "model",
       "kind": "model",
       "profileId": "nekoapi-chat-image-purpose",

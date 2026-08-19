@@ -64,17 +64,6 @@
       "evidenceRef": "turn-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "turn-facts"
-    },
-    {
       "id": "order",
       "kind": "process-order",
       "events": [

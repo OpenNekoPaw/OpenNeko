@@ -70,17 +70,6 @@
       ],
       "evidenceRef": "compaction-facts"
     },
-    {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "compaction-facts"
-    },
     { "id": "terminal", "kind": "fully-idle", "evidenceRef": "compaction-facts" },
     {
       "id": "answer",

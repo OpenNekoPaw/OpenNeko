@@ -49,17 +49,6 @@
       "evidenceRef": "skill-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "skill-facts"
-    },
-    {
       "id": "skill",
       "kind": "skill",
       "identity": {

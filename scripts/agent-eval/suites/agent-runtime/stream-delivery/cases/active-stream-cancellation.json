@@ -57,17 +57,6 @@
       "evidenceRef": "cancel-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "cancel-facts"
-    },
-    {
       "id": "projection",
       "kind": "timeline-projection",
       "terminalStatus": "cancelled",

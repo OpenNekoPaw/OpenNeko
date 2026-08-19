@@ -130,6 +130,51 @@
     },
     {
       "kind": "agent-runtime-capability",
+      "id": "dsh-standard-agent-loop",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/dsh-bridge run test -- --run",
+        "reason": "The generic Agent loop is DSH-owned. OpenNeko verifies only ACP transport, typed bridge admission, and fail-visible diagnostics; it does not duplicate upstream loop behavior tests."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "dsh-standard-session-history",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/agent/runtime run test -- --run src/acp",
+        "reason": "DSH owns session persistence and history replay semantics. OpenNeko tests exact Conversation-to-DSH Session binding and projection isolation, not a second session authority."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "dsh-standard-skill-runtime",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/dsh-bridge run test -- --run",
+        "reason": "DSH owns Skill discovery, activation, and execution. OpenNeko retains Skill source/provenance projection and command gesture coverage only."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "dsh-standard-tool-scheduling",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/agent/runtime run test -- --run src/acp",
+        "reason": "DSH owns generic Tool scheduling, progress, and standard cancellation. OpenNeko evaluates only domain Tool delegation, authorization, and artifact/job facts."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "dsh-standard-permission-presets",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/agent/contracts run test -- --run src/dsh-permission-host.test.ts",
+        "reason": "DSH owns standard permission preset semantics. OpenNeko verifies sender-bound projection and explicit user selection without redefining plan/ask/auto or duplicating preset behavior."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
       "id": "desktop-session-driver",
       "disposition": "suite",
       "suiteIds": ["agent-runtime.stream-delivery"]

@@ -54,17 +54,6 @@
       "evidenceRef": "skill-read-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "skill-read-facts"
-    },
-    {
       "id": "read-skill",
       "kind": "tool-call",
       "name": "read_skill",

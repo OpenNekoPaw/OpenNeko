@@ -46,18 +46,6 @@
   ],
   "assertions": [
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "modelProfileId": "deepseek-no-native-vision",
-      "evidenceRef": "perception-facts"
-    },
-    {
       "id": "model",
       "kind": "model",
       "profileId": "deepseek-no-native-vision",

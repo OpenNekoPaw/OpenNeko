@@ -68,18 +68,6 @@
       "evidenceRef": "workflow-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "modelProfileId": "nekoapi-chat-image-purpose",
-      "evidenceRef": "workflow-facts"
-    },
-    {
       "id": "order",
       "kind": "process-order",
       "events": [

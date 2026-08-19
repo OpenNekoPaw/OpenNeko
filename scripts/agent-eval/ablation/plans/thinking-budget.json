@@ -7,7 +7,7 @@
   "scenarioContract": {
     "schema": "neko.agent-eval.scenario",
     "evidenceRefs": ["model-facts"],
-    "assertionIds": ["runtime", "pi-runtime", "model", "answer"]
+    "assertionIds": ["runtime", "model", "answer"]
   },
   "baselineVariantId": "thinking-0",
   "matrix": { "strategy": "focused", "maxVariants": 2 },

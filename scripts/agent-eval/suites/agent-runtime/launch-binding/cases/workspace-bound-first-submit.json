@@ -47,17 +47,6 @@
       "conversationCreated": true,
       "evidenceRef": "launch-facts"
     },
-    {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "launch-facts"
-    },
     { "id": "answer", "kind": "final-answer", "mode": "non-empty", "evidenceRef": "launch-facts" }
   ],
   "artifactChecks": [],

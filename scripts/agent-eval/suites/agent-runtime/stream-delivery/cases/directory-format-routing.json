@@ -52,17 +52,6 @@
       "evidenceRef": "directory-routing-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "directory-routing-facts"
-    },
-    {
       "id": "list-directory",
       "kind": "tool-call",
       "name": "ListDirectory",

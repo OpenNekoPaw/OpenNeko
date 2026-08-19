@@ -62,18 +62,6 @@
       "evidenceRef": "assistant-generation-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "modelProfileId": "nekoapi-luna-image-purpose",
-      "evidenceRef": "assistant-generation-facts"
-    },
-    {
       "id": "tool",
       "kind": "tool-call",
       "name": "GenerateImage",

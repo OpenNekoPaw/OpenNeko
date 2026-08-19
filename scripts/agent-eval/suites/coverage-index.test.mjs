@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { discoverSuites } from './discovery.mjs';
-import { EXPECTED_BUILTIN_SKILLS, loadCoverageIndex } from './coverage-index.mjs';
+import {
+  EXPECTED_BUILTIN_SKILLS,
+  EXPECTED_RUNTIME_CAPABILITIES,
+  loadCoverageIndex,
+} from './coverage-index.mjs';
 
 describe('Agent Evaluation coverage index', () => {
   it('covers every current builtin Skill with exact portable Host identity and fingerprint', async () => {
@@ -43,5 +47,32 @@ describe('Agent Evaluation coverage index', () => {
         (item) => item.kind === 'builtin-skill' && item.disposition === 'excluded',
       ),
     ).toEqual([]);
+  });
+
+  it('records DSH-owned generic behavior as excluded instead of duplicating Pi-era tests', async () => {
+    const coverage = await loadCoverageIndex();
+    const dshTargets = coverage.targets.filter(
+      (item) => item.kind === 'agent-runtime-capability' && item.id.startsWith('dsh-standard-'),
+    );
+
+    expect(dshTargets.map((item) => item.id).sort()).toEqual(
+      EXPECTED_RUNTIME_CAPABILITIES.filter((id) => id.startsWith('dsh-standard-')).sort(),
+    );
+    expect(dshTargets.every((item) => item.disposition === 'excluded')).toBe(true);
+    expect(dshTargets.every((item) => item.deterministicValidation.reason.includes('DSH'))).toBe(
+      true,
+    );
+  });
+
+  it('keeps active scenarios free of retired Pi runtime assertions', async () => {
+    const suites = await discoverSuites();
+    const retired = suites.flatMap((entry) =>
+      entry.cases.flatMap((item) =>
+        item.scenario.assertions
+          .filter((assertion) => assertion.kind === 'pi-runtime')
+          .map((assertion) => `${entry.suite.id}/${item.scenario.id}/${assertion.id}`),
+      ),
+    );
+    expect(retired).toEqual([]);
   });
 });

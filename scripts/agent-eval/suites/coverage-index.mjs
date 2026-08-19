@@ -52,8 +52,15 @@ const EXPECTED_PROMPT_LAYERS = Object.freeze([
   'environment',
   'ephemeral',
 ]);
-const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
+export const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'evaluation-platform',
+  // DSH owns these generic Agent behaviors. OpenNeko only validates the
+  // public ACP/bridge boundary where it contributes product-specific policy.
+  'dsh-standard-agent-loop',
+  'dsh-standard-session-history',
+  'dsh-standard-skill-runtime',
+  'dsh-standard-tool-scheduling',
+  'dsh-standard-permission-presets',
   'desktop-session-driver',
   'launch-domain-binding',
   'prompt-composition',

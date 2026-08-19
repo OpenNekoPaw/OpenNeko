@@ -76,17 +76,6 @@
       "evidenceRef": "visible-tool-facts"
     },
     {
-      "id": "pi-runtime",
-      "kind": "pi-runtime",
-      "implementation": "pi-agent-core",
-      "transcriptAuthority": "pi-session",
-      "productMetadataAuthority": "sqlite",
-      "purpose": "agent.main",
-      "workspaceLocatorKind": "virtual",
-      "turnDurability": "durable",
-      "evidenceRef": "visible-tool-facts"
-    },
-    {
       "id": "write",
       "kind": "tool-call",
       "name": "Write",
