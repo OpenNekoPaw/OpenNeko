@@ -174,7 +174,7 @@ export const en = {
   'home.noActivity': 'No Agent activity',
   'home.capabilities.eyebrow': 'Global catalog',
   'home.capabilities.description':
-    'Manage global Skills and extensions supported by OpenNeko and Pi Agent.',
+    'Manage global Skills and extensions provided by the OpenNeko DSH profile.',
   'home.capabilities.search': 'Search Skills or extensions',
   'home.capabilities.tabs': 'Extension catalog',
   'home.capabilities.skills': 'Skills',

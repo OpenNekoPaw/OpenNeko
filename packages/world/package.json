@@ -10,9 +10,6 @@
     "./application": "./src/application/index.ts",
     "./testing": "./src/testing/index.ts"
   },
-  "dependencies": {
-    "@neko/agent-contracts": "workspace:*"
-  },
   "scripts": {
     "test": "vitest run",
     "test:run": "vitest --run",

@@ -1,105 +1,53 @@
 # Agent Runtime Boundary
 
-`runtime/` contains host-neutral OpenNeko product adapters around the canonical Pi conversation runtime.
-It does not implement an Agent loop, transcript store, Skill lifecycle, permission policy, Webview transport
-or concrete domain execution.
+`runtime/` 只包含 OpenNeko 保留的 host-neutral product adapters。DSH 独立子进程拥有
+Agent loop、Session/transcript、Inbox、Tool lifecycle、Skill、MCP 与 Plugin runtime；OpenNeko
+不得在本目录重建这些 authority。
 
-System contracts are defined by:
+系统边界见：
 
 - [`docs/architecture/agent.md`](../../../../docs/architecture/agent.md)
-- [`docs/architecture/adr-pi-agent-runtime.md`](../../../../docs/architecture/adr-pi-agent-runtime.md)
+- [`docs/architecture/adr-dsh-cordis-replace-agent-extension-runtime.md`](../../../../docs/architecture/adr-dsh-cordis-replace-agent-extension-runtime.md)
 
-## Allowed categories
+## 保留职责
 
-- `session/`: product-owned message queue, conversation/run coordination and execution ownership that Pi
-  does not provide.
-- `turn/`: input, attachment, context, artifact collection and product-routing helpers around one Pi turn.
-- `capability/`: consumption of `AgentCapabilityProvider` contributions and Host-injected content/external
-  processor/research ports.
-- `host-controller/`: Host-neutral Agent message connection identity, typed transport, shared
-  conversation/turn/queue/Tool/Mermaid/config/settings/Skill/context/content/projection routing
-  and responsibility-specific effect ports. It cannot import VS Code, Electron, Pi instances,
-  projection owners or concrete Host effects.
-- `stream/`: reserved owner for host-neutral Pi event-stream state and background observation when those
-  collaborators require a directory; it must not become a second event bus or transport layer.
-- `projection/`: conversation-owned authoritative projection state, operation buffering and immutable
-  versioned changes.
+- `turn/`：仍由产品直接使用的内容、上下文、产物和多模态纯适配器；不得执行主模型 turn。
+- `capability/`：Host content access 等真实边界 adapter；不得成为 Tool registry。
+- runtime root：仅保留小型 host-neutral collaborators 与公共导出。
 
-The runtime root contains package exports and small host-neutral collaborators only. New subdirectories
-require a stable responsibility and an architecture-boundary update.
+ACP client、Conversation-to-DSH Session binding、Session catalog、事件 projection、permission owner 和
+DSH domain Tool adapters 位于相邻 `acp/` 与 `application/` owner，不通过本目录建立第二通信路径。
 
-## Existing owners
+## Authority
 
-Prefer the established owner before adding runtime code:
+| Concern                                                     | Canonical owner                                 |
+| ----------------------------------------------------------- | ----------------------------------------------- |
+| Agent execution、Session、transcript、Inbox、Tool lifecycle | DSH subprocess/profile                          |
+| Skill、MCP、Plugin discovery/load/execute                   | DSH subprocess/profile                          |
+| Conversation metadata 与 exact DSH Session binding          | OpenNeko Agent application + LocalMetadata      |
+| ACP replay/event 的 bounded projection                      | `@neko/agent-runtime` ACP/application           |
+| Workspace trust、credential、process、sender authorization  | Desktop Main / Host                             |
+| Generation、Canvas 等 schema、validation、facts、Job        | owning domain package                           |
+| Extension management presentation                           | `@neko/agent-webview/extension-management/root` |
 
-| Concern                                                                       | Owner                                       |
-| ----------------------------------------------------------------------------- | ------------------------------------------- |
-| Pi Agent, Session JSONL, branches, compaction, model execution and Skill read | `pi/`                                       |
-| Prompt modules, prompt files and AGENTS overlays                              | `prompt/`                                   |
-| Permission and approval policy                                                | `permission/`, `approval/`                  |
-| Project memory and recall                                                     | `memory/`                                   |
-| MCP transport and registration                                                | `mcp/`                                      |
-| Tool definitions and domain contribution adapters                             | `tools/` and contributing package           |
-| Provider cards and flat model-purpose projection                              | `provider/`, Host configuration composition |
-| Message attachments and display-resource projection                           | `input/`                                    |
-| Slash-command intent and Host projection                                      | `commands/`                                 |
-| Workspace path/config codecs                                                  | `workspace/`                                |
+## 禁止路径
 
-No owner exists for a legacy Executor, AgentSession, ReAct loop, activation-based Skill lifecycle, generic
-Task continuation or duplicate Journal. Those concepts must not be reintroduced beside Pi.
+- Pi Agent/Session/Skill/Tool runtime、OpenNeko queue、custom transcript/history/compaction；
+- Webview message controller、`confirmTool`、active/current/recent identity fallback；
+- 内嵌 Cordis、DSH Web/Client Runtime、TS SDK 或 Remote API production path；
+- generic Tool/MCP/Plugin registry、wildcard handler、try-next 或 provider fallback；
+- 为缺失实现返回空数据、no-op 或兼容成功。
 
-## Concept boundaries
+DSH/ACP 不可用或 contract 非法时，应只拒绝当前 request/session 并返回明确 diagnostic；不得切换
+到旧 runtime。旧 Pi 用户数据保持原字节，只能显示局部 unavailable，不能自动读取、迁移或修复。
 
-- **Pi conversation runtime** owns Agent execution, Tool scheduling, cancellation, confirmation,
-  transcript/context, branches, compaction and actual Skill input.
-- **Product turn bridge** freezes OpenNeko configuration, supplies permission/Capability/domain ports and
-  projects Pi events. It never implements Think/Act/ReAct or a second message history.
-- **Context** is the transient model input produced by Pi Session/context policy.
-- **Memory** is durable or cross-session product information that may feed context but is not the transcript.
-- **Capability** means consuming typed package contributions; concrete behavior and facts remain with the
-  contributing package.
-- **Domain Job** means independently recoverable work owned by Generation, Cut or another concrete domain.
-  Agent runtime observes it only through the exact domain port.
+## Identity
 
-## Canonical files
+Conversation、DSH Session、turn、Tool call 与领域 Job identity 必须精确关联，不能从 Window、active
+Workspace 或 recent Conversation 推断。领域 Job 由 owning domain 独立持久化；Tool call 只记录精确引用。
 
-| Category               | Files                                                                                                                                                                                                                                                                                                                                                   |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Session product state  | `session/agent-message-queue.ts`, `session/conversation-run-registry.ts`, `session/execution-ownership.ts`                                                                                                                                                                                                                                              |
-| Turn adapters          | `turn/message-runtime.ts`, `turn/agent-turn-context.ts`, `turn/multimodal-context-packet.ts`, `turn/timeline-context-runtime.ts`, `turn/canvas-ambient-context-runtime.ts`, `turn/context-control-runtime.ts`, `turn/workspace-input-processor-runtime.ts`, `turn/creator-visible-artifact-collector.ts`                                                |
-| Capability consumption | `capability/capability-registry-runtime.ts`, `capability/capability-runtime-bindings.ts`, `capability/capability-runtime-registries.ts`, `capability/agent-content-access-runtime.ts`, `capability/external-processor-runtime.ts`                                                                                                                       |
-| Host controller        | `host-controller/agent-host-controller-contract.ts`, `host-controller/agent-host-message-controller.ts`, `host-controller/agent-conversation-controller.ts`, `host-controller/agent-config-controller.ts`, `host-controller/agent-skill-controller.ts`, `host-controller/agent-content-controller.ts`, `host-controller/agent-projection-controller.ts` |
-| Projection             | `projection/conversation-projection-store.ts`, `projection/conversation-projection-operation-buffer.ts`                                                                                                                                                                                                                                                 |
-| Root collaborators     | `agent-entry-intent-runtime.ts`, `agent-state-runtime.ts`, `config-bridge-runtime.ts`, `conversation-route-runtime.ts`, `conversation-tab-runtime.ts`, `plugin-transfer-runtime.ts`, `subagent-event-runtime.ts`, `document-module-diagnostics.ts`                                                                                                      |
+## 验证
 
-`runtime/index.ts` exposes retained product adapters only. `Executor`, `AgentSession` and `AgentRunner`
-public surfaces are intentionally absent.
-
-## Identity and isolation
-
-| Identity          | Owner                           | Scope                              |
-| ----------------- | ------------------------------- | ---------------------------------- |
-| `tabId`           | Desktop renderer                | view binding only                  |
-| `conversationId`  | OpenNeko conversation aggregate | complete conversation runtime      |
-| `branchId`        | OpenNeko product metadata       | active or historical branch        |
-| Pi `sessionId`    | Pi Session                      | one branch transcript/context tree |
-| `turnId`          | conversation runtime            | one input-to-terminal turn         |
-| `runId`           | runtime owner                   | one foreground/delegated execution |
-| `toolCallId`      | Pi Tool execution               | one exact Tool invocation          |
-| concrete `JobRef` | owning domain                   | recoverable independent work       |
-
-These identities are never inferred from the active tab or active conversation. Each conversation owns its
-queue, abort state, active Pi Agent/session binding, immutable in-flight model snapshot, event subscription
-and projection.
-
-## Storage boundaries
-
-- Pi Session JSONL is the sole transcript/context/compaction authority.
-- User-level OpenNeko SQLite owns conversation/branch catalog, writer lease and other product metadata; it
-  does not copy transcript messages.
-- Workspace logs are diagnostic only and cannot hydrate a conversation.
-- Historical LocalMetadata task rows retained for Canvas delivery protect user data but cannot become a
-  generic Agent Task runtime.
-- Desktop window/tab state stores view projection such as tabs and selection, never Agent/session/Job facts.
-- A persisted fact must not contain provider secrets, Webview URIs, runtime handles, absolute cache paths or
-  process-local Skill locators.
+修改本边界至少运行 runtime typecheck/test、Agent/package/application boundary gates 与内部版本/多路径
+扫描。涉及真实 Agent behavior 时，按 Evaluation 平台记录 canonical path、forbidden fallback 和真实
+Desktop/provider 证据；key-free 测试不等于行为验收。

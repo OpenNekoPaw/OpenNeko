@@ -8,6 +8,7 @@ import {
   type GenerationJobSnapshot,
   type GenerationJobStage,
   type GenerationProviderTaskRef,
+  type SubmitPurposeGenerationJobInput,
 } from './contracts';
 import type {
   AudioGenerationRequest,
@@ -63,6 +64,34 @@ export function decodeGenerationJobSnapshot(serialized: string): GenerationJobSn
   }
   deepFreeze(value, new WeakSet<object>());
   return value;
+}
+
+export function decodeSubmitPurposeGenerationJobInput(
+  value: unknown,
+): SubmitPurposeGenerationJobInput {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, PURPOSE_GENERATION_REQUEST_KEYS) ||
+    !isNonEmptyString(value['purpose']) ||
+    (value['lifecycleMode'] !== 'linked' && value['lifecycleMode'] !== 'detached')
+  ) {
+    throw new Error('Generation submission violates the canonical purpose request contract.');
+  }
+  const request = value['request'];
+  if (isRecord(request) && ('providerId' in request || 'modelId' in request)) {
+    throw new Error('Generation provider and model bindings are Host-owned.');
+  }
+  if (
+    !isGenerationJobRequest({
+      providerId: 'host-bound',
+      modelId: 'host-bound',
+      generationType: value['generationType'],
+      request,
+    })
+  ) {
+    throw new Error('Generation submission request violates its generation type contract.');
+  }
+  return value as SubmitPurposeGenerationJobInput;
 }
 
 function isGenerationJobSnapshot(value: unknown): value is GenerationJobSnapshot {
@@ -352,6 +381,12 @@ const BASE_REQUEST_KEYS = [
   'modelId',
   'metadata',
 ] as const;
+const PURPOSE_GENERATION_REQUEST_KEYS = new Set([
+  'purpose',
+  'generationType',
+  'lifecycleMode',
+  'request',
+]);
 const GENERATION_JOB_SNAPSHOT_KEYS = new Set([
   'ref',
   'submissionId',

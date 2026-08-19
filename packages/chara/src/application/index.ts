@@ -1,5 +1,6 @@
 export * from './character-purpose-operations';
 export * from './character-authoring-service';
+export * from './character-dsh-tool';
 export * from './character-creation-source-service';
 export * from './character-version-lineage-repository';
 export * from './character-version-graph-service';
@@ -23,4 +24,3 @@ export * from './character-conversation-launch-service';
 export * from './character-companion-continuity-service';
 export * from './character-storyline-service';
 export * from './character-presentation-service';
-export * from './character-authoring-capability-provider';

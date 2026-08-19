@@ -9,9 +9,7 @@
     "fixedRoots": ["packages/skills/skills", ".agents/skills", "~/.agents/skills"],
     "evidence": [
       "packages/skills/README.md",
-      "packages/agent/runtime/src/pi/skill-host.ts",
-      "packages/agent/runtime/src/workspace/agent-skill-layout.ts",
-      "packages/agent/runtime/src/pi/__tests__/builtin-skills.test.ts"
+      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
     ]
   },
   "skillAuthoringMetadata": {
@@ -23,20 +21,19 @@
     },
     "evidence": [
       "packages/agent/contracts/src/portable-skill.ts",
-      "packages/agent/runtime/src/pi/skill-package-creation-service.ts",
-      "packages/agent/runtime/src/pi/skill-host.ts"
+      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
     ]
   },
   "compositionPackage": {
-    "classification": "portable-plugin-subset",
+    "classification": "official-dsh-profile",
     "manifest": "plugin.json",
-    "requiredOnlyFor": "shared-install-lifecycle",
+    "requiredOnlyFor": "dsh-extension-composition",
     "skillContributionOptional": true,
     "mcpContributionOptional": true,
     "appContributionStatus": "unsupported",
     "evidence": [
-      "packages/agent/runtime/src/extensions/extension-manager.ts",
-      "packages/agent/runtime/src/extensions/plugin-runtime.ts"
+      "packages/dsh-bridge/cordis.patch.yml",
+      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
     ]
   },
   "pluginState": {
@@ -46,43 +43,48 @@
     "evidence": [
       "packages/local-metadata/src/plugin-state.ts",
       "packages/local-metadata/src/sqlite/plugin-state-schema.ts",
-      "packages/agent/runtime/src/extensions/extension-manager.ts"
+      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
     ]
   },
   "extensionManagement": {
-    "classification": "management-only",
+    "classification": "dsh-projection-only",
     "runtimeContributionAuthority": false,
     "evidence": [
       "packages/agent/contracts/src/extension-management.ts",
-      "packages/agent/runtime/src/extensions/extension-manager.ts"
+      "packages/agent/contracts/src/dsh-acp.ts"
     ]
   },
   "mcp": {
     "standard": "Model Context Protocol",
-    "classification": "partial-optional-adapter",
-    "supportedCapability": "tools",
+    "classification": "dsh-owned",
+    "supportedCapability": "dsh-profile",
     "supportedTransports": ["stdio", "streamable-http-https"],
     "skillDiscoveryDependency": false,
     "skillCreationDependency": false,
     "hostCapabilityDependency": false,
     "connectionFailureIsolation": "contribution",
     "evidence": [
-      "packages/agent/runtime/src/mcp/mcp-client.ts",
-      "packages/agent/runtime/src/extensions/plugin-runtime.ts"
+      "packages/dsh-bridge/cordis.patch.yml",
+      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
     ]
   },
   "hostCapability": {
-    "classification": "internal-executable-composition",
+    "classification": "host-domain-tool-adapter",
     "mcpRequired": false,
-    "runtimeAuthority": "package-owned-capability-provider",
+    "runtimeAuthority": "owning-domain-application-service",
     "evidence": [
       "packages/agent/contracts/src/capability.ts",
-      "packages/agent/runtime/src/pi/capability-tool-bridge.ts"
+      "packages/agent/contracts/src/dsh-acp.ts",
+      "packages/dsh-bridge/src/index.ts",
+      "packages/generation/dsh-plugin/src/index.ts",
+      "packages/canvas/dsh-plugin/src/index.ts",
+      "packages/cut/dsh-plugin/src/index.ts",
+      "openspec/changes/replace-pi-with-dsh-runtime-atomically/evidence/w2-domain-tool-slice-freeze.md"
     ]
   },
   "standardsSupport": {
-    "agentSkills": "core-supported",
-    "agentPlugins": "not-conformant-host-extension-only",
-    "mcp": "partial-tools-client"
+    "agentSkills": "dsh-owned",
+    "agentPlugins": "official-first-party-only",
+    "mcp": "dsh-owned"
   }
 }

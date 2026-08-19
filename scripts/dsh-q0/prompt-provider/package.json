@@ -1,0 +1,9 @@
+{
+  "name": "@openneko/dsh-q0-prompt-provider",
+  "private": true,
+  "type": "module",
+  "main": "index.mjs",
+  "dependencies": {
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.7"
+  }
+}

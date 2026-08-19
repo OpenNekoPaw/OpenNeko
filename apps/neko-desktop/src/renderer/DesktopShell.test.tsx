@@ -43,84 +43,44 @@ import assetManagementSurfaceSource from './DesktopAssetManagementSurface.tsx?ra
 import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 describe('Desktop scene Workbench', () => {
-  it('binds a finalized CharacterVersion handoff only to its exact fresh Agent Draft', () => {
+  it('projects only an exact existing Conversation into the DSH surface', () => {
     const projection = agentProjection();
     const composition = resolveActiveDesktopWindowWorkbench(projection.window);
     const interaction = composition.scene.slots.interaction;
     if (!interaction || interaction.kind !== 'agent' || interaction.scope.kind === 'workspace') {
       throw new Error('Agent projection requires an unbound interaction surface.');
     }
-    const intent = {
-      kind: 'character-dialogue' as const,
-      intentId: 'character-dialogue:1',
-      label: 'Rin',
-      binding: {
-        kind: 'character-dialogue' as const,
-        mode: 'companion' as const,
-        participants: [
-          {
-            globalCharacterId: 'global-character:rin',
-            characterVersionId: 'character-version:rin-2',
-          },
-        ],
-      },
-    };
-    const common = {
-      projection,
-      workbenchInstanceId: composition.workbenchInstanceId,
-      interaction,
-      onChooseWorkspaceTarget: vi.fn(async () => undefined),
-      onSelectWorkspaceProjectTarget: vi.fn(async () => undefined),
-      onLoadAuthoringTargets: vi.fn(async () => ({
-        targets: [],
-        creationContexts: [],
-        diagnostics: [],
-      })),
-      onSelectAuthoringTarget: vi.fn(async () => undefined),
-      onCreateAuthoringTarget: vi.fn(async () => undefined),
-    };
-
     expect(
-      createDesktopAgentSurfaceProps({
-        ...common,
-        characterDialogueHandoff: { draftId: interaction.scope.draftId, intent },
-      }),
-    ).toMatchObject({ characterDialogueHandoff: intent });
-    expect(
-      createDesktopAgentSurfaceProps({
-        ...common,
-        characterDialogueHandoff: { draftId: 'wrong-draft', intent },
-      }),
-    ).not.toHaveProperty('characterDialogueHandoff');
-  });
-
-  it('does not expose Workspace Canvas capabilities to the Entry composer', () => {
-    const projection = agentProjection();
-    const composition = resolveActiveDesktopWindowWorkbench(projection.window);
-    const interaction = composition.scene.slots.interaction;
-    if (!interaction || interaction.kind !== 'agent' || interaction.scope.kind === 'workspace') {
-      throw new Error('Agent projection requires an unbound interaction surface.');
-    }
-
-    const surface = createDesktopAgentSurfaceProps({
-      projection,
-      workbenchInstanceId: composition.workbenchInstanceId,
-      interaction,
-      onChooseWorkspaceTarget: vi.fn(async () => undefined),
-      onSelectWorkspaceProjectTarget: vi.fn(async () => undefined),
-      onLoadAuthoringTargets: vi.fn(async () => ({
-        targets: [],
-        creationContexts: [],
-        diagnostics: [],
-      })),
-      onSelectAuthoringTarget: vi.fn(async () => undefined),
-      onCreateAuthoringTarget: vi.fn(async () => undefined),
+      createDesktopAgentSurfaceProps({ workbenchInstanceId: 'workbench-1', interaction }),
+    ).toEqual({
+      agentSurfaceId: interaction.agentSurfaceId,
+      entryKind: 'authoring',
+      workbenchInstanceId: 'workbench-1',
     });
 
-    expect(surface?.composerWorkspace).toMatchObject({ kind: 'entry' });
-    expect(surface?.composerWorkspace).not.toHaveProperty('loadCanvasCatalog');
-    expect(surface?.composerWorkspace).not.toHaveProperty('openCanvasDocument');
+    const sessionInteraction = {
+      ...interaction,
+      phase: 'session' as const,
+      scope: {
+        kind: 'assistant' as const,
+        draftId: interaction.scope.draftId,
+        assistantSpaceId: 'assistant-1',
+        conversationId: 'conversation-1',
+      },
+    };
+    expect(
+      createDesktopAgentSurfaceProps({
+        workbenchInstanceId: 'workbench-1',
+        interaction: sessionInteraction,
+      }),
+    ).toEqual({
+      agentSurfaceId: interaction.agentSurfaceId,
+      entryKind: 'assistant',
+      workbenchInstanceId: 'workbench-1',
+      conversationId: 'conversation-1',
+    });
   });
+
   it('locks only controls owned by the pending Shell mutation scope', () => {
     const base = {
       scene: false,
@@ -759,7 +719,7 @@ describe('Desktop scene Workbench', () => {
       },
     };
     const markup = renderShell(<DesktopShellView projection={misleading} />);
-    expect(markup).toContain('Connecting to Agent');
+    expect(markup).toContain('Hi, start creating with a conversation');
     expect(markup).toContain('data-agent-scope="unbound"');
     expect(markup).not.toContain('data-main-view-id=');
 
@@ -835,8 +795,8 @@ describe('Desktop scene Workbench', () => {
 
   it('uses one Workbench shell and the package-owned Asset Management surface', () => {
     expect(desktopShellSource.match(/<ControlledWorkbenchShell/gu) ?? []).toHaveLength(1);
-    expect(desktopShellSource).toContain('onChooseWorkspaceTarget');
-    expect(desktopShellSource).toContain('AgentComposerWorkspaceTarget');
+    expect(desktopShellSource).not.toContain('onChooseWorkspaceTarget');
+    expect(desktopShellSource).not.toContain('AgentComposerWorkspaceTarget');
     expect(assetManagementSurfaceSource).toContain('@neko/assets-webview/asset-management/root');
   });
 
@@ -913,21 +873,10 @@ describe('Desktop scene Workbench', () => {
     expect(source).not.toMatch(/latest|versions\[0\]|activeCharacter|recentCharacter/u);
   });
 
-  it('adds the exact Workspace Project to Creation context without navigating', () => {
-    const start = desktopShellSource.indexOf(
-      'onSelectWorkspaceProjectTarget: async (projectId) =>',
-    );
-    const end = desktopShellSource.indexOf('onLoadAuthoringTargets: async', start);
-    const projectSelectionSource = desktopShellSource.slice(start, end);
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    expect(projectSelectionSource).toContain('workspaceGrants.selectProject');
-    expect(projectSelectionSource).toContain('projectId');
-    expect(projectSelectionSource).toContain('workspaceGrantId: result.grant.workspaceGrantId');
-    expect(projectSelectionSource).toContain("kind: 'project' as const");
-    expect(projectSelectionSource).not.toContain('projectAuthoring.getCatalog');
-    expect(projectSelectionSource).not.toContain('scenes.transition');
-    expect(projectSelectionSource).not.toContain("kind: 'open-project-workspace'");
+  it('does not retain the old Entry composer Workspace selection path', () => {
+    expect(desktopShellSource).not.toContain('onSelectWorkspaceProjectTarget');
+    expect(desktopShellSource).not.toContain('onLoadAuthoringTargets');
+    expect(desktopShellSource).not.toContain('onCreateAuthoringTarget');
   });
 
   it('removes standalone management creation producers', () => {

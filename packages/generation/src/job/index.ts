@@ -18,6 +18,7 @@ export {
   type SubmitPurposeGenerationJobInput,
 } from './contracts';
 export { GenerationJobCoordinator, type GenerationJobCoordinatorOptions } from './coordinator';
+export { decodeSubmitPurposeGenerationJobInput } from './codec';
 export { createPurposeGenerationJobPort } from './purpose-port';
 export {
   GenerationApplicationRuntime,

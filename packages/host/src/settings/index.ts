@@ -16,6 +16,7 @@ export * from './mcp-server-config';
 export * from './model-purpose-registry';
 export * from './ollama-model-refresh';
 export * from './provider-configuration';
+export * from './provider-credential-authority';
 export * from './provider-credential-source';
 export * from './retry-timeout-presets';
 export * from './user-config';

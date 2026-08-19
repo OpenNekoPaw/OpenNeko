@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { ChatModelOption } from '@neko/ai-contracts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModeSelector } from './ModeSelector';
 import { ModelSelector } from './ModelSelector';
 
@@ -26,29 +26,6 @@ const translations: Record<string, string> = {
   'chat.executionMode.askDesc': 'Continue reads; confirm changes and external actions',
   'chat.executionMode.auto': 'Auto',
   'chat.executionMode.autoDesc': 'Automatically run only allowed safe actions',
-  'chat.sessionMode.sections.agent': 'Direct Agent Collaboration',
-  'chat.sessionMode.sections.media': 'Media Generation',
-  'chat.sessionMode.agent': 'Creative Collaboration',
-  'chat.sessionMode.agentDesc':
-    'Refine story themes, character settings, worlds, scene atmosphere, and creative direction',
-  'chat.sessionMode.short.agent': 'Agent',
-  'chat.sessionMode.summary.agent': 'Refine story themes, characters, worlds, and scene mood',
-  'chat.sessionMode.image': 'Image Generation',
-  'chat.sessionMode.imageDesc': 'Create character images and scene references',
-  'chat.sessionMode.short.image': 'Image',
-  'chat.sessionMode.summary.image': 'Create character images and scene references',
-  'chat.sessionMode.video': 'Video Generation',
-  'chat.sessionMode.videoDesc': 'Create video material and motion previews',
-  'chat.sessionMode.short.video': 'Video',
-  'chat.sessionMode.summary.video': 'Create video material and motion previews',
-  'chat.sessionMode.audio': 'Sound Generation',
-  'chat.sessionMode.audioDesc': 'Create voice, sound effects, and ambience',
-  'chat.sessionMode.short.audio': 'Audio',
-  'chat.sessionMode.summary.audio': 'Create voice, sound effects, and ambience',
-  'chat.sessionMode.badge.agent': 'Chat',
-  'chat.sessionMode.badge.image': 'Image',
-  'chat.sessionMode.badge.video': 'Video',
-  'chat.sessionMode.badge.audio': 'Sound',
 };
 
 const models: ChatModelOption[] = [
@@ -160,7 +137,7 @@ describe('dropdown overlay presentation contract', () => {
 
   it('uses the shared overlay shell for the execution menu', () => {
     render(<ModeSelector mode="ask" onChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Execution mode' }));
     expect(screen.getByRole('menu').className).toContain('agent-dropdown-menu-mode');
   });
 
@@ -180,7 +157,7 @@ describe('dropdown overlay presentation contract', () => {
       </div>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Auto' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Execution mode' }));
 
     expect(screen.getByRole('menu').className).toContain('right-0');
   });
@@ -188,25 +165,22 @@ describe('dropdown overlay presentation contract', () => {
   it('explains exactly three execution choices without a full-access mode', () => {
     render(<ModeSelector mode="ask" onChange={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Execution mode' }));
 
     const menu = screen.getByRole('menu', { name: 'Execution mode' });
     expect(screen.getAllByRole('menuitemradio')).toHaveLength(3);
-    expect(
-      screen.getByRole('menuitemradio', { name: /Analyze and plan without side-effect tools/ }),
-    ).toBeTruthy();
-    expect(
-      screen
-        .getByRole('menuitemradio', {
-          name: /Continue reads; confirm changes and external actions/,
-        })
-        .getAttribute('aria-checked'),
-    ).toBe('true');
-    expect(
-      screen.getByRole('menuitemradio', {
-        name: /Automatically run only allowed safe actions/,
-      }),
-    ).toBeTruthy();
+    expect(screen.getByRole('menuitemradio', { name: 'Plan' }).textContent).toContain(
+      'Analyze and plan without side-effect tools',
+    );
+    expect(screen.getByRole('menuitemradio', { name: 'Ask' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    expect(screen.getByRole('menuitemradio', { name: 'Ask' }).textContent).toContain(
+      'Continue reads; confirm changes and external actions',
+    );
+    expect(screen.getByRole('menuitemradio', { name: 'Auto' }).textContent).toContain(
+      'Automatically run only allowed safe actions',
+    );
     expect(menu.textContent).not.toMatch(/full access/i);
   });
 

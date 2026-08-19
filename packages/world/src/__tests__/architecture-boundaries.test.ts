@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const packageRoot = resolve(__dirname, '../..');
 
 describe('neko-world architecture boundaries', () => {
-  it('keeps the Foundation host-neutral and independent from Chara and Agent runtimes', () => {
+  it('keeps the Foundation host-neutral and independent from Chara and Agent packages', () => {
     const files = listTypeScriptFiles(resolve(packageRoot, 'src')).filter(
       (file) => !file.endsWith('.test.ts'),
     );
@@ -27,12 +27,9 @@ describe('neko-world architecture boundaries', () => {
       }
     }
 
-    const capability = readFileSync(
-      resolve(packageRoot, 'src/application/world-authoring-capability-provider.ts'),
-      'utf8',
+    expect(files.map((file) => readFileSync(file, 'utf8')).join('\n')).not.toMatch(
+      /from ['"]@neko\/agent-(?:contracts|runtime|webview)/u,
     );
-    expect(capability).toContain("from '@neko/agent-contracts'");
-    expect(capability).not.toMatch(/from ['"]@neko\/agent-(?:runtime|webview)/u);
   });
 
   it('exports only explicit host-neutral public subpaths', () => {

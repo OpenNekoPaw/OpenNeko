@@ -1,0 +1,3 @@
+- insert:
+    - id: openneko-generation-tools
+      name: '@neko/generation-dsh-plugin'

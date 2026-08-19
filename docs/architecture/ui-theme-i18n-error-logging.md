@@ -51,7 +51,7 @@ Renderer UI 统一进入 `@neko/ui`；旧 `@neko/shared/components` 入口已经
 - `@neko/ui` 组件只接收 props/callbacks/typed data，不主动读取全局 package state。
 - 被多个 renderer surface 复用且无领域语义的控件可以进入 `@neko/ui`；只在一个领域成立的交互留在领域包。
 - Cut、Canvas、Preview、Assets、Tools 等被动状态投影到 Desktop shell 的 owning activity/attention surface，避免各 surface 重复状态栏。
-- Agent 聊天输入、模型选择、会话模式、媒体模型栏等 Agent-first 交互留在 `@neko/agent-webview`，不迁入 `@neko/ui`。
+- Agent Session 输入、消息、审批与取消由 Desktop 原生 DSH surface 渲染；`@neko/agent-webview` 仅保留 extension management presentation，不向 `@neko/ui` 回流领域语义。
 
 ## 统一主题
 

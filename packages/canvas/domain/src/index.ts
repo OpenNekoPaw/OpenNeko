@@ -138,3 +138,4 @@ export type {
   CanvasHostRuntimeSessionEffects,
   CanvasHostRuntimeSessionOptions,
 } from './canvas-host-runtime-session';
+export * from './dsh-tool';
