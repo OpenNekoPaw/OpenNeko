@@ -162,7 +162,7 @@ describe('Resource Browser controller', () => {
       },
     };
     const child: ResourceBrowserContentEntry = {
-      locator: { kind: 'workspace-file', path: 'References/scene.png' },
+      locator: { file: { authority: 'workspace', path: 'References/scene.png' } },
       label: 'scene.png',
       availability: 'available',
       capabilities: ['read', 'preview', 'bind'],

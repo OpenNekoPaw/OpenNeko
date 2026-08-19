@@ -164,7 +164,7 @@ export function createDesktopDshDomainToolHandlers(options: {
         return createHostAgentContentAccessRuntime({
           contentRead: createNodeHostContentReadService({ workspaceRoot: root }),
           documentAccess: createNodeDocumentAccessService(),
-          resolveDocumentHostFilePath: (source) => join(root, ...source.path.split('/')),
+          resolveDocumentHostFilePath: (source) => join(root, ...source.file.path.split('/')),
         });
       },
     },

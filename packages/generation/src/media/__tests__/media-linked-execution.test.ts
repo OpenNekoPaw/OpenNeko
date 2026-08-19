@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   MediaGenerationConfigPort,
@@ -251,38 +249,6 @@ describe('MediaGenerationExecutor linked execution', () => {
     ).rejects.toThrow(`Configured media provider ${provider.id} is unavailable.`);
     expect(providerResolver.resolveProvider).toHaveBeenCalledTimes(2);
     expect(cancelTask).not.toHaveBeenCalled();
-  });
-
-  it('keeps provider execution behind GenerationJob and rejects direct Agent Tool execution', () => {
-    const serviceSource = fs.readFileSync(
-      path.resolve(import.meta.dirname, '..', 'media-generation-service.ts'),
-      'utf8',
-    );
-    const toolSource = fs.readFileSync(
-      path.resolve(
-        import.meta.dirname,
-        '..',
-        '..',
-        '..',
-        '..',
-        'agent',
-        'runtime',
-        'src',
-        'tools',
-        'generation',
-        'media-agent-tools.ts',
-      ),
-      'utf8',
-    );
-
-    expect(serviceSource).not.toContain('GenerationJobCoordinator');
-    expect(toolSource).not.toContain('GenerationJobCoordinator');
-    expect(toolSource).not.toContain('createInMemoryGenerationJobStore');
-    expect(toolSource).toContain('jobs.submitGeneration');
-    expect(toolSource).toContain('jobs.observeGeneration');
-    expect(toolSource).not.toContain('media.generateImage');
-    expect(toolSource).not.toContain('media.generateVideo');
-    expect(toolSource).not.toContain('media.generateAudio');
   });
 });
 

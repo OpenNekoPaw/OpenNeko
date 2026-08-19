@@ -1760,7 +1760,7 @@ describe('DesktopCanvasRuntime', () => {
         requestId: 'embedded-invalid',
         nodeId: 'generation-1',
         outputId: 'output-1',
-        locator: { ...firstLocator, path: 'neko/generated/stale.png' },
+        locator: { file: { authority: 'workspace', path: 'neko/generated/stale.png' } },
         contentKind: 'image',
         mediaType: 'image/png',
         displayName: 'Stale',

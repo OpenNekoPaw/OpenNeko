@@ -384,7 +384,7 @@ function documentRequest(): DshAcpDomainToolRequest {
     toolCallId: 'call:document',
     tool: 'openneko.document',
     operation: 'read',
-    input: { source: { kind: 'workspace-file', path: 'notes.md' } },
+    input: { source: { file: { authority: 'workspace', path: 'notes.md' } } },
   };
 }
 

@@ -206,7 +206,7 @@ describe('DSH Session preload bridge', () => {
             id: 'files:scene',
             kind: 'file',
             label: 'scene.md',
-            contentLocator: { kind: 'workspace-file', path: 'notes/scene.md' },
+            contentLocator: { file: { authority: 'workspace', path: 'notes/scene.md' } },
             source: 'workspace',
             mediaType: 'text',
           },

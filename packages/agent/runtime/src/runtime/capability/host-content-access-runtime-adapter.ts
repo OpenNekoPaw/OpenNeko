@@ -5,6 +5,7 @@ import {
   type ContentRepresentationLocator,
   type ContentRepresentationService,
   type WorkspaceFileContentLocator,
+  isWorkspaceFileContentLocator,
 } from '@neko/content';
 import {
   createAgentContentAccessDiagnostic,
@@ -44,7 +45,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
   async resolveDocumentContent(
     input: AgentDocumentContentInput,
   ): Promise<AgentDocumentContentResult> {
-    if (input.source.kind !== 'workspace-file') {
+    if (!isWorkspaceFileContentLocator(input.source)) {
       return documentFailure(input, 'Document source must be a workspace-file locator.');
     }
     const source = input.source;
