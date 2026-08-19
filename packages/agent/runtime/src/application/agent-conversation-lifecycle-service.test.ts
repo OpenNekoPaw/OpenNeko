@@ -30,7 +30,7 @@ describe('Agent Conversation lifecycle service', () => {
           type: 'file',
           id: 'file:first',
           label: 'first.md',
-          contentLocator: { kind: 'workspace-file', path: 'first.md' },
+          contentLocator: { file: { authority: 'workspace' as const, path: 'first.md' } },
         },
       ],
     });
@@ -73,7 +73,7 @@ describe('Agent Conversation lifecycle service', () => {
           id: 'file:notes.fountain',
           label: 'notes.fountain',
           mediaType: 'text' as const,
-          contentLocator: { kind: 'workspace-file' as const, path: 'notes.fountain' },
+          contentLocator: { file: { authority: 'workspace' as const, path: 'notes.fountain' } },
         },
       ],
       resourceGrantIds: [],

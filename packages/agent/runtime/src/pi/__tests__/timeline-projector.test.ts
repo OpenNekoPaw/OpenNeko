@@ -113,10 +113,10 @@ describe('Pi Timeline projector', () => {
               {
                 type: 'image',
                 contentLocator: {
-                  kind: 'generated-output',
-                  outputId: 'generated-image',
-                  digest: 'a'.repeat(64),
-                  path: 'neko/generated/image/generated-image.png',
+                  file: {
+                    authority: 'workspace' as const,
+                    path: 'neko/generated/image/generated-image.png',
+                  },
                 },
               },
             ],
@@ -165,10 +165,10 @@ describe('Pi Timeline projector', () => {
               {
                 type: 'image',
                 contentLocator: {
-                  kind: 'generated-output',
-                  outputId: 'generated-image',
-                  digest: 'a'.repeat(64),
-                  path: 'neko/generated/image/generated-image.png',
+                  file: {
+                    authority: 'workspace' as const,
+                    path: 'neko/generated/image/generated-image.png',
+                  },
                 },
               },
             ],

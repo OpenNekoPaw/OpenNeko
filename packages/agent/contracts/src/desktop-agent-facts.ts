@@ -450,7 +450,7 @@ function parseResourceDisplayProjection(input: unknown): AgentResourceDisplayPro
       'toolCallId',
       'projectionKind',
       'status',
-      'locatorKind',
+      'sourceKind',
       'transport',
       'renderTarget',
       'diagnosticCodes',
@@ -466,17 +466,10 @@ function parseResourceDisplayProjection(input: unknown): AgentResourceDisplayPro
       'resource projection kind',
     ),
     status: oneOf(record['status'], ['authorized', 'denied'] as const, 'resource status'),
-    locatorKind: oneOf(
-      record['locatorKind'],
-      [
-        'workspace-file',
-        'media-library',
-        'document-entry',
-        'generated-output',
-        'package-resource',
-        'content-representation',
-      ] as const,
-      'resource locator kind',
+    sourceKind: oneOf(
+      record['sourceKind'],
+      ['workspace-file', 'media-library', 'package-file', 'representation-handle'] as const,
+      'resource source kind',
     ),
     transport: oneOf(
       record['transport'],

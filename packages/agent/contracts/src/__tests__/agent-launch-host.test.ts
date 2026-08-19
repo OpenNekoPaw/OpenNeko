@@ -184,7 +184,7 @@ describe('Agent launch Host contract', () => {
             filter: 'hero',
             files: [
               {
-                locator: { kind: 'workspace-file', path: 'hero.md' },
+                locator: { file: { authority: 'workspace', path: 'hero.md' } },
                 name: 'hero.md',
                 type: 'file',
                 referenceReceipt: {

@@ -10,9 +10,8 @@ describe('clipboard-context-presenter', () => {
           filePath: '/books/a.epub',
           source: { filePath: '/books/a.epub', format: 'epub' },
           contentLocator: {
-            kind: 'document-entry',
-            source: { kind: 'workspace-file', path: 'books/a.epub' },
-            entryPath: 'image/Page_1.jpg',
+            file: { authority: 'workspace', path: 'books/a.epub' },
+            selector: { kind: 'entry', path: 'image/Page_1.jpg' },
           },
           locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
         },
@@ -39,9 +38,8 @@ describe('clipboard-context-presenter', () => {
         kind: 'document-image-reference',
         document: {
           contentLocator: {
-            kind: 'document-entry',
-            source: { kind: 'workspace-file', path: 'books/a.epub' },
-            entryPath: 'image/Page_1.jpg',
+            file: { authority: 'workspace', path: 'books/a.epub' },
+            selector: { kind: 'entry', path: 'image/Page_1.jpg' },
           },
           locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
         },
@@ -52,9 +50,8 @@ describe('clipboard-context-presenter', () => {
           byteSize: 1024,
           mimeType: 'image/jpeg',
           contentLocator: {
-            kind: 'document-entry',
-            source: { kind: 'workspace-file', path: 'books/a.epub' },
-            entryPath: 'image/Page_1.jpg',
+            file: { authority: 'workspace', path: 'books/a.epub' },
+            selector: { kind: 'entry', path: 'image/Page_1.jpg' },
           },
         },
         navigationData: {
@@ -92,9 +89,8 @@ describe('clipboard-context-presenter', () => {
       document: {
         filePath: '/books/a.epub',
         contentLocator: {
-          kind: 'document-entry',
-          source: { kind: 'workspace-file', path: 'books/a.epub' },
-          entryPath: 'image/Page_1.jpg',
+          file: { authority: 'workspace', path: 'books/a.epub' },
+          selector: { kind: 'entry', path: 'image/Page_1.jpg' },
         },
       },
       image: { index: 0 },
@@ -113,7 +109,7 @@ describe('clipboard-context-presenter', () => {
         kind: 'media-library-file-reference',
         path: '${REFS}/hero.png',
         resolvedPath: '/mnt/media/hero.png',
-        contentLocator: { kind: 'workspace-file', path: 'references/hero.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'references/hero.png' } },
         name: 'hero.png',
         mediaType: 'image',
         source: { partition: 'media-library', variable: 'REFS' },
@@ -127,7 +123,7 @@ describe('clipboard-context-presenter', () => {
       summary: 'Media: hero.png (image)',
       data: expect.objectContaining({
         kind: 'media-library-file-reference',
-        contentLocator: { kind: 'workspace-file', path: 'references/hero.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'references/hero.png' } },
         source: { partition: 'media-library', variable: 'REFS' },
         navigationData: {
           source: 'media-library',

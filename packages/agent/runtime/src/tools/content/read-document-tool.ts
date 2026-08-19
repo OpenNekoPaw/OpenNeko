@@ -17,24 +17,12 @@ import {
   type ToolParameterProperty,
   type ToolResult,
 } from '@neko/agent-contracts';
+import { CONTENT_LOCATOR_SCHEMA } from './content-locator-schema';
 
 const DEFAULT_READ_DOCUMENT_MAX_CHARS = 20000;
 const MAX_READ_DOCUMENT_CHARS = 100000;
 const DEFAULT_DOCUMENT_IMAGE_INFO_LIMIT = 50;
 const MAX_DOCUMENT_IMAGE_INFO_LIMIT = 500;
-
-const CONTENT_SOURCE_REF_PARAMETER: ToolParameterProperty = {
-  type: 'object',
-  description: 'Canonical ContentLocator returned by an owning content capability.',
-  properties: {
-    kind: {
-      type: 'string',
-      enum: ['workspace-file', 'generated-output', 'package-resource'],
-    },
-  },
-  required: ['kind'],
-  additionalProperties: true,
-};
 
 const DOCUMENT_LOCATOR_PARAMETER: ToolParameterProperty = {
   type: 'object',
@@ -220,7 +208,8 @@ export function createReadDocumentTool(deps: ReadDocumentToolDeps): Tool {
       type: 'object',
       properties: {
         source: {
-          ...CONTENT_SOURCE_REF_PARAMETER,
+          ...CONTENT_LOCATOR_SCHEMA,
+          description: 'Canonical ContentLocator returned by an owning content capability.',
         },
         mode: {
           type: 'string',

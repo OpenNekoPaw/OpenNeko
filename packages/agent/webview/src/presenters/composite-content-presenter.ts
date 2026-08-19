@@ -735,7 +735,7 @@ function collectExplicitStoryboardDocumentMediaRefs(
 }
 
 function hasStableDocumentContentLocator(mediaRef: StoryboardMediaRef): boolean {
-  return parseStableContentLocator(mediaRef.contentLocator)?.kind === 'document-entry';
+  return parseStableContentLocator(mediaRef.contentLocator)?.selector?.kind === 'entry';
 }
 
 function projectStoryboardDocumentResourceMediaRef(
@@ -743,16 +743,16 @@ function projectStoryboardDocumentResourceMediaRef(
   assetIndex: number,
 ): ResolvedCompositeMedia | undefined {
   const contentLocator = parseStableContentLocator(mediaRef.contentLocator);
-  if (contentLocator?.kind !== 'document-entry') return undefined;
+  if (contentLocator?.selector?.kind !== 'entry') return undefined;
   return {
     id: [
       'storyboard-document-resource',
       mediaRef.refId,
-      createDocumentResourceCandidateKey(contentLocator) ?? contentLocator.entryPath,
+      createDocumentResourceCandidateKey(contentLocator) ?? contentLocator.selector.path,
     ].join(':'),
     toolCallId: mediaRef.refId,
     assetIndex,
-    type: inferMediaType(mediaRef.mimeType, contentLocator.entryPath, 'image'),
+    type: inferMediaType(mediaRef.mimeType, contentLocator.selector.path, 'image'),
     contentLocator,
     ...(mediaRef.mimeType ? { mimeType: mediaRef.mimeType } : {}),
     ...(mediaRef.label ? { caption: mediaRef.label, label: mediaRef.label } : {}),
@@ -1029,9 +1029,7 @@ function projectDocumentImageCandidate(input: {
   const alias = normalizeStoryboardAlias(readString(input.info, 'alias'));
   const sourceDocumentId =
     readString(input.info, 'sourceDocumentId') ?? readDocumentResourceSourceId(contentLocator);
-  const entryPath =
-    readString(input.info, 'entryPath') ??
-    (contentLocator?.kind === 'document-entry' ? contentLocator.entryPath : undefined);
+  const entryPath = readString(input.info, 'entryPath') ?? contentLocator?.selector?.path;
   return {
     assetIndex: input.index,
     type: 'image',
@@ -1058,8 +1056,8 @@ function createDocumentResourceCandidateKey(
 function readDocumentResourceSourceId(
   contentLocator: ContentLocator | undefined,
 ): string | undefined {
-  return contentLocator?.kind === 'document-entry'
-    ? contentLocatorKey(contentLocator.source)
+  return contentLocator?.selector?.kind === 'entry'
+    ? contentLocatorKey({ file: contentLocator.file })
     : undefined;
 }
 

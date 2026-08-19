@@ -21,7 +21,7 @@ describe('projectPiConversationEntries', () => {
               id: 'file:test.png',
               label: 'test.png',
               mediaType: 'image',
-              contentLocator: { kind: 'workspace-file', path: 'test.png' },
+              contentLocator: { file: { authority: 'workspace' as const, path: 'test.png' } },
             },
           ],
         },
@@ -46,7 +46,7 @@ describe('projectPiConversationEntries', () => {
             id: 'file:test.png',
             label: 'test.png',
             mediaType: 'image',
-            contentLocator: { kind: 'workspace-file', path: 'test.png' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'test.png' } },
           },
         ],
       },
@@ -282,9 +282,8 @@ describe('projectPiConversationEntries', () => {
 
   it('restores the canonical ReadImage ToolResult shape from durable Pi details', () => {
     const contentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
-      entryPath: 'images/cover.jpg',
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'images/cover.jpg' },
     };
     const entries: PiConversationTranscriptEntry[] = [
       messageEntry('assistant-entry', null, {

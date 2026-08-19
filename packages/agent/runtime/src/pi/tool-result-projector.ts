@@ -5,7 +5,7 @@ import type {
   ToolResultAttachment,
   ToolResultBackfillDiagnostic,
 } from '@neko/agent-contracts';
-import { isContentLocator, isContentRepresentationLocator } from '@neko/content';
+import { contentLocatorKey, isContentLocator, isContentRepresentationHandle } from '@neko/content';
 
 export function projectPiToolResult(
   value: unknown,
@@ -22,7 +22,7 @@ export function projectPiToolResult(
   if (envelope) {
     return {
       success: envelope['success'] === true,
-      data: structuredClone(envelope['data']),
+      data: projectDurableValue(envelope['data']),
       ...(typeof envelope['error'] === 'string' ? { error: envelope['error'] } : {}),
       ...(typeof envelope['duration'] === 'number' ? { duration: envelope['duration'] } : {}),
       ...projectToolResultCollections(envelope),
@@ -31,7 +31,7 @@ export function projectPiToolResult(
 
   return {
     success: !isError,
-    data: structuredClone(details?.['data'] ?? record?.['details'] ?? value),
+    data: projectDurableValue(details?.['data'] ?? record?.['details'] ?? value),
     ...(isError
       ? {
           error:
@@ -51,8 +51,15 @@ function projectToolResultCollections(value: unknown): {
 } {
   const record = asRecord(value);
   if (!record) return {};
-  const attachments = readCollection(record, 'attachments', isToolResultAttachment);
-  const perceptionCards = readCollection(record, 'perceptionCards', isPerceptionCard);
+  const attachments = readCollection(record, 'attachments', isToolResultAttachment)?.flatMap(
+    (attachment) => {
+      const projected = projectDurableAttachment(attachment);
+      return projected ? [projected] : [];
+    },
+  );
+  const perceptionCards = readCollection(record, 'perceptionCards', isPerceptionCard)?.map(
+    (card) => projectDurableValue(card) as PerceptionCard,
+  );
   const backfillDiagnostics = readCollection(
     record,
     'backfillDiagnostics',
@@ -60,7 +67,7 @@ function projectToolResultCollections(value: unknown): {
   );
   const artifacts = readCollection(record, 'artifacts', isToolResultArtifactTransfer);
   return {
-    ...(attachments ? { attachments } : {}),
+    ...(attachments && attachments.length > 0 ? { attachments } : {}),
     ...(perceptionCards ? { perceptionCards } : {}),
     ...(backfillDiagnostics ? { backfillDiagnostics } : {}),
     ...(artifacts ? { artifacts } : {}),
@@ -98,8 +105,59 @@ function isToolResultAttachment(value: unknown): value is ToolResultAttachment {
     typeof assetRef['assetId'] === 'string' &&
     typeof assetRef['uri'] === 'string' &&
     (isContentLocator(assetRef['contentLocator']) ||
-      isContentRepresentationLocator(assetRef['representationLocator']))
+      isContentRepresentationHandle(assetRef['representationHandle']))
   );
+}
+
+function projectDurableAttachment(
+  attachment: ToolResultAttachment,
+): ToolResultAttachment | undefined {
+  const assetRef = asRecord(attachment.assetRef);
+  const contentLocator = isContentLocator(attachment.contentLocator)
+    ? attachment.contentLocator
+    : isContentLocator(assetRef?.['contentLocator'])
+      ? assetRef['contentLocator']
+      : undefined;
+  const hasRepresentationHandle = isContentRepresentationHandle(assetRef?.['representationHandle']);
+  if (hasRepresentationHandle && !contentLocator) return undefined;
+  return projectDurableValue(attachment) as ToolResultAttachment;
+}
+
+function projectDurableValue(value: unknown): unknown {
+  if (isContentRepresentationHandle(value)) return undefined;
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => {
+      const projected = projectDurableValue(entry);
+      return projected === undefined ? [] : [projected];
+    });
+  }
+  const record = asRecord(value);
+  if (!record) return structuredClone(value);
+  const contentLocator = isContentLocator(record['contentLocator'])
+    ? record['contentLocator']
+    : undefined;
+  if (record['portableForTransfer'] === false && !contentLocator) return undefined;
+  const hasRepresentationHandle = isContentRepresentationHandle(record['representationHandle']);
+  const projected: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    if (key === 'representationHandle') continue;
+    if (
+      hasRepresentationHandle &&
+      !contentLocator &&
+      (key === 'uri' || key === 'previewUri' || key === 'renderUri' || key === 'path')
+    ) {
+      continue;
+    }
+    const next = projectDurableValue(entry);
+    if (next !== undefined) projected[key] = next;
+  }
+  if (contentLocator && typeof projected['uri'] === 'string') {
+    const uri = projected['uri'];
+    if (uri.startsWith('data:') || uri.startsWith('blob:') || uri.startsWith('openneko:')) {
+      projected['uri'] = `content:${contentLocatorKey(contentLocator)}`;
+    }
+  }
+  return projected;
 }
 
 function isPerceptionCard(value: unknown): value is PerceptionCard {

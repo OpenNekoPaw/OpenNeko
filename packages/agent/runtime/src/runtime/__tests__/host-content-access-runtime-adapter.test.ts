@@ -44,30 +44,24 @@ describe('HostAgentContentAccessRuntime document representations', () => {
     });
 
     const result = await runtime.resolveDocumentContent({
-      source: { kind: 'workspace-file', path: 'neko/assets/Reference/story.md' },
+      source: { file: { authority: 'workspace' as const, path: 'neko/assets/Reference/story.md' } },
     });
 
     expect(result).toMatchObject({
       status: 'ready',
-      source: { kind: 'workspace-file', path: 'neko/assets/Reference/story.md' },
+      source: { file: { authority: 'workspace' as const, path: 'neko/assets/Reference/story.md' } },
       text: '# Linked story\n',
     });
     expect(JSON.stringify(result)).not.toContain(libraryPath);
   });
 
-  it('projects computed document pages as representation locators without physical paths', async () => {
+  it('projects computed document pages as opaque representation handles without physical paths', async () => {
     const getRepresentation = vi.fn(
       async (request: Parameters<ContentRepresentationService['getRepresentation']>[0]) => ({
         status: 'ready' as const,
-        locator: {
-          kind: 'content-representation' as const,
+        handle: {
+          kind: 'content-representation-handle' as const,
           id: `page-${request.spec.kind === 'raster-page' ? request.spec.page : 0}`,
-          representationKind: request.spec.kind,
-          source: request.source,
-          spec: request.spec,
-          generatorId: 'document-raster',
-          sourceFingerprint: 'source-content',
-          specFingerprint: 'raster-spec',
         },
         metadata: { mimeType: 'image/png', width: 640, height: 480, byteLength: 16 },
       }),
@@ -75,7 +69,7 @@ describe('HostAgentContentAccessRuntime document representations', () => {
     const runtime = createRuntime(createRepresentations(getRepresentation));
 
     const result = await runtime.resolveDocumentContent({
-      source: { kind: 'workspace-file', path: 'docs/story.pdf' },
+      source: { file: { authority: 'workspace' as const, path: 'docs/story.pdf' } },
       includeImages: true,
       maxImages: 2,
     });
@@ -88,23 +82,21 @@ describe('HostAgentContentAccessRuntime document representations', () => {
       imageInfo: [
         {
           locator: { kind: 'page', pageNumber: 1, pageIndex: 0 },
-          representationLocator: {
-            kind: 'content-representation',
-            representationKind: 'raster-page',
+          representationHandle: {
+            kind: 'content-representation-handle',
           },
         },
         {
           locator: { kind: 'page', pageNumber: 2, pageIndex: 1 },
-          representationLocator: {
-            kind: 'content-representation',
-            representationKind: 'raster-page',
+          representationHandle: {
+            kind: 'content-representation-handle',
           },
         },
       ],
     });
     expect(getRepresentation).toHaveBeenCalledTimes(2);
     expect(getRepresentation).toHaveBeenNthCalledWith(1, {
-      source: { kind: 'workspace-file', path: 'docs/story.pdf' },
+      source: { file: { authority: 'workspace' as const, path: 'docs/story.pdf' } },
       spec: { kind: 'raster-page', page: 1, format: 'png' },
     });
     expect(JSON.stringify(result)).not.toContain('cacheRoot');
@@ -125,7 +117,7 @@ describe('HostAgentContentAccessRuntime document representations', () => {
     );
 
     const result = await runtime.resolveDocumentContent({
-      source: { kind: 'workspace-file', path: 'docs/story.pdf' },
+      source: { file: { authority: 'workspace' as const, path: 'docs/story.pdf' } },
       includeImages: true,
       maxImages: 1,
     });

@@ -40,8 +40,7 @@ describe('context-reference-presenter', () => {
       summary: 'Media: Hero reference',
       data: {
         contentLocator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/References/hero.png',
+          file: { authority: 'workspace', path: 'neko/assets/References/hero.png' },
         },
         navigationData: {
           partition: 'media-library',
@@ -57,8 +56,7 @@ describe('context-reference-presenter', () => {
         label: 'Hero reference',
         summary: 'Media: Hero reference',
         contentLocator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/References/hero.png',
+          file: { authority: 'workspace', path: 'neko/assets/References/hero.png' },
         },
         navigationData: { partition: 'media-library' },
       },
@@ -73,7 +71,7 @@ describe('context-reference-presenter', () => {
       summary: 'Workspace image',
       data: {
         kind: 'authorized-content-reference',
-        locator: { kind: 'workspace-file', path: 'test.png' },
+        locator: { file: { authority: 'workspace', path: 'test.png' } },
         mediaType: 'image',
       },
     };
@@ -85,7 +83,7 @@ describe('context-reference-presenter', () => {
         label: 'test.png',
         summary: 'Workspace image',
         mediaType: 'image',
-        contentLocator: { kind: 'workspace-file', path: 'test.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'test.png' } },
       },
     ]);
   });
@@ -100,8 +98,7 @@ describe('context-reference-presenter', () => {
           source: 'workspace',
           thumbnailUri: 'neko-resource://thumbnail/hero',
           contentLocator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/References/hero.png',
+            file: { authority: 'workspace', path: 'neko/assets/References/hero.png' },
           },
         },
       ]),
@@ -114,8 +111,7 @@ describe('context-reference-presenter', () => {
         thumbnailUri: 'neko-resource://thumbnail/hero',
         mediaType: 'image',
         contentLocator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/References/hero.png',
+          file: { authority: 'workspace', path: 'neko/assets/References/hero.png' },
         },
       },
     ]);
@@ -138,13 +134,13 @@ describe('context-reference-presenter', () => {
             id: 'canvas-node-1',
             label: 'Duplicate opening shot',
             source: 'canvas',
-            contentLocator: { kind: 'workspace-file', path: 'neko/boards/workspace.nkc' },
+            contentLocator: { file: { authority: 'workspace', path: 'neko/boards/workspace.nkc' } },
           },
           {
             id: 'file:hero.png',
             label: 'hero.png',
             mediaType: 'image',
-            contentLocator: { kind: 'workspace-file', path: 'hero.png' },
+            contentLocator: { file: { authority: 'workspace', path: 'hero.png' } },
           },
         ],
       }),
@@ -162,7 +158,7 @@ describe('context-reference-presenter', () => {
         label: 'hero.png',
         summary: 'hero.png',
         mediaType: 'image',
-        contentLocator: { kind: 'workspace-file', path: 'hero.png' },
+        contentLocator: { file: { authority: 'workspace', path: 'hero.png' } },
       },
     ]);
   });

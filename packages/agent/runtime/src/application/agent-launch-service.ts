@@ -713,7 +713,8 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
         bindingReceiptId,
         identity: JSON.stringify(file.locator),
         name: file.name,
-        description: file.locator.kind === 'workspace-file' ? file.locator.path : file.name,
+        description:
+          file.locator.file.authority === 'workspace' ? file.locator.file.path : file.name,
       });
       return {
         entry,

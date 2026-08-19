@@ -36,7 +36,7 @@ describe('PerceptionImageUnderstandTool', () => {
       {
         images: [
           {
-            contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'reference.png' } },
             label: 'reference.png',
           },
         ],
@@ -82,7 +82,9 @@ describe('PerceptionImageUnderstandTool', () => {
 
     await expect(
       tool.execute({
-        images: [{ contentLocator: { kind: 'workspace-file', path: 'reference.png' } }],
+        images: [
+          { contentLocator: { file: { authority: 'workspace' as const, path: 'reference.png' } } },
+        ],
       }),
     ).resolves.toEqual({
       success: false,

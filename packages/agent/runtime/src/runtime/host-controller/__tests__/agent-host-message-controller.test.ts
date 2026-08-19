@@ -89,7 +89,7 @@ describe('Agent Host message controller', () => {
     });
     await controller.tryHandle({
       type: 'openFile',
-      contentLocator: { kind: 'workspace-file', path: 'docs/readme.md' },
+      contentLocator: { file: { authority: 'workspace' as const, path: 'docs/readme.md' } },
     });
     await controller.tryHandle({
       type: 'projectionEndpointDiscover',
@@ -101,7 +101,7 @@ describe('Agent Host message controller', () => {
     expect(effects.skill.readInputCatalog).toHaveBeenCalledWith('conversation-1', context);
     expect(effects.content.openFile).toHaveBeenCalledWith(
       {
-        contentLocator: { kind: 'workspace-file', path: 'docs/readme.md' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'docs/readme.md' } },
       },
       context,
     );

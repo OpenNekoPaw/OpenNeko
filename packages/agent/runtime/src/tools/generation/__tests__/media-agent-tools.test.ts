@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ToolRegistry } from '../../tool-registry';
-import type { ContentLocator, GeneratedOutputContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content';
 import type { GenerationJobSnapshot, SubmitGenerationJobInput } from '@neko/generation';
 import { registerMediaAgentTools } from '../media-agent-tools';
 
@@ -511,20 +511,24 @@ describe('registerMediaAgentTools', () => {
         outputs: [
           {
             type: 'image',
-            contentLocator: expect.objectContaining({
-              kind: 'generated-output',
-              outputId: 'generation-job-1:image:0',
-            }),
+            contentLocator: {
+              file: {
+                authority: 'workspace',
+                path: 'neko/generated/generation-job-1-image-0.png',
+              },
+            },
           },
         ],
       },
       attachments: [
         expect.objectContaining({
           type: 'image',
-          contentLocator: expect.objectContaining({
-            kind: 'generated-output',
-            outputId: 'generation-job-1:image:0',
-          }),
+          contentLocator: {
+            file: {
+              authority: 'workspace',
+              path: 'neko/generated/generation-job-1-image-0.png',
+            },
+          },
         }),
       ],
     });
@@ -1015,7 +1019,9 @@ describe('registerMediaAgentTools', () => {
     const result = await executeAgentTool(registry, 'GenerateVideo', {
       prompt: 'Animate the shot',
       operation: 'generate-from-keyframes',
-      startFrameLocator: { kind: 'workspace-file', path: '/tmp/runtime-frame.png' },
+      startFrameLocator: {
+        file: { authority: 'workspace' as const, path: '/tmp/runtime-frame.png' },
+      },
       endFrameLocator: createWorkspaceLocator('assets/end-frame.png'),
       providerId: 'dashscope-provider',
       modelId: 'wan-keyframe-model',
@@ -1097,18 +1103,15 @@ describe('registerMediaAgentTools', () => {
 });
 
 function createWorkspaceLocator(path: string): ContentLocator {
-  return {
-    kind: 'workspace-file',
-    path,
-  };
+  return { file: { authority: 'workspace', path } };
 }
 
-function createGeneratedContentLocator(id: string): GeneratedOutputContentLocator {
+function createGeneratedContentLocator(id: string): ContentLocator {
   return {
-    kind: 'generated-output',
-    outputId: id,
-    digest: 'a'.repeat(64),
-    path: `neko/generated/${id.replaceAll(':', '-')}.png`,
+    file: {
+      authority: 'workspace' as const,
+      path: `neko/generated/${id.replaceAll(':', '-')}.png`,
+    },
   };
 }
 

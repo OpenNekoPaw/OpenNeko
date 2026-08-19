@@ -42,11 +42,7 @@ import {
 import type { ContentLocator, DocumentContextData, DocumentLocator } from '@neko/content';
 import type { CanvasNodeType } from '@neko/canvas-domain';
 import { isDocumentFile } from '@neko/media';
-import {
-  contentLocatorKey,
-  isContentLocator,
-  serializeContentReferenceTarget,
-} from '@neko/content';
+import { contentLocatorKey, isContentLocator } from '@neko/content';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
   extractFileReferencePaths,
@@ -1451,7 +1447,9 @@ export function projectAgentFileMentions(
 ): ProjectFileMentionInfo[] {
   return files.map((file) => {
     const relativePath = normalizeRelativeProjectPath(file.relativePath);
-    const locator = file.contentLocator ?? { kind: 'workspace-file' as const, path: relativePath };
+    const locator = file.contentLocator ?? {
+      file: { authority: 'workspace' as const, path: relativePath },
+    };
     if (!isContentLocator(locator)) {
       throw new Error('Agent Project file candidate contains an invalid content locator.');
     }
@@ -1906,15 +1904,11 @@ function summarizeFileReferences(
 }
 
 function contentLocatorDisplayPath(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return locator.path;
-    case 'document-entry':
-      return `${serializeContentReferenceTarget(locator.source)}#${locator.entryPath}`;
-    case 'package-resource':
-      return `${locator.packageId}/${locator.resourcePath}`;
-  }
+  const filePath =
+    locator.file.authority === 'workspace'
+      ? locator.file.path
+      : `${locator.file.packageId}/${locator.file.path}`;
+  return locator.selector ? `${filePath}#${locator.selector.path}` : filePath;
 }
 
 function summarizeBase64Images(

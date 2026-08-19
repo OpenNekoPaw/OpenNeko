@@ -108,7 +108,7 @@ describe('Agent conversation controller', () => {
           {
             id: 'file-1',
             label: 'notes.md',
-            contentLocator: { kind: 'workspace-file', path: 'notes.md' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'notes.md' } },
             mediaType: 'text',
           },
         ],
@@ -137,7 +137,7 @@ describe('Agent conversation controller', () => {
           {
             id: 'file-1',
             label: 'notes.md',
-            contentLocator: { kind: 'workspace-file', path: 'notes.md' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'notes.md' } },
             mediaType: 'text',
           },
         ],

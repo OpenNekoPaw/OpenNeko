@@ -8,13 +8,10 @@ import {
   deliverCreatorVisibleArtifactsFromTurnProjection,
   type CreatorVisibleToolResult,
 } from '../turn/creator-visible-artifact-collector';
-import type { ConversationTurnProjection } from '@neko/agent-contracts';
+import type { ConversationTurnProjection, ToolCall } from '@neko/agent-contracts';
+import { projectPiToolResult } from '../../pi/tool-result-projector';
 
-const sourceLocator = {
-  kind: 'workspace-file' as const,
-  path: 'materials/brief.png',
-  fingerprint: { strategy: 'sha256' as const, value: 'sha256:source-1' },
-};
+const sourceLocator = { file: { authority: 'workspace' as const, path: 'materials/brief.png' } };
 
 describe('collectCreatorVisibleArtifacts', () => {
   it('collects consumed durable material, named Markdown, and generated output', () => {
@@ -40,8 +37,7 @@ describe('collectCreatorVisibleArtifacts', () => {
               uri: 'materials/unselected.png',
               mimeType: 'image/png',
               contentLocator: {
-                kind: 'workspace-file',
-                path: 'materials/unselected.png',
+                file: { authority: 'workspace' as const, path: 'materials/unselected.png' },
               },
             },
           },
@@ -116,9 +112,8 @@ describe('collectCreatorVisibleArtifacts', () => {
 
   it('keeps ReadImage intrinsic dimensions with a document-entry attachment', () => {
     const documentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/Blame.epub' },
-      entryPath: 'OEBPS/images/cover.jpg',
+      file: { authority: 'workspace' as const, path: 'books/Blame.epub' },
+      selector: { kind: 'entry' as const, path: 'OEBPS/images/cover.jpg' },
     };
 
     const collected = collectCreatorVisibleArtifacts({
@@ -157,13 +152,12 @@ describe('collectCreatorVisibleArtifacts', () => {
 
   it('finalizes explicitly requested native image analysis with its source images', () => {
     const firstPageLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/Blame.epub' },
-      entryPath: 'OEBPS/images/page-01.jpg',
+      file: { authority: 'workspace' as const, path: 'books/Blame.epub' },
+      selector: { kind: 'entry' as const, path: 'OEBPS/images/page-01.jpg' },
     };
     const secondPageLocator = {
       ...firstPageLocator,
-      entryPath: 'OEBPS/images/page-02.jpg',
+      selector: { kind: 'entry' as const, path: 'OEBPS/images/page-02.jpg' },
     };
 
     const collected = collectCreatorVisibleArtifacts({
@@ -223,14 +217,12 @@ describe('collectCreatorVisibleArtifacts', () => {
 
   it('uses locator-derived Canvas source identities for same-named images from different documents', () => {
     const firstLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/volume-1.epub' },
-      entryPath: 'images/cover.jpg',
+      file: { authority: 'workspace' as const, path: 'books/volume-1.epub' },
+      selector: { kind: 'entry' as const, path: 'images/cover.jpg' },
     };
     const secondLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/volume-2.epub' },
-      entryPath: 'images/cover.jpg',
+      file: { authority: 'workspace' as const, path: 'books/volume-2.epub' },
+      selector: { kind: 'entry' as const, path: 'images/cover.jpg' },
     };
 
     const collected = collectCreatorVisibleArtifacts({
@@ -281,9 +273,8 @@ describe('collectCreatorVisibleArtifacts', () => {
 
   it('does not promote ordinary ReadImage replies without an explicit analysis declaration', () => {
     const documentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/Blame.epub' },
-      entryPath: 'OEBPS/images/cover.jpg',
+      file: { authority: 'workspace' as const, path: 'books/Blame.epub' },
+      selector: { kind: 'entry' as const, path: 'OEBPS/images/cover.jpg' },
     };
 
     const collected = collectCreatorVisibleArtifacts({
@@ -355,13 +346,9 @@ describe('collectCreatorVisibleArtifacts', () => {
 
   it('does not retain source candidates only because Markdown resembles an artifact', () => {
     const portablePath = 'epub/animation/Blame/volume-01.epub';
-    const unversionedLocator = {
-      kind: 'workspace-file' as const,
-      path: portablePath,
-    };
-    const fingerprintedLocator = {
-      ...unversionedLocator,
-      fingerprint: { strategy: 'sha256' as const, value: 'sha256:volume-01' },
+    const unversionedLocator = { file: { authority: 'workspace' as const, path: portablePath } };
+    const siblingLocator = {
+      file: { authority: 'workspace' as const, path: 'epub/animation/Blame/volume-02.epub' },
     };
 
     const collected = collectCreatorVisibleArtifacts({
@@ -374,7 +361,7 @@ describe('collectCreatorVisibleArtifacts', () => {
         {
           name: 'ReadDocument',
           success: true,
-          data: { contentLocator: fingerprintedLocator },
+          data: { contentLocator: siblingLocator },
         },
       ],
       assistantMarkdown: `~~~NEKO\n${JSON.stringify({
@@ -428,7 +415,7 @@ describe('collectCreatorVisibleArtifacts', () => {
       createTurn({
         toolName: 'Write',
         toolData: {
-          contentLocator: { kind: 'workspace-file', path: 'docs/output.md' },
+          contentLocator: { file: { authority: 'workspace' as const, path: 'docs/output.md' } },
           mode: 'write',
           bytesWritten: 12,
         },
@@ -439,7 +426,7 @@ describe('collectCreatorVisibleArtifacts', () => {
       expect.objectContaining({
         role: 'output',
         kind: 'file-reference',
-        contentLocator: { kind: 'workspace-file', path: 'docs/output.md' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'docs/output.md' } },
       }),
     ]);
   });
@@ -450,7 +437,7 @@ describe('collectCreatorVisibleArtifacts', () => {
         createTurn({
           toolName: 'Read',
           toolData: {
-            contentLocator: { kind: 'workspace-file', path: 'docs/source.md' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'docs/source.md' } },
             content: '1\tsource',
           },
         }),
@@ -463,7 +450,7 @@ describe('collectCreatorVisibleArtifacts', () => {
       createTurn({
         toolName: 'Read',
         toolData: {
-          contentLocator: { kind: 'workspace-file', path: 'docs/source.md' },
+          contentLocator: { file: { authority: 'workspace' as const, path: 'docs/source.md' } },
           content: '1\tsource',
         },
         assistantMarkdown: `~~~NEKO\n{"kind":"composite-artifact"}\n~~~`,
@@ -476,7 +463,9 @@ describe('collectCreatorVisibleArtifacts', () => {
   it('does not collect artifacts from failed or non-terminal turns', () => {
     const failed = createTurn({
       toolName: 'Write',
-      toolData: { contentLocator: { kind: 'workspace-file', path: 'docs/output.md' } },
+      toolData: {
+        contentLocator: { file: { authority: 'workspace' as const, path: 'docs/output.md' } },
+      },
       completionStatus: 'failed',
     });
     const nonTerminal = { ...failed, completion: undefined };
@@ -487,10 +476,7 @@ describe('collectCreatorVisibleArtifacts', () => {
 
   it('preserves Generation Job evidence for generated Tool attachments', () => {
     const locator = {
-      kind: 'generated-output' as const,
-      outputId: 'job-1:image:0',
-      digest: 'sha256:image-0',
-      path: 'neko/generated/image/job-1-image-0.png',
+      file: { authority: 'workspace' as const, path: 'neko/generated/image/job-1-image-0.png' },
     };
     const collected = collectCreatorVisibleArtifacts({
       toolResults: [
@@ -520,10 +506,158 @@ describe('collectCreatorVisibleArtifacts', () => {
     ]);
   });
 
+  it('delivers the original PDF and Markdown while omitting raster-page representations', () => {
+    const pdfLocator = {
+      file: { authority: 'workspace' as const, path: 'documents/source.pdf' },
+    };
+    const projected = projectPiToolResult(
+      {
+        success: true,
+        data: { contentLocator: pdfLocator },
+        attachments: [
+          {
+            type: 'image',
+            path: 'data:image/png;base64,AQID',
+            assetRef: {
+              assetId: 'source-page-1',
+              uri: 'data:image/png;base64,AQID',
+              mimeType: 'image/png',
+              representationHandle: {
+                kind: 'content-representation-handle',
+                id: 'pdf-page-handle-1',
+              },
+            },
+          },
+        ],
+        artifacts: [
+          {
+            type: 'artifactSnapshot',
+            complete: true,
+            artifact: {
+              kind: 'composite-artifact',
+              artifactId: 'pdf-analysis',
+              title: 'PDF Analysis',
+              blocks: [{ blockId: 'summary', kind: 'text', text: 'The document summary.' }],
+              provenance: { sourceArtifactIds: [contentSourceId(pdfLocator)] },
+            },
+          },
+        ],
+      },
+      false,
+    );
+
+    expect(projected.attachments).toBeUndefined();
+    expect(JSON.stringify(projected)).not.toContain('pdf-page-handle-1');
+    expect(
+      collectCreatorVisibleArtifactsFromTurnProjection(
+        createTurn({ toolName: 'ReadDocument', toolResult: projected }),
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        role: 'source',
+        contentLocator: pdfLocator,
+      }),
+      expect.objectContaining({
+        artifactId: 'pdf-analysis',
+        role: 'analysis',
+        kind: 'markdown',
+        markdown: '# PDF Analysis\n\nThe document summary.',
+      }),
+    ]);
+  });
+
+  it('omits representation-only evidence without hiding malformed durable attachments', async () => {
+    const representationOnly = {
+      type: 'image' as const,
+      path: 'data:image/png;base64,AQID',
+      assetRef: {
+        assetId: 'source-page-1',
+        uri: 'data:image/png;base64,AQID',
+        mimeType: 'image/png',
+        representationHandle: {
+          kind: 'content-representation-handle' as const,
+          id: 'pdf-page-handle-1',
+        },
+      },
+    };
+    const projectedRepresentationOnly = projectPiToolResult(
+      {
+        success: true,
+        data: {
+          analysis: 'describe',
+          images: [
+            {
+              label: 'Page 1',
+              width: 1200,
+              height: 1600,
+              portableForTransfer: false,
+            },
+          ],
+          imageCount: 1,
+        },
+        attachments: [representationOnly],
+      },
+      false,
+    );
+    let calls = 0;
+
+    expect(projectedRepresentationOnly.data).toMatchObject({ images: [] });
+
+    await expect(
+      deliverCreatorVisibleArtifactsFromTurnProjection({
+        turn: createTurn({ toolName: 'ReadImage', toolResult: projectedRepresentationOnly }),
+        workspaceId: 'workspace-1',
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        delivery: {
+          deliver: async () => {
+            calls += 1;
+            return { status: 'accepted' };
+          },
+        },
+      }),
+    ).resolves.toBeUndefined();
+    expect(calls).toBe(0);
+
+    const projectedWithMalformedDurableAttachment = projectPiToolResult(
+      {
+        success: true,
+        data: {
+          analysis: 'describe',
+          images: [{ label: 'Page 1', portableForTransfer: false }],
+          imageCount: 1,
+        },
+        attachments: [representationOnly, { type: 'image', path: 'outputs/missing-locator.png' }],
+      },
+      false,
+    );
+    await expect(
+      deliverCreatorVisibleArtifactsFromTurnProjection({
+        turn: createTurn({
+          toolName: 'ReadImage',
+          toolResult: projectedWithMalformedDurableAttachment,
+        }),
+        workspaceId: 'workspace-1',
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+      }),
+    ).resolves.toEqual({
+      status: 'blocked',
+      diagnostic: {
+        code: 'agent-artifact-delivery-failed',
+        message: 'Creator-visible Tool attachment requires contentLocator.',
+      },
+    });
+  });
+
   it('invokes the terminal delivery port once and localizes Host delivery failure', async () => {
     const turn = createTurn({
       toolName: 'Write',
-      toolData: { contentLocator: { kind: 'workspace-file', path: 'docs/output.md' } },
+      toolData: {
+        contentLocator: { file: { authority: 'workspace' as const, path: 'docs/output.md' } },
+      },
     });
     let calls = 0;
 
@@ -574,7 +708,9 @@ describe('collectCreatorVisibleArtifacts', () => {
   it('passes exact Canvas target to delivery and leaves Board context target absent', async () => {
     const turn = createTurn({
       toolName: 'Write',
-      toolData: { contentLocator: { kind: 'workspace-file', path: 'docs/output.md' } },
+      toolData: {
+        contentLocator: { file: { authority: 'workspace' as const, path: 'docs/output.md' } },
+      },
     });
     let capturedExact: unknown = 'unset';
     await deliverCreatorVisibleArtifactsFromTurnProjection({
@@ -671,7 +807,8 @@ function createTextOnlyTurn(): ConversationTurnProjection {
 
 function createTurn(input: {
   readonly toolName: string;
-  readonly toolData: unknown;
+  readonly toolData?: unknown;
+  readonly toolResult?: NonNullable<ToolCall['result']>;
   readonly assistantMarkdown?: string;
   readonly completionStatus?: 'completed' | 'failed' | 'cancelled';
 }): ConversationTurnProjection {
@@ -694,7 +831,7 @@ function createTurn(input: {
             id: 'call-1',
             name: input.toolName,
             arguments: {},
-            result: { success: true, data: input.toolData },
+            result: input.toolResult ?? { success: true, data: input.toolData },
           },
         },
         createdAt: 1,

@@ -6,20 +6,14 @@ import {
   projectResourceValue,
 } from '../../input/message-resource-projector';
 
-const contentLocator = {
-  kind: 'workspace-file' as const,
-  path: 'images/page-1.jpg',
+const contentLocator = { file: { authority: 'workspace' as const, path: 'images/page-1.jpg' } };
+const representationSource = {
+  file: { authority: 'workspace' as const, path: 'documents/book.pdf' },
 };
 
-const representationLocator = {
-  kind: 'content-representation' as const,
+const representationHandle = {
+  kind: 'content-representation-handle' as const,
   id: 'page-1',
-  representationKind: 'raster-page' as const,
-  source: { kind: 'workspace-file' as const, path: 'documents/book.pdf' },
-  spec: { kind: 'raster-page' as const, page: 1, format: 'png' as const },
-  generatorId: 'document-raster',
-  sourceFingerprint: 'sha256:source',
-  specFingerprint: 'sha256:spec',
 };
 
 describe('message resource projector', () => {
@@ -52,9 +46,12 @@ describe('message resource projector', () => {
       contentLocator,
       previewDescriptor: descriptor,
     });
-    expect(resolveDisplayLocator).toHaveBeenCalledWith(contentLocator, {
-      mediaType: 'image/jpeg',
-    });
+    expect(resolveDisplayLocator).toHaveBeenCalledWith(
+      { source: contentLocator },
+      {
+        mediaType: 'image/jpeg',
+      },
+    );
   });
 
   it('removes path-only local media and emits a visible diagnostic without inference', async () => {
@@ -184,8 +181,8 @@ describe('message resource projector', () => {
     });
   });
 
-  it('projects the exact representation locator instead of substituting its source', async () => {
-    const descriptor = previewDescriptor(representationLocator.source);
+  it('uses an opaque representation handle for display without persisting it', async () => {
+    const descriptor = previewDescriptor(representationSource);
     const resolveDisplayLocator = vi.fn(async () => ({ status: 'ready' as const, descriptor }));
 
     await expect(
@@ -193,19 +190,28 @@ describe('message resource projector', () => {
         {
           label: 'Page 1',
           mimeType: 'image/png',
-          representationLocator,
+          contentLocator: representationSource,
+          representationHandle,
         },
         { resolveDisplayLocator },
       ),
     ).resolves.toEqual({
       label: 'Page 1',
       mimeType: 'image/png',
-      representationLocator,
+      contentLocator: representationSource,
       previewDescriptor: descriptor,
     });
-    expect(resolveDisplayLocator).toHaveBeenCalledWith(representationLocator, {
-      mediaType: 'image/png',
-    });
+    expect(resolveDisplayLocator).toHaveBeenCalledWith(
+      { source: representationSource, representationHandle },
+      {
+        mediaType: 'image/png',
+      },
+    );
+    expect(
+      JSON.stringify(
+        await projectResourceValue({ contentLocator: representationSource, representationHandle }),
+      ),
+    ).not.toContain(representationHandle.id);
   });
 });
 

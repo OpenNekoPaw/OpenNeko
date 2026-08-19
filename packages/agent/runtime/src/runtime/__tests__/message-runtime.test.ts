@@ -889,14 +889,14 @@ describe('message runtime helpers', () => {
       ]),
     ).toEqual([
       {
-        locator: { kind: 'workspace-file', path: 'src/app.ts' },
+        locator: { file: { authority: 'workspace' as const, path: 'src/app.ts' } },
         name: 'app.ts',
         type: 'file',
         source: 'workspace',
         icon: 'TS',
       },
       {
-        locator: { kind: 'workspace-file', path: 'docs/intro.md' },
+        locator: { file: { authority: 'workspace' as const, path: 'docs/intro.md' } },
         name: 'intro.md',
         type: 'file',
       },
@@ -934,8 +934,7 @@ describe('message runtime helpers', () => {
           source: 'media-library',
           icon: '🎭',
           contentLocator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Characters/hero.png',
+            file: { authority: 'workspace' as const, path: 'neko/assets/Characters/hero.png' },
           },
           mediaType: 'image',
           entityType: 'character',
@@ -951,8 +950,7 @@ describe('message runtime helpers', () => {
         source: 'media-library',
         icon: '🎭',
         contentLocator: {
-          kind: 'workspace-file',
-          path: 'neko/assets/Characters/hero.png',
+          file: { authority: 'workspace' as const, path: 'neko/assets/Characters/hero.png' },
         },
         mediaType: 'image',
         entityType: 'character',
@@ -975,7 +973,7 @@ describe('message runtime helpers', () => {
       filter: '',
       files: [
         {
-          locator: { kind: 'workspace-file', path: 'src/app.ts' },
+          locator: { file: { authority: 'workspace' as const, path: 'src/app.ts' } },
           name: 'app.ts',
           type: 'file',
         },
@@ -1007,8 +1005,10 @@ describe('message runtime helpers', () => {
             searchText: '灯神 genie reference concept',
             source: 'media-library',
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/References/reference-01.png',
+              file: {
+                authority: 'workspace' as const,
+                path: 'neko/assets/References/reference-01.png',
+              },
             },
             mediaType: 'image',
           },
@@ -1028,8 +1028,10 @@ describe('message runtime helpers', () => {
           searchText: '灯神 genie reference concept',
           source: 'media-library',
           contentLocator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/References/reference-01.png',
+            file: {
+              authority: 'workspace' as const,
+              path: 'neko/assets/References/reference-01.png',
+            },
           },
           mediaType: 'image',
         },
@@ -1056,12 +1058,12 @@ describe('message runtime helpers', () => {
       filter: 'app',
       files: [
         {
-          locator: { kind: 'workspace-file', path: 'src/app.ts' },
+          locator: { file: { authority: 'workspace' as const, path: 'src/app.ts' } },
           name: 'app.ts',
           type: 'file',
         },
         {
-          locator: { kind: 'workspace-file', path: 'docs/intro.md' },
+          locator: { file: { authority: 'workspace' as const, path: 'docs/intro.md' } },
           name: 'intro.md',
           type: 'file',
         },
@@ -1148,7 +1150,7 @@ describe('message runtime helpers', () => {
       purpose: 'entry',
       files: [
         {
-          locator: { kind: 'workspace-file', path: 'assets/hero.png' },
+          locator: { file: { authority: 'workspace' as const, path: 'assets/hero.png' } },
           name: 'hero.png',
           type: 'file',
         },
@@ -1696,7 +1698,9 @@ describe('message runtime helpers', () => {
           id: 'f1',
           label: 'notes.txt',
           summary: 'File: notes.txt',
-          data: { contentLocator: { kind: 'workspace-file', path: 'notes.txt' } },
+          data: {
+            contentLocator: { file: { authority: 'workspace' as const, path: 'notes.txt' } },
+          },
         },
         {
           type: 'canvas-node',
@@ -1719,7 +1723,7 @@ describe('message runtime helpers', () => {
           summary: 'Workspace image',
           data: {
             kind: 'authorized-content-reference',
-            locator: { kind: 'workspace-file', path: 'reference.png' },
+            locator: { file: { authority: 'workspace' as const, path: 'reference.png' } },
             mediaType: 'image',
           },
         },
@@ -1730,7 +1734,7 @@ describe('message runtime helpers', () => {
         id: 'f1',
         label: 'notes.txt',
         summary: 'File: notes.txt',
-        contentLocator: { kind: 'workspace-file', path: 'notes.txt' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'notes.txt' } },
       },
       {
         type: 'canvas-node',
@@ -1746,7 +1750,7 @@ describe('message runtime helpers', () => {
         label: 'reference.png',
         summary: 'Workspace image',
         mediaType: 'image',
-        contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'reference.png' } },
       },
     ]);
   });
@@ -1763,7 +1767,9 @@ describe('message runtime helpers', () => {
             id: 'f1',
             label: 'img.png',
             summary: '',
-            data: { contentLocator: { kind: 'workspace-file', path: 'images/img.png' } },
+            data: {
+              contentLocator: { file: { authority: 'workspace' as const, path: 'images/img.png' } },
+            },
           },
         ],
       },
@@ -1777,7 +1783,7 @@ describe('message runtime helpers', () => {
         type: 'file',
         id: 'f1',
         label: 'img.png',
-        contentLocator: { kind: 'workspace-file', path: 'images/img.png' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'images/img.png' } },
       },
     ]);
   });
@@ -1792,7 +1798,7 @@ describe('message runtime helpers', () => {
           {
             id: 'file-ref:books/story.epub',
             label: 'story.epub',
-            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'books/story.epub' } },
             mediaType: 'document',
           },
         ],
@@ -1809,14 +1815,14 @@ describe('message runtime helpers', () => {
         label: 'story.epub',
         summary: 'books/story.epub',
         mediaType: 'document',
-        contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'books/story.epub' } },
       },
     ]);
   });
 });
 
 function contentLocator(path: string): ContentLocator {
-  return { kind: 'workspace-file', path };
+  return { file: { authority: 'workspace', path } };
 }
 
 function threeReferencePayload(): AgentContextPayload {

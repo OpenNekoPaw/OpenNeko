@@ -659,7 +659,7 @@ vi.mock('./ChatView/InputArea', async () => {
                     id: 'reference-1',
                     label: 'reference.png',
                     mediaType: 'image',
-                    contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+                    contentLocator: { file: { authority: 'workspace', path: 'reference.png' } },
                   },
                 ],
               })
@@ -1037,7 +1037,7 @@ describe('ConversationController entry state', () => {
         fileReferences: [
           expect.objectContaining({
             id: 'reference-1',
-            contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+            contentLocator: { file: { authority: 'workspace', path: 'reference.png' } },
           }),
         ],
       }),
@@ -2818,7 +2818,7 @@ describe('ConversationController entry state', () => {
                     label: 'release.png',
                     mediaType: 'image',
                     thumbnailUri: 'neko-resource://thumbnail/release',
-                    contentLocator: { kind: 'workspace-file', path: 'release.png' },
+                    contentLocator: { file: { authority: 'workspace', path: 'release.png' } },
                   },
                 ],
               },

@@ -13,17 +13,10 @@ import type { PiCapabilityToolContext } from '../pi/capability-tool-bridge';
 import { projectOpenNekoTool } from '../pi/openneko-tool';
 import { PiContentToolModelProtocol } from './pi-content-tool-model-protocol';
 
-const SOURCE = { kind: 'workspace-file' as const, path: 'books/book.pdf' };
-const IMAGE = {
-  kind: 'document-entry' as const,
-  source: SOURCE,
-  entryPath: 'pages/page-1.png',
-};
+const SOURCE = { file: { authority: 'workspace' as const, path: 'books/book.pdf' } };
+const IMAGE = { file: SOURCE.file, selector: { kind: 'entry' as const, path: 'pages/page-1.png' } };
 const GENERATED_IMAGE = {
-  kind: 'generated-output' as const,
-  outputId: 'output-1',
-  digest: 'sha256:generated-image',
-  path: 'neko/generated/image/output-1.png',
+  file: { authority: 'workspace' as const, path: 'neko/generated/image/output-1.png' },
 };
 
 describe('Pi content Tool model protocol', () => {
@@ -42,7 +35,7 @@ describe('Pi content Tool model protocol', () => {
     expect(providerTool.parameters.required).toEqual(['input_ref']);
     expect(providerTool.parameters.properties['input_ref']).toMatchObject({ minLength: 1 });
     expect(JSON.stringify(definition)).not.toMatch(
-      /ContentLocator|DocumentLocator|fingerprint|representationLocator|entryPath/u,
+      /ContentLocator|DocumentLocator|fingerprint|representationHandle|entryPath/u,
     );
 
     expect(
@@ -166,7 +159,7 @@ describe('Pi content Tool model protocol', () => {
     ).toEqual({
       images: [
         {
-          contentLocator: { kind: 'workspace-file', path: 'page.png' },
+          contentLocator: { file: { authority: 'workspace' as const, path: 'page.png' } },
           alias: 'page.png',
         },
       ],
@@ -235,7 +228,7 @@ describe('Pi content Tool model protocol', () => {
     const firstInputRef = protocol
       .bindInputs('conversation-1', [documentPayload()])
       .get('file:book.pdf');
-    const secondSource = { kind: 'workspace-file' as const, path: 'books/other.pdf' };
+    const secondSource = { file: { authority: 'workspace' as const, path: 'books/other.pdf' } };
     protocol.bindInputs('conversation-1', [
       {
         ...documentPayload(),
@@ -352,8 +345,10 @@ describe('Pi content Tool model protocol', () => {
       images: [
         {
           contentLocator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Reference/library-image.png',
+            file: {
+              authority: 'workspace' as const,
+              path: 'neko/assets/Reference/library-image.png',
+            },
           },
         },
       ],
@@ -486,7 +481,9 @@ describe('Pi content Tool model protocol', () => {
         args: { input_ref: bookRef },
         context: context('conversation-1'),
       }),
-    ).toMatchObject({ source: { kind: 'workspace-file', path: 'materials/book.epub' } });
+    ).toMatchObject({
+      source: { file: { authority: 'workspace' as const, path: 'materials/book.epub' } },
+    });
     expect(
       restored.prepareArguments({
         tool: tool(TOOL_NAMES_SYSTEM.READ_IMAGE),
@@ -494,7 +491,13 @@ describe('Pi content Tool model protocol', () => {
         context: context('conversation-1'),
       }),
     ).toMatchObject({
-      images: [{ contentLocator: { kind: 'workspace-file', path: 'materials/cover.png' } }],
+      images: [
+        {
+          contentLocator: {
+            file: { authority: 'workspace' as const, path: 'materials/cover.png' },
+          },
+        },
+      ],
     });
     expect(
       restored.prepareArguments({
@@ -552,7 +555,7 @@ function imagePayload(): AgentContextPayload {
     summary: 'Page',
     data: {
       kind: 'authorized-content-reference',
-      locator: { kind: 'workspace-file', path: 'page.png' },
+      locator: { file: { authority: 'workspace' as const, path: 'page.png' } },
       mediaType: 'image',
     },
   };
@@ -628,8 +631,10 @@ function searchResult() {
             partition: 'media-library',
             sourceKind: 'media-library',
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Reference/library-image.png',
+              file: {
+                authority: 'workspace' as const,
+                path: 'neko/assets/Reference/library-image.png',
+              },
             },
           },
         },
@@ -643,7 +648,7 @@ function directoryResult() {
     name,
     type: 'file',
     size,
-    contentLocator: { kind: 'workspace-file' as const, path: `materials/${name}` },
+    contentLocator: { file: { authority: 'workspace' as const, path: `materials/${name}` } },
   });
   return {
     success: true,
@@ -661,7 +666,9 @@ function directoryResult() {
           name: 'escaped.txt',
           type: 'file',
           size: 700,
-          contentLocator: { kind: 'workspace-file' as const, path: 'private/escaped.txt' },
+          contentLocator: {
+            file: { authority: 'workspace' as const, path: 'private/escaped.txt' },
+          },
         },
       ],
       totalEntries: 7,

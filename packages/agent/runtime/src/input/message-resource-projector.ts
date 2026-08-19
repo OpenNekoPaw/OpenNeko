@@ -1,9 +1,9 @@
 import {
   contentLocatorKey,
   isContentLocator,
-  isContentRepresentationLocator,
+  isContentRepresentationHandle,
   type ContentLocator,
-  type ContentRepresentationLocator,
+  type ContentRepresentationHandle,
 } from '@neko/content';
 import type {
   AgentTurnTimelineItem,
@@ -55,6 +55,11 @@ export interface MessageResourceProjectionContext {
   readonly mediaType?: string;
 }
 
+export interface MessageResourceDisplaySource {
+  readonly source: ContentLocator;
+  readonly representationHandle?: ContentRepresentationHandle;
+}
+
 export type MessageResourceDisplayResolution =
   | { readonly status: 'ready'; readonly descriptor: PreviewMediaDescriptor }
   | {
@@ -64,7 +69,7 @@ export type MessageResourceDisplayResolution =
 
 export interface MessageResourceProjectionOptions {
   resolveDisplayLocator?: (
-    locator: ContentLocator | ContentRepresentationLocator,
+    source: MessageResourceDisplaySource,
     context: MessageResourceProjectionContext,
   ) => Promise<MessageResourceDisplayResolution>;
 }
@@ -241,7 +246,8 @@ async function projectResourceValueInternal(
   visited: WeakSet<object>,
 ): Promise<unknown> {
   if (value === null || value === undefined || typeof value !== 'object') return value;
-  if (isContentLocator(value) || isContentRepresentationLocator(value)) return value;
+  if (isContentLocator(value)) return value;
+  if (isContentRepresentationHandle(value)) return undefined;
   if (visited.has(value)) return value;
   visited.add(value);
 
@@ -254,22 +260,26 @@ async function projectResourceValueInternal(
   const contentLocator = isContentLocator(owner['contentLocator'])
     ? owner['contentLocator']
     : undefined;
-  const representationLocator = isContentRepresentationLocator(owner['representationLocator'])
-    ? owner['representationLocator']
+  const representationHandle = isContentRepresentationHandle(owner['representationHandle'])
+    ? owner['representationHandle']
     : undefined;
-  const displayLocator = representationLocator ?? contentLocator;
+  const displaySource = contentLocator
+    ? {
+        source: contentLocator,
+        ...(representationHandle ? { representationHandle } : {}),
+      }
+    : undefined;
   const mediaType = typeof owner['mimeType'] === 'string' ? owner['mimeType'] : undefined;
   const projected: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(owner)) {
     if (key === 'renderUri' || key === 'previewUri') {
-      if (!displayLocator) appendProjectionDiagnostic(projected, key, 'missing-content-locator');
+      if (!displaySource) appendProjectionDiagnostic(projected, key, 'missing-content-locator');
       continue;
     }
+    if (key === 'representationHandle') continue;
     if (typeof item === 'string' && isUnsafeMediaDisplayField(key, item)) {
-      if (displayLocator) {
-        projected[key] = portableContentPath(
-          displayLocator.kind === 'content-representation' ? displayLocator.source : displayLocator,
-        );
+      if (displaySource) {
+        projected[key] = portableContentPath(displaySource.source);
       } else {
         appendProjectionDiagnostic(projected, key, 'missing-content-locator');
       }
@@ -290,14 +300,14 @@ async function projectResourceValueInternal(
     projected[key] = await projectResourceValueInternal(item, options, visited);
   }
 
-  if (displayLocator) {
-    const resolution = await resolveDisplayLocator(displayLocator, mediaType, options);
+  if (displaySource) {
+    const resolution = await resolveDisplayLocator(displaySource, mediaType, options);
     if (resolution.status === 'ready') {
       projected['previewDescriptor'] = resolution.descriptor;
     } else {
       appendProjectionDiagnostic(
         projected,
-        representationLocator ? 'representationLocator' : 'contentLocator',
+        representationHandle ? 'representationHandle' : 'contentLocator',
         'authorization-denied',
         resolution.diagnostic,
       );
@@ -317,7 +327,7 @@ function isUnsafeMediaDisplaySource(value: string): boolean {
 }
 
 async function resolveDisplayLocator(
-  locator: ContentLocator | ContentRepresentationLocator,
+  source: MessageResourceDisplaySource,
   mediaType: string | undefined,
   options: MessageResourceProjectionOptions,
 ): Promise<MessageResourceDisplayResolution> {
@@ -331,22 +341,16 @@ async function resolveDisplayLocator(
       },
     };
   }
-  return resolve(locator, {
+  return resolve(source, {
     ...(mediaType ? { mediaType } : {}),
   });
 }
 
 function portableContentPath(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-      return locator.path;
-    case 'document-entry':
-      return locator.entryPath;
-    case 'generated-output':
-      return locator.path;
-    case 'package-resource':
-      return `${locator.packageId}/${locator.resourcePath}`;
-  }
+  if (locator.selector) return locator.selector.path;
+  return locator.file.authority === 'workspace'
+    ? locator.file.path
+    : `${locator.file.packageId}/${locator.file.path}`;
 }
 
 function appendProjectionDiagnostic(
@@ -379,10 +383,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function messageResourceProjectionKey(
-  locator: ContentLocator | ContentRepresentationLocator,
-): string {
-  return locator.kind === 'content-representation'
-    ? JSON.stringify(['content-representation', locator.id, locator.sourceFingerprint])
-    : contentLocatorKey(locator);
+export function messageResourceProjectionKey(source: MessageResourceDisplaySource): string {
+  return JSON.stringify([contentLocatorKey(source.source), source.representationHandle?.id]);
 }

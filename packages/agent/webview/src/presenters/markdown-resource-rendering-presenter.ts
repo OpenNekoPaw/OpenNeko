@@ -11,12 +11,7 @@ import {
   type NekoMarkdownSemanticPromptSpan,
   type NekoMarkdownStableRef,
 } from '@neko/markdown';
-import {
-  contentLocatorKey,
-  isContentLocator,
-  serializeContentReferenceTarget,
-  type ContentLocator,
-} from '@neko/content';
+import { contentLocatorKey, isContentLocator, type ContentLocator } from '@neko/content';
 import { type PerceptionCard, type ToolResultAttachment } from '@neko/agent-contracts';
 import { type PerceptualAssetRef } from '@neko/media';
 import {
@@ -331,7 +326,7 @@ function projectMarkdownStableRefForResource(
 ): NekoMarkdownStableRef | undefined {
   if (ref.contentLocator) {
     return {
-      kind: ref.contentLocator.kind,
+      kind: ref.contentLocator.selector?.kind ?? `${ref.contentLocator.file.authority}-file`,
       id: contentLocatorKey(ref.contentLocator),
       namespace: 'content',
     };
@@ -673,7 +668,7 @@ function createMarkdownToolResultTokens(ref: MarkdownToolResultImageRef): readon
       ref.label,
       ref.contentLocator ? contentLocatorKey(ref.contentLocator) : undefined,
       ...(ref.contentLocator ? contentLocatorLookupTokens(ref.contentLocator) : []),
-      ref.contentLocator?.kind === 'document-entry' ? ref.contentLocator.entryPath : undefined,
+      ref.contentLocator?.selector?.path,
       ref.pageNumber !== undefined ? `page_${ref.pageNumber}` : undefined,
       ref.pageNumber !== undefined ? `P${ref.pageNumber}` : undefined,
       ref.sequenceNumber !== undefined ? `image_${ref.sequenceNumber}` : undefined,
@@ -681,9 +676,7 @@ function createMarkdownToolResultTokens(ref: MarkdownToolResultImageRef): readon
       ref.sequenceNumber !== undefined ? `P${ref.sequenceNumber}` : undefined,
       ...sequenceNumberLookupTokens(ref.sequenceNumber),
       ...(ref.entryPath ? pathLookupTokens(ref.entryPath) : []),
-      ...(ref.contentLocator?.kind === 'document-entry'
-        ? pathLookupTokens(ref.contentLocator.entryPath)
-        : []),
+      ...(ref.contentLocator?.selector ? pathLookupTokens(ref.contentLocator.selector.path) : []),
       ...(ref.toolName === 'ReadImage' ? readImageDerivedAssetTokens(ref) : []),
       ...(ref.extraTokens ?? []),
     ]
@@ -796,10 +789,7 @@ function collectMarkdownImageRefsFromPerceptionCards(
       width: card.structural.width,
       height: card.structural.height,
       ...(imageRef.contentLocator ? { contentLocator: imageRef.contentLocator } : {}),
-      entryPath:
-        (imageRef.contentLocator?.kind === 'document-entry'
-          ? imageRef.contentLocator.entryPath
-          : undefined) ?? imageRef.uri,
+      entryPath: imageRef.contentLocator?.selector?.path ?? imageRef.uri,
     };
     return [
       projectMarkdownImageRef(
@@ -830,9 +820,7 @@ function projectMarkdownImageRef(
   const alias = readString(image, 'alias');
   const sourceDocumentId =
     readString(image, 'sourceDocumentId') ?? readDocumentResourceSourceId(contentLocator);
-  const entryPath =
-    readString(image, 'entryPath') ??
-    (contentLocator?.kind === 'document-entry' ? contentLocator.entryPath : undefined);
+  const entryPath = readString(image, 'entryPath') ?? contentLocator?.selector?.path;
   const pageNumber =
     readFinitePositiveInteger(locator?.['pageNumber']) ??
     resolveStoryboardSourceImageNumber(alias) ??
@@ -917,14 +905,7 @@ function readPerceptionCardLookupTokens(card: PerceptionCard): readonly (string 
 function readPerceptualAssetRefLookupTokens(
   ref: PerceptualAssetRef | undefined,
 ): readonly (string | undefined)[] {
-  return ref
-    ? [
-        ref.assetId,
-        ref.label,
-        ref.uri,
-        ref.contentLocator?.kind === 'document-entry' ? ref.contentLocator.entryPath : undefined,
-      ]
-    : [];
+  return ref ? [ref.assetId, ref.label, ref.uri, ref.contentLocator?.selector?.path] : [];
 }
 
 function readRenderableAttachmentUri(attachment: ToolResultAttachment): string | undefined {
@@ -1050,16 +1031,14 @@ function mergeMarkdownImageRefs(
 function readDocumentResourcePageNumber(
   contentLocator: ContentLocator | undefined,
 ): number | undefined {
-  return resolveStoryboardSourceImageNumber(
-    contentLocator?.kind === 'document-entry' ? contentLocator.entryPath : undefined,
-  );
+  return resolveStoryboardSourceImageNumber(contentLocator?.selector?.path);
 }
 
 function readDocumentResourceSourceId(
   contentLocator: ContentLocator | undefined,
 ): string | undefined {
-  return contentLocator?.kind === 'document-entry'
-    ? contentLocatorKey(contentLocator.source)
+  return contentLocator?.selector?.kind === 'entry'
+    ? contentLocatorKey({ file: contentLocator.file })
     : undefined;
 }
 
@@ -1108,14 +1087,7 @@ function stripMarkdownToken(value: string): string {
 }
 
 function contentLocatorLookupTokens(contentLocator: ContentLocator): readonly string[] {
-  const paths =
-    contentLocator.kind === 'workspace-file'
-      ? [contentLocator.path]
-      : contentLocator.kind === 'document-entry'
-        ? [serializeContentReferenceTarget(contentLocator.source), contentLocator.entryPath]
-        : contentLocator.kind === 'generated-output'
-          ? [contentLocator.path, contentLocator.outputId]
-          : [contentLocator.resourcePath, contentLocator.manifestPath];
+  const paths = [contentLocator.file.path, contentLocator.selector?.path];
   return uniqueStrings(paths.filter(isNonEmptyString).flatMap(pathLookupTokens));
 }
 

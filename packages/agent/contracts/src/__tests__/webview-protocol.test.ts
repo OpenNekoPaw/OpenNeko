@@ -10,13 +10,8 @@ import {
 } from '../webview-protocol';
 
 const contentLocator = {
-  kind: 'document-entry' as const,
-  source: {
-    kind: 'workspace-file' as const,
-    path: 'books/a.epub',
-    fingerprint: { strategy: 'provider' as const, value: 'book-a' },
-  },
-  entryPath: 'models/character.glb',
+  file: { authority: 'workspace' as const, path: 'books/a.epub' },
+  selector: { kind: 'entry' as const, path: 'models/character.glb' },
 };
 
 describe('webview protocol parser', () => {
@@ -39,7 +34,7 @@ describe('webview protocol parser', () => {
             id: 'file-1',
             label: 'reference.png',
             mediaType: 'image',
-            contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+            contentLocator: { file: { authority: 'workspace', path: 'reference.png' } },
           },
         ],
       }),
@@ -60,7 +55,7 @@ describe('webview protocol parser', () => {
           id: 'file-1',
           label: 'reference.png',
           mediaType: 'image',
-          contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+          contentLocator: { file: { authority: 'workspace', path: 'reference.png' } },
         },
       ],
     });
@@ -807,7 +802,7 @@ describe('webview protocol parser', () => {
   });
 
   it('accepts canonical content routes and rejects unsafe locators', () => {
-    const contentLocator = { kind: 'workspace-file', path: 'books/a.pdf' };
+    const contentLocator = { file: { authority: 'workspace', path: 'books/a.pdf' } };
     const locator = { kind: 'page', pageNumber: 2, pageIndex: 1 };
     expect(
       parseAgentWebviewToHostMessage({
@@ -844,11 +839,11 @@ describe('webview protocol parser', () => {
     for (const payload of [
       {
         type: 'openFile',
-        contentLocator: { kind: 'workspace-file', path: '/tmp/a.pdf' },
+        contentLocator: { file: { authority: 'workspace', path: '/tmp/a.pdf' } },
       },
       {
         type: 'revealFile',
-        contentLocator: { kind: 'workspace-file', path: '../a.pdf' },
+        contentLocator: { file: { authority: 'workspace', path: '../a.pdf' } },
       },
     ]) {
       expect(parseAgentWebviewToHostMessage(payload)).toBeNull();
@@ -869,7 +864,7 @@ describe('webview protocol parser', () => {
       type: 'revealContextSource',
       contextType: 'media',
       contextId: 'media-1',
-      contentLocator: { kind: 'workspace-file', path: 'assets/hero.png' },
+      contentLocator: { file: { authority: 'workspace', path: 'assets/hero.png' } },
     };
     expect(
       parseAgentWebviewToHostMessage({

@@ -303,7 +303,7 @@ function turnKey(identity: Pick<PiToolRunIdentity, 'conversationId' | 'turnId' |
 }
 
 function resourceProjectionKey(fact: AgentResourceDisplayProjectionFact): string {
-  return `${fact.toolCallId}\u0000${fact.locatorKind}\u0000${fact.status}`;
+  return `${fact.toolCallId}\u0000${fact.sourceKind}\u0000${fact.status}`;
 }
 
 function freezeProjection(

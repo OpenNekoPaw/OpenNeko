@@ -163,7 +163,7 @@ export function collectCreatorVisibleArtifacts(
         continue;
       }
       const intrinsicDimensions = imageDimensions.get(contentLocatorKey(contentLocator));
-      const generation = collectGenerationEvidence(result.data, contentLocator);
+      const generation = collectGenerationEvidence(result.data);
       const role = nativeImageAnalysisKind || input.consumedContentSourceIds ? 'source' : 'output';
       const candidate: CreatorVisibleArtifactCandidate = {
         artifactId: role === 'source' ? sourceId : (attachment.assetRef?.assetId ?? sourceId),
@@ -218,11 +218,8 @@ export function collectCreatorVisibleArtifacts(
   );
 }
 
-function collectGenerationEvidence(
-  data: unknown,
-  contentLocator: ContentLocator,
-): CanvasGenerationEvidence | undefined {
-  if (contentLocator.kind !== 'generated-output' || !isRecord(data)) return undefined;
+function collectGenerationEvidence(data: unknown): CanvasGenerationEvidence | undefined {
+  if (!isRecord(data)) return undefined;
   const jobKind = data['jobKind'];
   const jobId = readNonEmptyString(data['jobId']);
   const prompt = readNonEmptyString(data['message']);
@@ -477,7 +474,11 @@ function collectWorkspaceFileArtifact(
   if (!isRecord(data)) return undefined;
   const contentLocator = data['contentLocator'];
   if (contentLocator === undefined) return undefined;
-  if (!isContentLocator(contentLocator) || contentLocator.kind !== 'workspace-file') {
+  if (
+    !isContentLocator(contentLocator) ||
+    contentLocator.file.authority !== 'workspace' ||
+    contentLocator.selector !== undefined
+  ) {
     throw new Error(`Creator-visible ${role} file requires a Workspace ContentLocator.`);
   }
   const id = createContentSourceId(contentLocator);
@@ -509,32 +510,11 @@ function createContentSourceId(locator: ContentLocator): string {
 }
 
 function createContentFingerprint(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'generated-output':
-      return locator.digest;
-    case 'package-resource':
-      return locator.revision;
-    case 'workspace-file':
-      return locator.fingerprint?.value ?? `locator:${hashStableValue(contentLocatorKey(locator))}`;
-    case 'document-entry':
-      return (
-        locator.fingerprint?.value ??
-        locator.source.fingerprint?.value ??
-        `locator:${hashStableValue(contentLocatorKey(locator))}`
-      );
-  }
+  return `locator:${hashStableValue(contentLocatorKey(locator))}`;
 }
 
 function createContentTitle(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return locator.path;
-    case 'document-entry':
-      return locator.entryPath;
-    case 'package-resource':
-      return locator.resourcePath;
-  }
+  return locator.selector?.path ?? locator.file.path;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

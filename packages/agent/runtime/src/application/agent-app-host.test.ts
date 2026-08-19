@@ -823,7 +823,9 @@ describe('AgentAppHost', () => {
           data: {
             kind: 'cut-clip-selection',
             document: {
-              locator: { kind: 'workspace-file', path: 'projects/cut/demo.otio' },
+              locator: {
+                file: { authority: 'workspace' as const, path: 'projects/cut/demo.otio' },
+              },
               sessionId: 'cut-session-1',
             },
           },
@@ -861,7 +863,7 @@ describe('AgentAppHost', () => {
           summary: 'Workspace content: story.epub',
           data: {
             kind: 'authorized-content-reference',
-            locator: { kind: 'workspace-file', path: 'story.epub' },
+            locator: { file: { authority: 'workspace' as const, path: 'story.epub' } },
             mediaType: 'document',
           },
         },
@@ -961,7 +963,7 @@ describe('AgentAppHost', () => {
           summary: 'Workspace content: notes.py',
           data: {
             kind: 'authorized-content-reference',
-            locator: { kind: 'workspace-file', path: 'notes.py' },
+            locator: { file: { authority: 'workspace' as const, path: 'notes.py' } },
             mediaType: 'text',
           },
         },
@@ -978,7 +980,8 @@ describe('AgentAppHost', () => {
     const persisted = JSON.stringify(
       await workspace.readConversationEntries('conversation-text-reference'),
     );
-    expect(persisted).toContain('workspace-file');
+    expect(persisted).toContain('"authority":"workspace"');
+    expect(persisted).not.toContain('workspace-file');
     expect(persisted).toContain('notes.py');
     expect(persisted).toContain('openneko.user-message-presentation');
     expect(persisted).toContain('Read the selected source');
@@ -1014,7 +1017,7 @@ describe('AgentAppHost', () => {
             summary: `Workspace content: ${documentPath}`,
             data: {
               kind: 'authorized-content-reference',
-              locator: { kind: 'workspace-file', path: documentPath },
+              locator: { file: { authority: 'workspace' as const, path: documentPath } },
               mediaType: 'document',
             },
           },
@@ -1058,7 +1061,7 @@ describe('AgentAppHost', () => {
             summary: 'Workspace content: clip.mp4',
             data: {
               kind: 'authorized-content-reference',
-              locator: { kind: 'workspace-file', path: 'clip.mp4' },
+              locator: { file: { authority: 'workspace' as const, path: 'clip.mp4' } },
               mediaType: 'video',
             },
           },
@@ -1102,7 +1105,7 @@ describe('AgentAppHost', () => {
             summary: 'Workspace content: opaque.bin',
             data: {
               kind: 'authorized-content-reference',
-              locator: { kind: 'workspace-file', path: 'opaque.bin' },
+              locator: { file: { authority: 'workspace' as const, path: 'opaque.bin' } },
             },
           },
         ],
@@ -1161,7 +1164,7 @@ describe('AgentAppHost', () => {
             summary: `Workspace content: ${fileName}`,
             data: {
               kind: 'authorized-content-reference',
-              locator: { kind: 'workspace-file', path: fileName },
+              locator: { file: { authority: 'workspace' as const, path: fileName } },
             },
           },
         ],
@@ -1206,10 +1209,10 @@ describe('AgentAppHost', () => {
           type: 'file',
           id: 'file:test.png',
           label: 'test.png',
-          summary: 'Workspace image: test.png (ContentLocator: workspace-file:test.png)',
+          summary: 'Workspace image: test.png',
           data: {
             kind: 'authorized-content-reference',
-            locator: { kind: 'workspace-file', path: 'test.png' },
+            locator: { file: { authority: 'workspace' as const, path: 'test.png' } },
             mediaType: 'image',
           },
         },
@@ -1241,7 +1244,10 @@ describe('AgentAppHost', () => {
     );
     expect(JSON.stringify(contexts[0])).not.toContain(fixture.workspace.workspacePath);
     const persisted = JSON.stringify(await workspace.readConversationEntries('conversation-image'));
-    expect(persisted).toContain('"contentLocator":{"kind":"workspace-file","path":"test.png"}');
+    expect(persisted).toContain(
+      '"contentLocator":{"file":{"authority":"workspace","path":"test.png"}}',
+    );
+    expect(persisted).not.toContain('workspace-file');
     expect(persisted).toContain('input_ref: input_');
     expect(persisted).toContain('openneko.user-message-presentation');
     expect(persisted).toContain('Analyze the selected image');
@@ -1273,7 +1279,7 @@ describe('AgentAppHost', () => {
             summary: 'Workspace image: test.png',
             data: {
               kind: 'authorized-content-reference',
-              locator: { kind: 'workspace-file', path: 'test.png' },
+              locator: { file: { authority: 'workspace' as const, path: 'test.png' } },
               mediaType: 'image',
             },
           },
@@ -1347,7 +1353,7 @@ describe('AgentAppHost', () => {
             summary: 'Workspace image: external.png',
             data: {
               kind: 'authorized-content-reference',
-              locator: { kind: 'workspace-file', path: 'external.png' },
+              locator: { file: { authority: 'workspace' as const, path: 'external.png' } },
               mediaType: 'image',
             },
           },
@@ -1404,7 +1410,7 @@ describe('AgentAppHost', () => {
             summary: 'Workspace image: missing.png',
             data: {
               kind: 'authorized-content-reference',
-              locator: { kind: 'workspace-file', path: 'missing.png' },
+              locator: { file: { authority: 'workspace' as const, path: 'missing.png' } },
               mediaType: 'image',
             },
           },
@@ -1451,7 +1457,7 @@ describe('AgentAppHost', () => {
             summary: 'Workspace image: spoofed.jpg',
             data: {
               kind: 'authorized-content-reference',
-              locator: { kind: 'workspace-file', path: 'spoofed.jpg' },
+              locator: { file: { authority: 'workspace' as const, path: 'spoofed.jpg' } },
               mediaType: 'image',
             },
           },
@@ -3374,8 +3380,7 @@ describe('AgentAppHost', () => {
       images: [
         {
           contentLocator: {
-            kind: 'workspace-file',
-            path: 'station-illustration.svg',
+            file: { authority: 'workspace' as const, path: 'station-illustration.svg' },
           },
         },
       ],
@@ -3389,8 +3394,7 @@ describe('AgentAppHost', () => {
         images: [
           {
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'station-illustration.svg',
+              file: { authority: 'workspace' as const, path: 'station-illustration.svg' },
             },
             mimeType: 'image/svg+xml',
             width: 32,
@@ -3446,7 +3450,7 @@ describe('AgentAppHost', () => {
             summary: 'Workspace image: tool-image.png',
             data: {
               kind: 'authorized-content-reference',
-              locator: { kind: 'workspace-file', path: 'tool-image.png' },
+              locator: { file: { authority: 'workspace' as const, path: 'tool-image.png' } },
               mediaType: 'image',
             },
           },

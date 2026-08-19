@@ -533,9 +533,8 @@ describe('PiConversationRuntime', () => {
               uri: 'book.epub#images/page.png',
               mimeType: 'image/png',
               contentLocator: {
-                kind: 'document-entry',
-                source: { kind: 'workspace-file', path: 'book.epub' },
-                entryPath: 'images/page.png',
+                file: { authority: 'workspace' as const, path: 'book.epub' },
+                selector: { kind: 'entry' as const, path: 'images/page.png' },
               },
             },
           },
@@ -827,7 +826,7 @@ describe('PiConversationRuntime', () => {
             id: 'file:notes.txt',
             label: 'notes.txt',
             mediaType: 'text',
-            contentLocator: { kind: 'workspace-file', path: 'notes.txt' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'notes.txt' } },
           },
         ],
       },
@@ -857,7 +856,7 @@ describe('PiConversationRuntime', () => {
         contextReferences: [
           expect.objectContaining({
             label: 'notes.txt',
-            contentLocator: { kind: 'workspace-file', path: 'notes.txt' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'notes.txt' } },
           }),
         ],
       }),

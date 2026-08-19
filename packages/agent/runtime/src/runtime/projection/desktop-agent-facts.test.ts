@@ -36,7 +36,7 @@ describe('Desktop Agent neutral facts', () => {
           {
             projectionKind: 'tool-result',
             status: 'authorized',
-            locatorKind: 'workspace-file',
+            sourceKind: 'workspace-file',
             transport: 'openneko-resource',
             renderTarget: 'agent-webview',
           },
@@ -246,7 +246,7 @@ function input(): MutableFactsInput {
         toolCallId: 'tool-call-1',
         projectionKind: 'tool-result',
         status: 'authorized',
-        locatorKind: 'workspace-file',
+        sourceKind: 'workspace-file',
         transport: 'openneko-resource',
         renderTarget: 'agent-webview',
         diagnosticCodes: [],

@@ -767,7 +767,9 @@ function previewDescriptor(displayName: string) {
   return {
     descriptorId: `descriptor-${displayName}`,
     sourceFingerprint: `fingerprint-${displayName}`,
-    contentLocator: { kind: 'workspace-file' as const, path: `assets/${displayName}` },
+    contentLocator: {
+      file: { authority: 'workspace' as const, path: `assets/${displayName}` },
+    },
     url: 'openneko://resource/12345678901234567890123456789012',
     contentKind: 'image' as const,
     mediaType: 'image/png',

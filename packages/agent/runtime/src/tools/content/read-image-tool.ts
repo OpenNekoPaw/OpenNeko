@@ -3,14 +3,15 @@ import {
   AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
   AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES,
 } from '@neko/agent-contracts';
+import { CONTENT_LOCATOR_SCHEMA } from './content-locator-schema';
 import { createTool } from '../base';
 import { getMimeType } from '@neko/media';
 import {
   contentLocatorKey,
-  isContentRepresentationLocator,
+  isContentRepresentationHandle,
   validateContentLocator,
   type ContentLocator,
-  type ContentRepresentationLocator,
+  type ContentRepresentationHandle,
 } from '@neko/content';
 import {
   TOOL_NAMES_SYSTEM,
@@ -57,7 +58,7 @@ export interface ReadImageInputImage {
   readonly mimeType?: string;
   readonly metadata?: Record<string, unknown>;
   readonly contentLocator?: ContentLocator;
-  readonly representationLocator?: ContentRepresentationLocator;
+  readonly representationHandle?: ContentRepresentationHandle;
 }
 
 export interface ReadImageResultImage {
@@ -74,7 +75,6 @@ export interface ReadImageResultImage {
   readonly byteSize: number;
   readonly metadata?: Record<string, unknown>;
   readonly contentLocator?: ContentLocator;
-  readonly representationLocator?: ContentRepresentationLocator;
 }
 
 export interface ReadImageResultData {
@@ -94,77 +94,14 @@ interface LoadedImage {
   readonly metadata: ImageMetadata;
 }
 
-const CONTENT_FINGERPRINT_SCHEMA: ToolParameterProperty = {
+const REPRESENTATION_HANDLE_SCHEMA: ToolParameterProperty = {
   type: 'object',
   properties: {
-    strategy: { type: 'string', enum: ['sha256', 'mtime-size', 'provider'] },
-    value: { type: 'string', minLength: 1 },
+    kind: { type: 'string', enum: ['content-representation-handle'] },
+    id: { type: 'string', minLength: 1 },
   },
-  required: ['strategy', 'value'],
+  required: ['kind', 'id'],
   additionalProperties: false,
-};
-
-const WORKSPACE_FILE_LOCATOR_SCHEMA: ToolParameterProperty = {
-  type: 'object',
-  description:
-    'Canonical workspace-file ContentLocator returned by Media Library or Project Search. Paths must remain normalized and workspace-relative.',
-  properties: {
-    kind: { type: 'string', enum: ['workspace-file'] },
-    path: { type: 'string', minLength: 1 },
-    fingerprint: CONTENT_FINGERPRINT_SCHEMA,
-  },
-  required: ['kind', 'path'],
-  additionalProperties: false,
-};
-
-const DOCUMENT_ENTRY_CONTENT_LOCATOR_SCHEMA: ToolParameterProperty = {
-  type: 'object',
-  properties: {
-    kind: { type: 'string', enum: ['document-entry'] },
-    source: WORKSPACE_FILE_LOCATOR_SCHEMA,
-    entryPath: { type: 'string', minLength: 1 },
-    fingerprint: CONTENT_FINGERPRINT_SCHEMA,
-  },
-  required: ['kind', 'source', 'entryPath'],
-  additionalProperties: false,
-};
-
-const GENERATED_OUTPUT_CONTENT_LOCATOR_SCHEMA: ToolParameterProperty = {
-  type: 'object',
-  properties: {
-    kind: { type: 'string', enum: ['generated-output'] },
-    outputId: { type: 'string', minLength: 1 },
-    digest: { type: 'string', minLength: 1 },
-    path: { type: 'string', minLength: 1 },
-  },
-  required: ['kind', 'outputId', 'digest', 'path'],
-  additionalProperties: false,
-};
-
-const PACKAGE_RESOURCE_CONTENT_LOCATOR_SCHEMA: ToolParameterProperty = {
-  type: 'object',
-  properties: {
-    kind: { type: 'string', enum: ['package-resource'] },
-    packageId: { type: 'string', minLength: 1 },
-    revision: { type: 'string', minLength: 1 },
-    resourcePath: { type: 'string', minLength: 1 },
-    digest: { type: 'string', minLength: 1 },
-    manifestPath: { type: 'string', minLength: 1 },
-  },
-  required: ['kind', 'packageId', 'revision', 'resourcePath'],
-  additionalProperties: false,
-};
-
-const CONTENT_LOCATOR_SCHEMA: ToolParameterProperty = {
-  type: 'object',
-  description:
-    'Canonical ContentLocator copied unchanged from ReadDocument.imageInfo[].contentLocator.',
-  anyOf: [
-    WORKSPACE_FILE_LOCATOR_SCHEMA,
-    DOCUMENT_ENTRY_CONTENT_LOCATOR_SCHEMA,
-    GENERATED_OUTPUT_CONTENT_LOCATOR_SCHEMA,
-    PACKAGE_RESOURCE_CONTENT_LOCATOR_SCHEMA,
-  ],
 };
 
 export function createReadImageTool(deps: ReadImageToolDeps = {}): Tool {
@@ -172,7 +109,7 @@ export function createReadImageTool(deps: ReadImageToolDeps = {}): Tool {
     name: TOOL_NAMES_SYSTEM.READ_IMAGE,
     description:
       'Read local image metadata and expose selected images as native multimodal Agent resources. ' +
-      'Use this with ContentLocator or Host-owned representationLocator values returned by ReadDocument, Media Library, Project Search, or another content capability. ' +
+      'Use exact content bindings resolved by the Agent content protocol. ' +
       'Do not pass document positions, entry paths, cache paths, Webview URIs, system paths, or whole document sources. ' +
       'The selected chat model performs visual analysis in the next Agent reasoning step; this tool does not call a separate vision model.',
     category: 'analysis',
@@ -184,7 +121,7 @@ export function createReadImageTool(deps: ReadImageToolDeps = {}): Tool {
         images: {
           type: 'array',
           description:
-            'Structured image inputs with a stable contentLocator or representationLocator.',
+            'Structured image bindings resolved from conversation-scoped image references.',
           items: {
             type: 'object',
             anyOf: [
@@ -195,8 +132,8 @@ export function createReadImageTool(deps: ReadImageToolDeps = {}): Tool {
               },
               {
                 type: 'object',
-                required: ['representationLocator'],
-                properties: { representationLocator: { type: 'object' } },
+                required: ['representationHandle'],
+                properties: { representationHandle: REPRESENTATION_HANDLE_SCHEMA },
               },
             ],
             properties: {
@@ -215,11 +152,7 @@ export function createReadImageTool(deps: ReadImageToolDeps = {}): Tool {
                 description: 'Optional metadata copied from ReadDocument.imageInfo.',
               },
               contentLocator: CONTENT_LOCATOR_SCHEMA,
-              representationLocator: {
-                type: 'object',
-                description:
-                  'Stable ContentRepresentationLocator copied unchanged from ReadDocument.imageInfo[].representationLocator.',
-              },
+              representationHandle: REPRESENTATION_HANDLE_SCHEMA,
             },
           },
         },
@@ -279,8 +212,7 @@ export async function executeReadImage(
   if (images.length === 0) {
     return {
       success: false,
-      error:
-        'Missing required stable image identity: pass images[].contentLocator or images[].representationLocator from an owning content capability.',
+      error: 'Missing required image binding from the owning Agent content protocol.',
     };
   }
 
@@ -305,9 +237,6 @@ export async function executeReadImage(
       byteSize: image.metadata.byteSize,
       ...(image.input.metadata ? { metadata: image.input.metadata } : {}),
       ...(image.input.contentLocator ? { contentLocator: image.input.contentLocator } : {}),
-      ...(image.input.representationLocator
-        ? { representationLocator: image.input.representationLocator }
-        : {}),
     }));
     const perceptionCards = results.map((image, index) => {
       const loadedImage = loaded[index];
@@ -362,7 +291,7 @@ async function loadImage(
     maxBytes: MAX_READ_IMAGE_BYTES,
     operationName: 'ReadImage',
   });
-  const resolvedPath = input.representationLocator
+  const resolvedPath = input.representationHandle
     ? `data:${loaded.metadata.mimeType};base64,${Buffer.from(loaded.bytes).toString('base64')}`
     : input.contentLocator
       ? `content:${contentLocatorKey(input.contentLocator)}`
@@ -394,10 +323,10 @@ function readInputImages(args: Record<string, unknown>): ReadImageInputImage[] {
       const mimeType = readString(item['mimeType']);
       const metadata = isRecord(item['metadata']) ? item['metadata'] : undefined;
       const contentLocator = parseContentLocator(item['contentLocator'], index);
-      const representationLocator = isContentRepresentationLocator(item['representationLocator'])
-        ? item['representationLocator']
+      const representationHandle = isContentRepresentationHandle(item['representationHandle'])
+        ? item['representationHandle']
         : undefined;
-      return contentLocator || representationLocator
+      return contentLocator || representationHandle
         ? [
             {
               ...(alias ? { alias } : {}),
@@ -412,7 +341,7 @@ function readInputImages(args: Record<string, unknown>): ReadImageInputImage[] {
               ...(mimeType ? { mimeType } : {}),
               ...(metadata ? { metadata } : {}),
               ...(contentLocator ? { contentLocator } : {}),
-              ...(representationLocator ? { representationLocator } : {}),
+              ...(representationHandle ? { representationHandle } : {}),
             },
           ]
         : [];
@@ -488,11 +417,10 @@ function createReadImagePerceptionCard(input: {
     assetId,
     uri: selectPerceptualAssetUri(input.image, input.loaded.resolvedPath),
     mimeType,
-    ...(input.image.contentLocator
-      ? { contentLocator: input.image.contentLocator }
-      : input.image.representationLocator
-        ? { representationLocator: input.image.representationLocator }
-        : {}),
+    ...(input.image.contentLocator ? { contentLocator: input.image.contentLocator } : {}),
+    ...(input.loaded.input.representationHandle
+      ? { representationHandle: input.loaded.input.representationHandle }
+      : {}),
     ...(input.image.label ? { label: input.image.label } : {}),
   };
 
@@ -517,7 +445,7 @@ function createReadImagePerceptionCard(input: {
       thumbnailRef: assetRef,
     },
     cacheKey:
-      input.image.representationLocator?.id ??
+      input.loaded.input.representationHandle?.id ??
       (input.image.contentLocator ? contentLocatorKey(input.image.contentLocator) : assetId),
   };
 }
@@ -533,7 +461,7 @@ function createReadImageAssetId(
     image.alias ??
     path.basename(resolvedPath) ??
     `image-${index + 1}`;
-  const identity = image.contentLocator ?? image.representationLocator ?? resolvedPath;
+  const identity = image.contentLocator ?? resolvedPath;
   return `read-image-${sanitizeAssetIdPart(label)}-${hashStableValue(identity)}`;
 }
 
@@ -546,7 +474,6 @@ function sanitizeAssetIdPart(value: string): string {
 }
 
 function selectPerceptualAssetUri(image: ReadImageResultImage, resolvedPath: string): string {
-  if (image.representationLocator) return resolvedPath;
   if (image.contentLocator) return `content:${contentLocatorKey(image.contentLocator)}`;
   return resolvedPath;
 }

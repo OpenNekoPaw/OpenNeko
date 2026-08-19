@@ -179,10 +179,7 @@ describe('storyboard transfer presenter', () => {
           {
             traceId: 'trace-script-1',
             sourceProfile: 'from-script',
-            sourceLocator: {
-              kind: 'workspace-file',
-              path: 'scripts/story.md',
-            },
+            sourceLocator: { file: { authority: 'workspace', path: 'scripts/story.md' } },
           },
         ],
         contentFingerprint: 'sha256:storyboard-content',
@@ -206,10 +203,7 @@ describe('storyboard transfer presenter', () => {
                     refId: 'source-image-1',
                     role: 'source',
                     locator: { type: 'workspace-path', path: '${WORKSPACE}/assets/cat.png' },
-                    contentLocator: {
-                      kind: 'workspace-file',
-                      path: 'assets/cat.png',
-                    },
+                    contentLocator: { file: { authority: 'workspace', path: 'assets/cat.png' } },
                   },
                 ],
               },
@@ -227,10 +221,7 @@ describe('storyboard transfer presenter', () => {
                     role: 'generated',
                     locator: { type: 'asset', assetId: 'generated-image-2' },
                     contentLocator: {
-                      kind: 'generated-output',
-                      outputId: 'generated-image-2',
-                      digest: 'sha256:generated-image-2',
-                      path: 'generated/generated-image-2.png',
+                      file: { authority: 'workspace', path: 'generated/generated-image-2.png' },
                     },
                   },
                 ],
@@ -275,10 +266,7 @@ describe('storyboard transfer presenter', () => {
                 sourceMediaRefs: [
                   expect.objectContaining({
                     refId: 'source-image-1',
-                    contentLocator: {
-                      kind: 'workspace-file',
-                      path: 'assets/cat.png',
-                    },
+                    contentLocator: { file: { authority: 'workspace', path: 'assets/cat.png' } },
                   }),
                 ],
               },
@@ -288,10 +276,7 @@ describe('storyboard transfer presenter', () => {
                   expect.objectContaining({
                     refId: 'generated-image-2',
                     contentLocator: {
-                      kind: 'generated-output',
-                      outputId: 'generated-image-2',
-                      digest: 'sha256:generated-image-2',
-                      path: 'generated/generated-image-2.png',
+                      file: { authority: 'workspace', path: 'generated/generated-image-2.png' },
                     },
                   }),
                 ],

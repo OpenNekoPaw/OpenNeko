@@ -508,14 +508,9 @@ const ZH_TOOL_DEFINITION_LOCALIZATIONS: Readonly<Record<string, ToolDefinitionLo
   },
   ReadImage: {
     description:
-      '读取图片内容。EPUB/PDF/CBZ 图片必须使用 ReadDocument.imageInfo 返回的 contentLocator 或 representationLocator，不能自行拼接路径。',
+      '读取已授权图片内容。使用当前对话输入或 ReadDocument 返回的 image_ref，不要构造路径或内部定位参数。',
     parameters: {
-      images: '要读取的图片列表。',
-      'images.[].metadata': '从 ReadDocument.imageInfo 复制的可选图片元数据。',
-      'images.[].contentLocator':
-        '稳定内容定位器，必须原样来自 ReadDocument.imageInfo[].contentLocator 或统一内容访问结果。',
-      'images.[].representationLocator':
-        '稳定派生表示定位器，必须原样来自 ReadDocument.imageInfo[].representationLocator。',
+      image_refs: '当前对话已授权的图片引用列表。',
       mode: '读取模式。当前只支持 metadata：读取元数据并把图片暴露给原生多模态 Agent 推理；不要使用 vision。',
       analysis: '希望图片分析回答的问题或分析类型。',
       prompt: '给下一次原生多模态 Agent 推理使用的可选提示；此工具本身不执行模型分析。',

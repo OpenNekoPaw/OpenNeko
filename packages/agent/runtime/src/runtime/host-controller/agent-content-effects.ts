@@ -22,6 +22,7 @@ import type { NekoHostPorts } from '@neko/host/ports';
 import {
   validateContentLocator,
   contentLocatorKey,
+  isWorkspaceFileContentLocator,
   type ContentLocator,
   type DocumentLocator,
   type WorkspaceFileContentLocator,
@@ -259,16 +260,17 @@ async function searchWorkspaceMentionFiles(
     const validation = validateContentLocator(locator);
     if (
       !validation.ok ||
-      validation.locator.kind !== 'workspace-file' ||
-      !validation.locator.path.startsWith('neko/assets/')
+      validation.locator.file.authority !== 'workspace' ||
+      validation.locator.selector !== undefined ||
+      !validation.locator.file.path.startsWith('neko/assets/')
     ) {
       throw new Error('Agent linked media contributor returned an invalid Workspace locator.');
     }
     candidates.set(contentLocatorKey(validation.locator), {
-      relativePath: validation.locator.path,
+      relativePath: validation.locator.file.path,
       contentLocator: validation.locator,
       source: 'workspace',
-      ...workspaceFilePresentation(validation.locator.path),
+      ...workspaceFilePresentation(validation.locator.file.path),
     });
   }
   return [...candidates.values()]
@@ -385,8 +387,10 @@ async function walkWorkspaceFiles(input: {
     ) {
       continue;
     }
-    const locatorResult = validateContentLocator({ kind: 'workspace-file', path: relativePath });
-    if (!locatorResult.ok || locatorResult.locator.kind !== 'workspace-file') {
+    const locatorResult = validateContentLocator({
+      file: { authority: 'workspace', path: relativePath },
+    });
+    if (!locatorResult.ok || !isWorkspaceFileContentLocator(locatorResult.locator)) {
       input.reportInvalidCandidate?.(
         new Error(
           `Agent Workspace path '${relativePath}' cannot form a canonical content locator. ${
@@ -411,10 +415,10 @@ async function walkWorkspaceFiles(input: {
       (!input.filter || relativePath.toLocaleLowerCase().includes(input.filter))
     ) {
       input.candidates.push({
-        relativePath: locatorResult.locator.path,
+        relativePath: locatorResult.locator.file.path,
         contentLocator: locatorResult.locator,
         source: 'workspace',
-        ...workspaceFilePresentation(locatorResult.locator.path),
+        ...workspaceFilePresentation(locatorResult.locator.file.path),
       });
     }
   }
@@ -476,17 +480,9 @@ function workspaceLocatorForRead(
 ): WorkspaceFileContentLocator | undefined {
   const validation = validateContentLocator(locatorValue);
   if (!validation.ok) return undefined;
-  switch (validation.locator.kind) {
-    case 'workspace-file':
-      return validation.locator;
-    case 'document-entry':
-      return validation.locator.source.kind === 'workspace-file'
-        ? validation.locator.source
-        : undefined;
-    case 'generated-output':
-    case 'package-resource':
-      return undefined;
-  }
+  return validation.locator.file.authority === 'workspace'
+    ? { file: validation.locator.file }
+    : undefined;
 }
 
 function resolveLexicalWorkspacePath(
@@ -529,23 +525,11 @@ function workspaceRelativePath(locatorValue: ContentLocator): string {
     );
   }
   const locator = validation.locator;
-  switch (locator.kind) {
-    case 'workspace-file':
-      return locator.path;
-    case 'document-entry':
-      if (locator.source.kind === 'workspace-file') return locator.source.path;
-      throw new AgentContentEffectError(
-        'desktop-agent-content-kind-unsupported',
-        'Desktop Agent document effects require the managed-link Workspace projection.',
-      );
-    case 'generated-output':
-      return locator.path;
-    case 'package-resource':
-      throw new AgentContentEffectError(
-        'desktop-agent-content-kind-unsupported',
-        `Desktop package resource '${locator.packageId}/${locator.resourcePath}' requires its owning package resolver.`,
-      );
-  }
+  if (locator.file.authority === 'workspace') return locator.file.path;
+  throw new AgentContentEffectError(
+    'desktop-agent-content-kind-unsupported',
+    `Desktop package resource '${locator.file.packageId}/${locator.file.path}' requires its owning package resolver.`,
+  );
 }
 
 function assertWorkspaceGrant(

@@ -166,7 +166,7 @@ describe('OpenNeko tool projection to Pi', () => {
   it('projects the complete ReadDocument chapter locator contract to Pi', () => {
     const projected = projectOpenNekoTool(createReadDocumentTool({}));
     const base = {
-      source: { kind: 'workspace-file', path: 'books/book.epub' },
+      source: { file: { authority: 'workspace' as const, path: 'books/book.epub' } },
       mode: 'range',
       range: {
         locator: { kind: 'chapter', spineIndex: 304 },
@@ -203,9 +203,8 @@ describe('OpenNeko tool projection to Pi', () => {
     const projected = projectOpenNekoTool(createReadImageTool({}));
     const contentLocatorImage = {
       contentLocator: {
-        kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'books/book.epub' },
-        entryPath: 'images/page-1.jpg',
+        file: { authority: 'workspace' as const, path: 'books/book.epub' },
+        selector: { kind: 'entry' as const, path: 'images/page-1.jpg' },
       },
     };
 
@@ -214,9 +213,8 @@ describe('OpenNeko tool projection to Pi', () => {
         images: [
           {
             resourceRef: {
-              kind: 'document-entry',
-              source: { filePath: 'books/book.epub', format: 'epub' },
-              entryPath: 'images/page-1.jpg',
+              file: { filePath: 'books/book.epub', format: 'epub' }.file,
+              selector: { kind: 'entry' as const, path: 'images/page-1.jpg' },
             },
           },
         ],
@@ -242,12 +240,11 @@ describe('OpenNeko tool projection to Pi', () => {
           items: {
             properties: {
               contentLocator: {
-                anyOf: [
-                  expect.any(Object),
-                  expect.objectContaining({ required: ['kind', 'source', 'entryPath'] }),
-                  expect.any(Object),
-                  expect.any(Object),
-                ],
+                required: ['file'],
+                properties: {
+                  file: { anyOf: expect.any(Array) },
+                  selector: expect.objectContaining({ required: ['kind', 'path'] }),
+                },
               },
             },
           },
@@ -342,10 +339,7 @@ describe('OpenNeko tool projection to Pi', () => {
         execute: async () => ({
           success: true,
           data: {
-            contentLocator: {
-              kind: 'workspace-file',
-              path: 'media/video.mp4',
-            },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'media/video.mp4' } },
             nested: data,
           },
         }),
@@ -359,9 +353,8 @@ describe('OpenNeko tool projection to Pi', () => {
 
   it('projects stable image attachments through the injected Host loader', async () => {
     const contentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'book.epub' },
-      entryPath: 'images/page-1.png',
+      file: { authority: 'workspace' as const, path: 'book.epub' },
+      selector: { kind: 'entry' as const, path: 'images/page-1.png' },
     };
     const assetRef = {
       assetId: 'document-page-1',
@@ -449,12 +442,9 @@ describe('OpenNeko tool projection to Pi', () => {
     });
   });
 
-  it('projects generated-output image attachments through their canonical content locator', async () => {
+  it('projects generated image attachments through their canonical content locator', async () => {
     const contentLocator = {
-      kind: 'generated-output' as const,
-      outputId: 'generated-cat',
-      digest: `sha256:${'a'.repeat(64)}`,
-      path: 'neko/generated/image/generated-cat.png',
+      file: { authority: 'workspace' as const, path: 'neko/generated/image/generated-cat.png' },
     };
     const load = vi.fn(async () => ({
       kind: 'image' as const,
@@ -466,7 +456,19 @@ describe('OpenNeko tool projection to Pi', () => {
         execute: async () => ({
           success: true,
           data: { imageCount: 1 },
-          attachments: [{ type: 'image', contentLocator }],
+          attachments: [
+            {
+              type: 'image',
+              mimeType: 'image/png',
+              contentLocator,
+              assetRef: {
+                assetId: 'generated-cat',
+                uri: contentLocator.file.path,
+                mimeType: 'image/png',
+                contentLocator,
+              },
+            },
+          ],
         }),
       }),
       { assetLoader: { load } },
@@ -645,10 +647,7 @@ describe('OpenNeko tool projection to Pi', () => {
 
   it('fails visibly when an image attachment has no Host loader', async () => {
     const contentLocator = {
-      kind: 'generated-output' as const,
-      outputId: 'generated-page-1',
-      digest: 'sha256:generated-page-1',
-      path: 'generated/generated-page-1.png',
+      file: { authority: 'workspace' as const, path: 'generated/generated-page-1.png' },
     };
     const projected = projectOpenNekoTool(
       tool({
@@ -659,6 +658,12 @@ describe('OpenNeko tool projection to Pi', () => {
             {
               type: 'image',
               contentLocator,
+              assetRef: {
+                assetId: 'generated-page-1',
+                uri: contentLocator.file.path,
+                mimeType: 'image/png',
+                contentLocator,
+              },
             },
           ],
         }),
@@ -672,10 +677,7 @@ describe('OpenNeko tool projection to Pi', () => {
 
   it('rejects non-image or non-base64 Host payloads', async () => {
     const contentLocator = {
-      kind: 'generated-output' as const,
-      outputId: 'generated-page-1',
-      digest: 'sha256:generated-page-1',
-      path: 'generated/generated-page-1.png',
+      file: { authority: 'workspace' as const, path: 'generated/generated-page-1.png' },
     };
     const projected = projectOpenNekoTool(
       tool({
@@ -686,6 +688,12 @@ describe('OpenNeko tool projection to Pi', () => {
             {
               type: 'image',
               contentLocator,
+              assetRef: {
+                assetId: 'generated-page-1',
+                uri: contentLocator.file.path,
+                mimeType: 'image/png',
+                contentLocator,
+              },
             },
           ],
         }),

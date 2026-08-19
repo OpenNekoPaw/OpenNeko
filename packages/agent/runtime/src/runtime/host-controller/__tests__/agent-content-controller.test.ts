@@ -120,7 +120,7 @@ describe('Agent content controller', () => {
         filter: '',
         purpose: 'entry',
         searchWorkspaceLinkedMediaFiles: async () => [
-          { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
+          { file: { authority: 'workspace' as const, path: 'neko/assets/Reference/hero.png' } },
         ],
         reportMentionContributorError,
       });
@@ -128,7 +128,9 @@ describe('Agent content controller', () => {
       expect(projection.files).toEqual([
         expect.objectContaining({ name: 'local.md', source: 'workspace' }),
         expect.objectContaining({
-          locator: { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
+          locator: {
+            file: { authority: 'workspace' as const, path: 'neko/assets/Reference/hero.png' },
+          },
           name: 'hero.png',
           source: 'workspace',
           mediaType: 'image',
@@ -183,7 +185,7 @@ describe('Agent content controller', () => {
 
       expect(projection.files).toEqual([
         expect.objectContaining({
-          locator: { kind: 'workspace-file', path: 'guide.md' },
+          locator: { file: { authority: 'workspace' as const, path: 'guide.md' } },
           name: 'guide.md',
           source: 'workspace',
         }),
@@ -203,7 +205,7 @@ describe('Agent content controller', () => {
   it('routes all content operations through narrow Host effects with connection context', async () => {
     const effects = createEffects();
     const context = createContext();
-    const contentLocator = { kind: 'workspace-file' as const, path: 'docs/guide.pdf' };
+    const contentLocator = { file: { authority: 'workspace' as const, path: 'docs/guide.pdf' } };
     const documentLocator = { kind: 'page' as const, pageNumber: 3, pageIndex: 2 };
     const contextSource = {
       type: 'revealContextSource' as const,

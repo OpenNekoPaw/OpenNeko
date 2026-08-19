@@ -1,4 +1,4 @@
-import type { ContentRepresentationLocator } from '@neko/content';
+import type { ContentRepresentationHandle } from '@neko/content';
 import { AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES } from '@neko/agent-contracts';
 import type { PerceptualAssetRef } from '@neko/media';
 import { describe, expect, it, vi } from 'vitest';
@@ -12,20 +12,13 @@ const PNG_BYTES = Buffer.from(
 );
 
 const CONTENT_LOCATOR = {
-  kind: 'document-entry' as const,
-  source: { kind: 'workspace-file' as const, path: 'books/book.epub' },
-  entryPath: 'images/page-1.png',
-};
+  file: { authority: 'workspace' as const, path: 'books/book.epub' },
+  selector: { kind: 'entry' as const, path: 'images/page-1.png' },
+} as const;
 
-const REPRESENTATION_LOCATOR: ContentRepresentationLocator = {
-  kind: 'content-representation',
+const REPRESENTATION_HANDLE: ContentRepresentationHandle = {
+  kind: 'content-representation-handle',
   id: 'book-page-1',
-  representationKind: 'raster-page',
-  source: { kind: 'workspace-file', path: 'books/book.pdf' },
-  spec: { kind: 'raster-page', page: 1, format: 'png' },
-  generatorId: 'neko-content.document-raster',
-  sourceFingerprint: 'source-1',
-  specFingerprint: 'raster-page-1',
 };
 
 describe('Pi Tool result asset loader', () => {
@@ -80,11 +73,11 @@ describe('Pi Tool result asset loader', () => {
         assetId: 'raster-page-1',
         uri: 'data:image/png;base64,ignored',
         mimeType: 'image/png',
-        representationLocator: REPRESENTATION_LOCATOR,
+        representationHandle: REPRESENTATION_HANDLE,
       }),
     ).resolves.toMatchObject({ kind: 'image', mimeType: 'image/png' });
     expect(runtime.loadRepresentationAsset).toHaveBeenCalledWith({
-      locator: REPRESENTATION_LOCATOR,
+      handle: REPRESENTATION_HANDLE,
       maxBytes: AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
     });
     expect(runtime.loadContentAsset).not.toHaveBeenCalled();
@@ -100,8 +93,8 @@ describe('Pi Tool result asset loader', () => {
       uri: `content:page-${index + 1}`,
       mimeType: 'image/png',
       contentLocator: {
-        ...CONTENT_LOCATOR,
-        entryPath: `images/page-${index + 1}.png`,
+        file: CONTENT_LOCATOR.file,
+        selector: { kind: 'entry', path: `images/page-${index + 1}.png` },
       },
     }));
 
@@ -125,7 +118,7 @@ describe('Pi Tool result asset loader', () => {
         uri: 'file:///must-not-be-read.png',
         mimeType: 'image/png',
       }),
-    ).rejects.toThrow('requires an exact content or representation locator');
+    ).rejects.toThrow('requires an exact content locator or representation handle');
     expect(runtime.loadContentAsset).not.toHaveBeenCalled();
     expect(runtime.loadRepresentationAsset).not.toHaveBeenCalled();
   });

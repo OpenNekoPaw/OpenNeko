@@ -102,7 +102,7 @@ import { CutProjectAuthoringService } from '@neko/cut-domain';
 import type {
   ContentLocator,
   ContentReadService,
-  ContentRepresentationLocator,
+  ContentRepresentationHandle,
 } from '@neko/content';
 import type { EffectiveAgentConfigurationProjection } from '@neko/agent-contracts';
 import type {
@@ -280,7 +280,8 @@ export interface AgentWorkspaceRuntime {
   readonly models: ReturnType<typeof createOpenNekoPiModels>;
   readonly tools: IToolRegistry;
   loadDisplayAsset?(input: {
-    readonly locator: ContentLocator | ContentRepresentationLocator;
+    readonly source: ContentLocator;
+    readonly representationHandle?: ContentRepresentationHandle;
     readonly maxBytes: number;
     readonly signal?: AbortSignal;
   }): Promise<
@@ -1000,14 +1001,15 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   }
 
   loadDisplayAsset(input: {
-    readonly locator: ContentLocator | ContentRepresentationLocator;
+    readonly source: ContentLocator;
+    readonly representationHandle?: ContentRepresentationHandle;
     readonly maxBytes: number;
     readonly signal?: AbortSignal;
   }): Promise<
     import('../runtime/capability/agent-content-access-runtime').AgentProviderAssetResult
   > {
     this.requireActive();
-    if (input.locator.kind === 'content-representation') {
+    if (input.representationHandle) {
       const loadRepresentationAsset = this.contentAccessRuntime.loadRepresentationAsset;
       if (!loadRepresentationAsset) {
         return Promise.resolve({
@@ -1022,12 +1024,12 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         });
       }
       return loadRepresentationAsset.call(this.contentAccessRuntime, {
-        locator: input.locator,
+        handle: input.representationHandle,
         maxBytes: input.maxBytes,
       });
     }
     return this.contentAccessRuntime.loadContentAsset({
-      locator: input.locator,
+      locator: input.source,
       maxBytes: input.maxBytes,
       ...(input.signal ? { signal: input.signal } : {}),
     });
@@ -2522,15 +2524,7 @@ function classifyUnregisteredContentProcessor(locator: ContentLocator): string |
 }
 
 function contentLocatorPortablePath(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return locator.path;
-    case 'document-entry':
-      return locator.entryPath;
-    case 'package-resource':
-      return locator.resourcePath;
-  }
+  return locator.selector?.path ?? locator.file.path;
 }
 
 function requireAgentReferenceCapability(
@@ -2637,9 +2631,9 @@ async function validateAgentTurnImage(
     throw new Error(`Agent image reference '${label}' exceeds the supported image dimensions.`);
   }
   if (
-    locator.kind === 'workspace-file' &&
+    locator.file.authority === 'workspace' &&
     !imageExtensions(detectedMimeType).some((extension) =>
-      locator.path.toLowerCase().endsWith(extension),
+      locator.file.path.toLowerCase().endsWith(extension),
     )
   ) {
     throw new Error(

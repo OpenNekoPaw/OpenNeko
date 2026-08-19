@@ -263,9 +263,8 @@ describe('content block presenter', () => {
             locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
           },
           contentLocator: {
-            kind: 'document-entry',
-            source: { kind: 'workspace-file', path: 'books/a.epub' },
-            entryPath: 'image/Page_1.jpg',
+            file: { authority: 'workspace', path: 'books/a.epub' },
+            selector: { kind: 'entry', path: 'image/Page_1.jpg' },
           },
         },
       ],

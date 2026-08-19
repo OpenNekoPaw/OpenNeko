@@ -113,7 +113,7 @@ describe('Agent launch Draft submission application service', () => {
         id: 'reference:notes.fountain',
         label: 'notes.fountain',
         mediaType: 'text' as const,
-        contentLocator: { kind: 'workspace-file' as const, path: 'notes.fountain' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'notes.fountain' } },
       },
     ];
     fixture.resources.validate.mockReturnValueOnce(contextReferences);

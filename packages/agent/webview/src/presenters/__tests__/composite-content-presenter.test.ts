@@ -1091,7 +1091,9 @@ function previewDescriptor(displayName: string) {
   return {
     descriptorId: `descriptor-${displayName}`,
     sourceFingerprint: `fingerprint-${displayName}`,
-    contentLocator: { kind: 'workspace-file' as const, path: `assets/${displayName}` },
+    contentLocator: {
+      file: { authority: 'workspace' as const, path: `assets/${displayName}` },
+    },
     url: 'openneko://resource/12345678901234567890123456789012',
     contentKind: 'image' as const,
     mediaType: displayName.endsWith('.jpg') ? 'image/jpeg' : 'image/png',
@@ -1113,13 +1115,11 @@ function makeDocumentEntryContentLocator(
   entryPath: string,
   filePath = 'books/comic.epub',
 ): {
-  readonly kind: 'document-entry';
-  readonly source: { readonly kind: 'workspace-file'; readonly path: string };
-  readonly entryPath: string;
+  readonly file: { readonly authority: 'workspace'; readonly path: string };
+  readonly selector: { readonly kind: 'entry'; readonly path: string };
 } {
   return {
-    kind: 'document-entry',
-    source: { kind: 'workspace-file', path: filePath.replace(/^\/+/u, '') },
-    entryPath,
+    file: { authority: 'workspace', path: filePath.replace(/^\/+/u, '') },
+    selector: { kind: 'entry', path: entryPath },
   };
 }

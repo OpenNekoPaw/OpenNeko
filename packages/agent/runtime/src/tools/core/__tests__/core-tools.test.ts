@@ -89,7 +89,7 @@ describe('createCoreTools', () => {
     await expect(read.execute({ file_path: 'src/story.txt' })).resolves.toMatchObject({
       success: true,
       data: expect.objectContaining({
-        contentLocator: { kind: 'workspace-file', path: 'src/story.txt' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'src/story.txt' } },
         content: expect.stringContaining('hello neko'),
       }),
     });
@@ -105,7 +105,7 @@ describe('createCoreTools', () => {
     expect(result).toMatchObject({
       success: true,
       data: expect.objectContaining({
-        contentLocator: { kind: 'workspace-file', path: 'src/story.txt' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'src/story.txt' } },
         content: expect.stringContaining('hello neko'),
       }),
     });
@@ -124,7 +124,9 @@ describe('createCoreTools', () => {
       success: true,
       data: expect.objectContaining({
         content: expect.stringContaining('outside'),
-        contentLocator: { kind: 'workspace-file', path: 'linked-outside/secret.txt' },
+        contentLocator: {
+          file: { authority: 'workspace' as const, path: 'linked-outside/secret.txt' },
+        },
       }),
     });
 
@@ -181,7 +183,7 @@ describe('createCoreTools', () => {
     expect(result).toMatchObject({
       success: true,
       data: expect.objectContaining({
-        contentLocator: { kind: 'workspace-file', path: 'docs/output.md' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'docs/output.md' } },
       }),
     });
     expect(JSON.stringify(result)).not.toContain(workspaceRoot);
@@ -201,7 +203,7 @@ describe('createCoreTools', () => {
       expect(result).toMatchObject({
         success: true,
         data: {
-          contentLocator: { kind: 'workspace-file', path: relativePath },
+          contentLocator: { file: { authority: 'workspace' as const, path: relativePath } },
           operation: 'create',
           byteLength: new TextEncoder().encode(content).byteLength,
           fingerprint: expect.objectContaining({ strategy: 'mtime-size' }),
@@ -235,7 +237,7 @@ describe('createCoreTools', () => {
     ).resolves.toMatchObject({
       success: true,
       data: {
-        contentLocator: { kind: 'workspace-file', path: 'plan.md' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'plan.md' } },
         operation: 'replace',
         byteLength: expect.any(Number),
         fingerprint: expect.objectContaining({ strategy: 'mtime-size' }),
@@ -256,7 +258,9 @@ describe('createCoreTools', () => {
     ).resolves.toMatchObject({
       success: true,
       data: {
-        contentLocator: { kind: 'workspace-file', path: 'drafts/scene.fountain' },
+        contentLocator: {
+          file: { authority: 'workspace' as const, path: 'drafts/scene.fountain' },
+        },
         operation: 'create',
         fingerprint: expect.objectContaining({ strategy: 'mtime-size' }),
       },
@@ -431,7 +435,7 @@ describe('createCoreTools', () => {
           expect.objectContaining({
             name: 'src',
             type: 'directory',
-            contentLocator: { kind: 'workspace-file', path: 'src' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'src' } },
           }),
         ]),
       }),
@@ -445,7 +449,7 @@ describe('createCoreTools', () => {
           expect.objectContaining({
             name: 'story.txt',
             type: 'file',
-            contentLocator: { kind: 'workspace-file', path: 'src/story.txt' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'src/story.txt' } },
           }),
         ],
       }),
@@ -499,7 +503,7 @@ describe('createCoreTools', () => {
           expect.objectContaining({
             name: 'src',
             type: 'directory',
-            contentLocator: { kind: 'workspace-file', path: 'src' },
+            contentLocator: { file: { authority: 'workspace' as const, path: 'src' } },
           }),
         ]),
       }),
@@ -518,7 +522,7 @@ describe('createCoreTools', () => {
     expect(result).toMatchObject({
       success: true,
       data: {
-        contentLocator: { kind: 'workspace-file', path: 'docs/absolute.md' },
+        contentLocator: { file: { authority: 'workspace' as const, path: 'docs/absolute.md' } },
         operation: 'create',
       },
     });

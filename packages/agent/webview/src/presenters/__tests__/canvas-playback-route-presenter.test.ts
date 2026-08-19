@@ -5,12 +5,7 @@ import { validateCompositeArtifact } from '@neko/agent-contracts';
 import { projectCanvasPlaybackRouteCard } from '../canvas-playback-route-presenter';
 
 function createPosterContentLocator(): ContentLocator {
-  return {
-    kind: 'generated-output',
-    outputId: 'asset-shot-1',
-    digest: 'sha256:asset-shot-1',
-    path: 'generated/asset-shot-1.png',
-  };
+  return { file: { authority: 'workspace', path: 'generated/asset-shot-1.png' } };
 }
 
 function createPlan(): CanvasPlaybackPlan {

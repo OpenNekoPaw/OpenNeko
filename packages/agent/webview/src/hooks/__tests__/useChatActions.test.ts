@@ -834,7 +834,7 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:assets/ref file.zip',
             label: 'ref file.zip',
-            contentLocator: { kind: 'workspace-file', path: 'assets/ref file.zip' },
+            contentLocator: { file: { authority: 'workspace', path: 'assets/ref file.zip' } },
           },
         ],
       });
@@ -852,7 +852,7 @@ describe('useChatActions', () => {
             label: 'ref file.zip',
             type: 'file',
             summary: 'assets/ref file.zip',
-            contentLocator: { kind: 'workspace-file', path: 'assets/ref file.zip' },
+            contentLocator: { file: { authority: 'workspace', path: 'assets/ref file.zip' } },
           }),
         ],
       }),
@@ -865,10 +865,7 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:assets/ref file.zip',
             label: 'ref file.zip',
-            contentLocator: {
-              kind: 'workspace-file',
-              path: 'assets/ref file.zip',
-            },
+            contentLocator: { file: { authority: 'workspace', path: 'assets/ref file.zip' } },
           },
         ],
       }),
@@ -908,7 +905,7 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:books/story.epub',
             label: 'story.epub',
-            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
+            contentLocator: { file: { authority: 'workspace', path: 'books/story.epub' } },
             mediaType: 'document',
           },
         ],
@@ -927,7 +924,7 @@ describe('useChatActions', () => {
             type: 'file',
             summary: 'books/story.epub',
             mediaType: 'document',
-            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
+            contentLocator: { file: { authority: 'workspace', path: 'books/story.epub' } },
           }),
         ],
       }),
@@ -945,10 +942,7 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:books/story.epub',
             label: 'story.epub',
-            contentLocator: {
-              kind: 'workspace-file',
-              path: 'books/story.epub',
-            },
+            contentLocator: { file: { authority: 'workspace', path: 'books/story.epub' } },
             mediaType: 'document',
           },
         ],
@@ -988,7 +982,7 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:books/story.epub',
             label: 'story.epub',
-            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
+            contentLocator: { file: { authority: 'workspace', path: 'books/story.epub' } },
             mediaType: 'document',
           },
         ],
@@ -1005,7 +999,7 @@ describe('useChatActions', () => {
             id: 'file-ref:books/story.epub',
             label: 'story.epub',
             summary: 'books/story.epub',
-            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
+            contentLocator: { file: { authority: 'workspace', path: 'books/story.epub' } },
           }),
         ],
       }),
@@ -1018,7 +1012,7 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:books/story.epub',
             label: 'story.epub',
-            contentLocator: { kind: 'workspace-file', path: 'books/story.epub' },
+            contentLocator: { file: { authority: 'workspace', path: 'books/story.epub' } },
             mediaType: 'document',
           },
         ],
@@ -1058,13 +1052,13 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:assets/1.png',
             label: '1.png',
-            contentLocator: { kind: 'workspace-file', path: 'assets/1.png' },
+            contentLocator: { file: { authority: 'workspace', path: 'assets/1.png' } },
             mediaType: 'image',
           },
           {
             id: 'file-ref:cases/1080P.mp4',
             label: '1080P.mp4',
-            contentLocator: { kind: 'workspace-file', path: 'cases/1080P.mp4' },
+            contentLocator: { file: { authority: 'workspace', path: 'cases/1080P.mp4' } },
             mediaType: 'video',
           },
         ],
@@ -1116,7 +1110,7 @@ describe('useChatActions', () => {
           {
             id: 'file-ref:cases/1080P.mp4',
             label: '1080P.mp4',
-            contentLocator: { kind: 'workspace-file', path: 'cases/1080P.mp4' },
+            contentLocator: { file: { authority: 'workspace', path: 'cases/1080P.mp4' } },
           },
         ],
       });
@@ -1128,7 +1122,7 @@ describe('useChatActions', () => {
         contextReferences: [
           expect.objectContaining({
             label: '1080P.mp4',
-            contentLocator: { kind: 'workspace-file', path: 'cases/1080P.mp4' },
+            contentLocator: { file: { authority: 'workspace', path: 'cases/1080P.mp4' } },
           }),
         ],
       }),

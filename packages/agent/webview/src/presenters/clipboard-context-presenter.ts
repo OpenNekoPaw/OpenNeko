@@ -22,22 +22,8 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
   const image = asRecord(value.image);
   if (!document || !image) return null;
   if (
-    !hasExactKeys(document, [
-      'filePath',
-      'source',
-      'locator',
-      'contentLocator',
-      'representationLocator',
-    ]) ||
-    !hasExactKeys(image, [
-      'index',
-      'width',
-      'height',
-      'byteSize',
-      'mimeType',
-      'contentLocator',
-      'representationLocator',
-    ])
+    !hasExactKeys(document, ['filePath', 'source', 'locator', 'contentLocator']) ||
+    !hasExactKeys(image, ['index', 'width', 'height', 'byteSize', 'mimeType', 'contentLocator'])
   ) {
     return null;
   }
@@ -57,8 +43,8 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
   if (!contentLocator) return null;
   const label = locator
     ? formatDocumentLocator(locator)
-    : contentLocator.kind === 'document-entry'
-      ? basename(contentLocator.entryPath)
+    : contentLocator.selector
+      ? basename(contentLocator.selector.path)
       : basename(projectContentLocatorPath(contentLocator));
   const sourceFormat = readString(source?.format);
   const contentPath = projectContentLocatorPath(contentLocator);
@@ -78,7 +64,7 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
     },
     navigationData: {
       source: sourceFormat ?? 'document',
-      ...(contentLocator.kind === 'document-entry' ? { entryPath: contentLocator.entryPath } : {}),
+      ...(contentLocator.selector ? { entryPath: contentLocator.selector.path } : {}),
     },
   };
 
@@ -87,7 +73,7 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
     id: stableContextId(
       'document-image',
       contentPath,
-      contentLocator.kind === 'document-entry' ? contentLocator.entryPath : label,
+      contentLocator.selector?.path ?? label,
       label,
     ),
     label,

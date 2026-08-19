@@ -504,9 +504,8 @@ describe('MessageList auto-scroll lifecycle', () => {
     fireEvent.click(openButton);
     expect(revealDocumentLocatorMock).toHaveBeenCalledWith({
       contentLocator: {
-        kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'books/a.epub' },
-        entryPath: 'image/Page_1.jpg',
+        file: { authority: 'workspace', path: 'books/a.epub' },
+        selector: { kind: 'entry', path: 'image/Page_1.jpg' },
       },
       locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
     });
@@ -900,10 +899,7 @@ function createReadImageContextMessage(): Message {
                 {
                   alias: 'P1',
                   label: 'Page 1',
-                  contentLocator: {
-                    kind: 'workspace-file',
-                    path: 'images/page-1.jpg',
-                  },
+                  contentLocator: { file: { authority: 'workspace', path: 'images/page-1.jpg' } },
                 },
               ],
             },
@@ -1063,9 +1059,8 @@ function createDocumentEvidenceMessage(): Message {
                     locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 1 },
                   },
                   contentLocator: {
-                    kind: 'document-entry',
-                    source: { kind: 'workspace-file', path: 'books/a.epub' },
-                    entryPath: 'image/Page_1.jpg',
+                    file: { authority: 'workspace', path: 'books/a.epub' },
+                    selector: { kind: 'entry', path: 'image/Page_1.jpg' },
                   },
                 },
               ],

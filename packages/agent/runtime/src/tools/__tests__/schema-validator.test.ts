@@ -4,7 +4,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { validateSchema, formatValidationErrors } from '../schema-validator';
-import type { ToolParameterProperty, ToolParameters } from '@neko/agent-contracts';
+import type { ToolParameters } from '@neko/agent-contracts';
+import { CONTENT_LOCATOR_SCHEMA } from '../content/content-locator-schema';
 
 const baseSchema: ToolParameters = {
   type: 'object',
@@ -194,9 +195,8 @@ describe('validateSchema', () => {
     const schema = createDocumentImageSchema();
     const images = Array.from({ length: 10 }, (_, index) => ({
       contentLocator: {
-        kind: 'document-entry',
-        source: { kind: 'workspace-file', path: 'book.epub' },
-        entryPath: `image/page-${index + 1}.jpg`,
+        file: { authority: 'workspace' as const, path: 'book.epub' },
+        selector: { kind: 'entry' as const, path: `image/page-${index + 1}.jpg` },
       },
     }));
 
@@ -211,8 +211,8 @@ describe('validateSchema', () => {
         images: [
           {
             contentLocator: {
-              kind: 'document-entry',
-              source: { kind: 'workspace-file', path: 'book.epub' },
+              file: { authority: 'workspace' as const, path: 'book.epub' },
+              selector: { kind: 'entry' },
             },
           },
         ],
@@ -221,7 +221,7 @@ describe('validateSchema', () => {
     );
 
     expect(errors).toEqual([
-      expect.objectContaining({ field: 'images[0].contentLocator.entryPath' }),
+      expect.objectContaining({ field: 'images[0].contentLocator.selector.path' }),
     ]);
   });
 
@@ -231,15 +231,13 @@ describe('validateSchema', () => {
         images: [
           {
             contentLocator: {
-              kind: 'document-entry',
-              source: { kind: 'workspace-file', path: 'book.epub' },
-              entryPath: 'image/page-1.jpg',
+              file: { authority: 'workspace' as const, path: 'book.epub' },
+              selector: { kind: 'entry' as const, path: 'image/page-1.jpg' },
             },
           },
           {
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'images/reference.png',
+              file: { authority: 'workspace' as const, path: 'images/reference.png' },
             },
           },
         ],
@@ -281,26 +279,6 @@ describe('validateSchema', () => {
 });
 
 function createDocumentImageSchema(): ToolParameters {
-  const workspaceFile: ToolParameterProperty = {
-    type: 'object',
-    required: ['kind', 'path'],
-    properties: {
-      kind: { type: 'string', enum: ['workspace-file'] },
-      path: { type: 'string', minLength: 1 },
-    },
-    additionalProperties: false,
-  };
-  const documentEntryProperties: Record<string, ToolParameterProperty> = {
-    kind: { type: 'string', enum: ['document-entry'] },
-    source: workspaceFile,
-    entryPath: { type: 'string', minLength: 1 },
-  };
-  const completeDocumentEntry: ToolParameterProperty = {
-    type: 'object',
-    required: ['kind', 'source', 'entryPath'],
-    properties: documentEntryProperties,
-  };
-
   return {
     type: 'object',
     required: ['images'],
@@ -311,10 +289,7 @@ function createDocumentImageSchema(): ToolParameters {
           type: 'object',
           required: ['contentLocator'],
           properties: {
-            contentLocator: {
-              type: 'object',
-              anyOf: [completeDocumentEntry, workspaceFile],
-            },
+            contentLocator: CONTENT_LOCATOR_SCHEMA,
           },
         },
       },

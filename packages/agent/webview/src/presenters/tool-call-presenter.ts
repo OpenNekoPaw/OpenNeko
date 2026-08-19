@@ -1,16 +1,9 @@
 import type { ToolCall, ToolCallProgress } from '@neko/agent-contracts';
-import type {
-  ContentLocator,
-  ContentRepresentationLocator,
-  DocumentLocator,
-  DocumentSourceRef,
-} from '@neko/content';
+import type { ContentLocator, DocumentLocator, DocumentSourceRef } from '@neko/content';
 import type { CanvasWorkspaceDeliveryState } from '@neko/canvas-domain';
 import {
-  isContentRepresentationLocator,
   parseDocumentLocator,
   parseDocumentSourceRef,
-  serializeContentReferenceTarget,
   validateContentLocator,
 } from '@neko/content';
 import {
@@ -40,7 +33,6 @@ export interface DocumentImageThumbnailProjection {
   mimeType?: string;
   locator?: DocumentLocator;
   contentLocator?: ContentLocator;
-  representationLocator?: ContentRepresentationLocator;
   previewDescriptor?: PreviewMediaDescriptor;
   previewDiagnostic?: string;
   label: string;
@@ -511,15 +503,10 @@ function extractDocumentImageThumbnails(data: unknown): DocumentImageThumbnailPr
     const mimeType = readString(info, 'mimeType');
     if (info?.resourceRef !== undefined || info?.documentResourceRef !== undefined) continue;
     const contentLocator = parseStableContentLocator(info?.contentLocator);
-    const representationLocator = isContentRepresentationLocator(info?.representationLocator)
-      ? info.representationLocator
-      : undefined;
-    if (!contentLocator && !representationLocator) continue;
-    const locatorIdentity = describeContentLocatorForDisplay(
-      contentLocator ?? representationLocator!.source,
-    );
+    if (!contentLocator) continue;
+    const locatorIdentity = describeContentLocatorForDisplay(contentLocator);
     const path =
-      (contentLocator?.kind === 'document-entry' ? contentLocator.entryPath : undefined) ??
+      contentLocator.selector?.path ??
       readString(info, 'entryPath') ??
       (locator ? formatDocumentLocator(locator) : locatorIdentity.path);
     const documentFilePath = locatorIdentity.filePath || filePath;
@@ -538,7 +525,6 @@ function extractDocumentImageThumbnails(data: unknown): DocumentImageThumbnailPr
       ...(mimeType ? { mimeType } : {}),
       ...(locator ? { locator } : {}),
       ...(contentLocator ? { contentLocator } : {}),
-      ...(representationLocator ? { representationLocator } : {}),
       ...(previewDescriptor ? { previewDescriptor } : {}),
       ...(src ? { src } : {}),
       ...(previewDiagnostic ? { previewDiagnostic } : {}),
@@ -554,7 +540,6 @@ function extractDocumentImageThumbnails(data: unknown): DocumentImageThumbnailPr
         mimeType,
         locator,
         contentLocator,
-        representationLocator,
       }),
     });
   }
@@ -596,11 +581,6 @@ function extractReadImageThumbnails(
       const contentLocator =
         parseStableContentLocator(image.contentLocator) ??
         parseStableContentLocator(documentImage?.contentLocator);
-      const representationLocator = isContentRepresentationLocator(image.representationLocator)
-        ? image.representationLocator
-        : isContentRepresentationLocator(documentImage?.representationLocator)
-          ? documentImage.representationLocator
-          : undefined;
       const attachment = asRecord(attachments?.[index]);
       const attachmentAssetRef = asRecord(attachment?.assetRef);
       const perceptionCard = asRecord(perceptionCards?.[index]);
@@ -628,16 +608,15 @@ function extractReadImageThumbnails(
         readString(perceptionThumbnailRef, 'previewDiagnostic') ??
         readResourceProjectionDiagnostic(image) ??
         readResourceProjectionDiagnostic(documentImage);
-      const locatorIdentity =
-        contentLocator || representationLocator
-          ? describeContentLocatorForDisplay(contentLocator ?? representationLocator!.source)
-          : undefined;
+      const locatorIdentity = contentLocator
+        ? describeContentLocatorForDisplay(contentLocator)
+        : undefined;
       const displayPath =
-        (contentLocator?.kind === 'document-entry' ? contentLocator.entryPath : undefined) ??
+        contentLocator?.selector?.path ??
         readString(image, 'entryPath') ??
         path ??
         locatorIdentity?.path;
-      if (!displayPath || (!src && !contentLocator && !representationLocator)) return [];
+      if (!displayPath || (!src && !contentLocator)) return [];
 
       const thumbnailFilePath = filePath ?? locatorIdentity?.filePath ?? displayPath;
       const label = readString(image, 'label') ?? formatDocumentThumbnailLabel(locator, index);
@@ -656,7 +635,6 @@ function extractReadImageThumbnails(
           ...(mimeType ? { mimeType } : {}),
           ...(locator ? { locator } : {}),
           ...(contentLocator ? { contentLocator } : {}),
-          ...(representationLocator ? { representationLocator } : {}),
           ...(previewDescriptor ? { previewDescriptor } : {}),
           ...(previewDiagnostic ? { previewDiagnostic } : {}),
           label,
@@ -672,7 +650,6 @@ function extractReadImageThumbnails(
             mimeType,
             locator,
             contentLocator,
-            representationLocator,
             displayPath,
           }),
         },
@@ -739,7 +716,6 @@ function formatDocumentImageReferenceJson(input: {
   readonly mimeType?: string;
   readonly locator?: DocumentLocator;
   readonly contentLocator?: ContentLocator;
-  readonly representationLocator?: ContentRepresentationLocator;
   readonly displayPath?: string;
 }): string {
   return JSON.stringify(
@@ -750,9 +726,6 @@ function formatDocumentImageReferenceJson(input: {
         ...(input.source ? { source: input.source } : {}),
         ...(input.locator ? { locator: input.locator } : {}),
         ...(input.contentLocator ? { contentLocator: input.contentLocator } : {}),
-        ...(input.representationLocator
-          ? { representationLocator: input.representationLocator }
-          : {}),
       },
       image: {
         index: input.index,
@@ -761,9 +734,6 @@ function formatDocumentImageReferenceJson(input: {
         ...(input.byteSize !== undefined ? { byteSize: input.byteSize } : {}),
         ...(input.mimeType ? { mimeType: input.mimeType } : {}),
         ...(input.contentLocator ? { contentLocator: input.contentLocator } : {}),
-        ...(input.representationLocator
-          ? { representationLocator: input.representationLocator }
-          : {}),
       },
       ...(input.displayPath
         ? {
@@ -798,19 +768,11 @@ function describeContentLocatorForDisplay(locator: ContentLocator): {
   readonly filePath: string;
   readonly path: string;
 } {
-  switch (locator.kind) {
-    case 'document-entry':
-      return { filePath: serializeContentReferenceTarget(locator.source), path: locator.entryPath };
-    case 'workspace-file':
-      return { filePath: locator.path, path: locator.path };
-    case 'generated-output':
-      return { filePath: locator.path, path: locator.path };
-    case 'package-resource':
-      return {
-        filePath: locator.manifestPath ?? `${locator.packageId}@${locator.revision}`,
-        path: locator.resourcePath,
-      };
-  }
+  const filePath =
+    locator.file.authority === 'workspace'
+      ? locator.file.path
+      : `${locator.file.packageId}@${locator.file.revision}`;
+  return { filePath, path: locator.selector?.path ?? locator.file.path };
 }
 
 function extractToolFilePath(data: unknown): string | null {
@@ -909,14 +871,7 @@ function formatReadDocumentCopyText(data: unknown): string | null {
       ...thumbnails.map((thumbnail) => {
         const dimensions = formatDimensions(thumbnail.width, thumbnail.height);
         const byteSize = formatByteSize(thumbnail.byteSize);
-        return [
-          thumbnail.label,
-          dimensions,
-          byteSize,
-          thumbnail.contentLocator?.kind === 'document-entry'
-            ? thumbnail.contentLocator.entryPath
-            : undefined,
-        ]
+        return [thumbnail.label, dimensions, byteSize, thumbnail.contentLocator?.selector?.path]
           .filter(Boolean)
           .join(' · ');
       }),

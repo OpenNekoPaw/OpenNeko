@@ -66,12 +66,12 @@ async function loadProviderImageSource(
   ref: PerceptualAssetRef,
 ): Promise<ProviderImageBatchSource> {
   let loaded: AgentProviderAssetResult;
-  if (ref.representationLocator) {
+  if (ref.representationHandle) {
     if (!contentAccessRuntime.loadRepresentationAsset) {
       throw new Error('Pi Tool result representation access is unavailable.');
     }
     loaded = await contentAccessRuntime.loadRepresentationAsset({
-      locator: ref.representationLocator,
+      handle: ref.representationHandle,
       maxBytes: AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
     });
   } else if (ref.contentLocator) {
@@ -80,7 +80,9 @@ async function loadProviderImageSource(
       maxBytes: AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
     });
   } else {
-    throw new Error('Pi image Tool result requires an exact content or representation locator.');
+    throw new Error(
+      'Pi image Tool result requires an exact content locator or representation handle.',
+    );
   }
   if (loaded.status !== 'ready' || !loaded.bytes) {
     const diagnostic =

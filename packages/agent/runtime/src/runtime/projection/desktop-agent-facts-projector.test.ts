@@ -72,7 +72,7 @@ describe('Desktop Agent authoritative facts projector', () => {
       toolCallId: 'read-image-1',
       projectionKind: 'tool-result',
       status: 'authorized',
-      locatorKind: 'workspace-file',
+      sourceKind: 'workspace-file',
       transport: 'openneko-resource',
       renderTarget: 'agent-webview',
       diagnosticCodes: [],

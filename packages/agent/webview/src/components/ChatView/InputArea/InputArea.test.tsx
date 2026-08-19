@@ -1662,7 +1662,7 @@ describe('InputArea composer controls', () => {
       label: 'hero.md',
       summary: 'notes/hero.md',
       data: {
-        contentLocator: { kind: 'workspace-file', path: 'notes/hero.md' },
+        contentLocator: { file: { authority: 'workspace', path: 'notes/hero.md' } },
         catalogEntryId: 'mention:workspace-reference:hero',
         referenceId: 'workspace-reference:hero',
         ownerKind: 'workspace',
@@ -1678,7 +1678,7 @@ describe('InputArea composer controls', () => {
             id: 'file:hero',
             kind: 'file',
             label: 'hero.md',
-            contentLocator: { kind: 'workspace-file', path: 'notes/hero.md' },
+            contentLocator: { file: { authority: 'workspace', path: 'notes/hero.md' } },
             contextPayload,
           },
         ]}
@@ -2013,10 +2013,7 @@ describe('InputArea composer controls', () => {
         fileReferences: [
           expect.objectContaining({
             label: '【CG】游戏角色.zip',
-            contentLocator: {
-              kind: 'workspace-file',
-              path: 'assets/【CG】游戏角色.zip',
-            },
+            contentLocator: { file: { authority: 'workspace', path: 'assets/【CG】游戏角色.zip' } },
           }),
         ],
       }),
@@ -2033,8 +2030,7 @@ describe('InputArea composer controls', () => {
             kind: 'media',
             label: 'Hero portrait',
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Characters/hero.png',
+              file: { authority: 'workspace', path: 'neko/assets/Characters/hero.png' },
             },
             source: 'media-library',
             mediaType: 'image',
@@ -2065,8 +2061,7 @@ describe('InputArea composer controls', () => {
           expect.objectContaining({
             label: 'Hero portrait',
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Characters/hero.png',
+              file: { authority: 'workspace', path: 'neko/assets/Characters/hero.png' },
             },
             mediaType: 'image',
             source: 'media-library',
@@ -2089,8 +2084,7 @@ describe('InputArea composer controls', () => {
             kind: 'media',
             label: '灯神立绘',
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Characters/lamp-spirit.png',
+              file: { authority: 'workspace', path: 'neko/assets/Characters/lamp-spirit.png' },
             },
             source: 'media-library',
             mediaType: 'image',
@@ -2142,8 +2136,7 @@ describe('InputArea composer controls', () => {
           expect.objectContaining({
             label: '按键 黑脸.exp3.json',
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'assets/live2d/按键 黑脸.exp3.json',
+              file: { authority: 'workspace', path: 'assets/live2d/按键 黑脸.exp3.json' },
             },
           }),
         ],
@@ -2174,7 +2167,7 @@ describe('InputArea composer controls', () => {
         displayMessageText: '参考',
         fileReferences: [
           expect.objectContaining({
-            contentLocator: { kind: 'workspace-file', path: 'assets/ref file.zip' },
+            contentLocator: { file: { authority: 'workspace', path: 'assets/ref file.zip' } },
           }),
         ],
       }),
@@ -2527,7 +2520,7 @@ describe('InputArea composer controls', () => {
         fileReferences: [
           expect.objectContaining({
             id: 'file-ref:assets/ref.png',
-            contentLocator: { kind: 'workspace-file', path: 'assets/ref.png' },
+            contentLocator: { file: { authority: 'workspace', path: 'assets/ref.png' } },
           }),
         ],
       }),
@@ -2802,7 +2795,7 @@ function normalizeMentionItem(item: MentionItemFixture): MentionItem {
     ...(rest.contentLocator
       ? { contentLocator: rest.contentLocator }
       : filePath
-        ? { contentLocator: { kind: 'workspace-file', path: filePath } }
+        ? { contentLocator: { file: { authority: 'workspace', path: filePath } } }
         : {}),
   };
 }
@@ -2813,7 +2806,7 @@ function normalizeSelectedFileReference(
   const { path, ...rest } = reference;
   if (rest.contentLocator) return { ...rest, contentLocator: rest.contentLocator };
   if (!path) throw new Error(`Selected file reference '${reference.id}' requires a path.`);
-  return { ...rest, contentLocator: { kind: 'workspace-file', path } };
+  return { ...rest, contentLocator: { file: { authority: 'workspace', path } } };
 }
 
 function injectInputReferenceProps(

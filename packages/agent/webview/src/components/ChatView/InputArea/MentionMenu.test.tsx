@@ -34,7 +34,9 @@ function mention(overrides: Partial<MentionItem> & { readonly filePath?: string 
     kind: 'file',
     label: 'Item',
     ...itemOverrides,
-    ...(filePath ? { contentLocator: { kind: 'workspace-file' as const, path: filePath } } : {}),
+    ...(filePath
+      ? { contentLocator: { file: { authority: 'workspace' as const, path: filePath } } }
+      : {}),
   };
 }
 
@@ -144,8 +146,7 @@ describe('MentionMenu icon projection', () => {
             kind: 'media',
             label: 'Hero portrait',
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Characters/hero.png',
+              file: { authority: 'workspace', path: 'neko/assets/Characters/hero.png' },
             },
             mediaType: 'image',
             source: 'media-library',
@@ -240,10 +241,7 @@ describe('MentionMenu icon projection', () => {
       id: 'media',
       kind: 'media',
       label: 'Hero portrait',
-      contentLocator: {
-        kind: 'workspace-file',
-        path: 'neko/assets/Characters/hero.png',
-      },
+      contentLocator: { file: { authority: 'workspace', path: 'neko/assets/Characters/hero.png' } },
       mediaType: 'image',
       source: 'media-library',
       contextPayload: {

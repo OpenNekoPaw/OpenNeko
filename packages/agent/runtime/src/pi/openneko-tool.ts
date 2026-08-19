@@ -5,11 +5,7 @@ import {
   AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES,
 } from '@neko/agent-contracts';
 import { getMimeType } from '@neko/media';
-import {
-  serializeContentReferenceTarget,
-  validateContentLocator,
-  type ContentLocator,
-} from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content';
 import {
   TOOL_NAMES_MEDIA,
   TOOL_NAMES_PERCEPTION,
@@ -496,10 +492,9 @@ function projectToolResultImageRef(attachment: ToolResultAttachment): Perceptual
     );
   }
   const locator = validation.locator;
-  const assetId =
-    locator.kind === 'generated-output' ? locator.outputId : attachment.assetRef?.assetId;
+  const assetId = attachment.assetRef?.assetId;
   if (!assetId) {
-    throw new Error(`Pi ${locator.kind} image Tool result requires a semantic assetRef identity.`);
+    throw new Error('Pi image Tool result requires a semantic assetRef identity.');
   }
   const uri = contentLocatorPortablePath(locator);
   return {
@@ -515,15 +510,11 @@ function projectToolResultImageRef(attachment: ToolResultAttachment): Perceptual
 }
 
 function contentLocatorPortablePath(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return locator.path;
-    case 'document-entry':
-      return `${serializeContentReferenceTarget(locator.source)}#${locator.entryPath}`;
-    case 'package-resource':
-      return `${locator.packageId}/${locator.resourcePath}`;
-  }
+  const filePath =
+    locator.file.authority === 'workspace'
+      ? locator.file.path
+      : `${locator.file.packageId}/${locator.file.path}`;
+  return locator.selector ? `${filePath}#${locator.selector.path}` : filePath;
 }
 
 async function projectProviderImagePayloads(

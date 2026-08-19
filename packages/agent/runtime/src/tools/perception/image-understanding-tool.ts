@@ -12,10 +12,10 @@ import {
   type ToolResult,
 } from '@neko/agent-contracts';
 import {
-  isContentRepresentationLocator,
+  isContentRepresentationHandle,
   validateContentLocator,
   type ContentLocator,
-  type ContentRepresentationLocator,
+  type ContentRepresentationHandle,
 } from '@neko/content';
 
 import { normalizeProviderImage } from '../../provider/image-batch-transport';
@@ -166,7 +166,7 @@ export function createImageUnderstandingCapabilityProvider(
 
 interface ImageUnderstandingInputImage {
   readonly contentLocator?: ContentLocator;
-  readonly representationLocator?: ContentRepresentationLocator;
+  readonly representationHandle?: ContentRepresentationHandle;
   readonly label?: string;
 }
 
@@ -176,14 +176,14 @@ function readImages(value: unknown): ImageUnderstandingInputImage[] {
     if (!isRecord(entry)) return [];
     const contentLocatorResult = validateContentLocator(entry['contentLocator']);
     const contentLocator = contentLocatorResult.ok ? contentLocatorResult.locator : undefined;
-    const representationLocator = isContentRepresentationLocator(entry['representationLocator'])
-      ? entry['representationLocator']
+    const representationHandle = isContentRepresentationHandle(entry['representationHandle'])
+      ? entry['representationHandle']
       : undefined;
-    if (!contentLocator && !representationLocator) return [];
+    if (!contentLocator && !representationHandle) return [];
     return [
       {
         ...(contentLocator ? { contentLocator } : {}),
-        ...(representationLocator ? { representationLocator } : {}),
+        ...(representationHandle ? { representationHandle } : {}),
         ...(typeof entry['label'] === 'string' && entry['label'].trim().length > 0
           ? { label: entry['label'].trim() }
           : {}),

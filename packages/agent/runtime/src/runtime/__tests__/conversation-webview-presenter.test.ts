@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Message, ToolCall } from '@neko/agent-contracts';
+import type { ContentLocator } from '@neko/content';
 import {
   buildActiveConversationMessage,
   buildConversationListMessage,
@@ -30,10 +31,7 @@ describe('conversation-host-message', () => {
   });
 
   it('projects active conversation resources through a locator resolver', async () => {
-    const contentLocator = {
-      kind: 'workspace-file' as const,
-      path: 'images/out.png',
-    };
+    const contentLocator = { file: { authority: 'workspace' as const, path: 'images/out.png' } };
     const toolCall: ToolCall = {
       id: 'tool-1',
       name: 'GenerateImage',
@@ -100,10 +98,7 @@ describe('conversation-host-message', () => {
   });
 });
 
-function previewDescriptor(contentLocator: {
-  readonly kind: 'workspace-file';
-  readonly path: string;
-}) {
+function previewDescriptor(contentLocator: ContentLocator) {
   return {
     descriptorId: 'agent-display:attachment-1:image-1',
     sourceFingerprint: 'sha256:image-1',

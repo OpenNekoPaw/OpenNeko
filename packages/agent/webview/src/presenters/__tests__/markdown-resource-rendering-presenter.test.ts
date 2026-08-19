@@ -73,7 +73,9 @@ describe('markdown resource rendering presenter', () => {
         resources: [
           expect.objectContaining({
             token: 'P1',
-            contentLocator: expect.objectContaining({ entryPath: 'OPS/page-1.jpg' }),
+            contentLocator: expect.objectContaining({
+              selector: expect.objectContaining({ path: 'OPS/page-1.jpg' }),
+            }),
           }),
         ],
       }),
@@ -132,7 +134,9 @@ describe('markdown resource rendering presenter', () => {
         resources: [
           expect.objectContaining({
             token: 'read-image-cover.jpg',
-            contentLocator: expect.objectContaining({ path: 'image/cover.jpg' }),
+            contentLocator: expect.objectContaining({
+              file: expect.objectContaining({ path: 'image/cover.jpg' }),
+            }),
           }),
         ],
       }),
@@ -164,7 +168,9 @@ describe('markdown resource rendering presenter', () => {
         resources: [
           expect.objectContaining({
             token: 'read-image-moe-010564.jpg',
-            contentLocator: expect.objectContaining({ path: 'image/moe-010564.jpg' }),
+            contentLocator: expect.objectContaining({
+              file: expect.objectContaining({ path: 'image/moe-010564.jpg' }),
+            }),
           }),
         ],
       }),
@@ -196,7 +202,9 @@ describe('markdown resource rendering presenter', () => {
         resources: [
           expect.objectContaining({
             token: 'read-image-p01-cover',
-            contentLocator: expect.objectContaining({ path: 'images/p01-cover.jpg' }),
+            contentLocator: expect.objectContaining({
+              file: expect.objectContaining({ path: 'images/p01-cover.jpg' }),
+            }),
           }),
         ],
       }),
@@ -224,7 +232,9 @@ describe('markdown resource rendering presenter', () => {
         resources: [
           expect.objectContaining({
             token: 'P1',
-            contentLocator: expect.objectContaining({ entryPath: 'image/moe-010564.jpg' }),
+            contentLocator: expect.objectContaining({
+              selector: expect.objectContaining({ path: 'image/moe-010564.jpg' }),
+            }),
           }),
         ],
       }),
@@ -252,7 +262,9 @@ describe('markdown resource rendering presenter', () => {
         resources: [
           expect.objectContaining({
             token: 'P00',
-            contentLocator: expect.objectContaining({ entryPath: 'image/cover.jpg' }),
+            contentLocator: expect.objectContaining({
+              selector: expect.objectContaining({ path: 'image/cover.jpg' }),
+            }),
           }),
         ],
       }),
@@ -263,7 +275,9 @@ describe('markdown resource rendering presenter', () => {
         resources: [
           expect.objectContaining({
             token: 'P01',
-            contentLocator: expect.objectContaining({ entryPath: 'image/moe-010564.jpg' }),
+            contentLocator: expect.objectContaining({
+              selector: expect.objectContaining({ path: 'image/moe-010564.jpg' }),
+            }),
           }),
         ],
       }),
@@ -274,7 +288,9 @@ describe('markdown resource rendering presenter', () => {
         resources: [
           expect.objectContaining({
             token: 'P02',
-            contentLocator: expect.objectContaining({ entryPath: 'image/moe-003015.jpg' }),
+            contentLocator: expect.objectContaining({
+              selector: expect.objectContaining({ path: 'image/moe-003015.jpg' }),
+            }),
           }),
         ],
       }),
@@ -419,7 +435,9 @@ describe('markdown resource rendering presenter', () => {
         resources: [
           expect.objectContaining({
             token: 'P1',
-            contentLocator: expect.objectContaining({ entryPath: 'OPS/page-1.jpg' }),
+            contentLocator: expect.objectContaining({
+              selector: expect.objectContaining({ path: 'OPS/page-1.jpg' }),
+            }),
           }),
         ],
       }),
@@ -462,7 +480,9 @@ describe('markdown resource rendering presenter', () => {
     expect(resource).toEqual(
       expect.objectContaining({
         token: 'P1',
-        contentLocator: expect.objectContaining({ entryPath: 'OPS/page-1.jpg' }),
+        contentLocator: expect.objectContaining({
+          selector: expect.objectContaining({ path: 'OPS/page-1.jpg' }),
+        }),
       }),
     );
     expect(resource).not.toHaveProperty('sourcePath');
@@ -740,10 +760,7 @@ function createReadImageToolCall(
             ...(overrides.alias ? { alias: overrides.alias } : {}),
             ...(overrides.entryPath ? { entryPath: overrides.entryPath } : {}),
             mimeType: 'image/jpeg',
-            contentLocator: {
-              kind: 'workspace-file',
-              path: entryPath,
-            },
+            contentLocator: { file: { authority: 'workspace', path: entryPath } },
           },
         ],
       },
@@ -777,12 +794,8 @@ function createReadImageDocumentResourceToolCall(
 ): ToolCall {
   const entryPath = overrides.entryPath ?? 'image/moe-010564.jpg';
   const contentLocator = {
-    kind: 'document-entry' as const,
-    source: {
-      kind: 'workspace-file' as const,
-      path: 'books/story.epub',
-    },
-    entryPath,
+    file: { authority: 'workspace' as const, path: 'books/story.epub' },
+    selector: { kind: 'entry' as const, path: entryPath },
   };
   return {
     id: 'read-image-document',
@@ -859,8 +872,10 @@ function createReadImageDocumentResourceBatchToolCall(): ToolCall {
     },
   ];
   const source = {
-    kind: 'workspace-file' as const,
-    path: 'epub/animation/Blame/volume-01.epub',
+    file: {
+      authority: 'workspace' as const,
+      path: 'epub/animation/Blame/volume-01.epub',
+    },
   };
   return {
     id: 'read-image-document-batch',
@@ -875,9 +890,8 @@ function createReadImageDocumentResourceBatchToolCall(): ToolCall {
           entryPath: entry.entryPath,
           mimeType: 'image/jpeg',
           contentLocator: {
-            kind: 'document-entry',
-            source,
-            entryPath: entry.entryPath,
+            file: source.file,
+            selector: { kind: 'entry', path: entry.entryPath },
           },
         })),
       },
@@ -891,9 +905,8 @@ function createReadImageDocumentResourceBatchToolCall(): ToolCall {
           mimeType: 'image/jpeg',
           label: entry.label,
           contentLocator: {
-            kind: 'document-entry',
-            source,
-            entryPath: entry.entryPath,
+            file: source.file,
+            selector: { kind: 'entry', path: entry.entryPath },
           },
         },
       })),
@@ -920,9 +933,8 @@ function createReadImageManagedDocumentResourceToolCall(
             label: 'Moe page',
             mimeType: 'image/jpeg',
             contentLocator: {
-              kind: 'document-entry',
-              source: { kind: 'workspace-file', path: 'books/story.epub' },
-              entryPath,
+              file: { authority: 'workspace', path: 'books/story.epub' },
+              selector: { kind: 'entry', path: entryPath },
             },
           },
         ],
@@ -962,12 +974,11 @@ function createReadDocumentToolCall(
       width: 1494,
       height: 2133,
       contentLocator: {
-        kind: 'document-entry',
-        source: {
-          kind: 'workspace-file',
+        file: {
+          authority: 'workspace',
           path: (overrides.sourcePath ?? 'books/story.epub').replace(/^\/+/u, ''),
         },
-        entryPath,
+        selector: { kind: 'entry', path: entryPath },
       },
     },
   ];
@@ -995,12 +1006,8 @@ function createReadDocumentToolCall(
 
 function createPerceptionOnlyToolCall(): ToolCall {
   const contentLocator = {
-    kind: 'document-entry' as const,
-    source: {
-      kind: 'workspace-file' as const,
-      path: 'books/story.epub',
-    },
-    entryPath: 'OPS/page-1.jpg',
+    file: { authority: 'workspace' as const, path: 'books/story.epub' },
+    selector: { kind: 'entry' as const, path: 'OPS/page-1.jpg' },
   };
   return {
     id: 'read-image-perception-only',
@@ -1055,12 +1062,8 @@ function createPerceptionOnlyToolCall(): ToolCall {
 
 function createReadImageDocumentResourceFieldToolCall(): ToolCall {
   const contentLocator = {
-    kind: 'document-entry' as const,
-    source: {
-      kind: 'workspace-file' as const,
-      path: 'books/story.epub',
-    },
-    entryPath: 'OPS/page-1.jpg',
+    file: { authority: 'workspace' as const, path: 'books/story.epub' },
+    selector: { kind: 'entry' as const, path: 'OPS/page-1.jpg' },
   };
   return {
     id: 'read-image-document-ref-field',

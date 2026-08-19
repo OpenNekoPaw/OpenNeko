@@ -11,12 +11,13 @@ import {
   type ToolResult,
 } from '@neko/agent-contracts';
 import {
-  isContentRepresentationLocator,
+  isContentRepresentationHandle,
   isDocumentFormat,
+  isWorkspaceFileContentLocator,
   parseDocumentLocator,
   validateContentLocator,
   type ContentLocator,
-  type ContentRepresentationLocator,
+  type ContentRepresentationHandle,
   type DocumentBatchCursor,
   type DocumentLocator,
 } from '@neko/content';
@@ -174,7 +175,7 @@ interface BoundImage {
   readonly height?: number;
   readonly mimeType?: string;
   readonly contentLocator?: ContentLocator;
-  readonly representationLocator?: ContentRepresentationLocator;
+  readonly representationHandle?: ContentRepresentationHandle;
 }
 
 interface ConversationBindings {
@@ -557,7 +558,17 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
     return {
       analysis: typeof data['analysis'] === 'string' ? data['analysis'] : 'describe',
       images: images.slice(0, MAX_MODEL_IMAGE_REFS).flatMap((value, index) => {
-        const image = readDocumentImageInfo(value);
+        const record = asRecord(value);
+        const assetRef = result.attachments?.[index]?.assetRef;
+        const image = readDocumentImageInfo({
+          ...record,
+          ...(record?.['contentLocator'] === undefined && assetRef?.contentLocator
+            ? { contentLocator: assetRef.contentLocator }
+            : {}),
+          ...(assetRef?.representationHandle
+            ? { representationHandle: assetRef.representationHandle }
+            : {}),
+        });
         if (!image) return [];
         const ref = imageRef(image);
         this.bind(conversationId, ref, { kind: 'image', image });
@@ -589,11 +600,7 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
         typeof source['projectRelativePath'] === 'string'
           ? source['projectRelativePath']
           : undefined;
-      const locator =
-        optionalContentLocator(source['contentLocator']) ??
-        (workspacePath === undefined
-          ? undefined
-          : optionalContentLocator({ kind: 'workspace-file', path: workspacePath }));
+      const locator = optionalContentLocator(source['contentLocator']);
       const reference =
         locator === undefined
           ? undefined
@@ -664,8 +671,9 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
       const locator = optionalContentLocator(entry['contentLocator']);
       if (entry['type'] === 'directory') {
         if (
-          locator?.kind !== 'workspace-file' ||
-          locator.path !== workspaceDirectoryEntryPath(directoryPath, entry['name'])
+          locator?.file.authority !== 'workspace' ||
+          locator.selector !== undefined ||
+          locator.file.path !== workspaceDirectoryEntryPath(directoryPath, entry['name'])
         ) {
           invalidEntryCount += 1;
           return [{ ...base, availability: 'invalid-entry' }];
@@ -673,29 +681,30 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
         return [
           {
             ...base,
-            directory_path: locator.path,
+            directory_path: locator.file.path,
           },
         ];
       }
       if (entry['type'] !== 'file') return [base];
       if (
-        locator?.kind !== 'workspace-file' ||
-        locator.path !== workspaceDirectoryEntryPath(directoryPath, entry['name'])
+        locator?.file.authority !== 'workspace' ||
+        locator.selector !== undefined ||
+        locator.file.path !== workspaceDirectoryEntryPath(directoryPath, entry['name'])
       ) {
         invalidEntryCount += 1;
         return [{ ...base, availability: 'invalid-entry' }];
       }
 
-      const classification = classifyAgentContentPath(locator.path);
+      const classification = classifyAgentContentPath(locator.file.path);
       if (classification.kind === 'text') {
-        return [{ ...base, media_type: 'text', workspace_path: locator.path }];
+        return [{ ...base, media_type: 'text', workspace_path: locator.file.path }];
       }
       if (classification.kind === 'unknown') {
         return [
           {
             ...base,
             media_type: 'unknown',
-            workspace_path: locator.path,
+            workspace_path: locator.file.path,
             text_validation_required: true,
           },
         ];
@@ -786,12 +795,12 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
       const contentLocator = optionalContentLocator(
         attachment.contentLocator ?? attachment.assetRef?.contentLocator,
       );
-      const representationLocator = isContentRepresentationLocator(
-        attachment.assetRef?.representationLocator,
+      const representationHandle = isContentRepresentationHandle(
+        attachment.assetRef?.representationHandle,
       )
-        ? attachment.assetRef.representationLocator
+        ? attachment.assetRef.representationHandle
         : undefined;
-      if (!contentLocator && !representationLocator) continue;
+      if (!contentLocator && !representationHandle) continue;
       const reference =
         attachment.type === 'image'
           ? this.issueImageReference(conversationId, {
@@ -800,7 +809,7 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
                 ? { mimeType: attachment.mimeType ?? attachment.assetRef?.mimeType }
                 : {}),
               ...(contentLocator ? { contentLocator } : {}),
-              ...(representationLocator ? { representationLocator } : {}),
+              ...(representationHandle ? { representationHandle } : {}),
             })
           : contentLocator
             ? this.issueInputReference(conversationId, contentLocator, {
@@ -870,9 +879,9 @@ export class PiContentToolModelProtocol implements PiToolModelProtocol {
           continue;
         }
       }
-      if (key === 'representationLocator' && isContentRepresentationLocator(entry)) {
+      if (key === 'representationHandle' && isContentRepresentationHandle(entry)) {
         const reference = this.issueImageReference(conversationId, {
-          representationLocator: entry,
+          representationHandle: entry,
           ...(typeof record['mimeType'] === 'string' ? { mimeType: record['mimeType'] } : {}),
           ...(typeof record['label'] === 'string' ? { alias: record['label'] } : {}),
         });
@@ -1034,10 +1043,10 @@ function readDocumentImageInfo(value: unknown): BoundImage | undefined {
   const image = asRecord(value);
   if (!image) return undefined;
   const contentLocator = optionalContentLocator(image['contentLocator']);
-  const representationLocator = isContentRepresentationLocator(image['representationLocator'])
-    ? image['representationLocator']
+  const representationHandle = isContentRepresentationHandle(image['representationHandle'])
+    ? image['representationHandle']
     : undefined;
-  if (!contentLocator && !representationLocator) return undefined;
+  if (!contentLocator && !representationHandle) return undefined;
   return {
     ...(typeof image['alias'] === 'string' ? { alias: image['alias'] } : {}),
     ...(typeof image['entryPath'] === 'string' ? { entryPath: image['entryPath'] } : {}),
@@ -1045,7 +1054,7 @@ function readDocumentImageInfo(value: unknown): BoundImage | undefined {
     ...(typeof image['height'] === 'number' ? { height: image['height'] } : {}),
     ...(typeof image['mimeType'] === 'string' ? { mimeType: image['mimeType'] } : {}),
     ...(contentLocator ? { contentLocator } : {}),
-    ...(representationLocator ? { representationLocator } : {}),
+    ...(representationHandle ? { representationHandle } : {}),
   };
 }
 
@@ -1057,7 +1066,7 @@ function readCursor(value: unknown): DocumentBatchCursor | undefined {
     !cursor ||
     !source ||
     !sourceContent ||
-    sourceContent.kind !== 'workspace-file' ||
+    !isWorkspaceFileContentLocator(sourceContent) ||
     cursor['strategy'] !== 'manifest-order' ||
     typeof cursor['batchIndex'] !== 'number' ||
     typeof cursor['done'] !== 'boolean' ||
@@ -1104,7 +1113,7 @@ function cursorRef(source: ContentLocator, cursor: DocumentBatchCursor): string 
 function imageRef(image: BoundImage): string {
   return createRef('image', {
     contentLocator: image.contentLocator,
-    representationLocator: image.representationLocator,
+    representationHandle: image.representationHandle,
   });
 }
 
@@ -1126,15 +1135,7 @@ function readModelLabel(record: Record<string, unknown>, locator: ContentLocator
 }
 
 function contentLocatorLabel(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return portableBaseName(locator.path);
-    case 'document-entry':
-      return portableBaseName(locator.entryPath);
-    case 'package-resource':
-      return portableBaseName(locator.resourcePath);
-  }
+  return portableBaseName(locator.selector?.path ?? locator.file.path);
 }
 
 function portableBaseName(value: string): string {
@@ -1146,15 +1147,7 @@ function normalizeModelLabel(value: string): string {
 }
 
 function contentLocatorPortablePath(locator: ContentLocator): string {
-  switch (locator.kind) {
-    case 'workspace-file':
-    case 'generated-output':
-      return locator.path;
-    case 'document-entry':
-      return locator.entryPath;
-    case 'package-resource':
-      return locator.resourcePath;
-  }
+  return locator.selector?.path ?? locator.file.path;
 }
 
 function sameBindingTarget(left: Binding, right: Binding): boolean {
@@ -1179,11 +1172,11 @@ function sameBindingTarget(left: Binding, right: Binding): boolean {
         right.kind === 'image' &&
         stableJson({
           contentLocator: left.image.contentLocator,
-          representationLocator: left.image.representationLocator,
+          representationHandle: left.image.representationHandle,
         }) ===
           stableJson({
             contentLocator: right.image.contentLocator,
-            representationLocator: right.image.representationLocator,
+            representationHandle: right.image.representationHandle,
           })
       );
     case 'directory-cursor':

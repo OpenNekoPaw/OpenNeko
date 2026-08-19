@@ -159,8 +159,8 @@ function formatLocatorReference(thumbnail: DocumentImageThumbnailProjection): st
 
 function formatThumbnailLocation(thumbnail: DocumentImageThumbnailProjection): string {
   if (thumbnail.locator) return formatLocator(thumbnail.locator);
-  if (thumbnail.contentLocator?.kind === 'document-entry') {
-    return `entry:${thumbnail.contentLocator.entryPath}`;
+  if (thumbnail.contentLocator?.selector) {
+    return `entry:${thumbnail.contentLocator.selector.path}`;
   }
   return thumbnail.label;
 }

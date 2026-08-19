@@ -102,7 +102,7 @@ export class WriteTool extends BuiltinTool {
     let result: AuthorizedWorkspaceWriteResult;
     try {
       result = await this.workspaceWriter.write(
-        { kind: 'workspace-file', path: workspacePath },
+        { file: { authority: 'workspace', path: workspacePath } },
         bytes,
         {
           conflict: expectedFingerprint ? 'replace' : 'fail-if-exists',

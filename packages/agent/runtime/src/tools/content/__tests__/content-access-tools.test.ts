@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ContentRepresentationLocator } from '@neko/content';
+import type { ContentRepresentationHandle } from '@neko/content';
 import {
   createReadDocumentTool,
   type ReadDocumentContentAccessRuntime,
@@ -10,35 +10,20 @@ import {
   type ReadImageContentAccessRuntime,
 } from '../read-image-tool';
 
-const workspaceSource = {
-  kind: 'workspace-file' as const,
-  path: 'books/book.epub',
-  fingerprint: { strategy: 'sha256' as const, value: 'sha256:book-content' },
-};
+const workspaceSource = { file: { authority: 'workspace' as const, path: 'books/book.epub' } };
 
 const documentEntryLocator = {
-  kind: 'document-entry' as const,
-  source: workspaceSource,
-  entryPath: 'images/page-1.jpg',
+  file: workspaceSource.file,
+  selector: { kind: 'entry' as const, path: 'images/page-1.jpg' },
 };
 
-const representationLocator: ContentRepresentationLocator = {
-  kind: 'content-representation',
+const representationHandle: ContentRepresentationHandle = {
+  kind: 'content-representation-handle',
   id: 'document-raster-page-1',
-  representationKind: 'raster-page',
-  source: {
-    kind: 'workspace-file',
-    path: 'docs/story.pdf',
-    fingerprint: { strategy: 'mtime-size', value: '1:100' },
-  },
-  spec: { kind: 'raster-page', page: 1, format: 'png' },
-  generatorId: 'neko-content.document-raster',
-  sourceFingerprint: '1:100',
-  specFingerprint: 'raster-page-1-png',
 };
 
 describe('content access tools', () => {
-  it('publishes only ContentLocator and representation locator ReadImage identity branches', () => {
+  it('publishes only ContentLocator and representation handle ReadImage identity branches', () => {
     const tool = createReadImageTool({ contentAccessRuntime: createRuntime() });
     const images = tool.parameters.properties['images'] as {
       readonly items?: {
@@ -49,10 +34,10 @@ describe('content access tools', () => {
 
     expect(images.items?.anyOf?.map((branch) => branch.required)).toEqual([
       ['contentLocator'],
-      ['representationLocator'],
+      ['representationHandle'],
     ]);
     expect(images.items?.properties).toHaveProperty('contentLocator');
-    expect(images.items?.properties).toHaveProperty('representationLocator');
+    expect(images.items?.properties).toHaveProperty('representationHandle');
     expect(images.items?.properties).not.toHaveProperty('resourceRef');
     expect(JSON.stringify(tool.parameters)).not.toMatch(/documentResourceRef/u);
   });
@@ -194,14 +179,12 @@ describe('content access tools', () => {
     const runtime = createRuntime();
     runtime.loadContentAsset.mockResolvedValue(readyPng());
     const first = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/volume-1.epub' },
-      entryPath: 'images/cover.jpg',
+      file: { authority: 'workspace' as const, path: 'books/volume-1.epub' },
+      selector: { kind: 'entry' as const, path: 'images/cover.jpg' },
     };
     const second = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/volume-2.epub' },
-      entryPath: 'images/cover.jpg',
+      file: { authority: 'workspace' as const, path: 'books/volume-2.epub' },
+      selector: { kind: 'entry' as const, path: 'images/cover.jpg' },
     };
 
     const result = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
@@ -223,17 +206,17 @@ describe('content access tools', () => {
     runtime.loadRepresentationAsset.mockResolvedValueOnce(readyPng());
 
     const result = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
-      images: [{ label: 'page 1', representationLocator }],
+      images: [{ label: 'page 1', representationHandle }],
     });
 
     expect(result.success).toBe(true);
     expect(runtime.loadRepresentationAsset).toHaveBeenCalledWith({
-      locator: representationLocator,
+      handle: representationHandle,
       maxBytes: MAX_READ_IMAGE_BYTES,
     });
     expect(runtime.loadContentAsset).not.toHaveBeenCalled();
     expect(result.attachments?.[0]?.path).toMatch(/^data:image\/png;base64,/u);
-    expect(result.attachments?.[0]?.assetRef).toMatchObject({ representationLocator });
+    expect(result.attachments?.[0]?.assetRef).toMatchObject({ representationHandle });
     expect(result.attachments?.[0]?.assetRef).not.toHaveProperty('contentLocator');
   });
 
@@ -243,9 +226,11 @@ describe('content access tools', () => {
     const images = Array.from({ length: 12 }, (_, index) => ({
       label: `Page ${index + 1}`,
       contentLocator: {
-        kind: 'document-entry' as const,
-        source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
-        entryPath: `pages/${String(index + 1).padStart(3, '0')}.png`,
+        file: { authority: 'workspace' as const, path: 'books/comic.cbz' },
+        selector: {
+          kind: 'entry' as const,
+          path: `pages/${String(index + 1).padStart(3, '0')}.png`,
+        },
       },
     }));
 

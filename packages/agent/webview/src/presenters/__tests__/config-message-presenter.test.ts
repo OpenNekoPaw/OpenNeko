@@ -204,7 +204,7 @@ describe('config message presenter', () => {
         conversationId: 'conv-1',
         files: [
           {
-            locator: { kind: 'workspace-file', path: 'src/index.ts' },
+            locator: { file: { authority: 'workspace', path: 'src/index.ts' } },
             name: 'index.ts',
             type: 'file',
             icon: 'TS',
@@ -228,8 +228,7 @@ describe('config message presenter', () => {
             source: 'media-library',
             icon: '🎭',
             contentLocator: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Characters/hero.png',
+              file: { authority: 'workspace', path: 'neko/assets/Characters/hero.png' },
             },
             mediaType: 'image',
             entityType: 'character',
@@ -240,7 +239,7 @@ describe('config message presenter', () => {
     ).toEqual({
       projectFiles: [
         {
-          locator: { kind: 'workspace-file', path: 'src/index.ts' },
+          locator: { file: { authority: 'workspace', path: 'src/index.ts' } },
           name: 'index.ts',
           type: 'file',
           icon: 'TS',
@@ -249,11 +248,11 @@ describe('config message presenter', () => {
       ],
       mentionItems: [
         {
-          id: 'file:["workspace-file","src/index.ts",null,null]',
+          id: 'file:["workspace","src/index.ts",null,null]',
           kind: 'file',
           label: 'index.ts',
           description: 'src/index.ts',
-          contentLocator: { kind: 'workspace-file', path: 'src/index.ts' },
+          contentLocator: { file: { authority: 'workspace', path: 'src/index.ts' } },
           icon: 'TS',
           source: 'workspace',
         },
@@ -295,8 +294,7 @@ describe('config message presenter', () => {
               summary: 'Media: Hero portrait',
               source: 'media-library',
               contentLocator: {
-                kind: 'workspace-file',
-                path: 'neko/assets/Characters/hero.png',
+                file: { authority: 'workspace', path: 'neko/assets/Characters/hero.png' },
               },
               mediaType: 'image',
               entityType: 'character',
@@ -306,8 +304,7 @@ describe('config message presenter', () => {
           icon: '🎭',
           source: 'media-library',
           contentLocator: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Characters/hero.png',
+            file: { authority: 'workspace', path: 'neko/assets/Characters/hero.png' },
           },
           mediaType: 'image',
           entityType: 'character',
@@ -333,7 +330,7 @@ describe('config message presenter', () => {
       filter: 'hero',
       files: [
         {
-          locator: { kind: 'workspace-file', path: 'notes/hero.md' },
+          locator: { file: { authority: 'workspace', path: 'notes/hero.md' } },
           name: 'hero.md',
           type: 'file',
           source: 'workspace',
@@ -344,11 +341,11 @@ describe('config message presenter', () => {
 
     expect(projection.mentionItems[0]).toMatchObject({
       label: 'hero.md',
-      contentLocator: { kind: 'workspace-file', path: 'notes/hero.md' },
+      contentLocator: { file: { authority: 'workspace', path: 'notes/hero.md' } },
       contextPayload: {
         id: 'workspace-reference:hero',
         data: {
-          contentLocator: { kind: 'workspace-file', path: 'notes/hero.md' },
+          contentLocator: { file: { authority: 'workspace', path: 'notes/hero.md' } },
           ...referenceReceipt,
         },
       },

@@ -244,9 +244,8 @@ describe('tool-call-presenter', () => {
 
   it('projects ReadImage result images into thumbnail view models', () => {
     const contentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/a.epub' },
-      entryPath: 'image/Page_1.jpg',
+      file: { authority: 'workspace' as const, path: 'books/a.epub' },
+      selector: { kind: 'entry' as const, path: 'image/Page_1.jpg' },
     };
     const projection = projectToolCallDisplayState({
       id: 'tool-2',
@@ -362,9 +361,8 @@ describe('tool-call-presenter', () => {
 
   it('keeps ReadImage stable refs even when no webview URI is available', () => {
     const contentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/a.epub' },
-      entryPath: 'image/Page_1.jpg',
+      file: { authority: 'workspace' as const, path: 'books/a.epub' },
+      selector: { kind: 'entry' as const, path: 'image/Page_1.jpg' },
     };
     const projection = projectToolCallDisplayState({
       id: 'tool-3b',
@@ -409,9 +407,8 @@ describe('tool-call-presenter', () => {
 
   it('keeps locator-only ReadImage selections visible and aligns their attachment previews', () => {
     const contentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
-      entryPath: 'pages/001.png',
+      file: { authority: 'workspace' as const, path: 'books/comic.cbz' },
+      selector: { kind: 'entry' as const, path: 'pages/001.png' },
     };
     const projection = projectToolCallDisplayState({
       id: 'tool-locator-only',
@@ -461,9 +458,8 @@ describe('tool-call-presenter', () => {
 
   it('uses the authorized preview descriptor projected beside each ReadImage result', () => {
     const contentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
-      entryPath: 'pages/001.png',
+      file: { authority: 'workspace' as const, path: 'books/comic.cbz' },
+      selector: { kind: 'entry' as const, path: 'pages/001.png' },
     };
     const descriptor = {
       descriptorId: 'agent-display:read-image:page-1',
@@ -510,9 +506,8 @@ describe('tool-call-presenter', () => {
 
   it('keeps an ordered locator-only placeholder when preview projection fails', () => {
     const contentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
-      entryPath: 'pages/002.png',
+      file: { authority: 'workspace' as const, path: 'books/comic.cbz' },
+      selector: { kind: 'entry' as const, path: 'pages/002.png' },
     };
     const projection = projectToolCallDisplayState({
       id: 'tool-preview-failed',
@@ -550,9 +545,8 @@ describe('tool-call-presenter', () => {
 
   it('uses a Host-authorized perception-card preview when retained history has no attachments', () => {
     const contentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
-      entryPath: 'pages/003.png',
+      file: { authority: 'workspace' as const, path: 'books/comic.cbz' },
+      selector: { kind: 'entry' as const, path: 'pages/003.png' },
     };
     const thumbnailRef = {
       assetId: 'page-3',
@@ -676,9 +670,8 @@ describe('tool-call-presenter', () => {
 
   it('projects an authorized EPUB document-entry image into a visible thumbnail', () => {
     const contentLocator = {
-      kind: 'document-entry' as const,
-      source: { kind: 'workspace-file' as const, path: 'books/story.epub' },
-      entryPath: 'OPS/images/cover.png',
+      file: { authority: 'workspace' as const, path: 'books/story.epub' },
+      selector: { kind: 'entry' as const, path: 'OPS/images/cover.png' },
     };
     const projection = projectToolCallDisplayState({
       id: 'tool-epub',
@@ -690,11 +683,11 @@ describe('tool-call-presenter', () => {
           source: {
             filePath: 'books/story.epub',
             format: 'epub',
-            contentLocator: contentLocator.source,
+            contentLocator: { file: contentLocator.file },
           },
           imageInfo: [
             {
-              entryPath: contentLocator.entryPath,
+              entryPath: contentLocator.selector.path,
               contentLocator,
               mimeType: 'image/png',
               renderUri: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/content',
@@ -717,10 +710,7 @@ describe('tool-call-presenter', () => {
 
 function generatedOutputLocator(outputId: string) {
   return {
-    kind: 'generated-output' as const,
-    outputId,
-    digest: `sha256:${outputId}`,
-    path: `neko/generated/images/${outputId}.png`,
+    file: { authority: 'workspace' as const, path: `neko/generated/images/${outputId}.png` },
   };
 }
 

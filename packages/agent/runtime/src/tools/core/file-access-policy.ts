@@ -158,8 +158,7 @@ class WorkspaceFileAccessPolicy implements CoreFileAccessPolicy {
         ? {}
         : {
             contentLocator: {
-              kind: 'workspace-file' as const,
-              path: relativePath,
+              file: { authority: 'workspace' as const, path: relativePath },
             },
           }),
     };

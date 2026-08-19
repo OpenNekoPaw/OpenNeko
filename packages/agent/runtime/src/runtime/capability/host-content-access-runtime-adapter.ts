@@ -2,8 +2,9 @@ import { DocumentContentAccessRuntime, type IDocumentAccessService } from '@neko
 import {
   type ContentReadService,
   type ContentLocator,
-  type ContentRepresentationLocator,
+  type ContentRepresentationHandle,
   type ContentRepresentationService,
+  isWorkspaceFileContentLocator,
   type WorkspaceFileContentLocator,
 } from '@neko/content';
 import {
@@ -44,7 +45,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
   async resolveDocumentContent(
     input: AgentDocumentContentInput,
   ): Promise<AgentDocumentContentResult> {
-    if (input.source.kind !== 'workspace-file') {
+    if (!isWorkspaceFileContentLocator(input.source)) {
       return documentFailure(input, 'Document source must be a workspace-file locator.');
     }
     const source = input.source;
@@ -97,7 +98,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
   }
 
   async loadRepresentationAsset(input: {
-    readonly locator: ContentRepresentationLocator;
+    readonly handle: ContentRepresentationHandle;
     readonly maxBytes: number;
   }): Promise<AgentProviderAssetResult> {
     const service = this.services.contentRepresentation;
@@ -112,7 +113,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
         ],
       };
     }
-    const loaded = await service.readRepresentation(input.locator, { maxBytes: input.maxBytes });
+    const loaded = await service.readRepresentation(input.handle, { maxBytes: input.maxBytes });
     if (loaded.status !== 'ready') {
       return {
         status: 'failed',
@@ -209,7 +210,8 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
             ...(represented.metadata.byteLength !== undefined
               ? { byteSize: represented.metadata.byteLength }
               : {}),
-            representationLocator: represented.locator,
+            contentLocator: source,
+            representationHandle: represented.handle,
           };
         }),
       );

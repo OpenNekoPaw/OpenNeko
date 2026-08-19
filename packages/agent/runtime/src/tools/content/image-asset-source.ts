@@ -1,5 +1,5 @@
 import { probeImageMetadata, type ImageMetadata } from '@neko/content/document';
-import type { ContentLocator, ContentRepresentationLocator } from '@neko/content';
+import type { ContentLocator, ContentRepresentationHandle } from '@neko/content';
 
 export type AgentImageAssetStatus =
   'ready' | 'missing-source' | 'unsupported-source' | 'unauthorized' | 'failed';
@@ -25,14 +25,14 @@ export interface AgentImageAssetAccessRuntime {
     readonly signal?: AbortSignal;
   }): Promise<AgentImageAssetResult>;
   loadRepresentationAsset?(input: {
-    readonly locator: ContentRepresentationLocator;
+    readonly handle: ContentRepresentationHandle;
     readonly maxBytes: number;
   }): Promise<AgentImageAssetResult>;
 }
 
 export interface AgentImageAssetBinding {
   readonly contentLocator?: ContentLocator;
-  readonly representationLocator?: ContentRepresentationLocator;
+  readonly representationHandle?: ContentRepresentationHandle;
 }
 
 export interface LoadedAgentImageAsset {
@@ -53,14 +53,14 @@ export async function loadAgentImageAsset(input: {
     throw new Error(`${input.operationName} requires AgentContentAccessRuntime.`);
   }
 
-  const loaded = input.binding.representationLocator
-    ? await loadRepresentation(runtime, input.binding.representationLocator, input)
+  const loaded = input.binding.representationHandle
+    ? await loadRepresentation(runtime, input.binding.representationHandle, input)
     : input.binding.contentLocator
       ? await loadContent(runtime, input.binding.contentLocator, input)
       : undefined;
   if (!loaded) {
     throw new Error(
-      `${input.operationName} requires images[].contentLocator or images[].representationLocator.`,
+      `${input.operationName} requires an exact content locator or representation handle.`,
     );
   }
   if (loaded.status !== 'ready' || !loaded.bytes) {
@@ -82,13 +82,13 @@ export async function loadAgentImageAsset(input: {
 
 async function loadRepresentation(
   runtime: AgentImageAssetAccessRuntime,
-  locator: ContentRepresentationLocator,
+  handle: ContentRepresentationHandle,
   input: { readonly maxBytes: number; readonly operationName: string },
 ) {
   if (!runtime.loadRepresentationAsset) {
     throw new Error(`${input.operationName} representation access is unavailable.`);
   }
-  return runtime.loadRepresentationAsset({ locator, maxBytes: input.maxBytes });
+  return runtime.loadRepresentationAsset({ handle, maxBytes: input.maxBytes });
 }
 
 async function loadContent(

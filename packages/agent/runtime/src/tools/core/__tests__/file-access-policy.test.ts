@@ -16,7 +16,7 @@ describe('createWorkspaceFileAccessPolicy', () => {
       allowed: true,
       hostPath: '/workspace/project/src/story.md',
       workspacePath: 'src/story.md',
-      contentLocator: { kind: 'workspace-file', path: 'src/story.md' },
+      contentLocator: { file: { authority: 'workspace' as const, path: 'src/story.md' } },
     });
     expect(policy.authorize('.', 'list')).toEqual({
       allowed: true,
@@ -32,7 +32,7 @@ describe('createWorkspaceFileAccessPolicy', () => {
       allowed: true,
       hostPath: '/workspace/project/src/story.md',
       workspacePath: 'src/story.md',
-      contentLocator: { kind: 'workspace-file', path: 'src/story.md' },
+      contentLocator: { file: { authority: 'workspace' as const, path: 'src/story.md' } },
     });
     expect(policy.authorize('/workspace/project/.runtime/logs/events.jsonl', 'read')).toMatchObject(
       {
@@ -50,19 +50,19 @@ describe('createWorkspaceFileAccessPolicy', () => {
       allowed: true,
       hostPath: 'C:\\workspace\\project\\src\\story.md',
       workspacePath: 'src/story.md',
-      contentLocator: { kind: 'workspace-file', path: 'src/story.md' },
+      contentLocator: { file: { authority: 'workspace' as const, path: 'src/story.md' } },
     });
     expect(policy.authorize('C:\\workspace\\project\\src\\story.md', 'read')).toEqual({
       allowed: true,
       hostPath: 'C:\\workspace\\project\\src\\story.md',
       workspacePath: 'src/story.md',
-      contentLocator: { kind: 'workspace-file', path: 'src/story.md' },
+      contentLocator: { file: { authority: 'workspace' as const, path: 'src/story.md' } },
     });
     expect(policy.authorize('C:/workspace/project/src/story.md', 'read')).toEqual({
       allowed: true,
       hostPath: 'C:\\workspace\\project\\src\\story.md',
       workspacePath: 'src/story.md',
-      contentLocator: { kind: 'workspace-file', path: 'src/story.md' },
+      contentLocator: { file: { authority: 'workspace' as const, path: 'src/story.md' } },
     });
   });
 
@@ -144,11 +144,11 @@ describe('createWorkspaceFileAccessPolicy', () => {
     expect(policy.authorize('/workspace/project/boards/story.nkc', 'list')).toMatchObject({
       allowed: true,
       workspacePath: 'boards/story.nkc',
-      contentLocator: { kind: 'workspace-file', path: 'boards/story.nkc' },
+      contentLocator: { file: { authority: 'workspace' as const, path: 'boards/story.nkc' } },
     });
     expect(policy.authorize('notes/project.nkc.md', 'read')).toMatchObject({
       allowed: true,
-      contentLocator: { kind: 'workspace-file', path: 'notes/project.nkc.md' },
+      contentLocator: { file: { authority: 'workspace' as const, path: 'notes/project.nkc.md' } },
     });
   });
 

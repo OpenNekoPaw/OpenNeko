@@ -343,7 +343,7 @@ describe('ChatWorkspace pending send', () => {
                   id: 'reference-workspace',
                   label: 'reference.png',
                   mediaType: 'image',
-                  contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+                  contentLocator: { file: { authority: 'workspace', path: 'reference.png' } },
                 },
               ],
             },
@@ -576,7 +576,7 @@ describe('ChatWorkspace pending send', () => {
               {
                 id: 'reference-1',
                 label: 'reference.png',
-                contentLocator: { kind: 'workspace-file', path: 'reference.png' },
+                contentLocator: { file: { authority: 'workspace', path: 'reference.png' } },
                 mediaType: 'image',
               },
             ],
@@ -744,7 +744,7 @@ describe('ChatWorkspace pending send', () => {
       selectedFileReferences: [
         {
           id: 'file-a',
-          contentLocator: { kind: 'workspace-file', path: 'a.md' },
+          contentLocator: { file: { authority: 'workspace', path: 'a.md' } },
           label: 'a.md',
         },
       ],

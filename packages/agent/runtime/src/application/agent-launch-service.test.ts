@@ -766,7 +766,7 @@ describe('Agent launch application service', () => {
       filter,
       files: [
         {
-          locator: { kind: 'workspace-file' as const, path: 'notes/hero.md' },
+          locator: { file: { authority: 'workspace' as const, path: 'notes/hero.md' } },
           name: 'hero.md',
           type: 'file' as const,
           source: 'workspace' as const,
@@ -820,7 +820,7 @@ describe('Agent launch application service', () => {
       filter: 'hero',
       files: [
         expect.objectContaining({
-          locator: { kind: 'workspace-file', path: 'notes/hero.md' },
+          locator: { file: { authority: 'workspace' as const, path: 'notes/hero.md' } },
           name: 'hero.md',
           type: 'file',
           source: 'workspace',
@@ -1020,7 +1020,7 @@ describe('Agent launch application service', () => {
           filter,
           files: [
             {
-              locator: { kind: 'workspace-file', path: 'hero.md' },
+              locator: { file: { authority: 'workspace' as const, path: 'hero.md' } },
               name: 'hero.md',
               type: 'file',
             },

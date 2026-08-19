@@ -34,12 +34,7 @@ function descriptor(outputId: string): PreviewMediaDescriptor {
   return {
     descriptorId: `descriptor-${outputId}`,
     sourceFingerprint: `sha256-${outputId}`,
-    contentLocator: {
-      kind: 'generated-output',
-      outputId,
-      digest: `sha256:${outputId}`,
-      path: `neko/generated/${outputId}.png`,
-    },
+    contentLocator: { file: { authority: 'workspace', path: `neko/generated/${outputId}.png` } },
     url: `openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/${outputId}`,
     contentKind: 'image',
     mediaType: 'image/png',

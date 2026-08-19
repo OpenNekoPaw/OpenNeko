@@ -190,7 +190,7 @@ export class ReadTool extends BuiltinTool {
     if (!this.workspaceReader) {
       throw new Error('Workspace Read requires the canonical Content reader.');
     }
-    const locator = { kind: 'workspace-file' as const, path: workspacePath };
+    const locator = { file: { authority: 'workspace' as const, path: workspacePath } };
     const stat = await this.workspaceReader.stat(locator, { ...(signal ? { signal } : {}) });
     if (stat.status !== 'ready') throw new Error(stat.diagnostic.code);
     if (stat.byteLength > MAX_TEXT_FILE_BYTES) throw new TextReadBoundaryError('too-large');

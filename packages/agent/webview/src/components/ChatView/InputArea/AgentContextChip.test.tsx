@@ -67,5 +67,5 @@ describe('AgentContextChip', () => {
 });
 
 function contentLocator(id: string): ContentLocator {
-  return { kind: 'workspace-file', path: `references/${id}.png` };
+  return { file: { authority: 'workspace', path: `references/${id}.png` } };
 }
