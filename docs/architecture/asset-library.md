@@ -207,7 +207,7 @@ Search 只返回 canonical locator。绝对路径、变量路径、cache path �
 | 创建可独立移动的项目 | portable snapshot                 | 复制被引用字节到新项目并重写 staged 项目事实                       |
 | 整理已有文件         | copy to selected writable library | 复制真实字节，保留 source identity                                 |
 | 删除库内文件         | authorized delete                 | 明确修改 external target，需用户确认与 fingerprint precondition    |
-| 保留生成结果         | retain generated                  | generated-output owner 负责 revision/digest/lineage                |
+| 保留生成结果         | retain generated                  | Generation owner 负责 output identity/revision/digest/lineage      |
 | 导入可复用素材包     | Asset import/install              | Asset Library 负责 manifest、revision、digest、dependency 与 trust |
 | 关联创作身份         | bind/rebind                       | Creative Entity owner 只更新 binding fact                          |
 
@@ -216,8 +216,9 @@ link 存在不等于目标可写。复制与删除必须明确选择 library、�
 ## 与 Project Entity 的关系
 
 Project Entity 是 character、scene、object、location 和 style 在项目内唯一的可变语义身份
-authority。`EntityRepresentationBinding` 直接保存 workspace、media-library、document-entry、
-generated-output 或精确 package-resource reference；不得把 `neko/assets/...` 运行时投影写回 binding。
+authority。`EntityRepresentationBinding` 保存 canonical `ContentLocator`；文件内部内容使用 selector，
+Generation output identity/provenance 与 package owner identity 由各自领域记录旁置。项目媒体链接通过其
+授权后的 Workspace 文件地址引用；不得把物理 target、cache path 或 runtime projection 写回 binding。
 
 文件移动或 fingerprint 不匹配时，binding 变为 orphaned。Search 可以给出候选，但只有显式 rebind 可以修改 confirmed binding；不得通过旁路 catalog、fingerprint registry 或文件名猜测自动迁移。
 

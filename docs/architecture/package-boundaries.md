@@ -460,17 +460,17 @@ UserCharacterRelationship、AgentSession transcript 与外部存档必须保持�
 Canvas 只拥有节点布局、连接和 durable projection，不拥有素材字节、媒体库 membership、
 Generation recipe、viewer/editor 或 provider execution。素材进入 Canvas 固定为四条路径：
 
-1. 普通工作区文件保存 `WorkspaceFileContentLocator`；项目授权的外部媒体保存
-   `MediaLibraryContentLocator`，二者引用时都不复制字节；
+1. 普通工作区文件和项目授权媒体链接都保存 Workspace authority 的 canonical `ContentLocator`，
+   文件内部内容使用可选 selector，引用时不复制字节；
 2. 全局 Media Library 文件必须先由 Media Library owner 创建项目 binding 和匹配的 Workspace link，
    或由用户显式复制到项目可授权位置；
 3. 任意工作区外文件由 Host 原子复制到 `neko/imports/<kind>/`，再用新的项目 locator 创建节点；
-4. AI 素材先进入 Generation-owned draft/Job，只有 owner 成功提交的
-   `generated-output` locator 才投影为 Media/File 结果节点。
+4. AI 素材先进入 Generation-owned draft/Job；owner 成功提交字节后返回 canonical Workspace
+   `ContentLocator`，output identity、digest、Job 与 lineage 仍由 Generation 记录拥有。
 
-素材来源只能由 validated locator 推导：`workspace-file`、`media-library`、`document-entry`、
-`package-resource` 是 referenced，`generated-output` 是 generated。扩展名、目录名、
-provenance 文本、历史 prompt 和运行时 URL 都不得成为来源 authority。历史生成摘要只用于
+素材地址只由 validated `ContentLocator.file` 与可选 selector 推导；素材是 referenced 还是 generated
+由对应领域 authority/provenance 决定，不再由 locator kind 决定。扩展名、目录名、
+历史 prompt 和运行时 URL 都不得成为来源 authority。历史生成摘要只用于
 展示；重新生成必须用稳定 `JobRef<'generation'>` 向 Generation owner 解析权威 recipe，
 并创建新的 Job、output identity 和 lineage，不能覆盖旧结果。
 

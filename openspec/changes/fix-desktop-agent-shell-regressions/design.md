@@ -90,11 +90,11 @@ attachments 而丢失 perception cards。
 
 所有进入 Webview 的 ToolResult，无论来自 live projection attachment、`activeConversation` 还是
 `conversationSnapshot`，都通过同一个 Host resource display projector 使用 stable `ContentLocator` 或
-`ContentRepresentationLocator` 重新授权为短生命周期 preview descriptor。历史消息的授权 lease 绑定 exact
+runtime-owned `ContentRepresentationHandle` 重新授权为短生命周期 preview descriptor。历史消息的授权 lease 绑定 exact
 connection 与 Conversation identity；授权失败在对应资源上附加 diagnostic，不回退 raw path、`content:` URI、
 文件名推断或静默文件占位。
 
-`ReadImage` 的 perceptual asset identity 从 canonical locator/representation identity 派生，可附加可读 label，
+`ReadImage` 的 perceptual asset identity 从 canonical locator 或 runtime representation handle 派生，可附加可读 label，
 但同名文件不得决定 identity。terminal creator-visible collector 对 source artifact 使用同一 locator-derived
 source identity，不信任 Tool-local display assetId 作为 Canvas relation identity；这样既保证新结果唯一，也让
 仍保留旧 display assetId 的 durable ToolResult 在再次进入 canonical collection 时不会制造同批冲突。

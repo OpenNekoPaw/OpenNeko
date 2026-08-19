@@ -273,15 +273,15 @@ Agent Root 或 no-op 成功，但 Window Shell、Workspace Main、Canvas 和 sib
 
 ### 13. Pi 文档 range 与图片结果使用 Workspace 内容 authority
 
-`ReadDocument` 的 model-visible contract 只接受 `range: { locator, endLocator?, limit? }`。Tool 顶层
-拒绝未声明字段，schema 与失败诊断都明确禁止顶层 `locator`，而不是在执行期把错误 shape 解释成另一条
-成功路径。内容 runtime 继续消费 package-owned `DocumentRange`；Pi bridge 不重写模型参数，也不增加
+`ReadDocument` 的 model-visible contract 只接受 conversation-scoped `input_ref`，并按需使用返回的
+`unit_ref` / `cursor_ref`。Tool 拒绝 locator、Host path 和未声明字段；Pi content protocol 在 exact
+Conversation binding 内解析短引用后，内部 runtime 才消费 package-owned locator/range contract，不增加
 旧 shape alias。
 
 `ReadImage` 成功后返回的图片 attachment 必须由同一 Workspace runtime 已持有的
 `AgentContentAccessRuntime` 物化为 provider-bound image content。Workspace runtime 在创建 Tool snapshot
 时始终组合这一 loader；Desktop 不注入文件 reader、Workspace root 或第二套图片 transport。loader 只按
-attachment 的 exact `contentLocator` 或 `representationLocator` 读取、验证和有界标准化，批量图片复用
+attachment 的 exact `contentLocator` 或 opaque `representationHandle` 读取、验证和有界标准化，批量图片复用
 既有 contact-sheet transport，并保持 source index 顺序。缺失 locator、内容读取失败、MIME 非图片或预算
 越界继续让当前 Tool/Turn fail-visible，不得改读 `uri`、raw path、cache path 或另一 source。
 
@@ -289,8 +289,8 @@ attachment 的 exact `contentLocator` 或 `representationLocator` 读取、验�
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | 职责 | Content Tool 拥有参数 schema；Agent Workspace application 拥有 Tool-result loader composition；Pi 只适配结果；Desktop 不拥有内容处理。 |
 | 依赖 | loader 依赖 host-neutral `AgentContentAccessRuntime` 与既有 provider image transport，不依赖 Electron。                                |
-| 接口 | `ReadDocument` 保持一个 strict range shape；`PerceptualAssetRef` 可携带 exact representation locator，不新增内部版本或别名。           |
-| 扩展 | 单图、批量图、Workspace/document-entry/generated-output 与 representation 共用同一 loader。                                            |
+| 接口 | `ReadDocument` 暴露 strict opaque-ref façade；`PerceptualAssetRef` 仅在 runtime 内携带 opaque representation handle，不新增内部版本或别名。 |
+| 扩展 | 单图、批量图、canonical file/selector 与 runtime representation 共用同一 loader。                                                          |
 | 测试 | 覆盖错误顶层 locator、正确 range、生产 Workspace Tool snapshot、content/representation 物化、批量顺序和无 loader fallback。            |
 
 Agent Evaluation disposition 为 `reuse`：`agent-runtime.stream-delivery/document-image-native-delivery`

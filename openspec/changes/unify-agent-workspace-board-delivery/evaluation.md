@@ -25,9 +25,9 @@ Date: 2026-08-09
   Board Canvas nodes.
 - Decision and owning suite: `update` the existing `agent-runtime.stream-delivery` suite. The
   `document-image-native-delivery` case already owns the canonical EPUB `ReadDocument` ->
-  `ReadImage` path; it now also requires a redacted authorized `document-entry` display projection.
-- Canonical path: Desktop Agent input -> Pi Tool execution -> stable document-entry or representation
-  locator -> conversation projection -> Workspace content reader -> Desktop exact-resource registry
+  `ReadImage` path; it now also requires a redacted authorized Workspace-file display projection.
+- Canonical path: Desktop Agent input -> Pi Tool execution -> canonical file-plus-selector address or runtime
+  representation handle -> conversation projection -> Workspace content reader -> Desktop exact-resource registry
   -> package-owned Agent card. Workspace Board nodes retain the same ContentLocator and request a
   separate exact Canvas View resource lease.
 - Forbidden fallback: source-locator substitution for a representation, extracted/temp/absolute
@@ -37,13 +37,13 @@ Date: 2026-08-09
 ## Cases
 
 - Updated: `agent-runtime.stream-delivery/document-image-native-delivery` now proves the successful
-  `document-entry` Tool result also produces an authorized `openneko-resource` projection for the
+  selected-entry Tool result also produces an authorized `openneko-resource` projection for the
   Agent Webview with no diagnostic.
 - Reused: `agent-runtime.stream-delivery/locator-backed-display-projection` continues to prove the
   ordinary workspace-file path and forbids URL/path identity substitution.
-- Deterministic coverage: Agent projection tests cover exact representation identity, EPUB bytes,
+- Deterministic coverage: Agent projection tests cover exact opaque representation handles, EPUB bytes,
   per-resource failure isolation and lease release. Canvas bridge/runtime/Webview tests cover
-  document-entry acceptance, opaque URL-only results, stale URL rejection, exact source/role lease
+  selected-entry acceptance, opaque URL-only results, stale URL rejection, exact source/role lease
   ownership, View detach release and contain rendering.
 - Missing observability: current bounded Agent facts do not observe Canvas DOM image decode or
   pixels. `workspace-board-projection` proves durable node/connection delivery only; it must not be

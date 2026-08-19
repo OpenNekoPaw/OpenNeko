@@ -107,7 +107,7 @@ Electron Main 并非真正 OS sandbox，因此仍需上述 guard；Desktop 只�
 | Assets  | source locator、thumbnail spec、Asset ownership                                                             | ResourceCache provider/root/manifest/GC                                            |
 | Canvas  | source locator、thumbnail/preview/raster spec                                                               | cache status、materialized path、startup GC                                        |
 | Cut     | source locator、proxy/waveform/loudness spec                                                                | cache provider、quota、retention、root                                             |
-| Preview | source/document locator、runtime projection                                                                 | document-entry cache、physical path                                                |
+| Preview | canonical content locator、runtime representation handle/projection                                               | selected-content cache、physical path                                              |
 | Agent   | owner-qualified content locator、document entry、safe bytes/metadata；结构化项目的 owning-domain projection | `.neko`、connection/target、cache path、archive implementation、NKC/OTIO raw bytes |
 | Tools   | stable diagnostics、maintenance command result                                                              | 任意 cache path 或 provider-private payload                                        |
 
@@ -138,7 +138,7 @@ ReadDocument 分别输出语义 `DocumentLocator` 与内容 `DocumentEntryConten
 
 ## 派生物不变量
 
-- source/original/native document-entry 不进入派生物存储。
+- source/original/native selected content 不进入派生物存储。
 - thumbnail、proxy、preview transcode、waveform/loudness、fov-crop、raster page、OCR/ASR/embedding、semantic/search projection 和 rebuildable processor intermediate 可以内部复用和 GC。
 - key 来自 source identity/fingerprint、representation spec、generator/profile identity 与影响输出的
   外部 runtime fingerprint，不能来自 absolute path、link target、Webview URL、temp path 或内部数据代次。

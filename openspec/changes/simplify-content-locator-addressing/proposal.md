@@ -7,7 +7,7 @@
 - **BREAKING** Define the canonical content address as one durable file reference plus an optional file-internal selector.
 - Move fingerprint/change preconditions to content IO requests and results instead of locator identity.
 - Keep Generation output identity/digest and package ownership/revision in their owning domain records, referenced alongside—not embedded as alternate address semantics inside—the content address.
-- Keep `ContentRepresentationLocator` as a short-lived Content/Preview runtime handle only; it is not an Agent-constructible or durable artifact locator.
+- Delete `ContentRepresentationLocator` and replace it with a short-lived opaque `ContentRepresentationHandle`; it is not Agent-constructible or durable artifact identity.
 - Expose only `path` for ordinary files and opaque `input_ref`, `unit_ref`, `cursor_ref` and `image_ref` values for complex content to the Agent.
 - Require Board, Canvas durable nodes, transcript artifacts and creator-visible delivery to persist only canonical durable content addresses; explicit export/materialization creates a new durable address.
 

@@ -194,7 +194,7 @@ The Canvas-owned projector SHALL atomically create or reuse ordinary Document, T
 
 #### Scenario: A new image artifact carries portable intrinsic dimensions
 
-- **WHEN** a generated image or a `ReadImage` document-entry attachment is projected for the first time with positive intrinsic width and height
+- **WHEN** a generated image or a `ReadImage` selected-entry attachment is projected for the first time with positive intrinsic width and height
 - **THEN** the shared projection path SHALL create the image node with the same aspect ratio while satisfying Canvas minimum dimensions
 
 #### Scenario: An existing image node has creator-owned sizing
@@ -301,9 +301,9 @@ and session attachment; they SHALL use the same descriptor contract, resource tr
 
 #### Scenario: EPUB image is displayed in Agent and Canvas
 
-- **WHEN** `ReadDocument` or `ReadImage` returns an EPUB `document-entry` image and that stable locator is also projected into a Workspace Board image node
+- **WHEN** `ReadDocument` or `ReadImage` returns an EPUB image addressed by a canonical file plus entry selector and that stable locator is also projected into a Workspace Board image node
 - **THEN** the Agent thumbnail and Canvas node SHALL each display the complete image pixels using contain semantics through an authorized `openneko://resource` URL
-- **AND** neither durable projection SHALL replace the `document-entry` locator with an extracted path or runtime URL
+- **AND** neither durable projection SHALL replace the canonical locator with an extracted path or runtime URL
 
 #### Scenario: A derived document page is displayed in an Agent result
 
