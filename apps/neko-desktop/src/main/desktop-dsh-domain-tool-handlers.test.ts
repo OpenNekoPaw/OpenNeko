@@ -124,6 +124,67 @@ describe('Desktop DSH domain Tool handlers', () => {
     expect(resolveAuthorizedWorkspace).not.toHaveBeenCalled();
   });
 
+  it('resolves Character through the exact authoring target and Workspace grant', async () => {
+    const root = await createRoot();
+    const resolveAuthorizedWorkspace = vi.fn(async () => workspaceResolution(root));
+    const query = vi.fn(async () => characterFacts());
+    const resolveService = vi.fn(async () => ({ query, fillDraft: vi.fn() }));
+    const handlers = createDesktopDshDomainToolHandlers({
+      bindings: {
+        async getByDshSessionId() {
+          return sessionBinding();
+        },
+      },
+      contexts: {
+        async readContext() {
+          return {
+            kind: 'authoring' as const,
+            workspaceId: 'workspace:one',
+            workspaceGrantId: 'workspace-grant:one',
+            authority: { kind: 'project' as const, projectId: 'project:one' },
+            target: {
+              kind: 'character-project' as const,
+              characterProjectId: 'character:one',
+            },
+          };
+        },
+      },
+      workspaceGrants: { resolveAuthorizedWorkspace },
+      generationRuntime: { getJobs: vi.fn() },
+      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      assistant: { assistantSpaceId: 'assistant:one', root },
+      character: { resolveService },
+    });
+
+    await expect(
+      handlers.executeCharacterTool(
+        {
+          sessionId: 'dsh-session:one',
+          turn: 1,
+          toolCallId: 'call:character',
+          tool: 'openneko.character',
+          operation: 'query',
+          input: { characterProjectId: 'character:one' },
+        },
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'success',
+      result: { characterProjectId: 'character:one' },
+    });
+    expect(resolveAuthorizedWorkspace).toHaveBeenCalledWith('workspace-grant:one', 'workspace:one');
+    expect(resolveService).toHaveBeenCalledWith({
+      workspaceId: 'workspace:one',
+      workspacePath: root,
+      projectId: 'project:one',
+      characterProjectId: 'character:one',
+    });
+    expect(query).toHaveBeenCalledWith(
+      { characterProjectId: 'character:one' },
+      expect.any(AbortSignal),
+    );
+  });
+
   it('rejects absolute and escaping Cut paths before resolving a Workspace grant', async () => {
     const root = await createRoot();
     const resolveAuthorizedWorkspace = vi.fn(async () => workspaceResolution(root));
@@ -460,6 +521,32 @@ function generationSnapshot(): GenerationJobSnapshot {
     progress: { stage: 'queued' as const, percent: 0 },
     createdAt: 1,
     updatedAt: 1,
+  };
+}
+
+function characterFacts() {
+  return {
+    characterProjectId: 'character:one',
+    displayName: 'Mira',
+    reviewStatus: 'draft' as const,
+    isFreshTarget: true,
+    draft: {
+      hasSummary: false,
+      hasBackground: false,
+      hasOrigin: false,
+      canonCount: 0,
+      knowledgeBoundaryCount: 0,
+      behaviorPolicyCount: 0,
+      expressionPolicyCount: 0,
+      representationCount: 0,
+    },
+    evidenceCount: 0,
+    candidateCount: 0,
+    versionCount: 0,
+    versions: [],
+    versionsTruncated: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }
 

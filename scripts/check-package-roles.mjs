@@ -138,7 +138,6 @@ async function discoverWorkspacePackages(root) {
     if (await isFile(familyManifestPath)) {
       const manifest = await readJson(familyManifestPath);
       packages.push({ path: `packages/${familyEntry.name}`, name: manifest.name });
-      continue;
     }
     const roleEntries = await readdir(familyRoot, { withFileTypes: true });
     for (const roleEntry of roleEntries) {

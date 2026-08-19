@@ -57,6 +57,7 @@ export function assertDshRuntimeDirectory(runtimeRoot, target, options = {}) {
       JSON.stringify([
         '@deepseek-ai/dsh-base',
         '@neko/dsh-bridge',
+        '@neko/chara-dsh-plugin',
         '@neko/generation-dsh-plugin',
         '@neko/canvas-dsh-plugin',
         '@neko/cut-dsh-plugin',

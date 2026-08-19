@@ -9,6 +9,7 @@ import type {
   CutProjectAuthoringService,
 } from '@neko/cut-domain';
 import type { PurposeGenerationJobPort } from '@neko/generation/job';
+import type { CharacterDshAuthoringService } from '@neko/chara/application';
 import type { AgentContentAccessRuntime } from '../runtime/capability/agent-content-access-runtime';
 
 import type {
@@ -19,6 +20,7 @@ import { CanvasDshHostAdapter } from './canvas-host-adapter';
 import { CutDshHostAdapter } from './cut-host-adapter';
 import { GenerationDshHostAdapter } from './generation-host-adapter';
 import { DocumentDshHostAdapter } from './document-host-adapter';
+import { CharacterDshHostAdapter } from './character-host-adapter';
 
 export interface DshDomainToolHandlers {
   executeGenerationTool(
@@ -34,6 +36,10 @@ export interface DshDomainToolHandlers {
     signal: AbortSignal,
   ): Promise<DshAcpDomainToolResponse>;
   executeDocumentTool(
+    request: DshAcpDomainToolRequest,
+    signal: AbortSignal,
+  ): Promise<DshAcpDomainToolResponse>;
+  executeCharacterTool(
     request: DshAcpDomainToolRequest,
     signal: AbortSignal,
   ): Promise<DshAcpDomainToolResponse>;
@@ -78,6 +84,13 @@ export function createDshDomainToolHandlers(options: {
   };
   readonly document: {
     resolveRuntime(context: DshDomainToolContext): Promise<AgentContentAccessRuntime>;
+  };
+  readonly character: {
+    resolveService(
+      context: DshDomainToolContext & {
+        readonly binding: Extract<DshDomainToolContext['binding'], { readonly kind: 'authoring' }>;
+      },
+    ): Promise<Pick<CharacterDshAuthoringService, 'query' | 'fillDraft'>>;
   };
 }): DshDomainToolHandlers {
   return Object.freeze({
@@ -124,6 +137,22 @@ export function createDshDomainToolHandlers(options: {
       return new DocumentDshHostAdapter(async () => {
         const context = await options.contexts.resolve(request.sessionId);
         return options.document.resolveRuntime(context);
+      }).execute(request, signal);
+    },
+
+    async executeCharacterTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
+      return new CharacterDshHostAdapter(async () => {
+        const context = await options.contexts.resolve(request.sessionId);
+        if (
+          context.binding.kind !== 'authoring' ||
+          context.binding.target?.kind !== 'character-project'
+        ) {
+          throw diagnosticError(
+            'CHARACTER_DSH_CONTEXT_UNSUPPORTED',
+            'Character authoring requires an exact CharacterProject Conversation target.',
+          );
+        }
+        return options.character.resolveService({ ...context, binding: context.binding });
       }).execute(request, signal);
     },
   });

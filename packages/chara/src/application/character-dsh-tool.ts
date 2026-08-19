@@ -18,6 +18,115 @@ export const CHARACTER_DSH_TOOL_NAME = 'openneko.character' as const;
 export const CHARACTER_DSH_TOOL_OPERATIONS = ['query', 'fill-draft'] as const;
 export const CHARACTER_DSH_MAX_PROJECTED_VERSIONS = 32;
 
+const CHARACTER_LORE_ENTRY_SCHEMA = {
+  type: 'object',
+  properties: {
+    loreEntryId: { type: 'string', required: true },
+    statement: { type: 'string', required: true },
+    evidenceIds: { type: 'array', items: { type: 'string' }, required: true },
+  },
+  additionalProperties: false,
+} as const;
+
+const CHARACTER_DEFINITION_SCHEMA = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string', required: true },
+    backgroundStory: {
+      type: 'object',
+      properties: {
+        overview: { type: 'string', required: true },
+        origins: { type: 'array', items: CHARACTER_LORE_ENTRY_SCHEMA, required: true },
+        personalHistory: { type: 'array', items: CHARACTER_LORE_ENTRY_SCHEMA, required: true },
+        formativeEvents: { type: 'array', items: CHARACTER_LORE_ENTRY_SCHEMA, required: true },
+        establishedRelationships: {
+          type: 'array',
+          items: CHARACTER_LORE_ENTRY_SCHEMA,
+          required: true,
+        },
+      },
+      additionalProperties: false,
+      required: true,
+    },
+    originSetting: {
+      type: 'object',
+      properties: {
+        overview: { type: 'string', required: true },
+        eras: { type: 'array', items: CHARACTER_LORE_ENTRY_SCHEMA, required: true },
+        cultures: { type: 'array', items: CHARACTER_LORE_ENTRY_SCHEMA, required: true },
+        socialEnvironment: {
+          type: 'array',
+          items: CHARACTER_LORE_ENTRY_SCHEMA,
+          required: true,
+        },
+        importantPlaces: { type: 'array', items: CHARACTER_LORE_ENTRY_SCHEMA, required: true },
+        organizations: { type: 'array', items: CHARACTER_LORE_ENTRY_SCHEMA, required: true },
+        believedRules: { type: 'array', items: CHARACTER_LORE_ENTRY_SCHEMA, required: true },
+      },
+      additionalProperties: false,
+      required: true,
+    },
+    canon: { type: 'array', items: { type: 'string' }, required: true },
+    knowledgeBoundary: { type: 'array', items: { type: 'string' }, required: true },
+    behaviorPolicy: { type: 'array', items: { type: 'string' }, required: true },
+    expressionPolicy: { type: 'array', items: { type: 'string' }, required: true },
+    representationRefs: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          representationId: { type: 'string', required: true },
+          kind: {
+            type: 'string',
+            enum: ['portrait', 'live2d', 'vrm', 'mmd', 'pngtuber', 'voice'],
+            required: true,
+          },
+          resourceRef: { type: 'string', required: true },
+        },
+        additionalProperties: false,
+      },
+      required: true,
+    },
+    representationDefaults: {
+      type: 'object',
+      properties: {
+        portraitRepresentationId: { type: 'string' },
+        avatarRepresentationId: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    voiceDefaults: {
+      type: 'object',
+      properties: {
+        providerRef: { type: 'string', required: true },
+        voiceRepresentationId: { type: 'string', required: true },
+        speed: { type: 'number', required: true },
+        autoRead: { type: 'boolean', required: true },
+      },
+      additionalProperties: false,
+    },
+  },
+  additionalProperties: false,
+} as const;
+
+export const CHARACTER_DSH_TOOL_PARAMETERS = {
+  operation: {
+    type: 'string',
+    enum: [...CHARACTER_DSH_TOOL_OPERATIONS],
+    required: true,
+  },
+  input: {
+    type: 'object',
+    properties: {
+      characterProjectId: { type: 'string', required: true },
+      displayName: { type: 'string' },
+      definition: CHARACTER_DEFINITION_SCHEMA,
+    },
+    additionalProperties: false,
+    required: true,
+  },
+} as const;
+
 export type CharacterDshToolOperation = (typeof CHARACTER_DSH_TOOL_OPERATIONS)[number];
 
 export interface CharacterDshToolQueryInput {
@@ -175,7 +284,7 @@ export function projectCharacterDshFacts(
   }[],
 ): CharacterDshProjectFacts {
   const matchingVersions = versions.filter(
-    (version) => version.characterProjectId === project.characterProjectId,
+    (publication) => publication.characterProjectId === project.characterProjectId,
   );
   const draft = project.draft;
   return {
@@ -208,12 +317,14 @@ export function projectCharacterDshFacts(
     evidenceCount: project.evidence.length,
     candidateCount: project.candidates.length,
     versionCount: matchingVersions.length,
-    versions: matchingVersions.slice(0, CHARACTER_DSH_MAX_PROJECTED_VERSIONS).map((version) => ({
-      characterVersionId: version.characterVersionId,
-      label: version.label,
-      lifecycle: 'published',
-      publishedAt: version.publishedAt,
-    })),
+    versions: matchingVersions
+      .slice(0, CHARACTER_DSH_MAX_PROJECTED_VERSIONS)
+      .map((publication) => ({
+        characterVersionId: publication.characterVersionId,
+        label: publication.label,
+        lifecycle: 'published',
+        publishedAt: publication.publishedAt,
+      })),
     versionsTruncated: matchingVersions.length > CHARACTER_DSH_MAX_PROJECTED_VERSIONS,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,

@@ -155,7 +155,13 @@ export function validateCanonicalAgentRegistrationGraph(graph) {
   }
   expectExactIdentitySet(
     tools,
-    ['openneko.canvas', 'openneko.cut', 'openneko.document', 'openneko.generation'],
+    [
+      'openneko.canvas',
+      'openneko.character',
+      'openneko.cut',
+      'openneko.document',
+      'openneko.generation',
+    ],
     'Tool',
     findings,
   );
@@ -164,6 +170,7 @@ export function validateCanonicalAgentRegistrationGraph(graph) {
     plugins,
     [
       '@neko/canvas-dsh-plugin',
+      '@neko/chara-dsh-plugin',
       '@neko/content-dsh-plugin',
       '@neko/cut-dsh-plugin',
       '@neko/dsh-bridge',
@@ -285,6 +292,10 @@ async function checkCanonicalSourceEvidence(root, findings) {
     resolve(root, 'packages/generation/dsh-plugin/src/index.ts'),
     'utf8',
   );
+  const characterToolsSource = await readFile(
+    resolve(root, 'packages/chara/dsh-plugin/src/index.ts'),
+    'utf8',
+  );
   const canvasToolsSource = await readFile(
     resolve(root, 'packages/canvas/dsh-plugin/src/index.ts'),
     'utf8',
@@ -299,6 +310,10 @@ async function checkCanonicalSourceEvidence(root, findings) {
   );
   const generationProfile = await readFile(
     resolve(root, 'packages/generation/dsh-plugin/cordis.patch.yml'),
+    'utf8',
+  );
+  const characterProfile = await readFile(
+    resolve(root, 'packages/chara/dsh-plugin/cordis.patch.yml'),
     'utf8',
   );
   const canvasProfile = await readFile(
@@ -324,6 +339,16 @@ async function checkCanonicalSourceEvidence(root, findings) {
     findings.push('Generation DSH plugin does not register exact openneko.generation');
   }
   if (
+    !characterToolsSource.includes('CHARACTER_DSH_TOOL_NAME') ||
+    !characterToolsSource.includes("from '@neko/chara/application'") ||
+    !/ctx\.tools\.register\s*\(/u.test(characterToolsSource)
+  ) {
+    findings.push('Character DSH plugin does not register exact openneko.character');
+  }
+  if (!characterProfile.includes('@neko/chara-dsh-plugin')) {
+    findings.push('Character DSH plugin profile patch is missing its canonical contribution');
+  }
+  if (
     !canvasToolsSource.includes('CANVAS_DSH_TOOL_NAME') ||
     !canvasToolsSource.includes("from '@neko/canvas-domain'") ||
     !/ctx\.tools\.register\s*\(/u.test(canvasToolsSource)
@@ -345,8 +370,8 @@ async function checkCanonicalSourceEvidence(root, findings) {
     findings.push('Document DSH plugin does not register exact openneko.document');
   }
   if (
-    /openneko\.(?:assets|character|world|plugin|skill|mcp)\b/u.test(
-      `${generationToolsSource}\n${canvasToolsSource}\n${cutToolsSource}\n${documentToolsSource}`,
+    /openneko\.(?:assets|world|plugin|skill|mcp)\b/u.test(
+      `${generationToolsSource}\n${characterToolsSource}\n${canvasToolsSource}\n${cutToolsSource}\n${documentToolsSource}`,
     )
   ) {
     findings.push('Official DSH plugins register an unsupported domain Tool name');
@@ -363,6 +388,9 @@ async function checkCanonicalSourceEvidence(root, findings) {
     ...validateCanonicalAgentRegistrationGraph({
       runtimes: ['dsh'],
       tools: [
+        ...Array(countMatches(characterToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
+          'openneko.character',
+        ),
         ...Array(countMatches(generationToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
           'openneko.generation',
         ),
@@ -375,9 +403,14 @@ async function checkCanonicalSourceEvidence(root, findings) {
         ),
       ],
       mcpContributions: [],
-      plugins: [bridgeProfile, generationProfile, canvasProfile, cutProfile, documentProfile].flatMap(
-        readOpenNekoProfilePluginNames,
-      ),
+      plugins: [
+        bridgeProfile,
+        characterProfile,
+        generationProfile,
+        canvasProfile,
+        cutProfile,
+        documentProfile,
+      ].flatMap(readOpenNekoProfilePluginNames),
     }),
   );
 }

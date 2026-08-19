@@ -69,6 +69,7 @@
       "packages/generation/dsh-plugin/src/index.ts",
       "packages/canvas/dsh-plugin/src/index.ts",
       "packages/cut/dsh-plugin/src/index.ts",
+      "packages/chara/dsh-plugin/src/index.ts",
       "openspec/changes/replace-pi-with-dsh-runtime-atomically/evidence/w2-domain-tool-slice-freeze.md"
     ]
   },

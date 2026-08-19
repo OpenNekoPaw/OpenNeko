@@ -211,6 +211,7 @@ function canonicalProfileManifest(): object {
         bundles: [
           '@deepseek-ai/dsh-base',
           '@neko/dsh-bridge',
+          '@neko/chara-dsh-plugin',
           '@neko/generation-dsh-plugin',
           '@neko/canvas-dsh-plugin',
           '@neko/cut-dsh-plugin',
@@ -224,6 +225,7 @@ function canonicalProfileManifest(): object {
 function officialPackages(): readonly string[] {
   return [
     '@neko/dsh-bridge',
+    '@neko/chara-dsh-plugin',
     '@neko/generation-dsh-plugin',
     '@neko/canvas-dsh-plugin',
     '@neko/cut-dsh-plugin',

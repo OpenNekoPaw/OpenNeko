@@ -120,6 +120,7 @@ import {
 } from '@neko/world/application';
 import {
   CharacterAuthoringService,
+  CharacterDshAuthoringService,
   CharacterCreationSourceService,
   CharacterAuthoringHostService,
   CharacterAvatarAuthorityService,
@@ -240,7 +241,10 @@ import {
 import { DesktopDshPermissionHost } from './desktop-dsh-permission-host';
 import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-configuration';
 import { DesktopDshSessionHost } from './desktop-dsh-session-host';
-import { resolveDesktopDshConversationContext } from './desktop-dsh-conversation-context';
+import {
+  resolveDesktopDshConversationContext,
+  resolveDesktopDshSurfaceConversationContext,
+} from './desktop-dsh-conversation-context';
 import { DesktopDshRuntimeHost } from './desktop-dsh-runtime-host';
 import { DesktopDshExtensionManagementHost } from './desktop-dsh-extension-management-host';
 import { createDesktopDshProviderRuntimeProjection } from './desktop-dsh-provider-runtime';
@@ -1924,6 +1928,21 @@ async function startDesktop(): Promise<void> {
         configuration: workspaceConfigAuthority,
         assistant: { assistantSpaceId, root: assistantSpaceRoot },
         cutRuntime,
+        character: {
+          resolveService: async (input) => {
+            requireProjectIdentity(input.workspaceId, input.projectId);
+            const repository = createCharacterAuthoringFileRepository({
+              workspaceRoot: input.workspacePath,
+              scope: { kind: 'project', projectId: input.projectId },
+            });
+            return new CharacterDshAuthoringService({
+              scope: { kind: 'project', projectId: input.projectId },
+              characterProjectId: input.characterProjectId,
+              catalog: repository,
+              authoring: new CharacterAuthoringService({ repository, lineage: repository }),
+            });
+          },
+        },
         onPermissionChanged: (conversationId) =>
           publishDshChanged(DSH_PERMISSION_CHANGED_CHANNEL, { conversationId }),
         onSessionUpdate: async (notification) => {
@@ -1984,6 +2003,10 @@ async function startDesktop(): Promise<void> {
               scope.kind === 'assistant' ? scope.assistantSpaceId : assistantSpaceId,
             baseGrantIds: [] as const,
           };
+    const context = resolveDesktopDshSurfaceConversationContext({
+      surfaceBinding: binding,
+      workbench: grant.workbench,
+    });
     let mentionIdentity;
     if (scope.kind === 'workspace') {
       const projection = await shellService.getProjection(input.windowId);
@@ -2012,6 +2035,7 @@ async function startDesktop(): Promise<void> {
     return {
       grant,
       binding,
+      context,
       ...(mentionIdentity === undefined ? {} : { mentionIdentity }),
       ...(scope.kind === 'unbound' || scope.conversationId === undefined
         ? {}
@@ -2098,12 +2122,13 @@ async function startDesktop(): Promise<void> {
         windowId,
         target,
         surfaceBinding: resolved.binding,
+        surfaceContext: resolved.context,
         surfaceIsUnbound: scope.kind === 'unbound',
         projects: shellService,
         workspaceGrants: workspaceGrantAuthority,
       });
       const published = await dshProduct.runtime.conversations.publication.publish({
-        context,
+        context: context.context,
         title: app.getLocale().toLocaleLowerCase().startsWith('zh') ? '新会话' : 'New conversation',
       });
       await dshProduct.runtime.conversations.conversations.setSessionMode(
@@ -2115,7 +2140,7 @@ async function startDesktop(): Promise<void> {
         rendererSessionId,
         agentViewId: grant.interaction.agentViewId,
         draftId: scope.draftId,
-        context,
+        context: context.surfaceBinding,
         conversationId: published.conversationId,
       });
       return { conversationId: published.conversationId };

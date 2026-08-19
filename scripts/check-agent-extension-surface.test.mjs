@@ -47,7 +47,13 @@ test('rejects retired Agent Skill Tool instructions in stable architecture', () 
 test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrations', () => {
   const canonical = {
     runtimes: ['dsh'],
-    tools: ['openneko.generation', 'openneko.canvas', 'openneko.cut', 'openneko.document'],
+    tools: [
+      'openneko.generation',
+      'openneko.canvas',
+      'openneko.cut',
+      'openneko.document',
+      'openneko.character',
+    ],
     mcpContributions: ['official.browser'],
     plugins: [
       '@neko/dsh-bridge',
@@ -55,6 +61,7 @@ test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrat
       '@neko/canvas-dsh-plugin',
       '@neko/cut-dsh-plugin',
       '@neko/content-dsh-plugin',
+      '@neko/chara-dsh-plugin',
     ],
   };
   assert.deepEqual(validateCanonicalAgentRegistrationGraph(canonical), []);

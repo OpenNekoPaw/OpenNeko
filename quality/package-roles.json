@@ -154,6 +154,15 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/chara/dsh-plugin",
+      "name": "@neko/chara-dsh-plugin",
+      "family": "chara",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/chara-node",
       "name": "@neko/chara-node",
       "family": "chara",
@@ -177,6 +186,15 @@
       "family": "content",
       "roles": ["contracts", "domain", "node"],
       "runtimes": ["host-neutral", "node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/content/dsh-plugin",
+      "name": "@neko/content-dsh-plugin",
+      "family": "content",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
       "productStatus": "active-product",
       "architectureState": "converged"
     },
@@ -249,6 +267,15 @@
       "family": "generation",
       "roles": ["contracts", "domain", "application", "node"],
       "runtimes": ["host-neutral", "node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/generation/dsh-plugin",
+      "name": "@neko/generation-dsh-plugin",
+      "family": "generation",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
       "productStatus": "active-product",
       "architectureState": "converged"
     },

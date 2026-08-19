@@ -22,6 +22,30 @@ describe('package role catalog', () => {
     );
   });
 
+  it('accepts a family root package with nested role packages', () => {
+    const root = {
+      path: 'packages/example',
+      name: '@neko/example',
+      family: 'example',
+      roles: ['domain'],
+      runtimes: ['host-neutral'],
+      productStatus: 'active-product',
+      architectureState: 'converged',
+    };
+    const nested = {
+      ...validPackage,
+      path: 'packages/example/dsh-plugin',
+      name: '@neko/example-dsh-plugin',
+    };
+    assert.deepEqual(
+      validatePackageRoleCatalog({ packages: [root, nested] }, [
+        { path: root.path, name: root.name },
+        { path: nested.path, name: nested.name },
+      ]),
+      [],
+    );
+  });
+
   it('rejects omissions, unknown roles, identity drift and invalid runtime projections', () => {
     const findings = validatePackageRoleCatalog(
       {

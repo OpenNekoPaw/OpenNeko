@@ -50,9 +50,24 @@ shortcut. A malformed request or unavailable target rejects only the current Too
   and pre/post project facts with immutable CharacterVersion identities unchanged.
 - Forbidden fallback: direct ACP injection, direct Chara service Evaluation call, old capability provider or Tool
   identity, MCP, active Workspace/Character selection, global Character creation or final-text-only success.
-- Status: real provider and visible Desktop cases are `infrastructure-blocked` until W7 provides a complete DSH
-  Desktop driver through the visible composer and projection. No direct-runtime scenario may substitute.
+- Status: the complete DSH Desktop driver exists, but its scenario setup currently starts only at Entry or a
+  generic Workspace surface. It cannot create/select an exact Character authoring surface, bind the resulting
+  CharacterProject target, or collect the owning pre/post project facts required by this case. The real provider
+  and visible Desktop case therefore remains `infrastructure-blocked`; no direct-runtime scenario may substitute.
 
 The foundational session/persistence matrix is not changed by the domain transaction, but the basic Tool path,
 Conversation isolation, restored Character artifact projection and visible Desktop lane remain unverified.
 Key-free validation is harness readiness only.
+
+## Deterministic Verification (2026-08-20)
+
+- Character domain schema, semantic validation, bounded project/publication projection and fresh-target mutation:
+  `241` package tests passed.
+- Character DSH plugin registration, strict DSH argument admission and Host-port-only delegation: `2` tests passed.
+- ACP application/runtime dispatch and Character Host adapter: `375` runtime tests passed.
+- Desktop exact authoring target, cross-Workspace rejection, Workspace grant and repository composition: focused
+  Desktop tests passed.
+- Production closure/profile, package role/product reachability, Tool inventory and extension registration graph:
+  relevant package and Agent boundary checks passed.
+- `pnpm test:agent:eval`: `45` files / `307` key-free harness tests and all `26` suites / `72` cases dry-run passed.
+  This is infrastructure readiness, not Character Agent behavior acceptance.

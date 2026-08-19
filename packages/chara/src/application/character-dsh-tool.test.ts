@@ -148,9 +148,9 @@ describe('Character DSH tool', () => {
       lifecycle: 'published',
       publishedAt: '2026-08-19T00:00:00.000Z',
     });
-    expect(facts.versions.some((version) => version.characterVersionId === 'foreign-version')).toBe(
-      false,
-    );
+    expect(
+      facts.versions.some((publication) => publication.characterVersionId === 'foreign-version'),
+    ).toBe(false);
   });
 });
 

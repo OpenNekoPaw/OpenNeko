@@ -61,6 +61,15 @@ Each executable Conversation SHALL reference one exact DSH Session identity. DSH
 - **THEN** only that prompt fails with an explicit diagnostic before model execution
 - **AND** no Renderer value, active Workspace, recent Canvas, empty context or legacy handoff is used as fallback
 
+#### Scenario: Authoring Conversation preserves an exact target
+
+- **WHEN** a DSH Conversation is created from a sender-bound Workbench with one exact Character or World authoring surface
+- **THEN** its durable Conversation context stores the exact Workspace grant, Project authority and authoring target in the single canonical context authority
+- **AND** the Shell and Composer project that context to the same exact Workspace surface without creating another target store
+- **WHEN** no authoring surface is present or more than one authoring surface is visible
+- **THEN** Character/World Tool execution or Conversation creation fails locally with an explicit diagnostic
+- **AND** no active, recent, Renderer-provided or arbitrary Project identity is used
+
 ### Requirement: The ACP bridge supplements DSH without becoming another runtime
 
 Because the official `dsh-acp` rc.7 bridge is automation-only, OpenNeko SHALL ship one thin official DSH ACP bridge plugin/profile. It SHALL reuse public DSH Agent/Session APIs to provide the standard ACP session list/load/resume/history replay, Tool/progress updates and per-session close required by the product. Only capabilities not expressible in standard ACP MAY use one canonical extension surface: DSH inbox snapshot/edit/remove, official extension inventory/readiness/configuration/diagnostics, and typed DSH-to-Host domain Tool requests and responses. The bridge MUST NOT implement an Agent loop, Session store, queue, Tool registry, Skill runtime, MCP runtime or Plugin runtime.

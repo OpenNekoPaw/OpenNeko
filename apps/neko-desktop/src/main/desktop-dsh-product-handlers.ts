@@ -11,6 +11,7 @@ import type {
 import type { GenerationApplicationRuntime } from '@neko/generation/job';
 import type { CutProjectAuthoringService } from '@neko/cut-domain';
 import type { CutExportApplicationService } from '@neko/cut-node';
+import type { CharacterDshAuthoringService } from '@neko/chara/application';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
 import type { WorkspaceConfigManagerAuthority } from '@neko/host/settings';
 
@@ -41,6 +42,14 @@ export function createDesktopDshProductHandlers(options: {
       readonly authoring: Pick<CutProjectAuthoringService, 'query' | 'apply'>;
     }): CutExportApplicationService;
   };
+  readonly character?: {
+    resolveService(input: {
+      readonly workspaceId: string;
+      readonly workspacePath: string;
+      readonly projectId: string;
+      readonly characterProjectId: string;
+    }): Promise<Pick<CharacterDshAuthoringService, 'query' | 'fillDraft'>>;
+  };
   readonly onPermissionChanged: (conversationId: string) => Promise<void> | void;
   readonly onSessionUpdate: (notification: DshAcpSessionUpdateNotification) => Promise<void> | void;
   readonly onSessionEvent: (notification: DshAcpSessionEventNotification) => Promise<void> | void;
@@ -64,6 +73,7 @@ export function createDesktopDshProductHandlers(options: {
     executeCanvasTool: (request, signal) => domainTools.executeCanvasTool(request, signal),
     executeCutTool: (request, signal) => domainTools.executeCutTool(request, signal),
     executeDocumentTool: (request, signal) => domainTools.executeDocumentTool(request, signal),
+    executeCharacterTool: (request, signal) => domainTools.executeCharacterTool(request, signal),
     onSessionUpdate: options.onSessionUpdate,
     onSessionEvent: options.onSessionEvent,
   };

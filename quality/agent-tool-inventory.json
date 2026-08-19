@@ -1,6 +1,17 @@
 {
   "tools": [
     {
+      "tool": "openneko.character",
+      "operations": ["query", "fill-draft"],
+      "registration": "packages/chara/dsh-plugin/src/index.ts",
+      "schemaOwner": "packages/chara/src/application/character-dsh-tool.ts",
+      "validator": "decodeCharacterDshToolInput",
+      "permissionOwner": "packages/agent/runtime/src/application/dsh-permission-owner.ts",
+      "authorizationOwner": "apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers.ts",
+      "applicationService": "CharacterDshAuthoringService + CharacterAuthoringService",
+      "durableOwner": "Character project authority"
+    },
+    {
       "tool": "openneko.document",
       "operations": ["read", "continue", "read-images"],
       "registration": "packages/content/dsh-plugin/src/index.ts",
