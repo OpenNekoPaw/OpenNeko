@@ -38,6 +38,7 @@ interface ComposerConfigMenuProps {
   readonly onModelSelect: (modelId: string) => void;
   readonly mediaModelSelection: Readonly<MediaModelSelection>;
   readonly availableMediaModels: readonly ChatModelOption[];
+  readonly mediaModelOptOutEnabled?: boolean;
   readonly mediaUnderstandingModels?: MediaUnderstandingModels;
   readonly mediaUnderstandingSelection: Readonly<MediaUnderstandingSelection>;
   readonly onMediaModelSelect: (category: MediaCategory, modelId: string) => void;
@@ -108,6 +109,7 @@ export function ComposerConfigMenu({
   onModelSelect,
   mediaModelSelection,
   availableMediaModels,
+  mediaModelOptOutEnabled = true,
   mediaUnderstandingModels,
   mediaUnderstandingSelection,
   onMediaModelSelect,
@@ -285,9 +287,11 @@ export function ComposerConfigMenu({
             ) : section === 'model' ? (
               <MediaModelPanel
                 category={category}
-                understandingModels={availableModels.filter((model) =>
-                  supportsUnderstanding(model, category),
-                )}
+                understandingModels={
+                  mediaUnderstandingModels?.[category] === undefined
+                    ? undefined
+                    : availableModels.filter((model) => supportsUnderstanding(model, category))
+                }
                 understandingStatus={mediaUnderstandingModels?.[category]}
                 understandingSelection={mediaUnderstandingSelection[category]}
                 onUnderstandingSelect={(modelId) =>
@@ -297,6 +301,7 @@ export function ComposerConfigMenu({
                   (model) => model.category === category && isSelectable(model),
                 )}
                 generationSelection={mediaModelSelection[category]}
+                generationOptOutEnabled={mediaModelOptOutEnabled}
                 onGenerationSelect={(modelId) => onMediaModelSelect(category, modelId)}
               />
             ) : (
@@ -342,15 +347,17 @@ function MediaModelPanel({
   onUnderstandingSelect,
   generationModels,
   generationSelection,
+  generationOptOutEnabled,
   onGenerationSelect,
 }: {
   readonly category: MediaCategory;
-  readonly understandingModels: readonly ChatModelOption[];
+  readonly understandingModels?: readonly ChatModelOption[];
   readonly understandingStatus?: MediaUnderstandingModels[MediaCategory];
   readonly understandingSelection: string;
   readonly onUnderstandingSelect: (modelId: string) => void;
   readonly generationModels: readonly ChatModelOption[];
   readonly generationSelection: string;
+  readonly generationOptOutEnabled: boolean;
   readonly onGenerationSelect: (modelId: string) => void;
 }) {
   const { t } = useTranslation();
@@ -358,24 +365,30 @@ function MediaModelPanel({
 
   return (
     <>
-      <ExactModelGroup
-        label={t('chat.modelMenu.understanding', { category: categoryLabel })}
-        models={understandingModels}
-        selectedId={understandingSelection}
-        onSelect={onUnderstandingSelect}
-        leadingOption={{
-          id: 'auto',
-          label: t('chat.modelMenu.autoUnderstanding', {
-            model: understandingStatus?.label ?? t('chat.mediaUnderstanding.unavailable'),
-          }),
-        }}
-      />
+      {understandingModels === undefined ? null : (
+        <ExactModelGroup
+          label={t('chat.modelMenu.understanding', { category: categoryLabel })}
+          models={understandingModels}
+          selectedId={understandingSelection}
+          onSelect={onUnderstandingSelect}
+          leadingOption={{
+            id: 'auto',
+            label: t('chat.modelMenu.autoUnderstanding', {
+              model: understandingStatus?.label ?? t('chat.mediaUnderstanding.unavailable'),
+            }),
+          }}
+        />
+      )}
       <ExactModelGroup
         label={t('chat.modelMenu.generation', { category: categoryLabel })}
         models={generationModels}
         selectedId={generationSelection}
         onSelect={onGenerationSelect}
-        leadingOption={{ id: 'none', label: t('chat.generation.model.none') }}
+        leadingOption={
+          generationOptOutEnabled
+            ? { id: 'none', label: t('chat.generation.model.none') }
+            : undefined
+        }
       />
     </>
   );

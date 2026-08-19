@@ -13,6 +13,7 @@ export interface InputAreaUiProjectionInput {
   ambientNodeCount: number;
   mediaModelCallCount: number;
   isThinking: boolean;
+  queueingEnabled?: boolean;
   queuedMessageCount?: number;
   disabled: boolean;
   sessionMode: SessionMode;
@@ -89,6 +90,7 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     input.configurationPolicy?.fields.executionMode.policy.status ?? 'editable';
   const hasQueueableContent = hasText || hasAttachments || hasContextChips;
   const canQueue =
+    input.queueingEnabled !== false &&
     input.isThinking &&
     !input.disabled &&
     !input.submissionBlocked &&

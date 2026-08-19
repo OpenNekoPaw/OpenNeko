@@ -9,9 +9,13 @@ import type {
   DshSessionHostProjection,
 } from '@neko/agent-contracts/dsh-session-host';
 
-vi.mock('@neko/ui/i18n/react', () => ({
-  useTranslation: () => ({ locale: 'en' }),
-}));
+vi.mock('@neko/ui/i18n/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@neko/ui/i18n/react')>();
+  return {
+    ...actual,
+    useTranslation: () => ({ locale: 'en' }),
+  };
+});
 
 import { DesktopAgentSurface } from './DesktopAgentSurface';
 
@@ -65,20 +69,36 @@ const composerConfiguration: DshComposerConfigurationProjection = {
       label: 'DeepSeek V4',
       providerId: 'deepseek-official',
       modelId: 'deepseek-v4',
+      providerLabel: 'DeepSeek',
+      category: 'llm',
+      capabilities: ['chat'],
     },
     {
       id: 'openai:gpt-5',
       label: 'GPT-5',
       providerId: 'openai',
       modelId: 'gpt-5',
+      providerLabel: 'OpenAI',
+      category: 'llm',
+      capabilities: ['chat'],
+    },
+    {
+      id: 'nekoapi-media:gpt-image-2',
+      label: 'GPT Image 2',
+      providerId: 'nekoapi-media',
+      modelId: 'gpt-image-2',
+      providerLabel: 'NekoAPI Media',
+      category: 'image',
+      capabilities: ['image.generate'],
     },
   ],
   selectedModelOptionId: 'deepseek-official:deepseek-v4',
-  executionMode: 'ask',
-  modes: [
-    { id: 'plan', available: false, diagnostic: 'Plan is unavailable.' },
-    { id: 'ask', available: true },
-    { id: 'auto', available: true },
+  selectedMediaModelOptionIds: {},
+  permissionPresetId: 'workspace-write',
+  permissionPresets: [
+    { id: 'read-only', label: 'read-only', selectable: true },
+    { id: 'workspace-write', label: 'workspace-write', selectable: true },
+    { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
   ],
   context: {
     kind: 'workspace',
@@ -100,10 +120,11 @@ const dshSessions = {
     ...composerConfiguration,
     selectedModelOptionId: 'openai:gpt-5',
   })),
-  selectComposerMode: vi.fn(async () => ({
+  selectComposerPermissionPreset: vi.fn(async () => ({
     ...composerConfiguration,
-    executionMode: 'auto' as const,
+    permissionPresetId: 'danger-full-access',
   })),
+  selectComposerMediaModel: vi.fn(async () => composerConfiguration),
   subscribe: vi.fn((listener: typeof sessionListener) => {
     sessionListener = listener;
     return vi.fn();
@@ -136,7 +157,7 @@ const dshRuntime = {
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   Object.assign(window, { openNekoDesktop: { dshSessions, dshPermissions, dshRuntime } });
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   dshSessions.create.mockResolvedValue(projection);
   dshSessions.getSnapshot.mockResolvedValue(projection);
   dshSessions.prompt.mockResolvedValue({
@@ -150,15 +171,28 @@ beforeEach(() => {
     ...composerConfiguration,
     selectedModelOptionId: 'openai:gpt-5',
   });
-  dshSessions.selectComposerMode.mockResolvedValue({
+  dshSessions.selectComposerPermissionPreset.mockResolvedValue({
     ...composerConfiguration,
-    executionMode: 'auto',
+    permissionPresetId: 'danger-full-access',
   });
+  dshSessions.selectComposerMediaModel.mockResolvedValue(composerConfiguration);
   dshPermissions.list.mockResolvedValue([permission]);
   dshPermissions.decide.mockResolvedValue([]);
   dshPermissions.cancel.mockResolvedValue([]);
+  dshSessions.subscribe.mockImplementation((listener: typeof sessionListener) => {
+    sessionListener = listener;
+    return vi.fn();
+  });
+  dshPermissions.subscribe.mockImplementation((listener: typeof permissionListener) => {
+    permissionListener = listener;
+    return vi.fn();
+  });
   dshRuntime.getStatus.mockResolvedValue({ status: 'running' });
   dshRuntime.restart.mockResolvedValue({ status: 'running' });
+  dshRuntime.subscribe.mockImplementation((listener: typeof runtimeListener) => {
+    runtimeListener = listener;
+    return vi.fn();
+  });
   sessionListener = undefined;
   permissionListener = undefined;
   runtimeListener = undefined;
@@ -176,6 +210,7 @@ describe('DesktopAgentSurface', () => {
         workbenchInstanceId="workbench-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
+        surfaceKind="workspace"
       />,
     );
 
@@ -218,6 +253,7 @@ describe('DesktopAgentSurface', () => {
         workbenchInstanceId="workbench-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
+        surfaceKind="workspace"
       />,
     );
     expect(await screen.findByText('Create a node')).toBeTruthy();
@@ -245,21 +281,26 @@ describe('DesktopAgentSurface', () => {
   });
 
   it('submits, cancels, and decides only advertised ACP permission options', async () => {
+    const idleProjection = { ...projection, currentTurn: undefined };
+    dshSessions.getSnapshot.mockResolvedValueOnce(idleProjection);
+    dshSessions.cancel.mockResolvedValueOnce(idleProjection);
+    dshPermissions.list
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([permission])
+      .mockResolvedValueOnce([]);
     render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
+        surfaceKind="workspace"
       />,
     );
     await screen.findByText('Create a node');
 
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: '  hello  ' } });
-    fireEvent.click(screen.getByLabelText('Send message'));
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
     await waitFor(() => expect(dshSessions.prompt).toHaveBeenCalledWith('conversation-1', 'hello'));
-
-    fireEvent.click(screen.getByLabelText('Cancel current turn'));
-    await waitFor(() => expect(dshSessions.cancel).toHaveBeenCalledWith('conversation-1'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Allow once' }));
     await waitFor(() =>
@@ -273,6 +314,9 @@ describe('DesktopAgentSurface', () => {
         'allow-once',
       ),
     );
+
+    fireEvent.click(screen.getByLabelText('Stop response (Esc)'));
+    await waitFor(() => expect(dshSessions.cancel).toHaveBeenCalledWith('conversation-1'));
   });
 
   it.each([
@@ -293,6 +337,7 @@ describe('DesktopAgentSurface', () => {
           workbenchInstanceId="workbench-1"
           agentSurfaceId="surface-1"
           conversationId="conversation-1"
+          surfaceKind="workspace"
         />,
       );
 
@@ -313,30 +358,97 @@ describe('DesktopAgentSurface', () => {
 
   it('keeps the final composer visible without creating an implicit Conversation', async () => {
     render(
-      <DesktopAgentSurface workbenchInstanceId="workbench-1" agentSurfaceId="surface-draft" />,
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        agentSurfaceId="surface-draft"
+        surfaceKind="entry"
+      />,
     );
     expect(screen.getByText('Hi, start creating with a conversation')).toBeTruthy();
     expect(dshSessions.getSnapshot).not.toHaveBeenCalled();
     expect(dshSessions.subscribe).not.toHaveBeenCalled();
     const composer = screen.getByLabelText('Message');
     await waitFor(() => expect((composer as HTMLTextAreaElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button', { name: 'Execution mode' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Full access' }));
+    await waitFor(() =>
+      expect(dshSessions.selectComposerPermissionPreset).toHaveBeenCalledWith(
+        'workbench-1',
+        'surface-draft',
+        'danger-full-access',
+      ),
+    );
     expect(dshSessions.create).not.toHaveBeenCalled();
   });
 
-  it('projects content-creation context and changes model and execution mode through Host ports', async () => {
+  it('passes the complete Entry context presentation to the retained selector components', async () => {
+    const loadCharacterTargets = vi.fn(async () => ({
+      targets: [
+        {
+          globalCharacterId: 'global-character-1',
+          characterVersionId: 'character-version-1',
+          displayName: 'Neko',
+          versionLabel: 'Published v1',
+          lineage: {
+            coverage: 'complete' as const,
+            state: 'declared-root' as const,
+            isHead: true,
+            path: [{ characterVersionId: 'character-version-1', label: 'Published v1' }],
+          },
+          storylines: [],
+        },
+      ],
+      diagnostics: [],
+    }));
+    const loadWorldTargets = vi.fn(async () => ({ targets: [], diagnostics: [] }));
+    const { container } = render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        agentSurfaceId="surface-draft"
+        surfaceKind="entry"
+        entryContext={{
+          workspace: { projects: [], onSelectProject: vi.fn() },
+          loadCharacterTargets,
+          loadWorldTargets,
+        }}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        (container.querySelector('[data-entry-context-action="character"]') as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    fireEvent.click(
+      container.querySelector('[data-entry-context-action="character"]') as HTMLButtonElement,
+    );
+    expect(await screen.findByText('Neko')).toBeTruthy();
+    expect(loadCharacterTargets).toHaveBeenCalledOnce();
+    expect(loadWorldTargets).not.toHaveBeenCalled();
+    expect(dshSessions.create).not.toHaveBeenCalled();
+  });
+
+  it('projects content context and changes models and DSH permissions through Host ports', async () => {
+    dshSessions.getSnapshot.mockResolvedValueOnce({
+      conversationId: projection.conversationId,
+      dshSessionId: projection.dshSessionId,
+      events: projection.events,
+    });
     const { container } = render(
       <DesktopAgentSurface
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
         workbenchInstanceId="workbench-1"
+        surfaceKind="workspace"
       />,
     );
     expect(await screen.findByText('My Film')).toBeTruthy();
     expect(screen.getByText('Board')).toBeTruthy();
     expect(container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Model' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'GPT-5' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Configure models' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'GPT-5' }));
     await waitFor(() =>
       expect(dshSessions.selectComposerModel).toHaveBeenCalledWith(
         'workbench-1',
@@ -344,17 +456,31 @@ describe('DesktopAgentSurface', () => {
         'openai:gpt-5',
       ),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Execution mode' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Auto' }));
+    if (!screen.queryByRole('tab', { name: 'Image' })) {
+      fireEvent.click(screen.getByRole('button', { name: 'Configure models' }));
+    }
+    fireEvent.click(screen.getByRole('tab', { name: 'Image' }));
+    expect(screen.queryByRole('radio', { name: 'GPT-5' })).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'GPT Image 2' }));
     await waitFor(() =>
-      expect(dshSessions.selectComposerMode).toHaveBeenCalledWith(
+      expect(dshSessions.selectComposerMediaModel).toHaveBeenCalledWith(
         'workbench-1',
         'surface-1',
-        'auto',
+        'image',
+        'nekoapi-media:gpt-image-2',
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Execution mode' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Full access' }));
+    await waitFor(() =>
+      expect(dshSessions.selectComposerPermissionPreset).toHaveBeenCalledWith(
+        'workbench-1',
+        'surface-1',
+        'danger-full-access',
       ),
     );
     expect(
-      (screen.getByRole('button', { name: 'Add context' }) as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Attach file' }) as HTMLButtonElement).disabled,
     ).toBe(true);
   });
 
@@ -372,16 +498,24 @@ describe('DesktopAgentSurface', () => {
     });
     dshPermissions.list.mockResolvedValueOnce([]);
     render(
-      <DesktopAgentSurface workbenchInstanceId="workbench-1" agentSurfaceId="surface-draft" />,
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        agentSurfaceId="surface-draft"
+        surfaceKind="entry"
+      />,
     );
 
     const composer = screen.getByLabelText('Message');
     await waitFor(() => expect((composer as HTMLTextAreaElement).disabled).toBe(false));
     fireEvent.change(composer, { target: { value: '  first message  ' } });
-    fireEvent.click(screen.getByLabelText('Send message'));
+    fireEvent.click(screen.getByLabelText('Send (Enter)'));
 
     await waitFor(() =>
-      expect(dshSessions.create).toHaveBeenCalledWith('workbench-1', 'surface-draft'),
+      expect(dshSessions.create).toHaveBeenCalledWith(
+        'workbench-1',
+        'surface-draft',
+        'workspace-write',
+      ),
     );
     expect(dshSessions.prompt).toHaveBeenCalledWith('conversation-created', 'first message');
     expect(dshPermissions.list).toHaveBeenCalledWith('conversation-created');
@@ -397,6 +531,7 @@ describe('DesktopAgentSurface', () => {
         workbenchInstanceId="workbench-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
+        surfaceKind="workspace"
       />,
     );
 
@@ -412,6 +547,7 @@ describe('DesktopAgentSurface', () => {
         workbenchInstanceId="workbench-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
+        surfaceKind="workspace"
       />,
     );
     expect(await screen.findByText('Create a node')).toBeTruthy();
@@ -454,6 +590,7 @@ describe('DesktopAgentSurface', () => {
         workbenchInstanceId="workbench-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
+        surfaceKind="workspace"
       />,
     );
 

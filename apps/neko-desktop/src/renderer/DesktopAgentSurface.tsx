@@ -7,15 +7,18 @@ import type {
   DshComposerConfigurationProjection,
   DshSessionHostProjection,
 } from '@neko/agent-contracts/dsh-session-host';
-import type { ShellExecutionMode } from '@neko/agent-contracts';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
-import { DshAgentView } from '@neko/agent-webview/dsh-session/root';
+import {
+  DshAgentView,
+  type DshEntryContextPresentation,
+} from '@neko/agent-webview/dsh-session/root';
 
 export interface DesktopAgentSurfaceProps {
   readonly agentSurfaceId: string;
   readonly workbenchInstanceId: string;
   readonly conversationId?: string;
-  readonly entryKind?: 'assistant' | 'authoring';
+  readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
+  readonly entryContext?: DshEntryContextPresentation;
   readonly conversationFeed?: ReactNode;
 }
 
@@ -32,7 +35,8 @@ export function DesktopAgentSurface({
   agentSurfaceId,
   conversationFeed,
   conversationId,
-  entryKind,
+  entryContext,
+  surfaceKind,
   workbenchInstanceId,
 }: DesktopAgentSurfaceProps): JSX.Element {
   const [state, setState] = useState<DesktopAgentSurfaceState>({ kind: 'loading' });
@@ -141,14 +145,37 @@ export function DesktopAgentSurface({
     }
   };
 
-  const selectMode = async (mode: ShellExecutionMode): Promise<void> => {
+  const selectPermissionPreset = async (permissionPresetId: string): Promise<void> => {
     if (configuring) return;
     setConfiguring(true);
     try {
-      const configuration = await window.openNekoDesktop.dshSessions.selectComposerMode(
+      const configuration =
+        await window.openNekoDesktop.dshSessions.selectComposerPermissionPreset(
+          workbenchInstanceId,
+          agentSurfaceId,
+          permissionPresetId,
+        );
+      setComposerConfiguration(configuration);
+      setComposerConfigurationError(undefined);
+    } catch (error) {
+      setComposerConfigurationError(describeError(error));
+    } finally {
+      setConfiguring(false);
+    }
+  };
+
+  const selectMediaModel = async (
+    category: 'image' | 'video' | 'audio',
+    modelOptionId: string,
+  ): Promise<void> => {
+    if (configuring) return;
+    setConfiguring(true);
+    try {
+      const configuration = await window.openNekoDesktop.dshSessions.selectComposerMediaModel(
         workbenchInstanceId,
         agentSurfaceId,
-        mode,
+        category,
+        modelOptionId,
       );
       setComposerConfiguration(configuration);
       setComposerConfigurationError(undefined);
@@ -165,10 +192,18 @@ export function DesktopAgentSurface({
     if (text.length === 0) return;
     setSubmitting(true);
     try {
+      const permissionPresetId = composerConfiguration?.permissionPresetId;
+      if (permissionPresetId === undefined) {
+        throw new Error('DSH permission preset is unavailable.');
+      }
       const targetConversationId =
         conversationId ??
         (state.kind === 'ready' ? state.projection.conversationId : undefined) ??
-        (await window.openNekoDesktop.dshSessions.create(workbenchInstanceId, agentSurfaceId))
+        (await window.openNekoDesktop.dshSessions.create(
+          workbenchInstanceId,
+          agentSurfaceId,
+          permissionPresetId,
+        ))
           .conversationId;
       const result = await window.openNekoDesktop.dshSessions.prompt(targetConversationId, text);
       const permissions = await window.openNekoDesktop.dshPermissions.list(targetConversationId);
@@ -249,7 +284,8 @@ export function DesktopAgentSurface({
       conversationId={
         conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined)
       }
-      entryKind={entryKind}
+      surfaceKind={surfaceKind}
+      entryContext={entryContext}
       draft={draft}
       composerConfiguration={composerConfiguration}
       composerConfigurationError={composerConfigurationError}
@@ -265,7 +301,12 @@ export function DesktopAgentSurface({
       onDecidePermission={(permission, optionId) => void decidePermission(permission, optionId)}
       onDraftChange={setDraft}
       onModelChange={(modelOptionId) => void selectModel(modelOptionId)}
-      onModeChange={(mode) => void selectMode(mode)}
+      onMediaModelChange={(category, modelOptionId) =>
+        void selectMediaModel(category, modelOptionId)
+      }
+      onPermissionPresetChange={(permissionPresetId) =>
+        void selectPermissionPreset(permissionPresetId)
+      }
       onRestartRuntime={() => void restartRuntime()}
       onSubmit={() => void submit()}
     />

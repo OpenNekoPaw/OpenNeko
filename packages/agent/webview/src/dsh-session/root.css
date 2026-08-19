@@ -6,10 +6,6 @@
   color: var(--agent-fg);
 }
 
-.dsh-agent-view .agent-entry-composition {
-  padding-block: 24px;
-}
-
 .dsh-agent-view .agent-inline-header:disabled {
   cursor: default;
 }

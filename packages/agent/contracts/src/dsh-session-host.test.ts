@@ -12,20 +12,25 @@ import {
   retiredIdentityAliasFields,
 } from './testing/dsh-contract-negative-fixtures';
 
-const createRequest = {
+const surfaceRequest = {
   requestId: 'request:create',
-  operation: 'create' as const,
   windowId: 'window:one',
   rendererSessionId: 'renderer:one',
   workbenchInstanceId: 'workbench:one',
   agentSurfaceId: 'surface:one',
 };
 
+const createRequest = {
+  ...surfaceRequest,
+  operation: 'create' as const,
+  permissionPresetId: 'workspace-write',
+};
+
 describe('DSH Session Host contract', () => {
-  it('strictly accepts model and execution-mode composer operations', () => {
+  it('strictly accepts model, media-model, and permission-preset composer operations', () => {
     expect(
       parseDshSessionHostRequest({
-        ...createRequest,
+        ...surfaceRequest,
         operation: 'composer-model',
         modelOptionId: 'deepseek-official:deepseek-v4',
       }),
@@ -35,14 +40,41 @@ describe('DSH Session Host contract', () => {
     });
     expect(
       parseDshSessionHostRequest({
-        ...createRequest,
-        operation: 'composer-mode',
-        mode: 'auto',
+        ...surfaceRequest,
+        operation: 'composer-permission-preset',
+        permissionPresetId: 'danger-full-access',
       }),
-    ).toMatchObject({ operation: 'composer-mode', mode: 'auto' });
+    ).toMatchObject({
+      operation: 'composer-permission-preset',
+      permissionPresetId: 'danger-full-access',
+    });
+    expect(
+      parseDshSessionHostRequest({
+        ...surfaceRequest,
+        operation: 'composer-media-model',
+        category: 'image',
+        modelOptionId: 'nekoapi-media:gpt-image-2',
+      }),
+    ).toMatchObject({
+      operation: 'composer-media-model',
+      category: 'image',
+      modelOptionId: 'nekoapi-media:gpt-image-2',
+    });
     expect(() =>
-      parseDshSessionHostRequest({ ...createRequest, operation: 'composer-mode', mode: 'legacy' }),
-    ).toThrow(/execution mode/u);
+      parseDshSessionHostRequest({
+        ...surfaceRequest,
+        operation: 'composer-media-model',
+        category: 'llm',
+        modelOptionId: 'deepseek-official:deepseek-v4',
+      }),
+    ).toThrow(/media category/u);
+    expect(() =>
+      parseDshSessionHostRequest({
+        ...surfaceRequest,
+        operation: 'composer-permission-preset',
+        permissionPresetId: '',
+      }),
+    ).toThrow(/permissionPresetId/u);
   });
 
   it('rejects incomplete, duplicated, or out-of-catalog composer projections', () => {
@@ -53,14 +85,27 @@ describe('DSH Session Host contract', () => {
           label: 'DeepSeek V4',
           providerId: 'deepseek-official',
           modelId: 'deepseek-v4',
+          providerLabel: 'DeepSeek',
+          category: 'llm',
+          capabilities: ['chat'],
+        },
+        {
+          id: 'nekoapi-media:gpt-image-2',
+          label: 'GPT Image 2',
+          providerId: 'nekoapi-media',
+          modelId: 'gpt-image-2',
+          providerLabel: 'NekoAPI Media',
+          category: 'image',
+          capabilities: ['image.generate'],
         },
       ],
       selectedModelOptionId: 'deepseek-official:deepseek-v4',
-      executionMode: 'ask',
-      modes: [
-        { id: 'plan', available: false, diagnostic: 'Unavailable.' },
-        { id: 'ask', available: true },
-        { id: 'auto', available: true },
+      selectedMediaModelOptionIds: { image: 'nekoapi-media:gpt-image-2' },
+      permissionPresetId: 'workspace-write',
+      permissionPresets: [
+        { id: 'read-only', label: 'read-only', selectable: true },
+        { id: 'workspace-write', label: 'workspace-write', selectable: true },
+        { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
       ],
     };
     expect(
@@ -78,12 +123,21 @@ describe('DSH Session Host contract', () => {
     expect(() =>
       parseDshComposerConfigurationProjection({
         ...configuration,
-        modes: [...configuration.modes, { id: 'ask', available: true }],
+        permissionPresets: [
+          ...configuration.permissionPresets,
+          { id: 'workspace-write', label: 'duplicate', selectable: true },
+        ],
       }),
-    ).toThrow(/mode 'ask' is duplicated/u);
+    ).toThrow(/permission preset 'workspace-write' is duplicated/u);
+    expect(() =>
+      parseDshComposerConfigurationProjection({
+        ...configuration,
+        selectedMediaModelOptionIds: { video: 'nekoapi-media:gpt-image-2' },
+      }),
+    ).toThrow(/selected video model/u);
   });
 
-  it('accepts create with only sender and exact Agent Surface identity', () => {
+  it('accepts create with sender, exact Agent Surface identity, and DSH preset', () => {
     expect(parseDshSessionHostRequest(createRequest)).toEqual(createRequest);
   });
 

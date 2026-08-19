@@ -1978,6 +1978,19 @@ async function startDesktop(): Promise<void> {
     workspaceGrants: workspaceGrantAuthority,
     configuration: workspaceConfigAuthority,
     sessions: dshProduct.runtime.conversations.conversations,
+    permissions: {
+      read: (conversationId) =>
+        conversationId === undefined
+          ? dshProduct.runtime.client.readPermissionPresets()
+          : dshProduct.runtime.conversations.conversations.readPermissionPresets(conversationId),
+      set: async (conversationId, permissionPresetId) => {
+        await dshProduct.runtime.conversations.conversations.setSessionMode(
+          conversationId,
+          permissionPresetId,
+        );
+        return dshProduct.runtime.conversations.conversations.readPermissionPresets(conversationId);
+      },
+    },
   });
   const dshPromptContext = createDshConversationTurnContextResolver({
     contexts: agentConversationContexts,
@@ -1994,6 +2007,7 @@ async function startDesktop(): Promise<void> {
       rendererSessionId,
       workbenchInstanceId,
       agentSurfaceId,
+      permissionPresetId,
     }) => {
       const resolved = await resolveDshAgentSurfaceScope({
         windowId,
@@ -2010,6 +2024,10 @@ async function startDesktop(): Promise<void> {
         context,
         title: app.getLocale().toLocaleLowerCase().startsWith('zh') ? '新会话' : 'New conversation',
       });
+      await dshProduct.runtime.conversations.conversations.setSessionMode(
+        published.conversationId,
+        permissionPresetId,
+      );
       await shellService.attachAgentConversation({
         windowId,
         rendererSessionId,

@@ -1,11 +1,11 @@
 /**
  * ModeSelector Component
- * Shell execution mode selector (plan/ask/auto)
+ * Shared mode selector. Runtime-backed surfaces provide their canonical options.
  */
 
 import { useState, useRef } from 'react';
 import { useComposerControlMenu } from './composer-menu-runtime';
-import { ShellExecutionMode } from '@neko/agent-contracts';
+import type { ShellExecutionMode } from '@neko/agent-contracts';
 import { useClickOutsideSingle } from './useClickOutside';
 import { ChevronDownIcon } from './DropdownMenu';
 import {
@@ -16,16 +16,25 @@ import {
 import { useTranslation } from '../../../i18n/I18nContext';
 
 interface ModeSelectorProps {
-  mode: ShellExecutionMode;
-  onChange: (mode: ShellExecutionMode) => void;
+  mode: string;
+  onChange: (mode: string) => void;
+  options?: readonly ModeSelectorOption[];
   disabled?: boolean;
   disabledReason?: string;
   availableModes?: Readonly<Record<ShellExecutionMode, boolean>>;
 }
 
+export interface ModeSelectorOption {
+  readonly id: string;
+  readonly label: string;
+  readonly description?: string;
+  readonly disabled?: boolean;
+}
+
 export function ModeSelector({
   mode,
   onChange,
+  options,
   disabled = false,
   disabledReason,
   availableModes,
@@ -44,7 +53,7 @@ export function ModeSelector({
     estimatedWidth: 220,
   });
 
-  const MODE_OPTIONS: Array<{
+  const defaultOptions: Array<{
     value: ShellExecutionMode;
     labelKey: string;
     descriptionKey: string;
@@ -65,8 +74,15 @@ export function ModeSelector({
       descriptionKey: 'chat.executionMode.autoDesc',
     },
   ];
-
-  const currentMode = MODE_OPTIONS.find((option) => option.value === mode);
+  const modeOptions: readonly ModeSelectorOption[] =
+    options ??
+    defaultOptions.map((option) => ({
+      id: option.value,
+      label: t(option.labelKey),
+      description: t(option.descriptionKey),
+      disabled: availableModes?.[option.value] === false,
+    }));
+  const currentMode = modeOptions.find((option) => option.id === mode);
 
   return (
     <div className="relative" ref={menuRef}>
@@ -84,9 +100,7 @@ export function ModeSelector({
         className="agent-control-chip agent-execution-mode-trigger"
         title={disabledReason ?? `${t('chat.executionMode.title')} (Shift+Tab)`}
       >
-        <span className="agent-control-chip-text">
-          {currentMode ? t(currentMode.labelKey) : mode}
-        </span>
+        <span className="agent-control-chip-text">{currentMode?.label ?? mode}</span>
         <ChevronDownIcon className="w-3 h-3" />
       </button>
 
@@ -99,24 +113,26 @@ export function ModeSelector({
           <div className="agent-dropdown-header" role="presentation">
             {t('chat.executionMode.title')}
           </div>
-          {MODE_OPTIONS.map((option) => (
+          {modeOptions.map((option) => (
             <button
-              key={option.value}
+              key={option.id}
               type="button"
               onClick={() => {
-                onChange(option.value);
+                onChange(option.id);
                 setIsOpen(false);
               }}
               className={`agent-dropdown-item agent-dropdown-item-stacked ${
-                mode === option.value ? 'agent-dropdown-item-selected' : ''
+                mode === option.id ? 'agent-dropdown-item-selected' : ''
               }`}
               role="menuitemradio"
-              aria-label={t(option.labelKey)}
-              aria-checked={mode === option.value}
-              disabled={availableModes?.[option.value] === false}
+              aria-label={option.label}
+              aria-checked={mode === option.id}
+              disabled={option.disabled}
             >
-              <div>{t(option.labelKey)}</div>
-              <div className="agent-dropdown-item-description">{t(option.descriptionKey)}</div>
+              <div>{option.label}</div>
+              {option.description ? (
+                <div className="agent-dropdown-item-description">{option.description}</div>
+              ) : null}
             </button>
           ))}
         </div>

@@ -1,16 +1,31 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { DshPermissionHostProjection } from '@neko/agent-contracts/dsh-permission-host';
 import type {
   DshComposerConfigurationProjection,
   DshSessionHostEvent,
   DshSessionHostProjection,
 } from '@neko/agent-contracts/dsh-session-host';
-import type { ShellExecutionMode } from '@neko/agent-contracts';
+import type {
+  AgentCharacterDialogueTargetOption,
+  AgentWorldExperienceTargetOption,
+} from '@neko/agent-contracts';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
 import type { ChatModelOption } from '@neko/ai-contracts';
 import { InputArea } from '../components/ChatView/InputArea/InputArea';
 import { InputAreaProvider } from '../components/ChatView/InputAreaContext';
-import type { GenerationParams } from '../components/ChatView/InputArea/types';
+import type {
+  GenerationParams,
+  SelectedCharacterLaunch,
+  SelectedWorldLaunch,
+} from '../components/ChatView/InputArea/types';
+import type {
+  AgentComposerWorkspacePresentation,
+  AgentComposerWorkspaceTarget,
+} from '../components/ComposerWorkspaceContext';
+import { AuthoringTargetSelector } from '../components/ChatView/AuthoringTargetSelector';
+import { CharacterDialogueTargetSelector } from '../components/ChatView/CharacterDialogueTargetSelector';
+import { HomeExperienceQuickActions } from '../components/ChatView/HomeExperienceQuickActions';
+import { WorldExperienceTargetSelector } from '../components/ChatView/WorldExperienceTargetSelector';
 import {
   ChevronDownIcon,
   CodeIcon,
@@ -19,11 +34,11 @@ import {
   MarkdownDocumentView,
   RefreshIcon,
   SegmentedControl,
-  StopIcon,
   SuccessIcon,
   WarningIcon,
 } from '@neko/ui';
-import { useTranslation } from '@neko/ui/i18n/react';
+import { useTranslation as useUiTranslation } from '@neko/ui/i18n/react';
+import { AgentPresentationI18nProvider, useTranslation } from '../i18n/I18nContext';
 
 import '../index.css';
 import './root.css';
@@ -32,7 +47,8 @@ export interface DshAgentViewProps {
   readonly agentSurfaceId: string;
   readonly conversationFeed?: ReactNode;
   readonly conversationId?: string;
-  readonly entryKind?: 'assistant' | 'authoring';
+  readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
+  readonly entryContext?: DshEntryContextPresentation;
   readonly composerConfiguration?: DshComposerConfigurationProjection;
   readonly composerConfigurationError?: string;
   readonly configuring: boolean;
@@ -48,23 +64,146 @@ export interface DshAgentViewProps {
   readonly onDecidePermission: (permission: DshPermissionHostProjection, optionId: string) => void;
   readonly onDraftChange: (value: string) => void;
   readonly onModelChange: (modelOptionId: string) => void;
-  readonly onModeChange: (mode: ShellExecutionMode) => void;
+  readonly onMediaModelChange?: (
+    category: 'image' | 'video' | 'audio',
+    modelOptionId: string,
+  ) => void;
+  readonly onPermissionPresetChange: (permissionPresetId: string) => void;
   readonly onRestartRuntime: () => void;
   readonly onSubmit: () => void;
 }
 
+export interface DshEntryContextPresentation {
+  readonly workspace: Pick<
+    Extract<AgentComposerWorkspacePresentation, { readonly kind: 'entry' }>,
+    'projects' | 'onSelectProject'
+  >;
+  readonly loadCharacterTargets: () => Promise<
+    DshEntryTargetCatalog<AgentCharacterDialogueTargetOption>
+  >;
+  readonly loadWorldTargets: () => Promise<DshEntryTargetCatalog<AgentWorldExperienceTargetOption>>;
+}
+
+export interface DshEntryTargetCatalog<T> {
+  readonly targets: readonly T[];
+  readonly diagnostics: readonly string[];
+}
+
 export function DshAgentView(props: DshAgentViewProps): JSX.Element {
+  const { locale } = useUiTranslation();
+  return (
+    <AgentPresentationI18nProvider locale={locale}>
+      <DshAgentViewContent {...props} />
+    </AgentPresentationI18nProvider>
+  );
+}
+
+function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const { locale } = useTranslation();
   const copy = locale === 'zh-cn' ? ZH_COPY : EN_COPY;
+  const [entryExperience, setEntryExperience] = useState<'assistant' | 'authoring'>('assistant');
+  const [entryDetail, setEntryDetail] = useState<'project' | 'character' | 'world'>('character');
+  const [entryDetailExpanded, setEntryDetailExpanded] = useState(false);
+  const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
+  const [entryCharacterTargets, setEntryCharacterTargets] = useState<
+    readonly AgentCharacterDialogueTargetOption[]
+  >([]);
+  const [entryCharacterTargetsStatus, setEntryCharacterTargetsStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'unavailable'
+  >('idle');
+  const [entryWorldTargets, setEntryWorldTargets] = useState<
+    readonly AgentWorldExperienceTargetOption[]
+  >([]);
+  const [entryWorldTargetsStatus, setEntryWorldTargetsStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'unavailable'
+  >('idle');
+  const [entryCharacterLaunches, setEntryCharacterLaunches] = useState<
+    readonly SelectedCharacterLaunch[]
+  >([]);
+  const [entryWorldLaunch, setEntryWorldLaunch] = useState<SelectedWorldLaunch>();
+  const [entryContextDiagnostic, setEntryContextDiagnostic] = useState<string>();
   const runtimeReady = props.runtime?.status === 'running';
   const hasEvents = (props.projection?.events.length ?? 0) > 0;
-  const showEmptyState = !hasEvents && !props.conversationFeed;
-  const entryKind = props.entryKind ?? 'authoring';
-  const emptyTitle = entryKind === 'assistant' ? copy.assistantEmptyTitle : copy.emptyTitle;
+  const showEmptyState =
+    props.conversationId === undefined && !hasEvents && !props.conversationFeed;
+  const emptyTitle =
+    props.surfaceKind === 'entry'
+      ? entryExperience === 'assistant'
+        ? copy.entryEmptyTitle
+        : copy.entryAuthoringEmptyTitle
+      : props.surfaceKind === 'assistant'
+        ? copy.assistantEmptyTitle
+        : copy.workspaceEmptyTitle;
+  const compositionClass =
+    props.surfaceKind === 'workspace'
+      ? 'agent-workspace-initial-composition'
+      : 'agent-entry-composition';
+  const centerGroupClass =
+    props.surfaceKind === 'workspace'
+      ? 'agent-workspace-initial-center-group'
+      : 'agent-entry-center-group';
+  useEffect(() => {
+    if (!entryDetailExpanded || entryDetail !== 'character' || !props.entryContext) {
+      return;
+    }
+    let active = true;
+    setEntryCharacterTargetsStatus('loading');
+    setEntryContextDiagnostic(undefined);
+    void props.entryContext.loadCharacterTargets().then(
+      (catalog) => {
+        if (!active) return;
+        setEntryCharacterTargets(catalog.targets);
+        setEntryCharacterTargetsStatus('ready');
+        setEntryContextDiagnostic(projectCatalogDiagnostic(catalog.diagnostics));
+      },
+      (error: unknown) => {
+        if (!active) return;
+        setEntryCharacterTargets([]);
+        setEntryCharacterTargetsStatus('unavailable');
+        setEntryContextDiagnostic(describeError(error));
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [entryDetail, entryDetailExpanded, props.entryContext]);
+  useEffect(() => {
+    if (!entryDetailExpanded || entryDetail !== 'world' || !props.entryContext) {
+      return;
+    }
+    let active = true;
+    setEntryWorldTargetsStatus('loading');
+    setEntryContextDiagnostic(undefined);
+    void props.entryContext.loadWorldTargets().then(
+      (catalog) => {
+        if (!active) return;
+        setEntryWorldTargets(catalog.targets);
+        setEntryWorldTargetsStatus('ready');
+        setEntryContextDiagnostic(projectCatalogDiagnostic(catalog.diagnostics));
+      },
+      (error: unknown) => {
+        if (!active) return;
+        setEntryWorldTargets([]);
+        setEntryWorldTargetsStatus('unavailable');
+        setEntryContextDiagnostic(describeError(error));
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [entryDetail, entryDetailExpanded, props.entryContext]);
+  const chooseEntryDetail = (detail: 'project' | 'character' | 'world'): void => {
+    if (!props.entryContext) {
+      throw new Error('Agent Entry context presentation is unavailable.');
+    }
+    setEntryDetail(detail);
+    setEntryDetailExpanded(true);
+    setEntryContextDiagnostic(undefined);
+  };
   const composer = (
     <DshComposer
       copy={copy}
-      entryKind={entryKind}
+      surfaceKind={props.surfaceKind}
       configuration={props.composerConfiguration}
       configurationError={props.composerConfigurationError}
       configuring={props.configuring}
@@ -74,8 +213,29 @@ export function DshAgentView(props: DshAgentViewProps): JSX.Element {
       onCancel={props.onCancelTurn}
       onDraftChange={props.onDraftChange}
       onModelChange={props.onModelChange}
-      onModeChange={props.onModeChange}
+      onMediaModelChange={props.onMediaModelChange}
+      onPermissionPresetChange={props.onPermissionPresetChange}
       onSubmit={props.onSubmit}
+      entryExperience={entryExperience}
+      entryContextAvailable={props.entryContext !== undefined}
+      entryWorkspaceTarget={entryWorkspaceTarget}
+      selectedCharacterLaunches={entryCharacterLaunches}
+      selectedWorldLaunch={entryWorldLaunch}
+      onChooseEntryDetail={chooseEntryDetail}
+      onClearEntryWorkspaceTarget={() => setEntryWorkspaceTarget(undefined)}
+      onRemoveCharacterLaunch={(characterVersionId) =>
+        setEntryCharacterLaunches((current) =>
+          current.filter((selection) => selection.characterVersionId !== characterVersionId),
+        )
+      }
+      onRemoveWorldLaunch={() => setEntryWorldLaunch(undefined)}
+      presentation={
+        showEmptyState
+          ? props.surfaceKind === 'workspace'
+            ? 'workspace'
+            : 'entry'
+          : 'conversation'
+      }
     />
   );
 
@@ -83,13 +243,15 @@ export function DshAgentView(props: DshAgentViewProps): JSX.Element {
     <div
       className="dsh-agent-view agent-chat-view flex h-full min-h-0 flex-1 flex-col overflow-hidden"
       data-agent-surface={props.agentSurfaceId}
+      data-agent-surface-kind={props.surfaceKind}
+      data-entry-detail={entryDetailExpanded ? entryDetail : 'closed'}
       data-dsh-runtime-status={props.runtime?.status ?? 'loading'}
       data-empty-state={showEmptyState}
       data-presentation="desktop-dock"
     >
       {showEmptyState ? (
-        <div className="agent-entry-composition flex-1">
-          {entryKind === 'assistant' ? (
+        <div className={`${compositionClass} flex-1`}>
+          {props.surfaceKind === 'entry' ? (
             <div className="agent-entry-experience-selector">
               <SegmentedControl
                 appearance="neutral"
@@ -98,20 +260,28 @@ export function DshAgentView(props: DshAgentViewProps): JSX.Element {
                 maxWidth={480}
                 options={[
                   { value: 'assistant', label: copy.entryConversation },
-                  { value: 'authoring', label: copy.entryCreation, disabled: true },
+                  { value: 'authoring', label: copy.entryCreation },
                 ]}
-                value="assistant"
+                value={entryExperience}
                 onValueChange={(value) => {
-                  if (value !== 'assistant') {
-                    throw new Error(
-                      'Assistant entry cannot switch to Authoring before DSH binding exists.',
-                    );
+                  if (value !== 'assistant' && value !== 'authoring') {
+                    throw new Error(`Unsupported Entry experience '${value}'.`);
+                  }
+                  setEntryExperience(value);
+                  setEntryDetail(value === 'authoring' ? 'project' : 'character');
+                  setEntryDetailExpanded(false);
+                  setEntryContextDiagnostic(undefined);
+                  if (value === 'authoring') {
+                    setEntryCharacterLaunches([]);
+                    setEntryWorldLaunch(undefined);
+                  } else {
+                    setEntryWorkspaceTarget(undefined);
                   }
                 }}
               />
             </div>
           ) : null}
-          <div className="agent-entry-center-group">
+          <div className={centerGroupClass}>
             <div className="agent-empty-state agent-empty-state--desktop-dock select-none px-3">
               <section
                 className="agent-entry-intro w-full min-w-0"
@@ -127,6 +297,56 @@ export function DshAgentView(props: DshAgentViewProps): JSX.Element {
             </div>
             {renderRuntimeState(props, copy)}
             {composer}
+            {props.surfaceKind === 'entry' && props.entryContext ? (
+              <HomeExperienceQuickActions
+                key={`${entryExperience}:${entryDetail}:${entryDetailExpanded ? 'open' : 'closed'}`}
+                mode={entryExperience}
+                detailExpanded={entryDetailExpanded}
+                disabled={props.submitting}
+                title={
+                  entryExperience === 'authoring'
+                    ? copy.chooseProject
+                    : entryDetail === 'world'
+                      ? copy.chooseWorld
+                      : copy.chooseCharacter
+                }
+                onExpandedChange={setEntryDetailExpanded}
+              >
+                {entryExperience === 'authoring' ? (
+                  <AuthoringTargetSelector
+                    presentation={props.entryContext.workspace}
+                    selected={entryWorkspaceTarget}
+                    pending={props.submitting}
+                    onChange={async (target) => {
+                      setEntryWorkspaceTarget(target);
+                      setEntryContextDiagnostic(undefined);
+                    }}
+                  />
+                ) : entryDetail === 'character' ? (
+                  <CharacterDialogueTargetSelector
+                    targets={entryCharacterTargets}
+                    selected={entryCharacterLaunches}
+                    loading={
+                      entryCharacterTargetsStatus === 'idle' ||
+                      entryCharacterTargetsStatus === 'loading'
+                    }
+                    pending={props.submitting}
+                    onChange={setEntryCharacterLaunches}
+                  />
+                ) : (
+                  <WorldExperienceTargetSelector
+                    targets={entryWorldTargets}
+                    selected={entryWorldLaunch}
+                    loading={
+                      entryWorldTargetsStatus === 'idle' || entryWorldTargetsStatus === 'loading'
+                    }
+                    pending={props.submitting}
+                    onChange={setEntryWorldLaunch}
+                  />
+                )}
+                {entryContextDiagnostic ? <p role="alert">{entryContextDiagnostic}</p> : null}
+              </HomeExperienceQuickActions>
+            ) : null}
           </div>
         </div>
       ) : (
@@ -156,7 +376,7 @@ export function DshAgentView(props: DshAgentViewProps): JSX.Element {
 
 function DshComposer({
   copy,
-  entryKind,
+  surfaceKind,
   configuration,
   configurationError,
   configuring,
@@ -166,11 +386,22 @@ function DshComposer({
   onCancel,
   onDraftChange,
   onModelChange,
-  onModeChange,
+  onMediaModelChange,
+  onPermissionPresetChange,
   onSubmit,
+  entryExperience,
+  entryContextAvailable,
+  entryWorkspaceTarget,
+  selectedCharacterLaunches,
+  selectedWorldLaunch,
+  onChooseEntryDetail,
+  onClearEntryWorkspaceTarget,
+  onRemoveCharacterLaunch,
+  onRemoveWorldLaunch,
+  presentation,
 }: {
   readonly copy: DshAgentCopy;
-  readonly entryKind: 'assistant' | 'authoring';
+  readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
   readonly configuration?: DshComposerConfigurationProjection;
   readonly configurationError?: string;
   readonly configuring: boolean;
@@ -180,16 +411,31 @@ function DshComposer({
   readonly onCancel: () => void;
   readonly onDraftChange: (value: string) => void;
   readonly onModelChange: (modelOptionId: string) => void;
-  readonly onModeChange: (mode: ShellExecutionMode) => void;
+  readonly onMediaModelChange?: (
+    category: 'image' | 'video' | 'audio',
+    modelOptionId: string,
+  ) => void;
+  readonly onPermissionPresetChange: (permissionPresetId: string) => void;
   readonly onSubmit: () => void;
+  readonly entryExperience: 'assistant' | 'authoring';
+  readonly entryContextAvailable: boolean;
+  readonly entryWorkspaceTarget?: AgentComposerWorkspaceTarget;
+  readonly selectedCharacterLaunches: readonly SelectedCharacterLaunch[];
+  readonly selectedWorldLaunch?: SelectedWorldLaunch;
+  readonly onChooseEntryDetail: (detail: 'project' | 'character' | 'world') => void;
+  readonly onClearEntryWorkspaceTarget: () => void;
+  readonly onRemoveCharacterLaunch: (characterVersionId: string) => void;
+  readonly onRemoveWorldLaunch: () => void;
+  readonly presentation: 'entry' | 'workspace' | 'conversation';
 }): JSX.Element {
   const models: ChatModelOption[] = (configuration?.models ?? []).map((model) => ({
     id: model.id,
     label: model.label,
     providerId: model.providerId,
     modelId: model.modelId,
-    providerLabel: model.providerId,
-    category: 'llm',
+    providerLabel: model.providerLabel,
+    category: model.category,
+    capabilities: model.capabilities,
   }));
   const generationParams: GenerationParams = {
     ratio: '16:9',
@@ -202,20 +448,25 @@ function DshComposer({
   const configurationDiagnostic = configurationError ?? configuration?.diagnostic;
   return (
     <InputAreaProvider
-      isBusy={disabled || configuring}
+      isBusy={configuring || currentTurn !== undefined}
       modelCatalogStatus={configuration === undefined ? 'loading' : 'ready'}
       selectedModel={configuration?.selectedModelOptionId ?? ''}
       availableModels={models}
       onModelSelect={onModelChange}
-      mediaModelSelection={{ image: '', video: '', audio: '' }}
-      availableMediaModels={[]}
+      mediaModelSelection={{
+        image: configuration?.selectedMediaModelOptionIds.image ?? 'none',
+        video: configuration?.selectedMediaModelOptionIds.video ?? 'none',
+        audio: configuration?.selectedMediaModelOptionIds.audio ?? 'none',
+      }}
+      availableMediaModels={models.filter((model) => model.category !== 'llm')}
+      mediaModelOptOutEnabled={false}
       mediaUnderstandingSelection={{ image: '', video: '', audio: '' }}
-      onMediaModelSelect={() => undefined}
+      onMediaModelSelect={onMediaModelChange ?? (() => undefined)}
       onMediaUnderstandingModelSelect={() => undefined}
       sessionMode="agent"
       onSessionModeChange={() => undefined}
-      executionMode={configuration?.executionMode ?? 'ask'}
-      onExecutionModeChange={onModeChange}
+      executionMode="ask"
+      onExecutionModeChange={() => undefined}
       contextTokenCount={0}
       isCompressing={false}
       mediaModelCallCount={0}
@@ -228,10 +479,11 @@ function DshComposer({
     >
       <div className="dsh-composer-adapter" data-dsh-adapter="input-area">
         <InputArea
-          presentation="entry"
+          presentation={presentation}
           inputValue={draft}
-          isThinking={false}
-          isRunActive={false}
+          isThinking={currentTurn !== undefined}
+          isRunActive={currentTurn !== undefined}
+          queueingEnabled={false}
           onInputChange={onDraftChange}
           onSend={() => {
             if (configurationDiagnostic || disabled || draft.trim().length === 0) return false;
@@ -241,10 +493,21 @@ function DshComposer({
           onCancel={onCancel}
           disabled={disabled || configuring || configuration === undefined}
           attachmentsDisabled
-          availableExecutionModes={
-            Object.fromEntries(
-              (configuration?.modes ?? []).map((mode) => [mode.id, mode.available]),
-            ) as Record<ShellExecutionMode, boolean>
+          runtimeMode={
+            configuration === undefined
+              ? undefined
+              : {
+                  current: configuration.permissionPresetId,
+                  options: configuration.permissionPresets.map((preset) => ({
+                    id: preset.id,
+                    label: formatPermissionPresetLabel(preset.id, preset.label),
+                    disabled: !preset.selectable,
+                    ...(preset.description === undefined
+                      ? {}
+                      : { description: preset.description }),
+                  })),
+                  onChange: onPermissionPresetChange,
+                }
           }
           submissionBlocked={configurationDiagnostic !== undefined}
           submissionBlockedReason={configurationDiagnostic}
@@ -277,25 +540,51 @@ function DshComposer({
               : undefined
           }
           entryContextActions={
-            entryKind === 'assistant'
-              ? [
-                  { kind: 'character', label: '选择角色', disabled: true },
-                  { kind: 'world', label: '选择世界', disabled: true },
-                ]
+            presentation === 'entry' && surfaceKind === 'entry'
+              ? entryExperience === 'authoring'
+                ? [
+                    {
+                      kind: 'project' as const,
+                      label: copy.chooseProject,
+                      onInvoke: () => onChooseEntryDetail('project'),
+                      disabled: !entryContextAvailable,
+                      ...(!entryContextAvailable
+                        ? { disabledReason: copy.entryContextUnavailable }
+                        : {}),
+                    },
+                  ]
+                : [
+                    {
+                      kind: 'character' as const,
+                      label: copy.chooseCharacter,
+                      onInvoke: () => onChooseEntryDetail('character'),
+                      disabled: !entryContextAvailable,
+                      ...(!entryContextAvailable
+                        ? { disabledReason: copy.entryContextUnavailable }
+                        : {}),
+                    },
+                    {
+                      kind: 'world' as const,
+                      label: copy.chooseWorld,
+                      onInvoke: () => onChooseEntryDetail('world'),
+                      disabled: !entryContextAvailable,
+                      ...(!entryContextAvailable
+                        ? { disabledReason: copy.entryContextUnavailable }
+                        : {}),
+                    },
+                  ]
               : undefined
           }
+          entryContextActionsDisabled={false}
+          entryWorkspaceTarget={entryExperience === 'authoring' ? entryWorkspaceTarget : undefined}
+          selectedCharacterLaunches={
+            entryExperience === 'assistant' ? selectedCharacterLaunches : []
+          }
+          selectedWorldLaunch={entryExperience === 'assistant' ? selectedWorldLaunch : undefined}
+          onClearEntryWorkspaceTarget={async () => onClearEntryWorkspaceTarget()}
+          onRemoveCharacterLaunch={onRemoveCharacterLaunch}
+          onRemoveWorldLaunch={onRemoveWorldLaunch}
         />
-        {currentTurn !== undefined ? (
-          <button
-            type="button"
-            className="agent-composer-action-button agent-composer-stop"
-            aria-label={copy.cancelTurn}
-            title={copy.cancelTurn}
-            onClick={onCancel}
-          >
-            <StopIcon size={14} />
-          </button>
-        ) : null}
       </div>
     </InputAreaProvider>
   );
@@ -575,19 +864,18 @@ interface DshAgentCopy {
   readonly attachmentsUnavailable: string;
   readonly board: string;
   readonly chooseCharacter: string;
+  readonly chooseProject: string;
   readonly chooseWorld: string;
-  readonly emptyTitle: string;
+  readonly entryEmptyTitle: string;
+  readonly entryAuthoringEmptyTitle: string;
   readonly entryContext: string;
   readonly entryContextUnavailable: string;
   readonly entryConversation: string;
   readonly entryCreation: string;
   readonly entryExperience: string;
   readonly input: string;
-  readonly executionMode: string;
   readonly loadingConfiguration: string;
-  readonly modeLabels: Readonly<Record<ShellExecutionMode, string>>;
   readonly model: string;
-  readonly modelAndMode: string;
   readonly modelRequired: string;
   readonly loading: string;
   readonly output: string;
@@ -603,6 +891,7 @@ interface DshAgentCopy {
   readonly you: string;
   readonly youAvatar: string;
   readonly unavailable: string;
+  readonly workspaceEmptyTitle: string;
   readonly workspaceContext: string;
 }
 
@@ -618,21 +907,20 @@ const EN_COPY: DshAgentCopy = {
     'Attachments are unavailable until the authorized resource picker is connected.',
   board: 'Board',
   chooseCharacter: 'Choose character',
+  chooseProject: 'Choose project',
   chooseWorld: 'Choose world',
-  emptyTitle: 'Hi, start creating with a conversation',
+  entryEmptyTitle: 'Hi, start creating with a conversation',
+  entryAuthoringEmptyTitle: 'What should we create?',
   entryContext: 'Conversation context',
-  entryContextUnavailable: 'Character and World context is not connected to DSH yet.',
+  entryContextUnavailable: 'Product context selection is unavailable.',
   entryConversation: 'Conversation',
   entryCreation: 'Creation',
   entryExperience: 'Entry experience',
-  executionMode: 'Execution mode',
   input: 'Input',
   loadingConfiguration: 'Loading model configuration…',
   loading: 'Loading DSH session…',
   output: 'Result',
-  modeLabels: { plan: 'Plan', ask: 'Ask', auto: 'Auto' },
   model: 'Model',
-  modelAndMode: 'Model and execution mode',
   modelRequired: 'Select a configured model before sending.',
   permissions: 'Pending permissions',
   placeholder: 'Ask the DSH Agent…',
@@ -651,6 +939,7 @@ const EN_COPY: DshAgentCopy = {
   you: 'You',
   youAvatar: 'ME',
   unavailable: 'Unavailable',
+  workspaceEmptyTitle: 'Start creating',
   workspaceContext: 'Workspace and Canvas context',
 };
 
@@ -665,21 +954,20 @@ const ZH_COPY: DshAgentCopy = {
   attachmentsUnavailable: '授权资源选择器接入前，附件上下文暂不可用。',
   board: '画板',
   chooseCharacter: '选择角色',
+  chooseProject: '选择项目',
   chooseWorld: '选择世界',
-  emptyTitle: 'Hi，用对话开启创作',
+  entryEmptyTitle: 'Hi，用对话开启创作',
+  entryAuthoringEmptyTitle: '这次要创作什么？',
   entryContext: '对话上下文',
-  entryContextUnavailable: '角色和世界上下文尚未接入 DSH。',
+  entryContextUnavailable: '产品上下文选择暂不可用。',
   entryConversation: '对话',
   entryCreation: '创作',
   entryExperience: '入口模式',
-  executionMode: '执行模式',
   input: '输入',
   loadingConfiguration: '正在加载模型配置…',
   loading: '正在加载 DSH 会话…',
   output: '结果',
-  modeLabels: { plan: 'Plan', ask: 'Ask', auto: 'Auto' },
   model: '模型',
-  modelAndMode: '模型与执行模式',
   modelRequired: '发送前请选择已配置的模型。',
   permissions: '待处理权限',
   placeholder: '向 DSH Agent 提问…',
@@ -693,5 +981,21 @@ const ZH_COPY: DshAgentCopy = {
   you: '你',
   youAvatar: '我',
   unavailable: '不可用',
+  workspaceEmptyTitle: '开始创作',
   workspaceContext: '工作区与画布上下文',
 };
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function projectCatalogDiagnostic(diagnostics: readonly string[]): string | undefined {
+  return diagnostics.length === 0 ? undefined : diagnostics.join('\n');
+}
+
+function formatPermissionPresetLabel(permissionPresetId: string, advertisedLabel: string): string {
+  if (permissionPresetId === 'read-only') return 'Read Only';
+  if (permissionPresetId === 'workspace-write') return 'Workspace Write';
+  if (permissionPresetId === 'danger-full-access') return 'Full access';
+  return advertisedLabel;
+}

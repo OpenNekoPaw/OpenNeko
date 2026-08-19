@@ -54,7 +54,7 @@ describe('DSH Session preload bridge', () => {
     });
     await requireBridge().bootstrap.get();
 
-    await requireBridge().dshSessions.create('workbench-1', 'surface-1');
+    await requireBridge().dshSessions.create('workbench-1', 'surface-1', 'workspace-write');
 
     expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
       requestId: expect.any(String),
@@ -63,6 +63,7 @@ describe('DSH Session preload bridge', () => {
       rendererSessionId: 'renderer-1',
       workbenchInstanceId: 'workbench-1',
       agentSurfaceId: 'surface-1',
+      permissionPresetId: 'workspace-write',
     });
   });
 
@@ -93,7 +94,7 @@ describe('DSH Session preload bridge', () => {
     });
   });
 
-  it('routes composer model and mode through strict sender-bound operations', async () => {
+  it('routes composer model, media model, and mode through strict sender-bound operations', async () => {
     const configuration = {
       models: [
         {
@@ -101,14 +102,27 @@ describe('DSH Session preload bridge', () => {
           label: 'DeepSeek V4',
           providerId: 'deepseek-official',
           modelId: 'deepseek-v4',
+          providerLabel: 'DeepSeek',
+          category: 'llm' as const,
+          capabilities: ['chat'],
+        },
+        {
+          id: 'nekoapi-media:gpt-image-2',
+          label: 'GPT Image 2',
+          providerId: 'nekoapi-media',
+          modelId: 'gpt-image-2',
+          providerLabel: 'NekoAPI Media',
+          category: 'image' as const,
+          capabilities: ['image.generate'],
         },
       ],
       selectedModelOptionId: 'deepseek-official:deepseek-v4',
-      executionMode: 'ask',
-      modes: [
-        { id: 'plan', available: false, diagnostic: 'Unavailable.' },
-        { id: 'ask', available: true },
-        { id: 'auto', available: true },
+      selectedMediaModelOptionIds: { image: 'nekoapi-media:gpt-image-2' },
+      permissionPresetId: 'workspace-write',
+      permissionPresets: [
+        { id: 'read-only', label: 'read-only', selectable: true },
+        { id: 'workspace-write', label: 'workspace-write', selectable: true },
+        { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
       ],
     };
     state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
@@ -144,10 +158,31 @@ describe('DSH Session preload bridge', () => {
         modelOptionId: 'deepseek-official:deepseek-v4',
       }),
     );
-    await bridge.dshSessions.selectComposerMode('workbench-1', 'surface-1', 'auto');
+    await bridge.dshSessions.selectComposerMediaModel(
+      'workbench-1',
+      'surface-1',
+      'image',
+      'nekoapi-media:gpt-image-2',
+    );
     expect(state.invoke).toHaveBeenLastCalledWith(
       DSH_SESSION_HOST_CHANNEL,
-      expect.objectContaining({ operation: 'composer-mode', mode: 'auto' }),
+      expect.objectContaining({
+        operation: 'composer-media-model',
+        category: 'image',
+        modelOptionId: 'nekoapi-media:gpt-image-2',
+      }),
+    );
+    await bridge.dshSessions.selectComposerPermissionPreset(
+      'workbench-1',
+      'surface-1',
+      'danger-full-access',
+    );
+    expect(state.invoke).toHaveBeenLastCalledWith(
+      DSH_SESSION_HOST_CHANNEL,
+      expect.objectContaining({
+        operation: 'composer-permission-preset',
+        permissionPresetId: 'danger-full-access',
+      }),
     );
   });
 

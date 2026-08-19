@@ -1,5 +1,5 @@
 import { decodeDshAcpJsonPayload, type DshAcpJsonValue } from './dsh-acp';
-import type { ShellExecutionMode } from './settings';
+import type { ModelType } from '@neko/ai-contracts';
 
 export const DSH_SESSION_HOST_CHANNEL = 'openneko:dsh:session';
 export const DSH_SESSION_CHANGED_CHANNEL = 'openneko:dsh:session:changed';
@@ -49,12 +49,16 @@ export interface DshComposerModelOption {
   readonly label: string;
   readonly providerId: string;
   readonly modelId: string;
+  readonly providerLabel: string;
+  readonly category: ModelType;
+  readonly capabilities: readonly string[];
 }
 
-export interface DshComposerModeOption {
-  readonly id: ShellExecutionMode;
-  readonly available: boolean;
-  readonly diagnostic?: string;
+export interface DshComposerPermissionPresetOption {
+  readonly id: string;
+  readonly label: string;
+  readonly description?: string;
+  readonly selectable: boolean;
 }
 
 export interface DshComposerContextProjection {
@@ -70,8 +74,11 @@ export interface DshComposerContextProjection {
 export interface DshComposerConfigurationProjection {
   readonly models: readonly DshComposerModelOption[];
   readonly selectedModelOptionId?: string;
-  readonly executionMode: ShellExecutionMode;
-  readonly modes: readonly DshComposerModeOption[];
+  readonly selectedMediaModelOptionIds: Readonly<
+    Partial<Record<Exclude<ModelType, 'llm'>, string>>
+  >;
+  readonly permissionPresetId: string;
+  readonly permissionPresets: readonly DshComposerPermissionPresetOption[];
   readonly context?: DshComposerContextProjection;
   readonly diagnostic?: string;
 }
@@ -91,6 +98,7 @@ export type DshSessionHostRequest =
       readonly operation: 'create';
       readonly workbenchInstanceId: string;
       readonly agentSurfaceId: string;
+      readonly permissionPresetId: string;
     })
   | (DshSessionHostConversationRequest & { readonly operation: 'snapshot' })
   | (DshSessionHostConversationRequest & { readonly operation: 'prompt'; readonly text: string })
@@ -107,10 +115,17 @@ export type DshSessionHostRequest =
       readonly modelOptionId: string;
     })
   | (DshSessionHostSenderRequest & {
-      readonly operation: 'composer-mode';
+      readonly operation: 'composer-media-model';
       readonly workbenchInstanceId: string;
       readonly agentSurfaceId: string;
-      readonly mode: ShellExecutionMode;
+      readonly category: 'image' | 'video' | 'audio';
+      readonly modelOptionId: string;
+    })
+  | (DshSessionHostSenderRequest & {
+      readonly operation: 'composer-permission-preset';
+      readonly workbenchInstanceId: string;
+      readonly agentSurfaceId: string;
+      readonly permissionPresetId: string;
     });
 
 export interface DshSessionHostResult {
@@ -130,7 +145,11 @@ export interface DshSessionChangedEvent {
 
 export interface OpenNekoDshSessionBridge {
   readonly dshSessions: {
-    create(workbenchInstanceId: string, agentSurfaceId: string): Promise<DshSessionHostProjection>;
+    create(
+      workbenchInstanceId: string,
+      agentSurfaceId: string,
+      permissionPresetId: string,
+    ): Promise<DshSessionHostProjection>;
     getSnapshot(conversationId: string): Promise<DshSessionHostProjection>;
     prompt(conversationId: string, text: string): Promise<DshSessionHostResult>;
     cancel(conversationId: string): Promise<DshSessionHostProjection>;
@@ -143,10 +162,16 @@ export interface OpenNekoDshSessionBridge {
       agentSurfaceId: string,
       modelOptionId: string,
     ): Promise<DshComposerConfigurationProjection>;
-    selectComposerMode(
+    selectComposerMediaModel(
       workbenchInstanceId: string,
       agentSurfaceId: string,
-      mode: ShellExecutionMode,
+      category: 'image' | 'video' | 'audio',
+      modelOptionId: string,
+    ): Promise<DshComposerConfigurationProjection>;
+    selectComposerPermissionPreset(
+      workbenchInstanceId: string,
+      agentSurfaceId: string,
+      permissionPresetId: string,
     ): Promise<DshComposerConfigurationProjection>;
     subscribe(listener: (event: DshSessionChangedEvent) => void): () => void;
   };
@@ -167,18 +192,21 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
       'rendererSessionId',
       'workbenchInstanceId',
       'agentSurfaceId',
+      'permissionPresetId',
     ]);
     return {
       ...base,
       operation: 'create',
       workbenchInstanceId: requireIdentity(record.workbenchInstanceId, 'workbenchInstanceId'),
       agentSurfaceId: requireIdentity(record.agentSurfaceId, 'agentSurfaceId'),
+      permissionPresetId: requireIdentity(record.permissionPresetId, 'permissionPresetId'),
     };
   }
   if (
     record.operation === 'composer-snapshot' ||
     record.operation === 'composer-model' ||
-    record.operation === 'composer-mode'
+    record.operation === 'composer-media-model' ||
+    record.operation === 'composer-permission-preset'
   ) {
     const commonKeys = [
       'requestId',
@@ -205,11 +233,20 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
         modelOptionId: requireIdentity(record.modelOptionId, 'modelOptionId'),
       };
     }
-    requireExactKeys(record, [...commonKeys, 'mode']);
+    if (record.operation === 'composer-media-model') {
+      requireExactKeys(record, [...commonKeys, 'category', 'modelOptionId']);
+      return {
+        ...common,
+        operation: 'composer-media-model',
+        category: parseMediaCategory(record.category),
+        modelOptionId: requireIdentity(record.modelOptionId, 'modelOptionId'),
+      };
+    }
+    requireExactKeys(record, [...commonKeys, 'permissionPresetId']);
     return {
       ...common,
-      operation: 'composer-mode',
-      mode: parseExecutionMode(record.mode),
+      operation: 'composer-permission-preset',
+      permissionPresetId: requireIdentity(record.permissionPresetId, 'permissionPresetId'),
     };
   }
   const conversationId = requireIdentity(record.conversationId, 'conversationId');
@@ -242,6 +279,11 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
   throw new Error(`DSH Session operation '${String(record.operation)}' is unsupported.`);
 }
 
+function parseMediaCategory(value: unknown): 'image' | 'video' | 'audio' {
+  if (value === 'image' || value === 'video' || value === 'audio') return value;
+  throw new Error(`DSH composer media category '${String(value)}' is unsupported.`);
+}
+
 export function parseDshComposerConfigurationHostResult(
   value: unknown,
   expectedRequestId: string,
@@ -266,23 +308,47 @@ export function parseDshComposerConfigurationProjection(
   const record = requireRecord(value, 'DSH composer configuration projection');
   requireAllowedKeys(
     record,
-    ['models', 'selectedModelOptionId', 'executionMode', 'modes', 'context', 'diagnostic'],
-    ['models', 'executionMode', 'modes'],
+    [
+      'models',
+      'selectedModelOptionId',
+      'selectedMediaModelOptionIds',
+      'permissionPresetId',
+      'permissionPresets',
+      'context',
+      'diagnostic',
+    ],
+    ['models', 'selectedMediaModelOptionIds', 'permissionPresetId', 'permissionPresets'],
   );
   if (!Array.isArray(record.models)) {
     throw new Error('DSH composer models must be an array.');
   }
-  if (!Array.isArray(record.modes)) {
-    throw new Error('DSH composer modes must be an array.');
+  if (!Array.isArray(record.permissionPresets) || record.permissionPresets.length === 0) {
+    throw new Error('DSH composer permission presets must be a non-empty array.');
   }
   const models = record.models.map((model) => {
     const candidate = requireRecord(model, 'DSH composer model option');
-    requireExactKeys(candidate, ['id', 'label', 'providerId', 'modelId']);
+    requireExactKeys(candidate, [
+      'id',
+      'label',
+      'providerId',
+      'modelId',
+      'providerLabel',
+      'category',
+      'capabilities',
+    ]);
+    if (!Array.isArray(candidate.capabilities)) {
+      throw new Error('DSH composer model capabilities must be an array.');
+    }
     return {
       id: requireIdentity(candidate.id, 'model.id'),
       label: requireIdentity(candidate.label, 'model.label'),
       providerId: requireIdentity(candidate.providerId, 'model.providerId'),
       modelId: requireIdentity(candidate.modelId, 'model.modelId'),
+      providerLabel: requireIdentity(candidate.providerLabel, 'model.providerLabel'),
+      category: parseModelType(candidate.category),
+      capabilities: candidate.capabilities.map((capability) =>
+        requireIdentity(capability, 'model.capability'),
+      ),
     };
   });
   const modelIds = new Set<string>();
@@ -292,26 +358,28 @@ export function parseDshComposerConfigurationProjection(
     }
     modelIds.add(model.id);
   }
-  const modes = record.modes.map((mode) => {
-    const candidate = requireRecord(mode, 'DSH composer mode option');
-    requireAllowedKeys(candidate, ['id', 'available', 'diagnostic'], ['id', 'available']);
-    if (typeof candidate.available !== 'boolean') {
-      throw new Error('DSH composer mode availability must be boolean.');
-    }
+  const permissionPresets = record.permissionPresets.map((preset) => {
+    const candidate = requireRecord(preset, 'DSH composer permission preset option');
+    requireAllowedKeys(
+      candidate,
+      ['id', 'label', 'description', 'selectable'],
+      ['id', 'label', 'selectable'],
+    );
     return {
-      id: parseExecutionMode(candidate.id),
-      available: candidate.available,
-      ...(candidate.diagnostic === undefined
+      id: requireIdentity(candidate.id, 'permissionPreset.id'),
+      label: requireIdentity(candidate.label, 'permissionPreset.label'),
+      selectable: requireBoolean(candidate.selectable, 'permissionPreset.selectable'),
+      ...(candidate.description === undefined
         ? {}
-        : { diagnostic: requireIdentity(candidate.diagnostic, 'mode.diagnostic') }),
+        : { description: requireIdentity(candidate.description, 'permissionPreset.description') }),
     };
   });
-  const modeIds = new Set<ShellExecutionMode>();
-  for (const mode of modes) {
-    if (modeIds.has(mode.id)) {
-      throw new Error(`DSH composer mode '${mode.id}' is duplicated.`);
+  const permissionPresetIds = new Set<string>();
+  for (const preset of permissionPresets) {
+    if (permissionPresetIds.has(preset.id)) {
+      throw new Error(`DSH composer permission preset '${preset.id}' is duplicated.`);
     }
-    modeIds.add(mode.id);
+    permissionPresetIds.add(preset.id);
   }
   const selectedModelOptionId =
     record.selectedModelOptionId === undefined
@@ -322,20 +390,53 @@ export function parseDshComposerConfigurationProjection(
       `DSH composer selected model '${selectedModelOptionId}' is not in the projected catalog.`,
     );
   }
-  const executionMode = parseExecutionMode(record.executionMode);
-  if (!modeIds.has(executionMode)) {
-    throw new Error(`DSH composer execution mode '${executionMode}' is not projected.`);
+  const permissionPresetId = requireIdentity(record.permissionPresetId, 'permissionPresetId');
+  if (!permissionPresetIds.has(permissionPresetId)) {
+    throw new Error(`DSH composer permission preset '${permissionPresetId}' is not projected.`);
   }
+  const selectedMediaModelOptionIds = parseSelectedMediaModelOptionIds(
+    record.selectedMediaModelOptionIds,
+    models,
+  );
   return {
     models,
     ...(selectedModelOptionId === undefined ? {} : { selectedModelOptionId }),
-    executionMode,
-    modes,
+    selectedMediaModelOptionIds,
+    permissionPresetId,
+    permissionPresets,
     ...(record.context === undefined ? {} : { context: parseComposerContext(record.context) }),
     ...(record.diagnostic === undefined
       ? {}
       : { diagnostic: requireIdentity(record.diagnostic, 'diagnostic') }),
   };
+}
+
+function parseModelType(value: unknown): ModelType {
+  if (value === 'llm' || value === 'image' || value === 'video' || value === 'audio') return value;
+  throw new Error(`DSH composer model category '${String(value)}' is unsupported.`);
+}
+
+function parseSelectedMediaModelOptionIds(
+  value: unknown,
+  models: readonly DshComposerModelOption[],
+): DshComposerConfigurationProjection['selectedMediaModelOptionIds'] {
+  const record = requireRecord(value, 'DSH composer selected media models');
+  requireAllowedKeys(record, ['image', 'video', 'audio'], []);
+  const result: Partial<Record<'image' | 'video' | 'audio', string>> = {};
+  for (const category of ['image', 'video', 'audio'] as const) {
+    if (record[category] === undefined) continue;
+    const modelOptionId = requireIdentity(
+      record[category],
+      `selectedMediaModelOptionIds.${category}`,
+    );
+    if (!models.some((model) => model.id === modelOptionId && model.category === category)) {
+      throw new Error(
+        `DSH composer selected ${category} model '${modelOptionId}' is not in that projected catalog.`,
+      );
+    }
+    result[category] = modelOptionId;
+  }
+  return result;
 }
 
 function parseComposerContext(value: unknown): DshComposerContextProjection {
@@ -512,10 +613,8 @@ function requireNonNegativeInteger(value: unknown, field: string): number {
   return value as number;
 }
 
-function parseExecutionMode(value: unknown): ShellExecutionMode {
-  if (value !== 'plan' && value !== 'ask' && value !== 'auto') {
-    throw new Error(`DSH composer execution mode '${String(value)}' is unsupported.`);
-  }
+function requireBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`DSH Session ${field} must be a boolean.`);
   return value;
 }
 

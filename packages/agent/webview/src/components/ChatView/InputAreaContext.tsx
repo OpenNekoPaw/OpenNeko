@@ -46,6 +46,7 @@ export interface InputAreaContextValue {
   // Media Models (per-category selection)
   mediaModelSelection: MediaModelSelection;
   availableMediaModels: ChatModelOption[];
+  mediaModelOptOutEnabled?: boolean;
   /** Read-only model routing for native media understanding. */
   mediaUnderstandingModels?: MediaUnderstandingModels;
   mediaUnderstandingSelection: MediaUnderstandingSelection;
@@ -106,6 +107,7 @@ export function InputAreaProvider({
       onModelSelect: value.onModelSelect,
       mediaModelSelection: value.mediaModelSelection,
       availableMediaModels: value.availableMediaModels,
+      mediaModelOptOutEnabled: value.mediaModelOptOutEnabled,
       mediaUnderstandingModels: value.mediaUnderstandingModels,
       mediaUnderstandingSelection: value.mediaUnderstandingSelection,
       onMediaModelSelect: value.onMediaModelSelect,
@@ -146,6 +148,7 @@ export function InputAreaProvider({
       value.onModelSelect,
       value.mediaModelSelection,
       value.availableMediaModels,
+      value.mediaModelOptOutEnabled,
       value.mediaUnderstandingModels,
       value.mediaUnderstandingSelection,
       value.onMediaModelSelect,

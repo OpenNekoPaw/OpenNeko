@@ -36,11 +36,18 @@ export class DesktopDshSessionHost {
           readonly agentSurfaceId: string;
           readonly modelOptionId: string;
         }): Promise<DshComposerConfigurationHostResult['configuration']>;
-        selectMode(input: {
+        selectMediaModel(input: {
           readonly windowId: string;
           readonly workbenchInstanceId: string;
           readonly agentSurfaceId: string;
-          readonly mode: 'plan' | 'ask' | 'auto';
+          readonly category: 'image' | 'video' | 'audio';
+          readonly modelOptionId: string;
+        }): Promise<DshComposerConfigurationHostResult['configuration']>;
+        selectPermissionPreset(input: {
+          readonly windowId: string;
+          readonly workbenchInstanceId: string;
+          readonly agentSurfaceId: string;
+          readonly permissionPresetId: string;
         }): Promise<DshComposerConfigurationHostResult['configuration']>;
         applyConversation(conversationId: string): Promise<void>;
       };
@@ -49,6 +56,7 @@ export class DesktopDshSessionHost {
         readonly rendererSessionId: string;
         readonly workbenchInstanceId: string;
         readonly agentSurfaceId: string;
+        readonly permissionPresetId: string;
       }) => Promise<{ readonly conversationId: string }>;
       readonly projection: Pick<DshAcpProjection, 'snapshot'>;
       readonly windows: {
@@ -76,7 +84,8 @@ export class DesktopDshSessionHost {
     if (
       request.operation === 'composer-snapshot' ||
       request.operation === 'composer-model' ||
-      request.operation === 'composer-mode'
+      request.operation === 'composer-media-model' ||
+      request.operation === 'composer-permission-preset'
     ) {
       const scope = {
         windowId: request.windowId,
@@ -91,7 +100,16 @@ export class DesktopDshSessionHost {
                 ...scope,
                 modelOptionId: request.modelOptionId,
               })
-            : await this.options.composer.selectMode({ ...scope, mode: request.mode });
+            : request.operation === 'composer-media-model'
+              ? await this.options.composer.selectMediaModel({
+                  ...scope,
+                  category: request.category,
+                  modelOptionId: request.modelOptionId,
+                })
+              : await this.options.composer.selectPermissionPreset({
+                  ...scope,
+                  permissionPresetId: request.permissionPresetId,
+                });
       return { requestId: request.requestId, configuration };
     }
     let stopReason: string | undefined;
@@ -103,6 +121,7 @@ export class DesktopDshSessionHost {
           rendererSessionId: request.rendererSessionId,
           workbenchInstanceId: request.workbenchInstanceId,
           agentSurfaceId: request.agentSurfaceId,
+          permissionPresetId: request.permissionPresetId,
         })
       ).conversationId;
     } else if (request.operation === 'prompt') {

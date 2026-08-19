@@ -416,7 +416,7 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   dshSessions: {
-    async create(workbenchInstanceId, agentSurfaceId) {
+    async create(workbenchInstanceId, agentSurfaceId, permissionPresetId) {
       const context = requireDesktopWindowContext();
       const request = {
         requestId: nextRequestId('dsh-session-create'),
@@ -425,6 +425,7 @@ const bridge: OpenNekoDesktopBridge &
         rendererSessionId: context.rendererSessionId,
         workbenchInstanceId,
         agentSurfaceId,
+        permissionPresetId,
       };
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return parseDshSessionHostResult(response, request.requestId).projection;
@@ -502,16 +503,35 @@ const bridge: OpenNekoDesktopBridge &
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return parseDshComposerConfigurationHostResult(response, request.requestId).configuration;
     },
-    async selectComposerMode(workbenchInstanceId, agentSurfaceId, mode) {
+    async selectComposerMediaModel(workbenchInstanceId, agentSurfaceId, category, modelOptionId) {
       const context = requireDesktopWindowContext();
       const request = {
-        requestId: nextRequestId('dsh-composer-mode'),
-        operation: 'composer-mode' as const,
+        requestId: nextRequestId('dsh-composer-media-model'),
+        operation: 'composer-media-model' as const,
         windowId: context.windowId,
         rendererSessionId: context.rendererSessionId,
         workbenchInstanceId,
         agentSurfaceId,
-        mode,
+        category,
+        modelOptionId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      return parseDshComposerConfigurationHostResult(response, request.requestId).configuration;
+    },
+    async selectComposerPermissionPreset(
+      workbenchInstanceId,
+      agentSurfaceId,
+      permissionPresetId,
+    ) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-composer-permission-preset'),
+        operation: 'composer-permission-preset' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        workbenchInstanceId,
+        agentSurfaceId,
+        permissionPresetId,
       };
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return parseDshComposerConfigurationHostResult(response, request.requestId).configuration;

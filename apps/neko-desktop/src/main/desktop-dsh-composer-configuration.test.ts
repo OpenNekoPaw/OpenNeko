@@ -1,14 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AssistantConfigState, AssistantSettingsSnapshot } from '@neko/host/settings';
+import type {
+  AgentModelPurpose,
+  AssistantConfigState,
+  AssistantSettingsSnapshot,
+  ConfigManager,
+} from '@neko/host/settings';
 
 import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-configuration';
 
 describe('Desktop DSH composer configuration', () => {
-  it('projects the workspace-owned model catalog and applies exact model and mode before prompting', async () => {
+  it('projects workspace models and DSH permission presets through their canonical owners', async () => {
     const workspaceConfig = createConfig();
     const applicationConfig = createConfig();
     const setSessionConfigOption = vi.fn(async () => ({ configOptions: [] }));
-    const setSessionMode = vi.fn(async () => ({}));
+    const setPermissionPreset = vi.fn(async (_conversationId: string, permissionPresetId: string) =>
+      permissionPresets(permissionPresetId),
+    );
     const service = createDesktopDshComposerConfiguration({
       resolveSurface: vi.fn(async () => ({
         binding: {
@@ -38,7 +45,11 @@ describe('Desktop DSH composer configuration', () => {
         getApplicationConfig: () => applicationConfig,
         getWorkspaceConfig: vi.fn(() => workspaceConfig),
       },
-      sessions: { setSessionConfigOption, setSessionMode },
+      sessions: { setSessionConfigOption },
+      permissions: {
+        read: vi.fn(async () => permissionPresets('workspace-write')),
+        set: setPermissionPreset,
+      },
     });
 
     await expect(
@@ -49,11 +60,12 @@ describe('Desktop DSH composer configuration', () => {
       }),
     ).resolves.toMatchObject({
       selectedModelOptionId: 'deepseek-official:deepseek-v4',
-      executionMode: 'ask',
-      modes: [
-        { id: 'plan', available: false },
-        { id: 'ask', available: true },
-        { id: 'auto', available: true },
+      selectedMediaModelOptionIds: { image: 'nekoapi-media:gpt-image-2' },
+      permissionPresetId: 'workspace-write',
+      permissionPresets: [
+        { id: 'read-only', label: 'read-only', selectable: true },
+        { id: 'workspace-write', label: 'workspace-write', selectable: true },
+        { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
       ],
     });
 
@@ -72,11 +84,43 @@ describe('Desktop DSH composer configuration', () => {
       'model',
       '["openai","gpt-5",8192]',
     );
-    expect(setSessionMode).toHaveBeenCalledWith('conversation-1', 'ask');
     expect(applicationConfig.setAssistantSettings).not.toHaveBeenCalled();
+
+    await expect(
+      service.selectPermissionPreset({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        permissionPresetId: 'danger-full-access',
+      }),
+    ).resolves.toMatchObject({ permissionPresetId: 'danger-full-access' });
+    expect(setPermissionPreset).toHaveBeenCalledWith(
+      'conversation-1',
+      'danger-full-access',
+    );
+
+    await service.selectMediaModel({
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      category: 'image',
+      modelOptionId: 'nekoapi-media:gpt-image-2',
+    });
+    expect(workspaceConfig.setDefaultModelPurposeRefs).toHaveBeenCalledWith({
+      'image.generate': { providerId: 'nekoapi-media', modelId: 'gpt-image-2' },
+    });
+    await expect(
+      service.selectMediaModel({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        category: 'video',
+        modelOptionId: 'nekoapi-media:gpt-image-2',
+      }),
+    ).rejects.toThrow(/Composer video model/u);
   });
 
-  it('rejects Plan and a missing authoritative Conversation context visibly', async () => {
+  it('rejects unadvertised presets and a missing authoritative Conversation context visibly', async () => {
     const config = createConfig();
     const service = createDesktopDshComposerConfiguration({
       resolveSurface: vi.fn(async () => ({
@@ -94,23 +138,37 @@ describe('Desktop DSH composer configuration', () => {
       },
       sessions: {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
-        setSessionMode: vi.fn(async () => ({})),
+      },
+      permissions: {
+        read: vi.fn(async () => permissionPresets('workspace-write')),
+        set: vi.fn(async () => permissionPresets('workspace-write')),
       },
     });
 
     await expect(
-      service.selectMode({
+      service.selectPermissionPreset({
         windowId: 'window-1',
         workbenchInstanceId: 'workbench-1',
         agentSurfaceId: 'surface-1',
-        mode: 'plan',
+        permissionPresetId: 'auto',
       }),
-    ).rejects.toThrow(/Plan mode is not implemented/u);
+    ).rejects.toThrow(/not advertised by the runtime/u);
     await expect(service.applyConversation('conversation-missing')).rejects.toThrow(
       /no authoritative domain context/u,
     );
   });
 });
+
+function permissionPresets(currentValue: string) {
+  return {
+    currentValue,
+    options: [
+      { value: 'read-only', name: 'read-only' },
+      { value: 'workspace-write', name: 'workspace-write' },
+      { value: 'danger-full-access', name: 'danger-full-access' },
+    ],
+  };
+}
 
 function createConfig() {
   let state = createState();
@@ -119,6 +177,23 @@ function createConfig() {
     setAssistantSettings: vi.fn(async (updates: Partial<AssistantSettingsSnapshot>) => {
       state = { ...state, ...updates };
     }),
+    setDefaultModelPurposeRefs: vi.fn(
+      async (updates: Parameters<ConfigManager['setDefaultModelPurposeRefs']>[0]) => {
+        const defaultMediaModels = { ...state.defaultMediaModels };
+        for (const [purpose, ref] of Object.entries(updates) as [
+          AgentModelPurpose,
+          NonNullable<(typeof updates)[AgentModelPurpose]> | undefined,
+        ][]) {
+          if (!ref) continue;
+          const category = purpose.replace('.generate', '');
+          if (category !== 'image' && category !== 'video' && category !== 'audio') {
+            throw new Error(`Unexpected media purpose '${purpose}'.`);
+          }
+          defaultMediaModels[category] = `${ref.providerId}:${ref.modelId}`;
+        }
+        state = { ...state, defaultMediaModels };
+      },
+    ),
   };
 }
 
@@ -141,15 +216,30 @@ function createState(): AssistantConfigState {
         label: 'DeepSeek V4',
         providerId: 'deepseek-official',
         modelId: 'deepseek-v4',
+        providerLabel: 'DeepSeek',
+        category: 'llm',
+        capabilities: ['chat'],
       },
       {
         id: 'openai:gpt-5',
         label: 'GPT-5',
         providerId: 'openai',
         modelId: 'gpt-5',
+        providerLabel: 'OpenAI',
+        category: 'llm',
+        capabilities: ['chat'],
+      },
+      {
+        id: 'nekoapi-media:gpt-image-2',
+        label: 'GPT Image 2',
+        providerId: 'nekoapi-media',
+        modelId: 'gpt-image-2',
+        providerLabel: 'NekoAPI Media',
+        category: 'image',
+        capabilities: ['image.generate'],
       },
     ],
     modelGroups: [],
-    defaultMediaModels: {},
+    defaultMediaModels: { image: 'nekoapi-media:gpt-image-2' },
   };
 }

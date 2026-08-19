@@ -23,6 +23,7 @@ import {
   UserIcon,
 } from '@neko/ui/icons';
 import { ModeSelector } from './ModeSelector';
+import type { ModeSelectorOption } from './ModeSelector';
 import { ComposerConfigMenu } from './ComposerConfigMenu';
 import { CharacterConversationModeSelector } from './CharacterConversationModeSelector';
 import { EntryPromptMenu as ComposerEntryPromptMenu } from './EntryPromptMenu';
@@ -86,6 +87,8 @@ interface InputAreaProps {
   isThinking: boolean;
   /** Conversation-owned run state for queue/send/stop behavior. */
   isRunActive?: boolean;
+  /** Whether the owning runtime accepts a new queued prompt while a run is active. */
+  queueingEnabled?: boolean;
   queuedMessageCount?: number;
   queuedMessages?: readonly AgentQueuedMessageItem[];
   droppedFiles?: MessageAttachment[];
@@ -112,6 +115,11 @@ interface InputAreaProps {
   submissionBlocked?: boolean;
   submissionBlockedReason?: string;
   availableExecutionModes?: Readonly<Record<ShellExecutionMode, boolean>>;
+  runtimeMode?: {
+    readonly current: string;
+    readonly options: readonly ModeSelectorOption[];
+    readonly onChange: (mode: string) => void;
+  };
   /** Session-bound attached files (managed by parent for conversation isolation) */
   attachedFiles?: MessageAttachment[];
   /** Callback to update attached files (when managed externally) */
@@ -125,6 +133,7 @@ interface InputAreaProps {
     readonly disabled?: boolean;
     readonly disabledReason?: string;
   }[];
+  entryContextActionsDisabled?: boolean;
   entryWorkspaceTarget?: AgentComposerWorkspaceTarget;
   workspaceCanvas?: {
     readonly workspaceLabel: string;
@@ -228,6 +237,7 @@ export function InputArea({
   inputValue,
   isThinking,
   isRunActive = isThinking,
+  queueingEnabled = true,
   queuedMessageCount = 0,
   queuedMessages = [],
   droppedFiles,
@@ -246,11 +256,13 @@ export function InputArea({
   submissionBlocked = false,
   submissionBlockedReason,
   availableExecutionModes,
+  runtimeMode,
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
   onAuthorizeResource,
   attachmentsDisabled = false,
   entryContextActions = [],
+  entryContextActionsDisabled = false,
   entryWorkspaceTarget,
   workspaceCanvas,
   onClearEntryWorkspaceTarget,
@@ -288,6 +300,7 @@ export function InputArea({
     mediaModelCallCount,
     mediaModelSelection,
     availableMediaModels,
+    mediaModelOptOutEnabled,
     mediaUnderstandingModels,
     mediaUnderstandingSelection,
     onMediaModelSelect,
@@ -584,18 +597,20 @@ export function InputArea({
     resizeTextarea(e.target, value);
   };
 
-  // Cycle execution mode: plan → ask → auto → plan
-  const EXECUTION_MODES: import('@neko/agent-contracts').ShellExecutionMode[] = [
-    'plan',
-    'ask',
-    'auto',
-  ];
+  // Cycle the mode catalog owned by the active runtime.
   const cycleExecutionMode = useCallback(() => {
     if (executionModeLocked) return;
-    const idx = EXECUTION_MODES.indexOf(executionMode);
-    const next = EXECUTION_MODES[(idx + 1) % EXECUTION_MODES.length];
-    onExecutionModeChange(next!);
-  }, [executionMode, executionModeLocked, onExecutionModeChange]);
+    if (runtimeMode !== undefined) {
+      const available = runtimeMode.options.filter((option) => !option.disabled);
+      const index = available.findIndex((option) => option.id === runtimeMode.current);
+      const next = available[(index + 1) % available.length];
+      if (next !== undefined) runtimeMode.onChange(next.id);
+      return;
+    }
+    const modes: readonly ShellExecutionMode[] = ['plan', 'ask', 'auto'];
+    const index = modes.indexOf(executionMode);
+    onExecutionModeChange(modes[(index + 1) % modes.length]!);
+  }, [executionMode, executionModeLocked, onExecutionModeChange, runtimeMode]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -996,6 +1011,7 @@ export function InputArea({
     ambientNodeCount: ambientNodes.length,
     mediaModelCallCount,
     isThinking: isRunActive,
+    queueingEnabled,
     queuedMessageCount: projectedQueuedMessageCount,
     disabled,
     sessionMode,
@@ -1061,7 +1077,7 @@ export function InputArea({
               <EntryContextActionButton
                 key={action.kind}
                 action={action}
-                composerDisabled={disabled}
+                composerDisabled={entryContextActionsDisabled}
               />
             ))}
             {entryWorkspaceTarget ? (
@@ -1232,6 +1248,7 @@ export function InputArea({
                       onModelSelect={onModelSelect}
                       mediaModelSelection={mediaModelSelection}
                       availableMediaModels={availableMediaModels}
+                      mediaModelOptOutEnabled={mediaModelOptOutEnabled}
                       mediaUnderstandingModels={mediaUnderstandingModels}
                       mediaUnderstandingSelection={mediaUnderstandingSelection}
                       onMediaModelSelect={onMediaModelSelect}
@@ -1289,8 +1306,18 @@ export function InputArea({
             {inputAreaProjection.showExecutionModeSelector && (
               <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
                 <ModeSelector
-                  mode={executionMode}
-                  onChange={onExecutionModeChange}
+                  mode={runtimeMode?.current ?? executionMode}
+                  onChange={(mode) => {
+                    if (runtimeMode !== undefined) {
+                      runtimeMode.onChange(mode);
+                      return;
+                    }
+                    if (mode !== 'plan' && mode !== 'ask' && mode !== 'auto') {
+                      throw new Error(`Unsupported shell execution mode '${mode}'.`);
+                    }
+                    onExecutionModeChange(mode);
+                  }}
+                  options={runtimeMode?.options}
                   disabled={executionModeLocked}
                   disabledReason={
                     executionModePolicy?.status === 'locked'

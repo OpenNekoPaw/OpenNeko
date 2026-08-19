@@ -1,68 +1,62 @@
-/**
- * React i18n bindings for neko-agent
- *
- * Re-exports shared Provider/hooks from @neko/shared.
- * Components import from './I18nContext' — no changes needed.
- */
-import { I18nProvider, useTranslation as useUiTranslation } from '@neko/ui/i18n/react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { SupportedLocale } from '@neko/ui/i18n';
+import { createWebviewI18n } from '@neko/ui/i18n/webview';
+import type { II18nService } from '@neko/ui/i18n';
 
-export { I18nProvider };
+import { agentPresentationMessages } from './presentation-messages';
 
-export function useTranslation(): {
-  readonly locale: string;
+const services = {
+  en: createAgentPresentationService('en'),
+  'zh-cn': createAgentPresentationService('zh-cn'),
+} as const;
+
+interface AgentI18nContextValue {
+  readonly locale: SupportedLocale;
   readonly t: (key: string, params?: Record<string, string | number>) => string;
-} {
-  const value = useUiTranslation();
-  const fallback = (key: string, params?: Record<string, string | number>): string => {
-    const isZh = value.locale === 'zh-cn';
-    const labels: Record<string, string> = isZh
-      ? {
-          'chat.input.attach': '添加上下文',
-          'chat.input.send': '发送消息',
-          'chat.input.cancel': '停止生成',
-          'chat.input.message': '消息',
-          'chat.modelMenu.trigger': '模型',
-          'chat.executionMode.title': '执行模式',
-          'chat.executionMode.plan': 'Plan',
-          'chat.executionMode.ask': 'Ask',
-          'chat.executionMode.auto': 'Auto',
-          'chat.executionMode.planDesc': '规划后执行',
-          'chat.executionMode.askDesc': '执行前询问',
-          'chat.executionMode.autoDesc': '自动执行',
-          'chat.input.entryPlaceholder': '输入创作指令…',
-          'chat.input.workspaceCanvas.label': '工作区上下文',
-          'chat.input.workspaceCanvas.canvasIndex': '画布',
-          'chat.input.workspaceCanvas.board': '画板',
-          'chat.entryContext.bindingBar': '上下文',
-          'chat.entryContext.clearTarget': '清除上下文',
-        }
-      : {
-          'chat.input.attach': 'Add context',
-          'chat.input.send': 'Send message',
-          'chat.input.cancel': 'Stop generation',
-          'chat.input.message': 'Message',
-          'chat.modelMenu.trigger': 'Model',
-          'chat.executionMode.title': 'Execution mode',
-          'chat.executionMode.plan': 'Plan',
-          'chat.executionMode.ask': 'Ask',
-          'chat.executionMode.auto': 'Auto',
-          'chat.executionMode.planDesc': 'Plan before execution',
-          'chat.executionMode.askDesc': 'Ask before execution',
-          'chat.executionMode.autoDesc': 'Execute automatically',
-          'chat.input.entryPlaceholder': 'Enter a creative instruction…',
-          'chat.input.workspaceCanvas.label': 'Workspace context',
-          'chat.input.workspaceCanvas.canvasIndex': 'Canvas',
-          'chat.input.workspaceCanvas.board': 'Board',
-          'chat.entryContext.bindingBar': 'Context',
-          'chat.entryContext.clearTarget': 'Clear context',
-        };
-    const template = labels[key] ?? key;
-    return template.replace(/\{(\w+)\}/g, (_, name: string) =>
-      String(params?.[name] ?? `{${name}}`),
-    );
-  };
-  return {
-    locale: value.locale,
-    t: value.t ?? fallback,
-  };
+}
+
+const AgentI18nContext = createContext<AgentI18nContextValue | undefined>(undefined);
+
+export function I18nProvider({
+  children,
+  service,
+}: {
+  readonly children: ReactNode;
+  readonly service: II18nService;
+}): JSX.Element {
+  const [locale, setLocale] = useState<SupportedLocale>(service.locale);
+  useEffect(() => {
+    service.onLocaleChange(setLocale);
+  }, [service]);
+  return (
+    <AgentI18nContext.Provider value={{ locale, t: (key, params) => service.t(key, params) }}>
+      {children}
+    </AgentI18nContext.Provider>
+  );
+}
+
+export function AgentPresentationI18nProvider({
+  children,
+  locale,
+}: {
+  readonly children: ReactNode;
+  readonly locale: SupportedLocale;
+}): JSX.Element {
+  return <I18nProvider service={services[locale]}>{children}</I18nProvider>;
+}
+
+export function useTranslation(): AgentI18nContextValue {
+  const context = useContext(AgentI18nContext);
+  if (!context) throw new Error('Agent presentation i18n provider is missing.');
+  return context;
+}
+
+function createAgentPresentationService(locale: SupportedLocale) {
+  return createWebviewI18n({
+    initialLocale: locale,
+    bundles: {
+      en: { agent: agentPresentationMessages.en },
+      'zh-cn': { agent: agentPresentationMessages['zh-cn'] },
+    },
+  }).i18nService;
 }

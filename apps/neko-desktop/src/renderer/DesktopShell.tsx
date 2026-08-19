@@ -275,6 +275,15 @@ interface ShellActions {
     readonly label: string;
   }) => Promise<void>;
   readonly onCharacterProductHandoff: (handoff: CharacterProductHandoff) => void;
+  readonly onSelectEntryProject: NonNullable<
+    DesktopAgentSurfaceProps['entryContext']
+  >['workspace']['onSelectProject'];
+  readonly onLoadEntryCharacterTargets: NonNullable<
+    DesktopAgentSurfaceProps['entryContext']
+  >['loadCharacterTargets'];
+  readonly onLoadEntryWorldTargets: NonNullable<
+    DesktopAgentSurfaceProps['entryContext']
+  >['loadWorldTargets'];
 }
 
 export function DesktopApplication(): JSX.Element {
@@ -876,6 +885,78 @@ export function DesktopApplication(): JSX.Element {
         finishPending();
       }
     },
+    onSelectEntryProject: async (projectId) => {
+      const finishPending = beginPending('target-selection');
+      setDiagnostic(undefined);
+      try {
+        const result = await window.openNekoDesktop.workspaceGrants.selectProject(
+          projection.window.windowId,
+          projectId,
+        );
+        if (result.status === 'cancelled') return undefined;
+        return {
+          label: result.grant.label,
+          context: {
+            kind: 'workspace' as const,
+            workspaceId: result.workspaceId,
+            workspaceGrantId: result.grant.workspaceGrantId,
+          },
+          authority: { kind: 'project' as const, projectId },
+        };
+      } catch (error) {
+        setDiagnostic(describeError(error));
+        await refresh();
+        throw error;
+      } finally {
+        finishPending();
+      }
+    },
+    onLoadEntryCharacterTargets: async () => {
+      const catalog = await window.openNekoDesktop.characterFoundation.getConversationLaunchCatalog();
+      return {
+        targets: catalog.targets.map((target) => ({
+          globalCharacterId: target.globalCharacterId,
+          characterVersionId: target.characterVersionId,
+          displayName: target.displayName,
+          versionLabel: target.versionLabel,
+          lineage: target.lineage,
+          storylines: target.storylines.map((storyline) => ({
+            storylineVersionId: storyline.characterStorylineVersionId,
+            label: storyline.label,
+          })),
+        })),
+        diagnostics: catalog.diagnostics.map((diagnostic) => diagnostic.message),
+      };
+    },
+    onLoadEntryWorldTargets: async () => {
+      const catalog = await window.openNekoDesktop.worldManagement.getCatalog({
+        search: '',
+        sort: 'recently-updated',
+      });
+      const available = catalog.items.filter((item) => item.status === 'available');
+      const details = await Promise.allSettled(
+        available.map((item) => window.openNekoDesktop.worldManagement.getDetail(item.globalWorldId)),
+      );
+      return {
+        targets: details.flatMap((result) =>
+          result.status === 'fulfilled'
+            ? result.value.versions.map((version) => ({
+                globalWorldId: result.value.globalWorldId,
+                worldVersionId: version.worldVersionId,
+                displayName: result.value.title,
+                versionLabel: version.label,
+              }))
+            : [],
+        ),
+        diagnostics: [
+          ...catalog.items.flatMap((item) => (item.status === 'invalid' ? [item.message] : [])),
+          ...catalog.diagnostics.map((diagnostic) => diagnostic.message),
+          ...details.flatMap((result) =>
+            result.status === 'rejected' ? [describeError(result.reason)] : [],
+          ),
+        ],
+      };
+    },
     onCharacterProductHandoff: (handoff) => {
       if (handoff.kind === 'open-character-studio') {
         const finishPending = beginPending('scene');
@@ -1071,6 +1152,9 @@ export function DesktopShellView({
     onStartGlobalCharacterConversation: async () => undefined,
     onFinalizeAndStartCharacterConversation: async () => undefined,
     onCharacterProductHandoff: () => undefined,
+    onSelectEntryProject: async () => undefined,
+    onLoadEntryCharacterTargets: async () => ({ targets: [], diagnostics: [] }),
+    onLoadEntryWorldTargets: async () => ({ targets: [], diagnostics: [] }),
   };
   return (
     <DesktopSceneWorkbench
@@ -1338,6 +1422,22 @@ function DesktopSceneWorkbench({
       ? createDesktopAgentSurfaceProps({
           workbenchInstanceId: activeWorkbench.workbenchInstanceId,
           interaction: scene.slots.interaction,
+          ...(scene.slots.interaction.scope.kind === 'unbound'
+            ? {
+                entryContext: {
+                  workspace: {
+                    projects: projection.catalog.projects.map((project) => ({
+                      projectId: project.projectId,
+                      label: project.displayName,
+                      ...(project.unavailable ? { disabled: true } : {}),
+                    })),
+                    onSelectProject: actions.onSelectEntryProject,
+                  },
+                  loadCharacterTargets: actions.onLoadEntryCharacterTargets,
+                  loadWorldTargets: actions.onLoadEntryWorldTargets,
+                },
+              }
+            : {}),
         })
       : undefined;
   const projectCatalogUnavailable = hasProjectCatalogDiagnostic(projection);
@@ -2529,12 +2629,19 @@ function hasCharacterVisualRepresentation(
 export function createDesktopAgentSurfaceProps(input: {
   readonly workbenchInstanceId: string;
   readonly interaction: DesktopAgentInteractionSurfaceRef;
+  readonly entryContext?: DesktopAgentSurfaceProps['entryContext'];
 }): DesktopAgentSurfaceProps {
   const { interaction } = input;
   return {
     agentSurfaceId: interaction.agentSurfaceId,
     workbenchInstanceId: input.workbenchInstanceId,
-    entryKind: interaction.scope.kind === 'assistant' ? 'assistant' : 'authoring',
+    surfaceKind:
+      interaction.scope.kind === 'unbound'
+        ? 'entry'
+        : interaction.scope.kind === 'assistant'
+          ? 'assistant'
+          : 'workspace',
+    ...(input.entryContext === undefined ? {} : { entryContext: input.entryContext }),
     ...(interaction.scope.kind === 'unbound' || interaction.scope.conversationId === undefined
       ? {}
       : { conversationId: interaction.scope.conversationId }),

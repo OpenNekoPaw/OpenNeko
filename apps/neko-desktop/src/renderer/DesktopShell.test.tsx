@@ -54,7 +54,7 @@ describe('Desktop scene Workbench', () => {
       createDesktopAgentSurfaceProps({ workbenchInstanceId: 'workbench-1', interaction }),
     ).toEqual({
       agentSurfaceId: interaction.agentSurfaceId,
-      entryKind: 'authoring',
+      surfaceKind: 'entry',
       workbenchInstanceId: 'workbench-1',
     });
 
@@ -75,9 +75,29 @@ describe('Desktop scene Workbench', () => {
       }),
     ).toEqual({
       agentSurfaceId: interaction.agentSurfaceId,
-      entryKind: 'assistant',
+      surfaceKind: 'assistant',
       workbenchInstanceId: 'workbench-1',
       conversationId: 'conversation-1',
+    });
+
+    const workspaceInteraction = {
+      ...interaction,
+      scope: {
+        kind: 'workspace' as const,
+        draftId: interaction.scope.draftId,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      },
+    };
+    expect(
+      createDesktopAgentSurfaceProps({
+        workbenchInstanceId: 'workbench-1',
+        interaction: workspaceInteraction,
+      }),
+    ).toEqual({
+      agentSurfaceId: interaction.agentSurfaceId,
+      surfaceKind: 'workspace',
+      workbenchInstanceId: 'workbench-1',
     });
   });
 
@@ -873,10 +893,38 @@ describe('Desktop scene Workbench', () => {
     expect(source).not.toMatch(/latest|versions\[0\]|activeCharacter|recentCharacter/u);
   });
 
-  it('does not retain the old Entry composer Workspace selection path', () => {
+  it('keeps Entry target selection on exact public owners without navigating', () => {
+    const projectStart = desktopShellSource.indexOf(
+      'onSelectEntryProject: async (projectId) =>',
+    );
+    const characterStart = desktopShellSource.indexOf(
+      'onLoadEntryCharacterTargets: async () =>',
+      projectStart,
+    );
+    const worldStart = desktopShellSource.indexOf(
+      'onLoadEntryWorldTargets: async () =>',
+      characterStart,
+    );
+    const handoffStart = desktopShellSource.indexOf(
+      'onCharacterProductHandoff:',
+      worldStart,
+    );
+    const projectSource = desktopShellSource.slice(projectStart, characterStart);
+    const characterSource = desktopShellSource.slice(characterStart, worldStart);
+    const worldSource = desktopShellSource.slice(worldStart, handoffStart);
+
+    expect(projectStart).toBeGreaterThanOrEqual(0);
+    expect(characterStart).toBeGreaterThan(projectStart);
+    expect(worldStart).toBeGreaterThan(characterStart);
+    expect(handoffStart).toBeGreaterThan(worldStart);
+    expect(projectSource).toContain('workspaceGrants.selectProject');
+    expect(projectSource).not.toMatch(/transitionScene|scenes\.transition/u);
+    expect(characterSource).toContain(
+      'characterFoundation.getConversationLaunchCatalog()',
+    );
+    expect(worldSource).toContain('worldManagement.getCatalog');
+    expect(worldSource).toContain('worldManagement.getDetail');
     expect(desktopShellSource).not.toContain('onSelectWorkspaceProjectTarget');
-    expect(desktopShellSource).not.toContain('onLoadAuthoringTargets');
-    expect(desktopShellSource).not.toContain('onCreateAuthoringTarget');
   });
 
   it('removes standalone management creation producers', () => {

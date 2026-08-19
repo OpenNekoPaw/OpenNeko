@@ -31,6 +31,7 @@ describe('Desktop DSH Session Host', () => {
           rendererSessionId: 'renderer-1',
           workbenchInstanceId: 'workbench-1',
           agentSurfaceId: 'surface-1',
+          permissionPresetId: 'workspace-write',
         },
       ),
     );
@@ -40,6 +41,7 @@ describe('Desktop DSH Session Host', () => {
       rendererSessionId: 'renderer-1',
       workbenchInstanceId: 'workbench-1',
       agentSurfaceId: 'surface-1',
+      permissionPresetId: 'workspace-write',
     });
     expect(result.projection).toMatchObject(identity);
   });
@@ -58,6 +60,7 @@ describe('Desktop DSH Session Host', () => {
           rendererSessionId: 'renderer-stale',
           workbenchInstanceId: 'workbench-1',
           agentSurfaceId: 'surface-1',
+          permissionPresetId: 'workspace-write',
         },
       ),
     ).rejects.toThrow(/sender-bound/u);
@@ -157,6 +160,56 @@ describe('Desktop DSH Session Host', () => {
     expect(result.configuration.selectedModelOptionId).toBe('deepseek:model');
   });
 
+  it('routes media-model selection only through the exact composer owner', async () => {
+    const selectMediaModel = vi.fn(async () => composerConfiguration());
+    const host = createHost({ selectMediaModel });
+    const result = await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      {
+        requestId: 'request-composer-media-model',
+        operation: 'composer-media-model',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        category: 'image',
+        modelOptionId: 'nekoapi-media:gpt-image-2',
+      },
+    );
+    if (!('configuration' in result)) throw new Error('Expected composer configuration result.');
+    expect(selectMediaModel).toHaveBeenCalledWith({
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      category: 'image',
+      modelOptionId: 'nekoapi-media:gpt-image-2',
+    });
+  });
+
+  it('routes only the exact DSH permission preset through the composer owner', async () => {
+    const selectPermissionPreset = vi.fn(async () => composerConfiguration());
+    const host = createHost({ selectPermissionPreset });
+    const result = await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      {
+        requestId: 'request-composer-permission-preset',
+        operation: 'composer-permission-preset',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        permissionPresetId: 'danger-full-access',
+      },
+    );
+    if (!('configuration' in result)) throw new Error('Expected composer configuration result.');
+    expect(selectPermissionPreset).toHaveBeenCalledWith({
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      permissionPresetId: 'danger-full-access',
+    });
+  });
+
   it('rejects one invalid Tool detail visibly without hiding the Tool or sibling events', async () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionUpdate({
@@ -240,11 +293,14 @@ function createHost(overrides: {
     readonly rendererSessionId: string;
     readonly workbenchInstanceId: string;
     readonly agentSurfaceId: string;
+    readonly permissionPresetId: string;
   }) => Promise<{ readonly conversationId: string }>;
   readonly applyConversation?: (conversationId: string) => Promise<void>;
   readonly promptContext?: { resolve(conversationId: string): Promise<string> };
   readonly setSessionContext?: (conversationId: string, text: string) => Promise<void>;
   readonly selectModel?: () => Promise<ReturnType<typeof composerConfiguration>>;
+  readonly selectMediaModel?: () => Promise<ReturnType<typeof composerConfiguration>>;
+  readonly selectPermissionPreset?: () => Promise<ReturnType<typeof composerConfiguration>>;
 }) {
   return new DesktopDshSessionHost({
     bindings: {
@@ -259,7 +315,10 @@ function createHost(overrides: {
     composer: {
       project: vi.fn(async () => composerConfiguration()),
       selectModel: overrides.selectModel ?? vi.fn(async () => composerConfiguration()),
-      selectMode: vi.fn(async () => composerConfiguration()),
+      selectMediaModel:
+        overrides.selectMediaModel ?? vi.fn(async () => composerConfiguration()),
+      selectPermissionPreset:
+        overrides.selectPermissionPreset ?? vi.fn(async () => composerConfiguration()),
       applyConversation: overrides.applyConversation ?? vi.fn(async () => undefined),
     },
     promptContext: overrides.promptContext ?? { resolve: vi.fn(async () => 'OpenNeko test context') },
@@ -283,13 +342,24 @@ function requireSessionResult(
 
 function composerConfiguration() {
   return {
-    models: [{ id: 'deepseek:model', label: 'DeepSeek', providerId: 'deepseek', modelId: 'model' }],
+    models: [
+      {
+        id: 'deepseek:model',
+        label: 'DeepSeek',
+        providerId: 'deepseek',
+        modelId: 'model',
+        providerLabel: 'DeepSeek',
+        category: 'llm' as const,
+        capabilities: ['chat'],
+      },
+    ],
     selectedModelOptionId: 'deepseek:model',
-    executionMode: 'ask' as const,
-    modes: [
-      { id: 'plan' as const, available: false, diagnostic: 'Unavailable.' },
-      { id: 'ask' as const, available: true },
-      { id: 'auto' as const, available: true },
+    selectedMediaModelOptionIds: {},
+    permissionPresetId: 'workspace-write',
+    permissionPresets: [
+      { id: 'read-only', label: 'read-only', selectable: true },
+      { id: 'workspace-write', label: 'workspace-write', selectable: true },
+      { id: 'danger-full-access', label: 'danger-full-access', selectable: true },
     ],
   };
 }
