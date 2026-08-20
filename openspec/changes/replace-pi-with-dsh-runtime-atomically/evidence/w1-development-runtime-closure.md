@@ -25,7 +25,7 @@
 - 变更行为：开发 Desktop 的 DSH profile/runtime 启动 authority。
 - 决策：`reuse` 现有 `agent-runtime.workflow-controller` suite；bridge build 仍消费同一 source/contract，没有改变 Session、queue、permission 或 Tool 语义。
 - canonical path：development builder → verified closure → `NEKO_DSH_RUNTIME_ROOT` → Desktop resource resolver → profile materializer → DSH subprocess。禁止 global DSH、系统 Node runtime、Q0、Pi、SDK 或 Remote API fallback。
-- key-free 验证：`pnpm test:agent:eval` 通过 45 files / 314 tests；all-suite dry-run 通过 27 suites / 80 cases。
+- key-free 验证：`pnpm test:agent:eval` 通过 45 files / 314 tests；all-suite dry-run 通过 26 suites / 65 cases。
 - 真实行为：按用户指示跳过真实 API/provider 验证，未执行 visible/hidden provider-backed case；key-free 与启动 smoke 不是 Agent 行为或发布证据。
 
 ## Verification

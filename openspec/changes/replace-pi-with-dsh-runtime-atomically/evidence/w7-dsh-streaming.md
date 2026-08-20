@@ -62,7 +62,7 @@ The final pixels were inspected directly. The answer rail and composer shared th
 - `@neko/dsh-bridge`: 2 files / 20 tests passed; typecheck passed.
 - `@neko/agent-webview`: 4 files / 29 tests passed; typecheck passed.
 - Focused Desktop: 3 files / 55 tests passed; Desktop typecheck passed.
-- Agent Evaluation key-free harness: 45 files / 314 tests passed; all-suite dry-run passed for 27 suites / 80 cases, including the existing six-case `agent-runtime.stream-delivery` owner. This is infrastructure evidence, not a provider-backed hidden behavior claim.
+- Agent Evaluation key-free harness: 45 files / 314 tests passed; all-suite dry-run passed for 26 suites / 65 cases, including the two-case `agent-runtime.stream-delivery` owner. This is infrastructure evidence, not a provider-backed hidden behavior claim.
 - Strict OpenSpec validation passed for all 106 items. Agent, Application and Package boundary gates, focused TS/TSX ESLint, `git diff --check`, and the classified legacy-debt gate passed.
 - The internal-versioning audit's focused Node test passed 12/12 and now excludes the ignored generated DSH development closure from source-contract scanning.
 - Real visible Electron turn: partial output observed at 10 and 23 seconds; canonical completion observed at 28 seconds.

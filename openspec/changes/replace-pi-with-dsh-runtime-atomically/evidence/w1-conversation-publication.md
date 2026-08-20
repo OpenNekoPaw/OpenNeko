@@ -37,7 +37,7 @@ There is no Pi, SDK, Remote API, active/recent Session, provider, cwd, or Render
 - `pnpm check:legacy-debt`
 - `pnpm exec openspec validate replace-pi-with-dsh-runtime-atomically --strict`
 - `pnpm check:openspec`: 106 items passed.
-- `pnpm test:agent:eval`: 45 files, 314 tests and 27 suites / 80 cases dry-run passed.
+- `pnpm test:agent:eval`: 45 files, 314 tests and 26 suites / 65 cases dry-run passed.
 
 Focused tests cover catalog reopen/rollback/invalid sibling isolation, Home bound/unpublished/invalid records, publication order and failure retention, activation concurrency/reset/retry, strict create contract, preload sender injection, Main sender mismatch, and Renderer creation.
 

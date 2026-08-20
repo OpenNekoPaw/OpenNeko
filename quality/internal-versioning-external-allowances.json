@@ -41,26 +41,6 @@
       "token": "version"
     },
     {
-      "category": "internal-version-field",
-      "externalOwner": "Browser Use release publisher",
-      "fieldScope": "Plugin manifest release occurrence: \"version\": \"0.13.7\",",
-      "id": "db443d6ee2934252d894",
-      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
-      "normativeSource": "https://github.com/browser-use/browser-use/releases/tag/0.13.7",
-      "path": "apps/neko-desktop/resources/extensions/plugins/browser-use/plugin.json",
-      "token": "version"
-    },
-    {
-      "category": "internal-version-field",
-      "externalOwner": "Cua release publisher",
-      "fieldScope": "Plugin manifest release occurrence: \"version\": \"0.19.2\",",
-      "id": "2e8c2d8217d6b628e5c7",
-      "isolationRule": "The publisher release identifies one Plugin package for display and package qualification only; it cannot select an OpenNeko contract, schema, migration, component generation, provider, or alternate runtime path.",
-      "normativeSource": "https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.19.2",
-      "path": "apps/neko-desktop/resources/extensions/plugins/computer-use/plugin.json",
-      "token": "version"
-    },
-    {
       "category": "versioned-path-or-key",
       "externalOwner": "Electron distribution archive",
       "fieldScope": "Architecture test exclusion of an unsupported Linux archive",
