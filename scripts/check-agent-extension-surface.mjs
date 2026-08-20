@@ -265,6 +265,10 @@ async function checkCanonicalSourceEvidence(root, findings) {
     'packages/agent/runtime/src/extensions/extension-manager.ts',
     'packages/agent/runtime/src/extensions/plugin-runtime.ts',
     'packages/agent/runtime/src/mcp/mcp-client.ts',
+    'packages/agent/runtime/src/acp/assets-host-adapter.ts',
+    'packages/assets/domain/src/dsh-tool.ts',
+    'packages/assets/node/src/agent-dsh-search.ts',
+    'packages/assets/dsh-plugin/src/index.ts',
   ];
   for (const path of retiredAuthorities) {
     try {
@@ -275,10 +279,7 @@ async function checkCanonicalSourceEvidence(root, findings) {
     }
   }
 
-  const bridgeSource = await readFile(
-    resolve(root, 'packages/dsh-bridge/src/index.ts'),
-    'utf8',
-  );
+  const bridgeSource = await readFile(resolve(root, 'packages/dsh-bridge/src/index.ts'), 'utf8');
   const bridgeManifest = JSON.parse(
     await readFile(resolve(root, 'packages/dsh-bridge/package.json'), 'utf8'),
   );

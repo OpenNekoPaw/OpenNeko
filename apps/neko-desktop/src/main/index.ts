@@ -164,6 +164,7 @@ import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
   AssetCenterNodeRuntime,
   ResourceBrowserNodeRuntime,
+  WorkspaceAssetMaterializationService,
   createProjectContentReadService,
   readProjectContentReferences,
   type ResourceBrowserNodeRuntimeOptions,
@@ -1119,10 +1120,7 @@ async function startDesktop(): Promise<void> {
       target.locator.selector === undefined &&
       modeForTextDocument(target.locator.file.path) !== undefined,
     editText: async ({ identity, target }) => {
-      if (
-        target.locator.file.authority !== 'workspace' ||
-        target.locator.selector !== undefined
-      ) {
+      if (target.locator.file.authority !== 'workspace' || target.locator.selector !== undefined) {
         throw new Error('Canvas Text Editor requires a Workspace File locator.');
       }
       await textEditorRuntime.open({
@@ -2058,6 +2056,10 @@ async function startDesktop(): Promise<void> {
         : { conversationId: scope.conversationId }),
     };
   };
+  const workspaceAssetMaterialization = new WorkspaceAssetMaterializationService({
+    globalAssetRoot: globalStorage.assets,
+    memberships: metadataRepositories.assetLibraryMemberships,
+  });
   const dshComposerConfiguration = createDesktopDshComposerConfiguration({
     resolveSurface: async (input) => {
       const resolved = await resolveDshAgentSurfaceScope(input);
@@ -2078,6 +2080,13 @@ async function startDesktop(): Promise<void> {
     sessions: dshProduct.runtime.conversations.conversations,
     executionCatalog: dshProviderRuntime.executionCatalog,
     resourceBrowser,
+    assets: {
+      materialize: ({ assetId, workspaceRoot }) =>
+        workspaceAssetMaterialization.materialize({
+          request: { assetId },
+          workspaceRoot,
+        }),
+    },
     entities: {
       search: async ({ workspace, query, limit }) => {
         const resources = await readProjectEntityResources({ workspace });

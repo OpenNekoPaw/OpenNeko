@@ -59,6 +59,7 @@ const MEDIA_TYPE_TAG_LABELS: Record<
 const SOURCE_TAG_LABELS: Record<NonNullable<MentionItem['source']>, MentionLocalizedLabel> = {
   workspace: { key: 'chat.input.mentionTags.source.workspace', defaultText: 'Workspace' },
   'media-library': { key: 'chat.input.mentionTags.source.mediaLibrary', defaultText: 'Media' },
+  'asset-library': { key: 'chat.input.mentionTags.source.assetLibrary', defaultText: 'Assets' },
   'entity-graph': { key: 'chat.input.mentionTags.source.entityGraph', defaultText: 'Entity' },
   story: { key: 'chat.input.mentionTags.source.story', defaultText: 'Story' },
   canvas: { key: 'chat.input.mentionTags.source.canvas', defaultText: 'Canvas' },

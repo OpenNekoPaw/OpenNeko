@@ -15,6 +15,7 @@ import {
   type ResourceBrowserProjection,
 } from '@neko/assets-domain/resource-browser/contract';
 import type { AgentConversationContext } from '@neko/agent-contracts';
+import type { WorkspaceAssetMaterializationResult } from '@neko/assets-domain/global-library';
 import type { ProjectEntityRecord } from '@neko/entity-domain';
 import type {
   AgentConversationContextAuthorityPort,
@@ -71,6 +72,12 @@ export function createDesktopDshComposerConfiguration(options: {
   readonly executionCatalog: DesktopDshExecutionCatalog;
   readonly resourceBrowser: {
     query(windowId: string, request: unknown): Promise<ResourceBrowserProjection>;
+  };
+  readonly assets: {
+    materialize(input: {
+      readonly assetId: string;
+      readonly workspaceRoot: string;
+    }): Promise<WorkspaceAssetMaterializationResult>;
   };
   readonly entities: {
     search(input: {
@@ -185,14 +192,8 @@ export function createDesktopDshComposerConfiguration(options: {
                 kind: 'asset',
                 label: item.label,
                 ...(item.description === undefined ? {} : { description: item.description }),
-                contextPayload: {
-                  type: 'asset',
-                  id: item.assetRef.assetId,
-                  label: item.label,
-                  summary: item.description ?? item.label,
-                  data: { assetRef: item.assetRef },
-                },
-                source: 'entity-graph',
+                assetId: item.assetRef.assetId,
+                source: 'asset-library',
               },
             ];
           }
@@ -211,6 +212,31 @@ export function createDesktopDshComposerConfiguration(options: {
           ];
         });
       return [...resources, ...entities.map(projectEntityMention)];
+    },
+
+    async materializeAsset(input: ComposerSurfaceIdentity & { readonly assetId: string }) {
+      const scope = await options.resolveSurface(input);
+      if (scope.binding.kind !== 'workspace' && scope.binding.kind !== 'authoring') {
+        throw new Error('Composer Asset materialization requires a Workspace-bound Agent Surface.');
+      }
+      const workspace = await options.workspaceGrants.restore(
+        scope.windowId,
+        scope.binding.workspaceGrantId,
+        scope.binding.workspaceId,
+      );
+      const result = await options.assets.materialize({
+        assetId: input.assetId,
+        workspaceRoot: workspace.workspace.workspacePath,
+      });
+      if (result.status === 'unavailable') {
+        throw new Error(`${result.diagnostic.code}: ${result.diagnostic.message}`);
+      }
+      return {
+        assetId: result.assetId,
+        label: result.label,
+        contentLocator: result.contentLocator,
+        source: 'asset-library' as const,
+      };
     },
 
     async selectModel(

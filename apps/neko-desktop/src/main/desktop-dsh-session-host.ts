@@ -7,6 +7,7 @@ import {
   type DshSessionHostResult,
   type DshComposerConfigurationHostResult,
   type DshComposerMentionsHostResult,
+  type DshComposerMaterializedAssetHostResult,
 } from '@neko/agent-contracts/dsh-session-host';
 import { decodeDshAcpJsonPayload } from '@neko/agent-contracts/dsh-acp';
 import type {
@@ -67,6 +68,12 @@ export class DesktopDshSessionHost {
           readonly agentSurfaceId: string;
           readonly filter: string;
         }): Promise<DshComposerMentionsHostResult['mentions']>;
+        materializeAsset(input: {
+          readonly windowId: string;
+          readonly workbenchInstanceId: string;
+          readonly agentSurfaceId: string;
+          readonly assetId: string;
+        }): Promise<DshComposerMaterializedAssetHostResult['materialized']>;
         applyConversation(conversationId: string, windowId: string): Promise<void>;
       };
       readonly createConversation: (input: {
@@ -92,7 +99,10 @@ export class DesktopDshSessionHost {
     sender: DesktopSenderIdentity,
     value: unknown,
   ): Promise<
-    DshSessionHostResult | DshComposerConfigurationHostResult | DshComposerMentionsHostResult
+    | DshSessionHostResult
+    | DshComposerConfigurationHostResult
+    | DshComposerMentionsHostResult
+    | DshComposerMaterializedAssetHostResult
   > {
     const request = parseDshSessionHostRequest(value);
     const window = this.options.windows.resolveSender(sender);
@@ -105,6 +115,7 @@ export class DesktopDshSessionHost {
     if (
       request.operation === 'composer-snapshot' ||
       request.operation === 'composer-mentions' ||
+      request.operation === 'composer-materialize-asset' ||
       request.operation === 'composer-model' ||
       request.operation === 'composer-media-model' ||
       request.operation === 'composer-permission-preset'
@@ -120,6 +131,15 @@ export class DesktopDshSessionHost {
           mentions: await this.options.composer.searchMentions({
             ...scope,
             filter: request.filter,
+          }),
+        };
+      }
+      if (request.operation === 'composer-materialize-asset') {
+        return {
+          requestId: request.requestId,
+          materialized: await this.options.composer.materializeAsset({
+            ...scope,
+            assetId: request.assetId,
           }),
         };
       }

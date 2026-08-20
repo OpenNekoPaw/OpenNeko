@@ -127,6 +127,7 @@ interface InputAreaProps {
   /** Callback to update attached files (when managed externally) */
   onAttachedFilesChange?: (files: MessageAttachment[]) => void;
   onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
+  onMaterializeAsset?: (assetId: string) => Promise<MentionItem | undefined>;
   attachmentsDisabled?: boolean;
   entryContextActions?: readonly {
     readonly kind: 'project' | 'character' | 'world';
@@ -267,6 +268,7 @@ export function InputArea({
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
   onAuthorizeResource,
+  onMaterializeAsset,
   attachmentsDisabled = false,
   entryContextActions = [],
   entryContextActionsDisabled = false,
@@ -411,6 +413,7 @@ export function InputArea({
   const [internalSelectedFileReferences, setInternalSelectedFileReferences] = useState<
     SelectedFileReference[]
   >([]);
+  const [pendingAssetSelectionCount, setPendingAssetSelectionCount] = useState(0);
   const selectedFileReferences = externalSelectedFileReferences ?? internalSelectedFileReferences;
   const inputValueRef = useRef(inputValue);
   const attachedFilesRef = useRef(attachedFiles);
@@ -792,13 +795,13 @@ export function InputArea({
   };
 
   const replaceActiveMention = (replacement: string) => {
-    onInputChange(replaceTrailingMention(inputValue, replacement));
+    onInputChange(replaceTrailingMention(inputValueRef.current, replacement));
   };
 
-  const addSelectedFileReference = (item: MentionItem) => {
+  const addSelectedFileReference = (item: MentionItem, removeActiveMention = true) => {
     if (!item.contentLocator) return;
     const reference = projectSelectedFileReference(item);
-    replaceActiveMention('');
+    if (removeActiveMention) replaceActiveMention('');
     updateSelectedFileReferences((prev) =>
       prev.some(
         (existing) =>
@@ -825,6 +828,20 @@ export function InputArea({
       textareaRef.current?.focus();
     } else if (item.contentLocator) {
       addSelectedFileReference(item);
+    } else if (item.assetId) {
+      if (!onMaterializeAsset) {
+        throw new Error(`Asset mention "${item.id}" requires onMaterializeAsset.`);
+      }
+      const selectedFromInput = inputValueRef.current;
+      setShowAtMenu(false);
+      setPendingAssetSelectionCount((count) => count + 1);
+      void onMaterializeAsset(item.assetId)
+        .then((materialized) => {
+          if (materialized) {
+            addSelectedFileReference(materialized, inputValueRef.current === selectedFromInput);
+          }
+        })
+        .finally(() => setPendingAssetSelectionCount((count) => Math.max(0, count - 1)));
     } else if (item.contextPayload) {
       if (!onAddContextChip) {
         throw new Error(`Context-backed mention "${item.id}" requires onAddContextChip.`);
@@ -838,8 +855,7 @@ export function InputArea({
   };
 
   const handleSend = () => {
-    if (disabled) return;
-    if (isRunActive && !inputAreaProjection.canQueue) return;
+    if (!inputAreaProjection.canSend) return;
     closeEntryPromptMenu();
     const hasSelectedFileReferences = selectedFileReferences.length > 0;
     if (
@@ -1048,6 +1064,10 @@ export function InputArea({
   };
 
   const projectedQueuedMessageCount = Math.max(queuedMessageCount, queuedMessages.length);
+  const materializingAsset = pendingAssetSelectionCount > 0;
+  const effectiveSubmissionBlockedReason = materializingAsset
+    ? t('chat.input.assetMaterializing')
+    : submissionBlockedReason;
   const inputAreaProjection = projectInputAreaUi({
     presentation,
     inputValue,
@@ -1064,7 +1084,7 @@ export function InputArea({
     configurationPolicy,
     currentSessionMediaModelCount,
     compactControls: composerPresentation === 'compact',
-    submissionBlocked: submissionBlocked || submissionBlockedReason !== undefined,
+    submissionBlocked: submissionBlocked || effectiveSubmissionBlockedReason !== undefined,
   });
   const queuePanelCount = inputAreaProjection.queuedMessageCount;
   const attachmentInputDisabled = disabled;
@@ -1242,9 +1262,9 @@ export function InputArea({
             />
           </div>
 
-          {submissionBlockedReason ? (
+          {effectiveSubmissionBlockedReason ? (
             <p className="agent-composer-validation" role="status">
-              {submissionBlockedReason}
+              {effectiveSubmissionBlockedReason}
             </p>
           ) : null}
 
@@ -1387,8 +1407,8 @@ export function InputArea({
                       ? 'agent-composer-send'
                       : 'bg-[var(--agent-control-muted-bg)] text-[var(--neko-descriptionForeground)]'
                 }`}
-                title={submissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
-                aria-label={submissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
+                title={effectiveSubmissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
+                aria-label={effectiveSubmissionBlockedReason ?? t(inputAreaProjection.sendTitleKey)}
               >
                 <SendIcon className="w-3.5 h-3.5" />
               </button>

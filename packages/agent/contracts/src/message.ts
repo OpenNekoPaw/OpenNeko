@@ -226,7 +226,7 @@ function parseMessageContextNavigationData(value: unknown): Record<string, strin
 // ---------------------------------------------------------------------------
 
 export type AgentFileReferenceSource =
-  'workspace' | 'media-library' | 'entity-graph' | 'story' | 'canvas';
+  'workspace' | 'media-library' | 'asset-library' | 'entity-graph' | 'story' | 'canvas';
 
 export type AgentFileReferenceMediaType =
   'video' | 'audio' | 'image' | 'sequence' | 'text' | 'document';
@@ -263,6 +263,7 @@ function isAgentFileReferenceMediaType(value: unknown): value is AgentFileRefere
 const AGENT_FILE_REFERENCE_SOURCES: ReadonlySet<string> = new Set([
   'workspace',
   'media-library',
+  'asset-library',
   'entity-graph',
   'story',
   'canvas',

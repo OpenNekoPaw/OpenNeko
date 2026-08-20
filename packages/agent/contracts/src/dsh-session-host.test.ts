@@ -4,6 +4,7 @@ import {
   parseDshComposerConfigurationHostResult,
   parseDshComposerConfigurationProjection,
   parseDshComposerMentionsHostResult,
+  parseDshComposerMaterializedAssetHostResult,
   parseDshSessionHostProjection,
   parseDshSessionHostRequest,
   parseDshSessionHostResult,
@@ -215,14 +216,8 @@ describe('DSH Session Host contract', () => {
               id: 'assets:lighting',
               kind: 'asset',
               label: 'Lighting',
-              contextPayload: {
-                type: 'asset',
-                id: 'asset-lighting',
-                label: 'Lighting',
-                summary: 'Lighting reference',
-                data: { assetRef: { assetId: 'asset-lighting' } },
-              },
-              source: 'entity-graph',
+              assetId: 'asset-lighting',
+              source: 'asset-library',
             },
           ],
         },
@@ -241,14 +236,8 @@ describe('DSH Session Host contract', () => {
         id: 'assets:lighting',
         kind: 'asset',
         label: 'Lighting',
-        contextPayload: {
-          type: 'asset',
-          id: 'asset-lighting',
-          label: 'Lighting',
-          summary: 'Lighting reference',
-          data: { assetRef: { assetId: 'asset-lighting' } },
-        },
-        source: 'entity-graph',
+        assetId: 'asset-lighting',
+        source: 'asset-library',
       },
     ]);
     expect(() =>
@@ -268,6 +257,37 @@ describe('DSH Session Host contract', () => {
         'request-mentions',
       ),
     ).toThrow(/ContentLocator is invalid/u);
+
+    expect(
+      parseDshSessionHostRequest({
+        ...surfaceRequest,
+        operation: 'composer-materialize-asset',
+        assetId: 'asset-lighting',
+      }),
+    ).toMatchObject({ operation: 'composer-materialize-asset', assetId: 'asset-lighting' });
+    expect(
+      parseDshComposerMaterializedAssetHostResult(
+        {
+          requestId: 'request-materialize',
+          materialized: {
+            assetId: 'asset-lighting',
+            label: 'Lighting.png',
+            contentLocator: {
+              file: { authority: 'workspace', path: 'assets/Lighting.png' },
+            },
+            source: 'asset-library',
+            mediaType: 'image',
+          },
+        },
+        'request-materialize',
+      ).materialized,
+    ).toEqual({
+      assetId: 'asset-lighting',
+      label: 'Lighting.png',
+      contentLocator: { file: { authority: 'workspace', path: 'assets/Lighting.png' } },
+      source: 'asset-library',
+      mediaType: 'image',
+    });
   });
 
   it('rejects prompt and authority fields smuggled into command and Skill submits', () => {

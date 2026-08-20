@@ -70,8 +70,10 @@ test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrat
   const poisoned = structuredClone(canonical);
   poisoned.runtimes.push('pi');
   poisoned.tools.push('openneko.generation');
+  poisoned.tools.push('openneko.assets');
   poisoned.mcpContributions.push('official.browser');
   poisoned.plugins[2] = '@neko/*';
+  poisoned.plugins.push('@neko/assets-dsh-plugin');
 
   const findings = validateCanonicalAgentRegistrationGraph(poisoned);
   assert.ok(findings.some((finding) => finding.includes('exactly one DSH runtime')));

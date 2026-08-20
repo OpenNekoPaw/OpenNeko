@@ -265,6 +265,21 @@ export function DesktopAgentSurface({
     }
   };
 
+  const materializeAsset = async (assetId: string) => {
+    try {
+      const materialized = await window.openNekoDesktop.dshSessions.materializeComposerAsset(
+        workbenchInstanceId,
+        agentSurfaceId,
+        assetId,
+      );
+      setMentionDiagnostic(undefined);
+      return materialized;
+    } catch (error) {
+      setMentionDiagnostic(describeError(error));
+      return undefined;
+    }
+  };
+
   const cancelTurn = async (): Promise<void> => {
     const targetConversationId =
       conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined);
@@ -368,6 +383,7 @@ export function DesktopAgentSurface({
       }
       onRestartRuntime={() => void restartRuntime()}
       onRequestMentions={(filter) => void requestMentions(filter)}
+      onMaterializeAsset={materializeAsset}
       onSubmit={submit}
     />
   );

@@ -53,6 +53,7 @@ describe('Desktop DSH composer configuration', () => {
       },
       executionCatalog: createExecutionCatalog(),
       resourceBrowser: unavailableResourceBrowser(),
+      assets: unavailableAssets(),
       entities: unavailableEntities(),
       permissions: {
         read: vi.fn(async () => permissionPresets('workspace-write')),
@@ -149,6 +150,7 @@ describe('Desktop DSH composer configuration', () => {
       },
       executionCatalog: createExecutionCatalog(),
       resourceBrowser: unavailableResourceBrowser(),
+      assets: unavailableAssets(),
       entities: unavailableEntities(),
       permissions: {
         read: vi.fn(async () => permissionPresets('workspace-write')),
@@ -167,6 +169,14 @@ describe('Desktop DSH composer configuration', () => {
     await expect(service.applyConversation('conversation-missing', 'window-1')).rejects.toThrow(
       /no authoritative domain context/u,
     );
+    await expect(
+      service.materializeAsset({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        assetId: 'asset-forged',
+      }),
+    ).rejects.toThrow(/Workspace-bound Agent Surface/u);
   });
 
   it('projects exact Workspace file, media, and Asset mentions through read-only Resource queries', async () => {
@@ -232,6 +242,14 @@ describe('Desktop DSH composer configuration', () => {
       createdAt: '2026-08-19T00:00:00.000Z',
       updatedAt: '2026-08-19T00:00:00.000Z',
     };
+    const materialize = vi.fn(async () => ({
+      status: 'materialized' as const,
+      assetId: 'global-asset-library:scene-lighting',
+      label: 'Scene lighting.png',
+      contentLocator: {
+        file: { authority: 'workspace' as const, path: 'assets/Scene lighting.png' },
+      },
+    }));
     const service = createDesktopDshComposerConfiguration({
       resolveSurface: vi.fn(async () => ({
         windowId: 'window-1',
@@ -259,6 +277,7 @@ describe('Desktop DSH composer configuration', () => {
       },
       executionCatalog: createExecutionCatalog(),
       resourceBrowser: { query },
+      assets: { materialize },
       entities: { search: vi.fn(async () => [character]) },
       permissions: {
         read: vi.fn(async () => permissionPresets('workspace-write')),
@@ -295,14 +314,8 @@ describe('Desktop DSH composer configuration', () => {
         kind: 'asset',
         label: 'Scene lighting',
         description: 'Lighting reference',
-        contextPayload: {
-          type: 'asset',
-          id: 'global-asset-library:scene-lighting',
-          label: 'Scene lighting',
-          summary: 'Lighting reference',
-          data: { assetRef: { assetId: 'global-asset-library:scene-lighting' } },
-        },
-        source: 'entity-graph',
+        assetId: 'global-asset-library:scene-lighting',
+        source: 'asset-library',
       },
       {
         id: 'entity:entity-hero',
@@ -329,6 +342,26 @@ describe('Desktop DSH composer configuration', () => {
       'window-1',
       expect.objectContaining({ identity: mentionIdentity, source: 'files', query: 'scene' }),
     );
+    expect(materialize).not.toHaveBeenCalled();
+    await expect(
+      service.materializeAsset({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        assetId: 'global-asset-library:scene-lighting',
+      }),
+    ).resolves.toEqual({
+      assetId: 'global-asset-library:scene-lighting',
+      label: 'Scene lighting.png',
+      contentLocator: {
+        file: { authority: 'workspace', path: 'assets/Scene lighting.png' },
+      },
+      source: 'asset-library',
+    });
+    expect(materialize).toHaveBeenCalledWith({
+      assetId: 'global-asset-library:scene-lighting',
+      workspaceRoot: '${WORKSPACE}/one',
+    });
     expect(query).toHaveBeenNthCalledWith(
       2,
       'window-1',
@@ -365,6 +398,7 @@ describe('Desktop DSH composer configuration', () => {
       },
       executionCatalog,
       resourceBrowser: unavailableResourceBrowser(),
+      assets: unavailableAssets(),
       entities: unavailableEntities(),
       permissions: {
         read: vi.fn(async () => permissionPresets('workspace-write')),
@@ -415,6 +449,14 @@ function unavailableResourceBrowser() {
   return {
     query: vi.fn(async () => {
       throw new Error('Resource Browser search is not expected in this test.');
+    }),
+  };
+}
+
+function unavailableAssets() {
+  return {
+    materialize: vi.fn(async () => {
+      throw new Error('Asset materialization is not expected in this test.');
     }),
   };
 }

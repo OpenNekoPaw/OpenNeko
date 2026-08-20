@@ -180,7 +180,7 @@ The canonical product contract SHALL preserve the qualified DSH Session, turn, c
 
 ### Requirement: Domain Tools preserve package ownership
 
-Generation and Canvas SHALL be the first vertical official domain Tool slice registered in DSH; Cut, Assets, Character, World and remaining domain capabilities SHALL follow. DSH SHALL own Tool registration, selection, call identity and execution lifecycle. Each owning package SHALL remain authoritative for the Tool schema, semantic validation, authorization, exact resource identity, business transaction, durable facts and long-running Job. The Host adapter SHALL validate with the package-owned canonical validator before invoking the owning service. Domain capabilities SHALL NOT be wrapped in MCP merely to reach DSH, and direct UI operations SHALL call the same owning application service without creating a hidden Agent turn.
+Generation and Canvas SHALL be the first vertical official domain Tool slice registered in DSH; Cut, Character, World and remaining operation-bearing domain capabilities SHALL follow. DSH SHALL own Tool registration, selection, call identity and execution lifecycle. Each owning package SHALL remain authoritative for the Tool schema, semantic validation, authorization, exact resource identity, business transaction, durable facts and long-running Job. The Host adapter SHALL validate with the package-owned canonical validator before invoking the owning service. Domain capabilities SHALL NOT be wrapped in MCP merely to reach DSH, and direct UI operations SHALL call the same owning application service without creating a hidden Agent turn. Assets resource discovery SHALL NOT register a DSH Tool; it SHALL use the canonical Composer mention and Workspace materialization path.
 
 #### Scenario: DSH advertises a first-party domain Tool to the model
 
@@ -319,7 +319,9 @@ Product-shipped first-party Skills SHALL be exposed to the DSH `standard` preset
 
 - **WHEN** the Composer belongs to an exact authorized Workspace or bound product context
 - **THEN** `@` candidates are projected only from canonical Host resource identities authorized for that binding
-- **AND** locator-backed files and media carry exactly one `ContentLocator`, while available Assets and active Project Entities carry exactly one bounded `AgentContextPayload`
+- **AND** locator-backed files and media carry exactly one `ContentLocator`, while an Asset candidate carries only its exact Host identity until explicit selection materializes one regular Workspace file and returns its `ContentLocator`
+- **AND** active Project Entities carry exactly one bounded `AgentContextPayload`, distinct from file resources
 - **AND** selecting a candidate produces the existing reference token/chip presentation
-- **AND** the selected locator is submitted as one ACP resource link or the selected context receipt is appended as untrusted data to the exact DSH turn context
+- **AND** a selected file, media or materialized Asset locator is submitted as one ACP resource link, while an Entity context receipt is appended as untrusted data to the exact DSH turn context
+- **AND** opening or filtering the mention menu never materializes an Asset
 - **AND** missing authority remains local and cannot search raw paths or infer another Workspace

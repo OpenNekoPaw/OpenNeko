@@ -238,6 +238,40 @@ describe('Desktop DSH Session Host', () => {
     expect(result.mentions).toHaveLength(1);
   });
 
+  it('materializes one exact Asset through the sender-bound Surface without a Tool path', async () => {
+    const materializeAsset = vi.fn(async () => ({
+      assetId: 'asset-lighting',
+      label: 'lighting.png',
+      contentLocator: {
+        file: { authority: 'workspace' as const, path: 'assets/lighting.png' },
+      },
+      source: 'asset-library' as const,
+    }));
+    const host = createHost({ materializeAsset });
+
+    const result = await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      {
+        requestId: 'request-materialize',
+        operation: 'composer-materialize-asset',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        assetId: 'asset-lighting',
+      },
+    );
+
+    if (!('materialized' in result)) throw new Error('Expected materialized Asset result.');
+    expect(materializeAsset).toHaveBeenCalledWith({
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      assetId: 'asset-lighting',
+    });
+    expect(result.materialized.contentLocator.file.path).toBe('assets/lighting.png');
+  });
+
   it('delegates canonical DSH turn timing without using Desktop receipt time', async () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionEvent({
@@ -521,6 +555,9 @@ function createHost(overrides: {
   readonly searchMentions?: () => Promise<
     readonly import('@neko/agent-contracts/dsh-session-host').DshComposerMentionProjection[]
   >;
+  readonly materializeAsset?: () => Promise<
+    import('@neko/agent-contracts/dsh-session-host').DshComposerMaterializedAssetProjection
+  >;
 }) {
   return new DesktopDshSessionHost({
     bindings: {
@@ -544,6 +581,16 @@ function createHost(overrides: {
       selectPermissionPreset:
         overrides.selectPermissionPreset ?? vi.fn(async () => composerConfiguration()),
       searchMentions: overrides.searchMentions ?? vi.fn(async () => []),
+      materializeAsset:
+        overrides.materializeAsset ??
+        vi.fn(async () => ({
+          assetId: 'asset-1',
+          label: 'asset.png',
+          contentLocator: {
+            file: { authority: 'workspace' as const, path: 'assets/asset.png' },
+          },
+          source: 'asset-library' as const,
+        })),
       applyConversation: overrides.applyConversation ?? vi.fn(async () => undefined),
     },
     promptContext: overrides.promptContext ?? {

@@ -20,5 +20,6 @@ export * from './project-portability-runtime';
 export * from './workspace-directory-observer';
 export * from './resource-browser-node-source';
 export * from './global-asset-files';
+export * from './workspace-asset-materialization';
 export * from './resource-browser-node-runtime';
 export * from './asset-center-node-runtime';

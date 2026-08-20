@@ -4,6 +4,7 @@ import type {
   DshConversationCreationTarget,
   DshComposerConfigurationProjection,
   DshComposerMentionProjection,
+  DshComposerMaterializedAssetProjection,
   DshComposerSubmitInput,
   DshSessionHostEvent,
   DshSessionHostProjection,
@@ -80,6 +81,9 @@ export interface DshAgentViewProps {
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
   readonly onRestartRuntime: () => void;
   readonly onRequestMentions?: (filter: string) => void;
+  readonly onMaterializeAsset?: (
+    assetId: string,
+  ) => Promise<DshComposerMaterializedAssetProjection | undefined>;
   readonly onSubmit: (
     target: DshConversationCreationTarget,
     input: DshComposerSubmitInput,
@@ -234,6 +238,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       onMediaModelChange={props.onMediaModelChange}
       onPermissionPresetChange={props.onPermissionPresetChange}
       onRequestMentions={props.onRequestMentions}
+      onMaterializeAsset={props.onMaterializeAsset}
       onSubmit={props.onSubmit}
       entryExperience={entryExperience}
       entryContextAvailable={props.entryContext !== undefined}
@@ -418,6 +423,7 @@ function DshComposer({
   onMediaModelChange,
   onPermissionPresetChange,
   onRequestMentions,
+  onMaterializeAsset,
   onSubmit,
   entryExperience,
   entryContextAvailable,
@@ -450,6 +456,9 @@ function DshComposer({
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
   readonly onRequestMentions?: (filter: string) => void;
+  readonly onMaterializeAsset?: (
+    assetId: string,
+  ) => Promise<DshComposerMaterializedAssetProjection | undefined>;
   readonly onSubmit: (
     target: DshConversationCreationTarget,
     input: DshComposerSubmitInput,
@@ -495,6 +504,7 @@ function DshComposer({
     ...(mention.description === undefined ? {} : { description: mention.description }),
     source: mention.source,
     ...(mention.contentLocator === undefined ? {} : { contentLocator: mention.contentLocator }),
+    ...(mention.assetId === undefined ? {} : { assetId: mention.assetId }),
     ...(mention.contextPayload === undefined ? {} : { contextPayload: mention.contextPayload }),
     ...(mention.mediaType === undefined ? {} : { mediaType: mention.mediaType }),
   }));
@@ -640,6 +650,30 @@ function DshComposer({
             suppressInputDiagnosticClearRef.current = true;
           }}
           onSend={submitComposerInput}
+          onMaterializeAsset={async (assetId) => {
+            if (!onMaterializeAsset) {
+              setInputDiagnostic('Workspace Asset materialization is unavailable.');
+              return undefined;
+            }
+            try {
+              const materialized = await onMaterializeAsset(assetId);
+              if (!materialized) return undefined;
+              setInputDiagnostic(undefined);
+              return {
+                id: `asset:${materialized.assetId}:${materialized.contentLocator.file.path}`,
+                kind: 'asset',
+                label: materialized.label,
+                contentLocator: materialized.contentLocator,
+                source: materialized.source,
+                ...(materialized.mediaType === undefined
+                  ? {}
+                  : { mediaType: materialized.mediaType }),
+              };
+            } catch (error) {
+              setInputDiagnostic(describeError(error));
+              return undefined;
+            }
+          }}
           onCancel={onCancel}
           disabled={disabled || configuring || configuration === undefined}
           attachmentsDisabled

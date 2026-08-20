@@ -11,6 +11,7 @@ import {
   DSH_SESSION_CHANGED_CHANNEL,
   DSH_SESSION_HOST_CHANNEL,
   parseDshComposerConfigurationHostResult,
+  parseDshComposerMaterializedAssetHostResult,
   parseDshComposerMentionsHostResult,
   parseDshSessionChangedEvent,
   parseDshSessionHostResult,
@@ -504,6 +505,20 @@ const bridge: OpenNekoDesktopBridge &
       };
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return parseDshComposerMentionsHostResult(response, request.requestId).mentions;
+    },
+    async materializeComposerAsset(workbenchInstanceId, agentSurfaceId, assetId) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-composer-materialize-asset'),
+        operation: 'composer-materialize-asset' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        workbenchInstanceId,
+        agentSurfaceId,
+        assetId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      return parseDshComposerMaterializedAssetHostResult(response, request.requestId).materialized;
     },
     async selectComposerModel(workbenchInstanceId, agentSurfaceId, modelOptionId) {
       const context = requireDesktopWindowContext();

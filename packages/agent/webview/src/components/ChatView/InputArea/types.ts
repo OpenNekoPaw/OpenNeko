@@ -128,7 +128,7 @@ export interface ProjectFile {
   name: string;
   type: 'file' | 'folder';
   icon?: string;
-  source?: 'workspace' | 'media-library' | 'entity-graph' | 'story' | 'canvas';
+  source?: 'workspace' | 'media-library' | 'asset-library' | 'entity-graph' | 'story' | 'canvas';
   mediaType?: 'video' | 'audio' | 'image' | 'sequence' | 'text' | 'document';
 }
 
@@ -150,6 +150,8 @@ export interface MentionItem {
   description?: string;
   /** Stable Host-issued content identity used when this item is selected. */
   contentLocator?: import('@neko/content').ContentLocator;
+  /** Exact Host identity used only to materialize a selected Asset into the Workspace. */
+  assetId?: string;
   /** Optional icon supplied by host protocol */
   icon?: string;
   /** Source index that produced this candidate */

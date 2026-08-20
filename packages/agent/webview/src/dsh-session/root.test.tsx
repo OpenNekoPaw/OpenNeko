@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nService, type SupportedLocale } from '@neko/ui/i18n';
 import { I18nProvider } from '@neko/ui/i18n/react';
+import type { DshComposerMaterializedAssetProjection } from '@neko/agent-contracts/dsh-session-host';
 
 import { DshAgentView } from './root';
 
@@ -124,24 +125,29 @@ describe('DshAgentView content-creation composer', () => {
     expect(composer.value).toBe('next request');
   });
 
-  it('reuses the retained mention menu for Assets and submits the selected context receipt', async () => {
+  it('reuses the retained mention menu and submits an Asset only after Workspace materialization', async () => {
     const onSubmit = vi.fn(async () => true);
+    const onMaterializeAsset = vi.fn(async (assetId: string) => ({
+      assetId,
+      label: 'Lighting reference.png',
+      contentLocator: {
+        file: { authority: 'workspace' as const, path: 'assets/Lighting reference.png' },
+      },
+      source: 'asset-library' as const,
+      mediaType: 'image' as const,
+    }));
     renderAgent(
       <DshComposerHarness
         onSubmit={onSubmit}
+        onMaterializeAsset={onMaterializeAsset}
         mentionItems={[
           {
             id: 'assets:lighting',
             kind: 'asset',
             label: 'Lighting reference',
-            contextPayload: {
-              type: 'asset',
-              id: 'asset-lighting',
-              label: 'Lighting reference',
-              summary: 'Soft studio lighting',
-              data: { assetRef: { assetId: 'asset-lighting' } },
-            },
-            source: 'entity-graph',
+            description: 'Soft studio lighting',
+            assetId: 'asset-lighting',
+            source: 'asset-library',
           },
         ]}
       />,
@@ -149,7 +155,10 @@ describe('DshAgentView content-creation composer', () => {
     const composer = screen.getByLabelText('消息');
     fireEvent.change(composer, { target: { value: '@light' } });
     fireEvent.click(await screen.findByText('Lighting reference'));
-    expect(screen.getByTitle('Soft studio lighting')).toBeTruthy();
+    await waitFor(() => expect(onMaterializeAsset).toHaveBeenCalledWith('asset-lighting'));
+    expect(
+      await screen.findByRole('button', { name: 'Remove Lighting reference.png' }),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
 
     await waitFor(() =>
@@ -158,53 +167,150 @@ describe('DshAgentView content-creation composer', () => {
         {
           kind: 'message',
           text: '',
-          references: [],
-          contextPayloads: [
+          references: [
             {
-              type: 'asset',
-              id: 'asset-lighting',
-              label: 'Lighting reference',
-              summary: 'Soft studio lighting',
-              data: { assetRef: { assetId: 'asset-lighting' } },
+              label: 'Lighting reference.png',
+              contentLocator: {
+                file: {
+                  authority: 'workspace',
+                  path: 'assets/Lighting reference.png',
+                },
+              },
             },
           ],
+          contextPayloads: [],
         },
       ),
     );
   });
 
-  it('does not carry selected mention context into another exact Conversation', async () => {
+  it('keeps the draft editable but blocks submission while an Asset is being materialized', async () => {
     const onSubmit = vi.fn(async () => true);
-    const view = renderAgent(
+    let resolveMaterialization!: (value: DshComposerMaterializedAssetProjection) => void;
+    const pendingMaterialization = new Promise<DshComposerMaterializedAssetProjection>(
+      (resolve) => {
+        resolveMaterialization = resolve;
+      },
+    );
+    renderAgent(
       <DshComposerHarness
-        conversationId="conversation-1"
         onSubmit={onSubmit}
+        onMaterializeAsset={() => pendingMaterialization}
         mentionItems={[
           {
             id: 'assets:lighting',
             kind: 'asset',
             label: 'Lighting reference',
-            contextPayload: {
-              type: 'asset',
-              id: 'asset-lighting',
-              label: 'Lighting reference',
-              summary: 'Soft studio lighting',
-              data: { assetRef: { assetId: 'asset-lighting' } },
-            },
-            source: 'entity-graph',
+            assetId: 'asset-lighting',
+            source: 'asset-library',
+          },
+        ]}
+      />,
+    );
+    const composer = screen.getByLabelText('消息') as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: '@light' } });
+    fireEvent.click(await screen.findByText('Lighting reference'));
+
+    expect(await screen.findByText('正在将素材添加到工作区...')).toBeTruthy();
+    expect(composer.disabled).toBe(false);
+    fireEvent.keyDown(composer, { key: 'Enter' });
+    expect(onSubmit).not.toHaveBeenCalled();
+    fireEvent.change(composer, { target: { value: 'continue editing' } });
+
+    await act(async () =>
+      resolveMaterialization({
+        assetId: 'asset-lighting',
+        label: 'Lighting reference.png',
+        contentLocator: {
+          file: { authority: 'workspace', path: 'assets/Lighting reference.png' },
+        },
+        source: 'asset-library',
+      }),
+    );
+    expect(screen.queryByText('正在将素材添加到工作区...')).toBeNull();
+    expect(composer.value).toBe('continue editing');
+    expect(screen.getByRole('button', { name: 'Remove Lighting reference.png' })).toBeTruthy();
+  });
+
+  it('does not carry a materialized Asset reference into another exact Conversation', async () => {
+    const onSubmit = vi.fn(async () => true);
+    const onMaterializeAsset = vi.fn(async (assetId: string) => ({
+      assetId,
+      label: 'Lighting reference.png',
+      contentLocator: {
+        file: { authority: 'workspace' as const, path: 'assets/Lighting reference.png' },
+      },
+      source: 'asset-library' as const,
+    }));
+    const view = renderAgent(
+      <DshComposerHarness
+        conversationId="conversation-1"
+        onSubmit={onSubmit}
+        onMaterializeAsset={onMaterializeAsset}
+        mentionItems={[
+          {
+            id: 'assets:lighting',
+            kind: 'asset',
+            label: 'Lighting reference',
+            assetId: 'asset-lighting',
+            source: 'asset-library',
           },
         ]}
       />,
     );
     fireEvent.change(screen.getByLabelText('消息'), { target: { value: '@light' } });
     fireEvent.click(await screen.findByText('Lighting reference'));
-    expect(screen.getByRole('button', { name: 'Remove Lighting reference' })).toBeTruthy();
+    expect(
+      await screen.findByRole('button', { name: 'Remove Lighting reference.png' }),
+    ).toBeTruthy();
 
     rerenderAgent(
       view,
       <DshComposerHarness conversationId="conversation-2" onSubmit={onSubmit} mentionItems={[]} />,
     );
-    expect(screen.queryByRole('button', { name: 'Remove Lighting reference' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove Lighting reference.png' })).toBeNull();
+  });
+
+  it('does not overwrite a newer draft when Asset materialization finishes', async () => {
+    let finishMaterialization!: (value: DshComposerMaterializedAssetProjection) => void;
+    const pending = new Promise<DshComposerMaterializedAssetProjection>((resolve) => {
+      finishMaterialization = resolve;
+    });
+    renderAgent(
+      <DshComposerHarness
+        onSubmit={vi.fn(async () => true)}
+        onMaterializeAsset={() => pending}
+        mentionItems={[
+          {
+            id: 'assets:lighting',
+            kind: 'asset',
+            label: 'Lighting reference',
+            assetId: 'asset-lighting',
+            source: 'asset-library',
+          },
+        ]}
+      />,
+    );
+    const composer = screen.getByLabelText('消息') as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: '@light' } });
+    fireEvent.click(await screen.findByText('Lighting reference'));
+    fireEvent.change(composer, { target: { value: 'continue writing' } });
+
+    await act(async () =>
+      finishMaterialization({
+        assetId: 'asset-lighting',
+        label: 'Lighting reference.png',
+        contentLocator: {
+          file: { authority: 'workspace', path: 'assets/Lighting reference.png' },
+        },
+        source: 'asset-library',
+      }),
+    );
+
+    expect(composer.value).toBe('continue writing');
+    expect(
+      await screen.findByRole('button', { name: 'Remove Lighting reference.png' }),
+    ).toBeTruthy();
   });
 
   it('renders canonical DSH command lifecycle as one retained activity', () => {
@@ -873,11 +979,13 @@ function DshComposerHarness({
   conversationId = 'conversation-1',
   mentionItems = [],
   onRequestMentions = vi.fn(),
+  onMaterializeAsset,
   onSubmit,
 }: {
   readonly conversationId?: string;
   readonly mentionItems?: React.ComponentProps<typeof DshAgentView>['mentionItems'];
   readonly onRequestMentions?: (filter: string) => void;
+  readonly onMaterializeAsset?: React.ComponentProps<typeof DshAgentView>['onMaterializeAsset'];
   readonly onSubmit: React.ComponentProps<typeof DshAgentView>['onSubmit'];
 }): JSX.Element {
   const [draft, setDraft] = useState('');
@@ -935,6 +1043,7 @@ function DshComposerHarness({
       onModelChange={vi.fn()}
       onPermissionPresetChange={vi.fn()}
       onRequestMentions={onRequestMentions}
+      onMaterializeAsset={onMaterializeAsset}
       onRestartRuntime={vi.fn()}
       onSubmit={onSubmit}
     />

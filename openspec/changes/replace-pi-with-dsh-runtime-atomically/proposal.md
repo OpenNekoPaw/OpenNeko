@@ -16,7 +16,7 @@ OpenNeko 曾在 `@neko/agent-runtime` 内直接维护 Pi conversation runtime，
 - Bridge 不得实现第二套 Agent loop、Session store、queue、tool registry、Skill/MCP/Plugin runtime。
 - 用户可见扩展类型首版只保留 Skill 与 MCP，配置 UI 保留但只投影 DSH authority。DSH Plugin 仅作为官方维护、随产品发布并精确锁定的内部装配单元，不提供通用 Plugin 安装/配置 UI，不提供第三方 Webview JS 或任意第三方 JS 注入 Electron Main/DSH。
 - `computer-use`、`browser-use` 作为官方维护的 DSH MCP contribution 接入；OpenNeko 只拥有 OS 权限、目标选择、sender-bound grant 与安全审批，不能拥有 MCP connection 或 Agent Tool registry。
-- Generation 与 Canvas 作为首批纵向官方领域 Tool slice 注册到 DSH；Cut、Assets、Character、World 等随后迁移。DSH 拥有调用 lifecycle，owning packages 拥有 schema、semantic validation、authorization、exact resource identity、业务事务、事实与长任务 Job；UI 直接操作不绕 Agent；领域能力不用 MCP 包装。
+- Generation 与 Canvas 作为首批纵向官方领域 Tool slice 注册到 DSH；Cut、Character、World 等随后迁移。Assets 不注册 Agent Tool：Files、Media、Assets 统一经 `@` 发现，Asset 被选择时由 Assets owner 复制到精确 Workspace，再以普通 `ContentLocator` 进入 DSH。DSH 拥有领域 Tool 调用 lifecycle，owning packages 拥有 schema、semantic validation、authorization、exact resource identity、业务事务、事实与长任务 Job；UI 直接操作不绕 Agent；领域能力不用 MCP 包装。
 - 保留内容创作所需的附件、多模态与感知能力：图片优先使用 DSH 原生 attachment/content block；当前模型不支持输入模态时，由显式配置的感知模型生成结构化 evidence，再进入同一 DSH turn。音频、视频和通用文件在 DSH 原生附件公开 API 补齐前保持明确受限，不恢复旧 Agent 多模态 runtime。
 - 旧 Agent 公共 Prompt/Input/Capability 代码只有在其功能已由 DSH system prompt/Skill、OpenNeko exact context injection、DSH attachment 或 first-party domain Tool 接管后才可删除；不得以删除旧代码为由删除产品功能，也不得保留无生产 consumer 的旧公共 API。
 - 保留旧 Pi Session JSONL 与 `pi_*` 本地记录的原始字节，不覆盖、不静默迁移、不回退旧 reader、不伪造空 transcript。
@@ -42,6 +42,6 @@ OpenNeko 曾在 `@neko/agent-runtime` 内直接维护 Pi conversation runtime，
 - `packages/agent/runtime`：从内嵌 runtime 组合改为 host-neutral ACP application client、Conversation/Session binding 协调与 canonical projection；不启动进程，也不再拥有 Agent loop、Session store、Tool registry、消息队列、Skill Host、MCP Manager 或 Plugin runtime。
 - `packages/host`：`settings` public entry 拥有 program-owned provider credential authority、配置优先级、精确 provider identity 与 SecretStorage key 语义；不依赖 Agent/Pi/DSH runtime，也不投影 secret。
 - `apps/neko-desktop`：保持已定稿的 Electron 原生 UI 和薄组合根；Renderer 只把 canonical DSH projection 投影到既有产品视觉与交互，不承载协议 authority；Desktop Main 只在 trust boundary 启动/监督 DSH 子进程、承载 stdio、实现 SecretStorage、sender-bound IPC 与 OS/领域 concrete Host adapters，不拥有 Agent/Session/extension 业务状态机。
-- owning domain packages：Canvas/Generation 首批迁移，Cut/Assets/Character/World 随后；继续拥有 schema、semantic validation、authorization、exact resource identity、业务事务、事实与长任务 Job；领域能力不以 MCP 包装。感知与 Generation 参数分别由其 domain owner 管理，不能进入通用 DSH Agent 配置。
+- owning domain packages：Canvas/Generation 首批迁移，Cut/Character/World 随后；继续拥有 schema、semantic validation、authorization、exact resource identity、业务事务、事实与长任务 Job。Assets 只拥有资源搜索与显式 Workspace copy，不进入 DSH Tool registry；领域能力不以 MCP 包装。感知与 Generation 参数分别由其 domain owner 管理，不能进入通用 DSH Agent 配置。
 - `scripts/dsh-q0`：非发布 fixture 验证 subprocess lifecycle、stdout purity、handshake/capability、session recovery/history、progress、permission、cancel、inbox、Host tool reverse requests、extension management、crash/restart/fail-local；已知 dsh CLI 可正常使用，不重复安装验证。真实 Provider 基线已通过可见 Desktop UI、产品 Composer、DSH/ACP 与真实 API 完成；完整 Provider/Model、approval、领域 Tool、重开与发布矩阵仍由统一发布门禁约束。
 - 依赖与数据：精确锁定随产品发布的 DSH profile/plugins 与 dsh-acp rc.7 兼容闭包；不保留 Pi 直接依赖、Remote API、TS SDK 或自研 runtime fallback。

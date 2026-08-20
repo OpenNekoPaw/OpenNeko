@@ -6,7 +6,12 @@ import {
 } from './dsh-acp';
 import { isAgentContextType, type AgentContextPayload } from './agent-context';
 import type { ModelType } from '@neko/ai-contracts';
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import {
+  isWorkspaceFileContentLocator,
+  validateContentLocator,
+  type ContentLocator,
+  type WorkspaceFileContentLocator,
+} from '@neko/content';
 
 export const DSH_SESSION_HOST_CHANNEL = 'openneko:dsh:session';
 export const DSH_SESSION_CHANGED_CHANNEL = 'openneko:dsh:session:changed';
@@ -136,8 +141,18 @@ export interface DshComposerMentionProjection {
   readonly label: string;
   readonly description?: string;
   readonly contentLocator?: ContentLocator;
+  readonly assetId?: string;
   readonly contextPayload?: AgentContextPayload;
-  readonly source: 'workspace' | 'media-library' | 'entity-graph' | 'story' | 'canvas';
+  readonly source:
+    'workspace' | 'media-library' | 'asset-library' | 'entity-graph' | 'story' | 'canvas';
+  readonly mediaType?: 'video' | 'audio' | 'image' | 'text' | 'document';
+}
+
+export interface DshComposerMaterializedAssetProjection {
+  readonly assetId: string;
+  readonly label: string;
+  readonly contentLocator: WorkspaceFileContentLocator;
+  readonly source: 'asset-library';
   readonly mediaType?: 'video' | 'audio' | 'image' | 'text' | 'document';
 }
 
@@ -195,6 +210,12 @@ export type DshSessionHostRequest =
       readonly filter: string;
     })
   | (DshSessionHostSenderRequest & {
+      readonly operation: 'composer-materialize-asset';
+      readonly workbenchInstanceId: string;
+      readonly agentSurfaceId: string;
+      readonly assetId: string;
+    })
+  | (DshSessionHostSenderRequest & {
       readonly operation: 'composer-model';
       readonly workbenchInstanceId: string;
       readonly agentSurfaceId: string;
@@ -230,6 +251,11 @@ export interface DshComposerMentionsHostResult {
   readonly mentions: readonly DshComposerMentionProjection[];
 }
 
+export interface DshComposerMaterializedAssetHostResult {
+  readonly requestId: string;
+  readonly materialized: DshComposerMaterializedAssetProjection;
+}
+
 export interface DshSessionChangedEvent {
   readonly conversationId: string;
 }
@@ -254,6 +280,11 @@ export interface OpenNekoDshSessionBridge {
       agentSurfaceId: string,
       filter: string,
     ): Promise<readonly DshComposerMentionProjection[]>;
+    materializeComposerAsset(
+      workbenchInstanceId: string,
+      agentSurfaceId: string,
+      assetId: string,
+    ): Promise<DshComposerMaterializedAssetProjection>;
     selectComposerModel(
       workbenchInstanceId: string,
       agentSurfaceId: string,
@@ -304,6 +335,7 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
   if (
     record.operation === 'composer-snapshot' ||
     record.operation === 'composer-mentions' ||
+    record.operation === 'composer-materialize-asset' ||
     record.operation === 'composer-model' ||
     record.operation === 'composer-media-model' ||
     record.operation === 'composer-permission-preset'
@@ -331,6 +363,14 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
         ...common,
         operation: 'composer-mentions',
         filter: requireString(record.filter, 'mention filter'),
+      };
+    }
+    if (record.operation === 'composer-materialize-asset') {
+      requireExactKeys(record, [...commonKeys, 'assetId']);
+      return {
+        ...common,
+        operation: 'composer-materialize-asset',
+        assetId: requireIdentity(record.assetId, 'assetId'),
       };
     }
     if (record.operation === 'composer-model') {
@@ -575,6 +615,7 @@ export function parseDshComposerMentionsHostResult(
         'label',
         'description',
         'contentLocator',
+        'assetId',
         'contextPayload',
         'source',
         'mediaType',
@@ -595,6 +636,7 @@ export function parseDshComposerMentionsHostResult(
     if (
       mention.source !== 'workspace' &&
       mention.source !== 'media-library' &&
+      mention.source !== 'asset-library' &&
       mention.source !== 'entity-graph' &&
       mention.source !== 'story' &&
       mention.source !== 'canvas'
@@ -612,12 +654,24 @@ export function parseDshComposerMentionsHostResult(
       mention.contextPayload === undefined
         ? undefined
         : parseAgentContextPayload(mention.contextPayload, `mention[${index}].contextPayload`);
-    if ((locator === undefined) === (contextPayload === undefined)) {
-      throw new Error(
-        `DSH composer mention[${index}] requires exactly one ContentLocator or context payload.`,
-      );
+    const assetId =
+      mention.assetId === undefined
+        ? undefined
+        : requireIdentity(mention.assetId, `mention[${index}].assetId`);
+    const receiptCount =
+      Number(locator !== undefined) +
+      Number(assetId !== undefined) +
+      Number(contextPayload !== undefined);
+    if (receiptCount !== 1) {
+      throw new Error(`DSH composer mention[${index}] requires exactly one resource receipt.`);
     }
-    if ((mention.kind === 'file' || mention.kind === 'media') !== (locator !== undefined)) {
+    const locatorKind = mention.kind === 'file' || mention.kind === 'media';
+    const assetKind = mention.kind === 'asset';
+    if (
+      locatorKind !== (locator !== undefined) ||
+      assetKind !== (assetId !== undefined) ||
+      (assetKind && mention.source !== 'asset-library')
+    ) {
       throw new Error(`DSH composer mention[${index}] kind does not match its resource receipt.`);
     }
     const mediaType =
@@ -633,6 +687,7 @@ export function parseDshComposerMentionsHostResult(
         : { description: requireIdentity(mention.description, `mention[${index}].description`) }),
       source: mention.source,
       ...(locator === undefined ? {} : { contentLocator: locator.locator }),
+      ...(assetId === undefined ? {} : { assetId }),
       ...(contextPayload === undefined ? {} : { contextPayload }),
       ...(mediaType === undefined ? {} : { mediaType }),
     };
@@ -643,6 +698,47 @@ export function parseDshComposerMentionsHostResult(
     ids.add(mention.id);
   }
   return { requestId, mentions };
+}
+
+export function parseDshComposerMaterializedAssetHostResult(
+  value: unknown,
+  expectedRequestId: string,
+): DshComposerMaterializedAssetHostResult {
+  const record = requireRecord(value, 'DSH composer materialized Asset result');
+  requireExactKeys(record, ['requestId', 'materialized']);
+  const requestId = requireIdentity(record.requestId, 'requestId');
+  if (requestId !== expectedRequestId) {
+    throw new Error(
+      `DSH composer materialized Asset result '${requestId}' does not match '${expectedRequestId}'.`,
+    );
+  }
+  const materialized = requireRecord(record.materialized, 'DSH composer materialized Asset');
+  requireAllowedKeys(
+    materialized,
+    ['assetId', 'label', 'contentLocator', 'source', 'mediaType'],
+    ['assetId', 'label', 'contentLocator', 'source'],
+  );
+  if (materialized.source !== 'asset-library') {
+    throw new Error('DSH composer materialized Asset source is invalid.');
+  }
+  const locator = validateContentLocator(materialized.contentLocator);
+  if (!locator.ok || !isWorkspaceFileContentLocator(locator.locator)) {
+    throw new Error('DSH composer materialized Asset requires a Workspace ContentLocator.');
+  }
+  const mediaType =
+    materialized.mediaType === undefined
+      ? undefined
+      : parseComposerMentionMediaType(materialized.mediaType);
+  return {
+    requestId,
+    materialized: {
+      assetId: requireIdentity(materialized.assetId, 'assetId'),
+      label: requireIdentity(materialized.label, 'label'),
+      contentLocator: locator.locator,
+      source: 'asset-library',
+      ...(mediaType === undefined ? {} : { mediaType }),
+    },
+  };
 }
 
 function parseComposerMentionMediaType(

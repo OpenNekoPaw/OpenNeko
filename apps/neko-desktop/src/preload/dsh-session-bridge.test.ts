@@ -230,6 +230,39 @@ describe('DSH Session preload bridge', () => {
     });
   });
 
+  it('materializes a selected Asset through the exact sender-bound Agent Surface', async () => {
+    state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
+      if (channel.endsWith('bootstrap:get')) return bootstrap(request.requestId as string);
+      expect(channel).toBe(DSH_SESSION_HOST_CHANNEL);
+      return {
+        requestId: request.requestId,
+        materialized: {
+          assetId: 'asset-lighting',
+          label: 'lighting.png',
+          contentLocator: {
+            file: { authority: 'workspace', path: 'assets/lighting.png' },
+          },
+          source: 'asset-library',
+        },
+      };
+    });
+    const bridge = requireBridge();
+    await bridge.bootstrap.get();
+
+    await expect(
+      bridge.dshSessions.materializeComposerAsset('workbench-1', 'surface-1', 'asset-lighting'),
+    ).resolves.toMatchObject({ contentLocator: { file: { path: 'assets/lighting.png' } } });
+    expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
+      requestId: expect.any(String),
+      operation: 'composer-materialize-asset',
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+      assetId: 'asset-lighting',
+    });
+  });
+
   it('projects changed events by Conversation identity', () => {
     const listener = vi.fn();
     const dispose = requireBridge().dshSessions.subscribe(listener);

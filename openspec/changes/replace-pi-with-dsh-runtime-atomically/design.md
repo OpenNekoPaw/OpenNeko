@@ -20,7 +20,7 @@ DSH 官方 `dsh-acp` rc.7 是 automation-only：它提供 ACP 自动化能力，
 - 最终版 composer 中的模型选择、执行模式、Workspace/Canvas 上下文栏、附件入口和引用 token 是 OpenNeko 内容创作产品能力，不是 DSH Web 或 ACP 的调试控件。`@neko/host/settings` 继续拥有 secret-free 模型目录、用户选择和 execution mode；Shell/对应领域 owner 继续拥有 exact Workspace/Canvas/引用事实；`@neko/agent-webview` 只渲染 typed presentation。Desktop 只能从 sender-bound Agent Surface 和 exact Conversation context 解析这些 authority，禁止从 active/recent Workspace、DSH 默认模型或旧 Pi 状态猜测。没有 authoritative attachment/reference projection 时不得伪造 token 或把 `+` 显示成可成功的入口。
 - Agent presentation 的用户可见文案由 `@neko/agent-webview` 的精简 package-owned locale bundle 负责，并跟随 Desktop locale；外层 Desktop i18n 只提供 locale，不得要求其复制 Agent `chat.*` keys，也不得让缺失 key 直接泄漏到 UI。该 bundle 只覆盖保留的 presentation component，不恢复已删除的 SkillHost、MCP、Plugin 或 Pi runtime 文案与注册面。
 - 用薄的 OpenNeko-owned bridge plugin/profile 补齐 `dsh-acp` rc.7 automation-only 缺口，且不实现第二套 Agent loop、Session store、queue、tool registry、Skill/MCP/Plugin runtime。
-- Generation+Canvas 作为首批纵向官方领域 Tool slice 迁移；Cut、Assets、Character、World 等随后迁移。
+- Generation+Canvas 作为首批纵向官方领域 Tool slice 迁移；Cut、Character、World 等随后迁移。Assets 通过 `@` 与显式 Workspace copy 接入，不注册 Tool。
 - 保留旧 Pi 用户数据原始字节，局部显示不可执行状态，不增加 legacy reader、迁移器或 fallback。
 - 通过 `scripts/dsh-q0` 非发布 fixture 验证子进程边界；真实 Provider 基线另由可见 Desktop UI 通过产品 Composer、DSH/ACP 和真实 API 验证，不能由 Q0 或 mock 替代。完整发布矩阵仍 fail-closed。
 
@@ -30,7 +30,7 @@ DSH 官方 `dsh-acp` rc.7 是 automation-only：它提供 ACP 自动化能力，
 - 不在 Electron Main 内嵌 Cordis Context，不使用 DSH Web/Client Runtime、TS SDK 或 Remote API 作为生产路径。
 - 不实现 OpenNeko 自研第三方插件 runtime，不允许第三方 Webview JS 或任意第三方 JS 注入 Electron Main/DSH。
 - 不保留 OpenNeko Skill Host、MCP Manager、Plugin runtime；Skill/MCP/Plugin 的实际发现/加载/启停/执行归 DSH profile。
-- 不把 Generation、Canvas、Cut、Assets、Character、World 或感知能力包装成 MCP，也不把 Generation 参数并入通用 Agent/DSH settings。
+- 不把 Generation、Canvas、Cut、Character、World 或感知能力包装成 MCP，也不把 Generation 参数并入通用 Agent/DSH settings；Assets 资源操作不进入 MCP 或 DSH Tool registry。
 - 不在本变更中转换旧 Pi transcript 为 DSH Session，也不提供正常产品可达的旧 transcript reader/repair/migration。
 - 不把 Evaluation 变成产品 Skill、第二个 Agent controller 或 direct runtime runner。
 - 不把领域能力用 MCP 包装；领域 Tools 是注册到 DSH 的官方 typed domain tools，UI 直接操作不绕 Agent。
@@ -55,7 +55,7 @@ Desktop Main 负责启动、配置、监督和按需重启 DSH 子进程。生�
 
 首版只允许随 OpenNeko 发布、由官方维护并精确锁定的 DSH profile/plugins。不使用 dist-tag、caret、tilde 或混合 RC；lockfile 必须唯一解析到同一审核过的闭包。Plugin 是 DSH 内部 composition unit，不是用户可见扩展类型；产品扩展 UI 只展示 Skill 与 MCP。OpenNeko 不提供自研第三方插件 runtime，不加载第三方 Webview JS，不允许任意第三方 JS 注入 Electron Main/DSH。未来若引入隔离的第三方扩展，必须由独立 OpenSpec 重新定义执行边界、沙箱和信任模型。
 
-产品 artifact 以只读 `resources/dsh-runtime/darwin-arm64` 作为唯一 executable/package authority，包含独立 Node、DSH CLI、完整 package closure、官方 OpenNeko profile template、tree fingerprint、关键文件 checksum 与第三方许可证清单。Desktop 不从系统 Node、全局 DSH、`PATH`、Electron `process.execPath`、普通 workspace `node_modules` 或 Q0 fixture 解析生产 runtime。DSH rc.7 启动会改写 profile `cordis.yml` 并维护 `$DSH_HOME/profiles/node_modules`，因此只读 template 不直接作为 `DSH_HOME`；Desktop 在 Electron `userData/dsh` 下维护唯一可写 DSH home，只将当前已验证 template 的 `package.json`、`cordis.patch.yml` 和指向只读 closure 中官方 OpenNeko package 的精确 links 重建到 `profiles/openneko`。当前 closure 包含 bridge、Generation、Canvas、Cut、Character 与 World DSH plugin；Assets 与官方 MCP contribution 只有完成对应 Tool/MCP slice 后才能加入同一生成清单。home-level `cordis.patch.yml` 固定为空，profile manifest 不声明 out-of-tree dependencies，普通本地包、Marketplace 与用户 patch 不得进入 production profile。
+产品 artifact 以只读 `resources/dsh-runtime/darwin-arm64` 作为唯一 executable/package authority，包含独立 Node、DSH CLI、完整 package closure、官方 OpenNeko profile template、tree fingerprint、关键文件 checksum 与第三方许可证清单。Desktop 不从系统 Node、全局 DSH、`PATH`、Electron `process.execPath`、普通 workspace `node_modules` 或 Q0 fixture 解析生产 runtime。DSH rc.7 启动会改写 profile `cordis.yml` 并维护 `$DSH_HOME/profiles/node_modules`，因此只读 template 不直接作为 `DSH_HOME`；Desktop 在 Electron `userData/dsh` 下维护唯一可写 DSH home，只将当前已验证 template 的 `package.json`、`cordis.patch.yml` 和指向只读 closure 中官方 OpenNeko package 的精确 links 重建到 `profiles/openneko`。当前 closure 包含 bridge、Generation、Canvas、Cut、Character 与 World DSH plugin；Assets 不进入 closure，官方 MCP contribution 只有完成对应 MCP slice 后才能加入同一生成清单。home-level `cordis.patch.yml` 固定为空，profile manifest 不声明 out-of-tree dependencies，普通本地包、Marketplace 与用户 patch 不得进入 production profile。
 
 开发启动同样只消费 verified closure，但由 repository-owned development builder 在 Forge 启动前生成到被忽略且不受 Forge `.vite` 清理管理的 `apps/neko-desktop/.dsh-development-runtime/darwin-arm64`。builder 的第三方输入只能来自独立、精确锁定的 development runtime manifest/lock，Node 来自该 lock 中的 `node-bin-darwin-arm64` 分发包；当前七个 OpenNeko bundle 必须先从当前 source build，再把各包声明的发布文件复制进 closure。普通 workspace `node_modules` 只可提供 builder/toolchain，不能被 runtime 直接解析；系统 Node 只可执行 builder，不能被复制或引用为 runtime executable。builder 必须删除 install-time symlink、生成许可证清单与 canonical descriptor/tree fingerprint、完整 qualification 后原子替换旧 cache，并以输入内容 fingerprint 判断 cache freshness。`scripts/dsh-q0` 的 manifest、lockfile、安装树和产物均不得成为任何 development/product closure 输入。
 
@@ -123,9 +123,9 @@ DSH rc.7 当前只为 PNG、JPEG、WebP 与 GIF 提供持久 image attachment �
 
 ### 5. 领域 Tools 是官方 DSH Tools，不是 MCP
 
-Generation、Canvas、Cut、Assets、Character、World 等作为精选高层官方领域 Tools 注册到 DSH。DSH 拥有调用 lifecycle；owning packages 拥有 schema、semantic validation、authorization、exact resource identity、业务事务、领域事实与长任务 Job。领域能力不用 MCP 包装。UI 直接操作领域能力时不经过 Agent；只有 Agent 发起领域调用时走 DSH→Host typed domain tool request/response。
+Generation、Canvas、Cut、Character、World 等作为精选高层官方领域 Tools 注册到 DSH。DSH 拥有调用 lifecycle；owning packages 拥有 schema、semantic validation、authorization、exact resource identity、业务事务、领域事实与长任务 Job。领域能力不用 MCP 包装。UI 直接操作领域能力时不经过 Agent；只有 Agent 发起领域调用时走 DSH→Host typed domain tool request/response。Assets 只通过 `@` 资源发现和选择时的 Workspace copy 进入 Agent，不注册 Tool。
 
-每个领域 Tool 必须有一个显式 package-owned DSH contribution 和一个精确 reverse Host adapter；不得用 generic Tool factory、wildcard dispatcher 或 MCP wrapper 批量恢复旧 Capability runtime。Generation、Canvas、Cut、Assets、Character 与 World 分别独立验收，缺少某个 Tool 只使该能力 unavailable，不得阻塞一般对话或 sibling domain Tool。
+每个领域 Tool 必须有一个显式 package-owned DSH contribution 和一个精确 reverse Host adapter；不得用 generic Tool factory、wildcard dispatcher 或 MCP wrapper 批量恢复旧 Capability runtime。Generation、Canvas、Cut、Character 与 World 分别独立验收，缺少某个 Tool 只使该能力 unavailable，不得阻塞一般对话或 sibling domain Tool。Assets 由 Composer/Assets public ports 独立验收，任何 `openneko.assets` 注册都必须使边界门禁失败。
 
 Cut media/export 的 durable owner 由 `@neko/cut-node` 的 `ExportJobCoordinator` 组合，按 exact
 Workspace identity 使用 `LocalMetadataStore` 的持久化 Job store。Job request 只保存 workspace-relative
