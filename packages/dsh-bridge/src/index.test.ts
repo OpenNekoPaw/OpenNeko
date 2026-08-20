@@ -126,6 +126,43 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     ]);
   });
 
+  it('replays OpenNeko resource links as structured ACP blocks without protocol text', () => {
+    const session = Session.create(SessionId('session-resource'));
+    const user = session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'Use the selected resource.' }],
+        source: {
+          kind: 'user',
+          opennekoDisplayContent: [
+            { type: 'text', text: '分析前10页' },
+            {
+              type: 'resource_link',
+              name: '卷01.epub',
+              uri: 'openneko-content:%7B%22file%22%3A%7B%22authority%22%3A%22workspace%22%2C%22path%22%3A%22books%2Fvol-01.epub%22%7D%7D',
+            },
+          ],
+        },
+      }),
+      { surfaceOp: 'append' },
+    );
+
+    const notifications = projectSessionEvent('session-resource', user);
+    expect(notifications).toHaveLength(2);
+    expect(notifications[0]?.update).toMatchObject({
+      sessionUpdate: 'user_message_chunk',
+      content: { type: 'text', text: '分析前10页' },
+    });
+    expect(notifications[1]?.update).toMatchObject({
+      sessionUpdate: 'user_message_chunk',
+      content: {
+        type: 'resource_link',
+        name: '卷01.epub',
+      },
+    });
+    expect(JSON.stringify(notifications)).not.toContain('[resource_link');
+  });
+
   it('projects canonical Tool result failure without requiring internal error metadata', () => {
     const session = Session.create(SessionId('session-1'));
     const call = session.append('tool/call', {
@@ -347,7 +384,7 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toContain('const promptAdmission = new PromptAdmission<PromptResponse>()');
     expect(source).toMatch(/const runPrompt[\s\S]*promptAdmission\.run\(sessionId/u);
     expect(source).toMatch(
-      /async prompt\(params\)[\s\S]*return runPrompt\(params\.sessionId, content\)/u,
+      /async prompt\(params\)[\s\S]*return runPrompt\(params\.sessionId, content, displayContent\)/u,
     );
     expect(source).toMatch(/cancel\(params\)[\s\S]*promptAdmission\.cancel\(params\.sessionId/u);
     expect(source).toMatch(

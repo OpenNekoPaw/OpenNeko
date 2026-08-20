@@ -40,6 +40,43 @@ describe('DSH Conversation turn context', () => {
       'Selected context: [{"type":"asset","id":"asset-lighting","label":"Lighting","summary":"Soft studio lighting","data":{"assetRef":{"assetId":"asset-lighting"}}}]',
     );
   });
+
+  it('appends exact selected Workspace resources without exposing a host path', async () => {
+    const resolver = createDshConversationTurnContextResolver({
+      contexts: {
+        readContext: async () => ({
+          kind: 'assistant' as const,
+          assistantSpaceId: 'assistant-1',
+          baseGrantIds: [],
+        }),
+      },
+      workspaceGrants: {
+        resolveAuthorizedWorkspace: async () => {
+          throw new Error('Workspace authority must not run.');
+        },
+      },
+      canvas: {
+        resolveTurnContext: async () => {
+          throw new Error('Canvas authority must not run.');
+        },
+      },
+    });
+
+    await expect(
+      resolver.resolve(
+        'conversation-1',
+        [],
+        [
+          {
+            label: '卷01.epub',
+            contentLocator: { file: { authority: 'workspace', path: 'books/卷01.epub' } },
+          },
+        ],
+      ),
+    ).resolves.toContain(
+      'Selected resources: [{"label":"卷01.epub","contentLocator":{"file":{"authority":"workspace","path":"books/卷01.epub"}}}]',
+    );
+  });
   it('resolves the exact durable Workspace and canonical Board context', async () => {
     const resolveTurnContext = vi.fn(async (_workspaceId: string, target: unknown) => ({
       target: target as ReturnType<typeof createCanvasWorkspaceBoardTarget>,

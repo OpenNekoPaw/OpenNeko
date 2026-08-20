@@ -16,11 +16,19 @@ import {
 export const DSH_SESSION_HOST_CHANNEL = 'openneko:dsh:session';
 export const DSH_SESSION_CHANGED_CHANNEL = 'openneko:dsh:session:changed';
 
+export type DshSessionUserMessageBlock =
+  | { readonly type: 'text'; readonly text: string }
+  | {
+      readonly type: 'resource';
+      readonly label: string;
+      readonly contentLocator: ContentLocator;
+    };
+
 export type DshSessionHostEvent =
   | {
       readonly kind: 'message';
       readonly role: 'user';
-      readonly text: string;
+      readonly content: readonly DshSessionUserMessageBlock[];
       readonly messageId?: string;
     }
   | {
@@ -943,11 +951,15 @@ function parseEvent(value: unknown): DshSessionHostEvent {
   const record = requireRecord(value, 'DSH Session event');
   if (record.kind === 'message') {
     if (record.role === 'user') {
-      requireAllowedKeys(record, ['kind', 'role', 'text', 'messageId'], ['kind', 'role', 'text']);
+      requireAllowedKeys(
+        record,
+        ['kind', 'role', 'content', 'messageId'],
+        ['kind', 'role', 'content'],
+      );
       return {
         kind: 'message',
         role: 'user',
-        text: requireIdentity(record.text, 'event.text'),
+        content: parseUserMessageContent(record.content),
         ...(record.messageId === undefined
           ? {}
           : { messageId: requireIdentity(record.messageId, 'event.messageId') }),
@@ -1086,6 +1098,34 @@ function parseEvent(value: unknown): DshSessionHostEvent {
     };
   }
   throw new Error(`DSH Session event kind '${String(record.kind)}' is unsupported.`);
+}
+
+function parseUserMessageContent(value: unknown): readonly DshSessionUserMessageBlock[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error('DSH Session user message content must be a non-empty array.');
+  }
+  return value.map((block, index) => {
+    const record = requireRecord(block, `DSH Session user message block ${index}`);
+    if (record.type === 'text') {
+      requireExactKeys(record, ['type', 'text']);
+      return { type: 'text' as const, text: requireIdentity(record.text, 'message block text') };
+    }
+    if (record.type === 'resource') {
+      requireExactKeys(record, ['type', 'label', 'contentLocator']);
+      const validation = validateContentLocator(record.contentLocator);
+      if (!validation.ok) {
+        throw new Error(
+          `DSH Session user resource locator is invalid: ${validation.diagnostics.map((item) => item.code).join(', ')}.`,
+        );
+      }
+      return {
+        type: 'resource' as const,
+        label: requireIdentity(record.label, 'message resource label'),
+        contentLocator: validation.locator,
+      };
+    }
+    throw new Error(`DSH Session user message block ${index} is unsupported.`);
+  });
 }
 
 function parseAssistantOutputState(value: unknown): 'streaming' | 'final' {

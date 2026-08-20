@@ -24,7 +24,12 @@ const projection: DshSessionHostProjection = {
   dshSessionId: 'dsh-session-1',
   currentTurn: 3,
   events: [
-    { kind: 'message', role: 'user', text: 'Create a node', messageId: 'message-1' },
+    {
+      kind: 'message',
+      role: 'user',
+      content: [{ type: 'text', text: 'Create a node' }],
+      messageId: 'message-1',
+    },
     {
       kind: 'tool',
       toolCallId: 'tool-1',

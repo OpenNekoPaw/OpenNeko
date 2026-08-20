@@ -89,6 +89,10 @@ interface OwnedSession {
   outputTail: Promise<void>;
 }
 
+type OpenNekoDisplayContentBlock =
+  | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'resource_link'; readonly name: string; readonly uri: string };
+
 interface DshSessionRuntimeContext {
   text: string;
 }
@@ -265,7 +269,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
   const runPrompt = (
     sessionId: string,
     content: readonly ContentBlock[],
-    displayText?: string,
+    displayContent?: readonly OpenNekoDisplayContentBlock[],
   ): Promise<PromptResponse> =>
     promptAdmission.run(sessionId, async () => {
       requireOpen();
@@ -296,9 +300,9 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           createUserMessage({
             content: [...content],
             source:
-              displayText === undefined
+              displayContent === undefined
                 ? { kind: 'user' as const }
-                : { kind: 'user' as const, opennekoDisplayText: displayText },
+                : { kind: 'user' as const, opennekoDisplayContent: displayContent },
           }),
         );
       } catch (error) {
@@ -455,8 +459,9 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       async prompt(params) {
         requireOpen();
         requireOwned(params.sessionId);
+        const displayContent = projectAcpDisplayContent(params.prompt);
         const content = await admitAcpPrompt(params.prompt, ctx.attachments);
-        return runPrompt(params.sessionId, content);
+        return runPrompt(params.sessionId, content, displayContent);
       },
       cancel(params) {
         const admission = promptAdmission.cancel(params.sessionId);
@@ -651,7 +656,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             const response = await runPrompt(
               request.sessionId,
               [{ type: 'text', text: gesture }],
-              canonicalDisplay,
+              [{ type: 'text', text: canonicalDisplay }],
             );
             return { stopReason: response.stopReason };
           }
@@ -795,9 +800,8 @@ export function projectSessionEvent(
       return projectMessage(
         sessionId,
         'user_message_chunk',
-        event.data.content,
+        readOpenNekoDisplayContent(event.data.source) ?? event.data.content,
         event.data.id,
-        readOpenNekoDisplayText(event.data.source),
       ).map((notification, frameIndex, notifications) =>
         withOpenNekoMeta(notification, event.seq, undefined, undefined, {
           frameIndex,
@@ -863,41 +867,97 @@ export function projectExtensionSessionEvent(
 function projectMessage(
   sessionId: string,
   sessionUpdate: 'user_message_chunk' | 'agent_message_chunk',
-  content: readonly { readonly type: string; readonly text?: string }[],
+  content: readonly {
+    readonly type: string;
+    readonly text?: string;
+    readonly name?: string;
+    readonly uri?: string;
+  }[],
   messageId?: string,
-  textOverride?: string,
 ): readonly SessionNotification[] {
-  const text =
-    textOverride ??
-    content
-      .filter(
-        (block): block is { readonly type: string; readonly text: string } =>
-          block.type === 'text' && block.text !== undefined && block.text.length > 0,
-      )
-      .map((block) => block.text)
-      .join('');
-  return text.length === 0
-    ? []
-    : [
+  return content.flatMap((block): readonly SessionNotification[] => {
+    if (block.type === 'text' && block.text !== undefined && block.text.length > 0) {
+      return [
         {
           sessionId,
           update: {
             sessionUpdate,
             ...(messageId === undefined ? {} : { messageId }),
-            content: { type: 'text', text },
+            content: { type: 'text', text: block.text },
           },
         },
       ];
+    }
+    if (
+      sessionUpdate === 'user_message_chunk' &&
+      block.type === 'resource_link' &&
+      block.name !== undefined &&
+      block.uri !== undefined
+    ) {
+      return [
+        {
+          sessionId,
+          update: {
+            sessionUpdate,
+            ...(messageId === undefined ? {} : { messageId }),
+            content: { type: 'resource_link', name: block.name, uri: block.uri },
+          },
+        },
+      ];
+    }
+    return [];
+  });
 }
 
-function readOpenNekoDisplayText(source: unknown): string | undefined {
+function readOpenNekoDisplayContent(
+  source: unknown,
+): readonly OpenNekoDisplayContentBlock[] | undefined {
   if (source === null || typeof source !== 'object' || Array.isArray(source)) return undefined;
-  const value = (source as Record<string, unknown>).opennekoDisplayText;
+  const value = (source as Record<string, unknown>).opennekoDisplayContent;
   if (value === undefined) return undefined;
-  if (typeof value !== 'string' || !/^\$[a-z0-9]+(?:-[a-z0-9]+)*(?:\s|$)/u.test(value)) {
-    throw new Error('OpenNeko Skill display text is invalid.');
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error('OpenNeko display content must be a non-empty array.');
   }
-  return value;
+  return value.map((block, index) => {
+    if (block === null || typeof block !== 'object' || Array.isArray(block)) {
+      throw new Error(`OpenNeko display content block ${index} is invalid.`);
+    }
+    const record = block as Record<string, unknown>;
+    if (
+      record.type === 'text' &&
+      Object.keys(record).every((key) => key === 'type' || key === 'text') &&
+      typeof record.text === 'string' &&
+      record.text.length > 0
+    ) {
+      return { type: 'text' as const, text: record.text };
+    }
+    if (
+      record.type === 'resource_link' &&
+      Object.keys(record).every((key) => key === 'type' || key === 'name' || key === 'uri') &&
+      typeof record.name === 'string' &&
+      record.name.length > 0 &&
+      typeof record.uri === 'string' &&
+      record.uri.length > 0
+    ) {
+      return { type: 'resource_link' as const, name: record.name, uri: record.uri };
+    }
+    throw new Error(`OpenNeko display content block ${index} is unsupported.`);
+  });
+}
+
+function projectAcpDisplayContent(
+  prompt: readonly AcpContentBlock[],
+): readonly OpenNekoDisplayContentBlock[] | undefined {
+  const displayContent = prompt.flatMap((block): readonly OpenNekoDisplayContentBlock[] => {
+    if (block.type === 'text' && block.text.length > 0) {
+      return [{ type: 'text', text: block.text }];
+    }
+    if (block.type === 'resource_link') {
+      return [{ type: 'resource_link', name: block.name, uri: block.uri }];
+    }
+    return [];
+  });
+  return displayContent.length === 0 ? undefined : displayContent;
 }
 
 function projectAssistantChunk(
@@ -1259,6 +1319,7 @@ export async function admitAcpPrompt(
   let text = '';
   const content: Array<ContentBlock | number> = [];
   const images: Parameters<AttachmentStore['saveImages']>[0][number][] = [];
+  let resourceCount = 0;
   for (const block of prompt) {
     if (block.type === 'text') {
       text += block.text;
@@ -1266,9 +1327,7 @@ export async function admitAcpPrompt(
       continue;
     }
     if (block.type === 'resource_link') {
-      const resourceText = `\n[resource_link name=${JSON.stringify(block.name)} uri=${JSON.stringify(block.uri)}]\n`;
-      text += resourceText;
-      content.push({ type: 'text', text: resourceText });
+      resourceCount += 1;
       continue;
     }
     if (block.type === 'image') {
@@ -1288,8 +1347,14 @@ export async function admitAcpPrompt(
     }
     throw RequestError.invalidParams(undefined, `Unsupported prompt content: ${block.type}`);
   }
-  if (text.trim().length === 0 && images.length === 0) {
+  if (text.trim().length === 0 && images.length === 0 && resourceCount === 0) {
     throw RequestError.invalidParams(undefined, 'Prompt must contain non-empty text.');
+  }
+  if (content.length === 0 && resourceCount > 0) {
+    content.push({
+      type: 'text',
+      text: 'Use the user-selected resource context for this request.',
+    });
   }
   if (images.length === 0) return content.map(requireAdmittedContentBlock);
   if (attachments === undefined) {

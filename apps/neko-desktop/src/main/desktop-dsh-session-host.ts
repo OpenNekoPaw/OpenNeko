@@ -15,6 +15,7 @@ import type {
   ConversationDshSessionBoundClient,
 } from '@neko/agent-runtime/application';
 import type { DshAcpProjection, DshAcpProjectedEvent } from '@neko/agent-runtime/acp';
+import { validateContentLocator, type ContentLocator } from '@neko/content';
 
 import type { DesktopSenderIdentity } from './window-registry';
 
@@ -35,6 +36,10 @@ export class DesktopDshSessionHost {
         resolve(
           conversationId: string,
           selectedContextPayloads?: readonly import('@neko/agent-contracts').AgentContextPayload[],
+          selectedResources?: readonly {
+            readonly label: string;
+            readonly contentLocator: import('@neko/content').ContentLocator;
+          }[],
         ): Promise<string>;
       };
       readonly composer: {
@@ -185,6 +190,12 @@ export class DesktopDshSessionHost {
         const context = await this.options.promptContext.resolve(
           conversationId,
           request.input.kind === 'message' ? request.input.contextPayloads : [],
+          request.input.kind === 'message'
+            ? request.input.references.map((reference) => ({
+                label: reference.label,
+                contentLocator: reference.contentLocator,
+              }))
+            : [],
         );
         await this.options.conversations.setSessionContext(conversationId, context);
         if (request.input.kind === 'skill') {
@@ -255,6 +266,18 @@ function projectEvents(events: readonly DshAcpProjectedEvent[]): readonly DshSes
   const projected: DshSessionHostEvent[] = [];
   for (const event of events) {
     if (event.kind !== 'tool') {
+      if (event.kind === 'message' && event.role === 'user') {
+        try {
+          projected.push(projectUserMessageEvent(event));
+        } catch (error) {
+          projected.push({
+            kind: 'diagnostic',
+            code: 'ACP_RESOURCE_LINK_INVALID',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        continue;
+      }
       const value = projectEvent(event);
       if (value !== undefined) projected.push(value);
       continue;
@@ -293,22 +316,20 @@ function projectEvents(events: readonly DshAcpProjectedEvent[]): readonly DshSes
 function projectEvent(event: DshAcpProjectedEvent): DshSessionHostEvent | undefined {
   switch (event.kind) {
     case 'message':
-      return event.role === 'user'
-        ? {
-            kind: 'message',
-            role: 'user',
-            text: event.text,
-            ...(event.messageId === undefined ? {} : { messageId: event.messageId }),
-          }
-        : {
-            kind: 'message',
-            role: 'assistant',
-            turn: event.turn,
-            step: event.step,
-            text: event.text,
-            messageId: event.messageId,
-            state: event.state,
-          };
+      if (event.role === 'user') {
+        throw new Error(
+          'User messages must be projected through the resource validation boundary.',
+        );
+      }
+      return {
+        kind: 'message',
+        role: 'assistant',
+        turn: event.turn,
+        step: event.step,
+        text: event.text,
+        messageId: event.messageId,
+        state: event.state,
+      };
     case 'thought':
       return {
         kind: 'thought',
@@ -356,4 +377,45 @@ function projectEvent(event: DshAcpProjectedEvent): DshSessionHostEvent | undefi
     case 'permission':
       return undefined;
   }
+}
+
+function projectUserMessageEvent(
+  event: Extract<DshAcpProjectedEvent, { readonly kind: 'message'; readonly role: 'user' }>,
+): Extract<DshSessionHostEvent, { readonly kind: 'message'; readonly role: 'user' }> {
+  return {
+    kind: 'message',
+    role: 'user',
+    content: event.content.map((block) =>
+      block.type === 'text'
+        ? { type: 'text' as const, text: block.text }
+        : {
+            type: 'resource' as const,
+            label: block.name,
+            contentLocator: deserializeContentLocatorResourceUri(block.uri),
+          },
+    ),
+    ...(event.messageId === undefined ? {} : { messageId: event.messageId }),
+  };
+}
+
+function deserializeContentLocatorResourceUri(uri: string): ContentLocator {
+  const prefix = 'openneko-content:';
+  if (!uri.startsWith(prefix) || uri.length === prefix.length) {
+    throw new Error('ACP resource link does not use the OpenNeko content scheme.');
+  }
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(decodeURIComponent(uri.slice(prefix.length)));
+  } catch (error) {
+    throw new Error('ACP resource link contains an invalid encoded ContentLocator.', {
+      cause: error,
+    });
+  }
+  const validation = validateContentLocator(decoded);
+  if (!validation.ok) {
+    throw new Error(
+      `ACP resource link contains an invalid ContentLocator: ${validation.diagnostics.map((item) => item.code).join(', ')}.`,
+    );
+  }
+  return validation.locator;
 }

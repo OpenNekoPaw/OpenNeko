@@ -6,6 +6,45 @@ import type { DshAcpSessionEventNotification } from '@neko/agent-contracts/dsh-a
 import { DshAcpProjection } from './dsh-acp-projection';
 
 describe('DshAcpProjection', () => {
+  it('assembles ordered text and resource frames into one user message', () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionUpdate({
+      sessionId: 's-resource',
+      _meta: { opennekoSequence: 0, opennekoFrameIndex: 0, opennekoFrameCount: 2 },
+      update: {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'user-resource',
+        content: { type: 'text', text: '分析前10页' },
+      },
+    });
+    projection.acceptSessionUpdate({
+      sessionId: 's-resource',
+      _meta: { opennekoSequence: 0, opennekoFrameIndex: 1, opennekoFrameCount: 2 },
+      update: {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'user-resource',
+        content: {
+          type: 'resource_link',
+          name: '卷01.epub',
+          uri: 'openneko-content:encoded',
+        },
+      },
+    });
+
+    expect(projection.snapshot('s-resource').events).toEqual([
+      {
+        kind: 'message',
+        sessionId: 's-resource',
+        role: 'user',
+        messageId: 'user-resource',
+        content: [
+          { type: 'text', text: '分析前10页' },
+          { type: 'resource_link', name: '卷01.epub', uri: 'openneko-content:encoded' },
+        ],
+      },
+    ]);
+  });
+
   it('assembles interleaved DSH text blocks and settles the final message exactly once', () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionUpdate(messageChunk('s1', 'user_message_chunk', 'hello', 0, 'u1'));
@@ -31,7 +70,7 @@ describe('DshAcpProjection', () => {
         kind: 'message',
         sessionId: 's1',
         role: 'user',
-        text: 'hello',
+        content: [{ type: 'text', text: 'hello' }],
         messageId: 'u1',
       },
       {

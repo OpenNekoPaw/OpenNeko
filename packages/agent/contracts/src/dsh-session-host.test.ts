@@ -472,6 +472,57 @@ describe('DSH Session Host contract', () => {
     ).toThrow(/must not precede/u);
   });
 
+  it('accepts structured user resource blocks and rejects protocol URI fields', () => {
+    const contentLocator = {
+      file: { authority: 'workspace' as const, path: 'books/卷01.epub' },
+    };
+    expect(
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            kind: 'message',
+            role: 'user',
+            messageId: 'user-resource',
+            content: [
+              { type: 'text', text: '分析前10页' },
+              { type: 'resource', label: '卷01.epub', contentLocator },
+            ],
+          },
+        ],
+      }).events,
+    ).toEqual([
+      {
+        kind: 'message',
+        role: 'user',
+        messageId: 'user-resource',
+        content: [
+          { type: 'text', text: '分析前10页' },
+          { type: 'resource', label: '卷01.epub', contentLocator },
+        ],
+      },
+    ]);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            kind: 'message',
+            role: 'user',
+            content: [
+              {
+                type: 'resource',
+                label: '卷01.epub',
+                contentLocator,
+                uri: 'openneko-content:private',
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/unexpected=uri/u);
+  });
+
   it('rejects compatibility fields and accepts only bounded JSON Tool payloads', () => {
     for (const { field, value } of [...retiredIdentityAliasFields, ...internalVersionFields]) {
       expect(() =>

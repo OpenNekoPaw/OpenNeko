@@ -1,4 +1,8 @@
-import type { RequestPermissionRequest, SessionNotification } from '@agentclientprotocol/sdk';
+import type {
+  ContentBlock as AcpContentBlock,
+  RequestPermissionRequest,
+  SessionNotification,
+} from '@agentclientprotocol/sdk';
 import type { DshAcpSessionEventNotification } from '@neko/agent-contracts/dsh-acp';
 
 export const DSH_ACP_PROJECTION_DEFAULT_MAX_EVENTS_PER_SESSION = 256;
@@ -67,12 +71,16 @@ export interface DshAcpProjectedCommandEvent {
   readonly text?: string;
 }
 
+export type DshAcpProjectedUserMessageBlock =
+  | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'resource_link'; readonly name: string; readonly uri: string };
+
 export type DshAcpProjectedMessageEvent =
   | {
       readonly kind: 'message';
       readonly sessionId: string;
       readonly role: 'user';
-      readonly text: string;
+      readonly content: readonly DshAcpProjectedUserMessageBlock[];
       readonly messageId?: string;
     }
   | {
@@ -158,6 +166,10 @@ interface SessionProjectionState {
   readonly cancelledToolKeys: Set<string>;
   readonly tools: Map<string, ToolProjectionState>;
   readonly commands: Map<string, CommandProjectionState>;
+  readonly userMessages: Map<
+    string,
+    Extract<DshAcpProjectedMessageEvent, { readonly role: 'user' }>
+  >;
   readonly events: DshAcpProjectedEvent[];
 }
 
@@ -200,16 +212,39 @@ export class DshAcpProjection {
     }
     const update = notification.update;
     if (update.sessionUpdate === 'user_message_chunk') {
-      if (update.content.type !== 'text' || update.content.text.length === 0) return [];
-      return this.record(session, {
+      const block = projectUserMessageBlock(update.content);
+      if (block === undefined) return [];
+      const event: Extract<DshAcpProjectedMessageEvent, { readonly role: 'user' }> = {
         kind: 'message',
         sessionId: notification.sessionId,
         role: 'user',
-        text: update.content.text,
+        content: [block],
         ...(update.messageId === undefined || update.messageId === null
           ? {}
           : { messageId: update.messageId }),
-      });
+      };
+      if (event.messageId === undefined) return this.record(session, event);
+      const existing = session.userMessages.get(event.messageId);
+      if (existing === undefined) {
+        const recorded = this.record(session, event);
+        if (recorded[0] === event) session.userMessages.set(event.messageId, event);
+        return recorded;
+      }
+      const replacement = { ...existing, content: [...existing.content, block] };
+      const eventIndex = session.events.indexOf(existing);
+      if (eventIndex < 0) {
+        return this.record(
+          session,
+          diagnostic(
+            session.sessionId,
+            'ACP_PROJECTION_USER_MESSAGE_MISSING',
+            `DSH user message '${event.messageId}' is no longer projected.`,
+          ),
+        );
+      }
+      session.events[eventIndex] = replacement;
+      session.userMessages.set(event.messageId, replacement);
+      return [replacement];
     }
     if (
       update.sessionUpdate === 'agent_message_chunk' ||
@@ -1045,6 +1080,7 @@ export class DshAcpProjection {
         cancelledToolKeys: new Set(),
         tools: new Map(),
         commands: new Map(),
+        userMessages: new Map(),
         events: [],
       };
       this.sessions.set(sessionId, session);
@@ -1192,6 +1228,20 @@ function readIntegerField(value: unknown): IntegerFieldResult {
     return { kind: 'invalid' };
   }
   return { kind: 'value', value };
+}
+
+function projectUserMessageBlock(
+  block: AcpContentBlock,
+): DshAcpProjectedUserMessageBlock | undefined {
+  if (block.type === 'text') {
+    return block.text.length === 0 ? undefined : { type: 'text', text: block.text };
+  }
+  if (block.type === 'resource_link') {
+    return block.name.length === 0 || block.uri.length === 0
+      ? undefined
+      : { type: 'resource_link', name: block.name, uri: block.uri };
+  }
+  return undefined;
 }
 
 function readOpenNekoSequenceFrame(notification: SessionNotification): SequenceFrameResult {

@@ -969,6 +969,79 @@ describe('DshAgentView content-creation composer', () => {
     expect(view.container.querySelectorAll('[data-agent-message-state="final"]')).toHaveLength(1);
     expect(view.container.querySelector('[data-agent-thought-state="final"]')).toBeTruthy();
   });
+
+  it('renders mixed and resource-only user messages as ordered reference tokens', () => {
+    const view = renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-resource"
+        surfaceKind="workspace"
+        conversationId="conversation-1"
+        projection={{
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          events: [
+            {
+              kind: 'message',
+              role: 'user',
+              messageId: 'user-resource',
+              content: [
+                { type: 'text', text: '分析前10页' },
+                {
+                  type: 'resource',
+                  label: '[Kmoe][BLAME!（新装版）]卷01.epub',
+                  contentLocator: {
+                    file: { authority: 'workspace', path: 'books/blame/卷01.epub' },
+                  },
+                },
+              ],
+            },
+            {
+              kind: 'message',
+              role: 'user',
+              messageId: 'user-resource-only',
+              content: [
+                {
+                  type: 'resource',
+                  label: '[Kmoe][BLAME!（新装版）]卷02.epub',
+                  contentLocator: {
+                    file: { authority: 'workspace', path: 'books/blame/卷02.epub' },
+                  },
+                },
+              ],
+            },
+          ],
+        }}
+        configuring={false}
+        draft=""
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('分析前10页')).toBeTruthy();
+    const filename = screen.getByText('[Kmoe][BLAME!（新装版）]卷01.epub');
+    const resourceToken = filename.closest('[data-agent-reference-token="true"]');
+    expect(resourceToken).toBeTruthy();
+    expect(resourceToken?.getAttribute('data-reference-variant')).toBe('attached');
+    expect(screen.getByText('[Kmoe][BLAME!（新装版）]卷02.epub')).toBeTruthy();
+    const userPrompts = view.container.querySelectorAll('.agent-user-prompt');
+    expect(userPrompts).toHaveLength(2);
+    expect(userPrompts[0]?.textContent).toContain('分析前10页');
+    expect(userPrompts[0]?.textContent).toContain('[Kmoe][BLAME!（新装版）]卷01.epub');
+    expect(userPrompts[1]?.textContent).toContain('[Kmoe][BLAME!（新装版）]卷02.epub');
+    expect(view.container.textContent).not.toContain('[resource_link');
+    expect(view.container.textContent).not.toContain('openneko-content:');
+  });
 });
 
 function renderAgent(view: JSX.Element, locale: SupportedLocale = 'zh-cn') {

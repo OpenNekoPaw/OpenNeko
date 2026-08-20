@@ -4,6 +4,32 @@ import { describe, expect, it, vi } from 'vitest';
 import { admitAcpPrompt } from './index';
 
 describe('DSH ACP image prompt admission', () => {
+  it('does not expose a resource name or URI as model-visible pseudo text', async () => {
+    await expect(
+      admitAcpPrompt([
+        { type: 'text', text: 'Analyze this.' },
+        {
+          type: 'resource_link',
+          name: 'story.epub',
+          uri: 'openneko-content:encoded-private-identity',
+        },
+      ]),
+    ).resolves.toEqual([{ type: 'text', text: 'Analyze this.' }]);
+
+    const resourceOnly = await admitAcpPrompt([
+      {
+        type: 'resource_link',
+        name: 'story.epub',
+        uri: 'openneko-content:encoded-private-identity',
+      },
+    ]);
+    expect(resourceOnly).toEqual([
+      { type: 'text', text: 'Use the user-selected resource context for this request.' },
+    ]);
+    expect(JSON.stringify(resourceOnly)).not.toContain('story.epub');
+    expect(JSON.stringify(resourceOnly)).not.toContain('openneko-content:');
+  });
+
   it('persists ACP image bytes through the native DSH attachment store', async () => {
     const ref: ImageAttachmentRef = {
       attachmentId: 'attachment-1' as ImageAttachmentRef['attachmentId'],

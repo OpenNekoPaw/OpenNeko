@@ -680,6 +680,17 @@ body {
   line-height: 1.55;
 }
 
+.agent-user-resource-token {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 4px;
+}
+
+.agent-user-resource-token:first-child {
+  margin-top: 0;
+}
+
 .agent-inline-diagnostic {
   display: grid;
   width: min(100%, 760px);

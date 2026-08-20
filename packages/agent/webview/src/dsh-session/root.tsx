@@ -20,6 +20,7 @@ import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime
 import type { ChatModelOption } from '@neko/ai-contracts';
 import { InputArea } from '../components/ChatView/InputArea/InputArea';
 import { InputAreaProvider } from '../components/ChatView/InputAreaContext';
+import { ReferenceToken } from '../components/ChatView/InputArea/ReferenceToken';
 import type {
   GenerationParams,
   MentionItem,
@@ -47,6 +48,8 @@ import {
 } from '@neko/ui';
 import { useTranslation as useUiTranslation } from '@neko/ui/i18n/react';
 import { AgentPresentationI18nProvider, useTranslation } from '../i18n/I18nContext';
+import { projectContentLocatorPath } from '../presenters/content-locator-presenter';
+import { projectPathReferenceToken } from '../presenters/reference-token-presenter';
 
 import '../index.css';
 import './root.css';
@@ -881,7 +884,16 @@ function DshSessionEvent({
               >
                 {isUser ? (
                   <div className="agent-user-prompt block w-fit max-w-full min-w-0 whitespace-pre-wrap break-words">
-                    {event.text}
+                    {event.content.map((block, index) =>
+                      block.type === 'text' ? (
+                        <span key={`text:${index}`}>{block.text}</span>
+                      ) : (
+                        <UserMessageResourceToken
+                          key={`resource:${index}:${block.label}`}
+                          block={block}
+                        />
+                      ),
+                    )}
                   </div>
                 ) : (
                   <div className="agent-assistant-turn">
@@ -931,6 +943,31 @@ function DshSessionEvent({
         </div>
       </div>
     </div>
+  );
+}
+
+function UserMessageResourceToken({
+  block,
+}: {
+  readonly block: Extract<
+    DshSessionHostEvent,
+    { readonly kind: 'message'; readonly role: 'user' }
+  >['content'][number] & { readonly type: 'resource' };
+}): JSX.Element {
+  const projection = projectPathReferenceToken({
+    path: projectContentLocatorPath(block.contentLocator),
+    label: block.label,
+  });
+  return (
+    <ReferenceToken
+      kind={projection.kind}
+      label={projection.label}
+      title={projection.title}
+      meta={projection.meta}
+      thumbnailSrc={projection.thumbnailSrc}
+      variant="attached"
+      className="agent-user-resource-token"
+    />
   );
 }
 

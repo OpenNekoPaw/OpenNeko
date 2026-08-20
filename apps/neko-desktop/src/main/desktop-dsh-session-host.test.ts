@@ -129,6 +129,10 @@ describe('Desktop DSH Session Host', () => {
       summary: 'Soft studio lighting',
       data: { assetRef: { assetId: 'asset-lighting' } },
     };
+    const selectedResource = {
+      label: 'draft.epub',
+      contentLocator: { file: { authority: 'workspace' as const, path: 'books/draft.epub' } },
+    };
 
     await host.execute(
       { webContentsId: 1, frameUrl: 'openneko://app' },
@@ -136,13 +140,17 @@ describe('Desktop DSH Session Host', () => {
         input: {
           kind: 'message',
           text: 'Use this reference',
-          references: [],
+          references: [selectedResource],
           contextPayloads: [contextPayload],
         },
       }),
     );
 
-    expect(resolve).toHaveBeenCalledWith(identity.conversationId, [contextPayload]);
+    expect(resolve).toHaveBeenCalledWith(
+      identity.conversationId,
+      [contextPayload],
+      [selectedResource],
+    );
     expect(setSessionContext).toHaveBeenCalledWith(
       identity.conversationId,
       'OpenNeko context with selected Asset',
@@ -150,6 +158,70 @@ describe('Desktop DSH Session Host', () => {
     expect(setSessionContext.mock.invocationCallOrder[0]).toBeLessThan(
       prompt.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
+  });
+
+  it('projects ACP resource links to canonical ContentLocators without exposing their URI', async () => {
+    const projection = new DshAcpProjection();
+    const locator = { file: { authority: 'workspace' as const, path: 'books/卷01.epub' } };
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 0 },
+      update: {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'resource-message',
+        content: {
+          type: 'resource_link',
+          name: '卷01.epub',
+          uri: `openneko-content:${encodeURIComponent(JSON.stringify(locator))}`,
+        },
+      },
+    });
+
+    const result = requireSessionResult(
+      await createHost({ projection }).execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        request('submit', {
+          input: { kind: 'message', text: 'continue', references: [], contextPayloads: [] },
+        }),
+      ),
+    );
+
+    expect(result.projection.events).toEqual([
+      {
+        kind: 'message',
+        role: 'user',
+        messageId: 'resource-message',
+        content: [{ type: 'resource', label: '卷01.epub', contentLocator: locator }],
+      },
+    ]);
+    expect(JSON.stringify(result.projection.events)).not.toContain('openneko-content:');
+  });
+
+  it('isolates an invalid ACP resource link as a local diagnostic', async () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 0 },
+      update: {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'bad-resource-message',
+        content: { type: 'resource_link', name: 'bad.epub', uri: 'openneko-content:not-json' },
+      },
+    });
+
+    const result = requireSessionResult(
+      await createHost({ projection }).execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        request('submit', {
+          input: { kind: 'message', text: 'continue', references: [], contextPayloads: [] },
+        }),
+      ),
+    );
+
+    expect(result.projection.events).toEqual([
+      expect.objectContaining({ kind: 'diagnostic', code: 'ACP_RESOURCE_LINK_INVALID' }),
+    ]);
+    expect(JSON.stringify(result.projection.events)).not.toContain('not-json');
   });
 
   it('executes a DSH command without creating a model turn or applying prompt context', async () => {
@@ -544,6 +616,10 @@ function createHost(overrides: {
     resolve(
       conversationId: string,
       contextPayloads?: readonly import('@neko/agent-contracts').AgentContextPayload[],
+      selectedResources?: readonly {
+        readonly label: string;
+        readonly contentLocator: import('@neko/content').ContentLocator;
+      }[],
     ): Promise<string>;
   };
   readonly setSessionContext?: (conversationId: string, text: string) => Promise<void>;
