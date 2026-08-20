@@ -5,19 +5,19 @@
   "caseGroup": "workflow",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Update the future-Turn model while the first Turn is running, preserve that Turn's immutable model snapshot, then run a second Turn with the updated model in the same Conversation.",
+    "userBehavior": "Finish the first Turn, update the exact idle DSH Session model, then run a second Turn with the updated model in the same Conversation.",
     "canonicalPath": [
       "same Desktop Conversation",
       "first immutable Turn configuration snapshot",
-      "running-Turn future configuration update",
+      "idle exact-Session model update",
       "second immutable Turn configuration snapshot",
-      "Pi provider/model registration"
+      "exact DSH Session model configuration"
     ],
     "observables": [
       {
         "ref": "model-sequence-facts",
         "kind": "runtime-fact",
-        "description": "Per-Turn requested/effective model facts with stable Conversation and distinct Turn/run identities.",
+        "description": "Per-turn requested/effective model facts with one stable Conversation/DSH Session binding and distinct numeric DSH turn identities.",
         "required": true
       }
     ],
@@ -35,17 +35,20 @@
       "modelProfileId": "nekoapi-gpt-5.5"
     },
     {
-      "id": "running-model-update",
+      "id": "first-idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    },
+    {
+      "id": "idle-model-update",
       "kind": "update-configuration",
-      "afterStepId": "first",
       "providerId": "nekoapi-chat",
       "modelId": "gpt-5.6-luna",
       "modelProfileId": "nekoapi-gpt-5.6-luna",
       "expectedStatus": "applied",
-      "turnState": "running",
+      "turnState": "idle",
       "timeoutMs": 30000
     },
-    { "id": "first-idle", "kind": "wait-for-idle", "timeoutMs": 180000 },
     {
       "id": "second",
       "kind": "submit",
@@ -57,14 +60,14 @@
   "assertions": [
     { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "model-sequence-facts" },
     {
-      "id": "running-update",
+      "id": "idle-update",
       "kind": "configuration-update",
-      "stepId": "running-model-update",
+      "stepId": "idle-model-update",
       "providerId": "nekoapi-chat",
       "modelId": "gpt-5.6-luna",
       "modelProfileId": "nekoapi-gpt-5.6-luna",
       "status": "applied",
-      "turnState": "running",
+      "turnState": "idle",
       "turnCreated": false,
       "evidenceRef": "model-sequence-facts"
     },

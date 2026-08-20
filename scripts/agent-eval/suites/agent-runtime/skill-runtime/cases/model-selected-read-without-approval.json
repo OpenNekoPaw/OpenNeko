@@ -7,29 +7,25 @@
   "evidenceContract": {
     "userBehavior": "Let the model read one relevant builtin Skill without interrupting the user for approval in ask mode.",
     "canonicalPath": [
-      "Pi Skill catalog",
+      "DSH Skill catalog",
       "model-selected read_skill",
       "read-only permission decision",
-      "terminal Pi turn"
+      "terminal DSH Turn"
     ],
     "observables": [
       {
         "ref": "skill-read-facts",
         "kind": "runtime-fact",
-        "description": "Pi runtime, read_skill Tool result, and terminal-idle facts.",
+        "description": "DSH Session, read_skill Tool result, and terminal-idle facts.",
         "required": true
       }
     ],
     "expectedResult": "read_skill succeeds and the turn reaches idle without a user approval step.",
     "expectedFailure": "A confirmation wait, missing read_skill result, runtime error, or non-terminal turn fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",

@@ -15,18 +15,28 @@ package-owned Session projection for terminal idle, reads bounded DSH events/fac
 permission decisions through the DSH permission bridge. It does not read DSH storage, inject ACP
 frames, create a second queue/transcript authority, or expose Pi `runId`/`branchId` identities.
 
+Model configuration uses the same public Desktop product boundary. It requires the exact visible
+Conversation surface and an idle Session, resolves one advertised Composer model option, invokes
+`dshSessions.selectComposerModel`, verifies the returned effective model and proves the operation
+did not create a DSH Turn. Running-Turn future configuration is not an alternate path.
+
+Renderer reload and application restart recovery reconnect through the public bridge on the new
+owner, verify that the visible Surface still names the exact requested Conversation and only then
+read the Session snapshot. No active/recent Conversation fallback is accepted. Scenario lifecycle
+requests and `desktop-lifecycle` assertions must match exactly; reload, focus and graceful-close
+facts are all evaluated by a hard gate.
+
 The retired `scripts/agent-eval/desktop/driver.mjs` and its tests were deleted after all production
 references were removed. DSH built-in Agent loop, Session/history, Skill runtime, Tool scheduling and
 permission behavior remain outside OpenNeko Evaluation coverage.
 
 ## Verification
 
-- `pnpm test:agent:eval`: 45 files, 307 tests; all 27 suites and 80 dry-run cases discovered.
+- `pnpm test:agent:eval`: 45 files, 314 tests; all 26 suites and 65 dry-run cases discovered.
 - DSH driver focused tests: public bridge-only expression, construction boundary and evaluator
   delegation pass.
 - A real `nekoapi-chat / gpt-5.6-luna` case passed provider/model authorization and reached Desktop
-  launch. Execution was blocked before the app started because another development process (PID
-  41047) owned the checkout Vite bundle lock. No provider request or success evidence was claimed.
+  launch. Execution was blocked before the app started because another development process (PID 41047) owned the checkout Vite bundle lock. No provider request or success evidence was claimed.
 
 ## Remaining blocker
 

@@ -8,9 +8,9 @@
     "userBehavior": "Activate one exact builtin Skill and prove its Host identity and injected prompt fragment.",
     "canonicalPath": [
       "explicit Skill trigger",
-      "Pi Skill Host identity resolution",
+      "DSH Skill identity resolution",
       "fingerprint locator disclosure",
-      "Pi prompt input"
+      "DSH prompt input"
     ],
     "observables": [
       {
@@ -23,13 +23,9 @@
     "expectedResult": "The exact builtin storyboard identity reaches injected state and participates in prompt composition.",
     "expectedFailure": "Wrong source/location/fingerprint or missing injection fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",

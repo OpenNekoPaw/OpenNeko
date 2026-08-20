@@ -7,8 +7,8 @@
   "evidenceContract": {
     "userBehavior": "Submit one detached image Generation Job, then use new Tool Calls to describe and observe the exact returned identity without retrying or using a generic Task.",
     "canonicalPath": [
-      "Desktop Agent input queue",
-      "PiConversationRuntime",
+      "public DSH Session submit",
+      "DSH Session runtime",
       "SubmitGenerationJob Tool call",
       "GenerationJobCoordinator",
       "versioned Generation Job store",

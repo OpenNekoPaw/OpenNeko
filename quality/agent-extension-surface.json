@@ -12,18 +12,6 @@
       "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
     ]
   },
-  "skillAuthoringMetadata": {
-    "allowedTools": {
-      "classification": "internal-experimental",
-      "acceptedByCreator": true,
-      "runtimeEnforced": false,
-      "supportClaim": "none"
-    },
-    "evidence": [
-      "packages/agent/contracts/src/portable-skill.ts",
-      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
-    ]
-  },
   "compositionPackage": {
     "classification": "official-dsh-profile",
     "manifest": "plugin.json",
@@ -63,7 +51,6 @@
     "mcpRequired": false,
     "runtimeAuthority": "owning-domain-application-service",
     "evidence": [
-      "packages/agent/contracts/src/capability.ts",
       "packages/agent/contracts/src/dsh-acp.ts",
       "packages/dsh-bridge/src/index.ts",
       "packages/generation/dsh-plugin/src/index.ts",

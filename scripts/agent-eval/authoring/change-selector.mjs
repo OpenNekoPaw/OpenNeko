@@ -38,11 +38,9 @@ const RULES = Object.freeze([
     'packages/content/src/document/read-document-tool.ts',
     'packages/content/src/document/read-image-tool.ts',
     'packages/agent/runtime/src/acp/dsh-acp-projection',
+    'packages/agent/runtime/src/input/message-resource-projector',
     'packages/agent/runtime/src/runtime/turn/multimodal-context-packet',
     'apps/neko-desktop/src/main/desktop-dsh-session-host',
-  ]),
-  rule('resource-display-projection', 'agent-runtime.stream-delivery', [
-    'packages/agent/runtime/src/input/message-resource-projector.ts',
   ]),
   regexRule(
     'portable-skill-content',
@@ -54,9 +52,7 @@ const RULES = Object.freeze([
   ]),
   rule('skill-runtime', 'agent-runtime.skill-runtime', [
     'packages/agent/runtime/src/skill/',
-    'packages/agent/runtime/src/pi/personal-skill-manager',
-    'packages/agent/runtime/src/pi/skill-host',
-    'packages/agent/runtime/src/pi/conversation-runtime',
+    'packages/dsh-bridge/src/skills/',
   ]),
   rule('screenplay-authoring', 'agent-runtime.screenplay-authoring', [
     'packages/agent/runtime/src/tools/core/file-access-policy',
@@ -69,11 +65,10 @@ const RULES = Object.freeze([
     'packages/quality/src/',
     'packages/agent/runtime/src/tools/',
     'packages/agent/runtime/src/runtime/capability/capability-runtime-bindings.ts',
-    'packages/agent/contracts/src/capability',
   ]),
   rule('provider-model-routing', 'agent-runtime.model-binding', [
     'packages/agent/runtime/src/provider/',
-    'packages/agent/runtime/src/pi/openneko-provider',
+    'packages/dsh-bridge/src/',
     'packages/host/src/settings/',
     'packages/ai/sdk/src/',
   ]),
@@ -90,7 +85,7 @@ const RULES = Object.freeze([
     'apps/neko-desktop/src/main/desktop-dsh-domain-tool-handlers',
   ]),
   rule('launch-domain-binding', 'agent-runtime.launch-binding', [
-    'packages/agent/contracts/src/agent-draft-submit',
+    'packages/agent/contracts/src/agent-input-intent',
     'packages/agent/contracts/src/character-creation-handoff',
     'packages/agent/contracts/src/agent-interaction-binding',
     'packages/agent/runtime/src/application/agent-domain-binding-service',

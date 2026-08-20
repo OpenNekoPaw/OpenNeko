@@ -191,11 +191,7 @@ export function resolveExecutionCase(selection) {
 }
 
 const DESKTOP_WORKFLOW_STEP_KINDS = new Set([
-  'draft-bind',
-  'draft-submit',
   'submit',
-  'queue',
-  'send-queued-now',
   'wait-for-idle',
   'cancel',
   'confirm',

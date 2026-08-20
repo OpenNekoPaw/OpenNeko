@@ -193,6 +193,10 @@ describe('Desktop Agent Evaluation matrix runtime', () => {
     expect(() =>
       assertConcurrentSampleIsolation([isolated('a', 4101), isolated('a', 4101)]),
     ).toThrow('do not isolate');
+
+    const sameDshSession = [isolated('a', 4101), isolated('b', 4102)];
+    sameDshSession[1].isolation.dshSessionId = sameDshSession[0].isolation.dshSessionId;
+    expect(() => assertConcurrentSampleIsolation(sameDshSession)).toThrow('dshSessionId');
   });
 });
 
@@ -241,7 +245,7 @@ function isolated(id, controlPort) {
       workspaceId: `workspace-${id}`,
       settingsStoreId: `settings-${id}`,
       credentialScopeId: `credentials-${id}`,
-      piSessionId: `pi-session-${id}`,
+      dshSessionId: `dsh-session-${id}`,
       conversationId: `conversation-${id}`,
       controlPort,
       reportId: `report-${id}`,

@@ -8,7 +8,7 @@
 - OpenNeko Skill Host and capability Tool bridge.
 - Desktop direct Agent launch/automation contracts and alternate DSH SDK/embedded runtime paths.
 
-`packages/agent/contracts/src/mcp.ts` was the final public residue of the custom MCP runtime. It had no consumer and exported `IMCPClient`/`IMCPManager` runtime authority, so it and its root barrel export were deleted. The third-party `MCPServerConfig` remains in `config.ts`; this is provider-specific configuration managed through the DSH boundary, not an OpenNeko MCP runtime.
+`packages/agent/contracts/src/mcp.ts` was the final public residue of the custom MCP runtime. It had no consumer and exported `IMCPClient`/`IMCPManager` runtime authority, so it and its root barrel export were deleted. The later W8 Host config audit also proved `MCPServerConfig` had no DSH management consumer; it, Host `mcp_servers` CRUD/TOML projection and the parallel external-research contract were deleted rather than retained as configuration-only aliases.
 
 ## Canonical DSH Boundary
 
@@ -34,13 +34,13 @@ pnpm --dir packages/agent/contracts run typecheck
 PASS
 
 pnpm --dir packages/agent/contracts run test
-PASS: 41 files / 211 tests
+PASS: 40 files / 210 tests
 
 pnpm check:agent-boundaries
-PASS: 8 gate tests; 163 production files; 13 extension evidence inputs
+PASS: 12 gate tests; 360 production/Evaluation files; 14 extension evidence inputs
 
-source scan: IMCPManager, IMCPClient, ./mcp export, agent-contracts/mcp
+source scan: IMCPManager, IMCPClient, MCPServerConfig, ./mcp export, agent-contracts/mcp
 PASS: no matches
 ```
 
-Tasks 11.2, 11.4 and 11.5 are complete for production source, public exports, manifests and registration. W8 remains open because the Evaluation driver/cases still contain retired Pi execution facts and built-output/full repository scans remain incomplete under tasks 11.1, 11.3 and 11.6.
+Tasks 11.2, 11.4 and 11.5 are complete for production source, public exports, manifests and registration. Production Evaluation definitions are now included in the same retired-marker gate. W8 remains open because the current generated Desktop bundles and packaged `app.asar` predate the cutover and fail `check:agent-retired-output`; they cannot be regenerated before the release guard under task 12.6.

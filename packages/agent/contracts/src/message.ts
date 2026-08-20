@@ -4,7 +4,6 @@
  * SSOT for: Message, ToolCall, ContentBlock, ContentBlockType, CodeDiff
  */
 
-import type { AgentCapabilityInvocationResult } from './agent-capability-lifecycle';
 import type { PerceptionCard, ToolResultBackfillDiagnostic } from './perception-card';
 import type { ToolResultAttachment } from './tool';
 import { validateContentLocator, type ContentLocator } from '@neko/content';
@@ -57,8 +56,7 @@ export interface ToolCallProgress {
  * Content block types for sequential rendering of AI responses.
  * Allows thinking, tool calls, text, and code diffs to be rendered in chronological order.
  */
-export type ContentBlockType =
-  'thinking' | 'text' | 'tool_call' | 'code_diff' | 'composite' | 'canvas_lifecycle';
+export type ContentBlockType = 'thinking' | 'text' | 'tool_call' | 'code_diff' | 'composite';
 
 export type CompositeTemplate = 'storyboard-table' | 'comparison' | 'gallery' | 'report';
 
@@ -101,13 +99,6 @@ export interface MarkdownDerivedCompositeSource {
   readonly candidateIndex: number;
 }
 
-export interface CanvasLifecycleBlockData {
-  readonly requestId: string;
-  readonly success: boolean;
-  readonly result: AgentCapabilityInvocationResult;
-  readonly error?: string;
-}
-
 /**
  * Code diff information for file edits
  */
@@ -140,8 +131,6 @@ export interface ContentBlock {
   composite?: CompositeBlockData;
   /** Present only when the composite is derived from authoritative Markdown source. */
   compositeSource?: MarkdownDerivedCompositeSource;
-  /** For Canvas lifecycle capability results and follow-up actions. */
-  canvasLifecycle?: CanvasLifecycleBlockData;
 }
 
 // ---------------------------------------------------------------------------

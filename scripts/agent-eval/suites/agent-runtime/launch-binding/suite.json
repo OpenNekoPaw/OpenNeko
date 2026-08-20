@@ -4,7 +4,7 @@
   "owner": { "kind": "agent-runtime", "id": "agent-launch-binding" },
   "target": {
     "kind": "workflow",
-    "id": "draft-binding-first-submit",
+    "id": "composer-first-submit",
     "contractHash": "sha256:1d8f56cd2f344126254df289f1f379c52559de9fcf7a1044e7b1a2a19e956072"
   },
   "runtimeProfiles": [
@@ -42,12 +42,6 @@
       "id": "workspace-bound-first-submit",
       "file": "cases/workspace-bound-first-submit.json",
       "group": "workflow",
-      "visibility": "public"
-    },
-    {
-      "id": "stale-binding-rejection",
-      "file": "cases/stale-binding-rejection.json",
-      "group": "failure",
       "visibility": "public"
     }
   ],

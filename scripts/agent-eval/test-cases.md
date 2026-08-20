@@ -165,26 +165,30 @@ terminal facts 一致。未授权 profile 在 Desktop 启动前失败，不能�
 - timeout/repetition budget；
 - 可选的 domain rubric。
 
-Scenario schema 与 Desktop driver contract 已表达 `draft-bind`、预 Session `draft-submit` 拒绝、
-`submit`、延迟 `submit`、`queue`、`wait-for-idle`、`cancel`、`confirm`、`resume`、
+Scenario schema 拒绝已退休的 `draft-bind`、预 Session `draft-submit` 与 synthetic
+`draft-rejection`；它们不得翻译到 DSH Session call。普通首提交只走可见 Composer。
+当前可执行 contract 表达 `submit`、延迟 `submit`、`wait-for-idle`、`cancel`、`confirm`、`resume`、
 Conversation `update-configuration`、typed `invoke-input`、closed-loop `feedback` 和 terminal
 `resize`。
-活跃 turn 中的新用户输入必须使用 `queue`；case 必须以 terminal idle 收敛。每条消息都通过
-Desktop Agent input queue，不能直接注入 Agent turn 或 history。当前通用 workflow interpreter
-执行上述除 `resize` 外的步骤；Draft 拒绝 case 必须在同一 Scenario 中恢复真实 Renderer，并通过
-可见 composer 完成后续 Session Turn，不能把 typed launch bridge 的负向证据冒充完整用户路径。
-运行中配置更新必须引用前一条 active submission，并从首个 Turn 的 immutable facts 和后续 Turn 的
-effective facts 证明更新只影响 future Turn。`resize` 尚未接入 Desktop Agent runner，必须在启动前以
+活跃 turn 中不得再次 `submit`；当前 Desktop 没有公开 DSH inbox 产品操作，因此 Evaluation 不
+声明 queue/send-now DSL，也不得恢复 OpenNeko shadow queue。case 必须以 terminal idle 收敛。
+每条消息都通过公开 DSH Session submit 操作，不能直接注入 Agent turn 或 history。当前通用 workflow interpreter
+执行上述除 `resize` 外的步骤；不得用 mock Draft receipt 冒充完整用户路径。
+模型配置只允许 exact visible Conversation 的 idle DSH Session 更新，并证明操作不创建 Turn。
+`resize` 尚未接入 Desktop Agent runner，必须在启动前以
 `configuration-invalid` 失败。缺失公开产品操作或 evidence adapter 时同样不得添加 per-case adapter
 绕过。
 
 当前 hard gates 覆盖 runtime error、fully idle、canonical turn、final answer、
 Skill identity/status、prompt composition、Markdown path、model/model sequence、Draft rejection、
 requested/effective configuration update、typed input invocation、Tool call、
-process order、queue state、cancellation、recovery、retry、terminal
-concerns、Timeline、脱敏 resource display projection、structured output、artifact 和
-current path refs。`resource-display-projection` 只接受 locator kind、授权状态和
-`openneko-resource`/`none` transport 分类；fact 出现 URL、token、路径或未知字段时必须失败。
+process order、cancellation、recovery、retry、terminal concerns、Timeline、structured output、
+artifact、Desktop lifecycle 和 current path refs。`desktop-lifecycle` assertion 必须与
+`execution.lifecycleChecks` 精确一致，并验证 reload 后 exact Conversation、Composer focus 与 graceful
+close disposal。旧 `resource-display-projection` assertion 与
+`resourceDisplayProjections` fixture 已删除：DSH Tool 结果只从 exact Tool event 的 lossless
+`rawOutput`、content-locator 和 artifact facts 验证，实际 Webview 展示由可见 UI 验收负责，
+Evaluation 不再伪造第二套脱敏 display fact。
 新增 assertion kind 前必须先
 实现 evaluator 与 key-free 失败测试；metadata-only 字段会被 strict validation 拒绝。
 
@@ -272,7 +276,7 @@ pnpm test:agent:eval
 ```bash
 node scripts/agent-eval/all-suite-dry-run.mjs \
   --suite agent-runtime.workflow-controller \
-  --case cancel-resume-recovery
+  --case conversation-persistence-resume
 ```
 
 具备真实 provider/model/config/fixture 时，移除 `--dry-run` 执行同一 case。修改多个

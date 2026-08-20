@@ -11,13 +11,13 @@
       "Host input catalog selection",
       "typed Skill activation intent",
       "Agent Draft first submit",
-      "Pi Skill Host receipt"
+      "DSH Skill receipt"
     ],
     "observables": [
       {
         "ref": "entry-skill-facts",
         "kind": "runtime-fact",
-        "description": "Exact Host Skill receipt, Draft-to-Session binding, Conversation creation, and terminal Pi facts.",
+        "description": "Exact Host Skill receipt, Draft-to-Session binding, Conversation creation, and terminal DSH facts.",
         "required": true
       }
     ],

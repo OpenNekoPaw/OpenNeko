@@ -10,20 +10,20 @@
       "Cut document/session selection",
       "shared AgentContextPayload",
       "exact sender-bound Desktop Agent connection",
-      "public Agent sendMessage bridge",
-      "Agent context message enhancement",
-      "Pi Conversation runtime and Pi Session",
+      "public DSH Session submit",
+      "DSH turn context projection",
+      "exact Conversation-to-DSH Session binding",
       "terminal answer"
     ],
     "observables": [
       {
         "ref": "cut-context-facts",
         "kind": "runtime-fact",
-        "description": "Exact Desktop turn identity, canonical Pi runtime path, Cut context summary in the Timeline, terminal marker, and zero forbidden-path facts.",
+        "description": "Exact Desktop DSH turn identity, canonical runtime path, Cut context summary in the projection, terminal marker, and zero forbidden-path facts.",
         "required": true
       }
     ],
-    "expectedResult": "The exact Cut payload reaches the selected Agent conversation as visible context, participates in the Pi turn, and produces the requested terminal marker without changing the Cut document.",
+    "expectedResult": "The exact Cut payload reaches the selected Agent Conversation as visible DSH turn context and produces the requested terminal marker without changing the Cut document.",
     "expectedFailure": "Missing/stale context, wrong conversation identity, target inference, runtime diagnostics, or a missing marker fails visibly."
   },
   "fixtureRefs": [

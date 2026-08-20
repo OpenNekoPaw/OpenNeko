@@ -97,6 +97,8 @@ export async function runEvaluationPipeline(input, options = {}) {
       : {}),
   });
   const neutralFacts = facts.neutralFacts;
+  const configurationDigest = neutralFacts.configuration?.effective?.digest;
+  const usage = neutralFacts.usage ?? {};
   const documents = createM1ReportDocuments({
     reportId,
     runId: input.runId,
@@ -116,20 +118,21 @@ export async function runEvaluationPipeline(input, options = {}) {
     effectiveConfiguration: {
       runtimeProfileId: input.executionCase.runtimeProfile.id,
       modelProfileId: input.executionCase.modelProfiles[0].id,
-      digest: neutralFacts.configuration.effective.digest,
+      ...(typeof configurationDigest === 'string'
+        ? { digest: configurationDigest }
+        : {
+            status: 'missing',
+            diagnostic: 'DSH Desktop facts do not expose an effective configuration digest.',
+          }),
     },
     fixtureDigest: input.executionCase.fixture.digest,
     command: options.command ?? 'node scripts/agent-eval/local-run.mjs',
     usage: {
       latencyMs: input.latencyMs,
       retries: 0,
-      ...(neutralFacts.usage.inputTokens === undefined
-        ? {}
-        : { inputTokens: neutralFacts.usage.inputTokens }),
-      ...(neutralFacts.usage.outputTokens === undefined
-        ? {}
-        : { outputTokens: neutralFacts.usage.outputTokens }),
-      ...(neutralFacts.usage.costUsd === undefined ? {} : { costUsd: neutralFacts.usage.costUsd }),
+      ...(usage.inputTokens === undefined ? {} : { inputTokens: usage.inputTokens }),
+      ...(usage.outputTokens === undefined ? {} : { outputTokens: usage.outputTokens }),
+      ...(usage.costUsd === undefined ? {} : { costUsd: usage.costUsd }),
     },
     skippedStages,
     residualRisk: options.residualRisk ?? [],

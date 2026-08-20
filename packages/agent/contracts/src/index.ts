@@ -21,11 +21,12 @@ export {
 } from './agent-purpose-model';
 export * from './agent-conversation-context';
 export * from './agent-conversation-binding';
-export * from './agent-draft-submit';
+export * from './agent-input-intent';
 export * from './agent-llm-configuration';
 export * from './agent-entry-intent';
 export * from './agent-token-budget';
 export * from './agent-turn-capability';
+export * from './creative-domain';
 export * from './config';
 export * from './desktop-agent-connection';
 export * from './dsh-acp';
@@ -37,9 +38,7 @@ export * from './extension-management';
 export * from './extension-management-host';
 export * from './message-attachment';
 export * from './multimodal-context';
-export * from './perception-tool';
 export * from './recovery-guidance';
-export * from './resource-display-projection';
 
 export type {
   ProjectionAttachmentHostFrame,
@@ -67,7 +66,6 @@ export type {
   ContentBlock,
   ContentBlockType,
   CodeDiff,
-  CanvasLifecycleBlockData,
   CompositeBlockData,
   MarkdownDerivedCompositeSource,
   CompositeSection,
@@ -87,10 +85,6 @@ export {
   AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND,
   isAgentAuthorizedContentReferenceContextData,
 } from './message';
-export {
-  buildPluginSlashCommandId,
-  type PluginSlashCommandIdInput,
-} from './plugin-command-contract';
 export type { EnabledStateRecord } from './enabled-state';
 
 export type {
@@ -118,51 +112,7 @@ export {
   parseAgentInputCatalogEntry,
   parseAgentInputTrigger,
 } from './agent-input-trigger';
-export type {
-  PluginSlashCommandDef,
-  PluginSlashCommandInvocation,
-  RegisteredPluginSlashCommand,
-} from './plugin-slash-command';
 export { normalizeSlashCommandName } from './slash-command-utils';
-export type {
-  AgentCapabilityContribution,
-  AgentCapabilityContributionIdentity,
-  AgentCapabilityContributionKind,
-  AgentCapabilityDiagnostic,
-  AgentCapabilityDiagnosticPhase,
-  AgentCapabilityInjectionContext,
-  AgentCapabilityPermissionMode,
-  AgentCapabilityPermissionRequirement,
-  AgentCapabilityRegistryProjection,
-  AgentCapabilitySlashCommandContribution,
-  AgentCapabilitySource,
-  AgentCapabilityTelemetryEvent,
-  AgentCapabilityTelemetryEventKind,
-  AgentCapabilityTelemetryReason,
-  AgentCapabilityTelemetrySnapshot,
-  AgentCapabilityPromptChainFragmentContribution,
-  AgentArtifactExecutionCapabilityContribution,
-  AgentArtifactFacetsContribution,
-  AgentLifecycleCapabilityContribution,
-  AgentEntityMemoryContributorFacetContribution,
-  AgentEntityProviderFacetContribution,
-  AgentMediaTextExtractorFacetContribution,
-  AgentPerceptionCapabilityCachePolicy,
-  AgentPerceptionCapabilityConfidenceKind,
-  AgentPerceptionCapabilityDeviceTier,
-  AgentPerceptionCapabilityExecutionMode,
-  AgentPerceptionCapabilityFacetContribution,
-  AgentPerceptionCapabilityMediaKind,
-  AgentPerceptionCapabilitySource,
-  AgentPerceptionCapabilityTask,
-  AgentPerceptionProviderFacetContribution,
-  AgentRepresentationResolverFacetContribution,
-  AgentReviewSurfaceFacetContribution,
-  AgentSemanticFacetAvailability,
-  AgentSemanticFacetActionAvailability,
-  AgentSemanticIndexProviderFacetContribution,
-  AgentInjectedCapabilitySet,
-} from './capability';
 export type {
   AgentGeneratedArtifactProjection,
   AgentMediaMetadata,
@@ -242,20 +192,12 @@ export {
   type ProjectPluginsAvailableInput,
 } from './plugin-transfer-contract';
 
-// Agent-owned capability, tool, profile, and prompt contracts.
-export * from './agent-capability-diagnostics';
-export * from './agent-capability-lifecycle';
-export * from './agent-capability';
+// Agent-owned message, tool, profile, and perception contracts.
 export * from './agent-observation';
 export * from './agent-profile';
 export * from './decision-rationale';
-export * from './domain-routing';
 export * from './perception-card';
-export * from './portable-skill';
-export * from './prompt-fragment';
 export * from './provider-card';
-export * from './reference-contributor';
-export * from './skill';
 export * from './tool-names';
 export * from './tool-planning';
 export * from './tool';
@@ -264,5 +206,4 @@ export * from './comic-animation-indexing';
 export * from './composite-artifact';
 export * from './storyboard-plan-overlay';
 export * from './shot-image-prep';
-export * from './external-research';
 export * from './character-dialogue-handoff';

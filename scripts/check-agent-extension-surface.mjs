@@ -15,8 +15,6 @@ const architecturePaths = [
 export function validateSurfaceStructure(surface) {
   const findings = [];
   const skill = requireRecord(surface, 'portableSkill', findings);
-  const skillAuthoring = requireRecord(surface, 'skillAuthoringMetadata', findings);
-  const allowedTools = requireRecord(skillAuthoring, 'allowedTools', findings);
   const composition = requireRecord(surface, 'compositionPackage', findings);
   const management = requireRecord(surface, 'extensionManagement', findings);
   const mcp = requireRecord(surface, 'mcp', findings);
@@ -33,24 +31,6 @@ export function validateSurfaceStructure(surface) {
     'portableSkill.sourceKinds',
     findings,
   );
-  expectEqual(
-    allowedTools?.classification,
-    'internal-experimental',
-    'skillAuthoringMetadata.allowedTools.classification',
-    findings,
-  );
-  expectFalse(
-    allowedTools?.runtimeEnforced,
-    'skillAuthoringMetadata.allowedTools.runtimeEnforced',
-    findings,
-  );
-  expectEqual(
-    allowedTools?.supportClaim,
-    'none',
-    'skillAuthoringMetadata.allowedTools.supportClaim',
-    findings,
-  );
-
   expectEqual(
     composition?.classification,
     'official-dsh-profile',
@@ -138,6 +118,24 @@ export function findRetiredAgentSkillToolClaims(source, path = '<document>') {
   return /\b(?:GetContext|ActivateSkill|DeactivateSkill)\b/u.test(source)
     ? [`${path}: retired Agent Skill Tool protocol`]
     : [];
+}
+
+export function validateDshExtensionManagementHostSource(source) {
+  const findings = [];
+  if (!source.includes('runtime.client.readExtensions()')) {
+    findings.push('Extension Management host must project the canonical DSH extension snapshot');
+  }
+  for (const retiredAuthority of [
+    'plugin_states',
+    'pluginStates',
+    'mcp_servers',
+    'external_research',
+  ]) {
+    if (source.includes(retiredAuthority)) {
+      findings.push(`Extension Management host retains retired authority ${retiredAuthority}`);
+    }
+  }
+  return findings;
 }
 
 export function validateCanonicalAgentRegistrationGraph(graph) {
@@ -280,6 +278,11 @@ async function checkCanonicalSourceEvidence(root, findings) {
   }
 
   const bridgeSource = await readFile(resolve(root, 'packages/dsh-bridge/src/index.ts'), 'utf8');
+  const extensionManagementHostSource = await readFile(
+    resolve(root, 'apps/neko-desktop/src/main/desktop-dsh-extension-management-host.ts'),
+    'utf8',
+  );
+  findings.push(...validateDshExtensionManagementHostSource(extensionManagementHostSource));
   const bridgeManifest = JSON.parse(
     await readFile(resolve(root, 'packages/dsh-bridge/package.json'), 'utf8'),
   );

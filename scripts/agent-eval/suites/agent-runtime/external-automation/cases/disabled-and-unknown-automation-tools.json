@@ -8,7 +8,7 @@
     "userBehavior": "Request Browser and Computer automation while both profiles are disabled or unavailable and receive an explicit non-execution response.",
     "canonicalPath": [
       "Desktop Agent composer",
-      "Pi agent.main capability snapshot",
+      "DSH Session capability snapshot",
       "exact capability registry",
       "disabled and unknown Tools remain absent"
     ],

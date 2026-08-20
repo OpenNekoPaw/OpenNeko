@@ -46,6 +46,7 @@
     "check:application-boundaries": "node scripts/check-application-boundaries.mjs --self-test && node scripts/check-application-boundaries.mjs",
     "check:product-brand": "node scripts/check-product-brand.mjs",
     "check:agent-boundaries": "node --test scripts/check-agent-extension-surface.test.mjs scripts/check-neko-agent-boundaries.test.mjs && tsx --test scripts/check-agent-tool-inventory.test.mts && node scripts/check-agent-extension-surface.mjs && node scripts/check-neko-agent-boundaries.mjs",
+    "check:agent-retired-output": "node --test scripts/check-neko-agent-boundaries.test.mjs && node scripts/check-neko-agent-boundaries.mjs --include-built-output",
     "check:canvas-playback-boundary": "node scripts/check-canvas-playback-boundary.mjs",
     "check:engine-retirement-boundary": "node scripts/check-engine-retirement-boundary.mjs",
     "check:automation-runtime-inputs": "node scripts/automation-runtime-release-inputs.mjs",
@@ -98,6 +99,7 @@
     "@img/sharp-wasm32": "^0.34.5"
   },
   "devDependencies": {
+    "@electron/asar": "3.4.1",
     "@eslint/js": "^9.39.4",
     "@fission-ai/openspec": "1.3.1",
     "@neko/canvas-domain": "workspace:*",

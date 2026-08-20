@@ -136,11 +136,6 @@ describe('Agent Evaluation change-to-suite selector', () => {
           suiteIds: ['agent-runtime.external-automation', 'agent-runtime.stream-delivery'],
         }),
         expect.objectContaining({
-          behaviorId: 'resource-display-projection',
-          suiteId: 'agent-runtime.stream-delivery',
-          suiteIds: ['agent-runtime.stream-delivery'],
-        }),
-        expect.objectContaining({
           behaviorId: 'evaluation-platform',
           suiteId: 'agent-runtime.evaluation-platform',
         }),

@@ -30,7 +30,7 @@ function evidenceContract() {
     canonicalPath: [
       'Desktop renderer/preload Agent bridge',
       'sender-bound controller',
-      'Pi Conversation runtime and Pi Session',
+      'DSH Session through ACP',
       'facts',
     ],
     observables: [
@@ -250,7 +250,6 @@ describe('agent evaluation suite and scenario contracts', () => {
     const workflow = scenario();
     workflow.steps = [
       { id: 'submit', kind: 'submit', prompt: 'Create a draft.' },
-      { id: 'queue', kind: 'queue', prompt: 'Review it.', afterStepId: 'submit' },
       { id: 'idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
       {
         id: 'idle-continuation',
@@ -275,7 +274,7 @@ describe('agent evaluation suite and scenario contracts', () => {
 
     const forwardReference = scenario();
     forwardReference.steps = [
-      { id: 'queue', kind: 'queue', prompt: 'Review it.', afterStepId: 'submit' },
+      { id: 'cancel', kind: 'cancel', afterStepId: 'submit' },
       { id: 'submit', kind: 'submit', prompt: 'Create a draft.' },
     ];
     expect(() => validateScenarioForExecution(forwardReference)).toThrow('earlier step');
@@ -293,90 +292,136 @@ describe('agent evaluation suite and scenario contracts', () => {
     submitWhileActive.steps.splice(1, 0, {
       id: 'second-submit',
       kind: 'submit',
-      prompt: 'This must be a queue step.',
+      prompt: 'This must wait for the active turn.',
     });
-    expect(() => validateScenarioForExecution(submitWhileActive)).toThrow('use queue');
-
-    const sendNow = scenario();
-    sendNow.steps = [
-      { id: 'submit', kind: 'submit', prompt: 'Create a draft.' },
-      { id: 'queue', kind: 'queue', prompt: 'Prioritize this.', afterStepId: 'submit' },
-      { id: 'cancel', kind: 'cancel', afterStepId: 'queue' },
-      { id: 'cancel-idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
-      { id: 'send-now', kind: 'send-queued-now', queueStepId: 'queue' },
-      { id: 'send-now-idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
-    ];
-    expect(validateScenarioForExecution(sendNow)).toBe(sendNow);
-
-    const invalidSendNow = scenario();
-    invalidSendNow.steps.splice(1, 0, {
-      id: 'send-now',
-      kind: 'send-queued-now',
-      queueStepId: 'submit',
-    });
-    expect(() => validateScenarioForExecution(invalidSendNow)).toThrow('earlier queue step');
+    expect(() => validateScenarioForExecution(submitWhileActive)).toThrow('requires idle state');
 
     const noTerminalIdle = scenario();
     noTerminalIdle.steps.pop();
     expect(() => validateScenarioForExecution(noTerminalIdle)).toThrow('end with wait-for-idle');
   });
 
-  it('validates Draft rejection and running configuration update workflows without case dispatch', () => {
+  it('rejects retired OpenNeko queue steps and queue-state assertions', () => {
+    const queuedStep = scenario();
+    queuedStep.steps.splice(1, 0, {
+      id: 'queue',
+      kind: 'queue',
+      prompt: 'Retired queue input.',
+      afterStepId: 'submit',
+    });
+    expect(() => validateScenario(queuedStep)).toThrow();
+
+    const queueAssertion = scenario();
+    queueAssertion.assertions.push({
+      id: 'queue-state',
+      kind: 'queue-state',
+      stepId: 'idle',
+      status: 'drained',
+      evidenceRef: 'turn-facts',
+    });
+    expect(() => validateScenario(queueAssertion)).toThrow();
+  });
+
+  it('rejects the retired OpenNeko resource-display projection assertion', () => {
+    const resourceDisplay = scenario();
+    resourceDisplay.assertions.push({
+      id: 'resource-display',
+      kind: 'resource-display-projection',
+      projectionKind: 'tool-result',
+      status: 'authorized',
+      locatorKind: 'workspace-file',
+      transport: 'openneko-resource',
+      renderTarget: 'agent-webview',
+      diagnosticsEmpty: true,
+      evidenceRef: 'turn-facts',
+    });
+    expect(() => validateScenario(resourceDisplay)).toThrow();
+  });
+
+  it('requires lifecycle assertions to match the executed Desktop lifecycle checks', () => {
+    const lifecycle = scenario();
+    lifecycle.execution = {
+      evidenceLevel: 'visible-desktop',
+      resourceClass: 'visible-ui',
+      protected: true,
+      lifecycleChecks: ['renderer-reload', 'graceful-close'],
+    };
+    lifecycle.assertions.push({
+      id: 'lifecycle',
+      kind: 'desktop-lifecycle',
+      checks: ['renderer-reload', 'graceful-close'],
+      evidenceRef: 'turn-facts',
+    });
+    expect(validateScenarioForExecution(lifecycle)).toBe(lifecycle);
+
+    lifecycle.assertions.at(-1).checks = ['graceful-close'];
+    expect(() => validateScenario(lifecycle)).toThrow(
+      'assertion checks must match execution.lifecycleChecks',
+    );
+    lifecycle.assertions.pop();
+    expect(() => validateScenario(lifecycle)).toThrow(
+      'requires exactly one desktop-lifecycle assertion',
+    );
+  });
+
+  it('validates idle DSH configuration update workflows without case dispatch', () => {
     const workflow = scenario();
     workflow.steps = [
-      { id: 'assistant-binding', kind: 'draft-bind', target: 'assistant' },
-      {
-        id: 'stale-submit',
-        kind: 'draft-submit',
-        catalogRef: 'initial',
-        input: { kind: 'message', text: 'hello' },
-        expectedStatus: 'rejected',
-      },
       { id: 'submit', kind: 'submit', prompt: 'Create a session.' },
+      { id: 'idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
       {
         id: 'model-update',
         kind: 'update-configuration',
-        afterStepId: 'submit',
         providerId: 'provider',
         modelId: 'model-next',
         expectedStatus: 'applied',
-        turnState: 'running',
+        turnState: 'idle',
         timeoutMs: 120_000,
       },
-      { id: 'idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
+      { id: 'configuration-idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
     ];
-    workflow.assertions.push(
-      {
-        id: 'draft-boundary',
-        kind: 'draft-rejection',
-        stepId: 'stale-submit',
-        catalogRef: 'initial',
-        initialBindingKind: 'unbound',
-        currentBindingKind: 'assistant',
-        surfaceBindingKind: 'unbound',
-        conversationCreated: false,
-        messageIncludes: 'stale',
-        evidenceRef: 'turn-facts',
-      },
-      {
-        id: 'configuration',
-        kind: 'configuration-update',
-        stepId: 'model-update',
-        providerId: 'provider',
-        modelId: 'model-next',
-        status: 'applied',
-        turnState: 'running',
-        turnCreated: false,
-        evidenceRef: 'turn-facts',
-      },
-    );
+    workflow.assertions.push({
+      id: 'configuration',
+      kind: 'configuration-update',
+      stepId: 'model-update',
+      providerId: 'provider',
+      modelId: 'model-next',
+      status: 'applied',
+      turnState: 'idle',
+      turnCreated: false,
+      evidenceRef: 'turn-facts',
+    });
     expect(validateScenarioForExecution(workflow)).toBe(workflow);
 
-    const unknownCatalog = structuredClone(workflow);
-    unknownCatalog.steps[1].catalogRef = 'missing';
-    expect(() => validateScenarioForExecution(unknownCatalog)).toThrow(
-      'references unknown Draft catalog',
-    );
+    const runningUpdate = structuredClone(workflow);
+    runningUpdate.steps[2] = {
+      ...runningUpdate.steps[2],
+      afterStepId: 'submit',
+      turnState: 'running',
+    };
+    runningUpdate.assertions[0].turnState = 'running';
+    expect(() => validateScenario(runningUpdate)).toThrow();
+  });
+
+  it('rejects retired Pi Draft workflow operations and assertions', () => {
+    const draftStep = scenario();
+    draftStep.steps.unshift({ id: 'binding', kind: 'draft-bind', target: 'assistant' });
+    expect(() => validateScenario(draftStep)).toThrow();
+
+    const draftAssertion = scenario();
+    draftAssertion.assertions.push({
+      id: 'draft-rejection',
+      kind: 'draft-rejection',
+      stepId: 'binding',
+      catalogRef: 'initial',
+      initialBindingKind: 'unbound',
+      currentBindingKind: 'assistant',
+      surfaceBindingKind: 'unbound',
+      conversationCreated: false,
+      messageIncludes: 'stale',
+      evidenceRef: 'turn-facts',
+    });
+    expect(() => validateScenario(draftAssertion)).toThrow();
   });
 
   it('rejects unknown schema identities, fields, and kinds', () => {
@@ -389,6 +434,61 @@ describe('agent evaluation suite and scenario contracts', () => {
     const invalid = scenario();
     invalid.steps = [{ id: 'submit', kind: 'teleport', prompt: 'ignored' }];
     expect(() => validateScenario(invalid)).toThrow('does not match any supported variant');
+  });
+
+  it('rejects the retired Pi runtime assertion instead of retaining an executable evaluator', () => {
+    const invalid = scenario();
+    invalid.assertions.push({
+      id: 'retired-runtime',
+      kind: 'pi-runtime',
+      implementation: 'pi-agent-core',
+      transcriptAuthority: 'pi-session',
+      productMetadataAuthority: 'sqlite',
+      purpose: 'agent.main',
+      workspaceLocatorKind: 'virtual',
+      turnDurability: 'durable',
+      evidenceRef: 'turn-facts',
+    });
+
+    expect(() => validateScenario(invalid)).toThrow('does not match any supported variant');
+  });
+
+  it('rejects Pi Session persistence authority instead of translating it to DSH', () => {
+    const invalid = scenario();
+    invalid.assertions.push({
+      id: 'retired-persistence',
+      kind: 'conversation-persistence',
+      authority: 'pi-session',
+      catalog: 'sqlite',
+      databaseScope: 'user-global',
+      resumeStatus: 'restored',
+      recordSource: 'pi-session',
+      minRestoredMessages: 1,
+      evidenceRef: 'turn-facts',
+    });
+
+    expect(() => validateScenario(invalid)).toThrow('does not match any supported variant');
+  });
+
+  it('requires exact DSH turn-end reasons for Timeline assertions', () => {
+    const valid = scenario();
+    valid.assertions.push({
+      id: 'timeline',
+      kind: 'timeline-projection',
+      turnEndReason: 'completed',
+      toolName: 'ListDirectory',
+      evidenceRef: 'turn-facts',
+    });
+    expect(validateScenario(valid)).toBe(valid);
+
+    const retired = structuredClone(valid);
+    retired.assertions.at(-1).terminalStatus = 'completed';
+    delete retired.assertions.at(-1).turnEndReason;
+    expect(() => validateScenario(retired)).toThrow('does not match any supported variant');
+
+    const productStatus = structuredClone(valid);
+    productStatus.assertions.at(-1).turnEndReason = 'cancelled';
+    expect(() => validateScenario(productStatus)).toThrow('does not match any supported variant');
   });
 
   it('rejects the committed unsupported-field pilot as configuration invalid', async () => {

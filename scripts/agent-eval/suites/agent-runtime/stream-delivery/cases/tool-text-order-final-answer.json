@@ -7,18 +7,18 @@
   "evidenceContract": {
     "userBehavior": "Stream text, execute one Tool, continue streaming a table, and preserve the final answer markers.",
     "canonicalPath": [
-      "Desktop Agent input queue",
-      "Pi Agent event stream",
-      "shared Pi Timeline projector",
+      "public DSH Session submit",
+      "DSH ACP event stream",
+      "DSH Session event projection",
       "conversation projection store",
-      "terminal Timeline presenter",
+      "existing Timeline presenter",
       "Markdown session finalize"
     ],
     "observables": [
       {
         "ref": "stream-facts",
         "kind": "runtime-fact",
-        "description": "Exact Timeline and Item identity, Tool result, one exact terminal patch, Markdown path, structured table, and final answer facts.",
+        "description": "Exact DSH Session, turn, and Tool-call identity, Tool result, one exact turn-end reason, Markdown path, structured table, and final answer facts.",
         "required": true
       }
     ],
@@ -54,7 +54,7 @@
     {
       "id": "projection",
       "kind": "timeline-projection",
-      "terminalStatus": "completed",
+      "turnEndReason": "completed",
       "toolName": "ListDirectory",
       "evidenceRef": "stream-facts"
     },

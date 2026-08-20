@@ -14,7 +14,7 @@
     "userBehavior": "Confirm one exact Browser origin in the visible Desktop and observe the single isolated page through the reviewed Browser Use screenshot Tool.",
     "canonicalPath": [
       "visible Desktop Agent composer",
-      "Pi agent.main Tool call",
+      "DSH Agent Tool call",
       "explicitly authorized user-managed Browser Use runtime",
       "explicit Browser origin selector",
       "one session-owned Browser Use client and isolated profile",
@@ -84,7 +84,7 @@
     {
       "id": "browser-timeline",
       "kind": "timeline-projection",
-      "terminalStatus": "completed",
+      "turnEndReason": "completed",
       "toolName": "automation_browser-use_browser_screenshot",
       "evidenceRef": "browser-observe-facts"
     },
@@ -134,6 +134,12 @@
       "id": "terminal",
       "kind": "terminal-idle",
       "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "browser-observe-facts"
+    },
+    {
+      "id": "lifecycle",
+      "kind": "desktop-lifecycle",
+      "checks": ["graceful-close"],
       "evidenceRef": "browser-observe-facts"
     }
   ],

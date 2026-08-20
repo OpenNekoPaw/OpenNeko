@@ -88,11 +88,11 @@ presentation package as an independent distributable artifact.
 
 ## Remaining Blockers
 
-W8 is not complete. `scripts/agent-eval` still contains the old `agentLaunch`, `confirmTool`, Pi Session,
-queue, `runId` and `branchId` driver/assertion paths. They must be replaced atomically by DSH ACP facts or
-reported `infrastructure-blocked`; they cannot be kept through aliases or result translation. Product
-contracts also retain general `runId`/`branchId` fields outside the deleted Webview slice until their W4
-producers and consumers are migrated together.
+W8 is not complete. The source and production Evaluation scans now reject `agentLaunch`, `confirmTool`,
+Pi authority, queue/Draft DSL and the removed projection facts. The current generated renderer bundles and
+packaged `app.asar` still contain retired bridge/queue markers and therefore fail the explicit
+`check:agent-retired-output` gate. They must be regenerated only after the machine release guard passes;
+the old bytes cannot be accepted as release evidence or hidden through scanner exceptions.
 
 Real provider/API and visible Electron acceptance were not executed by user direction and remain release
 blockers.

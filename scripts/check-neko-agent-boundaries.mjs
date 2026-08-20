@@ -11,6 +11,29 @@ const hostNeutralRoots = [
   'packages/ai/sdk/src',
 ];
 const browserRoots = ['packages/agent/webview/src'];
+const retiredAgentArtifactMarkers = Object.freeze([
+  ['@mariozechner/pi-', 'Pi runtime dependency'],
+  ['@neko/agent-runtime/pi', 'Pi runtime import'],
+  ['agentLaunch', 'retired Agent launch bridge'],
+  ['confirmTool', 'retired Tool confirmation bridge'],
+  ['agentAutomation', 'retired Agent automation bridge'],
+  ['AgentDraftSubmitInput', 'retired Draft submit contract'],
+  ['parseAgentDraftSubmitInput', 'retired Draft submit parser'],
+  ['draft-bind', 'retired Draft binding step'],
+  ['draft-submit', 'retired Draft submit step'],
+  ['draft-rejection', 'retired Draft rejection assertion'],
+  ['draft.binding.update', 'retired Draft binding operation'],
+  ['draft.input.submit', 'retired Draft submit operation'],
+  ['send-queued-now', 'retired send-now operation'],
+  ['queue-state', 'retired queue assertion'],
+  ['pi-runtime', 'retired Pi Evaluation assertion'],
+  ['projectionEvents', 'retired projection event facts'],
+  ['messageQueue', 'retired OpenNeko queue facts'],
+]);
+const retiredAgentEvaluationMarkers = Object.freeze([
+  ...retiredAgentArtifactMarkers,
+  ['Pi ', 'retired Pi authority'],
+]);
 const forbiddenDesktopAgentExecutionTokens = Object.freeze([
   ['@deepseek-ai/cordis', 'embedded Cordis'],
   ['@deepseek-ai/dsh-sdk-client', 'DSH TypeScript SDK'],
@@ -31,7 +54,9 @@ export function validateDesktopAgentExecutionSurface(input) {
       }
     }
     if (/\b(?:agentLaunch|confirmTool|agentAutomation)\b/u.test(source)) {
-      findings.push(`${path}: Desktop Agent production path contains a retired direct runtime bridge`);
+      findings.push(
+        `${path}: Desktop Agent production path contains a retired direct runtime bridge`,
+      );
     }
   }
   for (const [path, manifest] of Object.entries(input.manifests ?? {})) {
@@ -49,7 +74,22 @@ export function validateDesktopAgentExecutionSurface(input) {
   return findings;
 }
 
-export async function checkNekoAgentBoundaries(root = repositoryRoot) {
+export function validateRetiredAgentArtifactSources(
+  sources,
+  markers = retiredAgentArtifactMarkers,
+) {
+  const findings = [];
+  for (const [path, source] of Object.entries(sources)) {
+    for (const [marker, label] of markers) {
+      if (source.includes(marker)) {
+        findings.push(`${path}: contains ${label} marker '${marker}'`);
+      }
+    }
+  }
+  return findings;
+}
+
+export async function checkNekoAgentBoundaries(root = repositoryRoot, options = {}) {
   const findings = [];
   const hostNeutralFiles = [];
   const browserFiles = [];
@@ -130,7 +170,9 @@ export async function checkNekoAgentBoundaries(root = repositoryRoot) {
   const desktopAgentSources = Object.fromEntries(
     await Promise.all(
       desktopAgentFiles
-        .filter((file) => /(?:^|\/)desktop-(?:agent|dsh)-|DesktopAgentSurface/u.test(normalize(file)))
+        .filter((file) =>
+          /(?:^|\/)desktop-(?:agent|dsh)-|DesktopAgentSurface/u.test(normalize(file)),
+        )
         .map(async (file) => [normalize(relative(root, file)), await readFile(file, 'utf8')]),
     ),
   );
@@ -169,6 +211,9 @@ export async function checkNekoAgentBoundaries(root = repositoryRoot) {
 
   findings.push(...(await findRetiredAgentPathFindings(root)));
 
+  const evaluation = await findRetiredAgentEvaluationFindings(root);
+  findings.push(...evaluation.findings);
+
   const agentContractsIndex = await readFile(
     resolve(root, 'packages/agent/contracts/src/index.ts'),
     'utf8',
@@ -179,10 +224,71 @@ export async function checkNekoAgentBoundaries(root = repositoryRoot) {
     }
   }
 
+  let builtOutputCount = 0;
+  if (options.includeBuiltOutput === true) {
+    const builtOutput = await findRetiredAgentBuiltOutputFindings(root);
+    builtOutputCount = builtOutput.checkedFiles;
+    findings.push(...builtOutput.findings);
+  }
+
   return {
     status: findings.length === 0 ? 'passed' : 'failed',
-    checkedFiles: hostNeutralFiles.length + browserFiles.length + 5,
+    checkedFiles:
+      hostNeutralFiles.length +
+      browserFiles.length +
+      evaluation.checkedFiles +
+      builtOutputCount +
+      5,
     findings,
+  };
+}
+
+export async function findRetiredAgentEvaluationFindings(root) {
+  const files = [];
+  await collectEvaluationContractFiles(resolve(root, 'scripts/agent-eval'), files);
+  const sources = Object.fromEntries(
+    await Promise.all(
+      files.map(async (file) => [normalize(relative(root, file)), await readFile(file, 'utf8')]),
+    ),
+  );
+  return {
+    checkedFiles: files.length,
+    findings: validateRetiredAgentArtifactSources(sources, retiredAgentEvaluationMarkers),
+  };
+}
+
+export async function findRetiredAgentBuiltOutputFindings(root) {
+  const sources = {};
+  for (const directory of ['apps/neko-desktop/.vite/build', 'apps/neko-desktop/dist/assets']) {
+    const files = [];
+    await collectBuiltJavaScriptFiles(resolve(root, directory), files);
+    for (const file of files) {
+      sources[normalize(relative(root, file))] = await readFile(file, 'utf8');
+    }
+  }
+
+  const asarPaths = [];
+  await collectFilesNamed(resolve(root, 'apps/neko-desktop/out'), 'app.asar', asarPaths);
+  if (asarPaths.length > 0) {
+    const { extractFile, listPackage } = await import('@electron/asar');
+    for (const asarPath of asarPaths) {
+      const entries = listPackage(asarPath).filter(
+        (entry) =>
+          /\/\.vite\/build\/(?:main|preload)\.cjs$/u.test(entry) ||
+          /\/\.vite\/renderer\/main_window\/assets\/(?:main-root|root)-[^/]+\.js$/u.test(entry),
+      );
+      for (const entry of entries) {
+        sources[`${normalize(relative(root, asarPath))}${entry}`] = extractFile(
+          asarPath,
+          entry.replace(/^\//u, ''),
+        ).toString('utf8');
+      }
+    }
+  }
+
+  return {
+    checkedFiles: Object.keys(sources).length,
+    findings: validateRetiredAgentArtifactSources(sources),
   };
 }
 
@@ -194,19 +300,37 @@ export async function findRetiredAgentPathFindings(root) {
     'apps/neko-desktop/src/shared/agent-contract.ts',
     'apps/neko-desktop/src/shared/agent-automation-contract.ts',
     'packages/agent/contracts/src/mcp.ts',
+    'packages/agent/contracts/src/external-research.ts',
+    'packages/agent/contracts/src/agent-capability-diagnostics.ts',
+    'packages/agent/contracts/src/agent-capability-lifecycle.ts',
+    'packages/agent/contracts/src/agent-capability.ts',
+    'packages/agent/contracts/src/agent-draft-submit.ts',
     'packages/agent/contracts/src/agent-turn-timeline.ts',
+    'packages/agent/contracts/src/capability.ts',
     'packages/agent/contracts/src/conversation-projection.ts',
+    'packages/agent/contracts/src/domain-routing.ts',
+    'packages/agent/contracts/src/perception-tool.ts',
+    'packages/agent/contracts/src/plugin-command-contract.ts',
+    'packages/agent/contracts/src/plugin-slash-command.ts',
+    'packages/agent/contracts/src/portable-skill.ts',
+    'packages/agent/contracts/src/prompt-fragment.ts',
+    'packages/agent/contracts/src/reference-contributor.ts',
+    'packages/agent/contracts/src/resource-display-projection.ts',
+    'packages/agent/contracts/src/skill.ts',
     'packages/agent/runtime/src/runtime/session/conversation-run-registry.ts',
     'packages/agent/runtime/src/runtime/session/execution-ownership.ts',
     'packages/agent/runtime/src/runtime/turn/creator-visible-artifact-collector.ts',
     'packages/agent/runtime/src/extensions/plugin-runtime.ts',
     'packages/agent/runtime/src/pi/skill-host.ts',
+    'packages/host/src/settings/mcp-server-config.ts',
+    'packages/host/src/settings/types/config.ts',
   ]) {
     if (await pathExists(resolve(root, retiredPath))) {
       findings.push(`${retiredPath}: retired Agent path must remain deleted.`);
     }
   }
   for (const retiredDirectory of [
+    'apps/neko-desktop/resources/extensions/plugins',
     'packages/agent/runtime/src/pi',
     'packages/agent/runtime/src/mcp',
     'packages/agent/runtime/src/extensions',
@@ -262,6 +386,65 @@ async function collectProductionFiles(directory, files) {
   }
 }
 
+async function collectEvaluationContractFiles(directory, files) {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw error;
+  }
+  for (const entry of entries) {
+    if (['node_modules', 'reports', 'shared-fixtures'].includes(entry.name)) continue;
+    const file = resolve(directory, entry.name);
+    if (entry.isDirectory()) {
+      await collectEvaluationContractFiles(file, files);
+    } else if (
+      entry.isFile() &&
+      (/\.json$/u.test(entry.name) || /\.mjs$/u.test(entry.name)) &&
+      !/\.test\.mjs$/u.test(entry.name)
+    ) {
+      files.push(file);
+    }
+  }
+}
+
+async function collectBuiltJavaScriptFiles(directory, files) {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw error;
+  }
+  for (const entry of entries) {
+    const file = resolve(directory, entry.name);
+    if (entry.isDirectory()) {
+      await collectBuiltJavaScriptFiles(file, files);
+    } else if (entry.isFile() && /\.(?:cjs|js)$/u.test(entry.name)) {
+      files.push(file);
+    }
+  }
+}
+
+async function collectFilesNamed(directory, name, files) {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw error;
+  }
+  for (const entry of entries) {
+    const file = resolve(directory, entry.name);
+    if (entry.isDirectory()) {
+      await collectFilesNamed(file, name, files);
+    } else if (entry.isFile() && entry.name === name) {
+      files.push(file);
+    }
+  }
+}
+
 function extractImportSpecifiers(source) {
   return [
     ...source.matchAll(
@@ -276,7 +459,9 @@ function normalize(value) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const result = await checkNekoAgentBoundaries();
+  const result = await checkNekoAgentBoundaries(repositoryRoot, {
+    includeBuiltOutput: process.argv.includes('--include-built-output'),
+  });
   const output = `${JSON.stringify(result, null, 2)}\n`;
   if (result.status === 'failed') {
     process.stderr.write(output);

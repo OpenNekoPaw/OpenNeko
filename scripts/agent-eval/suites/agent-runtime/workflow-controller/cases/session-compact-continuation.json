@@ -7,17 +7,17 @@
   "evidenceContract": {
     "userBehavior": "Compact the exact active Conversation through its Session command catalog, then continue the same Conversation.",
     "canonicalPath": [
-      "initial Pi turn",
+      "initial DSH Turn",
       "Session input catalog",
       "typed compact command invocation",
-      "Pi Session compaction",
+      "DSH Session compaction",
       "same-Conversation continuation turn"
     ],
     "observables": [
       {
         "ref": "compaction-facts",
         "kind": "runtime-fact",
-        "description": "Exact command catalog receipt, compression result, stable Conversation identity, continuation Turn, and terminal Pi facts.",
+        "description": "Exact command catalog receipt, compression result, stable Conversation identity, continuation Turn, and terminal DSH facts.",
         "required": true
       }
     ],

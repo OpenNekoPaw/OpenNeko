@@ -44,12 +44,12 @@ describe('WorkspaceConfigManagerAuthority', () => {
 
 function createAuthority(): WorkspaceConfigManagerAuthority {
   const userConfigManager: IUserConfigManager = {
-    load: () => ({ providers: [], models: [], mcpServers: [] }),
-    loadRaw: () => ({ providers: [], models: [], mcpServers: [] }),
+    load: () => ({ providers: [], models: [] }),
+    loadRaw: () => ({ providers: [], models: [] }),
     loadRawResult: () => ({
       status: 'ok',
       filePath: '<workspace-config-authority-test>',
-      config: { providers: [], models: [], mcpServers: [] },
+      config: { providers: [], models: [] },
       diagnostics: [],
       providerCredentials: {},
     }),
@@ -58,8 +58,6 @@ function createAuthority(): WorkspaceConfigManagerAuthority {
     removeProvider: async () => undefined,
     addModel: async () => undefined,
     removeModel: async () => undefined,
-    addMCPServer: async () => undefined,
-    removeMCPServer: async () => undefined,
     clear: async () => undefined,
     updateScalar: async () => undefined,
     updateScalars: async () => undefined,

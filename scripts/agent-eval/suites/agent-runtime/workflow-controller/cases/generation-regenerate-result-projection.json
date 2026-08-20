@@ -7,8 +7,8 @@
   "evidenceContract": {
     "userBehavior": "Submit and observe one detached image Generation Job, then regenerate the successful result as a new submitted Job with an edited prompt instead of retrying or mutating the first result.",
     "canonicalPath": [
-      "Desktop Agent input queue",
-      "PiConversationRuntime",
+      "public DSH Session submit",
+      "DSH Session runtime",
       "SubmitGenerationJob Tool call",
       "Generation capability binding",
       "GenerationJobCoordinator",

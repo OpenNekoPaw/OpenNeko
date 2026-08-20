@@ -61,6 +61,7 @@ export const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'dsh-standard-skill-runtime',
   'dsh-standard-tool-scheduling',
   'dsh-standard-permission-presets',
+  'dsh-active-session-inbox',
   'desktop-session-driver',
   'launch-domain-binding',
   'prompt-composition',
@@ -76,7 +77,6 @@ export const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'timeline-projection-authority',
   'tool-result-delivery',
   'desktop-event-projection',
-  'resource-display-projection',
 ]);
 export async function loadCoverageIndex(options = {}) {
   const root = resolve(options.root ?? DEFAULT_ROOT);

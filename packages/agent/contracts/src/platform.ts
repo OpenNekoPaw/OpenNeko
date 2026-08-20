@@ -10,7 +10,7 @@
 // ToolDefinition is used for function calling with full schema
 
 import type { AgentTraceContext } from './agent-trace';
-import type { CreativeDomainMetadata } from './domain-routing';
+import type { CreativeDomainMetadata } from './creative-domain';
 import type { ToolPlanningMetadata } from './tool-planning';
 
 /**

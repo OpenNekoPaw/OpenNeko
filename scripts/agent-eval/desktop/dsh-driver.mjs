@@ -10,6 +10,7 @@ export function createDshDesktopAgentDriver(input) {
     throw infrastructureBlocker('DSH Desktop driver requires a renderer evaluate function.');
   }
   const evaluate = (command) => input.evaluate(dshDriverExpression(command));
+  const workflowEventOffsets = new Map();
   const operations = {
     async connect() {
       return evaluate({ kind: 'connect' });
@@ -35,6 +36,16 @@ export function createDshDesktopAgentDriver(input) {
     async readFacts(identity) {
       return evaluate({ kind: 'facts', identity });
     },
+    async observeWorkflowStep(command) {
+      const snapshot = await evaluate({ kind: 'snapshot', conversationId: command.conversationId });
+      const events = Array.isArray(snapshot?.events) ? snapshot.events : [];
+      const offset = workflowEventOffsets.get(command.conversationId) ?? 0;
+      if (events.length < offset) {
+        throw new Error('DSH Desktop workflow event projection moved behind its observed offset.');
+      }
+      workflowEventOffsets.set(command.conversationId, events.length);
+      return { ...snapshot, events: events.slice(offset) };
+    },
     async waitForIdentity(conversationId, _afterEventOffset, timeoutMs) {
       return evaluate({ kind: 'wait-for-idle', conversationId, timeoutMs }).then(
         (result) => result.identity,
@@ -49,10 +60,8 @@ export function createDshDesktopAgentDriver(input) {
     async invokeInput(command) {
       return evaluate({ kind: 'invoke-input', ...command });
     },
-    async updateConfiguration() {
-      throw infrastructureBlocker(
-        'DSH session configuration update is unavailable through the public Desktop bridge.',
-      );
+    async updateConfiguration(command) {
+      return evaluate({ kind: 'update-model', ...command });
     },
     async resume(command) {
       const conversationId = typeof command === 'string' ? command : command?.conversationId;
@@ -86,7 +95,10 @@ export function createDshDesktopAgentDriver(input) {
       }
       await operations.reloadRenderer();
       await input.waitForRenderer();
-      return operations.resume(command.conversationId);
+      const connected = await operations.connect();
+      requireRestoredConversation(connected.connection, command.conversationId);
+      const resumed = await operations.resume(command.conversationId);
+      return { accepted: true, connection: connected.connection, snapshot: resumed.snapshot };
     },
     async restartAndRestore(command) {
       if (typeof input.restartApplication !== 'function') {
@@ -94,7 +106,10 @@ export function createDshDesktopAgentDriver(input) {
       }
       await input.restartApplication();
       if (typeof input.waitForRenderer === 'function') await input.waitForRenderer();
-      return operations.resume(command.conversationId);
+      const connected = await operations.connect();
+      requireRestoredConversation(connected.connection, command.conversationId);
+      const resumed = await operations.resume(command.conversationId);
+      return { accepted: true, connection: connected.connection, snapshot: resumed.snapshot };
     },
   });
 }
@@ -144,13 +159,23 @@ export function dshDriverExpression(command) {
       );
       return ends.length > 0 ? ends[ends.length - 1] : undefined;
     };
+    const turnCount = (snapshot) =>
+      (snapshot?.events ?? []).filter(
+        (event) => event?.kind === 'turn' && event.phase === 'start',
+      ).length;
     const decorateSnapshot = (snapshot) => ({
       ...snapshot,
       messages: (snapshot?.events ?? [])
         .filter((event) => event?.kind === 'message')
         .map((event) => ({
           role: event.role,
-          content: event.text,
+          content:
+            event.role === 'assistant'
+              ? event.text
+              : (event.content ?? [])
+                  .filter((block) => block?.type === 'text')
+                  .map((block) => block.text)
+                  .join(''),
           ...(event.messageId === undefined ? {} : { id: event.messageId }),
         })),
     });
@@ -209,6 +234,77 @@ export function dshDriverExpression(command) {
         const conversationId = text(command.conversationId ?? state().conversationId, 'conversation');
         return decorateSnapshot(await sessions.getSnapshot(conversationId));
       }
+      case 'update-model': {
+        const conversationId = text(command.conversationId ?? state().conversationId, 'conversation');
+        const surface = await readSurface();
+        if (surface.scope?.conversationId !== conversationId) {
+          throw new Error('DSH model update requires the exact visible Conversation surface.');
+        }
+        const before = await sessions.getSnapshot(conversationId);
+        if (!isIdle(before)) {
+          throw new Error('DSH model update requires an idle Session.');
+        }
+        const configuration = await sessions.getComposerConfiguration(
+          surface.workbenchInstanceId,
+          surface.agentSurfaceId,
+        );
+        const matches = configuration.models.filter(
+          (item) => item.providerId === command.providerId && item.modelId === command.modelId,
+        );
+        if (matches.length === 0) {
+          return {
+            accepted: false,
+            status: 'rejected',
+            conversationId,
+            providerId: command.providerId,
+            modelId: command.modelId,
+            turnStateAtUpdate: 'idle',
+            turnCountBefore: turnCount(before),
+            turnCountAfter: turnCount(before),
+            diagnosticMessage: 'Requested DSH model is unavailable on the exact Agent surface.',
+          };
+        }
+        if (matches.length !== 1) {
+          throw new Error('Requested DSH model must resolve to exactly one Composer option.');
+        }
+        const selected = matches[0];
+        const applied = await sessions.selectComposerModel(
+          surface.workbenchInstanceId,
+          surface.agentSurfaceId,
+          selected.id,
+        );
+        const effective = applied.models.find(
+          (item) => item.id === applied.selectedModelOptionId,
+        );
+        if (
+          effective?.providerId !== command.providerId ||
+          effective.modelId !== command.modelId
+        ) {
+          throw new Error('DSH model update did not project the requested effective model.');
+        }
+        const after = await sessions.getSnapshot(conversationId);
+        return {
+          accepted: true,
+          status: 'applied',
+          conversationId,
+          providerId: command.providerId,
+          modelId: command.modelId,
+          turnStateAtUpdate: 'idle',
+          turnCountBefore: turnCount(before),
+          turnCountAfter: turnCount(after),
+          projection: {
+            request: { providerId: command.providerId, modelId: command.modelId },
+            fields: {
+              model: {
+                effectiveValue: {
+                  providerId: effective.providerId,
+                  modelId: effective.modelId,
+                },
+              },
+            },
+          },
+        };
+      }
       case 'wait-for-idle': {
         const conversationId = text(command.conversationId ?? state().conversationId, 'conversation');
         const deadline = Date.now() + (Number.isFinite(command.timeoutMs) ? command.timeoutMs : 180000);
@@ -234,7 +330,8 @@ export function dshDriverExpression(command) {
         const selected = configuration.models.find(
           (item) => item.id === configuration.selectedModelOptionId,
         );
-        return { status: 'facts', facts: { identity: command.identity, projection: decorateSnapshot(snapshot), configuration: { effective: { values: { modelBinding: selected ? { providerId: selected.providerId, modelId: selected.modelId } : undefined } } }, runtimePath: { controller: 'dsh-desktop-session-host', runtime: 'dsh-agent', transcript: 'dsh-session', metadata: 'openneko-conversation-catalog', projection: 'dsh-acp-projection' }, persistence: { checkpoint: 'observed', durability: 'dsh-session' }, disposal: { status: 'disposed' }, diagnostics: { items: snapshot.events.filter((event) => event.kind === 'diagnostic').map((event) => ({ severity: 'error', code: event.code, message: event.message })), droppedCount: 0 }, receipts: {} } };
+        if (!selected) throw new Error('DSH Desktop Session has no effective selected model.');
+        return { status: 'facts', facts: { identity: command.identity, projection: decorateSnapshot(snapshot), configuration: { effective: { values: { modelBinding: { providerId: selected.providerId, modelId: selected.modelId } } } }, runtimePath: { controller: 'dsh-desktop-session-host', runtime: 'dsh-agent', transcript: 'dsh-session', metadata: 'openneko-conversation-catalog', projection: 'dsh-acp-projection' }, persistence: { checkpoint: 'observed', durability: 'dsh-session' }, disposal: { status: 'disposed' }, diagnostics: { items: snapshot.events.filter((event) => event.kind === 'diagnostic').map((event) => ({ severity: 'error', code: event.code, message: event.message })), droppedCount: 0 }, receipts: {} } };
       }
       case 'permissions':
         return permissions.list(text(command.conversationId ?? state().conversationId, 'conversation'));
@@ -294,6 +391,12 @@ export function dshDriverExpression(command) {
         throw new Error('Unsupported DSH Desktop driver operation: ' + String(command.kind));
     }
   })(${JSON.stringify(command)})`;
+}
+
+function requireRestoredConversation(connection, conversationId) {
+  if (connection?.scope?.conversationId !== conversationId) {
+    throw new Error('Restored DSH Agent surface does not own the exact requested Conversation.');
+  }
 }
 
 function infrastructureBlocker(message) {

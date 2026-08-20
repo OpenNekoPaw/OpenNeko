@@ -52,11 +52,11 @@ describe('Agent Evaluation coverage index', () => {
   it('records DSH-owned generic behavior as excluded instead of duplicating Pi-era tests', async () => {
     const coverage = await loadCoverageIndex();
     const dshTargets = coverage.targets.filter(
-      (item) => item.kind === 'agent-runtime-capability' && item.id.startsWith('dsh-standard-'),
+      (item) => item.kind === 'agent-runtime-capability' && item.id.startsWith('dsh-'),
     );
 
     expect(dshTargets.map((item) => item.id).sort()).toEqual(
-      EXPECTED_RUNTIME_CAPABILITIES.filter((id) => id.startsWith('dsh-standard-')).sort(),
+      EXPECTED_RUNTIME_CAPABILITIES.filter((id) => id.startsWith('dsh-')).sort(),
     );
     expect(dshTargets.every((item) => item.disposition === 'excluded')).toBe(true);
     expect(dshTargets.every((item) => item.deterministicValidation.reason.includes('DSH'))).toBe(
@@ -70,6 +70,33 @@ describe('Agent Evaluation coverage index', () => {
       entry.cases.flatMap((item) =>
         item.scenario.assertions
           .filter((assertion) => assertion.kind === 'pi-runtime')
+          .map((assertion) => `${entry.suite.id}/${item.scenario.id}/${assertion.id}`),
+      ),
+    );
+    expect(retired).toEqual([]);
+  });
+
+  it('keeps retired OpenNeko queue operations out of active scenarios', async () => {
+    const suites = await discoverSuites();
+    const retired = suites.flatMap((entry) =>
+      entry.cases.flatMap((item) => [
+        ...item.scenario.steps
+          .filter((step) => step.kind === 'queue' || step.kind === 'send-queued-now')
+          .map((step) => `${entry.suite.id}/${item.scenario.id}/step/${step.id}`),
+        ...item.scenario.assertions
+          .filter((assertion) => assertion.kind === 'queue-state')
+          .map((assertion) => `${entry.suite.id}/${item.scenario.id}/assertion/${assertion.id}`),
+      ]),
+    );
+    expect(retired).toEqual([]);
+  });
+
+  it('keeps the retired OpenNeko resource-display assertion out of active scenarios', async () => {
+    const suites = await discoverSuites();
+    const retired = suites.flatMap((entry) =>
+      entry.cases.flatMap((item) =>
+        item.scenario.assertions
+          .filter((assertion) => assertion.kind === 'resource-display-projection')
           .map((assertion) => `${entry.suite.id}/${item.scenario.id}/${assertion.id}`),
       ),
     );

@@ -175,6 +175,15 @@
     },
     {
       "kind": "agent-runtime-capability",
+      "id": "dsh-active-session-inbox",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/dsh-bridge run test -- --run",
+        "reason": "The DSH bridge owns active-session inbox read/replace/remove, but Desktop exposes no public inbox product operation and DSH rc.7 cannot preserve pending inbox across owner release. Evaluation must not restore the retired OpenNeko queue or advertise a user path that does not exist."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
       "id": "desktop-session-driver",
       "disposition": "suite",
       "suiteIds": ["agent-runtime.stream-delivery"]
@@ -244,7 +253,7 @@
       "disposition": "excluded",
       "deterministicValidation": {
         "command": "pnpm --filter @neko/content test -- --run && pnpm --filter @neko/agent-runtime exec vitest run src/acp/document-host-adapter.test.ts",
-        "reason": "The retired Pi media-library document/image scenarios cannot execute against DSH. Canonical document decoding and exact Host delegation are covered deterministically until a DSH-native complete-session case is authored."
+        "reason": "The retired pre-DSH media-library document/image scenarios cannot execute against the canonical Session path. Canonical document decoding and exact Host delegation are covered deterministically until a DSH-native complete-session case is authored."
       }
     },
     {
@@ -276,12 +285,6 @@
       "id": "desktop-event-projection",
       "disposition": "suite",
       "suiteIds": ["agent-runtime.external-automation", "agent-runtime.stream-delivery"]
-    },
-    {
-      "kind": "agent-runtime-capability",
-      "id": "resource-display-projection",
-      "disposition": "suite",
-      "suiteIds": ["agent-runtime.stream-delivery"]
     }
   ]
 }

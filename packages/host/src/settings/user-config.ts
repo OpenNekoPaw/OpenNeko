@@ -6,7 +6,6 @@
  */
 
 import type { Model } from './types/provider';
-import type { MCPServerPreset } from './types/config';
 import type { ProviderDefinition, UnifiedConfig } from './config-core/index';
 import type { ProviderCredentialDeclaration } from './config-core/index';
 // Node.js config reader - direct import
@@ -27,14 +26,11 @@ export interface UserConfig {
   providers: ProviderDefinition[];
   /** Custom models */
   models: Model[];
-  /** Custom MCP servers */
-  mcpServers: MCPServerPreset[];
 }
 
 const DEFAULT_USER_CONFIG: UserConfig = {
   providers: [],
   models: [],
-  mcpServers: [],
 };
 
 // =============================================================================
@@ -52,7 +48,6 @@ function unifiedToUserConfig(unified: UnifiedConfig | null): UserConfig {
   return {
     providers: unified.providers ?? [],
     models: unified.models ?? [],
-    mcpServers: unified.mcpServers ?? [],
   };
 }
 
@@ -78,7 +73,6 @@ function userToUnifiedConfig(user: UserConfig, configPath?: string): WritableUse
       ...existing,
       providers: user.providers,
       models: user.models,
-      mcpServers: user.mcpServers,
     },
     providerCredentials: existingResult.status === 'ok' ? existingResult.providerCredentials : {},
   };
@@ -99,8 +93,6 @@ export interface IUserConfigManager {
   removeProvider(providerId: string): Promise<void>;
   addModel(model: Model): Promise<void>;
   removeModel(modelId: string): Promise<void>;
-  addMCPServer(server: MCPServerPreset): Promise<void>;
-  removeMCPServer(serverId: string): Promise<void>;
   clear(): Promise<void>;
 
   /** Load raw UnifiedConfig (includes scalar fields like temperature, maxTokens, etc.) */
@@ -229,27 +221,6 @@ export class FileUserConfigManager implements IUserConfigManager {
   async removeModel(modelId: string): Promise<void> {
     const config = this.load();
     config.models = config.models.filter((m) => m.id !== modelId);
-    await this.save(config);
-  }
-
-  // ==========================================================================
-  // MCP Server Methods
-  // ==========================================================================
-
-  async addMCPServer(server: MCPServerPreset): Promise<void> {
-    const config = this.load();
-    const existing = config.mcpServers.findIndex((s) => s.id === server.id);
-    if (existing >= 0) {
-      config.mcpServers[existing] = server;
-    } else {
-      config.mcpServers.push(server);
-    }
-    await this.save(config);
-  }
-
-  async removeMCPServer(serverId: string): Promise<void> {
-    const config = this.load();
-    config.mcpServers = config.mcpServers.filter((s) => s.id !== serverId);
     await this.save(config);
   }
 

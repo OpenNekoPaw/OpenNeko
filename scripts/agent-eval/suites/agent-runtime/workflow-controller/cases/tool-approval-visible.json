@@ -8,42 +8,34 @@
     "evidenceLevel": "visible-desktop",
     "resourceClass": "visible-ui",
     "protected": true,
-    "lifecycleChecks": [
-      "renderer-reload",
-      "composer-focus",
-      "graceful-close"
-    ]
+    "lifecycleChecks": ["renderer-reload", "composer-focus", "graceful-close"]
   },
   "evidenceContract": {
     "userBehavior": "Approve one workspace Write Tool call in the visible Desktop, observe its terminal Timeline result, reload the renderer, restore the same conversation, restore composer focus, and close gracefully.",
     "canonicalPath": [
       "Desktop Agent public bridge",
-      "Pi Conversation runtime",
+      "DSH Session runtime",
       "Tool confirmation projection",
       "Write Tool terminal result",
       "Timeline projection",
       "renderer reconnect",
-      "Pi Session restore",
+      "DSH Session restore",
       "graceful Desktop close"
     ],
     "observables": [
       {
         "ref": "visible-tool-facts",
         "kind": "runtime-fact",
-        "description": "Public Tool confirmation identity, terminal Timeline result, renderer reconnect identity, restored Pi Session snapshot, focused composer and disposal facts.",
+        "description": "Public Tool confirmation identity, terminal DSH turn result, renderer reconnect identity, restored DSH Session snapshot, focused composer and disposal facts.",
         "required": true
       }
     ],
     "expectedResult": "The visible Desktop approves exactly the projected Write call, completes it, restores the same conversation after renderer reload, focuses the composer and records disposal.",
     "expectedFailure": "A missing pending Tool identity, implicit approval, failed Write, stale reconnect, empty restore, missing focus or incomplete disposal fails visibly."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "submit",
@@ -85,7 +77,7 @@
     {
       "id": "timeline",
       "kind": "timeline-projection",
-      "terminalStatus": "completed",
+      "turnEndReason": "completed",
       "toolName": "Write",
       "evidenceRef": "visible-tool-facts"
     },
@@ -93,9 +85,13 @@
       "id": "answer",
       "kind": "final-answer",
       "mode": "contains",
-      "text": [
-        "APPROVAL_VISIBLE_OK"
-      ],
+      "text": ["APPROVAL_VISIBLE_OK"],
+      "evidenceRef": "visible-tool-facts"
+    },
+    {
+      "id": "lifecycle",
+      "kind": "desktop-lifecycle",
+      "checks": ["renderer-reload", "composer-focus", "graceful-close"],
       "evidenceRef": "visible-tool-facts"
     }
   ],

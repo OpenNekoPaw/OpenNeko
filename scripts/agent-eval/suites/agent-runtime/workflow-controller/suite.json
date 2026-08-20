@@ -39,12 +39,6 @@
   ],
   "cases": [
     {
-      "id": "queue-during-run",
-      "file": "cases/queue-during-run.json",
-      "group": "workflow",
-      "visibility": "public"
-    },
-    {
       "id": "tool-approval-visible",
       "file": "cases/tool-approval-visible.json",
       "group": "workflow",
@@ -63,12 +57,6 @@
       "visibility": "public"
     },
     {
-      "id": "cancel-resume-recovery",
-      "file": "cases/cancel-resume-recovery.json",
-      "group": "failure",
-      "visibility": "public"
-    },
-    {
       "id": "conversation-persistence-resume",
       "file": "cases/conversation-persistence-resume.json",
       "group": "regression",
@@ -84,12 +72,6 @@
       "id": "session-compact-continuation",
       "file": "cases/session-compact-continuation.json",
       "group": "workflow",
-      "visibility": "public"
-    },
-    {
-      "id": "entry-compact-session-required",
-      "file": "cases/entry-compact-session-required.json",
-      "group": "boundary",
       "visibility": "public"
     },
     {

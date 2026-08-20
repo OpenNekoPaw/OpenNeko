@@ -5,7 +5,7 @@
 import type { ToolDefinition } from './platform';
 import type { AgentTraceContext } from './agent-trace';
 import type { ConversationRunScope } from './agent-runtime-scope';
-import type { CreativeDomainMetadata } from './domain-routing';
+import type { CreativeDomainMetadata } from './creative-domain';
 import type {
   ToolQueryBeforeMutateGuidance,
   ToolSafetyKind,

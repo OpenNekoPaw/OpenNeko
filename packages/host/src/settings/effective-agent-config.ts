@@ -4,10 +4,6 @@ import { MEDIA_MODEL_TYPES, type MediaModelType, type ModelRefConfig } from '@ne
 import { stableStringify } from '@neko/shared';
 import { DEFAULT_CONFIG, DEFAULT_EXTENSION_CONFIG, type UnifiedConfig } from './config-core/index';
 import {
-  normalizeExternalResearchConfig,
-  type ExternalResearchConfig,
-} from '@neko/agent-contracts';
-import {
   EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
   type EffectiveAgentConfigurationProjection,
   type EffectiveAgentConfigurationValues,
@@ -15,7 +11,6 @@ import {
   type EffectiveAgentOutputFormat,
 } from '@neko/agent-contracts';
 import type { ConfigReadResult } from './config-reader';
-import type { MCPServerPreset } from './types/config';
 import type { Model, Provider } from './types/provider';
 import {
   buildAssistantConfigAvailabilityDiagnostic,
@@ -60,8 +55,6 @@ export interface EffectiveAgentWorkspaceConfigSnapshot {
   readonly executionMode: AssistantExecutionMode;
   readonly outputFormat: EffectiveAgentOutputFormat;
   readonly defaultMediaModels: Partial<Record<MediaModelType, string>>;
-  readonly externalResearch: ExternalResearchConfig;
-  readonly mcpServers: readonly MCPServerPreset[];
   readonly diagnostics: readonly AssistantConfigDiagnostic[];
   readonly blockingDiagnostic?: AssistantConfigDiagnostic;
   readonly sources: EffectiveAgentConfigSelectionSource;
@@ -71,7 +64,6 @@ export interface ResolveEffectiveAgentWorkspaceConfigInput {
   readonly userConfigReadResult: ConfigReadResult | null | undefined;
   readonly providers: readonly Provider[];
   readonly models: readonly Model[];
-  readonly mcpServers: readonly MCPServerPreset[];
   readonly runtimeOverrides?: EffectiveAgentRuntimeOverrides;
 }
 
@@ -118,8 +110,6 @@ export function resolveEffectiveAgentWorkspaceConfigSnapshot(
     source: runtime?.outputFormat === undefined ? 'default' : 'runtime',
   };
   const mediaDefaults = resolveMediaDefaults(userConfig, runtime);
-  const externalResearch = normalizeExternalResearchConfig(userConfig.externalResearch);
-
   const provider = providerSelection.value
     ? input.providers.find((candidate) => candidate.id === providerSelection.value)
     : undefined;
@@ -153,8 +143,6 @@ export function resolveEffectiveAgentWorkspaceConfigSnapshot(
     executionMode: executionMode.value,
     outputFormat: outputFormat.value,
     defaultMediaModels: mediaDefaults.values,
-    externalResearch,
-    mcpServers: input.mcpServers.filter((server) => server.enabled !== false),
     diagnostics,
     ...(blockingDiagnostic ? { blockingDiagnostic } : {}),
     sources: {

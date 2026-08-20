@@ -7,6 +7,7 @@ import {
   findRetiredAgentSkillToolClaims,
   readOpenNekoProfilePluginNames,
   validateCanonicalAgentRegistrationGraph,
+  validateDshExtensionManagementHostSource,
   validateSurfaceStructure,
 } from './check-agent-extension-surface.mjs';
 
@@ -17,6 +18,7 @@ const surface = JSON.parse(
 test('accepts the canonical minimal extension surface', () => {
   assert.deepEqual(validateSurfaceStructure(surface), []);
   assert.equal('pluginState' in surface, false);
+  assert.equal('skillAuthoringMetadata' in surface, false);
 });
 
 test('rejects coupling portable Skills to Host packaging or MCP', () => {
@@ -42,6 +44,19 @@ test('rejects retired Agent Skill Tool instructions in stable architecture', () 
       'adr.md: retired Agent Skill Tool protocol',
     ]);
   }
+});
+
+test('requires Extension Management to project DSH without a Host registry', () => {
+  assert.deepEqual(
+    validateDshExtensionManagementHostSource(
+      'const snapshot = await this.options.runtime.client.readExtensions();',
+    ),
+    [],
+  );
+  assert.deepEqual(validateDshExtensionManagementHostSource('const snapshot = plugin_states;'), [
+    'Extension Management host must project the canonical DSH extension snapshot',
+    'Extension Management host retains retired authority plugin_states',
+  ]);
 });
 
 test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrations', () => {

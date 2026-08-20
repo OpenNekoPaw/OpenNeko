@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  assertDesktopEvidenceSupport,
-  createDesktopEvaluationFacts,
-  requiresOpenNekoResourceObservation,
-} from './evidence.mjs';
+import { assertDesktopEvidenceSupport, createDesktopEvaluationFacts } from './evidence.mjs';
 import { evaluateHardGates } from '../runner/hard-gates.mjs';
 
 describe('Desktop Agent assertion-driven evidence', () => {
@@ -37,23 +33,6 @@ describe('Desktop Agent assertion-driven evidence', () => {
     ]);
   });
 
-  it('derives package-owned media observation from assertion semantics', () => {
-    expect(
-      requiresOpenNekoResourceObservation([
-        {
-          kind: 'resource-display-projection',
-          status: 'authorized',
-          transport: 'openneko-resource',
-        },
-      ]),
-    ).toBe(true);
-    expect(
-      requiresOpenNekoResourceObservation([
-        { kind: 'final-answer', mode: 'non-empty', evidenceRef: 'facts' },
-      ]),
-    ).toBe(false);
-  });
-
   it('accepts workflow evidence and rejects unsupported continuation ordering before launch', () => {
     expect(() =>
       assertDesktopEvidenceSupport([
@@ -65,13 +44,6 @@ describe('Desktop Agent assertion-driven evidence', () => {
             { kind: 'workflow-step', stepId: 'submit' },
             { kind: 'turn', role: 'assistant' },
           ],
-        },
-        {
-          id: 'queue',
-          kind: 'queue-state',
-          stepId: 'queue',
-          status: 'queued',
-          evidenceRef: 'facts',
         },
       ]),
     ).not.toThrow();
@@ -90,158 +62,76 @@ describe('Desktop Agent assertion-driven evidence', () => {
     ).toThrow("process-order event 'continuation' is not supported");
   });
 
-  it('proves queued, drained and ordered workflow state from public Desktop snapshots', () => {
-    const assertions = [
-      {
-        id: 'queued',
-        kind: 'queue-state',
-        stepId: 'review',
-        status: 'queued',
-        minPending: 1,
-        evidenceRef: 'facts',
-      },
-      {
-        id: 'drained',
-        kind: 'queue-state',
-        stepId: 'idle',
-        status: 'drained',
-        evidenceRef: 'facts',
-      },
-      {
-        id: 'order',
-        kind: 'process-order',
-        events: [
-          { kind: 'workflow-step', stepId: 'draft', method: 'message.submit' },
-          { kind: 'workflow-step', stepId: 'review', method: 'message.submit' },
-          { kind: 'turn', role: 'assistant' },
-        ],
-        evidenceRef: 'facts',
-      },
-    ];
-    const input = evidenceInput(assertions);
+  it('proves stream and Tool order from canonical DSH projection events', () => {
+    const assertion = {
+      id: 'order',
+      kind: 'process-order',
+      events: [
+        {
+          kind: 'timeline',
+          eventKind: 'assistant_text',
+          contentContains: 'STREAM_OPENING_MARKER',
+        },
+        { kind: 'timeline', eventKind: 'tool', toolName: 'ListDirectory', status: 'success' },
+        {
+          kind: 'timeline',
+          eventKind: 'assistant_text',
+          contentContains: 'STREAM_FINAL_MARKER',
+        },
+      ],
+      evidenceRef: 'facts',
+    };
+    const input = dshEvidenceInput([assertion]);
     input.workflow.steps = [
-      {
-        id: 'draft',
-        kind: 'submit',
-        method: 'message.submit',
-        accepted: true,
-        snapshot: workflowSnapshot({ pendingCount: 0 }),
-      },
-      {
-        id: 'review',
-        kind: 'queue',
-        method: 'message.submit',
-        accepted: true,
-        queued: true,
-        snapshot: workflowSnapshot({ pendingCount: 1 }),
-      },
       {
         id: 'idle',
         kind: 'wait-for-idle',
         method: 'session.waitForIdle',
-        snapshot: workflowSnapshot({
-          pendingCount: 0,
-          messages: [{ id: 'assistant-1', role: 'assistant', content: 'complete' }],
-        }),
+        snapshot: {
+          conversationId: input.identity.conversationId,
+          dshSessionId: input.identity.dshSessionId,
+          events: [
+            {
+              kind: 'message',
+              role: 'assistant',
+              turn: 1,
+              step: 0,
+              messageId: 'message-opening',
+              state: 'final',
+              text: 'STREAM_OPENING_MARKER',
+            },
+            dshToolEvent({
+              toolCallId: 'tool-call-1',
+              title: 'ListDirectory',
+              status: 'completed',
+              rawInput: {},
+              result: { entries: [] },
+            }),
+            {
+              kind: 'message',
+              role: 'assistant',
+              turn: 1,
+              step: 1,
+              messageId: 'message-closing',
+              state: 'final',
+              text: 'STREAM_FINAL_MARKER',
+            },
+          ],
+        },
       },
     ];
-
-    expect(run(input)).toEqual([
-      expect.objectContaining({ id: 'queued', status: 'pass' }),
-      expect.objectContaining({ id: 'drained', status: 'pass' }),
-      expect.objectContaining({ id: 'order', status: 'pass' }),
-    ]);
-
-    input.workflow.steps[1].queued = false;
-    expect(run(input)[0]).toEqual(
-      expect.objectContaining({ status: 'fail', message: expect.stringContaining('not accepted') }),
-    );
-  });
-
-  it('proves cancellation pause and exact queued-item send-now identity', () => {
-    const assertions = [
-      {
-        id: 'paused',
-        kind: 'queue-state',
-        stepId: 'cancelled-idle',
-        status: 'paused-after-cancel',
-        minPending: 2,
-        evidenceRef: 'facts',
-      },
-      {
-        id: 'send-now',
-        kind: 'queue-state',
-        stepId: 'priority-now',
-        status: 'resumed-by-send-now',
-        queueStepId: 'priority',
-        evidenceRef: 'facts',
-      },
-    ];
-    const input = evidenceInput(assertions);
-    input.workflow.steps = [
-      {
-        id: 'priority',
-        kind: 'queue',
-        method: 'message.submit',
-        accepted: true,
-        queued: true,
-        queueItemId: 'queue-priority',
-        snapshot: workflowSnapshot({ pendingCount: 2 }),
-      },
-      {
-        id: 'cancelled-idle',
-        kind: 'wait-for-idle',
-        method: 'session.waitForIdle',
-        snapshot: workflowSnapshot({ pendingCount: 2, paused: true }),
-      },
-      {
-        id: 'priority-now',
-        kind: 'send-queued-now',
-        method: 'message.queue.send-now',
-        accepted: true,
-        queueItemId: 'queue-priority',
-        queueStepId: 'priority',
-        snapshot: workflowSnapshot({ pendingCount: 1, paused: false }),
-      },
-    ];
-
-    expect(run(input)).toEqual([
-      expect.objectContaining({ id: 'paused', status: 'pass' }),
-      expect.objectContaining({ id: 'send-now', status: 'pass' }),
-    ]);
-
-    input.workflow.steps[2].queueItemId = 'queue-other';
-    expect(run(input)[1]).toEqual(
-      expect.objectContaining({ status: 'fail', message: expect.stringContaining('exact item') }),
-    );
-  });
-
-  it('proves denied resource projection without authorizing a render transport', () => {
-    const assertion = {
-      id: 'denied-resource',
-      kind: 'resource-display-projection',
-      projectionKind: 'tool-result',
-      status: 'denied',
-      locatorKind: 'workspace-file',
-      transport: 'none',
-      renderTarget: 'agent-webview',
-      diagnosticsEmpty: false,
-      evidenceRef: 'facts',
-    };
-    const input = evidenceInput([assertion]);
-    input.facts.receipts.tools.items.push({ callId: 'tool-1', name: 'Read', status: 'error' });
-    input.facts.resourceDisplayProjections.items.push({
-      conversationId: input.identity.conversationId,
-      toolCallId: 'tool-1',
-      projectionKind: 'tool-result',
-      status: 'denied',
-      locatorKind: 'workspace-file',
-      transport: 'none',
-      renderTarget: 'agent-webview',
-      diagnosticCodes: ['resource-not-authorized'],
-    });
 
     expect(run(input)[0]).toEqual(expect.objectContaining({ status: 'pass' }));
+
+    input.workflow.steps[0].snapshot.events.reverse();
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('not observed') }),
+    );
+    input.workflow.steps[0].snapshot.events.reverse();
+    input.workflow.steps[0].snapshot.events[1].toolCallId = '';
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('identity') }),
+    );
   });
 
   it('proves one exact Automation session result and transient observation receipt', () => {
@@ -258,47 +148,39 @@ describe('Desktop Agent assertion-driven evidence', () => {
       observationTransport: 'transient-receipt',
       evidenceRef: 'facts',
     };
-    const input = evidenceInput([assertion]);
-    input.facts.receipts.tools.items.push({
-      callId: 'automation-call-1',
-      name: assertion.name,
-      status: 'success',
-    });
-    input.projection.events.push({
-      kind: 'tool_call',
-      payload: {
-        toolCall: {
-          id: 'automation-call-1',
-          name: assertion.name,
-          result: {
-            success: true,
-            data: {
-              actionId: 'action-1',
-              session: {
-                sessionId: 'session-1',
-                profileId: 'browser-use.observe',
-                targetKey: 'browser-target:opaque-1',
-                targetLabel: 'OpenNeko Evaluation Browser',
-                mode: 'observe',
-                status: 'active',
-                remainingSteps: 0,
-              },
-              evidence: [
-                { kind: 'text', text: 'viewport observed' },
-                { kind: 'structured', data: { source: 'browser-use' } },
-                {
-                  kind: 'transient-image',
-                  receiptId: 'receipt-1',
-                  mimeType: 'image/png',
-                  width: 800,
-                  height: 600,
-                },
-              ],
-            },
-          },
-        },
+    const input = dshEvidenceInput([assertion]);
+    const result = {
+      actionId: 'action-1',
+      session: {
+        sessionId: 'session-1',
+        profileId: 'browser-use.observe',
+        targetKey: 'browser-target:opaque-1',
+        targetLabel: 'OpenNeko Evaluation Browser',
+        mode: 'observe',
+        status: 'active',
+        remainingSteps: 0,
       },
-    });
+      evidence: [
+        { kind: 'text', text: 'viewport observed' },
+        { kind: 'structured', data: { source: 'browser-use' } },
+        {
+          kind: 'transient-image',
+          receiptId: 'receipt-1',
+          mimeType: 'image/png',
+          width: 800,
+          height: 600,
+        },
+      ],
+    };
+    input.projection.events.push(
+      dshToolEvent({
+        toolCallId: 'automation-call-1',
+        title: assertion.name,
+        status: 'completed',
+        rawInput: { full_page: false },
+        result,
+      }),
+    );
 
     expect(run(input)[0]).toEqual(
       expect.objectContaining({
@@ -311,7 +193,14 @@ describe('Desktop Agent assertion-driven evidence', () => {
       }),
     );
 
-    input.projection.events[0].payload.toolCall.result.data.session.processId = 42;
+    result.session.processId = 42;
+    input.projection.events[0] = dshToolEvent({
+      toolCallId: 'automation-call-1',
+      title: assertion.name,
+      status: 'completed',
+      rawInput: { full_page: false },
+      result,
+    });
     expect(run(input)[0]).toEqual(
       expect.objectContaining({
         status: 'fail',
@@ -320,19 +209,96 @@ describe('Desktop Agent assertion-driven evidence', () => {
     );
   });
 
-  it('requires a real resumed Pi Session snapshot for persistence evidence', () => {
+  it('proves Tool results only from canonical DSH Tool events', () => {
     const assertion = {
-      id: 'persistence',
-      kind: 'conversation-persistence',
-      authority: 'pi-session',
-      catalog: 'sqlite',
-      databaseScope: 'user-global',
-      resumeStatus: 'restored',
-      recordSource: 'pi-session',
-      minRestoredMessages: 2,
+      id: 'tool',
+      kind: 'tool-call',
+      name: 'openneko.canvas',
+      status: 'success',
+      expectedArguments: { operation: 'query' },
+      resultIncludes: { documentPath: 'boards/story.nkc' },
+      evidenceRef: 'facts',
+    };
+    const input = dshEvidenceInput([assertion]);
+    input.projection.events.push(
+      dshToolEvent({
+        toolCallId: 'tool-call-1',
+        title: assertion.name,
+        status: 'completed',
+        rawInput: { operation: 'query', input: { documentPath: 'boards/story.nkc' } },
+        result: { documentPath: 'boards/story.nkc', nodeCount: 2 },
+      }),
+    );
+
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({
+        status: 'pass',
+        details: {
+          toolCallId: 'tool-call-1',
+          turn: 1,
+          name: 'openneko.canvas',
+          status: 'success',
+        },
+      }),
+    );
+
+    input.projection.events[0].toolCallId = '';
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('identity') }),
+    );
+  });
+
+  it('rejects retired Pi Tool projection as a successful Tool assertion path', () => {
+    const assertion = {
+      id: 'tool',
+      kind: 'tool-call',
+      name: 'Read',
+      status: 'success',
       evidenceRef: 'facts',
     };
     const input = evidenceInput([assertion]);
+    input.facts.runtimePath = {
+      controller: 'sender-bound-desktop-agent-controller',
+      runtime: 'pi-conversation-runtime',
+      transcript: 'pi-session',
+      metadata: 'sqlite',
+      projection: 'conversation-projection-store',
+    };
+    input.facts.identity = {
+      conversationId: input.identity.conversationId,
+      turnId: 'turn-1',
+      runId: 'run-1',
+      piSessionId: 'pi-session-1',
+    };
+    input.projection.events.push({
+      kind: 'tool_call',
+      payload: {
+        toolCall: { id: 'pi-call-1', name: 'Read', result: { success: true, data: {} } },
+      },
+    });
+    input.facts.receipts.tools.items.push({ callId: 'pi-call-1', name: 'Read', status: 'success' });
+
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({
+        status: 'fail',
+        message: expect.stringContaining('canonical DSH runtime path'),
+      }),
+    );
+  });
+
+  it('requires a real resumed DSH Session snapshot for persistence evidence', () => {
+    const assertion = {
+      id: 'persistence',
+      kind: 'conversation-persistence',
+      authority: 'dsh-session',
+      catalog: 'openneko-conversation-catalog',
+      databaseScope: 'user-global',
+      resumeStatus: 'restored',
+      recordSource: 'dsh-session',
+      minRestoredMessages: 2,
+      evidenceRef: 'facts',
+    };
+    const input = dshEvidenceInput([assertion]);
     input.workflow.receipts.resume = {
       accepted: true,
       snapshot: {
@@ -353,6 +319,45 @@ describe('Desktop Agent assertion-driven evidence', () => {
     input.workflow.receipts.resume.snapshot.messages.length = 1;
     expect(run(input)[0]).toEqual(
       expect.objectContaining({ status: 'fail', message: expect.stringContaining('at least 2') }),
+    );
+  });
+
+  it('proves Timeline state from the exact DSH Session turn and Tool identity', () => {
+    const assertion = {
+      id: 'timeline',
+      kind: 'timeline-projection',
+      turnEndReason: 'completed',
+      toolName: 'ListDirectory',
+      evidenceRef: 'facts',
+    };
+    const input = dshTimelineInput(assertion);
+
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({
+        status: 'pass',
+        details: {
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          turn: 1,
+          turnEndReason: 'completed',
+          toolCallIds: ['tool-call-1'],
+        },
+      }),
+    );
+
+    input.projection.dshSessionId = 'dsh-session-stale';
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('identity') }),
+    );
+    input.projection.dshSessionId = 'dsh-session-1';
+    input.projection.events.at(-1).reason = 'error';
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('end reason') }),
+    );
+    input.projection.events.at(-1).reason = 'completed';
+    input.projection.events[1].turn = 2;
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('missing Tool') }),
     );
   });
 
@@ -416,15 +421,14 @@ describe('Desktop Agent assertion-driven evidence', () => {
       },
     };
     const firstFacts = structuredClone(input.facts);
-    firstFacts.identity.turnId = 'turn-a';
-    firstFacts.identity.runId = 'run-a';
+    firstFacts.identity.turn = 1;
     firstFacts.configuration.effective.values.modelBinding = {
       providerId: 'provider-1',
       modelId: 'model-a',
     };
     input.workflow.receipts = {
       'first-idle': {
-        identity: { conversationId: 'conversation-1', turnId: 'turn-a', runId: 'run-a' },
+        identity: { conversationId: 'conversation-1', dshSessionId: 'dsh-session-1', turn: 1 },
         facts: firstFacts,
       },
       'second-idle': { identity: input.identity, facts: structuredClone(input.facts) },
@@ -438,7 +442,18 @@ describe('Desktop Agent assertion-driven evidence', () => {
 
     expect(run(input)).toEqual([
       expect.objectContaining({ id: 'binding', status: 'pass' }),
-      expect.objectContaining({ id: 'models', status: 'pass' }),
+      expect.objectContaining({
+        id: 'models',
+        status: 'pass',
+        details: expect.objectContaining({
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          turns: [
+            expect.objectContaining({ turn: 1, modelId: 'model-a' }),
+            expect.objectContaining({ turn: 2, modelId: 'model-1' }),
+          ],
+        }),
+      }),
       expect.objectContaining({ id: 'compact', status: 'pass' }),
     ]);
 
@@ -447,31 +462,23 @@ describe('Desktop Agent assertion-driven evidence', () => {
       expect.objectContaining({ status: 'fail', message: expect.stringContaining('binding') }),
     );
     input.interaction.final.draftId = 'draft-1';
-    input.workflow.receipts['first-idle'].identity.turnId = 'turn-1';
-    input.workflow.receipts['first-idle'].facts.identity.turnId = 'turn-1';
+    input.workflow.receipts['first-idle'].identity.dshSessionId = 'dsh-session-stale';
+    expect(run(input)[1]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('stale') }),
+    );
+    input.workflow.receipts['first-idle'].identity.dshSessionId = 'dsh-session-1';
+    input.workflow.receipts['first-idle'].identity.turn = 2;
+    input.workflow.receipts['first-idle'].facts.identity.turn = 2;
     expect(run(input)[1]).toEqual(
       expect.objectContaining({
         status: 'fail',
-        message: expect.stringContaining('distinct Turn identities'),
+        message: expect.stringContaining('distinct DSH turn identities'),
       }),
     );
   });
 
-  it('proves Draft rejection has no Session side effect and configuration updates create no Turn', () => {
+  it('proves configuration updates create no Turn', () => {
     const assertions = [
-      {
-        id: 'entry-compact',
-        kind: 'draft-rejection',
-        stepId: 'compact-draft',
-        catalogRef: 'initial',
-        initialBindingKind: 'unbound',
-        currentBindingKind: 'unbound',
-        surfaceBindingKind: 'unbound',
-        conversationCreated: false,
-        messageIncludes: 'committed conversation session',
-        availabilityCode: 'session-required',
-        evidenceRef: 'facts',
-      },
       {
         id: 'model-update',
         kind: 'configuration-update',
@@ -479,34 +486,22 @@ describe('Desktop Agent assertion-driven evidence', () => {
         providerId: 'provider-1',
         modelId: 'model-1',
         status: 'applied',
-        turnState: 'running',
+        turnState: 'idle',
         turnCreated: false,
         evidenceRef: 'facts',
       },
     ];
     const input = evidenceInput(assertions);
     input.workflow.receipts = {
-      'compact-draft': {
-        accepted: false,
-        status: 'rejected',
-        catalogRef: 'initial',
-        diagnosticMessage: "Agent route 'compact' requires a committed conversation session.",
-        initialBindingKind: 'unbound',
-        currentBindingKind: 'unbound',
-        conversationCreated: false,
-        surfaceBefore: { phase: 'draft', bindingKind: 'unbound', draftId: 'draft-1' },
-        surfaceAfter: { phase: 'draft', bindingKind: 'unbound', draftId: 'draft-1' },
-        availability: { diagnostic: { code: 'session-required' } },
-      },
       'configure-next': {
         accepted: true,
         status: 'applied',
         conversationId: 'conversation-1',
         providerId: 'provider-1',
         modelId: 'model-1',
-        turnStateAtUpdate: 'running',
-        submissionCountBefore: 1,
-        submissionCountAfter: 1,
+        turnStateAtUpdate: 'idle',
+        turnCountBefore: 1,
+        turnCountAfter: 1,
         projection: {
           request: { providerId: 'provider-1', modelId: 'model-1' },
           fields: {
@@ -520,28 +515,47 @@ describe('Desktop Agent assertion-driven evidence', () => {
 
     expect(run(input)).toEqual([
       expect.objectContaining({
-        id: 'entry-compact',
-        status: 'pass',
-        details: expect.objectContaining({ conversationCreated: false }),
-      }),
-      expect.objectContaining({
         id: 'model-update',
         status: 'pass',
         details: expect.objectContaining({ turnCreated: false }),
       }),
     ]);
 
-    input.workflow.receipts['compact-draft'].surfaceAfter.conversationId = 'conversation-2';
+    input.workflow.receipts['configure-next'].turnCountAfter = 2;
     expect(run(input)[0]).toEqual(
-      expect.objectContaining({ status: 'fail', message: expect.stringContaining('rejection') }),
-    );
-    delete input.workflow.receipts['compact-draft'].surfaceAfter.conversationId;
-    input.workflow.receipts['configure-next'].submissionCountAfter = 2;
-    expect(run(input)[1]).toEqual(
       expect.objectContaining({
         status: 'fail',
         message: expect.stringContaining('configuration update evidence'),
       }),
+    );
+  });
+
+  it('proves exact renderer reload, composer focus, and graceful close lifecycle evidence', () => {
+    const assertion = {
+      id: 'lifecycle',
+      kind: 'desktop-lifecycle',
+      checks: ['renderer-reload', 'composer-focus', 'graceful-close'],
+      evidenceRef: 'facts',
+    };
+    const input = evidenceInput([assertion]);
+    input.lifecycle = {
+      rendererReload: {
+        status: 'restored',
+        connection: { scope: { conversationId: input.identity.conversationId } },
+      },
+      composerFocus: { status: 'focused' },
+      gracefulClose: { status: 'disposed' },
+    };
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({
+        status: 'pass',
+        details: { checks: assertion.checks },
+      }),
+    );
+
+    input.lifecycle.rendererReload.connection.scope.conversationId = 'conversation-stale';
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('exact') }),
     );
   });
 });
@@ -554,6 +568,7 @@ function run(input) {
     projection: input.projection,
     snapshot: input.snapshot,
     interaction: input.interaction,
+    lifecycle: input.lifecycle,
   });
   return evaluateHardGates(input.executionCase.assertions, facts, {
     executionCase: input.executionCase,
@@ -562,7 +577,7 @@ function run(input) {
 }
 
 function evidenceInput(assertions) {
-  const identity = { conversationId: 'conversation-1', turnId: 'turn-1', runId: 'run-1' };
+  const identity = { conversationId: 'conversation-1', dshSessionId: 'dsh-session-1', turn: 2 };
   const bounded = (items = []) => ({ limit: 100, items, droppedCount: 0 });
   return {
     executionCase: {
@@ -590,15 +605,13 @@ function evidenceInput(assertions) {
           viewId: 'view-1',
           projectId: 'project-1',
         },
-        branchId: 'branch-1',
-        piSessionId: 'pi-session-1',
       },
       runtimePath: {
-        controller: 'sender-bound-desktop-agent-controller',
-        runtime: 'pi-conversation-runtime',
-        transcript: 'pi-session',
-        metadata: 'sqlite',
-        projection: 'conversation-projection-store',
+        controller: 'dsh-desktop-session-host',
+        runtime: 'dsh-agent',
+        transcript: 'dsh-session',
+        metadata: 'openneko-conversation-catalog',
+        projection: 'dsh-acp-projection',
       },
       configuration: {
         effective: {
@@ -611,27 +624,73 @@ function evidenceInput(assertions) {
         tools: bounded(),
         permissions: bounded(),
       },
-      projection: { terminalState: 'completed' },
-      resourceDisplayProjections: bounded(),
-      persistence: { durability: 'durable', checkpoint: 'observed' },
+      projection: {
+        conversationId: identity.conversationId,
+        dshSessionId: identity.dshSessionId,
+      },
+      persistence: { durability: 'dsh-session', checkpoint: 'observed' },
       diagnostics: bounded(),
       disposal: { status: 'disposed' },
     },
   };
 }
 
+function dshTimelineInput(assertion) {
+  const input = dshEvidenceInput([assertion]);
+  input.projection.events.push(
+    { kind: 'turn', turn: 1, phase: 'start', startedAt: 1 },
+    {
+      kind: 'tool',
+      turn: 1,
+      toolCallId: 'tool-call-1',
+      status: 'completed',
+      title: 'ListDirectory',
+    },
+    {
+      kind: 'turn',
+      turn: 1,
+      phase: 'end',
+      startedAt: 1,
+      completedAt: 2,
+      reason: 'completed',
+    },
+  );
+  return input;
+}
+
+function dshEvidenceInput(assertions) {
+  const input = evidenceInput(assertions);
+  const identity = { conversationId: 'conversation-1', dshSessionId: 'dsh-session-1', turn: 1 };
+  input.identity = identity;
+  input.workflow.terminalIdle.identity = identity;
+  input.facts.identity = identity;
+  input.facts.projection = {
+    conversationId: identity.conversationId,
+    dshSessionId: identity.dshSessionId,
+  };
+  input.projection = {
+    conversationId: identity.conversationId,
+    dshSessionId: identity.dshSessionId,
+    events: [],
+  };
+  return input;
+}
+
+function dshToolEvent({ toolCallId, title, status, rawInput, result }) {
+  return {
+    kind: 'tool',
+    turn: 1,
+    toolCallId,
+    status,
+    title,
+    rawInput,
+    rawOutput: [{ type: 'text', text: JSON.stringify(result) }],
+  };
+}
+
 function workflowSnapshot(options = {}) {
   return {
     conversationId: 'conversation-1',
-    messages: options.messages ?? [],
-    messageQueue: {
-      conversationId: 'conversation-1',
-      pendingCount: options.pendingCount ?? 0,
-      sequence: 1,
-      paused: options.paused ?? false,
-      items: options.items ?? [],
-    },
-    queued: (options.pendingCount ?? 0) > 0,
-    projectionEvents: [],
+    events: options.events ?? [],
   };
 }

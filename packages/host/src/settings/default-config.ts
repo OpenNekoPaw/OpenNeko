@@ -210,5 +210,4 @@ export const DEFAULT_USER_CONFIG: UnifiedConfig = {
   temperature: 0.7,
   providers: DEFAULT_PROVIDERS,
   models: DEFAULT_MODELS,
-  mcpServers: [],
 };

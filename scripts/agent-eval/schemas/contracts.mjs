@@ -290,17 +290,6 @@ const SUITE_INDEX_SCHEMA = s.object({
 });
 
 const STEP_SCHEMA = s.union([
-  s.object({ id: ID, kind: s.literal('draft-bind'), target: s.literal('assistant') }),
-  s.object({
-    id: ID,
-    kind: s.literal('draft-submit'),
-    catalogRef: ID,
-    input: s.union([
-      s.object({ kind: s.literal('message'), text: TEXT }),
-      s.object({ kind: s.enum(['command', 'skill']), name: ID }, { args: SHORT_TEXT }),
-    ]),
-    expectedStatus: s.literal('rejected'),
-  }),
   s.object(
     { id: ID, kind: s.literal('submit'), prompt: TEXT },
     {
@@ -309,11 +298,6 @@ const STEP_SCHEMA = s.union([
       modelProfileId: ID,
     },
   ),
-  s.object(
-    { id: ID, kind: s.literal('queue'), prompt: TEXT, afterStepId: ID },
-    { modelProfileId: ID },
-  ),
-  s.object({ id: ID, kind: s.literal('send-queued-now'), queueStepId: ID }),
   s.object({ id: ID, kind: s.literal('wait-for-idle'), timeoutMs: s.integer({ min: 1 }) }),
   s.object({ id: ID, kind: s.literal('cancel'), afterStepId: ID }),
   s.object({
@@ -334,10 +318,10 @@ const STEP_SCHEMA = s.union([
       providerId: ID,
       modelId: EXTERNAL_ID,
       expectedStatus: s.enum(['applied', 'rejected']),
-      turnState: s.enum(['running', 'idle']),
+      turnState: s.literal('idle'),
       timeoutMs: s.integer({ min: 1, max: 600_000 }),
     },
-    { modelProfileId: ID, afterStepId: ID },
+    { modelProfileId: ID },
   ),
   s.object(
     {
@@ -370,11 +354,8 @@ const PROCESS_EVENT_SELECTOR_SCHEMA = s.union([
     { kind: s.literal('workflow-step'), stepId: ID },
     {
       method: s.enum([
-        'draft.binding.update',
-        'draft.input.submit',
         'message.submit',
         'message.cancel',
-        'message.queue.send-now',
         'tool.confirm',
         'session.waitForIdle',
         'session.resume',
@@ -395,23 +376,15 @@ const PROCESS_EVENT_SELECTOR_SCHEMA = s.union([
   s.object({ kind: s.literal('tool'), name: EXTERNAL_ID }, { status: ID }),
   s.object({ kind: s.literal('continuation'), source: ID }, { status: ID }),
 ]);
+const DESKTOP_LIFECYCLE_CHECK_SCHEMA = s.enum([
+  'renderer-reload',
+  'composer-focus',
+  'graceful-close',
+]);
 const ASSERTION_SCHEMA = s.union([
   s.object({ ...ASSERTION_COMMON, kind: s.literal('runtime-errors-empty') }),
   s.object({ ...ASSERTION_COMMON, kind: s.literal('fully-idle') }),
   s.object({ ...ASSERTION_COMMON, kind: s.literal('canonical-turn') }),
-  s.object(
-    {
-      ...ASSERTION_COMMON,
-      kind: s.literal('pi-runtime'),
-      implementation: s.literal('pi-agent-core'),
-      transcriptAuthority: s.literal('pi-session'),
-      productMetadataAuthority: s.literal('sqlite'),
-      purpose: s.literal('agent.main'),
-      workspaceLocatorKind: s.literal('virtual'),
-      turnDurability: s.enum(['durable', 'persistence-delayed']),
-    },
-    { modelProfileId: ID },
-  ),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -478,26 +451,12 @@ const ASSERTION_SCHEMA = s.union([
   s.object(
     {
       ...ASSERTION_COMMON,
-      kind: s.literal('draft-rejection'),
-      stepId: ID,
-      catalogRef: ID,
-      initialBindingKind: s.enum(['unbound', 'assistant', 'workspace']),
-      currentBindingKind: s.enum(['unbound', 'assistant', 'workspace']),
-      surfaceBindingKind: s.enum(['unbound', 'assistant', 'workspace']),
-      conversationCreated: s.literal(false),
-      messageIncludes: SHORT_TEXT,
-    },
-    { availabilityCode: ID },
-  ),
-  s.object(
-    {
-      ...ASSERTION_COMMON,
       kind: s.literal('configuration-update'),
       stepId: ID,
       providerId: ID,
       modelId: EXTERNAL_ID,
       status: s.enum(['applied', 'rejected']),
-      turnState: s.enum(['running', 'idle']),
+      turnState: s.literal('idle'),
       turnCreated: s.literal(false),
     },
     { modelProfileId: ID },
@@ -545,24 +504,6 @@ const ASSERTION_SCHEMA = s.union([
     kind: s.literal('process-order'),
     events: s.array(PROCESS_EVENT_SELECTOR_SCHEMA, { minLength: 2, maxLength: 100 }),
   }),
-  s.union([
-    s.object(
-      {
-        ...ASSERTION_COMMON,
-        kind: s.literal('queue-state'),
-        stepId: ID,
-        status: s.enum(['queued', 'drained', 'paused-after-cancel']),
-      },
-      { minPending: s.integer({ min: 0 }) },
-    ),
-    s.object({
-      ...ASSERTION_COMMON,
-      kind: s.literal('queue-state'),
-      stepId: ID,
-      status: s.literal('resumed-by-send-now'),
-      queueStepId: ID,
-    }),
-  ]),
   s.object({
     ...ASSERTION_COMMON,
     kind: s.literal('cancellation'),
@@ -579,11 +520,11 @@ const ASSERTION_SCHEMA = s.union([
   s.object({
     ...ASSERTION_COMMON,
     kind: s.literal('conversation-persistence'),
-    authority: s.literal('pi-session'),
-    catalog: s.literal('sqlite'),
+    authority: s.literal('dsh-session'),
+    catalog: s.literal('openneko-conversation-catalog'),
     databaseScope: s.literal('user-global'),
     resumeStatus: s.literal('restored'),
-    recordSource: s.literal('pi-session'),
+    recordSource: s.literal('dsh-session'),
     minRestoredMessages: s.integer({ min: 1 }),
   }),
   s.object({
@@ -594,30 +535,26 @@ const ASSERTION_SCHEMA = s.union([
       maxLength: 2,
     }),
   }),
+  s.object({
+    ...ASSERTION_COMMON,
+    kind: s.literal('desktop-lifecycle'),
+    checks: s.array(DESKTOP_LIFECYCLE_CHECK_SCHEMA, { minLength: 1, maxLength: 3 }),
+  }),
   s.object(
     {
       ...ASSERTION_COMMON,
       kind: s.literal('timeline-projection'),
-      terminalStatus: s.enum(['completed', 'cancelled', 'failed']),
+      turnEndReason: s.enum([
+        'completed',
+        'aborted',
+        'blocked',
+        'error',
+        'max-tokens',
+        'interrupted',
+      ]),
     },
     { toolName: EXTERNAL_ID },
   ),
-  s.object({
-    ...ASSERTION_COMMON,
-    kind: s.literal('resource-display-projection'),
-    projectionKind: s.enum(['attachment', 'tool-result', 'perception', 'timeline', 'artifact']),
-    status: s.enum(['authorized', 'denied']),
-    locatorKind: s.enum([
-      'workspace-file',
-      'document-entry',
-      'generated-output',
-      'package-resource',
-      'content-representation',
-    ]),
-    transport: s.enum(['openneko-resource', 'none']),
-    renderTarget: s.literal('agent-webview'),
-    diagnosticsEmpty: s.boolean(),
-  }),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -777,7 +714,7 @@ const DESKTOP_EXECUTION_SCHEMA = s.object(
     protected: s.boolean(),
   },
   {
-    lifecycleChecks: s.array(s.enum(['renderer-reload', 'composer-focus', 'graceful-close']), {
+    lifecycleChecks: s.array(DESKTOP_LIFECYCLE_CHECK_SCHEMA, {
       minLength: 1,
       maxLength: 3,
     }),
@@ -1076,11 +1013,7 @@ const FAILURE_ATTRIBUTION_SCHEMA = s.object({
 
 const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
   stepKinds: new Set([
-    'draft-bind',
-    'draft-submit',
     'submit',
-    'queue',
-    'send-queued-now',
     'wait-for-idle',
     'cancel',
     'confirm',
@@ -1095,7 +1028,6 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'runtime-errors-empty',
     'fully-idle',
     'canonical-turn',
-    'pi-runtime',
     'final-answer',
     'skill',
     'prompt-composition',
@@ -1103,19 +1035,17 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'model-sequence',
     'interaction-binding',
     'input-invocation',
-    'draft-rejection',
     'configuration-update',
     'tool-call',
     'automation-tool-result',
     'todo-projection',
     'process-order',
-    'queue-state',
     'cancellation',
     'recovery',
     'conversation-persistence',
     'terminal-idle',
+    'desktop-lifecycle',
     'timeline-projection',
-    'resource-display-projection',
     'structured-output',
     'markdown-path',
     'artifact',
@@ -1217,6 +1147,7 @@ export function validateScenario(input) {
     'scenario.artifactChecks ids',
   );
   validateWorkflowSteps(input.steps);
+  validateDesktopLifecycle(input);
   const evidenceRefs = new Set(input.evidenceContract.observables.map((item) => item.ref));
   for (const item of [...input.assertions, ...input.artifactChecks]) {
     if (!evidenceRefs.has(item.evidenceRef)) {
@@ -1237,6 +1168,28 @@ export function validateScenario(input) {
     throw new Error('scenario holdout group and visibility must agree');
   }
   return input;
+}
+
+function validateDesktopLifecycle(input) {
+  const requested = input.execution?.lifecycleChecks ?? [];
+  const assertions = input.assertions.filter((item) => item.kind === 'desktop-lifecycle');
+  assertUnique(requested, 'scenario.execution.lifecycleChecks');
+  if (requested.length === 0) {
+    if (assertions.length > 0) {
+      throw new Error('desktop-lifecycle assertion requires execution.lifecycleChecks');
+    }
+    return;
+  }
+  if (assertions.length !== 1) {
+    throw new Error('execution.lifecycleChecks requires exactly one desktop-lifecycle assertion');
+  }
+  const assertion = assertions[0];
+  assertUnique(assertion.checks, `${assertion.id} lifecycle checks`);
+  const expected = [...requested].sort();
+  const observed = [...assertion.checks].sort();
+  if (JSON.stringify(expected) !== JSON.stringify(observed)) {
+    throw new Error('desktop-lifecycle assertion checks must match execution.lifecycleChecks');
+  }
 }
 
 export function validateRubricDefinition(input) {
@@ -1282,7 +1235,6 @@ function validateWorkflowSteps(steps) {
   const prior = new Map();
   let state = 'idle';
   let hasSessionTurn = false;
-  const draftCatalogRefs = new Set(['initial']);
   let previous;
   for (const step of steps) {
     if ('afterStepId' in step) {
@@ -1290,68 +1242,28 @@ function validateWorkflowSteps(steps) {
       if (!referenced) {
         throw new Error(`${step.kind} ${step.id} afterStepId must reference an earlier step`);
       }
-      if (step.kind === 'queue' && !['submit', 'queue'].includes(referenced.kind)) {
-        throw new Error(`queue ${step.id} must reference a submit or queue step`);
-      }
-      if (step.kind === 'cancel' && !['submit', 'queue', 'feedback'].includes(referenced.kind)) {
+      if (step.kind === 'cancel' && !['submit', 'feedback'].includes(referenced.kind)) {
         throw new Error(`cancel ${step.id} must reference an active message submission step`);
       }
       if (step.kind === 'feedback' && referenced.kind !== 'wait-for-idle') {
         throw new Error(`feedback ${step.id} must reference a wait-for-idle step`);
       }
-      if (
-        step.kind === 'update-configuration' &&
-        (step.turnState !== 'running' || !['submit', 'queue', 'feedback'].includes(referenced.kind))
-      ) {
-        throw new Error(
-          `update-configuration ${step.id} running state must reference an active submission`,
-        );
-      }
       if (step.afterStepId !== previous?.id) {
         throw new Error(`${step.kind} ${step.id} afterStepId must reference the previous step`);
-      }
-    }
-    if (step.kind === 'send-queued-now') {
-      const queued = prior.get(step.queueStepId);
-      if (queued?.kind !== 'queue') {
-        throw new Error(
-          `send-queued-now ${step.id} queueStepId must reference an earlier queue step`,
-        );
       }
     }
     if (step.kind === 'feedback' && !step.prompt.includes('${lastAssistant}')) {
       throw new Error(`feedback ${step.id} prompt must include \${lastAssistant}`);
     }
-    if (step.kind === 'draft-bind') {
-      if (state !== 'idle' || hasSessionTurn) {
-        throw new Error(`draft-bind ${step.id} requires the initial Draft state`);
-      }
-      draftCatalogRefs.add(step.id);
-    } else if (step.kind === 'draft-submit') {
-      if (state !== 'idle' || hasSessionTurn) {
-        throw new Error(`draft-submit ${step.id} requires the initial Draft state`);
-      }
-      if (!draftCatalogRefs.has(step.catalogRef)) {
-        throw new Error(
-          `draft-submit ${step.id} references unknown Draft catalog ${step.catalogRef}`,
-        );
-      }
-    } else if (step.kind === 'submit') {
+    if (step.kind === 'submit') {
       if (state !== 'idle') {
-        throw new Error(`submit ${step.id} requires idle state; use queue while a turn is active`);
+        throw new Error(`submit ${step.id} requires idle state`);
       }
       state = 'active';
       hasSessionTurn = true;
-    } else if (step.kind === 'queue') {
-      if (state !== 'active') throw new Error(`queue ${step.id} requires an active turn`);
     } else if (step.kind === 'cancel') {
       if (state !== 'active') throw new Error(`cancel ${step.id} requires an active turn`);
       state = 'cancelling';
-    } else if (step.kind === 'send-queued-now') {
-      if (state !== 'idle') {
-        throw new Error(`send-queued-now ${step.id} requires a cancelled idle state`);
-      }
-      state = 'active';
     } else if (step.kind === 'wait-for-idle') {
       state = 'idle';
     } else if (step.kind === 'feedback') {
@@ -1367,17 +1279,8 @@ function validateWorkflowSteps(steps) {
       if (!hasSessionTurn) {
         throw new Error(`update-configuration ${step.id} requires an established Session`);
       }
-      if (step.turnState === 'running' && state !== 'active') {
-        throw new Error(`update-configuration ${step.id} requires an active Turn`);
-      }
-      if (step.turnState === 'idle' && state !== 'idle') {
+      if (state !== 'idle') {
         throw new Error(`update-configuration ${step.id} requires idle state`);
-      }
-      if (step.turnState === 'running' && step.afterStepId === undefined) {
-        throw new Error(`update-configuration ${step.id} requires an active submission reference`);
-      }
-      if (step.turnState === 'idle' && step.afterStepId !== undefined) {
-        throw new Error(`update-configuration ${step.id} idle state cannot reference a submission`);
       }
     } else if (step.kind === 'invoke-input') {
       if (!hasSessionTurn) {

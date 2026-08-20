@@ -255,9 +255,4 @@ export interface IUnifiedConfigManager {
    * Get model by ID
    */
   getModel(id: string): import('@neko/ai-contracts').ModelConfig | undefined;
-
-  /**
-   * Get MCP server by ID
-   */
-  getMCPServer(id: string): import('@neko/agent-contracts').MCPServerConfig | undefined;
 }

@@ -8,31 +8,27 @@
     "userBehavior": "Cancel an active long Markdown stream and return the session to terminal idle.",
     "canonicalPath": [
       "message.submit",
-      "Pi Agent event stream",
-      "shared Pi Timeline projector",
+      "DSH ACP event stream",
+      "DSH Session event projection",
       "conversation projection store",
       "message.cancel",
-      "cancelled terminal projection",
+      "aborted turn-end projection",
       "session.waitForIdle"
     ],
     "observables": [
       {
         "ref": "cancel-facts",
         "kind": "runtime-fact",
-        "description": "Exact cancellation and Timeline owner identity, one cancelled terminal patch, zero accepted post-terminal patches, runtime diagnostics, and terminal idle facts.",
+        "description": "Exact cancellation, DSH Session, and turn identity, one aborted turn-end event, runtime diagnostics, and terminal idle facts.",
         "required": true
       }
     ],
     "expectedResult": "The active stream cancellation is accepted and all runtime concerns become terminal idle.",
     "expectedFailure": "Rejected cancellation, remaining work, or runtime errors fail."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "stream",
@@ -59,7 +55,7 @@
     {
       "id": "projection",
       "kind": "timeline-projection",
-      "terminalStatus": "cancelled",
+      "turnEndReason": "aborted",
       "evidenceRef": "cancel-facts"
     },
     {
@@ -72,10 +68,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "cancel-facts"
     }
   ],

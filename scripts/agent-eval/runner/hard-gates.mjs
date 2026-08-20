@@ -1,7 +1,5 @@
 import { evaluateStructuredOutput } from './structured-output.mjs';
 import { isDesktopEvaluationFacts, runDesktopHardGate } from '../desktop/evidence.mjs';
-import { assertOrderedWorkflowEvents, assertWorkflowQueueState } from './workflow-evidence.mjs';
-import { assertAutomationToolResult } from './automation-tool-evidence.mjs';
 
 const EVALUATION_OUTCOMES = Object.freeze({
   pass: 'pass',
@@ -65,24 +63,14 @@ function runGate(assertion, facts, context) {
       return assertFinalAnswer(assertion, facts);
     case 'canonical-turn':
       return assertCanonicalTurn(facts);
-    case 'pi-runtime':
-      return assertPiRuntime(assertion, facts, context);
     case 'skill':
       return assertSkill(assertion, facts);
     case 'prompt-composition':
       return assertPromptComposition(assertion, facts);
     case 'model':
       return assertModel(assertion, facts, context);
-    case 'tool-call':
-      return assertToolCall(assertion, facts);
-    case 'automation-tool-result':
-      return assertNeutralAutomationToolResult(assertion, facts);
     case 'todo-projection':
       return assertTodoProjection(assertion, facts);
-    case 'process-order':
-      return assertProcessOrder(assertion, facts);
-    case 'queue-state':
-      return assertQueueState(assertion, facts);
     case 'cancellation':
       return assertCancellation(assertion, facts);
     case 'recovery':
@@ -91,10 +79,6 @@ function runGate(assertion, facts, context) {
       return assertConversationPersistence(assertion, facts);
     case 'terminal-idle':
       return assertTerminalIdle(assertion, facts);
-    case 'timeline-projection':
-      return assertTimelineProjection(assertion, facts);
-    case 'resource-display-projection':
-      return assertResourceDisplayProjection(assertion, facts);
     case 'structured-output':
       return evaluateStructuredOutput(assertion, facts, context);
     case 'markdown-path':
@@ -213,118 +197,6 @@ function assertCanonicalTurn(facts) {
   return { userTurnId: turns[userIndex]?.id, assistantTurnId: turns[assistantIndex]?.id };
 }
 
-function assertPiRuntime(assertion, facts, context) {
-  const runtime = facts?.piRuntime;
-  if (!runtime || typeof runtime !== 'object') {
-    throw new Error('canonical Pi runtime facts are unavailable');
-  }
-  if (runtime.implementation !== assertion.implementation) {
-    throw new Error(
-      `unexpected Agent runtime implementation: ${runtime.implementation ?? 'missing'}`,
-    );
-  }
-  if (
-    runtime.transcriptAuthority !== assertion.transcriptAuthority ||
-    runtime.productMetadataAuthority !== assertion.productMetadataAuthority
-  ) {
-    throw new Error('Pi transcript or product metadata authority does not match the contract');
-  }
-  if (runtime.conversationId !== facts?.conversationId) {
-    throw new Error('Pi runtime conversation identity disagrees with session facts');
-  }
-  if (
-    !nonEmpty(runtime.conversationId) ||
-    !nonEmpty(runtime.branchId) ||
-    !nonEmpty(runtime.piSessionId) ||
-    runtime.piSessionId === runtime.conversationId
-  ) {
-    throw new Error('conversation, branch, and Pi Session identities are missing or conflated');
-  }
-  const locator = runtime.workspaceLocator;
-  if (
-    locator?.kind !== assertion.workspaceLocatorKind ||
-    typeof locator?.value !== 'string' ||
-    !locator.value.startsWith('/__neko_workspaces/') ||
-    locator.value.includes('..')
-  ) {
-    throw new Error('Pi runtime did not report a contained virtual workspace locator');
-  }
-  const turn = runtime.lastTurn;
-  if (
-    !nonEmpty(turn?.turnId) ||
-    !nonEmpty(turn?.runId) ||
-    turn?.purpose !== assertion.purpose ||
-    !nonEmpty(turn?.providerId) ||
-    !nonEmpty(turn?.modelId)
-  ) {
-    throw new Error('Pi turn identity or flat purpose-model identity is incomplete');
-  }
-  if (!isSha256(turn.parametersDigest) || !isSha256(turn.snapshotDigest)) {
-    throw new Error('Pi turn parameter or immutable snapshot digest is missing');
-  }
-  if (turn.durability !== assertion.turnDurability) {
-    throw new Error(
-      `Pi turn durability mismatch: expected ${assertion.turnDurability}, observed ${turn.durability ?? 'missing'}`,
-    );
-  }
-  if (
-    !nonEmpty(turn.protocol) ||
-    !nonEmpty(turn.authMechanism) ||
-    !nonEmpty(turn.credentialSource)
-  ) {
-    throw new Error('Pi provider protocol/auth/credential provenance facts are incomplete');
-  }
-  if (assertion.modelProfileId) {
-    const profile = arrayOrEmpty(context?.modelProfiles).find(
-      (candidate) => candidate?.id === assertion.modelProfileId,
-    );
-    if (!profile) {
-      throw new Error(`unknown Pi runtime model profile: ${assertion.modelProfileId}`);
-    }
-    for (const [purpose, expected] of Object.entries(profile.purposes ?? {})) {
-      const observed = arrayOrEmpty(turn.modelPurposes).find(
-        (candidate) => candidate?.purpose === purpose,
-      );
-      if (
-        observed?.providerId !== expected.providerId ||
-        observed?.configuredModelId !== expected.modelId ||
-        observed?.execution !== expectedPurposeExecution(purpose) ||
-        !nonEmpty(observed?.apiModelId) ||
-        !isSha256(observed?.parametersDigest)
-      ) {
-        throw new Error(
-          `Pi purpose model ${purpose} mismatch: expected ${expected.providerId}/${expected.modelId}`,
-        );
-      }
-    }
-  }
-  if (
-    hasModelIdentity(facts?.model) &&
-    (facts.model.providerId !== turn.providerId || facts.model.modelId !== turn.modelId)
-  ) {
-    throw new Error('Pi turn model identity disagrees with effective session model facts');
-  }
-  return {
-    implementation: runtime.implementation,
-    conversationId: runtime.conversationId,
-    branchId: runtime.branchId,
-    piSessionId: runtime.piSessionId,
-    purpose: turn.purpose,
-    providerId: turn.providerId,
-    modelId: turn.modelId,
-    parametersDigest: turn.parametersDigest,
-    snapshotDigest: turn.snapshotDigest,
-    durability: turn.durability,
-    protocol: turn.protocol,
-    authMechanism: turn.authMechanism,
-    credentialSource: turn.credentialSource,
-  };
-}
-
-function expectedPurposeExecution(purpose) {
-  return purpose.endsWith('.understand') ? 'pi' : 'domain';
-}
-
 function assertSkill(assertion, facts) {
   assertCompleteEvidence(facts, ['skillReceipts']);
   const receipt = arrayOrEmpty(facts?.skillReceipts).find((candidate) =>
@@ -332,7 +204,7 @@ function assertSkill(assertion, facts) {
   );
   if (!receipt) {
     throw new Error(
-      `Pi read_skill receipt was not observed: ${formatSkillIdentity(assertion.identity)}`,
+      `DSH read_skill receipt was not observed: ${formatSkillIdentity(assertion.identity)}`,
     );
   }
   if (!nonEmpty(receipt.toolCallId)) {
@@ -413,92 +285,6 @@ function assertModel(assertion, facts, context) {
       ? { providerExpressionProfileId: observed.providerExpressionProfileId }
       : {}),
   };
-}
-
-function assertToolCall(assertion, facts) {
-  assertCompleteEvidence(facts, ['turns', 'turnToolCalls']);
-  const calls = arrayOrEmpty(facts?.turns).flatMap((turn) => arrayOrEmpty(turn?.toolCalls));
-  const named = calls.filter((call) => call?.name === assertion.name);
-  if (assertion.status === 'absent') {
-    if (named.length > 0) throw new Error(`forbidden tool call observed: ${assertion.name}`);
-    return { name: assertion.name, status: 'absent', observedCount: 0 };
-  }
-  const matching = named.find((call) => matchesToolStatus(call?.status, assertion.status));
-  if (!matching) {
-    throw new Error(
-      `tool call ${assertion.name} did not reach ${assertion.status}; observed=${named.map((call) => call?.status ?? 'unknown').join(',') || 'none'}`,
-    );
-  }
-  if (
-    assertion.expectedArguments !== undefined &&
-    stableStringify(matching.arguments) !== stableStringify(assertion.expectedArguments)
-  ) {
-    throw new Error(`tool call ${assertion.name} arguments did not match the expected contract`);
-  }
-  if (
-    assertion.resultIncludes !== undefined &&
-    !containsExpectedValue(matching.result, assertion.resultIncludes)
-  ) {
-    throw new Error(`tool call ${assertion.name} result did not include the expected contract`);
-  }
-  if (assertion.status === 'success' && matching.resultObservation !== 'available') {
-    throw new Error(`tool call ${assertion.name} succeeded without an observed result`);
-  }
-  if (assertion.status === 'error' && matching.resultObservation !== 'error') {
-    throw new Error(`tool call ${assertion.name} failed without error observation evidence`);
-  }
-  return { id: matching.id, name: matching.name, status: assertion.status };
-}
-
-function assertNeutralAutomationToolResult(assertion, facts) {
-  assertCompleteEvidence(facts, ['turns', 'turnToolCalls']);
-  const matches = arrayOrEmpty(facts?.turns)
-    .flatMap((turn) => arrayOrEmpty(turn?.toolCalls))
-    .filter((call) => call?.name === assertion.name && matchesToolStatus(call?.status, 'success'));
-  if (matches.length !== 1 || matches[0].resultObservation !== 'available') {
-    throw new Error(`Automation Tool ${assertion.name} requires one observed successful result.`);
-  }
-  return assertAutomationToolResult(assertion, matches[0].result);
-}
-
-function containsExpectedValue(actual, expected) {
-  if (Array.isArray(expected)) {
-    return (
-      Array.isArray(actual) &&
-      expected.every((item, index) => containsExpectedValue(actual[index], item))
-    );
-  }
-  if (expected && typeof expected === 'object') {
-    return (
-      actual !== null &&
-      typeof actual === 'object' &&
-      !Array.isArray(actual) &&
-      Object.entries(expected).every(([key, value]) => containsExpectedValue(actual[key], value))
-    );
-  }
-  return Object.is(actual, expected);
-}
-
-function assertProcessOrder(assertion, facts) {
-  const collections = new Set();
-  for (const event of assertion.events) {
-    if (event.kind === 'turn') collections.add('turns');
-    if (event.kind === 'timeline') {
-      collections.add('turns');
-      collections.add('timelineRows');
-    }
-    if (event.kind === 'tool') {
-      collections.add('turns');
-      collections.add('turnToolCalls');
-    }
-    if (event.kind === 'continuation') collections.add('continuations');
-  }
-  assertCompleteEvidence(facts, [...collections]);
-  return assertOrderedWorkflowEvents(assertion, readAutomationSteps(facts));
-}
-
-function assertQueueState(assertion, facts) {
-  return assertWorkflowQueueState(assertion, readAutomationSteps(facts));
 }
 
 function assertCancellation(assertion, facts) {
@@ -603,176 +389,6 @@ function assertTerminalIdle(assertion, facts) {
     throw new Error(`terminal idle concern(s) failed: ${failed.join(', ')}`);
   }
   return { concerns: assertion.concerns };
-}
-
-function assertTimelineProjection(assertion, facts) {
-  const projection = facts?.timelineProjection;
-  if (!projection || typeof projection !== 'object') {
-    throw new Error('shared Timeline projection facts are unavailable');
-  }
-  const expectedPath = [
-    'pi-product-event',
-    'shared-pi-timeline-projector',
-    'conversation-projection-store',
-    'terminal-timeline-presenter',
-  ];
-  if (
-    projection.implementation !== expectedPath[1] ||
-    projection.store !== expectedPath[2] ||
-    projection.presenter !== expectedPath[3] ||
-    JSON.stringify(projection.path) !== JSON.stringify(expectedPath)
-  ) {
-    throw new Error('Timeline projection did not use the canonical shared projector/store path');
-  }
-  if (
-    !nonEmpty(projection.conversationId) ||
-    !nonEmpty(projection.turnId) ||
-    !nonEmpty(projection.runId) ||
-    !nonEmpty(projection.messageId)
-  ) {
-    throw new Error('Timeline projection identity is incomplete');
-  }
-  if (
-    projection.conversationId !== facts?.conversationId ||
-    projection.turnId !== facts?.piRuntime?.lastTurn?.turnId ||
-    projection.runId !== facts?.piRuntime?.lastTurn?.runId
-  ) {
-    throw new Error('Timeline projection identity disagrees with session/Pi runtime facts');
-  }
-  if (projection.completionStatus !== assertion.terminalStatus) {
-    throw new Error(
-      `Timeline terminal status expected=${assertion.terminalStatus} observed=${projection.completionStatus ?? 'unavailable'}`,
-    );
-  }
-  if (projection.droppedPatchCount !== 0) {
-    throw new Error(`Timeline patch evidence dropped ${projection.droppedPatchCount} patch(es)`);
-  }
-  if (projection.acceptedPostTerminalPatchCount !== 0) {
-    throw new Error(
-      `Timeline accepted ${projection.acceptedPostTerminalPatchCount} post-terminal patch(es)`,
-    );
-  }
-  const patches = arrayOrEmpty(projection.patches);
-  if (patches.length === 0) {
-    throw new Error('Timeline projection patch chain is empty');
-  }
-  for (const patch of patches) {
-    if (
-      patch?.conversationId !== projection.conversationId ||
-      patch?.turnId !== projection.turnId ||
-      patch?.runId !== projection.runId ||
-      patch?.messageId !== projection.messageId
-    ) {
-      throw new Error('Timeline projection patch owner identity is stale or mismatched');
-    }
-  }
-  const terminalPatches = patches.filter((patch) => patch?.completionStatus !== undefined);
-  if (
-    terminalPatches.length !== 1 ||
-    terminalPatches[0] !== patches.at(-1) ||
-    terminalPatches[0]?.completionStatus !== assertion.terminalStatus
-  ) {
-    throw new Error('Timeline projection did not freeze on one exact terminal patch');
-  }
-  const itemIds = new Set();
-  const itemSequences = new Set();
-  for (const item of arrayOrEmpty(projection.items)) {
-    if (
-      !nonEmpty(item?.itemId) ||
-      !nonEmpty(item?.kind) ||
-      !Number.isInteger(item?.sequence) ||
-      item.sequence < 0 ||
-      itemIds.has(item.itemId) ||
-      itemSequences.has(item.sequence)
-    ) {
-      throw new Error('Timeline item identity or sequence evidence is invalid');
-    }
-    itemIds.add(item.itemId);
-    itemSequences.add(item.sequence);
-  }
-  if (assertion.toolName) {
-    const tools = arrayOrEmpty(projection.items).filter(
-      (item) => item?.kind === 'tool_call' && item?.toolName === assertion.toolName,
-    );
-    if (tools.length !== 1 || !nonEmpty(tools[0]?.toolCallId)) {
-      throw new Error(
-        `Timeline expected exactly one ${assertion.toolName} Tool item with identity; observed ${tools.length}`,
-      );
-    }
-  }
-  return {
-    path: projection.path,
-    conversationId: projection.conversationId,
-    turnId: projection.turnId,
-    runId: projection.runId,
-    messageId: projection.messageId,
-    completionStatus: projection.completionStatus,
-    patchCount: patches.length,
-    itemSequences: arrayOrEmpty(projection.items).map((item) => ({
-      itemId: item.itemId,
-      sequence: item.sequence,
-    })),
-  };
-}
-
-function assertResourceDisplayProjection(assertion, facts) {
-  const projections = arrayOrEmpty(facts?.resourceDisplayProjections);
-  const projection = projections.find(
-    (candidate) =>
-      candidate?.projectionKind === assertion.projectionKind &&
-      candidate?.status === assertion.status &&
-      candidate?.locatorKind === assertion.locatorKind &&
-      candidate?.transport === assertion.transport &&
-      candidate?.renderTarget === assertion.renderTarget,
-  );
-  if (!projection) {
-    throw new Error(
-      `Resource display projection ${assertion.projectionKind}/${assertion.status}/${assertion.locatorKind}/${assertion.transport} was not observed`,
-    );
-  }
-  const allowedKeys = new Set([
-    'conversationId',
-    'toolCallId',
-    'projectionKind',
-    'status',
-    'locatorKind',
-    'transport',
-    'renderTarget',
-    'diagnosticCodes',
-  ]);
-  const unknownKeys = Object.keys(projection).filter((key) => !allowedKeys.has(key));
-  if (unknownKeys.length > 0) {
-    throw new Error(
-      `Resource display projection exposed non-redacted field(s): ${unknownKeys.join(', ')}`,
-    );
-  }
-  if (!nonEmpty(projection.conversationId) || projection.conversationId !== facts?.conversationId) {
-    throw new Error('Resource display projection conversation identity is unavailable or stale');
-  }
-  if (projection.toolCallId !== undefined) {
-    const matchingToolCall = arrayOrEmpty(facts?.turns).some((turn) =>
-      arrayOrEmpty(turn?.toolCalls).some((call) => call?.id === projection.toolCallId),
-    );
-    if (!matchingToolCall) {
-      throw new Error('Resource display projection Tool Call identity is unavailable or stale');
-    }
-  }
-  const diagnosticCodes = arrayOrEmpty(projection.diagnosticCodes);
-  if (assertion.diagnosticsEmpty && diagnosticCodes.length > 0) {
-    throw new Error(
-      `Resource display projection diagnostics observed: ${diagnosticCodes.join(', ')}`,
-    );
-  }
-  return {
-    conversationId: projection.conversationId,
-    toolCallId: projection.toolCallId,
-    projectionKind: projection.projectionKind,
-    status: projection.status,
-    locatorKind: projection.locatorKind,
-    transport: projection.transport,
-    renderTarget: projection.renderTarget,
-    diagnosticCodes,
-  };
 }
 
 function assertMarkdownPath(assertion, facts) {
@@ -1094,84 +710,6 @@ function formatModel(value) {
 function matchesToolStatus(actual, expected) {
   if (expected === 'success') return actual === 'success' || actual === 'complete';
   return actual === 'error';
-}
-
-function collectRuntimeRefs(facts) {
-  const refs = new Set();
-  addValues(refs, facts?.piRuntime);
-  addValues(refs, facts?.timelineProjection);
-  addValues(refs, facts?.resourceDisplayProjections);
-  addValues(refs, facts?.model);
-  addValues(refs, facts?.configuration?.chat);
-  addValue(refs, facts?.configuration?.digest);
-  for (const receipt of arrayOrEmpty(facts?.skillReceipts)) {
-    addValue(refs, receipt?.toolCallId);
-    addValue(refs, receipt?.skillName);
-    addValue(refs, receipt?.source);
-    addValue(refs, receipt?.fingerprint);
-    addValue(refs, receipt?.locatorKind);
-  }
-  for (const turn of arrayOrEmpty(facts?.turns)) {
-    addValue(refs, turn?.id);
-    for (const call of arrayOrEmpty(turn?.toolCalls)) {
-      addValue(refs, call?.id);
-      addValue(refs, call?.name);
-      addValues(
-        refs,
-        call?.diagnostics?.map((item) => item?.code),
-      );
-    }
-  }
-  for (const continuation of arrayOrEmpty(facts?.continuations)) {
-    addValue(refs, continuation?.id);
-    addValue(refs, continuation?.source);
-    addValues(
-      refs,
-      continuation?.diagnostics?.map((item) => item?.code),
-    );
-  }
-  for (const fragment of arrayOrEmpty(facts?.promptComposition)) addValues(refs, fragment);
-  for (const artifact of arrayOrEmpty(facts?.artifacts)) {
-    addValue(refs, artifact?.ref);
-    addValue(refs, artifact?.kind);
-    addValue(refs, artifact?.relativePath);
-    addValue(refs, artifact?.digest);
-    addValue(refs, artifact?.revision);
-    addValues(refs, artifact?.provenance);
-    addValue(refs, artifact?.validator?.id);
-    addValues(
-      refs,
-      artifact?.diagnostics?.map((item) => item?.code),
-    );
-  }
-  for (const projection of arrayOrEmpty(facts?.workspaceBoardProjections)) {
-    addValue(refs, projection?.status);
-    addValue(refs, projection?.targetKind);
-    addValue(refs, projection?.sourceFingerprint);
-    addValues(refs, projection?.nodeIds);
-    addValues(refs, projection?.diagnosticCodes);
-  }
-  for (const diagnostic of arrayOrEmpty(facts?.runtimeErrors)) {
-    if (typeof diagnostic === 'string') addValue(refs, diagnostic);
-    else addValue(refs, diagnostic?.code);
-  }
-  return refs;
-}
-
-function addValues(target, value) {
-  if (Array.isArray(value)) {
-    value.forEach((item) => addValues(target, item));
-    return;
-  }
-  if (!value || typeof value !== 'object') {
-    addValue(target, value);
-    return;
-  }
-  Object.values(value).forEach((item) => addValues(target, item));
-}
-
-function addValue(target, value) {
-  if (typeof value === 'string' && value.length > 0) target.add(value);
 }
 
 function stableStringify(value) {

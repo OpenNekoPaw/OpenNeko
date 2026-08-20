@@ -8,7 +8,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConfigManager } from '../config-manager';
 import type { IUserConfigManager, UserConfig } from '../user-config';
 import type { Provider, Model } from '../types/provider';
-import type { MCPServerPreset } from '../types/config';
 import type { UnifiedConfig } from '../config-core/index';
 import type { ConfigReadResult } from '../config-reader';
 import type { AssistantRuntimeSettingsPort } from '../assistant-runtime-settings-port';
@@ -20,13 +19,12 @@ import { RETRY_TIMEOUT_PRESETS } from '../retry-timeout-presets';
 
 function createMockUserConfigManager(
   initial?: Partial<UserConfig>,
-  rawScalars: Omit<UnifiedConfig, 'providers' | 'models' | 'mcpServers'> = {},
+  rawScalars: Omit<UnifiedConfig, 'providers' | 'models'> = {},
 ): IUserConfigManager {
   let scalars = { ...rawScalars };
   let config: UserConfig = {
     providers: [],
     models: [],
-    mcpServers: [],
     ...initial,
   };
 
@@ -35,7 +33,6 @@ function createMockUserConfigManager(
       ...config,
       providers: [...config.providers],
       models: [...config.models],
-      mcpServers: [...config.mcpServers],
     }),
     save: async (c: UserConfig) => {
       config = { ...c };
@@ -56,26 +53,16 @@ function createMockUserConfigManager(
     removeModel: async (id: string) => {
       config.models = config.models.filter((m) => m.id !== id);
     },
-    addMCPServer: async (s: MCPServerPreset) => {
-      const i = config.mcpServers.findIndex((x) => x.id === s.id);
-      if (i >= 0) config.mcpServers[i] = s;
-      else config.mcpServers.push(s);
-    },
-    removeMCPServer: async (id: string) => {
-      config.mcpServers = config.mcpServers.filter((s) => s.id !== id);
-    },
     clear: async () => {
       config = {
         providers: [],
         models: [],
-        mcpServers: [],
       };
     },
     loadRaw: () => ({
       ...scalars,
       providers: config.providers,
       models: config.models,
-      mcpServers: config.mcpServers,
     }),
     loadRawResult: () => ({
       status: 'ok',
@@ -84,7 +71,6 @@ function createMockUserConfigManager(
         ...scalars,
         providers: config.providers,
         models: config.models,
-        mcpServers: config.mcpServers,
       } satisfies UnifiedConfig,
       diagnostics: [],
       providerCredentials: {},
@@ -147,7 +133,6 @@ function createReadResultUserConfigManager(
     load: () => ({
       providers: [],
       models: [],
-      mcpServers: [],
     }),
     loadRaw: () => {
       const current = readResult();
@@ -167,12 +152,6 @@ function createReadResultUserConfigManager(
       throw new Error('write path should not be used');
     },
     removeModel: async () => {
-      throw new Error('write path should not be used');
-    },
-    addMCPServer: async () => {
-      throw new Error('write path should not be used');
-    },
-    removeMCPServer: async () => {
       throw new Error('write path should not be used');
     },
     clear: async () => {
@@ -219,7 +198,6 @@ describe('ConfigManager', () => {
 
       expect(config.providers.size).toBe(0);
       expect(config.models.size).toBe(0);
-      expect(config.mcpServers.size).toBe(0);
     });
 
     it('should return retry/timeout presets', () => {

@@ -5,8 +5,7 @@ export async function executeDesktopAgentWorkflow(input) {
   const steps = [];
   let terminalIdle;
   let conversationId = input.conversationId;
-  for (const [stepIndex, step] of input.steps.entries()) {
-    const nextStep = input.steps[stepIndex + 1];
+  for (const step of input.steps) {
     const receipt = await executeStep({
       ...input,
       conversationId,
@@ -27,10 +26,6 @@ export async function executeDesktopAgentWorkflow(input) {
           defaultTimeoutMs: input.defaultTimeoutMs,
           step,
           receipt,
-          deferObservation:
-            nextStep?.kind === 'update-configuration' &&
-            nextStep.turnState === 'running' &&
-            nextStep.afterStepId === step.id,
         }),
       ),
     );
@@ -54,41 +49,14 @@ export async function executeDesktopAgentWorkflow(input) {
 async function executeStep(input) {
   const { driver, conversationId, step, receipts } = input;
   switch (step.kind) {
-    case 'draft-bind':
-      return driver.bindDraft({ target: step.target, catalogRef: step.id });
-    case 'draft-submit':
-      return driver.submitDraft({
-        catalogRef: step.catalogRef,
-        input: step.input,
-        expectedStatus: step.expectedStatus,
-      });
     case 'submit':
       if (step.delayMs) await (input.delay ?? delay)(step.delayMs);
-      if (typeof driver.prepareSessionAfterDraft === 'function') {
-        await driver.prepareSessionAfterDraft();
-      }
       return driver.submit({
         ...(conversationId === undefined ? {} : { conversationId }),
         prompt: step.prompt,
         ...(step.contextPayloads ? { contextPayloads: step.contextPayloads } : {}),
         ...resolveModelOverride(step, input.modelProfiles),
       });
-    case 'queue':
-      requireReceipt(receipts, step.afterStepId, step);
-      return driver.queue({
-        conversationId: requireConversationId(conversationId),
-        prompt: step.prompt,
-        timeoutMs: input.defaultTimeoutMs,
-        ...resolveModelOverride(step, input.modelProfiles),
-      });
-    case 'send-queued-now': {
-      const queued = requireQueueReceipt(receipts, step.queueStepId, step);
-      return driver.sendQueuedMessageNow({
-        conversationId: requireConversationId(conversationId),
-        queueItemId: queued.queueItemId,
-        timeoutMs: input.defaultTimeoutMs,
-      });
-    }
     case 'wait-for-idle': {
       const idle = await driver.waitForIdle(requireConversationId(conversationId), step.timeoutMs);
       if (typeof driver.readFacts !== 'function') return idle;
@@ -140,24 +108,12 @@ async function executeStep(input) {
       });
     }
     case 'update-configuration': {
-      const referenced =
-        step.turnState === 'running'
-          ? requireSubmissionReceipt(receipts, step.afterStepId, step)
-          : undefined;
-      const runningTurnIdentity = referenced
-        ? await driver.waitForIdentity(
-            requireConversationId(conversationId),
-            referenced.eventOffset,
-            step.timeoutMs,
-          )
-        : undefined;
       return driver.updateConfiguration({
         conversationId: requireConversationId(conversationId),
         providerId: step.providerId,
         modelId: step.modelId,
         expectedStatus: step.expectedStatus,
         turnState: step.turnState,
-        ...(runningTurnIdentity === undefined ? {} : { runningTurnIdentity }),
         timeoutMs: step.timeoutMs,
       });
     }
@@ -225,16 +181,6 @@ function requireSubmissionReceipt(receipts, stepId, step) {
   return receipt;
 }
 
-function requireQueueReceipt(receipts, stepId, step) {
-  const receipt = requireReceipt(receipts, stepId, step);
-  if (typeof receipt.queueItemId !== 'string' || receipt.queueItemId.trim().length === 0) {
-    throw configurationError(
-      `Desktop Agent workflow step '${step.id}' requires a queued message identity from '${stepId}'.`,
-    );
-  }
-  return receipt;
-}
-
 function readLastAssistant(snapshot) {
   const assistant = snapshot?.messages
     ?.filter((message) => message?.role === 'assistant' && message.isError !== true)
@@ -272,31 +218,19 @@ async function createWorkflowStepEvidence(input) {
     ...(input.receipt?.accepted === undefined ? {} : { accepted: input.receipt.accepted }),
     ...(input.receipt?.facts === undefined ? {} : { facts: input.receipt.facts }),
     ...(input.receipt?.status === undefined ? {} : { status: input.receipt.status }),
-    ...(input.receipt?.queueItemId === undefined
-      ? {}
-      : { queueItemId: input.receipt.queueItemId }),
-    ...(input.step.kind === 'send-queued-now' ? { queueStepId: input.step.queueStepId } : {}),
-    ...(input.step.kind === 'queue' ? { queued: observation?.queued === true } : {}),
     ...(observation === undefined ? {} : { snapshot: observation }),
   };
 }
 
 function workflowMethod(kind) {
   switch (kind) {
-    case 'draft-bind':
-      return 'draft.binding.update';
-    case 'draft-submit':
-      return 'draft.input.submit';
     case 'submit':
-    case 'queue':
     case 'feedback':
       return 'message.submit';
     case 'wait-for-idle':
       return 'session.waitForIdle';
     case 'cancel':
       return 'message.cancel';
-    case 'send-queued-now':
-      return 'message.queue.send-now';
     case 'confirm':
       return 'tool.confirm';
     case 'resume':
