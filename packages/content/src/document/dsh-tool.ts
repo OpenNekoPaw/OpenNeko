@@ -18,6 +18,71 @@ export type DocumentDshJsonValue =
   | readonly DocumentDshJsonValue[]
   | { readonly [key: string]: DocumentDshJsonValue };
 
+const WORKSPACE_FILE_LOCATOR_SCHEMA = {
+  type: 'object',
+  title: 'workspace-file ContentLocator',
+  description:
+    'Canonical workspace file locator. Media-library files are addressed like ordinary workspace files, for example neko/assets/Blame/book.epub.',
+  properties: {
+    file: {
+      type: 'object',
+      properties: {
+        authority: {
+          type: 'string',
+          const: 'workspace',
+          required: true,
+          description: 'Must be workspace; never use kind: workspace-file.',
+        },
+        path: {
+          type: 'string',
+          required: true,
+          description:
+            'Workspace-relative POSIX path. Managed media libraries use neko/assets/<library>/... and need no special locator.',
+        },
+      },
+      additionalProperties: false,
+      required: true,
+    },
+    selector: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', const: 'entry', required: true },
+        path: { type: 'string', required: true },
+      },
+      additionalProperties: false,
+    },
+  },
+  additionalProperties: false,
+} as const;
+
+const DOCUMENT_RANGE_SCHEMA = {
+  type: 'object',
+  description: 'Canonical document range object returned by the document service.',
+  additionalProperties: true,
+} as const;
+
+const DOCUMENT_CURSOR_SCHEMA = {
+  type: 'object',
+  description: 'Cursor returned by a previous openneko.document read.',
+  additionalProperties: true,
+} as const;
+
+const DOCUMENT_INPUT_SCHEMA = {
+  type: 'object',
+  title: 'openneko.document input',
+  properties: {
+    source: { ...WORKSPACE_FILE_LOCATOR_SCHEMA, required: true },
+    mode: { type: 'string', enum: ['content', 'manifest', 'range'] },
+    range: DOCUMENT_RANGE_SCHEMA,
+    cursor: DOCUMENT_CURSOR_SCHEMA,
+    includeManifest: { type: 'boolean' },
+    includeImages: { type: 'boolean' },
+    maxImages: { type: 'number' },
+    maxChars: { type: 'number' },
+  },
+  additionalProperties: false,
+} as const;
+
 export const DOCUMENT_DSH_TOOL_PARAMETERS = {
   operation: {
     type: 'string',
@@ -26,9 +91,9 @@ export const DOCUMENT_DSH_TOOL_PARAMETERS = {
     required: true,
   },
   input: {
-    type: 'json',
+    ...DOCUMENT_INPUT_SCHEMA,
     description:
-      'Operation-specific input. The package-owned decoder enforces the exact canonical shape.',
+      'Operation-specific input. Use source.file.authority="workspace" and source.file.path. A managed neko/assets/<library> path is read like any other workspace file; do not use kind, locator, or pageRange.',
     required: true,
   },
 } as const;

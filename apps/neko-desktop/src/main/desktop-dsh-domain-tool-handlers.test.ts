@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -42,6 +42,49 @@ describe('Desktop DSH domain Tool handlers', () => {
       handlers.executeDocumentTool(documentRequest(), new AbortController().signal),
     ).resolves.toMatchObject({ outcome: 'success', result: { text: '# Story' } });
     expect(resolveAuthorizedWorkspace).toHaveBeenCalledWith('workspace-grant:one', 'workspace:one');
+  });
+
+  it('reads a managed media-library link through the ordinary workspace-file locator', async () => {
+    const root = await createRoot();
+    const libraryRoot = await mkdtemp(join(tmpdir(), 'openneko-dsh-document-library-'));
+    roots.push(libraryRoot);
+    await writeFile(join(libraryRoot, 'book.md'), '# Linked story');
+    await mkdir(join(root, 'neko', 'assets'), { recursive: true });
+    await symlink(
+      libraryRoot,
+      join(root, 'neko', 'assets', 'Books'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    const resolveAuthorizedWorkspace = vi.fn(async () => workspaceResolution(root));
+    const handlers = createDesktopDshDomainToolHandlers({
+      bindings: {
+        async getByDshSessionId() {
+          return sessionBinding();
+        },
+      },
+      contexts: {
+        async readContext() {
+          return workspaceContext();
+        },
+      },
+      workspaceGrants: { resolveAuthorizedWorkspace },
+      generationRuntime: { getJobs: vi.fn() },
+      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      assistant: { assistantSpaceId: 'assistant:one', root },
+      cutRuntime: undefined,
+    });
+
+    await expect(
+      handlers.executeDocumentTool(
+        {
+          ...documentRequest(),
+          input: {
+            source: { file: { authority: 'workspace', path: 'neko/assets/Books/book.md' } },
+          },
+        },
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({ outcome: 'success', result: { text: '# Linked story' } });
   });
 
   it('resolves exact Workspace grant and purpose model for Generation', async () => {

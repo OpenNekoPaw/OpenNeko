@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decodeDocumentDshToolInput,
   DOCUMENT_DSH_TOOL_NAME,
+  DOCUMENT_DSH_TOOL_PARAMETERS,
   DOCUMENT_DSH_TOOL_OPERATIONS,
 } from './dsh-tool';
 
@@ -12,6 +13,10 @@ describe('OpenNeko document DSH contract', () => {
   it('uses the canonical domain name and operations', () => {
     expect(DOCUMENT_DSH_TOOL_NAME).toBe('openneko.document');
     expect(DOCUMENT_DSH_TOOL_OPERATIONS).toEqual(['read', 'continue', 'read-images']);
+    expect(DOCUMENT_DSH_TOOL_PARAMETERS.input.type).toBe('object');
+    expect(DOCUMENT_DSH_TOOL_PARAMETERS.input.properties).toHaveProperty('source');
+    expect(JSON.stringify(DOCUMENT_DSH_TOOL_PARAMETERS)).toContain('source.file.authority');
+    expect(JSON.stringify(DOCUMENT_DSH_TOOL_PARAMETERS)).toContain('neko/assets/<library>');
   });
 
   it('decodes a canonical read request and rejects legacy/raw shapes', () => {

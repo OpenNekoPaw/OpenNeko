@@ -32,14 +32,21 @@ describe('OpenNeko Document DSH plugin', () => {
       required: ['operation', 'input'],
     });
     await definition.execute(
-      { operation: 'read', input: { source: { kind: 'workspace-file', path: 'docs/book.pdf' } } },
+      {
+        operation: 'read',
+        input: {
+          source: { file: { authority: 'workspace', path: 'neko/assets/Books/book.pdf' } },
+        },
+      },
       {},
     );
     expect(execute).toHaveBeenCalledWith(
       {
         tool: 'openneko.document',
         operation: 'read',
-        input: { source: { kind: 'workspace-file', path: 'docs/book.pdf' } },
+        input: {
+          source: { file: { authority: 'workspace', path: 'neko/assets/Books/book.pdf' } },
+        },
       },
       {},
     );
