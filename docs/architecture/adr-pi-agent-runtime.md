@@ -1,8 +1,12 @@
 # ADR: Pi Agent Runtime 与模型边界
 
-状态：Accepted
+状态：Superseded
 
-更新日期：2026-08-01
+更新日期：2026-08-21
+
+取代关系：生产实现已由 [`agent.md`](agent.md) 描述的 DSH/ACP 单一路径取代；最终发布验收由
+[`replace-pi-with-dsh-runtime-atomically`](../../openspec/changes/replace-pi-with-dsh-runtime-atomically/)
+跟踪。本文只保留历史决策背景，不再作为当前实现或新开发依据。
 
 范围：`neko-agent`、Pi Agent/Session/Skill、模型路由、Provider/Auth、Capability Tool bridge 与 Electron Desktop。
 

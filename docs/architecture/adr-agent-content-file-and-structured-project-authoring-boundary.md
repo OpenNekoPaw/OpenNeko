@@ -33,7 +33,7 @@ authoring contract 后才进入结构化路径。普通 JSON 不会因为语法�
 
 ```text
 Desktop composer
-  -> Pi turn
+  -> DSH turn through ACP
   -> core Workspace file Tool
   -> authorized content-source file
   -> file change
@@ -63,7 +63,7 @@ sequence、dirty state 和 close decision，不是 Agent authoring service。
 
 ```text
 Desktop composer
-  -> Pi turn
+  -> DSH turn through ACP
   -> exact Canvas/Cut Tool
   -> owning-domain application service
   -> revisioned apply

@@ -36,19 +36,20 @@ retention、backup 与离线恢复语义。未知分类、非 canonical SQLite p
 migration reader、legacy reader 或自动修复路径；需要保护有价值数据时只能使用显式授权、精确目标且
 产品不可达的离线工具。
 
-| 数据                              | Canonical owner                          | SQLite 角色                                         |
-| --------------------------------- | ---------------------------------------- | --------------------------------------------------- |
-| `.nk*`、Markdown、OTIO 等项目内容 | owning package 的项目文件                | 可选索引，不得反向覆盖项目事实                      |
-| Agent transcript                  | Pi Session JSONL + conversation manifest | catalog、查询和恢复所需的结构化投影                 |
-| Media Library 本机 binding        | Assets-owned 项目 `.neko` record         | 不进入 SQLite；缺失时初始化为空并从项目引用推导需求 |
-| Media/Entity/Asset projection     | owning domain                            | 可查询 projection 与 freshness metadata             |
-| 后台领域 Job                      | owning domain repository                 | checkpoint、状态和恢复索引                          |
-| 派生缓存                          | cache owner                              | locator、fingerprint、quota、GC eligibility         |
-| 凭据与 secret                     | Desktop credential store                 | 不保存 secret；仅允许无敏感信息的 provider metadata |
-| 窗口、选择、滚动和布局            | Desktop view-state owner                 | 仅保存明确允许恢复的稳定展示状态                    |
+| 数据                              | Canonical owner                  | SQLite 角色                                           |
+| --------------------------------- | -------------------------------- | ----------------------------------------------------- |
+| `.nk*`、Markdown、OTIO 等项目内容 | owning package 的项目文件        | 可选索引，不得反向覆盖项目事实                        |
+| Agent transcript                  | DSH Session JSONL                | OpenNeko Conversation catalog、binding 与运行恢复状态 |
+| Media Library 本机 binding        | Assets-owned 项目 `.neko` record | 不进入 SQLite；缺失时初始化为空并从项目引用推导需求   |
+| Media/Entity/Asset projection     | owning domain                    | 可查询 projection 与 freshness metadata               |
+| 后台领域 Job                      | owning domain repository         | checkpoint、状态和恢复索引                            |
+| 派生缓存                          | cache owner                      | locator、fingerprint、quota、GC eligibility           |
+| 凭据与 secret                     | Desktop credential store         | 不保存 secret；仅允许无敏感信息的 provider metadata   |
+| 窗口、选择、滚动和布局            | Desktop view-state owner         | 仅保存明确允许恢复的稳定展示状态                      |
 
-Agent Pi Session 的 transcript 仍保存在 JSONL；conversation lease/checkpoint 等 operational state 与
-catalog projection 使用同一 `~/.neko/neko.db`。旧 `agent/pi/metadata.sqlite`、旧 Desktop JSON state
+DSH Session transcript 保存在 Electron `userData/dsh/sessions`，由 DSH profile 直接拥有；OpenNeko
+Conversation metadata、DSH Session binding 与 checkpoint 等 operational state 使用
+`~/.neko/neko.db`，不得复制 transcript。旧 `agent/pi/metadata.sqlite`、旧 Desktop JSON state
 和旧 application settings 文件不属于产品输入：启动、普通 reader、build 和 package public entry
 均不得读取、导入、分类、改名或导出它们。现有字节保持不变；需要处理时由用户显式授权产品不可达的
 离线工具精确备份和修复。Credential 不得进入 SQLite；Desktop 通过 safeStorage-backed secret port

@@ -2,34 +2,34 @@
 
 状态：Accepted
 
-更新日期：2026-08-01
+更新日期：2026-08-21
 
-范围：`neko-agent`、Pi runtime、Skill、Capability、Tool Call、Subagent、领域 Job 与 Electron Desktop 投影。
+范围：Agent runtime、DSH Session、Skill、typed domain Tool、Subagent、领域 Job 与 Electron Desktop 投影。
 
 ## 决策
 
-OpenNeko 只保留一个 Agent/LLM/Session canonical runtime。Pi 提供会话循环、模型调用、
-Tool Call、Skill 和上下文管理；OpenNeko 领域能力通过 typed capability/tool contract 注入，
+OpenNeko 只保留一个 Agent/LLM/Session canonical runtime。DSH 子进程/profile 提供会话循环、模型调用、
+Tool Call、Skill 和上下文管理；OpenNeko 领域能力通过 typed domain Tool contract 注入，
 不得在 Canvas、Cut、Character 或 Desktop 中建立第二套 Agent loop。
 
 ```text
 Desktop renderer
   -> typed Desktop port
-  -> Desktop Main conversation owner
-  -> AgentSession / Pi
-  -> immutable Tool snapshot
+  -> Desktop DSH Session Host
+  -> ACP JSON-RPC stdio
+  -> DSH Session / Tool lifecycle
   -> owning-domain application port
 ```
 
 ## 责任边界
 
-| Owner | 拥有 | 不得拥有 |
-| --- | --- | --- |
-| `AgentSession` | conversation identity、turn、上下文、模型、权限快照、Tool Call | 领域项目事实、媒体 Job、Renderer 状态 |
-| Capability Host | discovery、trust、lifecycle、schema、当前 turn 的不可变 Tool snapshot | Agent transcript、领域内部状态 |
-| Owning domain | operation、validation、revision、持久事实、可恢复 Job | 通用 Agent 会话循环 |
-| Desktop Main | session registry、文件与凭据授权、typed IPC、窗口和资源生命周期 | Agent/领域事实副本 |
-| Renderer | 对话与 Activity 投影、输入草稿、选择和布局 | 文件 IO、后台任务、持久会话权威 |
+| Owner           | 拥有                                                                  | 不得拥有                              |
+| --------------- | --------------------------------------------------------------------- | ------------------------------------- |
+| `AgentSession`  | conversation identity、turn、上下文、模型、权限快照、Tool Call        | 领域项目事实、媒体 Job、Renderer 状态 |
+| Capability Host | discovery、trust、lifecycle、schema、当前 turn 的不可变 Tool snapshot | Agent transcript、领域内部状态        |
+| Owning domain   | operation、validation、revision、持久事实、可恢复 Job                 | 通用 Agent 会话循环                   |
+| Desktop Main    | session registry、文件与凭据授权、typed IPC、窗口和资源生命周期       | Agent/领域事实副本                    |
+| Renderer        | 对话与 Activity 投影、输入草稿、选择和布局                            | 文件 IO、后台任务、持久会话权威       |
 
 每个 Conversation、Agent Run、SubagentRun 和 Tool Call 都携带显式 identity。界面选择只切换
 投影，不改变 runtime owner。跨窗口共享会话时由 Main 中唯一 owner 协调；不得复制 session
@@ -63,5 +63,5 @@ turn、sequence/revision 和必要的 tool identity。未知 event、乱序不�
 
 相关决策见 [`agent.md`](agent.md)、
 [`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md)、
-[`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md) 和
+[`adr-dsh-cordis-replace-agent-extension-runtime.md`](adr-dsh-cordis-replace-agent-extension-runtime.md) 和
 [`application-composition.md`](application-composition.md)。

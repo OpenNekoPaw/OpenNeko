@@ -249,7 +249,7 @@ case 也必须记录排除原因，不能假装已迁移。
 目标会话或写入成功 fixture。
 
 批量回归使用无可见 UI 的完整 Desktop session + 真实 API：继续走公开 Agent input path、生产
-provider/model 配置、Pi Session、SQLite 和 projection；不得切换成 direct turn runner、mock provider
+provider/model 配置、DSH Session、OpenNeko Conversation catalog 和 projection；不得切换成 direct turn runner、mock provider
 或第二套 session assembly。
 
 基础矩阵如下；测试 artifact 应为每项记录 case、lane、provider/model、identity、terminal state、
