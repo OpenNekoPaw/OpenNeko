@@ -21,7 +21,7 @@ const WORKSPACE_ID = '9b2de3b5-5f50-4be4-9551-71fb5b512489';
 
 describe('storage classification', () => {
   it('classifies every canonical storage responsibility', () => {
-    expect(listNekoStorageClassifications()).toHaveLength(14);
+    expect(listNekoStorageClassifications()).toHaveLength(13);
     expect(getNekoStorageClassification('project-facts')).toMatchObject({
       scope: 'project-fact',
       tracking: 'git-trackable',
@@ -42,12 +42,6 @@ describe('storage classification', () => {
       portability: 'machine-local',
       sqliteRole: 'prohibited',
       tracking: 'gitignored',
-    });
-    expect(getNekoStorageClassification('conversation-journals')).toMatchObject({
-      storageClass: 'raw-journal',
-      durability: 'authoritative',
-      authorityKind: 'file',
-      sqliteRole: 'prohibited',
     });
     expect(getNekoStorageClassification('raw-logs')).toMatchObject({
       owner: 'logger',
@@ -101,7 +95,7 @@ describe('storage classification', () => {
       'secret-store',
     ],
     [
-      'Pi transcripts',
+      'DSH transcripts',
       'journal',
       'user-content',
       'user-exportable',

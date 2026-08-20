@@ -15,6 +15,27 @@ interface NonCanonicalDatabasePath {
   readonly literal: string;
 }
 
+export function validateRetiredAgentStorageSources(
+  sources: Readonly<Record<string, string>>,
+): readonly string[] {
+  const findings: string[] = [];
+  for (const [sourcePath, source] of Object.entries(sources)) {
+    if (/\b(?:ConversationCatalogRepository|ConversationCatalogSource)\b/u.test(source)) {
+      findings.push(`${sourcePath}: retired generic Conversation SQLite catalog contract`);
+    }
+    if (/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?conversations\b/iu.test(source)) {
+      findings.push(`${sourcePath}: retired generic Conversation SQLite catalog table`);
+    }
+    if (
+      source.includes("'conversation-journals'") ||
+      /join\(root,\s*['"](?:journals|conversations)['"]\)/u.test(source)
+    ) {
+      findings.push(`${sourcePath}: retired Pi conversation file layout`);
+    }
+  }
+  return findings;
+}
+
 export function validateStorageClassifications(
   classifications: readonly NekoStorageClassification[],
 ): readonly string[] {
@@ -78,8 +99,10 @@ export async function inspectStorageAuthorities(root = repositoryRoot) {
   const sourceFiles = await discoverProductionSources(root);
   const nonCanonicalDatabasePaths: NonCanonicalDatabasePath[] = [];
   const sourceFindings: string[] = [];
+  const sources: Record<string, string> = {};
   for (const sourcePath of sourceFiles) {
     const source = await readFile(path.join(root, sourcePath), 'utf8');
+    sources[sourcePath] = source;
     for (const literal of extractDatabaseLiterals(source)) {
       if (
         literal === 'neko.db' ||
@@ -105,6 +128,7 @@ export async function inspectStorageAuthorities(root = repositoryRoot) {
   const findings = [
     ...validateStorageClassifications(listNekoStorageClassifications()),
     ...reportNonCanonicalDatabasePaths(nonCanonicalDatabasePaths),
+    ...validateRetiredAgentStorageSources(sources),
     ...sourceFindings,
   ];
   return {

@@ -56,40 +56,6 @@ export interface WorkspaceRegistryRepository {
   markOrphaned(workspaceId: string, orphanedAt: string): Promise<WorkspaceRegistryRecord>;
 }
 
-export type ConversationCatalogSource = 'desktop' | 'agent' | 'import';
-
-export interface ConversationCatalogRecord {
-  readonly conversationId: string;
-  readonly workspaceId: string | null;
-  readonly journalId: string;
-  readonly title: string;
-  readonly source: ConversationCatalogSource;
-  readonly model: string | null;
-  readonly createdAt: string;
-  readonly updatedAt: string;
-}
-
-export interface ConversationCatalogQuery {
-  readonly workspaceId: string | null;
-  readonly text: string | null;
-  readonly limit: number;
-  readonly offset: number;
-}
-
-export interface ConversationProjectionReplaceRequest {
-  readonly workspaceId: string | null;
-  readonly conversations: readonly ConversationCatalogRecord[];
-}
-
-export interface ConversationCatalogRepository {
-  get(conversationId: string): Promise<ConversationCatalogRecord | null>;
-  list(query: ConversationCatalogQuery): Promise<readonly ConversationCatalogRecord[]>;
-  upsert(record: ConversationCatalogRecord): Promise<void>;
-  delete(conversationId: string): Promise<boolean>;
-  replaceProjection(request: ConversationProjectionReplaceRequest): Promise<void>;
-  deleteWorkspaceProjection(workspaceId: string): Promise<void>;
-}
-
 export interface TaskStateRecord {
   readonly workspaceId: string;
   readonly taskKey: string;
@@ -307,7 +273,6 @@ export interface CatalogProjectionRepository {
 }
 
 export type LocalMetadataCacheTable =
-  | 'conversations'
   | 'resource_cache_entries'
   | 'media_metadata'
   | 'search_documents'
@@ -388,7 +353,6 @@ export function evaluateLocalMetadataCacheQuota(
 export interface LocalMetadataRepositories {
   readonly assetLibraryMemberships: AssetLibraryMembershipRepository;
   readonly workspaces: WorkspaceRegistryRepository;
-  readonly conversations: ConversationCatalogRepository;
   readonly tasks: TaskStateRepository;
   readonly taskCheckpoints: TaskCheckpointRepository;
   readonly resourceCache: ResourceCacheMetadataRepository;

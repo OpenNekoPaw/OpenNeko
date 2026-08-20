@@ -5,6 +5,8 @@ import { initializeResourceCacheTables } from '../sqlite/resource-cache-schema';
 import { resolveGlobalStorageLayout } from '../storage';
 
 const CONTRACT_WORKSPACE_ID = '4be0e209-c70b-48b8-a513-cd230d915b93';
+const CONTRACT_TRANSACTION_WORKSPACE_ID = 'f8f01c47-13c5-42c3-b9a9-ec337d66bf2a';
+const ROLLED_BACK_WORKSPACE_ID = '6125ba71-f819-41f0-8e42-7bf15489495a';
 
 export interface LocalMetadataAdapterContractOptions {
   readonly sourceHome: string;
@@ -36,17 +38,12 @@ export async function runLocalMetadataAdapterContract(
   });
 
   await source.transaction(
-    { mode: 'cache-write', ownership: 'cache', operation: 'adapter-contract-commit' },
+    { mode: 'state-write', ownership: 'system', operation: 'adapter-contract-commit' },
     async ({ repositories }) => {
-      await repositories.conversations.upsert({
-        conversationId: 'contract-conversation',
-        workspaceId: CONTRACT_WORKSPACE_ID,
-        journalId: 'contract-journal',
-        title: 'Adapter contract conversation',
-        source: 'import',
-        model: null,
-        createdAt: '2026-07-13T00:00:00.000Z',
-        updatedAt: '2026-07-13T01:00:00.000Z',
+      await repositories.workspaces.bind({
+        identity: { workspaceId: CONTRACT_TRANSACTION_WORKSPACE_ID },
+        locator: { kind: 'relative', value: 'transaction-workspace' },
+        seenAt: '2026-07-13T01:00:00.000Z',
       });
     },
   );
@@ -54,17 +51,12 @@ export async function runLocalMetadataAdapterContract(
   let rollbackObserved = false;
   try {
     await source.transaction(
-      { mode: 'cache-write', ownership: 'cache', operation: 'adapter-contract-rollback' },
+      { mode: 'state-write', ownership: 'system', operation: 'adapter-contract-rollback' },
       async ({ repositories }) => {
-        await repositories.conversations.upsert({
-          conversationId: 'rolled-back-conversation',
-          workspaceId: CONTRACT_WORKSPACE_ID,
-          journalId: 'rolled-back-journal',
-          title: 'Rolled back',
-          source: 'import',
-          model: null,
-          createdAt: '2026-07-13T00:00:00.000Z',
-          updatedAt: '2026-07-13T01:00:00.000Z',
+        await repositories.workspaces.bind({
+          identity: { workspaceId: ROLLED_BACK_WORKSPACE_ID },
+          locator: { kind: 'relative', value: 'rolled-back-workspace' },
+          seenAt: '2026-07-13T01:00:00.000Z',
         });
         throw new Error('intentional adapter contract rollback');
       },
@@ -75,20 +67,13 @@ export async function runLocalMetadataAdapterContract(
   }
   assert(rollbackObserved, 'transaction callback failure must be observable');
   assert(
-    (await source.repositories.conversations.get('rolled-back-conversation')) === null,
-    'failed transaction must not persist its conversation',
+    (await source.repositories.workspaces.get(ROLLED_BACK_WORKSPACE_ID)) === null,
+    'failed transaction must not persist its workspace',
   );
-
-  const conversations = await source.repositories.conversations.list({
-    workspaceId: CONTRACT_WORKSPACE_ID,
-    text: 'contract',
-    limit: 10,
-    offset: 0,
-  });
-  assert(conversations.length === 1, 'committed conversation must be queryable');
   assert(
-    conversations[0]?.conversationId === 'contract-conversation',
-    'conversation query returned the wrong record',
+    (await source.repositories.workspaces.get(CONTRACT_TRANSACTION_WORKSPACE_ID))?.currentLocator
+      .value === 'transaction-workspace',
+    'committed workspace must be queryable',
   );
   const resourceCachePartition = {
     scope: 'workspace' as const,
@@ -133,16 +118,10 @@ export async function runLocalMetadataAdapterContract(
   );
   assert((await source.integrityCheck()).ok, 'integrity_check must return ok');
   await initializeCoreLocalMetadataTables(source);
-  await source.repositories.conversations.upsert({
-    conversationId: 'contract-conversation',
-    workspaceId: CONTRACT_WORKSPACE_ID,
-    journalId: 'contract-journal',
-    title: 'Updated before backup',
-    source: 'import',
-    model: null,
-    createdAt: '2026-07-13T00:00:00.000Z',
-    updatedAt: '2026-07-13T02:00:00.000Z',
-  });
+  await source.repositories.workspaces.markSeen(
+    CONTRACT_TRANSACTION_WORKSPACE_ID,
+    '2026-07-13T02:00:00.000Z',
+  );
 
   await source.backup({ destinationPath: backupSourcePath, reason: 'manual' });
   await source.dispose();
@@ -156,14 +135,9 @@ export async function runLocalMetadataAdapterContract(
     'backup must preserve workspace state',
   );
   assert(
-    (await restored.repositories.conversations.get('contract-conversation'))?.journalId ===
-      'contract-journal',
-    'backup must preserve conversation projection',
-  );
-  assert(
-    (await restored.repositories.conversations.get('contract-conversation'))?.title ===
-      'Updated before backup',
-    'manual backup must preserve the current record',
+    (await restored.repositories.workspaces.get(CONTRACT_TRANSACTION_WORKSPACE_ID))?.lastSeenAt ===
+      '2026-07-13T02:00:00.000Z',
+    'manual backup must preserve the current workspace state',
   );
   assert(
     (

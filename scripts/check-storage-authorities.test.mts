@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import type { NekoStorageClassification } from '../packages/local-metadata/src/storage.ts';
 import {
   reportNonCanonicalDatabasePaths,
+  validateRetiredAgentStorageSources,
   validateStorageClassifications,
 } from './check-storage-authorities.mts';
 
@@ -47,5 +48,22 @@ describe('storage authority quality gate', () => {
     ]);
 
     assert.deepEqual(findings, ['Non-canonical SQLite path: runtime.ts -> unknown.sqlite']);
+  });
+
+  it('rejects the retired generic Conversation SQLite catalog without matching DSH tables', () => {
+    assert.deepEqual(
+      validateRetiredAgentStorageSources({
+        'repositories.ts': 'export interface ConversationCatalogRepository {}',
+        'schema.ts': 'CREATE TABLE IF NOT EXISTS conversations (conversation_id TEXT);',
+        'layout.ts': "const retired = join(root, 'journals');",
+        'dsh.ts':
+          'CREATE TABLE IF NOT EXISTS agent_conversation_dsh_bindings (conversation_id TEXT);',
+      }),
+      [
+        'repositories.ts: retired generic Conversation SQLite catalog contract',
+        'schema.ts: retired generic Conversation SQLite catalog table',
+        'layout.ts: retired Pi conversation file layout',
+      ],
+    );
   });
 });

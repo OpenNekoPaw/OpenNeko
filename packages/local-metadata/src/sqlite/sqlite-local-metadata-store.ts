@@ -20,10 +20,6 @@ import type {
   CatalogItemSource,
   CatalogProjectionReplaceSliceRequest,
   CatalogProjectionRepository,
-  ConversationCatalogQuery,
-  ConversationCatalogRecord,
-  ConversationCatalogRepository,
-  ConversationProjectionReplaceRequest,
   LocalMetadataCacheMaintenanceRepository,
   LocalMetadataCachePartitionCleanupRequest,
   LocalMetadataCachePartitionCleanupResult,
@@ -252,27 +248,6 @@ function decodeWorkspace(row: SqliteRow): WorkspaceRegistryRecord {
     locatorHistory: parseLocatorHistory(readString(row, 'locator_history_json')),
     lastSeenAt: readString(row, 'last_seen_at'),
     orphanedAt: readNullableString(row, 'orphaned_at'),
-  };
-}
-
-function decodeConversation(row: SqliteRow): ConversationCatalogRecord {
-  const source = readString(row, 'source');
-  if (source !== 'desktop' && source !== 'agent' && source !== 'import') {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-conversation',
-      message: `Unknown conversation source: ${source}`,
-    });
-  }
-  return {
-    conversationId: readString(row, 'conversation_id'),
-    workspaceId: readNullableString(row, 'workspace_id'),
-    journalId: readString(row, 'journal_id'),
-    title: readString(row, 'title'),
-    source,
-    model: readNullableString(row, 'model'),
-    createdAt: readString(row, 'created_at'),
-    updatedAt: readString(row, 'updated_at'),
   };
 }
 
@@ -653,109 +628,6 @@ class RawWorkspaceRegistryRepository implements WorkspaceRegistryRepository {
       operation,
       message: `Workspace ${workspaceId} does not exist`,
     });
-  }
-}
-
-class RawConversationCatalogRepository implements ConversationCatalogRepository {
-  constructor(private readonly connection: () => SqliteConnection) {}
-
-  async get(conversationId: string): Promise<ConversationCatalogRecord | null> {
-    const rows = await this.connection().all(
-      `SELECT conversation_id, workspace_id, journal_id, title, source, model, created_at, updated_at
-         FROM conversations WHERE conversation_id = ?`,
-      [conversationId],
-    );
-    const row = rows[0];
-    return row ? decodeConversation(row) : null;
-  }
-
-  async list(query: ConversationCatalogQuery): Promise<readonly ConversationCatalogRecord[]> {
-    if (!Number.isSafeInteger(query.limit) || query.limit <= 0 || query.limit > 1_000) {
-      throw new LocalMetadataError({
-        code: 'metadata-transaction-failed',
-        operation: 'list-conversations',
-        message: `Conversation query limit must be between 1 and 1000: ${query.limit}`,
-      });
-    }
-    if (!Number.isSafeInteger(query.offset) || query.offset < 0) {
-      throw new LocalMetadataError({
-        code: 'metadata-transaction-failed',
-        operation: 'list-conversations',
-        message: `Conversation query offset must be a non-negative integer: ${query.offset}`,
-      });
-    }
-    const filters: string[] = [];
-    const parameters: SqliteBindingValue[] = [];
-    if (query.workspaceId === null) {
-      filters.push('workspace_id IS NULL');
-    } else {
-      filters.push('workspace_id = ?');
-      parameters.push(query.workspaceId);
-    }
-    if (query.text !== null) {
-      filters.push("title LIKE ? ESCAPE '\\'");
-      parameters.push(`%${query.text.replace(/[\\%_]/g, '\\$&')}%`);
-    }
-    parameters.push(query.limit, query.offset);
-    const rows = await this.connection().all(
-      `SELECT conversation_id, workspace_id, journal_id, title, source, model, created_at, updated_at
-         FROM conversations
-        WHERE ${filters.join(' AND ')}
-        ORDER BY updated_at DESC, conversation_id
-        LIMIT ? OFFSET ?`,
-      parameters,
-    );
-    return rows.map(decodeConversation);
-  }
-
-  async upsert(record: ConversationCatalogRecord): Promise<void> {
-    await this.connection().run(
-      `INSERT INTO conversations (
-        conversation_id, workspace_id, journal_id, title, source, model, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(conversation_id) DO UPDATE SET
-        workspace_id = excluded.workspace_id,
-        journal_id = excluded.journal_id,
-        title = excluded.title,
-        source = excluded.source,
-        model = excluded.model,
-        updated_at = excluded.updated_at`,
-      [
-        record.conversationId,
-        record.workspaceId,
-        record.journalId,
-        record.title,
-        record.source,
-        record.model,
-        record.createdAt,
-        record.updatedAt,
-      ],
-    );
-  }
-
-  async delete(conversationId: string): Promise<boolean> {
-    const result = await this.connection().run(
-      'DELETE FROM conversations WHERE conversation_id = ?',
-      [conversationId],
-    );
-    return result.changes === 1;
-  }
-
-  async replaceProjection(request: ConversationProjectionReplaceRequest): Promise<void> {
-    if (request.workspaceId === null) {
-      await this.connection().run('DELETE FROM conversations WHERE workspace_id IS NULL');
-    } else {
-      await this.connection().run('DELETE FROM conversations WHERE workspace_id = ?', [
-        request.workspaceId,
-      ]);
-    }
-    for (const conversation of request.conversations) {
-      await this.upsert(conversation);
-    }
-  }
-
-  async deleteWorkspaceProjection(workspaceId: string): Promise<void> {
-    await this.connection().run('DELETE FROM conversations WHERE workspace_id = ?', [workspaceId]);
   }
 }
 
@@ -2612,7 +2484,6 @@ class RawCacheMaintenanceRepository implements LocalMetadataCacheMaintenanceRepo
     request: LocalMetadataCachePartitionCleanupRequest,
   ): Promise<LocalMetadataCachePartitionCleanupResult> {
     if (
-      request.table !== 'conversations' &&
       request.table !== 'resource_cache_entries' &&
       request.table !== 'media_metadata' &&
       request.table !== 'search_documents' &&
@@ -2628,45 +2499,38 @@ class RawCacheMaintenanceRepository implements LocalMetadataCacheMaintenanceRepo
       });
     }
     const result =
-      request.table === 'conversations'
-        ? request.partition.workspaceId === null
-          ? await this.connection().run('DELETE FROM conversations WHERE workspace_id IS NULL')
-          : await this.connection().run('DELETE FROM conversations WHERE workspace_id = ?', [
-              request.partition.workspaceId,
+      request.table === 'resource_cache_entries'
+        ? await this.connection().run(
+            'DELETE FROM resource_cache_entries WHERE partition_key = ?',
+            [partitionKey(request.partition)],
+          )
+        : request.table === 'media_metadata'
+          ? await this.connection().run('DELETE FROM media_metadata WHERE partition_key = ?', [
+              partitionKey(request.partition),
             ])
-        : request.table === 'resource_cache_entries'
-          ? await this.connection().run(
-              'DELETE FROM resource_cache_entries WHERE partition_key = ?',
-              [partitionKey(request.partition)],
-            )
-          : request.table === 'media_metadata'
-            ? await this.connection().run('DELETE FROM media_metadata WHERE partition_key = ?', [
+          : request.table === 'search_documents'
+            ? await this.connection().run('DELETE FROM search_documents WHERE partition_key = ?', [
                 partitionKey(request.partition),
               ])
-            : request.table === 'search_documents'
+            : request.table === 'semantic_sources'
               ? await this.connection().run(
-                  'DELETE FROM search_documents WHERE partition_key = ?',
+                  'DELETE FROM semantic_sources WHERE partition_key = ?',
                   [partitionKey(request.partition)],
                 )
-              : request.table === 'semantic_sources'
+              : request.table === 'resource_usage_projections'
                 ? await this.connection().run(
-                    'DELETE FROM semantic_sources WHERE partition_key = ?',
+                    'DELETE FROM resource_usage_projections WHERE partition_key = ?',
                     [partitionKey(request.partition)],
                   )
-                : request.table === 'resource_usage_projections'
+                : request.table === 'project_entity_projections'
                   ? await this.connection().run(
-                      'DELETE FROM resource_usage_projections WHERE partition_key = ?',
+                      'DELETE FROM project_entity_projections WHERE partition_key = ?',
                       [partitionKey(request.partition)],
                     )
-                  : request.table === 'project_entity_projections'
-                    ? await this.connection().run(
-                        'DELETE FROM project_entity_projections WHERE partition_key = ?',
-                        [partitionKey(request.partition)],
-                      )
-                    : await this.connection().run(
-                        'DELETE FROM catalog_items WHERE partition_key = ?',
-                        [partitionKey(request.partition)],
-                      );
+                  : await this.connection().run(
+                      'DELETE FROM catalog_items WHERE partition_key = ?',
+                      [partitionKey(request.partition)],
+                    );
     return { deletedRows: result.changes };
   }
 
@@ -2718,9 +2582,7 @@ class RawCacheMaintenanceRepository implements LocalMetadataCacheMaintenanceRepo
                       ? 'resource-usage-projection'
                       : request.table === 'project_entity_projections'
                         ? 'project-entity-projection'
-                        : request.table === 'catalog_items'
-                          ? 'catalog'
-                          : 'conversations',
+                        : 'catalog',
         },
         reason: 'orphan-gc',
         updatedAt: request.collectedAt,
@@ -2770,38 +2632,6 @@ class ExclusiveWorkspaceRegistryRepository implements WorkspaceRegistryRepositor
   }
   markOrphaned(workspaceId: string, orphanedAt: string): Promise<WorkspaceRegistryRecord> {
     return this.exclusive.run(() => this.raw.markOrphaned(workspaceId, orphanedAt));
-  }
-}
-
-class ExclusiveConversationCatalogRepository implements ConversationCatalogRepository {
-  constructor(
-    private readonly raw: ConversationCatalogRepository,
-    private readonly exclusive: ExclusiveCoordinator,
-    private readonly transaction: (
-      mode: LocalMetadataTransactionMode,
-      operation: () => Promise<void>,
-    ) => Promise<void>,
-  ) {}
-
-  get(conversationId: string): Promise<ConversationCatalogRecord | null> {
-    return this.exclusive.run(() => this.raw.get(conversationId));
-  }
-  list(query: ConversationCatalogQuery): Promise<readonly ConversationCatalogRecord[]> {
-    return this.exclusive.run(() => this.raw.list(query));
-  }
-  upsert(record: ConversationCatalogRecord): Promise<void> {
-    return this.exclusive.run(() => this.raw.upsert(record));
-  }
-  delete(conversationId: string): Promise<boolean> {
-    return this.exclusive.run(() => this.raw.delete(conversationId));
-  }
-  replaceProjection(request: ConversationProjectionReplaceRequest): Promise<void> {
-    return this.exclusive.run(() =>
-      this.transaction('cache-write', () => this.raw.replaceProjection(request)),
-    );
-  }
-  deleteWorkspaceProjection(workspaceId: string): Promise<void> {
-    return this.exclusive.run(() => this.raw.deleteWorkspaceProjection(workspaceId));
   }
 }
 
@@ -3183,7 +3013,6 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
     const getConnection = (): SqliteConnection => this.requireConnection('repository-operation');
     const assetLibraryMemberships = new RawAssetLibraryMembershipRepository(getConnection);
     const workspaces = new RawWorkspaceRegistryRepository(getConnection);
-    const conversations = new RawConversationCatalogRepository(getConnection);
     const tasks = new RawTaskStateRepository(getConnection);
     const taskCheckpoints = new RawTaskCheckpointRepository(getConnection);
     const resourceCache = new RawResourceCacheMetadataRepository(getConnection);
@@ -3197,7 +3026,6 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
     this.rawRepositories = {
       assetLibraryMemberships,
       workspaces,
-      conversations,
       tasks,
       taskCheckpoints,
       resourceCache,
@@ -3216,11 +3044,6 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
         (mode, operation) => this.executeTransaction(mode, operation),
       ),
       workspaces: new ExclusiveWorkspaceRegistryRepository(workspaces, this.exclusive),
-      conversations: new ExclusiveConversationCatalogRepository(
-        conversations,
-        this.exclusive,
-        (mode, operation) => this.executeTransaction(mode, operation),
-      ),
       tasks: new ExclusiveTaskStateRepository(tasks, this.exclusive, (mode, operation) =>
         this.executeTransaction(mode, operation),
       ),
