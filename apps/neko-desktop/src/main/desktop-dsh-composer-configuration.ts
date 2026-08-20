@@ -124,13 +124,17 @@ export function createDesktopDshComposerConfiguration(options: {
     };
   };
 
-  const apply = async (conversationId: string, config: ComposerConfigManager): Promise<void> => {
+  const apply = async (
+    conversationId: string,
+    config: ComposerConfigManager,
+  ): Promise<{ readonly supportsImageInput: boolean }> => {
     const effective = requireEffectiveConfiguration(config, options.executionCatalog);
     await options.sessions.setSessionConfigOption(
       conversationId,
       DSH_ACP_MODEL_CONFIG_ID,
       encodeDshAcpModelConfiguration(effective.model),
     );
+    return { supportsImageInput: effective.supportsImageInput };
   };
 
   const readInputCatalog = (conversationId: string | undefined) =>
@@ -333,13 +337,16 @@ export function createDesktopDshComposerConfiguration(options: {
       );
     },
 
-    async applyConversation(conversationId: string, windowId: string): Promise<void> {
+    async applyConversation(
+      conversationId: string,
+      windowId: string,
+    ): Promise<{ readonly supportsImageInput: boolean }> {
       const binding = await options.contexts.readContext(conversationId);
       if (binding === undefined) {
         throw new Error(`Conversation '${conversationId}' has no authoritative domain context.`);
       }
       const resolved = await resolveConfiguration(binding, windowId);
-      await apply(conversationId, resolved.config);
+      return apply(conversationId, resolved.config);
     },
   });
 }
@@ -438,6 +445,7 @@ function requireEffectiveConfiguration(
     readonly modelId: string;
     readonly maxTokens: number;
   };
+  readonly supportsImageInput: boolean;
 } {
   const state = config.getAssistantConfigState();
   const selected = state.chatModelOptions.filter(
@@ -461,6 +469,7 @@ function requireEffectiveConfiguration(
       modelId: execution.apiModelName,
       maxTokens: state.maxTokens,
     },
+    supportsImageInput: execution.input.includes('image'),
   };
 }
 

@@ -72,7 +72,7 @@ describe('Desktop DSH Session Host', () => {
 
   it('routes prompt by exact Conversation binding and preserves bounded Tool details', async () => {
     const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
-    const applyConversation = vi.fn(async () => undefined);
+    const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
     const projection = new DshAcpProjection();
     projection.acceptSessionUpdate({
       sessionId: identity.dshSessionId,
@@ -158,6 +158,58 @@ describe('Desktop DSH Session Host', () => {
     expect(setSessionContext.mock.invocationCallOrder[0]).toBeLessThan(
       prompt.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
+  });
+
+  it('adds an admitted native image block after its resource identity', async () => {
+    const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
+    const admitPromptImages = vi.fn(async () => [
+      {
+        referenceIndex: 0,
+        data: 'aW1hZ2U=',
+        mimeType: 'image/png' as const,
+      },
+    ]);
+    const selectedResource = {
+      label: 'board.png',
+      contentLocator: {
+        file: { authority: 'workspace' as const, path: 'images/board.png' },
+      },
+    };
+    const host = createHost({
+      prompt,
+      admitPromptImages,
+      applyConversation: vi.fn(async () => ({ supportsImageInput: true })),
+    });
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      request('submit', {
+        input: {
+          kind: 'message',
+          text: '',
+          references: [selectedResource],
+          contextPayloads: [],
+        },
+      }),
+    );
+
+    expect(admitPromptImages).toHaveBeenCalledWith({
+      conversationId: identity.conversationId,
+      windowId: 'window-1',
+      references: [selectedResource],
+      modelSupportsImageInput: true,
+    });
+    expect(prompt).toHaveBeenCalledWith({
+      conversationId: identity.conversationId,
+      prompt: [
+        {
+          type: 'resource_link',
+          name: 'board.png',
+          uri: `openneko-content:${encodeURIComponent(JSON.stringify(selectedResource.contentLocator))}`,
+        },
+        { type: 'image', data: 'aW1hZ2U=', mimeType: 'image/png' },
+      ],
+    });
   });
 
   it('projects ACP resource links to canonical ContentLocators without exposing their URI', async () => {
@@ -246,7 +298,7 @@ describe('Desktop DSH Session Host', () => {
   it('invokes a catalog-validated DSH Skill through the canonical prompt context path', async () => {
     const prompt = vi.fn();
     const invokeSkill = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
-    const applyConversation = vi.fn(async () => undefined);
+    const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
     const host = createHost({ prompt, invokeSkill, applyConversation });
 
     const result = requireSessionResult(
@@ -611,7 +663,25 @@ function createHost(overrides: {
     readonly target:
       { readonly kind: 'surface' } | { readonly kind: 'project'; readonly projectId: string };
   }) => Promise<{ readonly conversationId: string }>;
-  readonly applyConversation?: (conversationId: string, windowId: string) => Promise<void>;
+  readonly applyConversation?: (
+    conversationId: string,
+    windowId: string,
+  ) => Promise<{ readonly supportsImageInput: boolean }>;
+  readonly admitPromptImages?: (input: {
+    readonly conversationId: string;
+    readonly windowId: string;
+    readonly references: readonly {
+      readonly label: string;
+      readonly contentLocator: import('@neko/content').ContentLocator;
+    }[];
+    readonly modelSupportsImageInput: boolean;
+  }) => Promise<
+    readonly {
+      readonly referenceIndex: number;
+      readonly data: string;
+      readonly mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+    }[]
+  >;
   readonly promptContext?: {
     resolve(
       conversationId: string,
@@ -667,7 +737,11 @@ function createHost(overrides: {
           },
           source: 'asset-library' as const,
         })),
-      applyConversation: overrides.applyConversation ?? vi.fn(async () => undefined),
+      applyConversation:
+        overrides.applyConversation ?? vi.fn(async () => ({ supportsImageInput: false })),
+    },
+    promptImages: {
+      admit: overrides.admitPromptImages ?? vi.fn(async () => []),
     },
     promptContext: overrides.promptContext ?? {
       resolve: vi.fn(async () => 'OpenNeko test context'),

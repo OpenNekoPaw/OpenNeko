@@ -440,7 +440,9 @@ function createExecutionCatalog(options: { readonly includeDeepSeek?: boolean } 
   return {
     resolve(providerId: string, productModelId: string) {
       const apiModelName = models.get(providerId)?.get(productModelId);
-      return apiModelName === undefined ? undefined : { providerId, productModelId, apiModelName };
+      return apiModelName === undefined
+        ? undefined
+        : { providerId, productModelId, apiModelName, input: ['text'] as const };
     },
   };
 }

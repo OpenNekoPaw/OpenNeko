@@ -282,6 +282,8 @@ function mimeTypeForPath(filePath: string): string | undefined {
       return 'image/jpeg';
     case '.webp':
       return 'image/webp';
+    case '.gif':
+      return 'image/gif';
     case '.mp3':
       return 'audio/mpeg';
     case '.wav':

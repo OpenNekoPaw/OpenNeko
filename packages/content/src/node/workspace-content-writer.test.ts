@@ -85,6 +85,17 @@ describe('NodeAuthorizedWorkspaceWriter', () => {
 });
 
 describe('Node workspace content path ownership', () => {
+  it('projects GIF media type for an authorized workspace file', async () => {
+    const root = await createWorkspace('images/reference.gif', 'gif-bytes');
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'images/reference.gif' },
+    };
+
+    await expect(
+      createNodeHostContentReadService({ workspaceRoot: root }).stat(locator),
+    ).resolves.toMatchObject({ status: 'ready', locator, mimeType: 'image/gif' });
+  });
+
   it('reads a managed neko/assets link through workspace-file', async () => {
     const root = await createWorkspace();
     const externalRoot = await mkdtemp(path.join(tmpdir(), 'openneko-linked-content-'));

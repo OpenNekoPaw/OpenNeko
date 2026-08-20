@@ -50,11 +50,13 @@ describe('Desktop DSH provider runtime projection', () => {
       providerId: 'nekoapi-chat',
       productModelId: 'product-luna',
       apiModelName: 'gpt-5.6-luna',
+      input: ['text'],
     });
     expect(projection.executionCatalog.resolve('deepseek-chat', 'product-deepseek-flash')).toEqual({
       providerId: 'deepseek-chat',
       productModelId: 'product-deepseek-flash',
       apiModelName: 'deepseek-v4-flash',
+      input: ['text'],
     });
     expect(projection.credentialEnvironment).toEqual({
       OPENNEKO_DSH_PROVIDER_CREDENTIAL_0: 'nekoapi-chat-secret',
@@ -67,6 +69,30 @@ describe('Desktop DSH provider runtime projection', () => {
     expect(serializedPatch).toContain('"deepseek-chat"');
     expect(serializedPatch).not.toContain('secret');
     expect(projection.diagnostics).toEqual([]);
+  });
+
+  it('advertises image input only for models with an explicit understanding capability', async () => {
+    const projection = await createDesktopDshProviderRuntimeProjection({
+      providers: [provider({ id: 'vision-provider', requiresApiKey: false })],
+      models: [
+        model({
+          id: 'vision-model',
+          providerId: 'vision-provider',
+          capabilities: ['chat', 'image.understand'],
+        }),
+        model({ id: 'text-model', providerId: 'vision-provider', capabilities: ['chat'] }),
+      ],
+      credentials: { read: vi.fn(async () => undefined) },
+    });
+
+    expect(projection.executionCatalog.resolve('vision-provider', 'vision-model')?.input).toEqual([
+      'text',
+      'image',
+    ]);
+    expect(projection.executionCatalog.resolve('vision-provider', 'text-model')?.input).toEqual([
+      'text',
+    ]);
+    expect(JSON.stringify(projection.profilePatchEntries)).toContain('"input":["text","image"]');
   });
 
   it('isolates missing credentials, unsupported providers, and duplicate API model names', async () => {

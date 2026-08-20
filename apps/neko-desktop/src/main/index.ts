@@ -243,6 +243,7 @@ import {
 import { DesktopDshPermissionHost } from './desktop-dsh-permission-host';
 import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-configuration';
 import { DesktopDshSessionHost } from './desktop-dsh-session-host';
+import { createDesktopDshPromptImageAdmission } from './desktop-dsh-prompt-image-admission';
 import {
   resolveDesktopDshConversationContext,
   resolveDesktopDshSurfaceConversationContext,
@@ -2120,10 +2121,17 @@ async function startDesktop(): Promise<void> {
     workspaceGrants: workspaceGrantAuthority,
     canvas: canvasWorkspaceIndexService,
   });
+  const dshPromptImages = createDesktopDshPromptImageAdmission({
+    contexts: agentConversationContexts,
+    workspaceGrants: workspaceGrantAuthority,
+    createContentRead: (workspacePath) =>
+      createNodeHostContentReadService({ workspaceRoot: workspacePath }),
+  });
   const dshSessionHost = new DesktopDshSessionHost({
     bindings: dshProduct.runtime.bindings,
     conversations: dshProduct.runtime.conversations.conversations,
     promptContext: dshPromptContext,
+    promptImages: dshPromptImages,
     composer: dshComposerConfiguration,
     createConversation: async ({
       windowId,

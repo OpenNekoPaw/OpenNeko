@@ -79,7 +79,27 @@ export class DesktopDshSessionHost {
           readonly agentSurfaceId: string;
           readonly assetId: string;
         }): Promise<DshComposerMaterializedAssetHostResult['materialized']>;
-        applyConversation(conversationId: string, windowId: string): Promise<void>;
+        applyConversation(
+          conversationId: string,
+          windowId: string,
+        ): Promise<{ readonly supportsImageInput: boolean }>;
+      };
+      readonly promptImages: {
+        admit(input: {
+          readonly conversationId: string;
+          readonly windowId: string;
+          readonly references: readonly {
+            readonly label: string;
+            readonly contentLocator: ContentLocator;
+          }[];
+          readonly modelSupportsImageInput: boolean;
+        }): Promise<
+          readonly {
+            readonly referenceIndex: number;
+            readonly data: string;
+            readonly mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+          }[]
+        >;
       };
       readonly createConversation: (input: {
         readonly windowId: string;
@@ -186,7 +206,10 @@ export class DesktopDshSessionHost {
       if (request.input.kind === 'command') {
         await this.options.conversations.executeCommand(conversationId, request.input.line);
       } else {
-        await this.options.composer.applyConversation(conversationId, request.windowId);
+        const appliedModel = await this.options.composer.applyConversation(
+          conversationId,
+          request.windowId,
+        );
         const context = await this.options.promptContext.resolve(
           conversationId,
           request.input.kind === 'message' ? request.input.contextPayloads : [],
@@ -197,8 +220,8 @@ export class DesktopDshSessionHost {
               }))
             : [],
         );
-        await this.options.conversations.setSessionContext(conversationId, context);
         if (request.input.kind === 'skill') {
+          await this.options.conversations.setSessionContext(conversationId, context);
           const response = await this.options.conversations.invokeSkill({
             conversationId,
             skillName: request.input.skillName,
@@ -207,17 +230,41 @@ export class DesktopDshSessionHost {
           });
           stopReason = response.stopReason;
         } else {
+          const images = await this.options.promptImages.admit({
+            conversationId,
+            windowId: request.windowId,
+            references: request.input.references,
+            modelSupportsImageInput: appliedModel.supportsImageInput,
+          });
+          const imageByReferenceIndex = new Map(
+            images.map((image) => [image.referenceIndex, image] as const),
+          );
+          await this.options.conversations.setSessionContext(conversationId, context);
           const response = await this.options.conversations.prompt({
             conversationId,
             prompt: [
               ...(request.input.text.length === 0
                 ? []
                 : [{ type: 'text' as const, text: request.input.text }]),
-              ...request.input.references.map((reference) => ({
-                type: 'resource_link' as const,
-                name: reference.label,
-                uri: serializeContentLocatorResourceUri(reference.contentLocator),
-              })),
+              ...request.input.references.flatMap((reference, referenceIndex) => {
+                const image = imageByReferenceIndex.get(referenceIndex);
+                return [
+                  {
+                    type: 'resource_link' as const,
+                    name: reference.label,
+                    uri: serializeContentLocatorResourceUri(reference.contentLocator),
+                  },
+                  ...(image === undefined
+                    ? []
+                    : [
+                        {
+                          type: 'image' as const,
+                          data: image.data,
+                          mimeType: image.mimeType,
+                        },
+                      ]),
+                ];
+              }),
             ],
           });
           stopReason = response.stopReason;

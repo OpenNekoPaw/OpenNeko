@@ -1801,11 +1801,12 @@ function isPersistedAgentSurfaceQualified(
   if (interaction.phase === 'draft') return true;
   if (scene.context.kind === 'character-interaction') {
     const context = scene.context;
-    return agentHome.conversations.some(
+    const conversation = agentHome.conversations.find(
       (conversation) =>
         conversation.navigation.conversationId === context.scope.conversationId &&
         isSameAgentConversationOwner(conversation.navigation.owner, context.owner),
     );
+    return conversation !== undefined && conversation.unavailable === undefined;
   }
   const scope = interaction.scope;
   if (scope.kind === 'unbound' || scope.conversationId === undefined) return false;
@@ -1813,11 +1814,12 @@ function isPersistedAgentSurfaceQualified(
     scope.kind === 'assistant'
       ? { kind: 'assistant' as const, assistantSpaceId: scope.assistantSpaceId }
       : { kind: 'workspace' as const, workspaceId: scope.workspaceId };
-  return agentHome.conversations.some(
+  const conversation = agentHome.conversations.find(
     (conversation) =>
       conversation.navigation.conversationId === scope.conversationId &&
       isSameAgentConversationOwner(conversation.navigation.owner, owner),
   );
+  return conversation !== undefined && conversation.unavailable === undefined;
 }
 
 function createReplacementAgentDraftScene(

@@ -7,6 +7,7 @@ export interface DesktopDshExecutionModel {
   readonly providerId: string;
   readonly productModelId: string;
   readonly apiModelName: string;
+  readonly input: readonly ('text' | 'image')[];
 }
 
 export interface DesktopDshExecutionCatalog {
@@ -68,7 +69,8 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
     const nameCounts = new Map<string, number>();
     for (const model of providerModels) {
       const apiModelName = model.name.trim();
-      if (apiModelName.length > 0) nameCounts.set(apiModelName, (nameCounts.get(apiModelName) ?? 0) + 1);
+      if (apiModelName.length > 0)
+        nameCounts.set(apiModelName, (nameCounts.get(apiModelName) ?? 0) + 1);
     }
     const dshModels: Readonly<Record<string, unknown>>[] = [];
     const providerExecutionModels = new Map<string, DesktopDshExecutionModel>();
@@ -94,6 +96,9 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
         providerId: provider.id,
         productModelId: model.id,
         apiModelName,
+        input: modelSupportsImageInput(model.capabilities)
+          ? (['text', 'image'] as const)
+          : (['text'] as const),
       });
       providerExecutionModels.set(model.id, execution);
       dshModels.push(
@@ -102,7 +107,7 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
           name: model.displayName || apiModelName,
           ...(isPositiveInteger(model.contextWindow) ? { contextWindow: model.contextWindow } : {}),
           ...(isPositiveInteger(model.maxOutputTokens) ? { maxTokens: model.maxOutputTokens } : {}),
-          input: ['text'],
+          input: execution.input,
         }),
       );
     }
@@ -136,9 +141,7 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
       api: protocol,
       baseURL,
       models: Object.freeze(dshModels),
-      ...(credentialEnvironmentName === undefined
-        ? {}
-        : { apiKeyEnv: credentialEnvironmentName }),
+      ...(credentialEnvironmentName === undefined ? {} : { apiKeyEnv: credentialEnvironmentName }),
     });
     executionModels.set(provider.id, providerExecutionModels);
   }
@@ -161,9 +164,14 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
   });
 }
 
-function resolveDshProtocol(
-  provider: Provider,
-): DshProviderProfile['api'] | undefined {
+function modelSupportsImageInput(capabilities: readonly string[]): boolean {
+  return capabilities.some(
+    (capability) =>
+      capability === 'vision' || capability === 'llm.vision' || capability === 'image.understand',
+  );
+}
+
+function resolveDshProtocol(provider: Provider): DshProviderProfile['api'] | undefined {
   if (provider.protocolProfile === 'openai-responses') return 'openai-responses';
   if (provider.protocolProfile === 'anthropic' || provider.type === 'anthropic') {
     return 'anthropic-messages';

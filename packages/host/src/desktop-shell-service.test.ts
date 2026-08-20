@@ -637,6 +637,93 @@ describe('DesktopShellService', () => {
     expect(JSON.stringify(invalidAuthorityRecord)).toBe(originalAuthorityBytes);
   });
 
+  it('resets an unavailable persisted Conversation to its same-owner Draft on application reopen', async () => {
+    const repository = createMemoryFile();
+    const conversationId = 'conversation:unavailable-binding';
+    const siblingConversationId = 'conversation:available-sibling';
+    const first = createFixture(repository);
+    first.service.setAgentHomeProjectionSource({
+      readHomeProjection: () => ({
+        conversations: [assistantHomeConversation(conversationId)],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }),
+      subscribeHomeProjection: () => () => undefined,
+    });
+    const windowId = await first.service.claimWindowId();
+    first.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await first.service.getProjection(windowId);
+    const scene = activeScene(initial.window);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
+      throw new Error('Expected the initial unbound Agent Draft.');
+    }
+    await first.service.attachAgentConversation({
+      windowId,
+      rendererSessionId: initial.rendererSessionId,
+      agentViewId: scene.context.agentViewId,
+      draftId: scene.context.scope.draftId,
+      context: {
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+        baseGrantIds: [],
+      },
+      conversationId,
+    });
+    first.service.releaseWindow(windowId);
+    await first.service.dispose();
+
+    const restored = createFixture(repository);
+    restored.service.setAgentHomeProjectionSource({
+      readHomeProjection: () => ({
+        conversations: [
+          {
+            ...assistantHomeConversation(conversationId),
+            unavailable: {
+              fieldNames: ['dshSessionId'],
+              message: 'Conversation publication has no DSH Session binding.',
+            },
+          },
+          assistantHomeConversation(siblingConversationId),
+        ],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }),
+      subscribeHomeProjection: () => () => undefined,
+    });
+
+    const restoredWindowId = await restored.service.claimWindowId();
+    restored.service.setRendererSessionId(restoredWindowId, 'renderer-session-1');
+    const projection = await restored.service.getProjection(restoredWindowId);
+    const restoredScene = activeScene(projection.window);
+
+    expect(restoredScene).toMatchObject({
+      context: {
+        kind: 'agent',
+        scope: {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant-space:local-user',
+        },
+      },
+      slots: {
+        interaction: {
+          phase: 'draft',
+          scope: {
+            kind: 'assistant',
+            assistantSpaceId: 'assistant-space:local-user',
+          },
+        },
+      },
+    });
+    expect(restoredScene.context).not.toHaveProperty('scope.conversationId');
+    expect(projection.agentHome.conversations).toEqual([
+      expect.objectContaining({
+        navigation: expect.objectContaining({ conversationId }),
+        unavailable: expect.objectContaining({ fieldNames: ['dshSessionId'] }),
+      }),
+      expect.objectContaining({
+        navigation: expect.objectContaining({ conversationId: siblingConversationId }),
+      }),
+    ]);
+  });
+
   it('validates standalone Assistant lifecycle identity without requiring a Project', async () => {
     const fixture = createFixture();
     const navigation = {

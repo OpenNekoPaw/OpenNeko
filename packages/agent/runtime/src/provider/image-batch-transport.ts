@@ -26,21 +26,32 @@ export async function normalizeProviderImage(
   bytes: Uint8Array,
   mimeType: string,
 ): Promise<{ readonly bytes: Uint8Array; readonly mimeType: string }> {
-  if (bytes.byteLength <= AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
-    try {
-      const sharp = (await import('sharp')).default;
-      const metadata = await sharp(bytes).metadata();
-      if (
-        (metadata.width ?? 0) <= AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE &&
-        (metadata.height ?? 0) <= AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE
-      ) {
-        return { bytes, mimeType };
-      }
-    } catch {
-      return { bytes, mimeType };
-    }
-  }
   const sharp = (await import('sharp')).default;
+  let metadata: Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
+  try {
+    metadata = await sharp(bytes, { animated: true }).metadata();
+  } catch (error) {
+    throw new Error('Provider image bytes are not a decodable supported image.', { cause: error });
+  }
+  const detectedMimeType = mimeTypeForSharpFormat(metadata.format);
+  if (detectedMimeType === undefined) {
+    throw new Error(`Provider image format '${metadata.format ?? 'unknown'}' is unsupported.`);
+  }
+  if (detectedMimeType !== mimeType) {
+    throw new Error(
+      `Provider image MIME '${mimeType}' does not match detected '${detectedMimeType}'.`,
+    );
+  }
+  if (metadata.width === undefined || metadata.height === undefined) {
+    throw new Error('Provider image dimensions are unavailable.');
+  }
+  if (
+    bytes.byteLength <= AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES &&
+    metadata.width <= AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE &&
+    metadata.height <= AGENT_IMAGE_TRANSPORT_MAX_LONG_EDGE
+  ) {
+    return { bytes, mimeType: detectedMimeType };
+  }
   const normalized = await sharp(bytes)
     .rotate()
     .resize({
@@ -60,6 +71,16 @@ export async function normalizeProviderImage(
   return { bytes: normalized, mimeType: 'image/jpeg' };
 }
 
+function mimeTypeForSharpFormat(
+  format: string | undefined,
+): 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' | undefined {
+  if (format === 'png') return 'image/png';
+  if (format === 'jpeg') return 'image/jpeg';
+  if (format === 'webp') return 'image/webp';
+  if (format === 'gif') return 'image/gif';
+  return undefined;
+}
+
 export async function normalizeProviderImageDataUri(
   uri: string,
 ): Promise<{ readonly url: string; readonly mimeType: string }> {
@@ -67,7 +88,11 @@ export async function normalizeProviderImageDataUri(
   if (!inline) {
     throw new Error('Inline image payload must be a base64 image data URI.');
   }
-  const normalized = await normalizeProviderImage(Buffer.from(inline[2]!, 'base64'), inline[1]!);
+  const [, mimeType, base64] = inline;
+  if (mimeType === undefined || base64 === undefined) {
+    throw new Error('Inline image payload match is incomplete.');
+  }
+  const normalized = await normalizeProviderImage(Buffer.from(base64, 'base64'), mimeType);
   return {
     url: `data:${normalized.mimeType};base64,${Buffer.from(normalized.bytes).toString('base64')}`,
     mimeType: normalized.mimeType,
