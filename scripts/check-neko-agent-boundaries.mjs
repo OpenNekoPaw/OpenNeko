@@ -34,6 +34,15 @@ const retiredAgentEvaluationMarkers = Object.freeze([
   ...retiredAgentArtifactMarkers,
   ['Pi ', 'retired Pi authority'],
 ]);
+const retiredAgentProductionMarkers = Object.freeze([
+  ['requireToolExecutionRunScope', 'retired generic Tool execution ownership'],
+  ['withToolExecutionRunMetadata', 'retired generic Tool execution metadata'],
+  ['projectQueuedMessagesForPendingCount', 'retired OpenNeko queue projector'],
+  ['projectQueuedMessagesCleared', 'retired OpenNeko queue projector'],
+  ['projectAuthoritativeQueuedMessagesIntoTranscript', 'retired OpenNeko queue projector'],
+  ['projectReleasedQueuedMessageIntoTranscript', 'retired OpenNeko queue projector'],
+  ['projectOptimisticQueuedMessageItem', 'retired OpenNeko queue projector'],
+]);
 const forbiddenDesktopAgentExecutionTokens = Object.freeze([
   ['@deepseek-ai/cordis', 'embedded Cordis'],
   ['@deepseek-ai/dsh-sdk-client', 'DSH TypeScript SDK'],
@@ -103,6 +112,12 @@ export async function checkNekoAgentBoundaries(root = repositoryRoot, options = 
   for (const file of hostNeutralFiles) {
     const relativeFile = normalize(relative(root, file));
     const source = await readFile(file, 'utf8');
+    findings.push(
+      ...validateRetiredAgentArtifactSources(
+        { [relativeFile]: source },
+        retiredAgentProductionMarkers,
+      ),
+    );
     for (const specifier of extractImportSpecifiers(source)) {
       if (
         specifier === 'electron' ||
@@ -121,6 +136,12 @@ export async function checkNekoAgentBoundaries(root = repositoryRoot, options = 
   for (const file of browserFiles) {
     const relativeFile = normalize(relative(root, file));
     const source = await readFile(file, 'utf8');
+    findings.push(
+      ...validateRetiredAgentArtifactSources(
+        { [relativeFile]: source },
+        retiredAgentProductionMarkers,
+      ),
+    );
     for (const specifier of extractImportSpecifiers(source)) {
       if (specifier === 'electron' || specifier === 'vscode' || specifier.startsWith('node:')) {
         findings.push(`${relativeFile}: Agent Webview imports prohibited host API ${specifier}`);
@@ -305,6 +326,7 @@ export async function findRetiredAgentPathFindings(root) {
     'packages/agent/contracts/src/agent-capability-lifecycle.ts',
     'packages/agent/contracts/src/agent-capability.ts',
     'packages/agent/contracts/src/agent-draft-submit.ts',
+    'packages/agent/contracts/src/agent-runtime-scope.ts',
     'packages/agent/contracts/src/agent-turn-timeline.ts',
     'packages/agent/contracts/src/capability.ts',
     'packages/agent/contracts/src/conversation-projection.ts',
@@ -316,7 +338,12 @@ export async function findRetiredAgentPathFindings(root) {
     'packages/agent/contracts/src/prompt-fragment.ts',
     'packages/agent/contracts/src/reference-contributor.ts',
     'packages/agent/contracts/src/resource-display-projection.ts',
+    'packages/agent/contracts/src/runtime-config.ts',
+    'packages/agent/contracts/src/runtime-scope.ts',
     'packages/agent/contracts/src/skill.ts',
+    'packages/agent/contracts/src/work-item-projector.ts',
+    'packages/agent/contracts/src/work-item.ts',
+    'packages/agent/webview/src/presenters/context-reference-presenter.ts',
     'packages/agent/runtime/src/runtime/session/conversation-run-registry.ts',
     'packages/agent/runtime/src/runtime/session/execution-ownership.ts',
     'packages/agent/runtime/src/runtime/turn/creator-visible-artifact-collector.ts',

@@ -162,6 +162,7 @@ test('rejects restored retired Agent authorities while accepting empty retired d
       'agent-capability-diagnostics.ts',
       'agent-capability-lifecycle.ts',
       'agent-capability.ts',
+      'agent-runtime-scope.ts',
       'capability.ts',
       'domain-routing.ts',
       'perception-tool.ts',
@@ -171,12 +172,21 @@ test('rejects restored retired Agent authorities while accepting empty retired d
       'prompt-fragment.ts',
       'reference-contributor.ts',
       'resource-display-projection.ts',
+      'runtime-config.ts',
+      'runtime-scope.ts',
       'skill.ts',
+      'work-item-projector.ts',
+      'work-item.ts',
     ]) {
       await writeFile(join(root, 'packages/agent/contracts/src', retiredContract), 'export {};');
     }
     await writeFile(
       join(root, 'packages/agent/contracts/src/conversation-projection.ts'),
+      'export {};',
+    );
+    await mkdir(join(root, 'packages/agent/webview/src/presenters'), { recursive: true });
+    await writeFile(
+      join(root, 'packages/agent/webview/src/presenters/context-reference-presenter.ts'),
       'export {};',
     );
     await mkdir(join(root, 'packages/agent/runtime/src/runtime/projection'), { recursive: true });
@@ -201,6 +211,7 @@ test('rejects restored retired Agent authorities while accepting empty retired d
       'packages/agent/contracts/src/agent-capability-lifecycle.ts: retired Agent path must remain deleted.',
       'packages/agent/contracts/src/agent-capability.ts: retired Agent path must remain deleted.',
       'packages/agent/contracts/src/agent-draft-submit.ts: retired Agent path must remain deleted.',
+      'packages/agent/contracts/src/agent-runtime-scope.ts: retired Agent path must remain deleted.',
       'packages/agent/contracts/src/capability.ts: retired Agent path must remain deleted.',
       'packages/agent/contracts/src/conversation-projection.ts: retired Agent path must remain deleted.',
       'packages/agent/contracts/src/domain-routing.ts: retired Agent path must remain deleted.',
@@ -211,7 +222,12 @@ test('rejects restored retired Agent authorities while accepting empty retired d
       'packages/agent/contracts/src/prompt-fragment.ts: retired Agent path must remain deleted.',
       'packages/agent/contracts/src/reference-contributor.ts: retired Agent path must remain deleted.',
       'packages/agent/contracts/src/resource-display-projection.ts: retired Agent path must remain deleted.',
+      'packages/agent/contracts/src/runtime-config.ts: retired Agent path must remain deleted.',
+      'packages/agent/contracts/src/runtime-scope.ts: retired Agent path must remain deleted.',
       'packages/agent/contracts/src/skill.ts: retired Agent path must remain deleted.',
+      'packages/agent/contracts/src/work-item-projector.ts: retired Agent path must remain deleted.',
+      'packages/agent/contracts/src/work-item.ts: retired Agent path must remain deleted.',
+      'packages/agent/webview/src/presenters/context-reference-presenter.ts: retired Agent path must remain deleted.',
       'packages/host/src/settings/mcp-server-config.ts: retired Agent path must remain deleted.',
       'packages/host/src/settings/types/config.ts: retired Agent path must remain deleted.',
       'apps/neko-desktop/resources/extensions/plugins: retired Agent directory must remain empty.',

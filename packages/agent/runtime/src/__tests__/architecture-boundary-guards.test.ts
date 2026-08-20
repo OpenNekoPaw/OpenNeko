@@ -296,10 +296,7 @@ describe('agent architecture boundary guards', () => {
   });
 
   it('keeps domain validators and task-result projectors out of Agent core', () => {
-    const coreProjectionFiles = [
-      join(agentTypesSrc, 'work-item.ts'),
-      join(agentTypesSrc, 'work-item-projector.ts'),
-    ];
+    const coreProjectionFiles = [join(agentTypesSrc, 'message.ts'), join(agentTypesSrc, 'tool.ts')];
     const forbiddenPatterns = [
       /\bcreativeEntity\b/,
       /generated-storyboard/,
@@ -313,6 +310,8 @@ describe('agent architecture boundary guards', () => {
         .map((pattern) => `${relative(workspaceRoot, file)} matches ${pattern}`);
     });
     const forbiddenFiles = [
+      join(agentTypesSrc, 'work-item.ts'),
+      join(agentTypesSrc, 'work-item-projector.ts'),
       join(agentSrc, 'validation/storyboard-output-validator.ts'),
       join(agentSrc, 'task/media-task-creative-entity.ts'),
       join(agentSrc, 'task/task-view-projector.ts'),

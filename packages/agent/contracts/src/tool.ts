@@ -4,7 +4,6 @@
 
 import type { ToolDefinition } from './platform';
 import type { AgentTraceContext } from './agent-trace';
-import type { ConversationRunScope } from './agent-runtime-scope';
 import type { CreativeDomainMetadata } from './creative-domain';
 import type {
   ToolQueryBeforeMutateGuidance,
@@ -296,70 +295,6 @@ export interface ToolPurposeModelRuntime {
   readonly providerId: string;
   readonly modelId: string;
   complete(input: ToolPurposeModelCompletionInput): Promise<ToolPurposeModelCompletionResult>;
-}
-
-/**
- * Require the immutable conversation/run owner attached by the Agent executor.
- * Runtime-owned work must never infer ownership from active UI state or local child ids.
- */
-export function requireToolExecutionRunScope(
-  options: ToolExecuteOptions | undefined,
-): ConversationRunScope {
-  const metadataConversationId = readToolExecutionOwnerId(
-    options?.metadata?.conversationId,
-    'metadata.conversationId',
-  );
-  const traceConversationId = readToolExecutionOwnerId(
-    options?.trace?.conversationId,
-    'trace.conversationId',
-  );
-  const conversationId = requireMatchingToolExecutionOwnerId(
-    'conversationId',
-    metadataConversationId,
-    traceConversationId,
-  );
-  const runId = requireMatchingToolExecutionOwnerId(
-    'runId',
-    readToolExecutionOwnerId(options?.metadata?.runId, 'metadata.runId'),
-    readToolExecutionOwnerId(options?.trace?.runId, 'trace.runId'),
-  );
-  return { conversationId, runId };
-}
-
-/** Attach canonical Agent execution ownership to an internal async-work request. */
-export function withToolExecutionRunMetadata(
-  options: ToolExecuteOptions | undefined,
-  metadata: Record<string, unknown> | undefined = undefined,
-): Record<string, unknown> {
-  return {
-    ...(metadata ?? {}),
-    ...requireToolExecutionRunScope(options),
-  };
-}
-
-function readToolExecutionOwnerId(value: unknown, source: string): string | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new Error(`Tool execution requires non-empty ${source}.`);
-  }
-  return value.trim();
-}
-
-function requireMatchingToolExecutionOwnerId(
-  field: 'conversationId' | 'runId',
-  metadataValue: string | undefined,
-  traceValue: string | undefined,
-): string {
-  if (metadataValue && traceValue && metadataValue !== traceValue) {
-    throw new Error(
-      `Tool execution ${field} owner mismatch: metadata=${metadataValue}, trace=${traceValue}.`,
-    );
-  }
-  const value = metadataValue ?? traceValue;
-  if (!value) {
-    throw new Error(`Tool execution requires ${field} ownership.`);
-  }
-  return value;
 }
 
 /**
