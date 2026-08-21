@@ -9,6 +9,7 @@ import {
   type DshComposerMentionsHostResult,
   type DshComposerMaterializedAssetHostResult,
   type DshComposerSubmitInput,
+  type DshComposerImageInput,
 } from '@neko/agent-contracts/dsh-session-host';
 import { decodeDshAcpJsonPayload } from '@neko/agent-contracts/dsh-acp';
 import type {
@@ -17,6 +18,7 @@ import type {
   DshConversationCatalogStore,
 } from '@neko/agent-runtime/application';
 import type { DshAcpProjection, DshAcpProjectedEvent } from '@neko/agent-runtime/acp';
+import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
 import { validateContentLocator, type ContentLocator } from '@neko/content';
 
 import type { DesktopSenderIdentity } from './window-registry';
@@ -46,6 +48,7 @@ export class DesktopDshSessionHost {
             readonly label: string;
             readonly contentLocator: import('@neko/content').ContentLocator;
           }[],
+          canvasTurnTarget?: CanvasWorkspaceTurnTarget,
         ): Promise<string>;
       };
       readonly composer: {
@@ -102,10 +105,13 @@ export class DesktopDshSessionHost {
             readonly label: string;
             readonly contentLocator: ContentLocator;
           }[];
+          readonly images: readonly DshComposerImageInput[];
           readonly modelSupportsImageInput: boolean;
         }): Promise<
           readonly {
-            readonly referenceIndex: number;
+            readonly source:
+              | { readonly kind: 'reference'; readonly referenceIndex: number }
+              | { readonly kind: 'inline'; readonly imageIndex: number; readonly name: string };
             readonly data: string;
             readonly mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
           }[]
@@ -235,6 +241,7 @@ export class DesktopDshSessionHost {
                 contentLocator: reference.contentLocator,
               }))
             : [],
+          request.input.canvasTurnTarget,
         );
         if (request.input.kind === 'skill') {
           await this.options.conversations.setSessionContext(conversationId, context);
@@ -250,15 +257,37 @@ export class DesktopDshSessionHost {
             conversationId,
             windowId: request.windowId,
             references: request.input.references,
+            images: request.input.images,
             modelSupportsImageInput: appliedModel.supportsImageInput,
           });
           const imageByReferenceIndex = new Map(
-            images.map((image) => [image.referenceIndex, image] as const),
+            images.flatMap((image) =>
+              image.source.kind === 'reference'
+                ? [[image.source.referenceIndex, image] as const]
+                : [],
+            ),
+          );
+          const imageByInlineIndex = new Map(
+            images.flatMap((image) =>
+              image.source.kind === 'inline' ? [[image.source.imageIndex, image] as const] : [],
+            ),
           );
           const prompt = [
             ...(request.input.text.length === 0
               ? []
               : [{ type: 'text' as const, text: request.input.text }]),
+            ...request.input.images.map((image, imageIndex) => {
+              const admitted = imageByInlineIndex.get(imageIndex);
+              if (admitted === undefined) {
+                throw new Error(`DSH Prompt inline image ${imageIndex} was not admitted.`);
+              }
+              return {
+                type: 'image' as const,
+                data: admitted.data,
+                mimeType: admitted.mimeType,
+                _meta: { opennekoDisplayName: image.name },
+              };
+            }),
             ...request.input.references.flatMap((reference, referenceIndex) => {
               const image = imageByReferenceIndex.get(referenceIndex);
               return [
@@ -287,6 +316,10 @@ export class DesktopDshSessionHost {
                 ...(request.input.text.length === 0
                   ? []
                   : [{ type: 'text' as const, text: request.input.text }]),
+                ...request.input.images.map((image) => ({
+                  type: 'image' as const,
+                  name: image.name,
+                })),
                 ...request.input.references.map((reference) => ({
                   type: 'resource-link' as const,
                   name: reference.label,
@@ -342,6 +375,9 @@ export class DesktopDshSessionHost {
       dshSessionId,
       title: record.title,
       ...(snapshot.currentTurn === undefined ? {} : { currentTurn: snapshot.currentTurn }),
+      ...(snapshot.contextPressure === undefined
+        ? {}
+        : { contextPressure: snapshot.contextPressure }),
       inbox,
       events: projectEvents(snapshot.events),
     };
@@ -480,14 +516,30 @@ function projectUserMessageEvent(
     content: event.content.map((block) =>
       block.type === 'text'
         ? { type: 'text' as const, text: block.text }
-        : {
-            type: 'resource' as const,
-            label: block.name,
-            contentLocator: deserializeContentLocatorResourceUri(block.uri),
-          },
+        : isDshAttachmentResourceUri(block.uri)
+          ? { type: 'image' as const, label: block.name }
+          : {
+              type: 'resource' as const,
+              label: block.name,
+              contentLocator: deserializeContentLocatorResourceUri(block.uri),
+            },
     ),
     ...(event.messageId === undefined ? {} : { messageId: event.messageId }),
   };
+}
+
+function isDshAttachmentResourceUri(uri: string): boolean {
+  const prefix = 'openneko-dsh-attachment:';
+  if (!uri.startsWith(prefix)) return false;
+  const encodedIdentity = uri.slice(prefix.length);
+  if (encodedIdentity.length === 0) {
+    throw new Error('ACP DSH attachment resource has no identity.');
+  }
+  const identity = decodeURIComponent(encodedIdentity);
+  if (identity.trim().length === 0) {
+    throw new Error('ACP DSH attachment resource identity is invalid.');
+  }
+  return true;
 }
 
 function deserializeContentLocatorResourceUri(uri: string): ContentLocator {

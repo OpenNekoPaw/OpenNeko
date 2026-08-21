@@ -1,11 +1,7 @@
 import type { SemanticSourceDescriptor, SemanticTextSegment } from '../contracts';
-import type {
-  ContentLocator,
-  DocumentFormat,
-  DocumentLocator,
-  DocumentSourceRef,
-} from '@neko/content';
-import type { IDocumentAccessService } from '@neko/content/document';
+import type { ContentLocator, DocumentFormat, DocumentSourceRef } from '@neko/content';
+import { contentLocatorKey } from '@neko/content';
+import type { DocumentReadCoordinate, IDocumentAccessService } from '@neko/content/document';
 import { extractSemanticText } from './text';
 
 export const DEFAULT_SEMANTIC_DOCUMENT_MAX_UNITS = 500;
@@ -119,8 +115,8 @@ export async function extractSemanticDocument(
     }
     const result = await input.documentAccess.readNext(cursor);
     const nextCursor = result.cursor;
-    const locator = result.locator;
-    if (!nextCursor || !locator) {
+    const coordinate = result.locator;
+    if (!nextCursor || !coordinate) {
       throw new SemanticDocumentExtractionError(
         'semantic-document-invalid-cursor',
         `Document reader did not return a cursor and locator: ${input.source.relativePath}`,
@@ -137,6 +133,7 @@ export async function extractSemanticDocument(
     }
     collectContentLocators(result.imageInfo, contentLocators);
     if (unitText.trim()) {
+      const locator = contentLocatorFromCoordinate(input.source, coordinate);
       const unitId = documentUnitId(input.source.sourceId, locator);
       const unitSegments = extractSemanticText({
         source: { ...input.source, format: 'plain', creativeSchema: undefined },
@@ -194,18 +191,36 @@ function collectContentLocators(
   }
 }
 
-function documentUnitId(sourceId: string, locator: DocumentLocator): string {
-  return `${sourceId}:unit:${stableLocator(locator)}`;
+function contentLocatorFromCoordinate(
+  source: SemanticSourceDescriptor,
+  coordinate: DocumentReadCoordinate,
+): ContentLocator {
+  const file = { authority: 'workspace' as const, path: source.relativePath };
+  switch (coordinate.kind) {
+    case 'page':
+      return {
+        file,
+        selector: {
+          kind: 'page',
+          pageNumber: coordinate.pageNumber,
+          pageIndex: coordinate.pageIndex,
+        },
+      };
+    case 'chapter':
+      return { file, selector: { kind: 'entry', path: coordinate.chapterHref } };
+    case 'text-range':
+      return { file, selector: coordinate };
+    case 'region':
+    case 'slide':
+      throw new SemanticDocumentExtractionError(
+        'semantic-document-invalid-cursor',
+        `Document reader returned unsupported semantic coordinate: ${coordinate.kind}`,
+      );
+  }
 }
 
-function stableLocator(locator: DocumentLocator): string {
-  return JSON.stringify(
-    Object.fromEntries(
-      Object.entries(locator)
-        .filter(([, value]) => value !== undefined)
-        .sort(([left], [right]) => left.localeCompare(right)),
-    ),
-  );
+function documentUnitId(sourceId: string, locator: ContentLocator): string {
+  return `${sourceId}:unit:${contentLocatorKey(locator)}`;
 }
 
 function positiveBudget(value: number, name: string): number {

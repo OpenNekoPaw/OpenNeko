@@ -1,4 +1,8 @@
-import { DocumentContentAccessRuntime, type IDocumentAccessService } from '@neko/content/document';
+import {
+  DocumentAccessError,
+  DocumentContentAccessRuntime,
+  type IDocumentAccessService,
+} from '@neko/content/document';
 import {
   type ContentReadService,
   type ContentLocator,
@@ -45,14 +49,17 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
     input: AgentDocumentContentInput,
   ): Promise<AgentDocumentContentResult> {
     if (!isWorkspaceFileContentLocator(input.source)) {
-      return documentFailure(input, 'Document source must be a workspace-file locator.');
+      return documentFailure(
+        input,
+        'unsupported-source',
+        'Document source must be a workspace-file locator.',
+      );
     }
     const source = input.source;
     try {
       const result = await this.documentRuntime.resolveDocumentContent({
         source,
         mode: input.mode,
-        range: input.range,
         cursor: input.cursor,
         startBatch: input.startBatch,
         includeManifest: input.includeManifest,
@@ -62,7 +69,11 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
         signal: input.signal,
       });
       if (result.status === 'unavailable') {
-        return documentFailure(input, `Document content is unavailable: ${result.diagnostic.code}`);
+        return documentFailure(
+          input,
+          result.diagnostic.code,
+          `Document content is unavailable: ${result.diagnostic.code}`,
+        );
       }
       const computedImages = await this.projectComputedDocumentImages(input, result);
       const imageInfo = computedImages.imageInfo ?? result.imageInfo;
@@ -75,8 +86,6 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
         diagnostics: computedImages.diagnostics,
         ...(result.text !== undefined ? { text: result.text } : {}),
         ...(result.manifest ? { manifest: result.manifest } : {}),
-        ...(result.range ? { range: result.range } : {}),
-        ...(result.locator ? { locator: result.locator } : {}),
         ...(result.excerpt ? { excerpt: result.excerpt } : {}),
         ...(result.cursor ? { cursor: result.cursor } : {}),
         ...(imageInfo ? { imageInfo } : {}),
@@ -91,8 +100,11 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
         ...(result.metadata ? { metadata: result.metadata } : {}),
       };
     } catch (error) {
-      void error;
-      return documentFailure(input, 'Document content could not be read.');
+      return documentFailure(
+        input,
+        documentErrorCode(error),
+        `Document content could not be read: ${documentErrorMessage(error)}`,
+      );
     }
   }
 
@@ -198,7 +210,10 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
           if (represented.status !== 'ready') throw new Error(represented.diagnostic.message);
           return {
             label: `page ${page}`,
-            locator: { kind: 'page' as const, pageNumber: page, pageIndex: index },
+            contentLocator: {
+              file: source.file,
+              selector: { kind: 'page' as const, pageNumber: page, pageIndex: index },
+            },
             mimeType: represented.metadata.mimeType ?? 'image/png',
             ...(represented.metadata.width !== undefined
               ? { width: represented.metadata.width }
@@ -235,16 +250,30 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
 
 function documentFailure(
   input: AgentDocumentContentInput,
+  code: string,
   message: string,
 ): AgentDocumentContentResult {
   return {
     status: 'failed',
     diagnostics: [
       createAgentContentAccessDiagnostic({
-        code: 'unsupported-source',
+        code,
         message,
         ...(input.metadata ? { metadata: input.metadata } : {}),
       }),
     ],
   };
+}
+
+function documentErrorCode(error: unknown): string {
+  if (error instanceof DocumentAccessError) return error.code;
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const code = Reflect.get(error, 'code');
+    if (typeof code === 'string' && code.length > 0) return code;
+  }
+  return 'document-read-failed';
+}
+
+function documentErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

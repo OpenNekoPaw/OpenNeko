@@ -18,15 +18,22 @@ The system MUST archive a published Conversation by resolving its exact DSH Sess
 - **WHEN** the same exact Conversation is archived more than once
 - **THEN** the command succeeds idempotently without creating duplicate archive entries
 
-#### Scenario: Archive target is invalid
+#### Scenario: Archive target has a stale DSH Session
 
-- **WHEN** the Conversation binding is missing, cross-bound or names an unknown DSH Session
+- **WHEN** the user explicitly archives a Conversation whose exact stored DSH Session no longer exists in authoritative `session/list`
+- **THEN** the system removes the exact catalog, context and binding rows in one local transaction
+- **AND** it does not invoke DSH archive or retain a Renderer-only hidden record
+- **AND** sibling Conversations remain available
+
+#### Scenario: Archive target is otherwise invalid
+
+- **WHEN** the Conversation binding is missing, cross-bound, changes concurrently or stale cleanup cannot match every expected row
 - **THEN** only the current archive command fails with an explicit diagnostic
 - **AND** sibling Conversations and the existing Home projection remain available
 
 ### Requirement: Conversation deletion is not a product capability
 
-The system MUST NOT expose a Conversation delete channel, contract, UI action, compatibility alias, raw Session deletion path or SQLite catalog deletion path.
+The system MUST NOT expose a Conversation delete channel, contract, UI action, compatibility alias, raw Session deletion path or SQLite catalog deletion path for a resolvable DSH Session. Local deletion is permitted only for a user-requested stale cleanup after authoritative DSH absence proof and exact transactional CAS.
 
 #### Scenario: Inspect production registrations
 

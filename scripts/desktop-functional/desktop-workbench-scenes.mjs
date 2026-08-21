@@ -1380,6 +1380,83 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         provider: providerEvidence,
       });
 
+      const pastedImagePrompt = '请分析刚刚粘贴的图片。';
+      await replaceActiveAgentComposerText({ evaluate, pressKey, type }, pastedImagePrompt);
+      await evaluate(`(() => {
+        const textarea = document.querySelector('${ACTIVE_AGENT_TEXTAREA_SELECTOR}');
+        if (!(textarea instanceof HTMLTextAreaElement)) {
+          throw new Error('Active Agent Composer is unavailable for image paste.');
+        }
+        const binary = atob(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        );
+        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([bytes], 'clipboard.png', { type: 'image/png' }));
+        textarea.dispatchEvent(
+          new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: transfer,
+          }),
+        );
+        return true;
+      })()`);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const token = document.querySelector(
+            '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-reference-row-attached [data-reference-kind="image"]',
+          );
+          const send = document.querySelector('${ACTIVE_AGENT_SEND_SELECTOR}');
+          return token?.textContent?.includes('pasted-image-') &&
+            send instanceof HTMLButtonElement && !send.disabled;
+        })()`,
+        'Pasted image did not become a sendable Composer attachment.',
+      );
+      const pastedPreviewScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-pasted-image-composer-preview',
+      );
+      await click(ACTIVE_AGENT_SEND_SELECTOR);
+      await waitForFunctionalProviderRequests(providerServer, 2);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const surface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+          const transcript = surface?.textContent ?? '';
+          const imageTokens = [...(surface?.querySelectorAll(
+            '.agent-user-prompt [data-reference-kind="image"]',
+          ) ?? [])];
+          return transcript.includes(${JSON.stringify(pastedImagePrompt)}) &&
+            transcript.includes('OPENNEKO_FUNCTIONAL_RESPONSE_2') &&
+            imageTokens.some((token) => token.textContent?.includes('pasted-image-')) &&
+            !surface?.querySelector('.agent-run-status') &&
+            !surface?.querySelector('.agent-execution-activity') &&
+            !surface?.querySelector('.agent-composer-stop');
+        })()`,
+        'Pasted image submit did not complete with a replayable image token.',
+        45_000,
+      );
+      const finalProviderEvidence = providerServer.snapshot();
+      assertFunctionalProviderEvidence(finalProviderEvidence, 2);
+      if (
+        finalProviderEvidence.requests.length !== 2 ||
+        finalProviderEvidence.requests[1]?.nativeImageCount !== 1
+      ) {
+        throw new Error(
+          `Pasted image submit did not produce one exact native image request: ${JSON.stringify(finalProviderEvidence)}`,
+        );
+      }
+      const pastedCompletedScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-pasted-image-session-complete',
+      );
+      checkpoint('workspace-pasted-image-session-complete', {
+        prompt: pastedImagePrompt,
+        provider: finalProviderEvidence,
+      });
+
       const associationDirectory = join(
         prepared.workspacePath,
         'neko',
@@ -1476,7 +1553,7 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         recoveryRequired,
         mentionSelection: mention.selection,
         workspaceSession,
-        provider: providerEvidence,
+        provider: finalProviderEvidence,
         unavailableLink,
         afterLocalStateDeletion,
         recoveryAfterUnlink,
@@ -1486,6 +1563,8 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
           recoveryRequired.appliedScreenshot,
           mention.screenshot,
           completedScreenshot,
+          pastedPreviewScreenshot,
+          pastedCompletedScreenshot,
           unavailableLinkScreenshot,
           deletedLocalStateScreenshot,
           recoveryAfterUnlink.requiredScreenshot,

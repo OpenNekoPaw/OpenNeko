@@ -15,6 +15,7 @@ import {
   type ResourceBrowserProjection,
 } from '@neko/assets-domain/resource-browser/contract';
 import type { AgentConversationContext } from '@neko/agent-contracts';
+import type { CanvasWorkspaceIndexService } from '@neko/canvas-domain';
 import type { WorkspaceAssetMaterializationResult } from '@neko/assets-domain/global-library';
 import type { ProjectEntityRecord } from '@neko/entity-domain';
 import type {
@@ -50,6 +51,7 @@ type ComposerConfigManager = Pick<
 export function createDesktopDshComposerConfiguration(options: {
   resolveSurface(input: ComposerSurfaceIdentity): Promise<ComposerSurfaceScope>;
   readonly contexts: Pick<AgentConversationContextAuthorityPort, 'readContext'>;
+  readonly canvas: Pick<CanvasWorkspaceIndexService, 'readCatalog'>;
   readonly workspaceGrants: {
     restore(
       windowId: string,
@@ -115,6 +117,7 @@ export function createDesktopDshComposerConfiguration(options: {
       binding.workspaceGrantId,
       binding.workspaceId,
     );
+    const canvas = await options.canvas.readCatalog(resolution.workspace.workspaceId);
     return {
       config: options.configuration.getWorkspaceConfig({
         workspaceId: resolution.workspace.workspaceId,
@@ -124,7 +127,7 @@ export function createDesktopDshComposerConfiguration(options: {
         kind: 'workspace',
         workspaceId: resolution.workspace.workspaceId,
         workspaceLabel: resolution.workspace.displayName,
-        canvas: { kind: 'workspace-board', label: 'Workspace Board' },
+        canvas,
       },
     };
   };

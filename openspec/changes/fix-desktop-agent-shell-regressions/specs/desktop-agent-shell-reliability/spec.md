@@ -710,6 +710,13 @@ rejected before any listener runs.
 - **WHEN** a Canvas projection event carries an identity that is not the exact current Canvas owner
 - **THEN** it is rejected before any Canvas listener receives it
 
+#### Scenario: The exact Canvas owner rebinds after its Host session is recreated
+
+- **WHEN** an already-mounted Canvas requests an authoritative snapshot after its previous Host session was released
+- **THEN** Desktop SHALL replace the stale Main subscription with a subscription owned by the recreated exact session
+- **AND** preload SHALL reset the event cursor for that new authoritative snapshot binding before accepting subsequent events
+- **AND** a later terminal Agent delivery SHALL update the mounted Canvas without closing or reopening it
+
 ### Requirement: Canvas document refresh preserves the active viewport
 
 Canvas Webview SHALL keep its package-owned runtime viewport stable when an authoritative full snapshot changes

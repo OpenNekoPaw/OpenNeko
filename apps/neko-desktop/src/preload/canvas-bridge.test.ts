@@ -116,6 +116,44 @@ describe('Desktop Canvas preload bridge', () => {
     unsubscribe();
   });
 
+  it('accepts the first projection from an exact Canvas session rebound by a new snapshot', async () => {
+    const reboundIdentity = {
+      ...identity,
+      viewInstanceId: 'canvas-view-instance-rebound',
+      sessionId: 'canvas-session-rebound',
+    };
+    electron.invoke.mockImplementation(async (channel: string, value: unknown) => {
+      expect(channel).toBe(DESKTOP_CANVAS_CHANNELS.snapshotGet);
+      expect(value).toEqual(reboundIdentity);
+      return snapshot([], reboundIdentity);
+    });
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+    const listener = vi.fn();
+    const unsubscribe = bridge.canvas.subscribe(reboundIdentity, listener);
+
+    await bridge.canvas.getSnapshot(reboundIdentity);
+    electron.listeners.get(DESKTOP_CANVAS_CHANNELS.projectionEvent)?.(
+      {},
+      { sequence: 8, snapshot: snapshot([], reboundIdentity) },
+    );
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    await bridge.canvas.getSnapshot(reboundIdentity);
+    electron.listeners.get(DESKTOP_CANVAS_CHANNELS.projectionEvent)?.(
+      {},
+      { sequence: 1, snapshot: snapshot([], reboundIdentity) },
+    );
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        sequence: 1,
+        snapshot: expect.objectContaining({ identity: reboundIdentity }),
+      }),
+    );
+    unsubscribe();
+  });
+
   it('requires an owner-bound snapshot and strictly parses text preview results', async () => {
     const textPreviewIdentity = {
       ...identity,

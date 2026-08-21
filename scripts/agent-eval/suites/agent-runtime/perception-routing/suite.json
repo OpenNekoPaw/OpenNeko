@@ -82,6 +82,18 @@
       "file": "cases/content-locator-document-images.json",
       "group": "canonical",
       "visibility": "public"
+    },
+    {
+      "id": "content-locator-selected-document-content",
+      "file": "cases/content-locator-selected-document-content.json",
+      "group": "canonical",
+      "visibility": "public"
+    },
+    {
+      "id": "content-locator-document-manifest",
+      "file": "cases/content-locator-document-manifest.json",
+      "group": "canonical",
+      "visibility": "public"
     }
   ],
   "rubricRefs": [],

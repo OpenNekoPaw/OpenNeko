@@ -8,3 +8,5 @@
 - [x] 6. Add contract, adapter, Desktop, plugin, no-Pi-fallback, build, and typecheck verification.
 - [x] 7. Update Agent Evaluation coverage and record visible real-provider evidence or its exact infrastructure blocker.
 - [x] 8. Serialize model-level Content image calls so multi-image steps cannot overflow bounded Host admission.
+- [x] 9. Normalize dimension-only oversized images into bounded DSH perception attachments while preserving the original locator and fail-visible pixel/byte safety bounds.
+- [x] 10. Add real-image regression coverage for the 1511x2160 EPUB cover, rebuild the DSH runtime closure, and update Evaluation evidence.

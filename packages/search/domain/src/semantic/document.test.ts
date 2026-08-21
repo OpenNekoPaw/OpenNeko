@@ -3,13 +3,12 @@ import type {
   DocumentEntryContentLocator,
   DocumentBatchCursor,
   DocumentFormat,
-  DocumentLocator,
   DocumentManifest,
   DocumentReadResult,
   DocumentSourceRef,
 } from '@neko/content';
 import { describe, expect, it } from 'vitest';
-import type { IDocumentAccessService } from '@neko/content/document';
+import type { DocumentReadCoordinate, IDocumentAccessService } from '@neko/content/document';
 import { extractSemanticDocument, SemanticDocumentExtractionError } from './document';
 import {
   readSemanticOccurrenceContext,
@@ -30,7 +29,11 @@ describe('semantic document extraction', () => {
     });
     expect(result.segments).toEqual([
       expect.objectContaining({
-        locator,
+        locator: {
+          file: { authority: 'workspace', path: `story.${format}` },
+          selector:
+            locator.kind === 'chapter' ? { kind: 'entry', path: locator.chapterHref } : locator,
+        },
         unitId: expect.stringContaining(':unit:'),
         contentHash: expect.stringMatching(/^fnv1a32:/u),
       }),
@@ -133,7 +136,7 @@ describe('semantic occurrence context', () => {
 });
 
 interface FakeUnit {
-  readonly locator: DocumentLocator;
+  readonly locator: DocumentReadCoordinate;
   readonly text: string;
   readonly truncated?: boolean;
   readonly contentLocator?: DocumentEntryContentLocator;
@@ -199,7 +202,7 @@ function fakeDocumentAccess(
 
 function readResult(
   sourceRef: DocumentSourceRef,
-  locator: DocumentLocator,
+  locator: DocumentReadCoordinate,
   unit: FakeUnit,
   cursor: DocumentBatchCursor | undefined,
 ): DocumentReadResult {
@@ -249,11 +252,11 @@ function resolveSource(
   return typeof input === 'string' ? { filePath: input, format } : input;
 }
 
-function sameLocator(left: DocumentLocator, right: DocumentLocator): boolean {
+function sameLocator(left: DocumentReadCoordinate, right: DocumentReadCoordinate): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function occurrenceRecord(locator: DocumentLocator) {
+function occurrenceRecord(locator: DocumentReadCoordinate) {
   return {
     occurrenceId: 'occurrence-1',
     owner: 'document' as const,
@@ -275,7 +278,15 @@ function occurrenceRecord(locator: DocumentLocator) {
       },
       role: 'reference' as const,
       location: '${WORKSPACE}/story.pdf:1',
-      locator,
+      locator: {
+        file: { authority: 'workspace' as const, path: 'story.pdf' },
+        selector:
+          locator.kind === 'page' || locator.kind === 'text-range'
+            ? locator
+            : locator.kind === 'chapter'
+              ? { kind: 'entry' as const, path: locator.chapterHref }
+              : undefined,
+      },
       sourceFingerprint: 'sha256:pdf',
     },
   };

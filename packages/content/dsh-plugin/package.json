@@ -22,7 +22,7 @@
     }
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:@deepseek-ai/* --external:@neko/agent-contracts --outfile=dist/index.js && tsc -p tsconfig.build.json --emitDeclarationOnly",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:@deepseek-ai/* --external:@neko/agent-contracts --external:sharp --outfile=dist/index.js && tsc -p tsconfig.build.json --emitDeclarationOnly",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -32,7 +32,8 @@
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/dsh-tools": "0.1.0-rc.8",
     "@neko/agent-contracts": "workspace:*",
-    "@neko/content": "workspace:*"
+    "@neko/content": "workspace:*",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

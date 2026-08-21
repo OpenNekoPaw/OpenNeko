@@ -58,9 +58,24 @@ Each executable Conversation SHALL reference one exact DSH Session identity. DSH
 #### Scenario: Submit a Workspace turn with product context
 
 - **WHEN** the user submits from a Workspace Agent Surface
-- **THEN** Host resolves the exact durable Conversation context and Canvas-owned canonical Workspace Board
+- **THEN** Host projects the Canvas-owned catalog containing the logical Workspace Board and every valid exact Canvas in that Conversation Workspace
+- **AND** the submit carries only the Canvas-owned Board or exact-Canvas turn target selected for that input
+- **AND** Host resolves the exact durable Conversation context and validates that target through the Canvas-owned index service
 - **AND** the bridge materializes that validated value through the exact DSH Agent scope as dynamic runtime context before the prompt
 - **AND** the user message stored and projected by DSH remains unchanged
+
+#### Scenario: Queue a turn with an exact Canvas target
+
+- **WHEN** the user selects an exact Canvas and submits while the exact DSH Session has an active turn
+- **THEN** Host validates and freezes that Canvas turn context in the identified DSH inbox message
+- **AND** the bridge applies it only when that exact message is claimed
+- **AND** later Canvas catalog or Renderer selection changes do not retarget the queued message
+
+#### Scenario: Selected Canvas becomes unavailable
+
+- **WHEN** the selected exact Canvas is missing, disabled, belongs to another Workspace or cannot be summarized
+- **THEN** only the current submission fails with an explicit diagnostic before model execution
+- **AND** Host does not fall back to the logical Board, active/recent Canvas, Renderer summary or raw path
 
 #### Scenario: Product context is unavailable or unsupported
 
@@ -219,6 +234,20 @@ The product SHALL use the selected current model directly when its authoritative
 - **WHEN** the selected Agent model supports image input and the image passes Host authorization and DSH attachment admission
 - **THEN** the exact DSH Session receives one native image content block with its durable attachment reference
 - **AND** no OpenNeko multimodal runtime or text-placeholder path is used
+
+#### Scenario: User pastes an image into the Composer
+
+- **WHEN** the user pastes or selects a PNG, JPEG, WebP or GIF in the canonical Composer and submits text with that image
+- **THEN** the sender-bound Host validates and normalizes the bounded image before publishing the same exact DSH Prompt or live inbox message
+- **AND** DSH persists one native image attachment while replay projects a visible image token without duplicating the image bytes
+- **AND** the Renderer attachment object, Data URL and any local path do not become Session facts or an alternate provider input path
+
+#### Scenario: Pasted image admission fails
+
+- **WHEN** the pasted image is malformed, unsupported, oversized, exceeds the batch bound or the exact selected model lacks image input
+- **THEN** the current submit fails visibly before any text-only Prompt is published
+- **AND** the Composer restores the submitted text and attachment unless the user has already started another draft
+- **AND** no sibling Conversation, provider, source or retired attachment projector is used as fallback success
 
 #### Scenario: Current model cannot perceive the selected media
 

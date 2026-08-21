@@ -29,7 +29,10 @@ describe('semantic text extraction', () => {
         kind: 'plain',
         text: 'First line\nsecond line',
         contentHash: expect.stringMatching(/^fnv1a32:/u),
-        locator: expect.objectContaining({ kind: 'text-range', startChar: 0 }),
+        locator: expect.objectContaining({
+          file: { authority: 'workspace', path: 'story.plain' },
+          selector: expect.objectContaining({ kind: 'text-range', startChar: 0 }),
+        }),
         range: expect.objectContaining({ startLine: 1, endLine: 2, startOffset: 0 }),
       }),
       expect.objectContaining({

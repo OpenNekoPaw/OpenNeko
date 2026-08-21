@@ -402,12 +402,9 @@ describe('Desktop DSH domain Tool handlers', () => {
       outcome: 'success',
       result: { documentPath: 'cuts/story.otio', name: 'Desktop DSH Cut' },
     });
+    expect(queried).not.toHaveProperty('result.fingerprint');
     if (queried.outcome !== 'success') throw new Error('Expected successful Cut query.');
     const queriedFacts = queried.result as {
-      fingerprint: {
-        strategy: 'sha256' | 'mtime-size' | 'provider';
-        value: string;
-      };
       tracks: readonly [{ trackId: string }];
     };
 
@@ -417,7 +414,6 @@ describe('Desktop DSH domain Tool handlers', () => {
         operation: 'apply',
         input: {
           documentPath: 'cuts/story.otio',
-          expectedFingerprint: queriedFacts.fingerprint,
           commands: [
             { type: 'set-track-muted', trackId: queriedFacts.tracks[0].trackId, muted: true },
           ],

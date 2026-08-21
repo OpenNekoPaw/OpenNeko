@@ -27,7 +27,13 @@ const createRequest = {
   operation: 'create' as const,
   permissionPresetId: 'workspace-write',
   target: { kind: 'surface' as const },
-  initialInput: { kind: 'message' as const, text: 'hello', references: [], contextPayloads: [] },
+  initialInput: {
+    kind: 'message' as const,
+    text: 'hello',
+    references: [],
+    images: [],
+    contextPayloads: [],
+  },
 };
 
 describe('DSH Session Host contract', () => {
@@ -174,11 +180,33 @@ describe('DSH Session Host contract', () => {
         windowId: 'window-1',
         rendererSessionId: 'renderer-1',
         conversationId: 'conversation-1',
-        input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+        input: {
+          kind: 'message',
+          text: 'hello',
+          references: [],
+          images: [],
+          contextPayloads: [],
+          canvasTurnTarget: {
+            kind: 'exact-canvas',
+            workspaceId: 'workspace-1',
+            canvasId: 'neko/boards/story.nkc',
+          },
+        },
       }),
     ).toMatchObject({
       operation: 'submit',
-      input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+      input: {
+        kind: 'message',
+        text: 'hello',
+        references: [],
+        images: [],
+        contextPayloads: [],
+        canvasTurnTarget: {
+          kind: 'exact-canvas',
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/story.nkc',
+        },
+      },
     });
     expect(
       parseDshSessionHostResult(
@@ -190,6 +218,111 @@ describe('DSH Session Host contract', () => {
         'request-1',
       ),
     ).toMatchObject({ projection: { dshSessionId: 'session-1' } });
+  });
+
+  it('strictly accepts bounded canonical inline images and rejects malformed batches', () => {
+    const submit = (images: unknown[]) =>
+      parseDshSessionHostRequest({
+        requestId: 'request-image',
+        operation: 'submit',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: 'conversation-1',
+        input: { kind: 'message', text: '', references: [], images, contextPayloads: [] },
+      });
+
+    expect(submit([{ name: 'clipboard.png', mimeType: 'image/png', data: 'AQID' }])).toMatchObject({
+      input: {
+        images: [{ name: 'clipboard.png', mimeType: 'image/png', data: 'AQID' }],
+      },
+    });
+    expect(() =>
+      submit([{ name: 'clipboard.svg', mimeType: 'image/svg+xml', data: 'AQID' }]),
+    ).toThrow(/MIME/u);
+    expect(() => submit([{ name: 'clipboard.png', mimeType: 'image/png', data: 'YR==' }])).toThrow(
+      /canonical base64/u,
+    );
+    expect(() =>
+      submit(
+        Array.from({ length: 5 }, (_, index) => ({
+          name: `clipboard-${index}.png`,
+          mimeType: 'image/png',
+          data: 'AQID',
+        })),
+      ),
+    ).toThrow(/limit of 4/u);
+  });
+
+  it('strictly decodes the Canvas-owned composer catalog', () => {
+    expect(
+      parseDshComposerConfigurationProjection({
+        models: [],
+        selectedMediaModelOptionIds: {},
+        permissionPresetId: 'workspace-write',
+        permissionPresets: [{ id: 'workspace-write', label: 'Workspace Write', selectable: true }],
+        context: {
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceLabel: 'Workspace One',
+          canvas: {
+            workspaceId: 'workspace-1',
+            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+            options: [
+              {
+                target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                label: 'Workspace Board',
+              },
+              {
+                target: {
+                  kind: 'exact-canvas',
+                  workspaceId: 'workspace-1',
+                  canvasId: 'neko/boards/story.nkc',
+                },
+                label: 'story.nkc',
+                summary: {
+                  canvasId: 'neko/boards/story.nkc',
+                  name: 'story.nkc',
+                },
+              },
+            ],
+            diagnostics: [],
+          },
+        },
+      }),
+    ).toMatchObject({
+      context: {
+        canvas: {
+          options: [
+            { target: { kind: 'workspace-board' } },
+            { target: { kind: 'exact-canvas', canvasId: 'neko/boards/story.nkc' } },
+          ],
+        },
+      },
+    });
+    expect(() =>
+      parseDshComposerConfigurationProjection({
+        models: [],
+        selectedMediaModelOptionIds: {},
+        permissionPresetId: 'workspace-write',
+        permissionPresets: [{ id: 'workspace-write', label: 'Workspace Write', selectable: true }],
+        context: {
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceLabel: 'Workspace One',
+          canvas: {
+            workspaceId: 'workspace-2',
+            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-2' },
+            options: [
+              {
+                target: { kind: 'workspace-board', workspaceId: 'workspace-2' },
+                label: 'Workspace Board',
+              },
+            ],
+            diagnostics: [],
+          },
+        },
+      }),
+    ).toThrow(/must match its Workspace context/u);
   });
 
   it('strictly decodes mention queries and authorized ContentLocator results', () => {
@@ -299,6 +432,7 @@ describe('DSH Session Host contract', () => {
         kind: 'message',
         text: 'hello',
         references: [],
+        images: [],
         contextPayloads: [],
         skillName: 'story',
       },
@@ -331,7 +465,7 @@ describe('DSH Session Host contract', () => {
         windowId: 'window-1',
         rendererSessionId: 'renderer-1',
         conversationId: 'conversation-1',
-        input: { kind: 'message', text: '', references: [], contextPayloads },
+        input: { kind: 'message', text: '', references: [], images: [], contextPayloads },
       });
 
     expect(submit([contextPayload])).toMatchObject({
@@ -438,6 +572,29 @@ describe('DSH Session Host contract', () => {
         ],
       }),
     ).toThrow(/event.args must be a string/u);
+  });
+
+  it('decodes optional DSH context pressure as a strict Session read model', () => {
+    expect(
+      parseDshSessionHostProjection({
+        ...projection(),
+        contextPressure: {
+          pressureTokens: 38_924,
+          projectedTokens: 41_100,
+          contextWindow: 256_000,
+        },
+      }).contextPressure,
+    ).toEqual({
+      pressureTokens: 38_924,
+      projectedTokens: 41_100,
+      contextWindow: 256_000,
+    });
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        contextPressure: { projectedTokens: 1, source: 'transcript' },
+      }),
+    ).toThrow(/unsupported fields/u);
   });
 
   it('requires canonical DSH timing on exact turn boundaries', () => {

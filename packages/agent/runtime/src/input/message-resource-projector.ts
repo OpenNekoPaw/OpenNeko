@@ -260,10 +260,14 @@ async function resolveDisplayLocator(
 }
 
 function portableContentPath(locator: ContentLocator): string {
-  if (locator.selector) return locator.selector.path;
-  return locator.file.authority === 'workspace'
-    ? locator.file.path
-    : `${locator.file.packageId}/${locator.file.path}`;
+  const file =
+    locator.file.authority === 'workspace'
+      ? locator.file.path
+      : `${locator.file.packageId}/${locator.file.path}`;
+  if (locator.selector?.kind === 'entry') return locator.selector.path;
+  if (locator.selector?.kind === 'page') return `${file}#page=${locator.selector.pageNumber}`;
+  if (locator.selector?.kind === 'text-range') return `${file}#text-range`;
+  return file;
 }
 
 function appendProjectionDiagnostic(

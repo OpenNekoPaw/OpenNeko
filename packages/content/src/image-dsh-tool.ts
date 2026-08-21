@@ -1,7 +1,7 @@
 import {
   isContentLocator,
   isWorkspaceFileContentLocator,
-  type ContentLocator,
+  type ContentEntrySelector,
   type WorkspaceFileContentLocator,
 } from './contracts';
 
@@ -43,24 +43,31 @@ export const CONTENT_IMAGE_DSH_TOOL_PARAMETERS = {
   },
 } as const;
 
+export type ContentImageDshSource = WorkspaceFileContentLocator & {
+  readonly selector?: ContentEntrySelector;
+};
+
 export interface ContentImageDshChunkRequest {
-  readonly source: ContentLocator;
+  readonly source: ContentImageDshSource;
   readonly offset: number;
 }
 
 export interface ContentImageDshChunk {
-  readonly source: ContentLocator;
+  readonly source: ContentImageDshSource;
   readonly offset: number;
   readonly totalBytes: number;
   readonly mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
   readonly data: string;
 }
 
-export function decodeContentImageDshToolSource(value: unknown): WorkspaceFileContentLocator {
+export function decodeContentImageDshToolSource(value: unknown): ContentImageDshSource {
   if (!isContentLocator(value) || !isWorkspaceFileContentLocator(value)) {
     throw new Error('source must be a canonical Workspace ContentLocator.');
   }
-  return value;
+  if (value.selector !== undefined && value.selector.kind !== 'entry') {
+    throw new Error('source selector must identify an image entry.');
+  }
+  return value as ContentImageDshSource;
 }
 
 export function decodeContentImageDshChunkRequest(

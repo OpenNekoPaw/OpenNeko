@@ -1,10 +1,11 @@
 import type { DshAcpProjectedEvent } from '../acp/dsh-acp-projection';
 import type { AgentConversationContext } from '@neko/agent-contracts';
-import { DOCUMENT_DSH_TOOL_NAME, decodeDocumentDshToolInput } from '@neko/content/document';
+import { DOCUMENT_DSH_TOOL_NAME, decodeDocumentDshToolArgs } from '@neko/content/document';
 import {
   CONTENT_IMAGE_DSH_TOOL_NAME,
   contentLocatorKey,
   decodeContentImageDshToolSource,
+  isContentLocator,
   type ContentLocator,
 } from '@neko/content';
 import { hashStableValue } from '@neko/shared';
@@ -34,6 +35,29 @@ export interface DshWorkspaceBoardArtifactBatch {
   readonly turn: number;
   readonly completedAt: number;
   readonly artifacts: readonly DshWorkspaceBoardArtifact[];
+}
+
+export interface DshWorkspaceBoardArtifactCollectionDiagnostic {
+  readonly code: 'DSH_WORKSPACE_BOARD_CONTENT_TOOL_PROJECTION_INVALID';
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly message: string;
+}
+
+export interface DshWorkspaceBoardArtifactCollection {
+  readonly batch?: DshWorkspaceBoardArtifactBatch;
+  readonly diagnostics: readonly DshWorkspaceBoardArtifactCollectionDiagnostic[];
+}
+
+type DshWorkspaceBoardSourceArtifact = Extract<
+  DshWorkspaceBoardArtifact,
+  { readonly role: 'source' }
+>;
+
+interface CollectedContentToolSource {
+  readonly artifact: DshWorkspaceBoardSourceArtifact;
+  readonly origin: 'document' | 'image';
+  readonly imageOnlyReplacementLocators: readonly ContentLocator[];
 }
 
 export interface DshWorkspaceBoardArtifactDeliveryInput {
@@ -79,6 +103,9 @@ export function createDshWorkspaceBoardTerminalDeliveryService(options: {
     readContext(conversationId: string): Promise<AgentConversationContext | undefined>;
   };
   readonly delivery: DshWorkspaceBoardArtifactDeliveryPort;
+  readonly diagnostics: {
+    report(diagnostic: DshWorkspaceBoardArtifactCollectionDiagnostic): void;
+  };
 }): DshWorkspaceBoardTerminalDeliveryService {
   return Object.freeze({
     async deliverTerminal(input: DshWorkspaceBoardTerminalDeliveryInput) {
@@ -90,10 +117,12 @@ export function createDshWorkspaceBoardTerminalDeliveryService(options: {
       if (terminal?.kind !== 'turn' || terminal.phase !== 'end') {
         throw new Error(`DSH Session '${input.dshSessionId}' has no projected terminal turn.`);
       }
-      const batch = collectDshWorkspaceBoardArtifactBatch({
+      const collection = collectDshWorkspaceBoardArtifacts({
         events: input.events,
         turn: terminal.turn,
       });
+      for (const diagnostic of collection.diagnostics) options.diagnostics.report(diagnostic);
+      const batch = collection.batch;
       if (batch === undefined) return undefined;
       return options.delivery.deliver({
         workspaceId: context.workspaceId,
@@ -111,43 +140,62 @@ export function createDshWorkspaceBoardTerminalDeliveryService(options: {
  * Collects one reviewable batch only after the exact DSH turn has reached a successful terminal
  * projection. Tool events are evidence; they never mutate Canvas directly.
  */
-export function collectDshWorkspaceBoardArtifactBatch(input: {
+export function collectDshWorkspaceBoardArtifacts(input: {
   readonly events: readonly DshAcpProjectedEvent[];
   readonly turn: number;
-}): DshWorkspaceBoardArtifactBatch | undefined {
+}): DshWorkspaceBoardArtifactCollection {
+  const diagnostics: DshWorkspaceBoardArtifactCollectionDiagnostic[] = [];
   const terminal = input.events.find(
     (event) => event.kind === 'turn' && event.phase === 'end' && event.turn === input.turn,
   );
-  if (terminal?.kind !== 'turn' || terminal.phase !== 'end') return undefined;
-  if (!isReviewableTurnEnd(terminal.reason)) return undefined;
-  if (
-    input.events.some(
-      (event) =>
-        event.kind === 'tool' &&
-        event.turn === input.turn &&
-        isContentTool(event.title) &&
-        event.status !== 'completed',
-    )
-  ) {
-    return undefined;
-  }
-
-  const sources = new Map<string, Extract<DshWorkspaceBoardArtifact, { role: 'source' }>>();
+  if (terminal?.kind !== 'turn' || terminal.phase !== 'end') return { diagnostics };
+  if (!isReviewableTurnEnd(terminal.reason)) return { diagnostics };
+  const sources = new Map<string, DshWorkspaceBoardSourceArtifact>();
+  const imageOnlyReplacements = new Map<string, readonly ContentLocator[]>();
+  const documentLocatorsByFile = new Map<string, Map<string, ContentLocator>>();
   for (const event of input.events) {
     if (event.kind !== 'tool' || event.turn !== input.turn || event.status !== 'completed')
       continue;
-    const source = collectContentToolSource(event);
+    if (event.title !== DOCUMENT_DSH_TOOL_NAME && event.title !== CONTENT_IMAGE_DSH_TOOL_NAME) {
+      continue;
+    }
+    let source: CollectedContentToolSource | undefined;
+    try {
+      source = collectContentToolSource(event);
+    } catch (error) {
+      diagnostics.push({
+        code: 'DSH_WORKSPACE_BOARD_CONTENT_TOOL_PROJECTION_INVALID',
+        toolCallId: event.toolCallId,
+        toolName: event.title,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
     if (!source) continue;
-    const locatorIdentity = contentLocatorKey(source.contentLocator);
+    const locatorIdentity = contentLocatorKey(source.artifact.contentLocator);
     const existing = sources.get(locatorIdentity);
-    if (existing === undefined || (existing.kind === 'file-reference' && source.kind === 'image')) {
-      sources.set(locatorIdentity, source);
+    if (
+      existing === undefined ||
+      (existing.kind === 'file-reference' && source.artifact.kind === 'image')
+    ) {
+      sources.set(locatorIdentity, source.artifact);
+    }
+    if (source.imageOnlyReplacementLocators.length > 0) {
+      imageOnlyReplacements.set(locatorIdentity, source.imageOnlyReplacementLocators);
+    }
+    if (source.origin === 'document') {
+      const fileIdentity = contentFileKey(source.artifact.contentLocator);
+      const locators = documentLocatorsByFile.get(fileIdentity) ?? new Map();
+      locators.set(locatorIdentity, source.artifact.contentLocator);
+      documentLocatorsByFile.set(fileIdentity, locators);
     }
   }
-  if (sources.size === 0) return undefined;
+  collapseConsumedImageOnlyDocumentWrappers(sources, imageOnlyReplacements);
+  collapseMultiLocationDocumentSources(sources, documentLocatorsByFile);
+  if (sources.size === 0) return { diagnostics };
 
   const markdown = collectFinalAssistantMarkdown(input.events, input.turn);
-  if (!markdown) return undefined;
+  if (!markdown) return { diagnostics };
 
   const orderedSources = [...sources.values()].sort((left, right) =>
     left.sourceId.localeCompare(right.sourceId),
@@ -170,33 +218,53 @@ export function collectDshWorkspaceBoardArtifactBatch(input: {
     markdown,
   };
   return {
-    turn: input.turn,
-    completedAt: terminal.completedAt,
-    artifacts: [...orderedSources, analysis],
+    batch: {
+      turn: input.turn,
+      completedAt: terminal.completedAt,
+      artifacts: [...orderedSources, analysis],
+    },
+    diagnostics,
   };
-}
-
-function isContentTool(title: string | undefined): boolean {
-  return title === DOCUMENT_DSH_TOOL_NAME || title === CONTENT_IMAGE_DSH_TOOL_NAME;
 }
 
 function collectContentToolSource(
   event: Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }>,
-): Extract<DshWorkspaceBoardArtifact, { role: 'source' }> | undefined {
+): CollectedContentToolSource | undefined {
   let locator: ContentLocator;
   let kind: 'file-reference' | 'image';
+  let origin: 'document' | 'image';
+  let imageOnlyReplacementLocators: readonly ContentLocator[] = [];
   if (event.title === DOCUMENT_DSH_TOOL_NAME) {
-    const rawInput = requireRecord(event.rawInput, `${DOCUMENT_DSH_TOOL_NAME} input`);
-    const decoded = decodeDocumentDshToolInput(rawInput['operation'], rawInput['input']);
-    locator = decoded.input.source;
+    const requested = decodeDocumentDshToolArgs(event.rawInput).input.source;
+    const completed = readCompletedDocumentResult(event.rawOutput);
+    if (contentLocatorKey(completed.source) !== contentLocatorKey(requested)) {
+      throw new Error(
+        'Completed openneko.document source does not match the requested ContentLocator.',
+      );
+    }
+    locator = completed.source;
     kind = 'file-reference';
+    origin = 'document';
+    imageOnlyReplacementLocators = readImageOnlyReplacementLocators(completed.result, locator);
   } else if (event.title === CONTENT_IMAGE_DSH_TOOL_NAME) {
     const rawInput = requireRecord(event.rawInput, `${CONTENT_IMAGE_DSH_TOOL_NAME} input`);
     locator = decodeContentImageDshToolSource(rawInput['source']);
     kind = 'image';
+    origin = 'image';
   } else {
     return undefined;
   }
+  return {
+    artifact: createSourceArtifact(locator, kind),
+    origin,
+    imageOnlyReplacementLocators,
+  };
+}
+
+function createSourceArtifact(
+  locator: ContentLocator,
+  kind: 'file-reference' | 'image',
+): DshWorkspaceBoardSourceArtifact {
   const locatorKey = contentLocatorKey(locator);
   const locatorHash = hashStableValue(locatorKey);
   const sourceId = `content:${locatorHash}`;
@@ -209,6 +277,95 @@ function collectContentToolSource(
     sourceId,
     contentLocator: locator,
   };
+}
+
+function readCompletedDocumentResult(rawOutput: unknown): {
+  readonly source: ContentLocator;
+  readonly result: Record<string, unknown>;
+} {
+  const projected = parseProjectedToolOutput(rawOutput);
+  if (!isRecord(projected) || !isContentLocatorValue(projected['source'])) {
+    throw new Error('Completed openneko.document output has no canonical source ContentLocator.');
+  }
+  return { source: projected['source'], result: projected };
+}
+
+function readImageOnlyReplacementLocators(
+  result: Record<string, unknown>,
+  source: ContentLocator,
+): readonly ContentLocator[] {
+  if (source.selector?.kind !== 'entry') return [];
+  const excerpt = result['excerpt'];
+  if (!isRecord(excerpt) || excerpt['contentKind'] !== 'image') return [];
+  const imageInfo = result['imageInfo'];
+  if (!Array.isArray(imageInfo)) return [];
+  return imageInfo.flatMap((entry) => {
+    if (!isRecord(entry) || !isContentLocatorValue(entry['contentLocator'])) return [];
+    const image = entry['contentLocator'];
+    if (contentLocatorKey({ file: image.file }) !== contentLocatorKey({ file: source.file })) {
+      return [];
+    }
+    return [image];
+  });
+}
+
+function collapseConsumedImageOnlyDocumentWrappers(
+  sources: Map<string, DshWorkspaceBoardSourceArtifact>,
+  replacements: ReadonlyMap<string, readonly ContentLocator[]>,
+): void {
+  for (const [wrapperIdentity, imageLocators] of replacements) {
+    if (imageLocators.length === 0) continue;
+    const imageIdentities = imageLocators.map(contentLocatorKey);
+    if (
+      imageIdentities.every((identity) => {
+        const source = sources.get(identity);
+        return source?.kind === 'image';
+      })
+    ) {
+      sources.delete(wrapperIdentity);
+    }
+  }
+}
+
+function collapseMultiLocationDocumentSources(
+  sources: Map<string, DshWorkspaceBoardSourceArtifact>,
+  documentLocatorsByFile: ReadonlyMap<string, ReadonlyMap<string, ContentLocator>>,
+): void {
+  for (const [fileIdentity, documentLocators] of documentLocatorsByFile) {
+    const firstLocator = documentLocators.values().next().value;
+    if (firstLocator === undefined) continue;
+    const rootLocator: ContentLocator = { file: firstLocator.file };
+    const rootIdentity = contentLocatorKey(rootLocator);
+    if (!sources.has(rootIdentity) && documentLocators.size < 2) continue;
+    for (const [sourceIdentity, source] of sources) {
+      if (contentFileKey(source.contentLocator) === fileIdentity) sources.delete(sourceIdentity);
+    }
+    sources.set(rootIdentity, createSourceArtifact(rootLocator, 'file-reference'));
+  }
+}
+
+function contentFileKey(locator: ContentLocator): string {
+  return contentLocatorKey({ file: locator.file });
+}
+
+function parseProjectedToolOutput(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    const text = value.find(
+      (item): item is { readonly type: 'text'; readonly text: string } =>
+        isRecord(item) && item['type'] === 'text' && typeof item['text'] === 'string',
+    )?.text;
+    if (text === undefined) return undefined;
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      throw new Error('Completed openneko.document output is not valid JSON.');
+    }
+  }
+  return value;
+}
+
+function isContentLocatorValue(value: unknown): value is ContentLocator {
+  return isContentLocator(value);
 }
 
 function collectFinalAssistantMarkdown(
@@ -253,13 +410,18 @@ function markdownTitle(markdown: string): string {
 }
 
 function contentTitle(locator: ContentLocator): string {
-  const portablePath = locator.selector?.path ?? locator.file.path;
+  const portablePath =
+    locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path;
   return portablePath.split('/').at(-1) ?? portablePath;
 }
 
 function requireRecord(value: unknown, field: string): Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error(`${field} must be an object.`);
   }
-  return value as Record<string, unknown>;
+  return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }

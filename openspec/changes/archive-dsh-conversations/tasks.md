@@ -8,3 +8,5 @@
 - [x] 3.1 Add producer, consumer, sender-bound IPC, persistence/restart, idempotency, fail-local and delete-path poison tests.
 - [x] 3.2 Run focused package tests, typechecks, Desktop Main build and DSH runtime closure/profile validation.
 - [x] 3.3 Record Agent Evaluation and UI validation evidence, including the real Desktop infrastructure blocker and residual lack of unarchive support.
+- [x] 4.1 Add transactional stale Conversation cleanup with exact binding/catalog/context CAS and connect it only to `DSH_SESSION_STALE` archive requests.
+- [x] 4.2 Add path-level tests proving valid Sessions use DSH archive, stale old records are removed, and missing/cross/raced records fail without sibling mutation.

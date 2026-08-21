@@ -19,7 +19,6 @@ describe('Cut DSH tool contract', () => {
     expect(
       decodeCutDshToolInput('apply', {
         documentPath: 'cuts/story.otio',
-        expectedFingerprint: { strategy: 'sha256', value: 'before' },
         commands: [
           { type: 'split', clipId: 'clip-1', offsetFrames: 12, rightClipId: 'clip-2' },
           { type: 'set-audio', clipId: 'clip-1', settings: { muted: false, gainDb: -3 } },
@@ -34,7 +33,7 @@ describe('Cut DSH tool contract', () => {
     });
   });
 
-  it('rejects raw paths, stale identity, unknown fields, unsupported media links and invalid semantics', () => {
+  it('rejects raw paths, retired fingerprint, unknown fields, unsupported media links and invalid semantics', () => {
     expect(() => decodeCutDshToolInput('query', { documentPath: '/tmp/story.otio' })).toThrow(
       /normalized Workspace-relative \.otio path/,
     );
@@ -47,18 +46,16 @@ describe('Cut DSH tool contract', () => {
         expectedFingerprint: { strategy: 'sha256', value: '' },
         commands: [{ type: 'trim-trailing-gaps' }],
       }),
-    ).toThrow(/exact content fingerprint/);
+    ).toThrow(/expectedFingerprint is not supported/);
     expect(() =>
       decodeCutDshToolInput('apply', {
         documentPath: 'cuts/story.otio',
-        expectedFingerprint: { strategy: 'sha256', value: 'before' },
         commands: [{ type: 'link-media', targetUrl: '/tmp/video.mp4' }],
       }),
     ).toThrow(/not supported by the Cut DSH tool/);
     expect(() =>
       decodeCutDshToolInput('apply', {
         documentPath: 'cuts/story.otio',
-        expectedFingerprint: { strategy: 'sha256', value: 'before' },
         commands: [{ type: 'split', clipId: 'clip-1', offsetFrames: 0, rightClipId: 'clip-2' }],
       }),
     ).toThrow(/must be positive/);
@@ -79,6 +76,7 @@ describe('Cut DSH tool contract', () => {
     expect(JSON.stringify(facts)).not.toContain('target_url');
     expect(JSON.stringify(facts)).not.toContain('file:///');
     expect(facts).not.toHaveProperty('timeline');
+    expect(facts).not.toHaveProperty('fingerprint');
   });
 
   it('accepts bounded export operations and rejects path escapes', () => {

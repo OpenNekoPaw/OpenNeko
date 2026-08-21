@@ -1,6 +1,10 @@
 import type { DshAcpHostToolPort, DshAcpJsonValue } from '@neko/agent-contracts/dsh-acp';
 import type { Context } from '@deepseek-ai/cordis';
-import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
+import {
+  AttachmentId,
+  type ImageAttachmentLimits,
+  type ImageAttachmentRef,
+} from '@deepseek-ai/dsh-attachment';
 import type {} from '@deepseek-ai/dsh-llm';
 import { defineTool, type JsonValue, type ToolRunContext } from '@deepseek-ai/dsh-tools';
 import {
@@ -13,7 +17,14 @@ import {
   type ContentImageDshChunk,
   type ContentLocator,
 } from '@neko/content';
-import { DOCUMENT_DSH_TOOL_NAME, DOCUMENT_DSH_TOOL_PARAMETERS } from '@neko/content/document';
+import {
+  DOCUMENT_DSH_TOOL_NAME,
+  DOCUMENT_DSH_TOOL_PARAMETERS,
+  decodeDocumentDshToolArgs,
+  documentDshJsonValue,
+  probeImageMetadata,
+} from '@neko/content/document';
+import sharp from 'sharp';
 
 export const name = 'openneko-content-tools';
 export const inject = ['opennekoHostTools', 'tools'];
@@ -31,18 +42,19 @@ export function apply(ctx: Context): void {
         defineTool({
           name: DOCUMENT_DSH_TOOL_NAME,
           description:
-            'Read bounded text, structure, and image metadata from an OpenNeko document.',
+            'Read bounded text, structure, and image metadata from an OpenNeko document. All arguments are top-level: pass the exact selected ContentLocator in source and never create an input wrapper.',
           parameters: DOCUMENT_DSH_TOOL_PARAMETERS,
           output: {
             schema: { type: 'json' },
             render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
           },
           async execute(args, execution) {
+            const decoded = decodeDocumentDshToolArgs(args);
             const response = await ctx.opennekoHostTools.execute(
               {
                 tool: DOCUMENT_DSH_TOOL_NAME,
-                operation: args.operation,
-                input: args.input,
+                operation: decoded.operation,
+                input: documentDshJsonValue(decoded.input),
               },
               execution,
             );
@@ -130,9 +142,18 @@ export function apply(ctx: Context): void {
                   `Content image exceeds the active DSH attachment limit of ${byteCap} bytes.`,
                 );
               }
+              const attachmentImage = await prepareContentImageAttachment(
+                loaded,
+                attachments.imageLimits,
+              );
+              if (attachmentImage.bytes.byteLength > byteCap) {
+                throw new Error(
+                  `Content image perception representation exceeds the active DSH attachment limit of ${byteCap} bytes.`,
+                );
+              }
               const ref = await attachments.saveImage({
-                data: loaded.bytes,
-                mediaType: loaded.mimeType,
+                data: attachmentImage.bytes,
+                mediaType: attachmentImage.mimeType,
                 name: contentImageName(source),
               });
               return {
@@ -152,6 +173,76 @@ export function apply(ctx: Context): void {
       'openneko-content-image-tools',
     );
   });
+}
+
+async function prepareContentImageAttachment(
+  image: {
+    readonly bytes: Uint8Array;
+    readonly mimeType: ContentImageDshChunk['mimeType'];
+  },
+  limits: ImageAttachmentLimits,
+): Promise<{
+  readonly bytes: Uint8Array;
+  readonly mimeType: ContentImageDshChunk['mimeType'];
+}> {
+  const metadata = probeImageMetadata(image.bytes);
+  if (metadata === null || metadata.mimeType !== image.mimeType) {
+    throw new Error('Content image metadata does not match the transferred image.');
+  }
+  const sourceDimensions = requireRasterDimensions(metadata, 'Content image');
+  const sourcePixels = sourceDimensions.width * sourceDimensions.height;
+  if (!Number.isSafeInteger(sourcePixels) || sourcePixels > limits.maxImagePixels) {
+    throw new Error(
+      `Content image exceeds the active DSH decoded-size limit of ${limits.maxImagePixels} pixels.`,
+    );
+  }
+  if (Math.max(sourceDimensions.width, sourceDimensions.height) <= limits.maxImageDimension) {
+    return image;
+  }
+
+  const resized = await sharp(image.bytes, { limitInputPixels: limits.maxImagePixels })
+    .rotate()
+    .resize({
+      width: limits.maxImageDimension,
+      height: limits.maxImageDimension,
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .toBuffer();
+  const bounded = new Uint8Array(resized);
+  const boundedMetadata = probeImageMetadata(bounded);
+  if (boundedMetadata === null || boundedMetadata.mimeType !== image.mimeType) {
+    throw new Error('Content image perception representation exceeds the active DSH limits.');
+  }
+  const boundedDimensions = requireRasterDimensions(
+    boundedMetadata,
+    'Content image perception representation',
+  );
+  if (
+    Math.max(boundedDimensions.width, boundedDimensions.height) > limits.maxImageDimension ||
+    boundedDimensions.width * boundedDimensions.height > limits.maxImagePixels
+  ) {
+    throw new Error('Content image perception representation exceeds the active DSH limits.');
+  }
+  return { bytes: bounded, mimeType: image.mimeType };
+}
+
+function requireRasterDimensions(
+  metadata: { readonly width?: number; readonly height?: number },
+  label: string,
+): { readonly width: number; readonly height: number } {
+  const { width, height } = metadata;
+  if (
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    !Number.isSafeInteger(width) ||
+    !Number.isSafeInteger(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    throw new Error(`${label} has no valid raster dimensions.`);
+  }
+  return { width, height };
 }
 
 async function loadContentImage(
@@ -235,13 +326,16 @@ function imageRef(value: {
 }
 
 function contentImageName(source: ContentLocator): string {
-  const path = source.selector?.path ?? source.file.path;
+  const path = source.selector?.kind === 'entry' ? source.selector.path : source.file.path;
   return path.split('/').at(-1) ?? 'image';
 }
 
 function contentImageJsonSource(source: ContentLocator): DshAcpJsonValue {
   if (source.file.authority !== 'workspace') {
     throw new Error('Content image source must remain under Workspace authority.');
+  }
+  if (source.selector !== undefined && source.selector.kind !== 'entry') {
+    throw new Error('Content image source selector must identify an entry.');
   }
   return {
     file: { authority: 'workspace', path: source.file.path },

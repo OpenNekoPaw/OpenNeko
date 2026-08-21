@@ -205,7 +205,7 @@ content class and current Turn policy.
 
 - **WHEN** Pi selects a locator from a `ReadDocument` manifest and requests range mode
 - **THEN** the model-visible Tool contract accepts only the returned `unit_ref` and optional bounded read limit
-- **AND** a ContentLocator, DocumentLocator, nested locator object or another undeclared field is rejected with an exact corrective diagnostic and is not interpreted through an alias or alternate reader
+- **AND** a ContentLocator, reader coordinate, nested locator object or another undeclared field is rejected with an exact corrective diagnostic and is not interpreted through an alias or alternate reader
 
 #### Scenario: ReadImage returns native image content to Pi
 

@@ -9,12 +9,41 @@ import type { DshComposerMaterializedAssetProjection } from '@neko/agent-contrac
 
 import { DshAgentView } from './root';
 
+const workspaceBoardTarget = {
+  kind: 'workspace-board' as const,
+  workspaceId: 'workspace-1',
+};
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
 });
 
 describe('DshAgentView content-creation composer', () => {
+  it('projects DSH next-request pressure through the existing usage indicator', () => {
+    renderAgent(
+      <DshComposerHarness
+        onSubmit={vi.fn(async () => true)}
+        projection={{
+          conversationId: 'conversation-pressure',
+          dshSessionId: 'dsh-pressure',
+          title: 'Image review',
+          contextPressure: {
+            pressureTokens: 38_924,
+            projectedTokens: 41_100,
+            contextWindow: 256_000,
+          },
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [],
+        }}
+      />,
+    );
+
+    fireEvent.mouseEnter(screen.getByTitle('点击压缩上下文'));
+    expect(screen.getByText(/41,100 \/ 256,000/u)).toBeTruthy();
+    expect(screen.getByText(/16\.1%/u)).toBeTruthy();
+  });
+
   it('keeps the OpenNeko composer active and projects the DSH inbox queue during a turn', () => {
     const onRemoveQueuedMessage = vi.fn();
     renderAgent(
@@ -77,6 +106,7 @@ describe('DshAgentView content-creation composer', () => {
           skillName: 'story-review',
           displayText: '$story-review chapter-1',
           args: 'chapter-1',
+          canvasTurnTarget: workspaceBoardTarget,
         },
       ),
     );
@@ -133,7 +163,9 @@ describe('DshAgentView content-creation composer', () => {
               contentLocator: { file: { authority: 'workspace', path: 'notes/scene.md' } },
             },
           ],
+          images: [],
           contextPayloads: [],
+          canvasTurnTarget: workspaceBoardTarget,
         },
       ),
     );
@@ -213,7 +245,9 @@ describe('DshAgentView content-creation composer', () => {
               },
             },
           ],
+          images: [],
           contextPayloads: [],
+          canvasTurnTarget: workspaceBoardTarget,
         },
       ),
     );
@@ -455,6 +489,51 @@ describe('DshAgentView content-creation composer', () => {
     expect(screen.getByRole('button', { name: '收起' })).toBeTruthy();
   });
 
+  it('renders a failed DSH Tool event as a visible error state', () => {
+    const view = renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-tool-failure"
+        surfaceKind="assistant"
+        conversationId="conversation-1"
+        projection={{
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          title: 'Workspace planning',
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [
+            {
+              kind: 'tool',
+              turn: 1,
+              toolCallId: 'tool-failed',
+              title: 'openneko.document',
+              status: 'failed',
+              rawInput: { operation: 'read-images' },
+              rawOutput: 'content-missing: Document content is unavailable.',
+            },
+          ],
+        }}
+        configuring={false}
+        draft=""
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const toolCard = view.container.querySelector('[data-agent-tool-call-id="tool-failed"]');
+    expect(toolCard?.className).toContain('is-danger');
+    expect(screen.getByRole('button', { name: /openneko\.document.*失败/u })).toBeTruthy();
+  });
+
   it('keeps the final title, context rail, model, mode, attachment, and send controls', () => {
     const onModelChange = vi.fn();
     const onPermissionPresetChange = vi.fn();
@@ -496,7 +575,30 @@ describe('DshAgentView content-creation composer', () => {
             kind: 'workspace',
             workspaceId: 'workspace-1',
             workspaceLabel: '短片项目',
-            canvas: { kind: 'workspace-board', label: '画板' },
+            canvas: {
+              workspaceId: 'workspace-1',
+              defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+              options: [
+                {
+                  target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                  label: '画板',
+                },
+                {
+                  target: {
+                    kind: 'exact-canvas',
+                    workspaceId: 'workspace-1',
+                    canvasId: 'neko/boards/story.nkc',
+                  },
+                  label: 'story.nkc',
+                  summary: {
+                    canvasId: 'neko/boards/story.nkc',
+                    name: 'story.nkc',
+                    nodeTypeSummary: { text: 2 },
+                  },
+                },
+              ],
+              diagnostics: [],
+            },
           },
         }}
         configuring={false}
@@ -521,7 +623,7 @@ describe('DshAgentView content-creation composer', () => {
     expect(screen.getByText('画板')).toBeTruthy();
     expect(view.container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
     expect((screen.getByRole('button', { name: '添加附件' }) as HTMLButtonElement).disabled).toBe(
-      true,
+      false,
     );
     fireEvent.click(screen.getByRole('button', { name: '配置模型' }));
     fireEvent.click(screen.getByRole('radio', { name: 'GPT-5' }));
@@ -530,11 +632,100 @@ describe('DshAgentView content-creation composer', () => {
     expect(screen.queryByRole('menuitemradio', { name: '计划' })).toBeNull();
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Full access' }));
     expect(onPermissionPresetChange).toHaveBeenCalledWith('danger-full-access');
+    fireEvent.change(screen.getByRole('combobox', { name: '画布索引' }), {
+      target: { value: 'neko/boards/story.nkc' },
+    });
     fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
     expect(onSubmit).toHaveBeenCalledWith(
       { kind: 'surface' },
-      { kind: 'message', text: '创建一个分镜', references: [], contextPayloads: [] },
+      {
+        kind: 'message',
+        text: '创建一个分镜',
+        references: [],
+        images: [],
+        contextPayloads: [],
+        canvasTurnTarget: {
+          kind: 'exact-canvas',
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/story.nkc',
+        },
+      },
     );
+  });
+
+  it('submits a pasted image through the canonical DSH image input', async () => {
+    const onSubmit = vi.fn(async () => true);
+    renderAgent(<DshComposerHarness onSubmit={onSubmit} />);
+    const composer = screen.getByRole('textbox', { name: '消息' });
+
+    fireEvent.change(composer, { target: { value: '分析这张图片' } });
+    fireEvent.paste(composer, {
+      clipboardData: {
+        getData: () => '',
+        items: [
+          {
+            type: 'image/png',
+            getAsFile: () =>
+              new File([new Uint8Array([1, 2, 3])], 'clipboard.png', {
+                type: 'image/png',
+              }),
+          },
+        ],
+      },
+    });
+
+    await screen.findByRole('button', { name: /Remove pasted-image-/u });
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      { kind: 'surface' },
+      {
+        kind: 'message',
+        text: '分析这张图片',
+        references: [],
+        images: [
+          {
+            name: expect.stringMatching(/^pasted-image-\d+\.png$/u),
+            mimeType: 'image/png',
+            data: 'AQID',
+          },
+        ],
+        contextPayloads: [],
+        canvasTurnTarget: workspaceBoardTarget,
+      },
+    );
+  });
+
+  it('restores pasted image content when Host admission rejects the submission', async () => {
+    const onSubmit = vi.fn(async () => false);
+    renderAgent(<DshComposerHarness onSubmit={onSubmit} />);
+    const composer = screen.getByRole('textbox', { name: '消息' });
+
+    fireEvent.change(composer, { target: { value: '分析失败时不要丢图' } });
+    fireEvent.paste(composer, {
+      clipboardData: {
+        getData: () => '',
+        items: [
+          {
+            type: 'image/png',
+            getAsFile: () =>
+              new File([new Uint8Array([1, 2, 3])], 'clipboard.png', { type: 'image/png' }),
+          },
+        ],
+      },
+    });
+
+    await screen.findByRole('button', { name: /Remove pasted-image-/u });
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect((screen.getByRole('textbox', { name: '消息' }) as HTMLTextAreaElement).value).toBe(
+        '分析失败时不要丢图',
+      ),
+    );
+    expect(screen.getByRole('button', { name: /Remove pasted-image-/u })).toBeTruthy();
   });
 
   it('restores the assistant entry presentation without claiming unsupported bindings', () => {
@@ -737,7 +928,7 @@ describe('DshAgentView content-creation composer', () => {
     fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
     expect(onSubmit).toHaveBeenCalledWith(
       { kind: 'project', projectId: 'project-1' },
-      { kind: 'message', text: 'Create a scene', references: [], contextPayloads: [] },
+      { kind: 'message', text: 'Create a scene', references: [], images: [], contextPayloads: [] },
     );
   });
 
@@ -1205,7 +1396,17 @@ function DshComposerHarness({
           kind: 'workspace',
           workspaceId: 'workspace-1',
           workspaceLabel: 'Workspace One',
-          canvas: { kind: 'workspace-board', label: 'Board' },
+          canvas: {
+            workspaceId: 'workspace-1',
+            defaultTarget: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+            options: [
+              {
+                target: { kind: 'workspace-board', workspaceId: 'workspace-1' },
+                label: 'Board',
+              },
+            ],
+            diagnostics: [],
+          },
         },
         inputCatalog: {
           commands: [{ name: 'help', description: 'Show help', inputHint: '[topic]' }],

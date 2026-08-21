@@ -37,6 +37,7 @@ describe('Desktop DSH Session Host', () => {
             kind: 'message',
             text: 'Create in project',
             references: [],
+            images: [],
             contextPayloads: [],
           },
         },
@@ -54,6 +55,7 @@ describe('Desktop DSH Session Host', () => {
         kind: 'message',
         text: 'Create in project',
         references: [],
+        images: [],
         contextPayloads: [],
       },
     });
@@ -80,6 +82,7 @@ describe('Desktop DSH Session Host', () => {
             kind: 'message',
             text: 'Hello',
             references: [],
+            images: [],
             contextPayloads: [],
           },
         },
@@ -109,7 +112,13 @@ describe('Desktop DSH Session Host', () => {
       await host.execute(
         { webContentsId: 1, frameUrl: 'openneko://app' },
         request('submit', {
-          input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+          input: {
+            kind: 'message',
+            text: 'hello',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
         }),
       ),
     );
@@ -151,6 +160,11 @@ describe('Desktop DSH Session Host', () => {
       label: 'draft.epub',
       contentLocator: { file: { authority: 'workspace' as const, path: 'books/draft.epub' } },
     };
+    const canvasTurnTarget = {
+      kind: 'exact-canvas' as const,
+      workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/story.nkc',
+    };
 
     await host.execute(
       { webContentsId: 1, frameUrl: 'openneko://app' },
@@ -159,7 +173,9 @@ describe('Desktop DSH Session Host', () => {
           kind: 'message',
           text: 'Use this reference',
           references: [selectedResource],
+          images: [],
           contextPayloads: [contextPayload],
+          canvasTurnTarget,
         },
       }),
     );
@@ -168,6 +184,7 @@ describe('Desktop DSH Session Host', () => {
       identity.conversationId,
       [contextPayload],
       [selectedResource],
+      canvasTurnTarget,
     );
     expect(setSessionContext).toHaveBeenCalledWith(
       identity.conversationId,
@@ -192,6 +209,12 @@ describe('Desktop DSH Session Host', () => {
     const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
     const readConversationExecution = vi.fn(async () => ({ supportsImageInput: false }));
     const setSessionContext = vi.fn(async () => undefined);
+    const resolve = vi.fn(async () => 'OpenNeko exact Canvas context');
+    const canvasTurnTarget = {
+      kind: 'exact-canvas' as const,
+      workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/story.nkc',
+    };
     const host = createHost({
       projection,
       enqueueInboxMessage,
@@ -199,12 +222,20 @@ describe('Desktop DSH Session Host', () => {
       applyConversation,
       readConversationExecution,
       setSessionContext,
+      promptContext: { resolve },
     });
 
     await host.execute(
       { webContentsId: 1, frameUrl: 'openneko://app' },
       request('submit', {
-        input: { kind: 'message', text: 'next request', references: [], contextPayloads: [] },
+        input: {
+          kind: 'message',
+          text: 'next request',
+          references: [],
+          images: [],
+          contextPayloads: [],
+          canvasTurnTarget,
+        },
       }),
     );
 
@@ -212,19 +243,72 @@ describe('Desktop DSH Session Host', () => {
       conversationId: identity.conversationId,
       prompt: [{ type: 'text', text: 'next request' }],
       displayContent: [{ type: 'text', text: 'next request' }],
-      contextText: 'OpenNeko test context',
+      contextText: 'OpenNeko exact Canvas context',
     });
+    expect(resolve).toHaveBeenCalledWith(identity.conversationId, [], [], canvasTurnTarget);
     expect(readConversationExecution).toHaveBeenCalledWith(identity.conversationId, 'window-1');
     expect(prompt).not.toHaveBeenCalled();
     expect(applyConversation).not.toHaveBeenCalled();
     expect(setSessionContext).not.toHaveBeenCalled();
   });
 
+  it('enqueues a pasted image with separate model bytes and durable display identity', async () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 0,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 1 },
+    });
+    const enqueueInboxMessage = vi.fn(async () => ({ nextTurn: [], nextStep: [] }));
+    const admitPromptImages = vi.fn(async () => [
+      {
+        source: { kind: 'inline' as const, imageIndex: 0, name: 'clipboard.png' },
+        data: 'AQID',
+        mimeType: 'image/png' as const,
+      },
+    ]);
+    const host = createHost({
+      projection,
+      enqueueInboxMessage,
+      admitPromptImages,
+      readConversationExecution: vi.fn(async () => ({ supportsImageInput: true })),
+    });
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      request('submit', {
+        input: {
+          kind: 'message',
+          text: '',
+          references: [],
+          images: [{ name: 'clipboard.png', mimeType: 'image/png', data: 'AQID' }],
+          contextPayloads: [],
+        },
+      }),
+    );
+
+    expect(enqueueInboxMessage).toHaveBeenCalledWith({
+      conversationId: identity.conversationId,
+      prompt: [
+        {
+          type: 'image',
+          data: 'AQID',
+          mimeType: 'image/png',
+          _meta: { opennekoDisplayName: 'clipboard.png' },
+        },
+      ],
+      displayContent: [{ type: 'image', name: 'clipboard.png' }],
+      contextText: 'OpenNeko test context',
+    });
+  });
+
   it('adds an admitted native image block after its resource identity', async () => {
     const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
     const admitPromptImages = vi.fn(async () => [
       {
-        referenceIndex: 0,
+        source: { kind: 'reference' as const, referenceIndex: 0 },
         data: 'aW1hZ2U=',
         mimeType: 'image/png' as const,
       },
@@ -248,6 +332,7 @@ describe('Desktop DSH Session Host', () => {
           kind: 'message',
           text: '',
           references: [selectedResource],
+          images: [],
           contextPayloads: [],
         },
       }),
@@ -257,6 +342,7 @@ describe('Desktop DSH Session Host', () => {
       conversationId: identity.conversationId,
       windowId: 'window-1',
       references: [selectedResource],
+      images: [],
       modelSupportsImageInput: true,
     });
     expect(prompt).toHaveBeenCalledWith({
@@ -270,6 +356,49 @@ describe('Desktop DSH Session Host', () => {
         { type: 'image', data: 'aW1hZ2U=', mimeType: 'image/png' },
       ],
     });
+  });
+
+  it('submits a pasted image as a named native image block without fabricating a resource', async () => {
+    const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
+    const admitPromptImages = vi.fn(async () => [
+      {
+        source: { kind: 'inline' as const, imageIndex: 0, name: 'clipboard.png' },
+        data: 'AQID',
+        mimeType: 'image/png' as const,
+      },
+    ]);
+    const host = createHost({
+      prompt,
+      admitPromptImages,
+      applyConversation: vi.fn(async () => ({ supportsImageInput: true })),
+    });
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      request('submit', {
+        input: {
+          kind: 'message',
+          text: '分析图片',
+          references: [],
+          images: [{ name: 'clipboard.png', mimeType: 'image/png', data: 'AQID' }],
+          contextPayloads: [],
+        },
+      }),
+    );
+
+    expect(prompt).toHaveBeenCalledWith({
+      conversationId: identity.conversationId,
+      prompt: [
+        { type: 'text', text: '分析图片' },
+        {
+          type: 'image',
+          data: 'AQID',
+          mimeType: 'image/png',
+          _meta: { opennekoDisplayName: 'clipboard.png' },
+        },
+      ],
+    });
+    expect(JSON.stringify(prompt.mock.calls)).not.toContain('resource_link');
   });
 
   it('projects ACP resource links to canonical ContentLocators without exposing their URI', async () => {
@@ -293,7 +422,13 @@ describe('Desktop DSH Session Host', () => {
       await createHost({ projection }).execute(
         { webContentsId: 1, frameUrl: 'openneko://app' },
         request('submit', {
-          input: { kind: 'message', text: 'continue', references: [], contextPayloads: [] },
+          input: {
+            kind: 'message',
+            text: 'continue',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
         }),
       ),
     );
@@ -307,6 +442,47 @@ describe('Desktop DSH Session Host', () => {
       },
     ]);
     expect(JSON.stringify(result.projection.events)).not.toContain('openneko-content:');
+  });
+
+  it('projects persisted DSH attachment identities as image tokens after replay', async () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 0 },
+      update: {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'image-message',
+        content: {
+          type: 'resource_link',
+          name: 'clipboard.png',
+          uri: 'openneko-dsh-attachment:attachment-1',
+        },
+      },
+    });
+
+    const result = requireSessionResult(
+      await createHost({ projection }).execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        request('submit', {
+          input: {
+            kind: 'message',
+            text: 'continue',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
+        }),
+      ),
+    );
+
+    expect(result.projection.events).toEqual([
+      {
+        kind: 'message',
+        role: 'user',
+        messageId: 'image-message',
+        content: [{ type: 'image', label: 'clipboard.png' }],
+      },
+    ]);
   });
 
   it('isolates an invalid ACP resource link as a local diagnostic', async () => {
@@ -325,7 +501,13 @@ describe('Desktop DSH Session Host', () => {
       await createHost({ projection }).execute(
         { webContentsId: 1, frameUrl: 'openneko://app' },
         request('submit', {
-          input: { kind: 'message', text: 'continue', references: [], contextPayloads: [] },
+          input: {
+            kind: 'message',
+            text: 'continue',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
         }),
       ),
     );
@@ -499,6 +681,38 @@ describe('Desktop DSH Session Host', () => {
     ]);
   });
 
+  it('delegates the exact DSH context-pressure read model without recalculation', async () => {
+    const projection = new DshAcpProjection();
+    projection.acceptContextPressure({
+      sessionId: identity.dshSessionId,
+      sourceSequence: 12,
+      pressure: {
+        pressureTokens: 38_924,
+        projectedTokens: 41_100,
+        contextWindow: 256_000,
+      },
+    });
+
+    const result = requireSessionResult(
+      await createHost({ projection }).execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-pressure',
+          operation: 'snapshot',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: identity.conversationId,
+        },
+      ),
+    );
+
+    expect(result.projection.contextPressure).toEqual({
+      pressureTokens: 38_924,
+      projectedTokens: 41_100,
+      contextWindow: 256_000,
+    });
+  });
+
   it('fails before ACP prompt when authoritative product context cannot be resolved', async () => {
     const prompt = vi.fn();
     const setSessionContext = vi.fn();
@@ -516,7 +730,13 @@ describe('Desktop DSH Session Host', () => {
       host.execute(
         { webContentsId: 1, frameUrl: 'openneko://app' },
         request('submit', {
-          input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+          input: {
+            kind: 'message',
+            text: 'hello',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
         }),
       ),
     ).rejects.toThrow(/Workspace authority is unavailable/u);
@@ -646,7 +866,13 @@ describe('Desktop DSH Session Host', () => {
       await createHost({ projection }).execute(
         { webContentsId: 1, frameUrl: 'openneko://app' },
         request('submit', {
-          input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+          input: {
+            kind: 'message',
+            text: 'hello',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
         }),
       ),
     );
@@ -684,7 +910,13 @@ describe('Desktop DSH Session Host', () => {
         { webContentsId: 1, frameUrl: 'openneko://app' },
         {
           ...request('submit', {
-            input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+            input: {
+              kind: 'message',
+              text: 'hello',
+              references: [],
+              images: [],
+              contextPayloads: [],
+            },
           }),
           rendererSessionId: 'stale',
         },
@@ -740,14 +972,9 @@ function createHost(overrides: {
       readonly label: string;
       readonly contentLocator: import('@neko/content').ContentLocator;
     }[];
+    readonly images: readonly import('@neko/agent-contracts').DshComposerImageInput[];
     readonly modelSupportsImageInput: boolean;
-  }) => Promise<
-    readonly {
-      readonly referenceIndex: number;
-      readonly data: string;
-      readonly mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
-    }[]
-  >;
+  }) => Promise<readonly import('./desktop-dsh-prompt-image-admission').DesktopDshPromptImage[]>;
   readonly promptContext?: {
     resolve(
       conversationId: string,
@@ -756,6 +983,7 @@ function createHost(overrides: {
         readonly label: string;
         readonly contentLocator: import('@neko/content').ContentLocator;
       }[],
+      canvasTurnTarget?: import('@neko/canvas-domain').CanvasWorkspaceTurnTarget,
     ): Promise<string>;
   };
   readonly setSessionContext?: (conversationId: string, text: string) => Promise<void>;

@@ -1,6 +1,6 @@
 import type { SemanticEntityOccurrenceRecord } from '../contracts';
-import type { DocumentReadResult, DocumentSourceRef } from '@neko/content';
-import type { IDocumentAccessService } from '@neko/content/document';
+import type { ContentLocator, DocumentReadResult, DocumentSourceRef } from '@neko/content';
+import type { DocumentReadCoordinate, IDocumentAccessService } from '@neko/content/document';
 
 export type SemanticOccurrenceContextErrorCode =
   'semantic-occurrence-context-missing-locator' | 'semantic-occurrence-context-stale';
@@ -33,9 +33,28 @@ export async function readSemanticOccurrenceContext(
     );
   }
   await assertCurrentFingerprint(input);
-  const result = await input.documentAccess.readRange(input.source, { locator });
+  const result = await input.documentAccess.readRange(input.source, {
+    locator: readCoordinate(locator),
+  });
   await assertCurrentFingerprint(input);
   return result;
+}
+
+function readCoordinate(locator: ContentLocator): DocumentReadCoordinate {
+  const selector = locator.selector;
+  if (!selector) {
+    throw new SemanticOccurrenceContextError(
+      'semantic-occurrence-context-missing-locator',
+      'Semantic occurrence ContentLocator has no selector.',
+    );
+  }
+  switch (selector.kind) {
+    case 'entry':
+      return { kind: 'chapter', chapterHref: selector.path };
+    case 'page':
+    case 'text-range':
+      return selector;
+  }
 }
 
 async function assertCurrentFingerprint(input: ReadSemanticOccurrenceContextInput): Promise<void> {

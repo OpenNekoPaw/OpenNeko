@@ -83,7 +83,7 @@ runtime 入口。
 
 ### `@neko/content`
 
-`packages/content` 拥有文档解析、locator/range、entry ref、图片元数据探测和格式识别等跨领域内容语义。
+`packages/content` 拥有文档解析、ContentLocator selector、reader-private range/coordinate、图片元数据探测和格式识别等内容语义。
 
 > 项目媒体和普通文件都使用 canonical `ContentLocator`。项目到 Agent 的 producer 才把已授权媒体
 > 投影为受控软链接下的 Workspace 文件；Agent 不感知 Media Library、全局 connection、物理 target
@@ -93,12 +93,15 @@ runtime 入口。
   `@neko/content/document` 显式导入，Node 文件/容器实现必须从 `@neko/content/node` 或
   `@neko/content/document/node` 显式导入。
 - 通过 runtime deps 注入文本、二进制和 container 读取能力。
-- `@neko/content` 只保留 Workspace/Package file authority 与可选 document-entry selector；Host 可读取
+- `@neko/content` 的跨应用地址只保留 Workspace/Package file authority 与可选 selector；EPUB/CBZ 使用
+  entry、PDF 使用 page、DOCX 使用 text-range。Host 可读取
   Agent 专用的 `neko/assets` Workspace 投影，但 guard 只允许精确 binding-backed managed link 跨越
   Workspace realpath，并拒绝普通 symlink 与 nested escape。
 - 不管理 cache root、Webview URI、runtime token、workspace 生命周期或 UI 状态。
 - Agent 和领域包复用公共入口，不重新实现 document reader/cache/path/media catalog。
-- 文本实体分析复用 `DocumentAccessService` manifest/cursor/range：PDF page、EPUB chapter、DOCX section/paragraph 的正文只在 transient analysis batch 中存在；Content 分别返回语义 `DocumentLocator` 与内容 `ContentLocator`，不拥有 SQLite projection。
+- 文本实体分析复用 `DocumentAccessService` manifest/cursor/range：PDF page、EPUB chapter、DOCX
+  section/paragraph 的正文只在 transient analysis batch 中存在；reader coordinate 只在 Content
+  内部参与解码，跨应用结果统一投影为完整 `ContentLocator`，Content 不拥有 SQLite projection。
 
 ### `@neko/project`
 

@@ -3,9 +3,9 @@ import {
   createDocumentEntryContentLocator,
   type DocumentFormat,
   type DocumentImageInfo,
-  type DocumentLocator,
   type DocumentSourceRef,
 } from '../contracts/document-reading';
+import type { DocumentReadCoordinate } from '../contracts/document-read-coordinate';
 import { probeImageMetadata } from './image-metadata';
 
 export interface DocumentContent {
@@ -915,7 +915,7 @@ function dedupeStrings(values: readonly string[]): string[] {
 
 interface DocumentImageResourceInput {
   readonly source: DocumentSourceRef;
-  readonly locator?: DocumentLocator;
+  readonly locator?: DocumentReadCoordinate;
   readonly entryPath?: string;
 }
 

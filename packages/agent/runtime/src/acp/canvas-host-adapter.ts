@@ -55,18 +55,18 @@ export class CanvasDshHostAdapter {
           outcome: 'success',
           result: {
             documentPath: facts.documentPath,
-            fingerprint: {
-              strategy: facts.fingerprint.strategy,
-              value: facts.fingerprint.value,
-            },
             nodeCount: facts.nodeCount,
             connectionCount: facts.connectionCount,
           },
         };
       }
+      const current = await service.query({
+        documentPath: decoded.input.documentPath,
+        ...(signal === undefined ? {} : { signal }),
+      });
       const result = await service.createNode({
         documentPath: decoded.input.documentPath,
-        expectedFingerprint: decoded.input.expectedFingerprint,
+        expectedFingerprint: current.fingerprint,
         node: decoded.input.node,
         ...(signal === undefined ? {} : { signal }),
       });
@@ -75,10 +75,6 @@ export class CanvasDshHostAdapter {
         outcome: 'success',
         result: {
           documentPath: facts.documentPath,
-          fingerprint: {
-            strategy: facts.fingerprint.strategy,
-            value: facts.fingerprint.value,
-          },
           nodeId: facts.nodeId,
           nodeType: facts.nodeType,
           nodePosition: {

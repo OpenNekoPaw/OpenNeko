@@ -71,6 +71,7 @@ function createHandlers(): DshAcpApplicationClientHandlers {
     ),
     onSessionUpdate: vi.fn(),
     onSessionEvent: vi.fn(),
+    onContextPressure: vi.fn(),
   };
 }
 
@@ -363,6 +364,20 @@ describe('DshAcpApplicationClient', () => {
       createConnection: fixture.createConnection,
     });
     const protocolClient = fixture.readProtocolClient();
+
+    await protocolClient.extNotification?.('openneko/session/context-pressure', {
+      sessionId: 's1',
+      sourceSequence: 0,
+      pressure: { pressureTokens: 20_000, projectedTokens: 22_000, contextWindow: 256_000 },
+    });
+    expect(handlers.onContextPressure).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 's1', sourceSequence: 0 }),
+    );
+    expect(projection.snapshot('s1').contextPressure).toEqual({
+      pressureTokens: 20_000,
+      projectedTokens: 22_000,
+      contextWindow: 256_000,
+    });
 
     await protocolClient.extNotification?.('openneko/session/event', {
       sessionId: 's1',

@@ -1,0 +1,83 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "content-locator-selected-document-content",
+  "suiteId": "agent-runtime.perception-routing",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "The Agent reads exact EPUB entry content using one selected ContentLocator and explicit content mode.",
+    "canonicalPath": [
+      "visible Desktop submit",
+      "openneko.document read",
+      "selected document-entry ContentLocator",
+      "explicit content mode",
+      "Host-authorized Content range read",
+      "terminal response"
+    ],
+    "observables": [
+      {
+        "ref": "selected-document-facts",
+        "kind": "runtime-fact",
+        "description": "Exact model, successful selected document Tool arguments, terminal idle state, and absence of runtime errors.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The selected EPUB entry read succeeds and the Agent reports TARGETED_DOCUMENT_READ_OK.",
+    "expectedFailure": "Argument rejection, omission of the selected ContentLocator, alternate raw paths, runtime errors, or non-idle completion fails visibly."
+  },
+  "fixtureRefs": ["document-image-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["native-vision"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "调用一次 openneko.document：operation 为 read，source 使用 workspace 文件 synthetic-document.epub 且 selector 为 entry OEBPS/page.xhtml，mode 为 content，maxChars 为 4000。调用成功后回复 TARGETED_DOCUMENT_READ_OK；不要使用 bash、glob、原始解压路径或其他文档调用。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 1200000 }
+  ],
+  "assertions": [
+    {
+      "id": "model",
+      "kind": "model",
+      "profileId": "native-vision",
+      "evidenceRef": "selected-document-facts"
+    },
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "selected-document-facts"
+    },
+    {
+      "id": "selected-document-tool",
+      "kind": "tool-call",
+      "name": "openneko.document",
+      "status": "success",
+      "expectedArguments": {
+        "operation": "read",
+        "source": {
+          "file": { "authority": "workspace", "path": "synthetic-document.epub" },
+          "selector": { "kind": "entry", "path": "OEBPS/page.xhtml" }
+        },
+        "mode": "content",
+        "maxChars": 4000
+      },
+      "evidenceRef": "selected-document-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["TARGETED_DOCUMENT_READ_OK"],
+      "evidenceRef": "selected-document-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "selected-document-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 1200000, "repetitions": 1 }
+}

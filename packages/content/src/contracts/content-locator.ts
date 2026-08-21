@@ -24,7 +24,23 @@ export interface ContentEntrySelector {
   readonly path: string;
 }
 
-export type ContentSelector = ContentEntrySelector;
+export interface ContentPageSelector {
+  readonly kind: 'page';
+  readonly pageNumber: number;
+  readonly pageIndex: number;
+}
+
+export interface ContentTextRangeSelector {
+  readonly kind: 'text-range';
+  readonly startChar?: number;
+  readonly endChar?: number;
+  readonly startLine?: number;
+  readonly endLine?: number;
+  readonly paragraphIndex?: number;
+  readonly heading?: string;
+}
+
+export type ContentSelector = ContentEntrySelector | ContentPageSelector | ContentTextRangeSelector;
 
 export interface ContentLocator {
   readonly file: ContentFileLocator;
@@ -80,6 +96,11 @@ export function isContentLocator(value: unknown): value is ContentLocator {
   return validateContentLocator(value).ok;
 }
 
+export function parseContentSelector(value: unknown): ContentSelector | undefined {
+  const result = validateOptionalContentSelector(value);
+  return result.ok ? result.selector : undefined;
+}
+
 export function isWorkspaceFileContentLocator(
   value: ContentLocator,
 ): value is WorkspaceFileContentLocator {
@@ -109,11 +130,7 @@ export function contentLocatorKey(locator: ContentLocator): string {
     locator.file.authority === 'workspace'
       ? [locator.file.authority, locator.file.path]
       : [locator.file.authority, locator.file.packageId, locator.file.revision, locator.file.path];
-  return JSON.stringify([
-    ...fileKey,
-    locator.selector?.kind,
-    locator.selector?.kind === 'entry' ? locator.selector.path : undefined,
-  ]);
+  return JSON.stringify([...fileKey, canonicalSelector(locator.selector)]);
 }
 
 export function createWorkspaceFileContentLocator(path: string): WorkspaceFileContentLocator {
@@ -279,7 +296,12 @@ type ContentSelectorValidationResult =
 
 function validateOptionalContentSelector(value: unknown): ContentSelectorValidationResult {
   if (value === undefined) return { ok: true };
-  if (!isRecord(value) || !hasOnlyKeys(value, ENTRY_SELECTOR_KEYS) || value['kind'] !== 'entry') {
+  if (!isRecord(value)) {
+    return invalidLocator('content-locator-invalid-shape', 'Content selector is invalid.');
+  }
+  if (value['kind'] === 'page') return validatePageSelector(value);
+  if (value['kind'] === 'text-range') return validateTextRangeSelector(value);
+  if (!hasOnlyKeys(value, ENTRY_SELECTOR_KEYS) || value['kind'] !== 'entry') {
     return invalidLocator('content-locator-invalid-shape', 'Content selector is invalid.');
   }
   if (typeof value['path'] !== 'string') {
@@ -296,6 +318,62 @@ function validateOptionalContentSelector(value: unknown): ContentSelectorValidat
     );
   }
   return { ok: true, selector: { kind: 'entry', path: path.entryPath } };
+}
+
+function validatePageSelector(value: Record<string, unknown>): ContentSelectorValidationResult {
+  if (
+    !hasOnlyKeys(value, PAGE_SELECTOR_KEYS) ||
+    !isPositiveSafeInteger(value['pageNumber']) ||
+    !isNonNegativeSafeInteger(value['pageIndex']) ||
+    value['pageNumber'] !== value['pageIndex'] + 1
+  ) {
+    return invalidLocator(
+      'content-locator-invalid-shape',
+      'Content page selector requires matching one-based pageNumber and zero-based pageIndex.',
+    );
+  }
+  return {
+    ok: true,
+    selector: {
+      kind: 'page',
+      pageNumber: value['pageNumber'],
+      pageIndex: value['pageIndex'],
+    },
+  };
+}
+
+function validateTextRangeSelector(
+  value: Record<string, unknown>,
+): ContentSelectorValidationResult {
+  if (
+    !hasOnlyKeys(value, TEXT_RANGE_SELECTOR_KEYS) ||
+    !isOptionalNonNegativeSafeInteger(value['startChar']) ||
+    !isOptionalNonNegativeSafeInteger(value['endChar']) ||
+    !isOptionalPositiveSafeInteger(value['startLine']) ||
+    !isOptionalPositiveSafeInteger(value['endLine']) ||
+    !isOptionalNonNegativeSafeInteger(value['paragraphIndex']) ||
+    !isOptionalNonEmptyString(value['heading']) ||
+    !hasOneTextRangeCoordinateFamily(value) ||
+    !isOrderedOptionalRange(value['startChar'], value['endChar']) ||
+    !isOrderedOptionalRange(value['startLine'], value['endLine'])
+  ) {
+    return invalidLocator(
+      'content-locator-invalid-shape',
+      'Content text-range selector is invalid.',
+    );
+  }
+  return {
+    ok: true,
+    selector: {
+      kind: 'text-range',
+      ...(value['startChar'] === undefined ? {} : { startChar: value['startChar'] }),
+      ...(value['endChar'] === undefined ? {} : { endChar: value['endChar'] }),
+      ...(value['startLine'] === undefined ? {} : { startLine: value['startLine'] }),
+      ...(value['endLine'] === undefined ? {} : { endLine: value['endLine'] }),
+      ...(value['paragraphIndex'] === undefined ? {} : { paragraphIndex: value['paragraphIndex'] }),
+      ...(value['heading'] === undefined ? {} : { heading: value['heading'] }),
+    },
+  };
 }
 
 function contentFileLocatorsEqual(left: ContentFileLocator, right: ContentFileLocator): boolean {
@@ -316,7 +394,16 @@ function selectorsEqual(
   right: ContentSelector | undefined,
 ): boolean {
   if (left === undefined || right === undefined) return left === right;
-  return left.kind === right.kind && left.path === right.path;
+  return JSON.stringify(canonicalSelector(left)) === JSON.stringify(canonicalSelector(right));
+}
+
+function canonicalSelector(selector: ContentSelector | undefined): unknown {
+  if (selector === undefined) return undefined;
+  return Object.fromEntries(
+    Object.entries(selector)
+      .filter(([, value]) => value !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
 }
 
 function invalidLocatorError(label: string, result: ContentLocatorValidationResult): Error {
@@ -330,6 +417,16 @@ const CONTENT_LOCATOR_KEYS = ['file', 'selector'] as const;
 const WORKSPACE_FILE_KEYS = ['authority', 'path'] as const;
 const PACKAGE_FILE_KEYS = ['authority', 'packageId', 'revision', 'path'] as const;
 const ENTRY_SELECTOR_KEYS = ['kind', 'path'] as const;
+const PAGE_SELECTOR_KEYS = ['kind', 'pageNumber', 'pageIndex'] as const;
+const TEXT_RANGE_SELECTOR_KEYS = [
+  'kind',
+  'startChar',
+  'endChar',
+  'startLine',
+  'endLine',
+  'paragraphIndex',
+  'heading',
+] as const;
 
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
   return Object.keys(value).every((key) => allowed.includes(key));
@@ -358,5 +455,43 @@ function isStableOwnerIdentity(value: unknown): value is string {
     !value.includes('project://assets/') &&
     !value.startsWith('/') &&
     !/^[A-Za-z]:[\\/]/u.test(value)
+  );
+}
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function isOptionalNonNegativeSafeInteger(value: unknown): value is number | undefined {
+  return value === undefined || isNonNegativeSafeInteger(value);
+}
+
+function isOptionalPositiveSafeInteger(value: unknown): value is number | undefined {
+  return value === undefined || isPositiveSafeInteger(value);
+}
+
+function isOptionalNonEmptyString(value: unknown): value is string | undefined {
+  return value === undefined || isNonEmptyString(value);
+}
+
+function hasOneTextRangeCoordinateFamily(value: Record<string, unknown>): boolean {
+  const families = [
+    value['startChar'] !== undefined || value['endChar'] !== undefined,
+    value['startLine'] !== undefined || value['endLine'] !== undefined,
+    value['paragraphIndex'] !== undefined,
+    value['heading'] !== undefined,
+  ];
+  return families.filter(Boolean).length === 1;
+}
+
+function isOrderedOptionalRange(start: unknown, end: unknown): boolean {
+  return (
+    start === undefined ||
+    end === undefined ||
+    (typeof start === 'number' && typeof end === 'number' && end >= start)
   );
 }

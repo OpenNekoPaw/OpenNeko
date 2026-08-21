@@ -3,7 +3,11 @@ import type {
   RequestPermissionRequest,
   SessionNotification,
 } from '@agentclientprotocol/sdk';
-import type { DshAcpSessionEventNotification } from '@neko/agent-contracts/dsh-acp';
+import type {
+  DshAcpContextPressureNotification,
+  DshAcpContextPressureProjection,
+  DshAcpSessionEventNotification,
+} from '@neko/agent-contracts/dsh-acp';
 
 export const DSH_ACP_PROJECTION_DEFAULT_MAX_EVENTS_PER_SESSION = 256;
 export const DSH_ACP_PROJECTION_DEFAULT_MAX_ASSISTANT_STREAM_BYTES = 262_144;
@@ -157,6 +161,8 @@ interface SessionProjectionState {
   lastEventSequence: number | undefined;
   lastEventFrameIndex: number;
   lastEventFrameCount: number;
+  lastContextPressureSequence: number | undefined;
+  contextPressure: DshAcpContextPressureProjection | undefined;
   currentTurn: number | undefined;
   readonly turnStartedAt: Map<number, number>;
   readonly openSteps: Set<string>;
@@ -528,6 +534,37 @@ export class DshAcpProjection {
     return [];
   }
 
+  acceptContextPressure(
+    notification: DshAcpContextPressureNotification,
+  ): readonly DshAcpProjectedEvent[] {
+    const session = this.session(notification.sessionId);
+    const lastSequence = session.lastContextPressureSequence;
+    if (lastSequence !== undefined && notification.sourceSequence < lastSequence) {
+      return this.record(
+        session,
+        diagnostic(
+          session.sessionId,
+          'ACP_PROJECTION_STALE_CONTEXT_PRESSURE',
+          `DSH context pressure sequence ${notification.sourceSequence} is older than ${lastSequence}.`,
+        ),
+      );
+    }
+    if (lastSequence === notification.sourceSequence) {
+      if (sameContextPressure(session.contextPressure, notification.pressure)) return [];
+      return this.record(
+        session,
+        diagnostic(
+          session.sessionId,
+          'ACP_PROJECTION_CONFLICTING_CONTEXT_PRESSURE',
+          `DSH context pressure sequence ${notification.sourceSequence} changed without a newer source event.`,
+        ),
+      );
+    }
+    session.lastContextPressureSequence = notification.sourceSequence;
+    session.contextPressure = Object.freeze({ ...notification.pressure });
+    return [];
+  }
+
   acceptPermission(request: RequestPermissionRequest): readonly DshAcpProjectedEvent[] {
     const session = this.session(request.sessionId);
     const toolCallId = request.toolCall.toolCallId;
@@ -674,6 +711,7 @@ export class DshAcpProjection {
     return {
       sessionId,
       currentTurn: session.currentTurn,
+      contextPressure: session.contextPressure,
       events: [...session.events],
       tools: [...session.tools.values()].map((tool) => ({
         toolCallId: tool.toolCallId,
@@ -1071,6 +1109,8 @@ export class DshAcpProjection {
         lastEventSequence: undefined,
         lastEventFrameIndex: -1,
         lastEventFrameCount: 1,
+        lastContextPressureSequence: undefined,
+        contextPressure: undefined,
         currentTurn: undefined,
         turnStartedAt: new Map(),
         openSteps: new Set(),
@@ -1170,8 +1210,21 @@ export class DshAcpProjection {
 export interface DshAcpProjectionSnapshot {
   readonly sessionId: string;
   readonly currentTurn: number | undefined;
+  readonly contextPressure: DshAcpContextPressureProjection | undefined;
   readonly events: readonly DshAcpProjectedEvent[];
   readonly tools: readonly DshAcpProjectionToolSnapshot[];
+}
+
+function sameContextPressure(
+  left: DshAcpContextPressureProjection | undefined,
+  right: DshAcpContextPressureProjection,
+): boolean {
+  return (
+    left !== undefined &&
+    left.pressureTokens === right.pressureTokens &&
+    left.projectedTokens === right.projectedTokens &&
+    left.contextWindow === right.contextWindow
+  );
 }
 
 type IntegerFieldResult =

@@ -130,6 +130,7 @@ interface InputAreaProps {
   onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
   onMaterializeAsset?: (assetId: string) => Promise<MentionItem | undefined>;
   attachmentsDisabled?: boolean;
+  attachmentAccept?: string;
   entryContextActions?: readonly {
     readonly kind: 'project' | 'character' | 'world';
     readonly label: string;
@@ -271,6 +272,7 @@ export function InputArea({
   onAuthorizeResource,
   onMaterializeAsset,
   attachmentsDisabled = false,
+  attachmentAccept = 'image/*,video/*,audio/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.c,.cpp,.h,.hpp,.css,.html,.xml,.yaml,.yml,.toml',
   entryContextActions = [],
   entryContextActionsDisabled = false,
   entryWorkspaceTarget,
@@ -1022,7 +1024,7 @@ export function InputArea({
       }
 
       const items = e.clipboardData?.items;
-      if (!items) return;
+      if (!items || attachmentsDisabled) return;
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -1047,7 +1049,7 @@ export function InputArea({
         }
       }
     },
-    [onAddContextChip, updateAttachedFiles],
+    [attachmentsDisabled, onAddContextChip, updateAttachedFiles],
   );
 
   const handleEntryRoleplaySelect = (item: MentionItem) => {
@@ -1293,7 +1295,7 @@ export function InputArea({
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*,video/*,audio/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.c,.cpp,.h,.hpp,.css,.html,.xml,.yaml,.yml,.toml"
+              accept={attachmentAccept}
               className="hidden"
               onChange={handleFileSelect}
               disabled={attachmentInputDisabled || onAuthorizeResource !== undefined}

@@ -7,6 +7,94 @@ import type {
 import { DocumentContentAccessRuntime } from '../content-access-document-runtime';
 
 describe('DocumentContentAccessRuntime', () => {
+  it.each([
+    {
+      format: 'epub',
+      path: 'books/story.epub',
+      selector: { kind: 'entry', path: 'OPS/chapter-1.xhtml' },
+      readerLocator: { kind: 'chapter', chapterHref: 'OPS/chapter-1.xhtml', spineIndex: 0 },
+      unitKind: 'chapter',
+    },
+    {
+      format: 'cbz',
+      path: 'comics/story.cbz',
+      selector: { kind: 'entry', path: 'images/page-01.jpg' },
+      readerLocator: {
+        kind: 'page',
+        pageNumber: 1,
+        pageIndex: 0,
+        entryName: 'images/page-01.jpg',
+      },
+      unitKind: 'page',
+    },
+    {
+      format: 'pdf',
+      path: 'books/story.pdf',
+      selector: { kind: 'page', pageNumber: 3, pageIndex: 2 },
+      readerLocator: { kind: 'page', pageNumber: 3, pageIndex: 2 },
+      unitKind: undefined,
+    },
+    {
+      format: 'docx',
+      path: 'notes/story.docx',
+      selector: { kind: 'text-range', startChar: 120, endChar: 240 },
+      readerLocator: { kind: 'text-range', startChar: 120, endChar: 240 },
+      unitKind: undefined,
+    },
+  ] as const)(
+    'maps one complete ContentLocator to the private $format reader coordinate',
+    async ({ format, path, selector, readerLocator, unitKind }) => {
+      const source = {
+        file: { authority: 'workspace' as const, path },
+        selector,
+      } as WorkspaceFileContentLocator;
+      const container = { file: source.file } as WorkspaceFileContentLocator;
+      const hostPath = `/workspace/${path}`;
+      const documentAccess = createDocumentAccess();
+      if (unitKind !== undefined) {
+        documentAccess.getManifest = vi.fn(async () => ({
+          source: { filePath: hostPath, format },
+          format,
+          units: [
+            {
+              kind: unitKind,
+              locator: readerLocator,
+              ...(selector.kind === 'entry'
+                ? { href: selector.path, entryName: selector.path }
+                : {}),
+            },
+          ],
+          capabilities: {
+            supportsManifest: true,
+            supportsRangeRead: true,
+            supportsCursorRead: true,
+          },
+        }));
+      }
+      documentAccess.readRange = vi.fn(async () => ({
+        source: { filePath: hostPath, format },
+        text: 'selected content',
+      }));
+      const contentRead = createContentRead();
+      const resolveHostFilePath = vi.fn(() => hostPath);
+      const runtime = new DocumentContentAccessRuntime({
+        contentRead,
+        documentAccess,
+        resolveHostFilePath,
+      });
+
+      const result = await runtime.resolveDocumentContent({ source, mode: 'range' });
+
+      expect(result).toMatchObject({ status: 'ready', source, text: 'selected content' });
+      expect(contentRead.stat).toHaveBeenCalledWith(container, {});
+      expect(resolveHostFilePath).toHaveBeenCalledWith(container);
+      expect(documentAccess.readRange).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath: hostPath, format }),
+        { locator: readerLocator, limit: {} },
+      );
+    },
+  );
+
   it('authorizes the source and archive entry through ContentReadService', async () => {
     const source: WorkspaceFileContentLocator = {
       file: { authority: 'workspace', path: 'documents/Library/book.epub' },
@@ -59,6 +147,22 @@ describe('DocumentContentAccessRuntime', () => {
     const hostPath = '/Users/feng/Assets/epub/animation/Blame/book.epub';
     const runtimeSource: DocumentSourceRef = { filePath: hostPath, format: 'epub' };
     const documentAccess = createDocumentAccess();
+    documentAccess.getManifest = vi.fn(async () => ({
+      source: runtimeSource,
+      format: 'epub' as const,
+      units: [
+        {
+          kind: 'chapter' as const,
+          locator: { kind: 'chapter' as const, chapterHref: 'Page_1', spineIndex: 0 },
+          href: 'Page_1',
+        },
+      ],
+      capabilities: {
+        supportsManifest: true,
+        supportsRangeRead: true,
+        supportsCursorRead: true,
+      },
+    }));
     documentAccess.readRange = vi.fn(async () => ({
       source: runtimeSource,
       range: { locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 0 } },
@@ -87,27 +191,21 @@ describe('DocumentContentAccessRuntime', () => {
     });
 
     const result = await runtime.resolveDocumentContent({
-      source,
+      source: { ...source, selector: { kind: 'entry', path: 'Page_1' } },
       mode: 'range',
-      range: { locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 0 } },
       includeImages: true,
       maxImages: 1,
     });
 
     expect(result.status).toBe('ready');
     if (result.status !== 'ready') throw new Error('expected ready');
-    expect(result.documentSource.filePath).toBe(source.file.path);
-    expect(result.cursor?.source.filePath).toBe(source.file.path);
-    expect(result.range?.locator).toEqual({
-      kind: 'chapter',
-      chapterHref: 'Page_1',
-      spineIndex: 0,
-    });
+    expect(result.cursor?.source).toEqual(source);
     expect(result.imageInfo?.[0]?.contentLocator).toEqual({
       file: source.file,
       selector: { kind: 'entry', path: 'image/moe-010564.jpg' },
     });
     expect(JSON.stringify(result)).not.toContain(hostPath);
+    expect(JSON.stringify(result)).not.toMatch(/fileId|fingerprint|identity/u);
   });
 
   it('returns safe diagnostics and never invokes the Host resolver after read denial', async () => {

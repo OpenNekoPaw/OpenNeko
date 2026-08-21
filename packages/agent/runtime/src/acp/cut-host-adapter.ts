@@ -73,9 +73,13 @@ export class CutDshHostAdapter {
         return { outcome: 'success', result: toJsonValue(projectCutDshToolFacts(snapshot)) };
       }
       if (decoded.operation === 'apply') {
+        const current = await service.query({
+          documentPath: decoded.input.documentPath,
+          ...(signal === undefined ? {} : { signal }),
+        });
         const snapshot = await service.apply({
           documentPath: decoded.input.documentPath,
-          expectedFingerprint: decoded.input.expectedFingerprint,
+          expectedFingerprint: current.fingerprint,
           commands: decoded.input.commands,
           ...(signal === undefined ? {} : { signal }),
         });

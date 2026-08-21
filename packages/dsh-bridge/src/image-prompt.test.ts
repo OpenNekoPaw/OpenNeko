@@ -132,4 +132,19 @@ describe('DSH ACP image prompt admission', () => {
     ]);
     expect(saveImages).toHaveBeenCalledTimes(1);
   });
+
+  it('rejects an oversized image count before persisting any attachment', async () => {
+    const saveImages = vi.fn();
+    await expect(
+      admitAcpPrompt(
+        Array.from({ length: 5 }, () => ({
+          type: 'image' as const,
+          data: 'YQ==',
+          mimeType: 'image/png',
+        })),
+        { saveImages },
+      ),
+    ).rejects.toThrow(/limit of 4/u);
+    expect(saveImages).not.toHaveBeenCalled();
+  });
 });

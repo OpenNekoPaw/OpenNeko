@@ -66,12 +66,14 @@ export function UsageIndicator({
   }, [onCompress, isCompressing]);
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
       <button
         type="button"
         onClick={handleClick}
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
         disabled={isCompressing || !onCompress}
         className={`agent-composer-tool-button ${isCompressing ? 'cursor-wait' : ''}`}
         title={t('chat.usage.clickToCompress')}

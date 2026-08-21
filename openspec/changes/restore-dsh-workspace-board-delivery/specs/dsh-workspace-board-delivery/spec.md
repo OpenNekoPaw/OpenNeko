@@ -20,19 +20,71 @@ SHALL NOT decide or directly perform Board synchronization.
 
 #### Scenario: Turn does not produce a reviewable batch
 
-- **WHEN** the turn is interrupted, reaches max tokens, contains a failed content Tool, contains only source reads,
-  or contains ordinary assistant text without a successfully consumed stable source
+- **WHEN** the turn is interrupted, reaches max tokens, has no successfully consumed stable source, contains only
+  source reads, or contains ordinary assistant text without a successfully consumed stable source
 - **THEN** the system SHALL NOT create a Workspace Board delivery
+
+#### Scenario: One sibling content Tool fails after another source succeeds
+
+- **WHEN** the turn completes with non-empty final assistant Markdown, at least one content Tool successfully consumed
+  a stable source, and another content Tool failed
+- **THEN** the terminal batch SHALL exclude the failed Tool and still project the successful deduplicated sources and
+  analysis to the configured Workspace Board
+- **AND** the failed Tool SHALL remain visible in the transcript without blocking or being represented as a successful
+  Canvas source
+
+#### Scenario: A completed sibling exposes a non-canonical result
+
+- **WHEN** one completed content Tool has invalid arguments, non-JSON output, no canonical result source, or a result
+  source that differs from its requested `ContentLocator`
+- **THEN** the collector SHALL reject only that tool-call and emit a diagnostic containing its exact tool-call identity
+- **AND** another successfully decoded source plus final assistant Markdown SHALL still reach the configured Workspace
+  Board
 
 ### Requirement: DSH Workspace Board delivery is idempotent and locator canonical
 
 The system SHALL keep `ContentLocator` as a pure location contract and SHALL deduplicate delivery at collector,
 ledger, and Canvas projection boundaries without adding content fingerprints or runtime values to the locator.
 
+#### Scenario: Completed Tool exposes one canonical source
+
+- **WHEN** DSH projects a completed Document Tool with a canonical `source` in its successful result
+- **THEN** the collector SHALL use that result locator and verify that the Content-owned argument decoder produces
+  the same requested `ContentLocator`
+- **AND** it SHALL NOT require an internal ACP `input` envelope or pass raw paths between applications
+
+#### Scenario: Source is a document entry
+
+- **WHEN** a completed Content Tool consumes a canonical locator with an entry selector inside EPUB or another
+  supported document container
+- **THEN** Desktop SHALL resolve freshness through the canonical document-entry Content reader
+- **AND** it SHALL NOT reject the delivery merely because a workspace-file-only reader lacks that selector capability
+
 #### Scenario: One source is read repeatedly within a turn
 
 - **WHEN** multiple successful Tool calls use the same canonical `ContentLocator`
 - **THEN** the terminal batch SHALL contain one source artifact for that locator
+
+#### Scenario: One analysis consumes multiple locations in the same document container
+
+- **WHEN** a turn successfully consumes multiple different selectors from the same EPUB, PDF, DOCX, CBZ, or other
+  document container, or also consumes that container's root locator
+- **THEN** the terminal batch SHALL contain one root file `ContentLocator` source for that container
+- **AND** it SHALL NOT create one Board node per internal Tool read
+- **AND** a single exact selector without a root source SHALL remain exact
+
+#### Scenario: An image-only EPUB page wrapper resolves to an image source
+
+- **WHEN** a completed Document Tool result identifies an exact entry as image-only and exposes an embedded image `ContentLocator` that a completed Content Image Tool consumed in the same turn
+- **THEN** the terminal batch SHALL project the embedded image as the single user-visible page source
+- **AND** it SHALL NOT also project the XHTML or HTML wrapper as a generic file-reference node
+- **AND** the decision SHALL use Content-owned result semantics rather than entry filenames
+
+#### Scenario: A document entry has independent text semantics
+
+- **WHEN** a completed Document Tool result is text or mixed content, or its embedded image was not successfully consumed
+- **THEN** the exact document source SHALL remain a distinct source artifact
+- **AND** the collector SHALL NOT infer replacement from `page`, `moe`, extension, or basename patterns
 
 #### Scenario: The same terminal event is handled repeatedly
 

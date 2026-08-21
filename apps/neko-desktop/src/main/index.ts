@@ -87,7 +87,10 @@ import {
 import { createDesktopMediaExecutionProviderResolver } from './desktop-media-execution-provider';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
 import { DesktopRetiredPiStorageFilePort } from './desktop-retired-pi-storage-file-port';
-import { DesktopDshWorkspaceBoardDelivery } from './desktop-dsh-workspace-board-delivery';
+import {
+  createDshWorkspaceBoardContentRead,
+  DesktopDshWorkspaceBoardDelivery,
+} from './desktop-dsh-workspace-board-delivery';
 import { closeDesktopWindows } from './window-lifecycle';
 import {
   DESKTOP_STATE_AUTHORITY_KEYS,
@@ -1243,7 +1246,13 @@ async function startDesktop(): Promise<void> {
     coordinateCanvasMutation: (workspaceId, operation) =>
       canvasRuntime.coordinateWorkspaceBoardMutation(workspaceId, operation),
     createContentRead: (workspacePath) =>
-      createNodeHostContentReadService({ workspaceRoot: workspacePath }),
+      createDshWorkspaceBoardContentRead({
+        workspacePath,
+        documentEntryReader: {
+          readEntry: (sourcePath, entryPath) =>
+            canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
+        },
+      }),
     createIdentity: randomUUID,
   });
   const resourceBrowser = new ResourceBrowserNodeRuntime({
@@ -1450,6 +1459,15 @@ async function startDesktop(): Promise<void> {
   const dshWorkspaceBoardTerminalDelivery = createDshWorkspaceBoardTerminalDeliveryService({
     contexts: agentConversationContexts,
     delivery: dshWorkspaceBoardDelivery,
+    diagnostics: {
+      report: (diagnostic) =>
+        logger.warn('DSH Workspace Board skipped an invalid content Tool projection.', {
+          code: diagnostic.code,
+          toolCallId: diagnostic.toolCallId,
+          toolName: diagnostic.toolName,
+          message: diagnostic.message,
+        }),
+    },
   });
   // Composed after its dependency callbacks while preserving an explicit unavailable state.
   // eslint-disable-next-line prefer-const
@@ -2033,6 +2051,17 @@ async function startDesktop(): Promise<void> {
             await refreshDshHomeAfterProjectionChange();
           }
         },
+        onContextPressure: async (notification) => {
+          const binding = await bindings.getByDshSessionId(notification.sessionId);
+          if (!binding) {
+            throw new Error(
+              `DSH Session '${notification.sessionId}' context pressure has no Conversation binding.`,
+            );
+          }
+          publishDshChanged(DSH_SESSION_CHANGED_CHANNEL, {
+            conversationId: binding.conversationId,
+          });
+        },
       });
       dshHandlers = assembly;
       return assembly;
@@ -2149,6 +2178,7 @@ async function startDesktop(): Promise<void> {
       };
     },
     contexts: agentConversationContexts,
+    canvas: canvasWorkspaceIndexService,
     workspaceGrants: workspaceGrantAuthority,
     configuration: workspaceConfigAuthority,
     sessions: dshProduct.runtime.conversations.conversations,
@@ -2884,7 +2914,7 @@ function requireCanvasPreviewContentType(
   declared: string | undefined,
 ): string {
   if (declared?.includes('/')) return declared;
-  const sourcePath = locator.selector?.path ?? locator.file.path;
+  const sourcePath = locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path;
   switch (path.posix.extname(sourcePath).toLocaleLowerCase()) {
     case '.png':
       return 'image/png';
@@ -2936,7 +2966,9 @@ function isCanvasTextContentType(contentType: string): boolean {
 }
 
 function canvasContentDisplayName(locator: ContentLocator): string {
-  return path.posix.basename(locator.selector?.path ?? locator.file.path);
+  return path.posix.basename(
+    locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path,
+  );
 }
 
 function createDesktopGlobalLibraryThumbnailFactory(): ResourceBrowserNodeRuntimeOptions['createGlobalLibraryThumbnail'] {

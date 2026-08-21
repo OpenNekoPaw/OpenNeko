@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   listOpenNekoSessions,
   projectDshExtensionCatalog,
+  projectContextPressureNotification,
   projectExtensionSessionEvent,
   projectSessionEvent,
 } from './index';
@@ -27,6 +28,38 @@ const header = (input: Partial<SessionHeader> & Pick<SessionHeader, 'id'>): Sess
 });
 
 describe('OpenNeko DSH ACP bridge projections', () => {
+  it('projects the exact DSH context-pressure whole value without inventing an empty capability', () => {
+    expect(
+      projectContextPressureNotification('session-1', {
+        asOfSeq: 42,
+        values: {
+          contextPressure: {
+            pressureTokens: 38_924,
+            projectedTokens: 41_100,
+            contextWindow: 256_000,
+          },
+        },
+      }),
+    ).toEqual({
+      sessionId: 'session-1',
+      sourceSequence: 42,
+      pressure: {
+        pressureTokens: 38_924,
+        projectedTokens: 41_100,
+        contextWindow: 256_000,
+      },
+    });
+    expect(
+      projectContextPressureNotification('session-1', { asOfSeq: -1, values: {} }),
+    ).toBeUndefined();
+    expect(() =>
+      projectContextPressureNotification('session-1', {
+        asOfSeq: 42,
+        values: { contextPressure: { projectedTokens: -1 } },
+      }),
+    ).toThrow(/projectedTokens must be a non-negative safe integer/u);
+  });
+
   it('mounts the DSH-owned Workspace archive services and does not publish delete', () => {
     const patch = readPackageFile('cordis.patch.yml');
     expect(patch).toContain("name: '@deepseek-ai/dsh-storage-domain'");
@@ -208,6 +241,36 @@ describe('OpenNeko DSH ACP bridge projections', () => {
       },
     });
     expect(JSON.stringify(notifications)).not.toContain('[resource_link');
+  });
+
+  it('replays persisted image attachment identities as named ACP resource blocks', () => {
+    const session = Session.create(SessionId('session-image'));
+    const user = session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'Describe the image.' }],
+        source: {
+          kind: 'user',
+          opennekoDisplayContent: [
+            { type: 'text', text: '分析图片' },
+            { type: 'image', name: 'clipboard.png', attachmentId: 'attachment-1' },
+          ],
+        },
+      }),
+      { surfaceOp: 'append' },
+    );
+
+    const notifications = projectSessionEvent('session-image', user);
+    expect(notifications.map((notification) => notification.update)).toEqual([
+      expect.objectContaining({ content: { type: 'text', text: '分析图片' } }),
+      expect.objectContaining({
+        content: {
+          type: 'resource_link',
+          name: 'clipboard.png',
+          uri: 'openneko-dsh-attachment:attachment-1',
+        },
+      }),
+    ]);
   });
 
   it('projects canonical Tool result failure without requiring internal error metadata', () => {

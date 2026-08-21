@@ -1,4 +1,4 @@
-import type { DocumentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content';
 import { isCreativeEntityKind, type CreativeEntityKind } from './creative-entity-identity';
 
 export type CreativeEntitySourceFreshness = 'fresh' | 'stale' | 'building' | 'partial' | 'failed';
@@ -64,7 +64,7 @@ export interface CreativeEntityOccurrenceProjection {
   readonly role: 'definition' | 'reference';
   readonly location: string;
   readonly detail?: string;
-  readonly locator?: DocumentLocator;
+  readonly locator?: ContentLocator;
   readonly range?: CreativeEntitySourceRange;
   readonly sourceFingerprint?: string;
 }

@@ -6,6 +6,41 @@ import type { DshAcpSessionEventNotification } from '@neko/agent-contracts/dsh-a
 import { DshAcpProjection } from './dsh-acp-projection';
 
 describe('DshAcpProjection', () => {
+  it('stores the latest exact context pressure independently from transcript sequencing', () => {
+    const projection = new DshAcpProjection();
+    projection.acceptContextPressure({
+      sessionId: 's-pressure',
+      sourceSequence: 4,
+      pressure: { pressureTokens: 30_000, projectedTokens: 32_000, contextWindow: 256_000 },
+    });
+    expect(projection.snapshot('s-pressure').contextPressure).toEqual({
+      pressureTokens: 30_000,
+      projectedTokens: 32_000,
+      contextWindow: 256_000,
+    });
+    expect(
+      projection.acceptContextPressure({
+        sessionId: 's-pressure',
+        sourceSequence: 4,
+        pressure: { pressureTokens: 30_000, projectedTokens: 32_000, contextWindow: 256_000 },
+      }),
+    ).toEqual([]);
+    expect(
+      projection.acceptContextPressure({
+        sessionId: 's-pressure',
+        sourceSequence: 3,
+        pressure: { projectedTokens: 1 },
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        kind: 'diagnostic',
+        code: 'ACP_PROJECTION_STALE_CONTEXT_PRESSURE',
+      }),
+    ]);
+    expect(projection.snapshot('s-pressure').contextPressure?.projectedTokens).toBe(32_000);
+    expect(projection.snapshot('s-sibling').contextPressure).toBeUndefined();
+  });
+
   it('assembles ordered text and resource frames into one user message', () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionUpdate({

@@ -300,6 +300,7 @@ const textEditorListeners = new Set<{
 }>();
 const currentCanvasIdentities = new Map<string, CanvasHostRuntimeIdentity>();
 const currentCanvasEventSequences = new Map<string, number>();
+const currentCanvasSnapshotRequests = new Map<string, object>();
 const canvasListeners = new Set<{
   readonly identity: CanvasHostRuntimeIdentity;
   readonly listener: Parameters<OpenNekoDesktopCanvasBridge['canvas']['subscribe']>[1];
@@ -1508,21 +1509,37 @@ const bridge: OpenNekoDesktopBridge &
   canvas: {
     async getSnapshot(value) {
       const identity = parseCanvasHostRuntimeIdentity(value);
-      const response: unknown = await ipcRenderer.invoke(
-        DESKTOP_CANVAS_CHANNELS.snapshotGet,
-        identity,
-      );
-      const snapshot = parseCanvasHostSnapshot(response);
-      if (!isSameCanvasHostIdentity(snapshot.identity, identity)) {
-        throw new Error('Desktop Canvas snapshot owner identity does not match.');
+      const key = canvasIdentityKey(identity);
+      const request = {};
+      currentCanvasSnapshotRequests.set(key, request);
+      currentCanvasIdentities.set(key, identity);
+      currentCanvasEventSequences.set(key, 0);
+      try {
+        const response: unknown = await ipcRenderer.invoke(
+          DESKTOP_CANVAS_CHANNELS.snapshotGet,
+          identity,
+        );
+        const snapshot = parseCanvasHostSnapshot(response);
+        if (!isSameCanvasHostIdentity(snapshot.identity, identity)) {
+          throw new Error('Desktop Canvas snapshot owner identity does not match.');
+        }
+        if (currentCanvasSnapshotRequests.get(key) === request) {
+          currentCanvasSnapshotRequests.delete(key);
+        }
+        return snapshot;
+      } catch (error) {
+        const current = currentCanvasIdentities.get(key);
+        if (
+          currentCanvasSnapshotRequests.get(key) === request &&
+          current &&
+          isSameCanvasHostIdentity(current, identity)
+        ) {
+          currentCanvasSnapshotRequests.delete(key);
+          currentCanvasIdentities.delete(key);
+          currentCanvasEventSequences.delete(key);
+        }
+        throw error;
       }
-      const key = canvasIdentityKey(snapshot.identity);
-      currentCanvasIdentities.set(key, snapshot.identity);
-      currentCanvasEventSequences.set(
-        key,
-        preserveDesktopBootstrapEventSequence(currentCanvasEventSequences.get(key)),
-      );
-      return snapshot;
     },
     async resolveMaterialActions(value) {
       const request = parseCanvasMaterialActionResolutionRequest(value);

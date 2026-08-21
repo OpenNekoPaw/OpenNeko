@@ -1,8 +1,4 @@
-import {
-  isContentFingerprint,
-  normalizeWorkspaceContentPath,
-  type ContentFingerprint,
-} from '@neko/content';
+import { normalizeWorkspaceContentPath } from '@neko/content';
 
 import {
   CANVAS_NODE_TYPES,
@@ -24,8 +20,7 @@ export const CANVAS_DSH_TOOL_PARAMETERS = {
   operation: {
     type: 'string',
     enum: [...CANVAS_DSH_TOOL_OPERATIONS],
-    description:
-      'Use query with { documentPath }; use create-node with { documentPath, expectedFingerprint, node }.',
+    description: 'Use query with { documentPath }; use create-node with { documentPath, node }.',
     required: true,
   },
   input: {
@@ -52,20 +47,6 @@ export const CANVAS_DSH_TOOL_PARAMETERS = {
           documentPath: {
             type: 'string',
             description: 'Normalized Workspace-relative .nkc path.',
-            required: true,
-          },
-          expectedFingerprint: {
-            type: 'object',
-            description: 'Exact fingerprint returned by the latest query operation.',
-            properties: {
-              strategy: {
-                type: 'string',
-                enum: ['sha256', 'mtime-size', 'provider'],
-                required: true,
-              },
-              value: { type: 'string', required: true },
-            },
-            additionalProperties: false,
             required: true,
           },
           node: {
@@ -111,7 +92,6 @@ export interface CanvasDshToolQueryInput {
 
 export interface CanvasDshToolCreateNodeInput {
   readonly documentPath: string;
-  readonly expectedFingerprint: ContentFingerprint;
   readonly node: {
     readonly type?: CanvasNodeType;
     readonly position?: { readonly x: number; readonly y: number };
@@ -131,14 +111,12 @@ export type CanvasDshToolInput =
 
 export interface CanvasDshToolQueryFacts {
   readonly documentPath: string;
-  readonly fingerprint: ContentFingerprint;
   readonly nodeCount: number;
   readonly connectionCount: number;
 }
 
 export interface CanvasDshToolCreateNodeFacts {
   readonly documentPath: string;
-  readonly fingerprint: ContentFingerprint;
   readonly nodeId: string;
   readonly nodeType: CanvasNode['type'];
   readonly nodePosition: CanvasNode['position'];
@@ -162,7 +140,6 @@ export function projectCanvasQuerySnapshot(
 ): CanvasDshToolQueryFacts {
   return {
     documentPath: snapshot.documentPath,
-    fingerprint: snapshot.fingerprint,
     nodeCount: snapshot.canvas.nodes.length,
     connectionCount: snapshot.canvas.connections.length,
   };
@@ -173,7 +150,6 @@ export function projectCanvasCreateNodeResult(
 ): CanvasDshToolCreateNodeFacts {
   return {
     documentPath: result.documentPath,
-    fingerprint: result.fingerprint,
     nodeId: result.node.id,
     nodeType: result.node.type,
     nodePosition: result.node.position,
@@ -189,14 +165,10 @@ function decodeQueryInput(input: unknown): CanvasDshToolQueryInput {
 
 function decodeCreateNodeInput(input: unknown): CanvasDshToolCreateNodeInput {
   const record = requireRecord(input, 'input');
-  requireOnlyKeys(record, ['documentPath', 'expectedFingerprint', 'node'], 'input');
+  requireOnlyKeys(record, ['documentPath', 'node'], 'input');
   const documentPath = requireDocumentPath(record.documentPath, 'input.documentPath');
-  const expectedFingerprint = requireFingerprint(
-    record.expectedFingerprint,
-    'input.expectedFingerprint',
-  );
   const node = requireNode(record.node, 'input.node');
-  return { documentPath, expectedFingerprint, node };
+  return { documentPath, node };
 }
 
 function requireDocumentPath(input: unknown, field: string): string {
@@ -204,13 +176,6 @@ function requireDocumentPath(input: unknown, field: string): string {
   const normalized = normalizeWorkspaceContentPath(input);
   if (normalized !== input || !normalized.toLowerCase().endsWith('.nkc')) {
     throw new Error(`${field} must be a normalized Workspace-relative .nkc path.`);
-  }
-  return input;
-}
-
-function requireFingerprint(input: unknown, field: string): ContentFingerprint {
-  if (!isContentFingerprint(input)) {
-    throw new Error(`${field} must be an exact content fingerprint.`);
   }
   return input;
 }

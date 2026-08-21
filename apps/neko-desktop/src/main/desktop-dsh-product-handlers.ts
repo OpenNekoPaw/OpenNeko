@@ -1,4 +1,7 @@
-import type { DshAcpSessionEventNotification } from '@neko/agent-contracts/dsh-acp';
+import type {
+  DshAcpContextPressureNotification,
+  DshAcpSessionEventNotification,
+} from '@neko/agent-contracts/dsh-acp';
 import {
   DshPermissionOwner,
   type AgentConversationContextAuthorityPort,
@@ -62,6 +65,9 @@ export function createDesktopDshProductHandlers(options: {
   readonly onPermissionChanged: (conversationId: string) => Promise<void> | void;
   readonly onSessionUpdate: (notification: DshAcpSessionUpdateNotification) => Promise<void> | void;
   readonly onSessionEvent: (notification: DshAcpSessionEventNotification) => Promise<void> | void;
+  readonly onContextPressure: (
+    notification: DshAcpContextPressureNotification,
+  ) => Promise<void> | void;
 }): DesktopDshProductHandlerAssembly {
   const domainTools = createDesktopDshDomainToolHandlers(options);
   const permissions = new DshPermissionOwner({
@@ -88,6 +94,7 @@ export function createDesktopDshProductHandlers(options: {
     executeWorldTool: (request, signal) => domainTools.executeWorldTool(request, signal),
     onSessionUpdate: options.onSessionUpdate,
     onSessionEvent: options.onSessionEvent,
+    onContextPressure: options.onContextPressure,
   };
   return Object.freeze({
     handlers: Object.freeze(handlers),

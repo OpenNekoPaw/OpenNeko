@@ -305,7 +305,7 @@ Tool 参数。Agent application 为 exact Conversation 建立可重建的 refere
 `unit_ref`、`cursor_ref` 和 `image_ref`；模型只能把这些字符串原样传回 Tool。
 
 ```text
-authorized ContentLocator / DocumentLocator / cursor / representation locator
+authorized ContentLocator / cursor / representation handle
   -> Conversation-scoped Agent reference binding
   -> input_ref / unit_ref / cursor_ref / image_ref
   -> model-visible Tool call
@@ -322,7 +322,7 @@ authorized ContentLocator / DocumentLocator / cursor / representation locator
 模型可见接口保持小而稳定：
 
 - `ReadDocument` 使用 `input_ref` 与 `content | manifest | range | next`；range 使用 `unit_ref`，next 使用
-  `cursor_ref`，模型不传 ContentLocator、DocumentLocator、fingerprint 或 cursor object；
+  `cursor_ref`，模型不传 ContentLocator、reader coordinate、fingerprint 或 cursor object；
 - `ReadImage` 只接收 `image_refs`、固定分析意图和最多五张图片；模型不传 entryPath、MIME、尺寸、
   ContentLocator 或 representation locator；
 - 基本 `Read`/`Write` 继续只接收 Workspace-relative path、文本和必要的简单并发引用；它们处理纯文本，
@@ -404,12 +404,12 @@ model-visible Tool snapshot 确实包含图片感知 Tool 时才添加外部感�
 丢弃像素，也不得内部切换到 purpose model。purpose binding、内容读取或模型调用失败只失败当前 Tool
 Call/Turn，不尝试另一 provider、模型、reader、source 或原生视觉路径。
 
-| 层   | 结论                                                                                                                                         |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 层   | 结论                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | 职责 | Agent application 拥有 Turn 路由与 Prompt；感知 Tool 拥有图片理解请求和证据；Content runtime 拥有授权 bytes；Pi bridge 拥有 purpose model。 |
 | 依赖 | Tool 依赖 host-neutral content port 与执行期 purpose model，不依赖 Electron、Renderer、配置文件或 Desktop path adapter。                    |
-| 接口 | 模型只见短引用和 focus；内部准备参数携带 canonical locator；结果是结构化 `PerceptionEvidence`，不新增内部 contract 版本。                    |
-| 扩展 | 后续媒体 purpose Tool 可复用“实际 Tool snapshot 驱动 Prompt”的原则，但本任务不建立通用媒体路由框架。                                      |
+| 接口 | 模型只见短引用和 focus；内部准备参数携带 canonical locator；结果是结构化 `PerceptionEvidence`，不新增内部 contract 版本。                   |
+| 扩展 | 后续媒体 purpose Tool 可复用“实际 Tool snapshot 驱动 Prompt”的原则，但本任务不建立通用媒体路由框架。                                        |
 | 测试 | 覆盖 external/native/unavailable 三路、精确 purpose identity、短引用隔离、图片预算、无 `ReadImage` 文本路径和无 provider fallback。         |
 
 Agent Evaluation disposition 为 `update`：扩充既有 `agent-runtime.perception-routing`。正例必须证明
@@ -436,13 +436,13 @@ Composer 已有未提交内容，则保留现有 Draft并显示局部冲突 diag
 所有 queue action 必须绑定 exact Conversation 和 queue item identity；stale、cross-Conversation 或非用户
 continuation item 失败当前操作，不能回退 active Conversation 或改变 sibling 队列。
 
-| 层   | 结论                                                                                                                                                 |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 层   | 结论                                                                                                                                                |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 职责 | Agent application 拥有完整 pending Turn、顺序、暂停和释放；Webview 拥有 Composer Draft；Desktop 只转发 typed queue intent。                         |
-| 依赖 | Queue contract 位于 `@neko/agent-contracts`，application 不依赖 React/Electron，Renderer 不持有 runtime input authority。                            |
-| 接口 | 复用唯一 queue snapshot，原子替换 `promote` 为 `send-now`；queue item 增加有界、可克隆的 Draft presentation，不增加内部版本或平行 handler。          |
+| 依赖 | Queue contract 位于 `@neko/agent-contracts`，application 不依赖 React/Electron，Renderer 不持有 runtime input authority。                           |
+| 接口 | 复用唯一 queue snapshot，原子替换 `promote` 为 `send-now`；queue item 增加有界、可克隆的 Draft presentation，不增加内部版本或平行 handler。         |
 | 扩展 | 普通 message 与会产生 Turn 的 typed Skill/command 共用同一 `startTurn` queue；不产生 Turn 的 Session command 仍由自身 operation contract 串行校验。 |
-| 测试 | 覆盖中断暂停、正常 drain、富输入重建、删除、编辑冲突、指定项立即发送、stale/cross-Conversation 拒绝、Desktop route 和可见控制。                      |
+| 测试 | 覆盖中断暂停、正常 drain、富输入重建、删除、编辑冲突、指定项立即发送、stale/cross-Conversation 拒绝、Desktop route 和可见控制。                     |
 
 Agent Evaluation disposition 为 `update`：扩充 `agent-runtime.workflow-controller` 的
 `cancel-resume-recovery`，证明 queue submit、active cancel、paused pending、指定项 send-now、exact identity、

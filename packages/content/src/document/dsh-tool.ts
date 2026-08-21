@@ -1,9 +1,11 @@
 import {
+  contentLocatorsEqual,
   isContentLocator,
   isWorkspaceFileContentLocator,
   type ContentLocator,
-  type DocumentBatchCursor,
+  type WorkspaceFileContentLocator,
 } from '../contracts';
+import type { ContentDocumentCursor } from './content-access-document-runtime';
 
 export const DOCUMENT_DSH_TOOL_NAME = 'openneko.document' as const;
 export const DOCUMENT_DSH_TOOL_OPERATIONS = ['read', 'continue', 'read-images'] as const;
@@ -18,7 +20,7 @@ export type DocumentDshJsonValue =
   | readonly DocumentDshJsonValue[]
   | { readonly [key: string]: DocumentDshJsonValue };
 
-const WORKSPACE_FILE_LOCATOR_SCHEMA = {
+const WORKSPACE_FILE_BASE_SCHEMA = {
   type: 'object',
   title: 'workspace-file ContentLocator',
   description:
@@ -47,30 +49,64 @@ const WORKSPACE_FILE_LOCATOR_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const DOCUMENT_RANGE_SCHEMA = {
-  type: 'object',
-  description: 'Canonical document range object returned by the document service.',
-  additionalProperties: true,
+const CONTENT_SELECTOR_SCHEMAS = [
+  {
+    type: 'object',
+    description: 'EPUB or CBZ entry inside the selected container file.',
+    properties: {
+      kind: { type: 'string', const: 'entry', required: true },
+      path: { type: 'string', required: true },
+    },
+    additionalProperties: false,
+  },
+  {
+    type: 'object',
+    description: 'PDF page selection.',
+    properties: {
+      kind: { type: 'string', const: 'page', required: true },
+      pageNumber: { type: 'number', required: true },
+      pageIndex: { type: 'number', required: true },
+    },
+    additionalProperties: false,
+  },
+  {
+    type: 'object',
+    description: 'DOCX or other textual document selection.',
+    properties: {
+      kind: { type: 'string', const: 'text-range', required: true },
+      startChar: { type: 'number' },
+      endChar: { type: 'number' },
+      startLine: { type: 'number' },
+      endLine: { type: 'number' },
+      paragraphIndex: { type: 'number' },
+      heading: { type: 'string' },
+    },
+    additionalProperties: false,
+  },
+] as const;
+
+const WORKSPACE_FILE_LOCATOR_SCHEMA = {
+  ...WORKSPACE_FILE_BASE_SCHEMA,
+  properties: {
+    ...WORKSPACE_FILE_BASE_SCHEMA.properties,
+    selector: {
+      description:
+        'Optional exact selection inside the document. EPUB/CBZ use entry, PDF uses page, and DOCX uses text-range.',
+      oneOf: CONTENT_SELECTOR_SCHEMAS,
+    },
+  },
 } as const;
 
 const DOCUMENT_CURSOR_SCHEMA = {
   type: 'object',
   description: 'Cursor returned by a previous openneko.document read.',
-  additionalProperties: true,
-} as const;
-
-const DOCUMENT_INPUT_SCHEMA = {
-  type: 'object',
-  title: 'openneko.document input',
   properties: {
     source: { ...WORKSPACE_FILE_LOCATOR_SCHEMA, required: true },
-    mode: { type: 'string', enum: ['content', 'manifest', 'range'] },
-    range: DOCUMENT_RANGE_SCHEMA,
-    cursor: DOCUMENT_CURSOR_SCHEMA,
-    includeManifest: { type: 'boolean' },
-    includeImages: { type: 'boolean' },
-    maxImages: { type: 'number' },
-    maxChars: { type: 'number' },
+    strategy: { type: 'string', const: 'manifest-order', required: true },
+    next: WORKSPACE_FILE_LOCATOR_SCHEMA,
+    batchIndex: { type: 'integer', required: true },
+    done: { type: 'boolean', required: true },
+    maxChars: { type: 'integer' },
   },
   additionalProperties: false,
 } as const;
@@ -79,15 +115,27 @@ export const DOCUMENT_DSH_TOOL_PARAMETERS = {
   operation: {
     type: 'string',
     enum: [...DOCUMENT_DSH_TOOL_OPERATIONS],
-    description: 'Read document content, continue an issued cursor, or list document images.',
-    required: true,
-  },
-  input: {
-    ...DOCUMENT_INPUT_SCHEMA,
     description:
-      'Operation-specific input. Use source.file.authority="workspace" and source.file.path. A managed neko/assets/<library> path is read like any other workspace file; do not use kind, locator, or pageRange.',
+      'Top-level operation discriminator: read document content, continue an issued cursor, or list document images. Never add strategy at the top level; continue must replay the returned cursor unchanged.',
     required: true,
   },
+  source: {
+    ...WORKSPACE_FILE_LOCATOR_SCHEMA,
+    description:
+      'Top-level canonical document source. Use source.file.authority="workspace" and source.file.path; never wrap source inside input.',
+    required: true,
+  },
+  mode: {
+    type: 'string',
+    enum: ['content', 'manifest'],
+    description:
+      'Read result mode. Manifest discovers whole-document structure; content extracts content. Use content (or omit mode) when source.selector targets exact document content. Never use range, next, or a top-level strategy.',
+  },
+  cursor: DOCUMENT_CURSOR_SCHEMA,
+  includeManifest: { type: 'boolean' },
+  includeImages: { type: 'boolean' },
+  maxImages: { type: 'number' },
+  maxChars: { type: 'number' },
 } as const;
 
 export type DocumentDshToolInput =
@@ -106,8 +154,7 @@ export type DocumentDshToolInput =
 
 export interface DocumentDshReadInput {
   readonly source: ContentLocator;
-  readonly mode?: 'content' | 'manifest' | 'range';
-  readonly range?: Record<string, unknown>;
+  readonly mode?: 'content' | 'manifest';
   readonly includeManifest?: boolean;
   readonly includeImages?: boolean;
   readonly maxChars?: number;
@@ -116,12 +163,23 @@ export interface DocumentDshReadInput {
 
 export interface DocumentDshContinueInput {
   readonly source: ContentLocator;
-  readonly cursor: DocumentBatchCursor;
+  readonly cursor: ContentDocumentCursor;
 }
 
 export interface DocumentDshReadImagesInput {
   readonly source: ContentLocator;
   readonly maxImages?: number;
+}
+
+export function decodeDocumentDshToolArgs(args: unknown): DocumentDshToolInput {
+  const record = requireRecord(args, 'arguments');
+  if ('input' in record) {
+    throw new Error(
+      'arguments.input is not supported; pass source and document options at the top level.',
+    );
+  }
+  const { operation, ...input } = record;
+  return decodeDocumentDshToolInput(operation, input);
 }
 
 export function decodeDocumentDshToolInput(
@@ -132,18 +190,17 @@ export function decodeDocumentDshToolInput(
     const record = requireRecord(input, 'input');
     requireExactKeys(
       record,
-      ['source', 'mode', 'range', 'includeManifest', 'includeImages', 'maxChars', 'maxImages'],
+      ['source', 'mode', 'includeManifest', 'includeImages', 'maxChars', 'maxImages'],
       'input',
       true,
     );
+    const source = requireContentLocator(record.source, 'input.source');
+    const mode = requireReadMode(record.mode, source);
     return {
       operation,
       input: {
-        source: requireContentLocator(record.source, 'input.source'),
-        ...(record.mode === undefined ? {} : { mode: requireMode(record.mode) }),
-        ...(record.range === undefined
-          ? {}
-          : { range: requireRecord(record.range, 'input.range') }),
+        source,
+        ...(mode === undefined ? {} : { mode }),
         ...(record.includeManifest === undefined
           ? {}
           : { includeManifest: requireBoolean(record.includeManifest, 'input.includeManifest') }),
@@ -162,11 +219,12 @@ export function decodeDocumentDshToolInput(
   if (operation === 'continue') {
     const record = requireRecord(input, 'input');
     requireExactKeys(record, ['source', 'cursor'], 'input');
+    const source = requireContentLocator(record.source, 'input.source');
     return {
       operation,
       input: {
-        source: requireContentLocator(record.source, 'input.source'),
-        cursor: requireRecord(record.cursor, 'input.cursor') as unknown as DocumentBatchCursor,
+        source,
+        cursor: requireDocumentCursor(record.cursor, source),
       },
     };
   }
@@ -188,6 +246,49 @@ export function decodeDocumentDshToolInput(
   );
 }
 
+function requireDocumentCursor(
+  value: unknown,
+  requestedSource: ContentLocator,
+): ContentDocumentCursor {
+  const record = requireRecord(value, 'input.cursor');
+  requireExactKeys(
+    record,
+    ['source', 'strategy', 'next', 'batchIndex', 'done', 'maxChars'],
+    'input.cursor',
+    true,
+  );
+  const source = requireContentLocator(record.source, 'input.cursor.source');
+  if (!contentLocatorsEqual(source, requestedSource)) {
+    throw new Error('input.cursor.source must match input.source exactly.');
+  }
+  if (record.strategy !== 'manifest-order') {
+    throw new Error('input.cursor.strategy must be manifest-order.');
+  }
+  const next =
+    record.next === undefined ? undefined : requireContentLocator(record.next, 'input.cursor.next');
+  if (next !== undefined && !sameContentFile(next, source)) {
+    throw new Error('input.cursor.next must address the same document as input.cursor.source.');
+  }
+  const done = requireBoolean(record.done, 'input.cursor.done');
+  if (done && next !== undefined) {
+    throw new Error('input.cursor.next must be omitted when input.cursor.done is true.');
+  }
+  return {
+    source,
+    strategy: 'manifest-order',
+    ...(next === undefined ? {} : { next }),
+    batchIndex: requireNonNegativeInteger(record.batchIndex, 'input.cursor.batchIndex'),
+    done,
+    ...(record.maxChars === undefined
+      ? {}
+      : { maxChars: requirePositiveInteger(record.maxChars, 'input.cursor.maxChars') }),
+  };
+}
+
+function sameContentFile(left: ContentLocator, right: ContentLocator): boolean {
+  return contentLocatorsEqual({ file: left.file }, { file: right.file });
+}
+
 export function documentDshJsonValue(value: unknown): DocumentDshJsonValue {
   if (value === null || typeof value === 'boolean' || typeof value === 'string') return value;
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -203,19 +304,45 @@ export function documentDshJsonValue(value: unknown): DocumentDshJsonValue {
   throw new Error(`Document DSH result contains unsupported value type: ${typeof value}.`);
 }
 
-function requireContentLocator(value: unknown, field: string): ContentLocator {
+function requireContentLocator(value: unknown, field: string): WorkspaceFileContentLocator {
   if (!isContentLocator(value) || !isWorkspaceFileContentLocator(value)) {
     throw new Error(`${field} must be a canonical workspace-file ContentLocator.`);
-  }
-  if (value.selector !== undefined) {
-    throw new Error(`${field} must identify a document file and cannot contain a selector.`);
   }
   return value;
 }
 
-function requireMode(value: unknown): DocumentDshReadInput['mode'] {
-  if (value === 'content' || value === 'manifest' || value === 'range') return value;
-  throw new Error('input.mode must be content, manifest, or range.');
+function requireReadMode(
+  value: unknown,
+  source: ContentLocator,
+): DocumentDshReadInput['mode'] | undefined {
+  if (source.selector !== undefined) {
+    requireSupportedDocumentSelector(source);
+    if (value === undefined || value === 'content') return value;
+    if (value === 'manifest') {
+      throw new Error('input.mode manifest cannot be used when input.source.selector is present.');
+    }
+    throw new Error('input.mode must be content or manifest.');
+  }
+  if (value === undefined) return undefined;
+  if (value === 'content' || value === 'manifest') return value;
+  throw new Error('input.mode must be content or manifest.');
+}
+
+function requireSupportedDocumentSelector(source: ContentLocator): void {
+  const extension = source.file.path.split('.').at(-1)?.toLowerCase();
+  const expectedKind =
+    extension === 'epub' || extension === 'cbz'
+      ? 'entry'
+      : extension === 'pdf'
+        ? 'page'
+        : extension === 'docx'
+          ? 'text-range'
+          : undefined;
+  if (expectedKind !== undefined && source.selector?.kind !== expectedKind) {
+    throw new Error(
+      `${(extension ?? 'document').toUpperCase()} document selection requires ${expectedKind}.`,
+    );
+  }
 }
 
 function requireRecord(value: unknown, field: string): Record<string, unknown> {
@@ -247,8 +374,15 @@ function requireBoolean(value: unknown, field: string): boolean {
 }
 
 function requirePositiveInteger(value: unknown, field: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${field} must be a positive integer.`);
   }
-  return value as number;
+  return value;
+}
+
+function requireNonNegativeInteger(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${field} must be a non-negative integer.`);
+  }
+  return value;
 }

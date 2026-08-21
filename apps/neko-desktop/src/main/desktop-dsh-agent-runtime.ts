@@ -1,6 +1,7 @@
 import {
   createConversationDshSessionApplication,
   createPersistentDshConversationCatalogStore,
+  createPersistentDshStaleConversationCleanup,
   createPersistentConversationDshSessionBindingStore,
   initializeAgentConversationContextAuthorityTable,
   initializeDshConversationCatalogTables,
@@ -28,7 +29,8 @@ import type {
 } from './desktop-dsh-subprocess-supervisor';
 
 export interface DesktopDshAgentClient
-  extends ConversationDshSessionAcpClient,
+  extends
+    ConversationDshSessionAcpClient,
     DshSessionCatalogAcpClient,
     DshSessionArchiveAcpClient,
     DshSessionCreationClient {
@@ -75,6 +77,9 @@ export async function startDesktopDshAgentRuntime(
     metadataStore: options.metadataStore,
   });
   const catalog = createPersistentDshConversationCatalogStore({
+    metadataStore: options.metadataStore,
+  });
+  const staleConversations = createPersistentDshStaleConversationCleanup({
     metadataStore: options.metadataStore,
   });
   const handlerAssembly = options.createHandlers({ bindings });
@@ -152,6 +157,7 @@ export async function startDesktopDshAgentRuntime(
     client,
     store: bindings,
     catalog,
+    staleConversations,
     conversationIdentitySeed: options.virtualCwd,
     activity: projection,
   });

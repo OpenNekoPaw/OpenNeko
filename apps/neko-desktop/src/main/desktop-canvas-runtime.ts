@@ -1020,7 +1020,9 @@ function materialIdentity(identity: CanvasHostRuntimeIdentity) {
 }
 
 function materialFileName(locator: ContentLocator): string {
-  return portableBaseName(locator.selector?.path ?? locator.file.path);
+  return portableBaseName(
+    locator.selector?.kind === 'entry' ? locator.selector.path : locator.file.path,
+  );
 }
 
 function portableBaseName(value: string): string {

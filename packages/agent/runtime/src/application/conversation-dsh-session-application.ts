@@ -21,6 +21,7 @@ import {
   type DshSessionCreationClient,
 } from './conversation-dsh-session-publication';
 import type { DshConversationCatalogStore } from './dsh-conversation-catalog-repository';
+import type { DshStaleConversationCleanup } from './dsh-stale-conversation-cleanup';
 import {
   createDshConversationHomeProjection,
   type DshConversationHomeProjection,
@@ -59,6 +60,7 @@ export interface ConversationDshSessionApplicationOptions {
     DshSessionCreationClient;
   readonly store: ConversationDshSessionBindingStore;
   readonly catalog: DshConversationCatalogStore;
+  readonly staleConversations: DshStaleConversationCleanup;
   readonly conversationIdentitySeed: string;
   readonly activity: Pick<DshAcpProjection, 'snapshot'>;
 }
@@ -90,6 +92,11 @@ export function createConversationDshSessionApplication(
       async archiveConversation(conversationId: string) {
         const resolution = await binding.resolve(conversationId);
         if (!resolution.ok) {
+          if (resolution.code === 'DSH_SESSION_STALE') {
+            await options.staleConversations.discard(resolution.binding);
+            await home.refresh();
+            return;
+          }
           throw new Error(
             `DSH Conversation archive failed: ${resolution.code}: ${resolution.message}`,
           );

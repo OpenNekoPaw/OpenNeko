@@ -5,6 +5,7 @@ import type {
   DshComposerConfigurationProjection,
   DshComposerMentionProjection,
   DshComposerMaterializedAssetProjection,
+  DshComposerImageInput,
   DshComposerSubmitInput,
   DshSessionHostEvent,
   DshSessionHostProjection,
@@ -23,6 +24,7 @@ import { InputAreaProvider } from '../components/ChatView/InputAreaContext';
 import { ReferenceToken } from '../components/ChatView/InputArea/ReferenceToken';
 import type {
   GenerationParams,
+  MessageAttachment,
   MentionItem,
   SelectedFileReference,
   SelectedCharacterLaunch,
@@ -235,6 +237,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       mentionDiagnostic={props.mentionDiagnostic}
       configuring={props.configuring}
       currentTurn={props.projection?.currentTurn}
+      contextPressure={props.projection?.contextPressure}
       inbox={props.projection?.inbox}
       submitting={props.submitting}
       disabled={!runtimeReady}
@@ -428,6 +431,7 @@ function DshComposer({
   mentionDiagnostic,
   configuring,
   currentTurn,
+  contextPressure,
   inbox,
   submitting,
   disabled,
@@ -461,6 +465,7 @@ function DshComposer({
   readonly mentionDiagnostic?: string;
   readonly configuring: boolean;
   readonly currentTurn?: number;
+  readonly contextPressure?: DshSessionHostProjection['contextPressure'];
   readonly inbox?: DshSessionHostProjection['inbox'];
   readonly submitting: boolean;
   readonly disabled: boolean;
@@ -493,9 +498,12 @@ function DshComposer({
   readonly onRemoveWorldLaunch: () => void;
   readonly presentation: 'entry' | 'workspace' | 'conversation';
 }): JSX.Element {
+  const { t } = useTranslation();
   const [inputDiagnostic, setInputDiagnostic] = useState<string>();
   const suppressInputDiagnosticClearRef = useRef(false);
   const [contextChips, setContextChips] = useState<readonly AgentContextPayload[]>([]);
+  const [selectedCanvasId, setSelectedCanvasId] = useState('workspace-board');
+  const selectedCanvasScopeRef = useRef<string>();
   const models: ChatModelOption[] = (configuration?.models ?? []).map((model) => ({
     id: model.id,
     label: model.label,
@@ -514,6 +522,25 @@ function DshComposer({
     audioType: 'sfx',
   };
   const configurationDiagnostic = configurationError ?? configuration?.diagnostic;
+  const canvasCatalog = configuration?.context?.canvas;
+  const canvasSelectionScope =
+    canvasCatalog === undefined
+      ? undefined
+      : `${conversationId ?? 'draft'}:${canvasCatalog.workspaceId}`;
+  const effectiveSelectedCanvasId =
+    canvasSelectionScope !== undefined && selectedCanvasScopeRef.current === canvasSelectionScope
+      ? selectedCanvasId
+      : 'workspace-board';
+  const selectedCanvasOption = canvasCatalog?.options.find((option) => {
+    const optionId =
+      option.target.kind === 'workspace-board' ? 'workspace-board' : option.target.canvasId;
+    return optionId === effectiveSelectedCanvasId;
+  });
+  const canvasSelectionDiagnostic =
+    canvasCatalog === undefined ||
+    (selectedCanvasOption !== undefined && selectedCanvasOption.disabled !== true)
+      ? undefined
+      : (selectedCanvasOption?.diagnostic ?? t('chat.input.workspaceCanvas.unavailable'));
   const inputCatalog = useMemo(() => projectDshInputCatalog(configuration), [configuration]);
   const inputCatalogBindingKind = configuration?.context ? 'workspace' : 'assistant';
   const projectedMentionItems: MentionItem[] = mentionItems.map((mention) => ({
@@ -532,7 +559,10 @@ function DshComposer({
     surfaceKind === 'entry' &&
     entryExperience === 'authoring' &&
     entryWorkspaceTarget === undefined;
-  const submissionBlocked = configurationDiagnostic !== undefined || entryTargetMissing;
+  const submissionBlocked =
+    configurationDiagnostic !== undefined ||
+    entryTargetMissing ||
+    canvasSelectionDiagnostic !== undefined;
   const queuedMessages = [...(inbox?.nextTurn ?? []), ...(inbox?.nextStep ?? [])].map(
     (message) => ({
       id: message.messageId,
@@ -548,8 +578,18 @@ function DshComposer({
     entryExperience === 'authoring' && entryWorkspaceTarget !== undefined
       ? { kind: 'project', projectId: entryWorkspaceTarget.projectId }
       : { kind: 'surface' };
+  const resolveCanvasTurnTarget = () => {
+    if (canvasCatalog === undefined) return undefined;
+    if (selectedCanvasOption === undefined || selectedCanvasOption.disabled === true) {
+      throw new Error(
+        selectedCanvasOption?.diagnostic ?? t('chat.input.workspaceCanvas.unavailable'),
+      );
+    }
+    return selectedCanvasOption.target;
+  };
   const submitComposerInput = async (input?: {
     readonly messageText?: string;
+    readonly attachments?: MessageAttachment[];
     readonly fileReferences?: SelectedFileReference[];
     readonly contextPayloads?: AgentContextPayload[];
   }): Promise<boolean> => {
@@ -560,6 +600,7 @@ function DshComposer({
         label: reference.label,
         contentLocator: reference.contentLocator,
       }));
+      const images = projectComposerImages(input?.attachments ?? []);
       const submittedContextPayloads = input?.contextPayloads ?? [];
       const trigger = parseAgentInputTrigger(messageText);
       if (trigger?.trigger === 'mention') {
@@ -568,7 +609,7 @@ function DshComposer({
         );
       }
       if (trigger !== null && (trigger.trigger === 'command' || trigger.trigger === 'skill')) {
-        if (references.length > 0 || submittedContextPayloads.length > 0) {
+        if (references.length > 0 || images.length > 0 || submittedContextPayloads.length > 0) {
           throw new Error('DSH commands and Skills do not accept attached Workspace context.');
         }
         const executableTrigger =
@@ -581,6 +622,7 @@ function DshComposer({
           phase: 'session',
           bindingKind: inputCatalogBindingKind,
         });
+        const canvasTurnTarget = intent.kind === 'skill' ? resolveCanvasTurnTarget() : undefined;
         const submitInput: DshComposerSubmitInput =
           intent.kind === 'command'
             ? { kind: 'command', line: messageText.trim() }
@@ -589,6 +631,7 @@ function DshComposer({
                 skillName: intent.skillName,
                 displayText: `$${intent.skillName}${intent.args === undefined ? '' : ` ${intent.args}`}`,
                 ...(intent.args === undefined ? {} : { args: intent.args }),
+                ...(canvasTurnTarget === undefined ? {} : { canvasTurnTarget }),
               };
         const accepted = await onSubmit(submitTarget(), submitInput);
         if (accepted) setInputDiagnostic(undefined);
@@ -597,15 +640,19 @@ function DshComposer({
       if (
         messageText.trim().length === 0 &&
         references.length === 0 &&
+        images.length === 0 &&
         submittedContextPayloads.length === 0
       ) {
         return false;
       }
+      const canvasTurnTarget = resolveCanvasTurnTarget();
       const accepted = await onSubmit(submitTarget(), {
         kind: 'message',
         text: messageText.trim(),
         references,
+        images,
         contextPayloads: submittedContextPayloads,
+        ...(canvasTurnTarget === undefined ? {} : { canvasTurnTarget }),
       });
       if (accepted) setInputDiagnostic(undefined);
       return accepted;
@@ -614,6 +661,13 @@ function DshComposer({
       return false;
     }
   };
+  useEffect(() => {
+    if (canvasCatalog === undefined) return;
+    const scope = `${conversationId ?? 'draft'}:${canvasCatalog.workspaceId}`;
+    if (selectedCanvasScopeRef.current === scope) return;
+    selectedCanvasScopeRef.current = scope;
+    setSelectedCanvasId('workspace-board');
+  }, [canvasCatalog, conversationId]);
   return (
     <InputAreaProvider
       isBusy={configuring || submitting || currentTurn !== undefined}
@@ -635,7 +689,8 @@ function DshComposer({
       onSessionModeChange={() => undefined}
       executionMode="ask"
       onExecutionModeChange={() => undefined}
-      contextTokenCount={0}
+      contextTokenCount={contextPressure?.projectedTokens ?? contextPressure?.pressureTokens ?? 0}
+      maxContextTokens={contextPressure?.contextWindow}
       isCompressing={false}
       mediaModelCallCount={0}
       inputCatalog={inputCatalog}
@@ -709,7 +764,7 @@ function DshComposer({
           }}
           onCancel={onCancel}
           disabled={disabled || configuring || configuration === undefined}
-          attachmentsDisabled
+          attachmentAccept="image/png,image/jpeg,image/webp,image/gif"
           runtimeMode={
             configuration === undefined
               ? undefined
@@ -728,31 +783,59 @@ function DshComposer({
                 }
           }
           submissionBlocked={submissionBlocked}
-          submissionBlockedReason={inputDiagnostic ?? mentionDiagnostic ?? configurationDiagnostic}
+          submissionBlockedReason={
+            inputDiagnostic ??
+            canvasSelectionDiagnostic ??
+            mentionDiagnostic ??
+            configurationDiagnostic
+          }
           workspaceCanvas={
             configuration?.context
               ? {
                   workspaceLabel: configuration.context.workspaceLabel,
                   showCanvasIndex: true,
                   canvas: {
-                    workspaceId: configuration.context.workspaceId,
-                    defaultTarget: {
-                      kind: 'workspace-board' as const,
-                      workspaceId: configuration.context.workspaceId,
-                    },
-                    options: [
-                      {
-                        id: 'workspace-board',
-                        label: configuration.context.canvas.label,
-                        target: {
-                          kind: 'workspace-board' as const,
-                          workspaceId: configuration.context.workspaceId,
-                        },
-                      },
-                    ],
-                    selectedId: 'workspace-board',
+                    workspaceId: configuration.context.canvas.workspaceId,
+                    defaultTarget: configuration.context.canvas.defaultTarget,
+                    options: configuration.context.canvas.options.map((option) => ({
+                      id:
+                        option.target.kind === 'workspace-board'
+                          ? 'workspace-board'
+                          : option.target.canvasId,
+                      label: option.label,
+                      target: option.target,
+                      ...(option.summary === undefined ? {} : { summary: option.summary }),
+                      ...(option.disabled === undefined ? {} : { disabled: option.disabled }),
+                      ...(option.diagnostic === undefined ? {} : { diagnostic: option.diagnostic }),
+                    })),
+                    selectedId: effectiveSelectedCanvasId,
                     loading: false,
-                    onSelect: async () => undefined,
+                    ...(canvasSelectionDiagnostic === undefined &&
+                    configuration.context.canvas.diagnostics.length === 0
+                      ? {}
+                      : {
+                          diagnostic:
+                            canvasSelectionDiagnostic ??
+                            configuration.context.canvas.diagnostics.join(' '),
+                        }),
+                    onSelect: async (optionId) => {
+                      const option = configuration.context?.canvas.options.find((candidate) =>
+                        candidate.target.kind === 'workspace-board'
+                          ? optionId === 'workspace-board'
+                          : candidate.target.canvasId === optionId,
+                      );
+                      if (option === undefined || option.disabled === true) {
+                        setInputDiagnostic(
+                          option?.diagnostic ?? t('chat.input.workspaceCanvas.unavailable'),
+                        );
+                        return;
+                      }
+                      if (canvasSelectionScope !== undefined) {
+                        selectedCanvasScopeRef.current = canvasSelectionScope;
+                      }
+                      setSelectedCanvasId(optionId);
+                      setInputDiagnostic(undefined);
+                    },
                   },
                 }
               : undefined
@@ -806,6 +889,41 @@ function DshComposer({
       </div>
     </InputAreaProvider>
   );
+}
+
+function projectComposerImages(
+  attachments: readonly MessageAttachment[],
+): readonly DshComposerImageInput[] {
+  return attachments.map((attachment) => {
+    if (attachment.type !== 'image') {
+      throw new Error(`DSH attachment '${attachment.name}' is not a supported image.`);
+    }
+    const preview = attachment.preview;
+    if (preview === undefined) {
+      throw new Error(`DSH image attachment '${attachment.name}' has no readable image content.`);
+    }
+    const parsed = parseComposerImageDataUrl(preview);
+    if (parsed === undefined) {
+      throw new Error(`DSH image attachment '${attachment.name}' must be PNG, JPEG, WebP or GIF.`);
+    }
+    return {
+      name: attachment.name,
+      mimeType: parsed.mimeType,
+      data: parsed.data,
+    };
+  });
+}
+
+function parseComposerImageDataUrl(
+  value: string,
+): { readonly mimeType: DshComposerImageInput['mimeType']; readonly data: string } | undefined {
+  for (const mimeType of ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const) {
+    const prefix = `data:${mimeType};base64,`;
+    if (!value.startsWith(prefix)) continue;
+    const data = value.slice(prefix.length);
+    return data.length === 0 ? undefined : { mimeType, data };
+  }
+  return undefined;
 }
 
 function projectDshInputCatalog(
@@ -918,10 +1036,17 @@ function DshSessionEvent({
                     {event.content.map((block, index) =>
                       block.type === 'text' ? (
                         <span key={`text:${index}`}>{block.text}</span>
-                      ) : (
+                      ) : block.type === 'resource' ? (
                         <UserMessageResourceToken
                           key={`resource:${index}:${block.label}`}
                           block={block}
+                        />
+                      ) : (
+                        <ReferenceToken
+                          key={`image:${index}:${block.label}`}
+                          kind="image"
+                          label={block.label}
+                          title={block.label}
                         />
                       ),
                     )}

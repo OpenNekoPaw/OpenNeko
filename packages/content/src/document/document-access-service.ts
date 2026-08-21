@@ -4,7 +4,6 @@ import {
   type DocumentBatchCursor,
   type DocumentFormat,
   type DocumentImageInfo,
-  type DocumentLocator,
   type DocumentManifest,
   type DocumentManifestCapabilities,
   type DocumentManifestUnit,
@@ -12,6 +11,7 @@ import {
   type DocumentReadResult,
   type DocumentSourceRef,
 } from '../contracts/document-reading';
+import type { DocumentReadCoordinate } from '../contracts/document-read-coordinate';
 import { probeImageMetadata } from './image-metadata';
 import {
   extractEpubImageEntryPaths,
@@ -488,7 +488,7 @@ export class DocumentAccessService implements IDocumentAccessService {
     const count = content.pageCount ?? 1;
     const unitKind = source.format === 'pptx' || source.format === 'ppt' ? 'slide' : 'section';
     const units = Array.from({ length: Math.max(count, 1) }, (_, index): DocumentManifestUnit => {
-      const locator: DocumentLocator =
+      const locator: DocumentReadCoordinate =
         unitKind === 'slide'
           ? { kind: 'slide', slideNumber: index + 1, slideIndex: index }
           : { kind: 'text-range', startChar: 0, endChar: content.text.length };
@@ -690,7 +690,7 @@ export class DocumentAccessService implements IDocumentAccessService {
       const pageIndex =
         selectedIndexByEntryName.get(image.entryName ?? '') ?? selection.startPageIndex + index;
       const entryName = image.entryName ?? selection.entries[index]?.name;
-      const locator: DocumentLocator = {
+      const locator: DocumentReadCoordinate = {
         kind: 'page',
         pageNumber: pageIndex + 1,
         pageIndex,
@@ -881,7 +881,7 @@ export class DocumentAccessService implements IDocumentAccessService {
     return Promise.all(
       selection.entries.map(async (entry, index) => {
         const pageIndex = selection.startPageIndex + index;
-        const locator: DocumentLocator = {
+        const locator: DocumentReadCoordinate = {
           kind: 'page',
           pageNumber: pageIndex + 1,
           pageIndex,
@@ -898,7 +898,7 @@ export class DocumentAccessService implements IDocumentAccessService {
   private async readZipEntryImageInfo(
     source: DocumentSourceRef,
     entryPath: string,
-    locator: DocumentLocator,
+    locator: DocumentReadCoordinate,
   ): Promise<DocumentImageInfo> {
     const bytes = await this.readZipEntryBytes(source.filePath, entryPath);
     return createImageInfo(bytes, {
@@ -1092,7 +1092,7 @@ function readEpubChapterHtml(epub: EpubLike, chapterId: string): Promise<string>
 
 function findEpubChapterIndex(
   chapters: readonly EpubChapterInfo[],
-  locator: Extract<DocumentLocator, { kind: 'chapter' }>,
+  locator: Extract<DocumentReadCoordinate, { kind: 'chapter' }>,
 ): number {
   if (locator.spineIndex !== undefined) {
     return chapters[locator.spineIndex] ? locator.spineIndex : -1;
@@ -1108,7 +1108,7 @@ function findEpubChapterIndex(
 
 function sliceTextByLocator(
   text: string,
-  locator: Extract<DocumentLocator, { kind: 'text-range' }>,
+  locator: Extract<DocumentReadCoordinate, { kind: 'text-range' }>,
 ): string {
   if (locator.startLine !== undefined || locator.endLine !== undefined) {
     const lines = text.split(/\r?\n/);
@@ -1222,16 +1222,16 @@ function findComicEntryIndex(
 function dedupeEpubImageRefs(
   refs: readonly {
     readonly entryPath: string;
-    readonly locator: Extract<DocumentLocator, { kind: 'chapter' }>;
+    readonly locator: Extract<DocumentReadCoordinate, { kind: 'chapter' }>;
   }[],
 ): Array<{
   readonly entryPath: string;
-  readonly locator: Extract<DocumentLocator, { kind: 'chapter' }>;
+  readonly locator: Extract<DocumentReadCoordinate, { kind: 'chapter' }>;
 }> {
   const seen = new Set<string>();
   const deduped: Array<{
     readonly entryPath: string;
-    readonly locator: Extract<DocumentLocator, { kind: 'chapter' }>;
+    readonly locator: Extract<DocumentReadCoordinate, { kind: 'chapter' }>;
   }> = [];
   for (const ref of refs) {
     if (seen.has(ref.entryPath)) {
@@ -1247,7 +1247,7 @@ function createImageInfo(
   bytes: Uint8Array,
   resource?: {
     readonly source?: DocumentSourceRef;
-    readonly locator?: DocumentLocator;
+    readonly locator?: DocumentReadCoordinate;
     readonly entryPath?: string;
   },
 ): DocumentImageInfo {
@@ -1269,12 +1269,12 @@ function createImageInfo(
 
 function findManifestUnitIndex(
   units: readonly DocumentManifestUnit[],
-  locator: DocumentLocator,
+  locator: DocumentReadCoordinate,
 ): number {
   return units.findIndex((unit) => sameLocator(unit.locator, locator));
 }
 
-function sameLocator(left: DocumentLocator, right: DocumentLocator): boolean {
+function sameLocator(left: DocumentReadCoordinate, right: DocumentReadCoordinate): boolean {
   if (left.kind !== right.kind) return false;
   switch (left.kind) {
     case 'page':
@@ -1302,8 +1302,8 @@ function createEpubChapterLocatorHref(chapter: EpubChapterInfo): string {
 }
 
 function sameChapterLocator(
-  left: Extract<DocumentLocator, { kind: 'chapter' }>,
-  right: Extract<DocumentLocator, { kind: 'chapter' }>,
+  left: Extract<DocumentReadCoordinate, { kind: 'chapter' }>,
+  right: Extract<DocumentReadCoordinate, { kind: 'chapter' }>,
 ): boolean {
   if (left.spineIndex !== undefined && right.spineIndex !== undefined) {
     return left.spineIndex === right.spineIndex;
@@ -1335,7 +1335,7 @@ function withContentImages(
   };
 }
 
-function unsupportedLocator(locator: DocumentLocator, message: string): DocumentAccessError {
+function unsupportedLocator(locator: DocumentReadCoordinate, message: string): DocumentAccessError {
   return new DocumentAccessError('unsupported-locator', `${message}; received ${locator.kind}`);
 }
 

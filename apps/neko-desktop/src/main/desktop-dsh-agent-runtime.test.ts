@@ -392,6 +392,7 @@ function createHandlers(): DshAcpApplicationClientHandlers {
     executeCharacterTool: async () => unsupported(),
     onSessionUpdate: unsupported,
     onSessionEvent: unsupported,
+    onContextPressure: unsupported,
   };
 }
 

@@ -94,6 +94,24 @@ describe('Canvas workspace context contract', () => {
     ).toThrow('Board option must not carry a file-backed index entry');
   });
 
+  it('rejects a catalog option from another Workspace', () => {
+    expect(() =>
+      createCanvasWorkspaceContextCatalog({
+        workspaceId: 'workspace-1',
+        options: [
+          {
+            target: createCanvasWorkspaceBoardTarget('workspace-1'),
+            label: 'Workspace Board',
+          },
+          {
+            target: createExactCanvasTarget('workspace-2', 'canvas-2'),
+            label: 'Foreign Canvas',
+          },
+        ],
+      }),
+    ).toThrow('catalog options must match its Workspace');
+  });
+
   it('parses turn context with only a light summary', () => {
     const context = parseCanvasWorkspaceTurnContext({
       target: { kind: 'exact-canvas', workspaceId: 'workspace-1', canvasId: 'canvas-1' },

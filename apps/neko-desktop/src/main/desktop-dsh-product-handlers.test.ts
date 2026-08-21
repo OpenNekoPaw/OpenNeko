@@ -21,6 +21,7 @@ describe('Desktop DSH product handlers', () => {
       onPermissionChanged,
       onSessionUpdate: vi.fn(),
       onSessionEvent: vi.fn(),
+      onContextPressure: vi.fn(),
     });
     const pending = assembly.handlers.requestPermission(permission(), {
       sessionId: 'dsh-session:one',
@@ -58,6 +59,7 @@ describe('Desktop DSH product handlers', () => {
       onPermissionChanged: vi.fn(),
       onSessionUpdate: vi.fn(),
       onSessionEvent: vi.fn(),
+      onContextPressure: vi.fn(),
     });
     const pending = assembly.handlers.requestPermission(permission(), {
       sessionId: 'dsh-session:one',
@@ -86,6 +88,7 @@ describe('Desktop DSH product handlers', () => {
       onPermissionChanged: vi.fn(),
       onSessionUpdate: vi.fn(),
       onSessionEvent: vi.fn(),
+      onContextPressure: vi.fn(),
     });
     const first = assembly.handlers.requestPermission(permission(), {
       sessionId: 'dsh-session:one',

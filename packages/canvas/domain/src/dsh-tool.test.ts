@@ -15,7 +15,7 @@ import type {
 describe('Canvas DSH tool contract', () => {
   it('owns the exact model-facing query and create-node parameter schema', () => {
     expect(CANVAS_DSH_TOOL_PARAMETERS.input.oneOf).toHaveLength(2);
-    expect(JSON.stringify(CANVAS_DSH_TOOL_PARAMETERS)).toContain('expectedFingerprint');
+    expect(JSON.stringify(CANVAS_DSH_TOOL_PARAMETERS)).not.toMatch(/fingerprint/iu);
     expect(JSON.stringify(CANVAS_DSH_TOOL_PARAMETERS)).not.toContain('include');
     expect(CANVAS_DSH_TOOL_PARAMETERS.input.oneOf[0]).toMatchObject({
       title: 'query input',
@@ -33,14 +33,12 @@ describe('Canvas DSH tool contract', () => {
     expect(
       decodeCanvasDshToolInput('create-node', {
         documentPath: 'boards/story.nkc',
-        expectedFingerprint: { strategy: 'sha256', value: 'abc' },
         node: { type: 'markdown', position: { x: 1, y: 2 }, data: { title: 'New' } },
       }),
     ).toEqual({
       operation: 'create-node',
       input: {
         documentPath: 'boards/story.nkc',
-        expectedFingerprint: { strategy: 'sha256', value: 'abc' },
         node: { type: 'markdown', position: { x: 1, y: 2 }, data: { title: 'New' } },
       },
     });
@@ -49,7 +47,7 @@ describe('Canvas DSH tool contract', () => {
     );
   });
 
-  it('rejects absolute, hidden, non-nkc, and stale fingerprint inputs', () => {
+  it('rejects absolute, hidden, non-nkc, retired fingerprint, and invalid node inputs', () => {
     expect(() => decodeCanvasDshToolInput('query', { documentPath: '/abs/board.nkc' })).toThrow(
       /normalized Workspace-relative \.nkc path/,
     );
@@ -65,18 +63,16 @@ describe('Canvas DSH tool contract', () => {
         expectedFingerprint: { strategy: 'sha256', value: '' },
         node: {},
       }),
-    ).toThrow(/exact content fingerprint/);
+    ).toThrow(/expectedFingerprint is not supported/);
     expect(() =>
       decodeCanvasDshToolInput('create-node', {
         documentPath: 'boards/story.nkc',
-        expectedFingerprint: { strategy: 'sha256', value: 'abc' },
         node: { position: { x: Number.NaN, y: 0 } },
       }),
     ).toThrow(/finite number/);
     expect(() =>
       decodeCanvasDshToolInput('create-node', {
         documentPath: 'boards/story.nkc',
-        expectedFingerprint: { strategy: 'sha256', value: 'abc' },
         node: { data: { invalid: new Date(0) } },
       }),
     ).toThrow(/plain JSON object/);
@@ -131,19 +127,19 @@ describe('Canvas DSH tool contract', () => {
 
     expect(projectCanvasQuerySnapshot(snapshot)).toEqual({
       documentPath: 'boards/story.nkc',
-      fingerprint: { strategy: 'sha256', value: 'fingerprint' },
       nodeCount: 1,
       connectionCount: 1,
     });
     expect(projectCanvasCreateNodeResult(mutation)).toEqual({
       documentPath: 'boards/story.nkc',
-      fingerprint: { strategy: 'sha256', value: 'fingerprint' },
       nodeId: 'node-2',
       nodeType: 'markdown',
       nodePosition: { x: 10, y: 20 },
       parentId: 'node-1',
     });
     expect(projectCanvasQuerySnapshot(snapshot)).not.toHaveProperty('canvas');
+    expect(projectCanvasQuerySnapshot(snapshot)).not.toHaveProperty('fingerprint');
     expect(projectCanvasCreateNodeResult(mutation)).not.toHaveProperty('node.data');
+    expect(projectCanvasCreateNodeResult(mutation)).not.toHaveProperty('fingerprint');
   });
 });

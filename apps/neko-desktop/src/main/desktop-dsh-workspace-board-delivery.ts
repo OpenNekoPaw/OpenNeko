@@ -8,6 +8,10 @@ import type {
 } from '@neko/agent-runtime/application';
 import type { ContentReadService } from '@neko/content';
 import {
+  createNodeHostContentReadService,
+  type NodeDocumentEntryReader,
+} from '@neko/content/node';
+import {
   WorkspaceBoardDeliveryCoordinator,
   WorkspaceBoardDeliveryLedger,
   type CanvasWorkspaceProjectionArtifact,
@@ -37,6 +41,16 @@ interface WorkspaceBoardBinding {
   readonly workspacePath: string;
   readonly ledger: WorkspaceBoardDeliveryLedger;
   readonly coordinator: WorkspaceBoardDeliveryCoordinator;
+}
+
+export function createDshWorkspaceBoardContentRead(input: {
+  readonly workspacePath: string;
+  readonly documentEntryReader: NodeDocumentEntryReader;
+}): ContentReadService {
+  return createNodeHostContentReadService({
+    workspaceRoot: input.workspacePath,
+    documentEntryReader: input.documentEntryReader,
+  });
 }
 
 export class DesktopDshWorkspaceBoardDelivery implements DshWorkspaceBoardArtifactDeliveryPort {

@@ -44,9 +44,16 @@ describe('Desktop DSH Prompt image admission', () => {
         conversationId,
         windowId: 'window-1',
         references: [{ label: 'board.png', contentLocator: imageLocator }],
+        images: [],
         modelSupportsImageInput: true,
       }),
-    ).resolves.toEqual([{ referenceIndex: 0, data: 'AQID', mimeType: 'image/png' }]);
+    ).resolves.toEqual([
+      {
+        source: { kind: 'reference', referenceIndex: 0 },
+        data: 'AQID',
+        mimeType: 'image/png',
+      },
+    ]);
     expect(restore).toHaveBeenCalledWith('window-1', 'grant-1', 'workspace-1');
     expect(read).toHaveBeenCalledWith(imageLocator, { maxBytes: 20 * 1024 * 1024 });
   });
@@ -67,19 +74,68 @@ describe('Desktop DSH Prompt image admission', () => {
         conversationId,
         windowId: 'window-1',
         references: [{ label: 'board.png', contentLocator: imageLocator }],
+        images: [],
         modelSupportsImageInput: false,
       }),
     ).rejects.toThrow(/does not support image input/u);
     expect(read).not.toHaveBeenCalled();
   });
 
+  it('admits a canonical pasted image without requiring Workspace file authority', async () => {
+    const stat = vi.fn();
+    const read = vi.fn();
+    const normalizeImage = vi.fn(async (bytes: Uint8Array, mimeType: string) => ({
+      bytes,
+      mimeType,
+    }));
+    const admission = createAdmission({ stat, read, normalizeImage });
+
+    await expect(
+      admission.admit({
+        conversationId,
+        windowId: 'window-1',
+        references: [],
+        images: [{ name: 'clipboard.png', mimeType: 'image/png', data: 'AQID' }],
+        modelSupportsImageInput: true,
+      }),
+    ).resolves.toEqual([
+      {
+        source: { kind: 'inline', imageIndex: 0, name: 'clipboard.png' },
+        data: 'AQID',
+        mimeType: 'image/png',
+      },
+    ]);
+    expect(Array.from(normalizeImage.mock.calls[0]?.[0] ?? [])).toEqual([1, 2, 3]);
+    expect(normalizeImage.mock.calls[0]?.[1]).toBe('image/png');
+    expect(stat).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed pasted bytes before normalization', async () => {
+    const stat = vi.fn();
+    const read = vi.fn();
+    const normalizeImage = vi.fn();
+    const admission = createAdmission({ stat, read, normalizeImage });
+
+    await expect(
+      admission.admit({
+        conversationId,
+        windowId: 'window-1',
+        references: [],
+        images: [{ name: 'clipboard.png', mimeType: 'image/png', data: 'YR==' }],
+        modelSupportsImageInput: true,
+      }),
+    ).rejects.toThrow(/canonical base64/u);
+    expect(normalizeImage).not.toHaveBeenCalled();
+  });
+
   it('keeps an authorized non-image reference as a resource without reading its bytes', async () => {
-    const documentLocator = {
+    const documentReadCoordinate = {
       file: { authority: 'workspace' as const, path: 'docs/notes.pdf' },
     };
     const stat = vi.fn(async () => ({
       status: 'ready' as const,
-      locator: documentLocator,
+      locator: documentReadCoordinate,
       byteLength: 100,
       mimeType: 'application/pdf',
       fingerprint,
@@ -91,7 +147,8 @@ describe('Desktop DSH Prompt image admission', () => {
       admission.admit({
         conversationId,
         windowId: 'window-1',
-        references: [{ label: 'notes.pdf', contentLocator: documentLocator }],
+        references: [{ label: 'notes.pdf', contentLocator: documentReadCoordinate }],
+        images: [],
         modelSupportsImageInput: false,
       }),
     ).resolves.toEqual([]);
@@ -119,6 +176,7 @@ describe('Desktop DSH Prompt image admission', () => {
         conversationId,
         windowId: 'window-1',
         references: [{ label: 'board.png', contentLocator: imageLocator }],
+        images: [],
         modelSupportsImageInput: true,
       }),
     ).rejects.toThrow(/content-missing/u);

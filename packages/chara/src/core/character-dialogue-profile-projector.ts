@@ -197,7 +197,13 @@ function representationLabel(representation: ContentLocator): string {
     representation.file.authority === 'workspace'
       ? representation.file.path
       : `${representation.file.packageId}/${representation.file.path}`;
-  return representation.selector ? `${file}#${representation.selector.path}` : file;
+  if (representation.selector?.kind === 'entry') {
+    return `${file}#${representation.selector.path}`;
+  }
+  if (representation.selector?.kind === 'page') {
+    return `${file}#page=${representation.selector.pageNumber}`;
+  }
+  return representation.selector ? `${file}#text-range` : file;
 }
 
 function getCharacterDialoguePromptLabels(

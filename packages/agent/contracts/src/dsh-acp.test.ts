@@ -4,6 +4,7 @@ import {
   DSH_ACP_MAX_JSON_DEPTH,
   DSH_ACP_MAX_PAYLOAD_BYTES,
   decodeDshAcpArchivedSessionsProjection,
+  decodeDshAcpContextPressureNotification,
   decodeDshAcpDomainToolCancelRequest,
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
@@ -18,6 +19,49 @@ import {
 } from './dsh-acp';
 
 describe('DSH ACP extension contract', () => {
+  it('decodes exact bounded context pressure while allowing unavailable optional fields', () => {
+    expect(
+      decodeDshAcpContextPressureNotification({
+        sessionId: 'session-1',
+        sourceSequence: 12,
+        pressure: {
+          pressureTokens: 38_924,
+          projectedTokens: 41_100,
+          contextWindow: 256_000,
+        },
+      }),
+    ).toEqual({
+      sessionId: 'session-1',
+      sourceSequence: 12,
+      pressure: {
+        pressureTokens: 38_924,
+        projectedTokens: 41_100,
+        contextWindow: 256_000,
+      },
+    });
+    expect(
+      decodeDshAcpContextPressureNotification({
+        sessionId: 'session-1',
+        sourceSequence: 0,
+        pressure: {},
+      }),
+    ).toEqual({ sessionId: 'session-1', sourceSequence: 0, pressure: {} });
+    expect(() =>
+      decodeDshAcpContextPressureNotification({
+        sessionId: 'session-1',
+        sourceSequence: 1,
+        pressure: { contextWindow: 0 },
+      }),
+    ).toThrow(/context window must be a positive safe integer/u);
+    expect(() =>
+      decodeDshAcpContextPressureNotification({
+        sessionId: 'session-1',
+        sourceSequence: 1,
+        pressure: { projectedTokens: 1, revision: 1 },
+      }),
+    ).toThrow(/unsupported fields/u);
+  });
+
   it('accepts exact Session archive requests and unique archive projections', () => {
     expect(decodeDshAcpSessionArchiveRequest({ sessionId: 'session-1' })).toEqual({
       sessionId: 'session-1',
@@ -56,6 +100,42 @@ describe('DSH ACP extension contract', () => {
         fallbackQueue: true,
       }),
     ).toThrow(/must contain exactly/u);
+
+    expect(
+      decodeDshAcpInboxEnqueueRequest({
+        sessionId: 'session-1',
+        prompt: [
+          {
+            type: 'image',
+            data: 'AQID',
+            mimeType: 'image/png',
+            _meta: { opennekoDisplayName: 'clipboard.png' },
+          },
+        ],
+        displayContent: [{ type: 'image', name: 'clipboard.png' }],
+        contextText: 'workspace context',
+      }),
+    ).toMatchObject({
+      prompt: [{ type: 'image', _meta: { opennekoDisplayName: 'clipboard.png' } }],
+      displayContent: [{ type: 'image', name: 'clipboard.png' }],
+    });
+
+    const imageData = 'AAAA'.repeat(70_000);
+    expect(
+      decodeDshAcpInboxEnqueueRequest({
+        sessionId: 'session-1',
+        prompt: [
+          {
+            type: 'image',
+            data: imageData,
+            mimeType: 'image/png',
+            _meta: { opennekoDisplayName: 'large.png' },
+          },
+        ],
+        displayContent: [{ type: 'image', name: 'large.png' }],
+        contextText: 'workspace context',
+      }).prompt[0],
+    ).toMatchObject({ type: 'image', data: imageData });
   });
 
   it('accepts only the exact bounded Session context payload', () => {

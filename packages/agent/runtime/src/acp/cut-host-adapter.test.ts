@@ -5,15 +5,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { CutDshHostAdapter } from './cut-host-adapter';
 
 describe('Cut DSH Host adapter', () => {
-  it('delegates exact fingerprint edits and returns bounded facts', async () => {
+  it('keeps the fingerprint internal while returning bounded facts', async () => {
     const apply = vi.fn<Pick<CutProjectAuthoringService, 'apply'>['apply']>(async () => snapshot());
-    const adapter = new CutDshHostAdapter({ query: vi.fn(), apply });
+    const query = vi.fn<Pick<CutProjectAuthoringService, 'query'>['query']>(async () =>
+      snapshot('before'),
+    );
+    const adapter = new CutDshHostAdapter({ query, apply });
 
     await expect(adapter.execute(applyRequest())).resolves.toMatchObject({
       outcome: 'success',
       result: {
         documentPath: 'cuts/story.otio',
-        fingerprint: { strategy: 'sha256', value: 'after' },
         trackCount: 0,
         tracks: [],
       },
@@ -23,6 +25,7 @@ describe('Cut DSH Host adapter', () => {
       expectedFingerprint: { strategy: 'sha256', value: 'before' },
       commands: [{ type: 'trim-trailing-gaps' }],
     });
+    expect(query).toHaveBeenCalledWith({ documentPath: 'cuts/story.otio' });
   });
 
   it('rejects schema errors before resolving a domain service', async () => {
@@ -40,7 +43,7 @@ describe('Cut DSH Host adapter', () => {
 
   it('projects owning-domain CAS failure without trying another source', async () => {
     const adapter = new CutDshHostAdapter({
-      query: vi.fn(),
+      query: vi.fn(async () => snapshot('before')),
       apply: vi.fn(async () => {
         throw Object.assign(new Error('Cut project changed.'), { code: 'stale-project' });
       }),
@@ -103,16 +106,15 @@ function applyRequest(): DshAcpDomainToolRequest {
     operation: 'apply',
     input: {
       documentPath: 'cuts/story.otio',
-      expectedFingerprint: { strategy: 'sha256', value: 'before' },
       commands: [{ type: 'trim-trailing-gaps' }],
     },
   };
 }
 
-function snapshot() {
+function snapshot(fingerprint = 'after') {
   return {
     documentPath: 'cuts/story.otio',
-    fingerprint: { strategy: 'sha256' as const, value: 'after' },
+    fingerprint: { strategy: 'sha256' as const, value: fingerprint },
     timeline: { documentUri: 'cuts/story.otio', name: 'Story', durationSeconds: 0, tracks: [] },
   };
 }

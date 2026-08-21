@@ -4,11 +4,11 @@ import type {
   DocumentContextData,
   DocumentFormat,
   DocumentImageInfo,
-  DocumentLocator,
   DocumentManifest,
   DocumentReadResult,
   DocumentSourceRef,
 } from '../document-reading';
+import type { DocumentReadCoordinate } from '../../document';
 import {
   createDocumentEntryContentLocator,
   isDocumentFormat,
@@ -41,7 +41,7 @@ describe('document reading contracts', () => {
   });
 
   it('represents stable page, chapter, text, and region locators', () => {
-    const locators: DocumentLocator[] = [
+    const locators: DocumentReadCoordinate[] = [
       { kind: 'page', pageNumber: 3, pageIndex: 2 },
       { kind: 'chapter', chapterHref: 'chapter-1.xhtml', spineIndex: 0, title: 'Chapter 1' },
       { kind: 'text-range', startLine: 10, endLine: 20 },

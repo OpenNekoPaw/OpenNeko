@@ -61,7 +61,13 @@ describe('DSH Session preload bridge', () => {
       'surface-1',
       'workspace-write',
       { kind: 'project', projectId: 'project-1' },
-      { kind: 'message', text: 'Create in project', references: [], contextPayloads: [] },
+      {
+        kind: 'message',
+        text: 'Create in project',
+        references: [],
+        images: [],
+        contextPayloads: [],
+      },
     );
 
     expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
@@ -77,6 +83,7 @@ describe('DSH Session preload bridge', () => {
         kind: 'message',
         text: 'Create in project',
         references: [],
+        images: [],
         contextPayloads: [],
       },
     });
@@ -103,6 +110,7 @@ describe('DSH Session preload bridge', () => {
       kind: 'message',
       text: 'hello',
       references: [],
+      images: [],
       contextPayloads: [],
     });
 
@@ -112,7 +120,7 @@ describe('DSH Session preload bridge', () => {
       windowId: 'window-1',
       rendererSessionId: 'renderer-1',
       conversationId: 'conversation-1',
-      input: { kind: 'message', text: 'hello', references: [], contextPayloads: [] },
+      input: { kind: 'message', text: 'hello', references: [], images: [], contextPayloads: [] },
     });
   });
 

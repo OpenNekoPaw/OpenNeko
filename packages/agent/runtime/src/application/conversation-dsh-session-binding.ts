@@ -50,11 +50,17 @@ export type ConversationDshSessionBindingResolution =
     }
   | {
       readonly ok: false;
+      readonly code: 'DSH_SESSION_STALE';
+      readonly conversationId: string;
+      readonly binding: ConversationDshSessionBindingRecord;
+      readonly message: string;
+    }
+  | {
+      readonly ok: false;
       readonly code:
         | 'CONVERSATION_BINDING_INVALID'
         | 'CONVERSATION_BINDING_MISSING'
-        | 'CONVERSATION_BINDING_CROSS_CONVERSATION'
-        | 'DSH_SESSION_STALE';
+        | 'CONVERSATION_BINDING_CROSS_CONVERSATION';
       readonly conversationId: string;
       readonly message: string;
     };
@@ -184,6 +190,7 @@ export function createConversationDshSessionBindingService(
           ok: false,
           code: 'DSH_SESSION_STALE',
           conversationId,
+          binding,
           message: `DSH Session is not resolvable for ${conversationId}: ${binding.dshSessionId}`,
         };
       }

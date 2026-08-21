@@ -47,11 +47,18 @@ import {
   decodeDshAcpPermissionPresetProjection,
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
+  decodeDshAcpContextPressureProjection,
   encodeDshAcpModelConfiguration,
   type DshAcpExtensionProjection,
+  type DshAcpContextPressureProjection,
   type DshAcpHostToolPort,
   type DshAcpSessionEventNotification,
 } from '@neko/agent-contracts/dsh-acp';
+import {
+  AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS,
+  AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES,
+  AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES,
+} from '@neko/agent-contracts';
 import { PromptAdmission } from './prompt-admission.js';
 import { OPENNEKO_PRODUCT_SYSTEM_PROMPT } from './product-system-prompt.js';
 
@@ -65,6 +72,7 @@ export const inject = [
   'permissionPresets',
   'sessions',
   'sessionPersistence',
+  'sessionProjections',
   'skills',
   'systemPrompt',
   'workspaceRegistry',
@@ -98,11 +106,20 @@ interface OwnedSession {
   inflight: InflightPrompt | undefined;
   commandAbort: AbortController | undefined;
   outputTail: Promise<void>;
+  contextPressure: DshAcpContextPressureProjection | undefined;
+}
+
+interface DshSessionProjectionReader {
+  snapshot(session: AgentHandle['agent']['session']): {
+    readonly asOfSeq: number;
+    readonly values: Readonly<Record<string, unknown>>;
+  };
 }
 
 type OpenNekoDisplayContentBlock =
   | { readonly type: 'text'; readonly text: string }
-  | { readonly type: 'resource_link'; readonly name: string; readonly uri: string };
+  | { readonly type: 'resource_link'; readonly name: string; readonly uri: string }
+  | { readonly type: 'image'; readonly name: string; readonly attachmentId: string };
 
 interface DshSessionRuntimeContext {
   text: string;
@@ -217,12 +234,26 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
     const standardNotifications = projectSessionEvent(sessionId, event, { replay });
     if (standardNotifications.length > 0) {
       for (const notification of standardNotifications) await notify(notification);
+    } else {
+      await connection.extNotification(
+        'openneko/session/event',
+        projectExtensionSessionEvent(sessionId, event),
+      );
+    }
+    await publishContextPressure(requireOwned(sessionId));
+  };
+  const publishContextPressure = async (record: OwnedSession): Promise<void> => {
+    const sessionProjections = requireSessionProjectionReader(ctx);
+    const snapshot = sessionProjections.snapshot(record.handle.agent.session);
+    const notification = projectContextPressureNotification(record.handle.agent.id, snapshot);
+    if (
+      notification === undefined ||
+      sameContextPressure(record.contextPressure, notification.pressure)
+    ) {
       return;
     }
-    await connection.extNotification(
-      'openneko/session/event',
-      projectExtensionSessionEvent(sessionId, event),
-    );
+    await connection.extNotification('openneko/session/context-pressure', notification);
+    record.contextPressure = notification.pressure;
   };
 
   ctx.on('agent/inbox/claimed', ({ agent, message, turn }) => {
@@ -416,6 +447,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           config,
           preset,
         );
+        await publishContextPressure(record);
         return {
           modes: projectModeState(ctx, record),
           configOptions: projectModelConfigOptions(record.configuration),
@@ -473,8 +505,8 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       async prompt(params) {
         requireOpen();
         requireOwned(params.sessionId);
-        const displayContent = projectAcpDisplayContent(params.prompt);
         const content = await admitAcpPrompt(params.prompt, ctx.attachments);
+        const displayContent = projectAcpDisplayContent(params.prompt, content);
         return runPrompt(params.sessionId, content, displayContent);
       },
       cancel(params) {
@@ -668,11 +700,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
               );
             }
             const content = await admitAcpPrompt(request.prompt, ctx.attachments);
-            const displayContent = request.displayContent.map((block) =>
-              block.type === 'text'
-                ? { type: 'text' as const, text: block.text }
-                : { type: 'resource_link' as const, name: block.name, uri: block.uri },
-            );
+            const displayContent = bindInboxDisplayContent(request.displayContent, content);
             try {
               record.handle.agent.followup(
                 createUserMessage({
@@ -914,6 +942,22 @@ export function projectExtensionSessionEvent(
   };
 }
 
+export function projectContextPressureNotification(
+  sessionId: string,
+  snapshot: {
+    readonly asOfSeq: number;
+    readonly values: Readonly<Record<string, unknown>>;
+  },
+) {
+  const candidate = snapshot.values.contextPressure;
+  if (candidate === undefined || snapshot.asOfSeq < 0) return undefined;
+  return {
+    sessionId,
+    sourceSequence: snapshot.asOfSeq,
+    pressure: decodeDshAcpContextPressureProjection(candidate),
+  };
+}
+
 function projectMessage(
   sessionId: string,
   sessionUpdate: 'user_message_chunk' | 'agent_message_chunk',
@@ -922,6 +966,7 @@ function projectMessage(
     readonly text?: string;
     readonly name?: string;
     readonly uri?: string;
+    readonly attachmentId?: string;
   }[],
   messageId?: string,
 ): readonly SessionNotification[] {
@@ -951,6 +996,27 @@ function projectMessage(
             sessionUpdate,
             ...(messageId === undefined ? {} : { messageId }),
             content: { type: 'resource_link', name: block.name, uri: block.uri },
+          },
+        },
+      ];
+    }
+    if (
+      sessionUpdate === 'user_message_chunk' &&
+      block.type === 'image' &&
+      block.name !== undefined &&
+      block.attachmentId !== undefined
+    ) {
+      return [
+        {
+          sessionId,
+          update: {
+            sessionUpdate,
+            ...(messageId === undefined ? {} : { messageId }),
+            content: {
+              type: 'resource_link',
+              name: block.name,
+              uri: serializeDshAttachmentUri(block.attachmentId),
+            },
           },
         },
       ];
@@ -991,6 +1057,22 @@ function readOpenNekoDisplayContent(
     ) {
       return { type: 'resource_link' as const, name: record.name, uri: record.uri };
     }
+    if (
+      record.type === 'image' &&
+      Object.keys(record).every(
+        (key) => key === 'type' || key === 'name' || key === 'attachmentId',
+      ) &&
+      typeof record.name === 'string' &&
+      record.name.length > 0 &&
+      typeof record.attachmentId === 'string' &&
+      record.attachmentId.length > 0
+    ) {
+      return {
+        type: 'image' as const,
+        name: record.name,
+        attachmentId: record.attachmentId,
+      };
+    }
     throw new Error(`OpenNeko display content block ${index} is unsupported.`);
   });
 }
@@ -1005,17 +1087,77 @@ function readOpenNekoRuntimeContext(source: unknown): string | undefined {
 
 function projectAcpDisplayContent(
   prompt: readonly AcpContentBlock[],
+  admitted: readonly ContentBlock[],
 ): readonly OpenNekoDisplayContentBlock[] | undefined {
+  let admittedIndex = 0;
   const displayContent = prompt.flatMap((block): readonly OpenNekoDisplayContentBlock[] => {
     if (block.type === 'text' && block.text.length > 0) {
+      admittedIndex += 1;
       return [{ type: 'text', text: block.text }];
     }
     if (block.type === 'resource_link') {
       return [{ type: 'resource_link', name: block.name, uri: block.uri }];
     }
+    if (block.type === 'image') {
+      const admittedBlock = admitted[admittedIndex];
+      admittedIndex += 1;
+      if (admittedBlock?.type !== 'image') {
+        throw new Error('DSH admitted image order does not match the ACP Prompt.');
+      }
+      const name = readAcpImageDisplayName(block);
+      return name === undefined
+        ? []
+        : [
+            {
+              type: 'image',
+              name,
+              attachmentId: String(admittedBlock.attachment.attachmentId),
+            },
+          ];
+    }
     return [];
   });
   return displayContent.length === 0 ? undefined : displayContent;
+}
+
+function bindInboxDisplayContent(
+  displayContent: readonly import('@neko/agent-contracts/dsh-acp').DshAcpContentBlock[],
+  admitted: readonly ContentBlock[],
+): readonly OpenNekoDisplayContentBlock[] {
+  const attachmentIds = admitted.flatMap((block) =>
+    block.type === 'image' ? [String(block.attachment.attachmentId)] : [],
+  );
+  let imageIndex = 0;
+  return displayContent.map((block) => {
+    if (block.type === 'text') return { type: 'text' as const, text: block.text };
+    if (block.type === 'resource-link') {
+      return { type: 'resource_link' as const, name: block.name, uri: block.uri };
+    }
+    const attachmentId = attachmentIds[imageIndex];
+    imageIndex += 1;
+    if (attachmentId === undefined) {
+      throw RequestError.internalError(
+        undefined,
+        `Inbox display image '${block.name}' has no admitted attachment.`,
+      );
+    }
+    return { type: 'image' as const, name: block.name, attachmentId };
+  });
+}
+
+function readAcpImageDisplayName(
+  block: Extract<AcpContentBlock, { readonly type: 'image' }>,
+): string | undefined {
+  const value = block._meta?.opennekoDisplayName;
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('ACP image display name must be a non-empty string.');
+  }
+  return value;
+}
+
+function serializeDshAttachmentUri(attachmentId: string): string {
+  return `openneko-dsh-attachment:${encodeURIComponent(attachmentId)}`;
 }
 
 function projectAssistantChunk(
@@ -1237,7 +1379,64 @@ function createOwnedSession(
     inflight: undefined,
     commandAbort: undefined,
     outputTail: Promise.resolve(),
+    contextPressure: undefined,
   };
+}
+
+function sameContextPressure(
+  left: DshAcpContextPressureProjection | undefined,
+  right: DshAcpContextPressureProjection,
+): boolean {
+  return (
+    left !== undefined &&
+    left.pressureTokens === right.pressureTokens &&
+    left.projectedTokens === right.projectedTokens &&
+    left.contextWindow === right.contextWindow
+  );
+}
+
+function requireSessionProjectionReader(ctx: Context): DshSessionProjectionReader {
+  const candidate: unknown = Reflect.get(ctx, 'sessionProjections');
+  if (typeof candidate !== 'object' || candidate === null) {
+    throw new Error('DSH sessionProjections service is unavailable.');
+  }
+  const snapshot: unknown = Reflect.get(candidate, 'snapshot');
+  if (typeof snapshot !== 'function') {
+    throw new Error('DSH sessionProjections snapshot operation is unavailable.');
+  }
+  return Object.freeze({
+    snapshot(session: AgentHandle['agent']['session']) {
+      const value: unknown = Reflect.apply(snapshot, candidate, [session]);
+      if (typeof value !== 'object' || value === null) {
+        throw new Error('DSH Session projection snapshot is invalid.');
+      }
+      const asOfSeq = requireNonNegativeSafeInteger(
+        Reflect.get(value, 'asOfSeq'),
+        'DSH Session projection snapshot sequence',
+      );
+      const values = requireReadonlyRecord(
+        Reflect.get(value, 'values'),
+        'DSH Session projection snapshot values',
+      );
+      return { asOfSeq, values };
+    },
+  });
+}
+
+function requireNonNegativeSafeInteger(input: unknown, field: string): number {
+  if (typeof input !== 'number' || !Number.isSafeInteger(input) || input < 0) {
+    throw new Error(`${field} is invalid.`);
+  }
+  return input;
+}
+
+function requireReadonlyRecord(input: unknown, field: string): Readonly<Record<string, unknown>> {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    throw new Error(`${field} are invalid.`);
+  }
+  const record: Record<string, unknown> = {};
+  for (const key of Object.keys(input)) record[key] = Reflect.get(input, key);
+  return Object.freeze(record);
 }
 
 function createSessionRuntimeContext(): DshSessionRuntimeContext {
@@ -1382,6 +1581,7 @@ export async function admitAcpPrompt(
   let text = '';
   const content: Array<ContentBlock | number> = [];
   const images: Parameters<AttachmentStore['saveImages']>[0][number][] = [];
+  let imageBytes = 0;
   let resourceCount = 0;
   for (const block of prompt) {
     if (block.type === 'text') {
@@ -1402,8 +1602,28 @@ export async function admitAcpPrompt(
       }
       const mediaType = requireImageMediaType(block.mimeType);
       content.push(images.length);
+      if (images.length >= AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS) {
+        throw RequestError.invalidParams(
+          undefined,
+          `DSH Prompt images exceed the limit of ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS}.`,
+        );
+      }
+      const data = decodeBase64Image(block.data);
+      if (data.byteLength > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
+        throw RequestError.invalidParams(
+          undefined,
+          `DSH Prompt image exceeds ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES} bytes.`,
+        );
+      }
+      imageBytes += data.byteLength;
+      if (imageBytes > AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES) {
+        throw RequestError.invalidParams(
+          undefined,
+          `DSH Prompt images exceed ${AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES} total bytes.`,
+        );
+      }
       images.push({
-        data: decodeBase64Image(block.data),
+        data,
         mediaType,
       });
       continue;
@@ -1463,6 +1683,13 @@ function requireImageMediaType(
 }
 
 function decodeBase64Image(value: string): Uint8Array {
+  const maximumEncodedLength = Math.ceil(AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES / 3) * 4;
+  if (value.length > maximumEncodedLength) {
+    throw RequestError.invalidParams(
+      undefined,
+      `DSH Prompt image exceeds ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES} bytes.`,
+    );
+  }
   if (value.length === 0 || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(value)) {
     throw RequestError.invalidParams(undefined, 'Image data must be canonical base64.');
   }
@@ -1508,7 +1735,9 @@ function projectInboxMessage(
       : displayContent.map((block) =>
           block.type === 'text'
             ? { type: 'text', text: block.text }
-            : { type: 'resource-link', name: block.name, uri: block.uri },
+            : block.type === 'resource_link'
+              ? { type: 'resource-link', name: block.name, uri: block.uri }
+              : { type: 'image', name: block.name },
         );
   return {
     messageId: message.id,

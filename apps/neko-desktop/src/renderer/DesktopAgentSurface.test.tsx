@@ -78,6 +78,11 @@ const generationPermission: DshPermissionHostProjection = {
   ],
 };
 
+const workspaceBoardTarget = {
+  kind: 'workspace-board' as const,
+  workspaceId: 'workspace-1',
+};
+
 const composerConfiguration: DshComposerConfigurationProjection = {
   models: [
     {
@@ -120,7 +125,17 @@ const composerConfiguration: DshComposerConfigurationProjection = {
     kind: 'workspace',
     workspaceId: 'workspace-1',
     workspaceLabel: 'My Film',
-    canvas: { kind: 'workspace-board', label: 'Board' },
+    canvas: {
+      workspaceId: 'workspace-1',
+      defaultTarget: workspaceBoardTarget,
+      options: [
+        {
+          target: workspaceBoardTarget,
+          label: 'Board',
+        },
+      ],
+      diagnostics: [],
+    },
   },
 };
 
@@ -336,7 +351,9 @@ describe('DesktopAgentSurface', () => {
         kind: 'message',
         text: 'hello',
         references: [],
+        images: [],
         contextPayloads: [],
+        canvasTurnTarget: workspaceBoardTarget,
       }),
     );
 
@@ -398,7 +415,9 @@ describe('DesktopAgentSurface', () => {
       kind: 'message',
       text: 'next request',
       references: [],
+      images: [],
       contextPayloads: [],
+      canvasTurnTarget: workspaceBoardTarget,
     });
 
     await act(async () =>
@@ -597,7 +616,7 @@ describe('DesktopAgentSurface', () => {
     );
     expect(
       (screen.getByRole('button', { name: 'Attach file' }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('creates an exact Conversation and submits the first Draft message through it', async () => {
@@ -636,7 +655,9 @@ describe('DesktopAgentSurface', () => {
           kind: 'message',
           text: 'first message',
           references: [],
+          images: [],
           contextPayloads: [],
+          canvasTurnTarget: workspaceBoardTarget,
         },
       ),
     );
@@ -644,7 +665,9 @@ describe('DesktopAgentSurface', () => {
       kind: 'message',
       text: 'first message',
       references: [],
+      images: [],
       contextPayloads: [],
+      canvasTurnTarget: workspaceBoardTarget,
     });
     expect(dshPermissions.list).toHaveBeenCalledWith('conversation-created');
     expect(await screen.findByText('Create a node')).toBeTruthy();
@@ -696,7 +719,9 @@ describe('DesktopAgentSurface', () => {
           kind: 'message',
           text: 'create in project',
           references: [],
+          images: [],
           contextPayloads: [],
+          canvasTurnTarget: workspaceBoardTarget,
         },
       ),
     );
@@ -704,7 +729,9 @@ describe('DesktopAgentSurface', () => {
       kind: 'message',
       text: 'create in project',
       references: [],
+      images: [],
       contextPayloads: [],
+      canvasTurnTarget: workspaceBoardTarget,
     });
   });
 

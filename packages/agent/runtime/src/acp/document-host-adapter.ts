@@ -9,7 +9,10 @@ import {
   documentDshJsonValue,
   type DocumentDshToolInput,
 } from '@neko/content/document';
-import type { AgentContentAccessRuntime } from '../runtime/capability/agent-content-access-runtime';
+import type {
+  AgentContentAccessRuntime,
+  AgentDocumentContentResult,
+} from '../runtime/capability/agent-content-access-runtime';
 
 export class DocumentDshHostAdapter {
   private readonly toolName: string;
@@ -45,6 +48,9 @@ export class DocumentDshHostAdapter {
     try {
       const runtime = typeof this.content === 'function' ? await this.content() : this.content;
       const result = await resolve(runtime, decoded, signal);
+      if (result.status !== 'ready') {
+        return contentFailure(result);
+      }
       return { outcome: 'success', result: toJson(result) };
     } catch (error) {
       return failure(toDocumentDiagnostic(error), errorMessage(error));
@@ -56,7 +62,7 @@ async function resolve(
   runtime: AgentContentAccessRuntime,
   input: DocumentDshToolInput,
   signal?: AbortSignal,
-): Promise<unknown> {
+): Promise<AgentDocumentContentResult> {
   if (input.operation === 'continue') {
     return runtime.resolveDocumentContent({
       source: input.input.source,
@@ -70,8 +76,7 @@ async function resolve(
     ...(input.operation === 'read-images'
       ? { includeImages: true, maxImages: input.input.maxImages }
       : {
-          mode: input.input.mode,
-          range: input.input.range as never,
+          mode: input.input.source.selector === undefined ? input.input.mode : 'range',
           includeManifest: input.input.includeManifest,
           includeImages: input.input.includeImages,
           maxChars: input.input.maxChars,
@@ -79,6 +84,15 @@ async function resolve(
         }),
     ...(signal ? { signal } : {}),
   });
+}
+
+function contentFailure(result: AgentDocumentContentResult): DshAcpDomainToolResponse {
+  const diagnostic =
+    result.diagnostics.find((candidate) => candidate.severity === 'error') ?? result.diagnostics[0];
+  return failure(
+    diagnostic?.code ?? 'DOCUMENT_DSH_TOOL_FAILED',
+    diagnostic?.message ?? `Document content access ended with status ${result.status}.`,
+  );
 }
 
 function toJson(value: unknown): DshAcpJsonValue {

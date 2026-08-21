@@ -1,13 +1,25 @@
 import {
+  decodeDshAcpContextPressureProjection,
   decodeDshAcpInputCatalogProjection,
   decodeDshAcpInboxSnapshot,
   decodeDshAcpJsonPayload,
   type DshAcpInputCatalogProjection,
   type DshAcpInboxSnapshot,
   type DshAcpJsonValue,
+  type DshAcpContextPressureProjection,
 } from './dsh-acp';
 import { isAgentContextType, type AgentContextPayload } from './agent-context';
+import {
+  AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS,
+  AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
+} from './agent-image-transport';
 import type { ModelType } from '@neko/ai-contracts';
+import {
+  parseCanvasWorkspaceContextCatalog,
+  parseCanvasWorkspaceTurnTarget,
+  type CanvasWorkspaceContextCatalog,
+  type CanvasWorkspaceTurnTarget,
+} from '@neko/canvas-domain';
 import {
   isWorkspaceFileContentLocator,
   validateContentLocator,
@@ -17,9 +29,12 @@ import {
 
 export const DSH_SESSION_HOST_CHANNEL = 'openneko:dsh:session';
 export const DSH_SESSION_CHANGED_CHANNEL = 'openneko:dsh:session:changed';
+const DSH_COMPOSER_MAX_SOURCE_BASE64_CHARS =
+  Math.ceil(AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES / 3) * 4;
 
 export type DshSessionUserMessageBlock =
   | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'image'; readonly label: string }
   | {
       readonly type: 'resource';
       readonly label: string;
@@ -97,6 +112,7 @@ export interface DshSessionHostProjection {
   readonly dshSessionId: string;
   readonly title: string;
   readonly currentTurn?: number;
+  readonly contextPressure?: DshAcpContextPressureProjection;
   readonly inbox: DshAcpInboxSnapshot;
   readonly events: readonly DshSessionHostEvent[];
 }
@@ -122,10 +138,7 @@ export interface DshComposerContextProjection {
   readonly kind: 'workspace';
   readonly workspaceId: string;
   readonly workspaceLabel: string;
-  readonly canvas: {
-    readonly kind: 'workspace-board';
-    readonly label: string;
-  };
+  readonly canvas: CanvasWorkspaceContextCatalog;
 }
 
 export interface DshComposerConfigurationProjection {
@@ -145,6 +158,14 @@ export interface DshComposerConfigurationProjection {
 export interface DshComposerReference {
   readonly label: string;
   readonly contentLocator: ContentLocator;
+}
+
+export type DshComposerImageMimeType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+
+export interface DshComposerImageInput {
+  readonly name: string;
+  readonly mimeType: DshComposerImageMimeType;
+  readonly data: string;
 }
 
 export interface DshComposerMentionProjection {
@@ -173,7 +194,9 @@ export type DshComposerSubmitInput =
       readonly kind: 'message';
       readonly text: string;
       readonly references: readonly DshComposerReference[];
+      readonly images: readonly DshComposerImageInput[];
       readonly contextPayloads: readonly AgentContextPayload[];
+      readonly canvasTurnTarget?: CanvasWorkspaceTurnTarget;
     }
   | { readonly kind: 'command'; readonly line: string }
   | {
@@ -181,6 +204,7 @@ export type DshComposerSubmitInput =
       readonly skillName: string;
       readonly displayText: string;
       readonly args?: string;
+      readonly canvasTurnTarget?: CanvasWorkspaceTurnTarget;
     };
 
 interface DshSessionHostSenderRequest {
@@ -799,7 +823,11 @@ function parseComposerMentionMediaType(
 function parseComposerSubmitInput(value: unknown): DshComposerSubmitInput {
   const record = requireRecord(value, 'DSH Composer submit input');
   if (record.kind === 'message') {
-    requireExactKeys(record, ['kind', 'text', 'references', 'contextPayloads']);
+    requireAllowedKeys(
+      record,
+      ['kind', 'text', 'references', 'images', 'contextPayloads', 'canvasTurnTarget'],
+      ['kind', 'text', 'references', 'images', 'contextPayloads'],
+    );
     if (!Array.isArray(record.references)) {
       throw new Error('DSH Composer message references must be an array.');
     }
@@ -813,6 +841,45 @@ function parseComposerSubmitInput(value: unknown): DshComposerSubmitInput {
       return {
         label: requireIdentity(reference.label, `reference[${index}].label`),
         contentLocator: locator.locator,
+      };
+    });
+    if (!Array.isArray(record.images)) {
+      throw new Error('DSH Composer message images must be an array.');
+    }
+    if (record.images.length > AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS) {
+      throw new Error(
+        `DSH Composer message images exceed the limit of ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS}.`,
+      );
+    }
+    let totalImageBytes = 0;
+    const images = record.images.map((candidate, index) => {
+      const image = requireRecord(candidate, `DSH Composer image[${index}]`);
+      requireExactKeys(image, ['name', 'mimeType', 'data']);
+      if (
+        typeof image.data === 'string' &&
+        image.data.length > DSH_COMPOSER_MAX_SOURCE_BASE64_CHARS
+      ) {
+        throw new Error(
+          `DSH Composer image[${index}] exceeds ${AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES} source bytes.`,
+        );
+      }
+      const data = requireCanonicalBase64(image.data, `image[${index}].data`);
+      const sourceBytes = decodedBase64ByteLength(data);
+      if (sourceBytes > AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES) {
+        throw new Error(
+          `DSH Composer image[${index}] exceeds ${AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES} source bytes.`,
+        );
+      }
+      totalImageBytes += sourceBytes;
+      if (totalImageBytes > AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES) {
+        throw new Error(
+          `DSH Composer inline image batch exceeds ${AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES} source bytes.`,
+        );
+      }
+      return {
+        name: requireIdentity(image.name, `image[${index}].name`),
+        mimeType: parseComposerImageMimeType(image.mimeType, index),
+        data,
       };
     });
     const text = requireString(record.text, 'message text');
@@ -833,10 +900,24 @@ function parseComposerSubmitInput(value: unknown): DshComposerSubmitInput {
       }
       contextIds.add(payload.id);
     }
-    if (text.trim().length === 0 && references.length === 0 && contextPayloads.length === 0) {
+    if (
+      text.trim().length === 0 &&
+      references.length === 0 &&
+      images.length === 0 &&
+      contextPayloads.length === 0
+    ) {
       throw new Error('DSH Composer message requires text or an authorized reference/context.');
     }
-    return { kind: 'message', text, references, contextPayloads };
+    return {
+      kind: 'message',
+      text,
+      references,
+      images,
+      contextPayloads,
+      ...(record.canvasTurnTarget === undefined
+        ? {}
+        : { canvasTurnTarget: parseCanvasWorkspaceTurnTarget(record.canvasTurnTarget) }),
+    };
   }
   if (record.kind === 'command') {
     requireExactKeys(record, ['kind', 'line']);
@@ -847,7 +928,7 @@ function parseComposerSubmitInput(value: unknown): DshComposerSubmitInput {
   if (record.kind === 'skill') {
     requireAllowedKeys(
       record,
-      ['kind', 'skillName', 'displayText', 'args'],
+      ['kind', 'skillName', 'displayText', 'args', 'canvasTurnTarget'],
       ['kind', 'skillName', 'displayText'],
     );
     return {
@@ -855,9 +936,68 @@ function parseComposerSubmitInput(value: unknown): DshComposerSubmitInput {
       skillName: requireIdentity(record.skillName, 'Skill name'),
       displayText: requireIdentity(record.displayText, 'Skill display text'),
       ...(record.args === undefined ? {} : { args: requireIdentity(record.args, 'Skill args') }),
+      ...(record.canvasTurnTarget === undefined
+        ? {}
+        : { canvasTurnTarget: parseCanvasWorkspaceTurnTarget(record.canvasTurnTarget) }),
     };
   }
   throw new Error(`DSH Composer submit kind '${String(record.kind)}' is unsupported.`);
+}
+
+function parseComposerImageMimeType(value: unknown, index: number): DshComposerImageMimeType {
+  if (
+    value === 'image/png' ||
+    value === 'image/jpeg' ||
+    value === 'image/webp' ||
+    value === 'image/gif'
+  ) {
+    return value;
+  }
+  throw new Error(`DSH Composer image[${index}] MIME '${String(value)}' is unsupported.`);
+}
+
+function requireCanonicalBase64(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length % 4 !== 0) {
+    throw new Error(`DSH Composer ${field} must be canonical base64.`);
+  }
+  const firstPadding = value.indexOf('=');
+  const contentLength = firstPadding === -1 ? value.length : firstPadding;
+  const padding = value.length - contentLength;
+  if (padding > 2) {
+    throw new Error(`DSH Composer ${field} must be canonical base64.`);
+  }
+  for (let index = 0; index < contentLength; index += 1) {
+    if (base64Value(value[index]) < 0) {
+      throw new Error(`DSH Composer ${field} must be canonical base64.`);
+    }
+  }
+  for (let index = contentLength; index < value.length; index += 1) {
+    if (value[index] !== '=') {
+      throw new Error(`DSH Composer ${field} must be canonical base64.`);
+    }
+  }
+  const finalValue = base64Value(value[value.length - padding - 1]);
+  if ((padding === 2 && (finalValue & 15) !== 0) || (padding === 1 && (finalValue & 3) !== 0)) {
+    throw new Error(`DSH Composer ${field} must be canonical base64.`);
+  }
+  return value;
+}
+
+function decodedBase64ByteLength(value: string): number {
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
+  return (value.length / 4) * 3 - padding;
+}
+
+function base64Value(value: string | undefined): number {
+  if (value === undefined) return -1;
+  const code = value.codePointAt(0);
+  if (code === undefined) return -1;
+  if (code >= 65 && code <= 90) return code - 65;
+  if (code >= 97 && code <= 122) return code - 71;
+  if (code >= 48 && code <= 57) return code + 4;
+  if (value === '+') return 62;
+  if (value === '/') return 63;
+  return -1;
 }
 
 function parseAgentContextPayload(value: unknown, field: string): AgentContextPayload {
@@ -916,19 +1056,16 @@ function parseComposerContext(value: unknown): DshComposerContextProjection {
   if (record.kind !== 'workspace') {
     throw new Error(`DSH composer context kind '${String(record.kind)}' is unsupported.`);
   }
-  const canvas = requireRecord(record.canvas, 'DSH composer Canvas context');
-  requireExactKeys(canvas, ['kind', 'label']);
-  if (canvas.kind !== 'workspace-board') {
-    throw new Error(`DSH composer Canvas context kind '${String(canvas.kind)}' is unsupported.`);
+  const workspaceId = requireIdentity(record.workspaceId, 'context.workspaceId');
+  const canvas = parseCanvasWorkspaceContextCatalog(record.canvas);
+  if (canvas.workspaceId !== workspaceId) {
+    throw new Error('DSH composer Canvas catalog must match its Workspace context.');
   }
   return {
     kind: 'workspace',
-    workspaceId: requireIdentity(record.workspaceId, 'context.workspaceId'),
+    workspaceId,
     workspaceLabel: requireIdentity(record.workspaceLabel, 'context.workspaceLabel'),
-    canvas: {
-      kind: 'workspace-board',
-      label: requireIdentity(canvas.label, 'context.canvas.label'),
-    },
+    canvas,
   };
 }
 
@@ -965,7 +1102,15 @@ export function parseDshSessionHostProjection(value: unknown): DshSessionHostPro
   const record = requireRecord(value, 'DSH Session projection');
   requireAllowedKeys(
     record,
-    ['conversationId', 'dshSessionId', 'title', 'currentTurn', 'inbox', 'events'],
+    [
+      'conversationId',
+      'dshSessionId',
+      'title',
+      'currentTurn',
+      'contextPressure',
+      'inbox',
+      'events',
+    ],
     ['conversationId', 'dshSessionId', 'title', 'inbox', 'events'],
   );
   if (!Array.isArray(record.events)) throw new Error('DSH Session events must be an array.');
@@ -976,6 +1121,9 @@ export function parseDshSessionHostProjection(value: unknown): DshSessionHostPro
     ...(record.currentTurn === undefined
       ? {}
       : { currentTurn: requireNonNegativeInteger(record.currentTurn, 'currentTurn') }),
+    ...(record.contextPressure === undefined
+      ? {}
+      : { contextPressure: decodeDshAcpContextPressureProjection(record.contextPressure) }),
     inbox: decodeDshAcpInboxSnapshot(requireRecord(record.inbox, 'inbox')),
     events: record.events.map(parseEvent),
   };
@@ -1156,6 +1304,13 @@ function parseUserMessageContent(value: unknown): readonly DshSessionUserMessage
         type: 'resource' as const,
         label: requireIdentity(record.label, 'message resource label'),
         contentLocator: validation.locator,
+      };
+    }
+    if (record.type === 'image') {
+      requireExactKeys(record, ['type', 'label']);
+      return {
+        type: 'image' as const,
+        label: requireIdentity(record.label, 'message image label'),
       };
     }
     throw new Error(`DSH Session user message block ${index} is unsupported.`);

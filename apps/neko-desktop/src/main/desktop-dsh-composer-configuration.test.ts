@@ -5,6 +5,11 @@ import type {
   AssistantSettingsSnapshot,
   ConfigManager,
 } from '@neko/host/settings';
+import {
+  createCanvasWorkspaceBoardTarget,
+  createCanvasWorkspaceContextCatalog,
+  createExactCanvasTarget,
+} from '@neko/canvas-domain';
 
 import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-configuration';
 
@@ -40,6 +45,7 @@ describe('Desktop DSH composer configuration', () => {
           workspaceGrantId: 'grant-1',
         })),
       },
+      canvas: canvasIndex(),
       workspaceGrants: {
         restore: restoreWorkspace,
       },
@@ -78,6 +84,29 @@ describe('Desktop DSH composer configuration', () => {
       ],
     });
     expect(restoreWorkspace).toHaveBeenCalledWith('window-1', 'grant-1', 'workspace-1');
+    await expect(
+      service.project({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+      }),
+    ).resolves.toMatchObject({
+      context: {
+        canvas: {
+          workspaceId: 'workspace-1',
+          options: [
+            { target: { kind: 'workspace-board', workspaceId: 'workspace-1' } },
+            {
+              target: {
+                kind: 'exact-canvas',
+                workspaceId: 'workspace-1',
+                canvasId: 'neko/boards/story.nkc',
+              },
+            },
+          ],
+        },
+      },
+    });
 
     await service.selectModel({
       windowId: 'window-1',
@@ -147,6 +176,7 @@ describe('Desktop DSH composer configuration', () => {
         binding: { kind: 'assistant' as const, assistantSpaceId: 'assistant-1', baseGrantIds: [] },
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
+      canvas: canvasIndex(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -189,6 +219,7 @@ describe('Desktop DSH composer configuration', () => {
         binding: { kind: 'assistant' as const, assistantSpaceId: 'assistant-1', baseGrantIds: [] },
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
+      canvas: canvasIndex(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -315,6 +346,7 @@ describe('Desktop DSH composer configuration', () => {
         mentionIdentity,
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
+      canvas: canvasIndex(),
       workspaceGrants: {
         restore: vi.fn(async () => ({
           workspace: {
@@ -437,6 +469,7 @@ describe('Desktop DSH composer configuration', () => {
         binding: { kind: 'assistant' as const, assistantSpaceId: 'assistant-1', baseGrantIds: [] },
       })),
       contexts: { readContext: vi.fn(async () => undefined) },
+      canvas: canvasIndex(),
       workspaceGrants: {
         restore: vi.fn(async () => {
           throw new Error('Workspace resolution must not run.');
@@ -498,6 +531,37 @@ function createExecutionCatalog(options: { readonly includeDeepSeek?: boolean } 
         ? undefined
         : { providerId, productModelId, apiModelName, input: ['text'] as const };
     },
+  };
+}
+
+function canvasIndex() {
+  return {
+    readCatalog: vi.fn(async (workspaceId: string) =>
+      createCanvasWorkspaceContextCatalog({
+        workspaceId,
+        options: [
+          {
+            target: createCanvasWorkspaceBoardTarget(workspaceId),
+            label: 'Workspace Board',
+          },
+          {
+            target: createExactCanvasTarget(workspaceId, 'neko/boards/story.nkc'),
+            label: 'story.nkc',
+            index: {
+              canvasId: 'neko/boards/story.nkc',
+              name: 'story.nkc',
+              scopeKind: 'generic',
+              relatedBoardCount: 0,
+            },
+            summary: {
+              canvasId: 'neko/boards/story.nkc',
+              name: 'story.nkc',
+              nodeTypeSummary: { text: 1 },
+            },
+          },
+        ],
+      }),
+    ),
   };
 }
 

@@ -106,6 +106,7 @@ export function decodeDshAcpExtensionProjection(
 
 export const DSH_ACP_EXTENSION_NOTIFICATIONS = {
   sessionEvent: 'openneko/session/event',
+  contextPressure: 'openneko/session/context-pressure',
 } as const;
 
 export const DSH_ACP_MODEL_CONFIG_ID = 'model';
@@ -412,7 +413,13 @@ export interface DshAcpResourceLinkContentBlock {
   readonly uri: string;
 }
 
-export type DshAcpContentBlock = DshAcpTextContentBlock | DshAcpResourceLinkContentBlock;
+export interface DshAcpImageDisplayContentBlock {
+  readonly type: 'image';
+  readonly name: string;
+}
+
+export type DshAcpContentBlock =
+  DshAcpTextContentBlock | DshAcpResourceLinkContentBlock | DshAcpImageDisplayContentBlock;
 
 export type DshAcpInboxPromptBlock =
   | DshAcpTextContentBlock
@@ -425,6 +432,7 @@ export type DshAcpInboxPromptBlock =
       readonly type: 'image';
       readonly data: string;
       readonly mimeType: string;
+      readonly _meta?: { readonly opennekoDisplayName: string };
     };
 
 export interface DshAcpInboxEnqueueRequest {
@@ -445,6 +453,18 @@ export interface DshAcpSessionEventNotification {
   readonly time: number;
   readonly type: string;
   readonly data: unknown;
+}
+
+export interface DshAcpContextPressureProjection {
+  readonly pressureTokens?: number;
+  readonly projectedTokens?: number;
+  readonly contextWindow?: number;
+}
+
+export interface DshAcpContextPressureNotification {
+  readonly sessionId: string;
+  readonly sourceSequence: number;
+  readonly pressure: DshAcpContextPressureProjection;
 }
 
 export interface DshAcpDomainToolRequest {
@@ -510,6 +530,53 @@ export function decodeDshAcpSessionEventNotification(
     time: requireNonNegativeInteger(input.time, 'time'),
     type: requireNonEmptyString(input.type, 'type'),
     data: input.data,
+  };
+}
+
+export function decodeDshAcpContextPressureProjection(
+  input: unknown,
+): DshAcpContextPressureProjection {
+  const record = requireRecord(input, 'context pressure');
+  requireAllowedKeys(
+    record,
+    ['pressureTokens', 'projectedTokens', 'contextWindow'],
+    'Context pressure',
+  );
+  return {
+    ...(record.pressureTokens === undefined
+      ? {}
+      : {
+          pressureTokens: requireNonNegativeInteger(
+            record.pressureTokens,
+            'context pressureTokens',
+          ),
+        }),
+    ...(record.projectedTokens === undefined
+      ? {}
+      : {
+          projectedTokens: requireNonNegativeInteger(
+            record.projectedTokens,
+            'context projectedTokens',
+          ),
+        }),
+    ...(record.contextWindow === undefined
+      ? {}
+      : { contextWindow: requirePositiveInteger(record.contextWindow, 'context window') }),
+  };
+}
+
+export function decodeDshAcpContextPressureNotification(
+  input: Record<string, unknown>,
+): DshAcpContextPressureNotification {
+  requireExactKeys(
+    input,
+    ['sessionId', 'sourceSequence', 'pressure'],
+    'Context pressure notification',
+  );
+  return {
+    sessionId: requireNonEmptyString(input.sessionId, 'sessionId'),
+    sourceSequence: requireNonNegativeInteger(input.sourceSequence, 'sourceSequence'),
+    pressure: decodeDshAcpContextPressureProjection(input.pressure),
   };
 }
 
@@ -604,7 +671,7 @@ function decodeInboxMessages(input: unknown, field: string): readonly DshAcpInbo
 export function decodeDshAcpInboxEnqueueRequest(
   input: Record<string, unknown>,
 ): DshAcpInboxEnqueueRequest {
-  decodeDshAcpJsonPayload(input, 'inbox enqueue request');
+  decodeDshAcpJsonPayload(projectInboxPayloadMetadata(input), 'inbox enqueue request metadata');
   requireExactKeys(
     input,
     ['sessionId', 'prompt', 'displayContent', 'contextText'],
@@ -641,11 +708,28 @@ function decodeInboxPromptBlock(input: unknown, field: string): DshAcpInboxPromp
     };
   }
   if (record.type === 'image') {
-    requireExactKeys(record, ['type', 'data', 'mimeType'], field);
+    const keys =
+      record._meta === undefined
+        ? ['type', 'data', 'mimeType']
+        : ['type', 'data', 'mimeType', '_meta'];
+    requireExactKeys(record, keys, field);
+    const meta =
+      record._meta === undefined ? undefined : requireRecord(record._meta, `${field}._meta`);
+    if (meta !== undefined) requireExactKeys(meta, ['opennekoDisplayName'], `${field}._meta`);
     return {
       type: 'image',
       data: requireNonEmptyString(record.data, `${field}.data`),
       mimeType: requireNonEmptyString(record.mimeType, `${field}.mimeType`),
+      ...(meta === undefined
+        ? {}
+        : {
+            _meta: {
+              opennekoDisplayName: requireNonEmptyString(
+                meta.opennekoDisplayName,
+                `${field}._meta.opennekoDisplayName`,
+              ),
+            },
+          }),
     };
   }
   throw new Error(`DSH ACP ${field} is unsupported.`);
@@ -663,7 +747,29 @@ function decodeContentBlock(input: unknown, field: string): DshAcpContentBlock {
       uri: requireNonEmptyString(record.uri, `${field}.uri`),
     };
   }
+  if (record.type === 'image') {
+    requireExactKeys(record, ['type', 'name'], field);
+    return {
+      type: 'image',
+      name: requireNonEmptyString(record.name, `${field}.name`),
+    };
+  }
   throw new Error(`DSH ACP ${field}.type is unsupported.`);
+}
+
+function projectInboxPayloadMetadata(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...input,
+    ...(Array.isArray(input.prompt)
+      ? {
+          prompt: input.prompt.map((block) => {
+            if (block === null || typeof block !== 'object' || Array.isArray(block)) return block;
+            const record = requireRecord(block, 'inbox prompt block');
+            return record.type === 'image' ? { ...record, data: '' } : record;
+          }),
+        }
+      : {}),
+  };
 }
 
 function requireRecord(input: unknown, field: string): Record<string, unknown> {
@@ -682,6 +788,18 @@ function requireExactKeys(
   const canonical = [...expected].sort();
   if (actual.length !== canonical.length || actual.some((key, index) => key !== canonical[index])) {
     throw new Error(`DSH ACP ${field} must contain exactly ${canonical.join(', ')}.`);
+  }
+}
+
+function requireAllowedKeys(
+  input: Record<string, unknown>,
+  allowed: readonly string[],
+  field: string,
+): void {
+  const allowedKeys = new Set(allowed);
+  const unexpected = Object.keys(input).filter((key) => !allowedKeys.has(key));
+  if (unexpected.length > 0) {
+    throw new Error(`DSH ACP ${field} contains unsupported fields: ${unexpected.join(', ')}.`);
   }
 }
 

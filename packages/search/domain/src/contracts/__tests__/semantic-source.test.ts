@@ -84,7 +84,10 @@ describe('semantic source contracts', () => {
         kind: 'document',
         source: { filePath: '${WORKSPACE}/story.md', format: 'markdown' },
       },
-      locator: { kind: 'text-range', startChar: 0, endChar: 3 },
+      locator: {
+        file: { authority: 'workspace', path: 'story.md' },
+        selector: { kind: 'text-range', startChar: 0, endChar: 3 },
+      },
       contentHash: 'fnv1a32:12345678',
       provenance: { providerId: 'neko.text-entity.deterministic', sourceKind: 'document' },
     };

@@ -24,6 +24,17 @@ OpenNeko UI archive action
   -> Agent Home filters matching catalog records
 ```
 
+当 exact binding 在 DSH `session/list` 中已不存在时，同一用户命令进入唯一的 stale cleanup 终态：
+
+```text
+exact stored binding
+  -> DSH session/list confirms Session absent
+  -> SQLite compare-and-delete exact binding + catalog + context in one transaction
+  -> Agent Home refresh
+```
+
+这不是第二条有效归档路径：它只处理 authoritative DSH Session 已不存在的孤儿记录，不能用于可解析 Session、DSH archive failure、missing/cross binding 或并发改变后的 binding。
+
 ## Runtime composition
 
 `@neko/dsh-bridge/cordis.patch.yml` 在 base rows 之后插入官方 `@deepseek-ai/dsh-storage`、`@deepseek-ai/dsh-storage-json`、`@deepseek-ai/dsh-storage-domain` 与 `@deepseek-ai/dsh-workspace`。Bridge 将 `workspaceRegistry` 声明为 mandatory injection；缺失时 profile 启动失败，不返回伪成功。
@@ -36,12 +47,13 @@ OpenNeko 不引入 DSH Web client/runtime。Bridge 只调用公开 Workspace ser
 - OpenNeko SQLite catalog/context/binding 继续保存 Conversation 产品事实，不新增 archive 列、不删除记录、不执行 dual-write。
 - Home projection 每次 refresh 读取当前 DSH archive set，再按 exact binding 过滤；读取失败使 refresh fail-visible，并保留上一份 presentation snapshot，不把空集合当成功。
 - 已归档 Session 的重复归档由 DSH 幂等完成。
-- 未知 Conversation、missing/cross binding、未知 DSH Session 或 storage failure 只拒绝当前命令；sibling Conversation 保持可用。
+- 用户显式归档精确 stale binding 时，Agent metadata owner 在一个 `state-write` 事务内按 Conversation/DSH Session 双 identity 删除 binding、catalog 与 context；任一行缺失或变化使事务回滚并 fail-visible。
+- 未知 Conversation、missing/cross binding、DSH archive/storage failure 或 stale cleanup CAS 冲突只拒绝当前命令；sibling Conversation 保持可用。
 - 归档不等于 close/cancel/delete，不改变后台 task/runtime ownership。
 
 ## Replaced path
 
-删除 `conversationDelete`、`projectConversationDelete`、`conversations.delete`、`projects.deleteConversations`、`releasePublishedConversation` 的删除语义及所有“永久删除”UI。不得保留别名、兼容 handler、raw Session 文件删除或 SQLite catalog 删除。
+删除 `conversationDelete`、`projectConversationDelete`、`conversations.delete`、`projects.deleteConversations`、`releasePublishedConversation` 的删除语义及所有“永久删除”UI。不得保留别名、兼容 handler、raw Session 文件删除或对有效 DSH Session 的 SQLite catalog 删除；显式 stale 旧记录清理必须经过 DSH absence proof 与 exact CAS。
 
 ## Evaluation disposition
 

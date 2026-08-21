@@ -4,10 +4,10 @@
 
 - Agent contracts: `32 files / 179 tests` passed; focused DSH ACP codecs: `10 tests` passed.
 - DSH bridge: `4 files / 30 tests` passed; focused profile/registration coverage: `19 tests` passed.
-- Agent runtime: `51 files / 350 tests` passed; archive/publication/Home focused coverage: `14 tests` passed.
+- Agent runtime: `52 files / 354 tests` passed; binding/archive/stale-cleanup focused coverage: `30 tests` passed.
 - Host: `38 files / 324 tests` passed.
 - Project Webview: `2 files / 13 tests` passed.
-- Desktop: `102 files / 608 tests` passed; sender-bound archive IPC poison coverage: `2 tests` passed.
+- Desktop: `102 files / 609 tests` passed; sender-bound archive IPC poison coverage: `2 tests` passed.
 - Typecheck passed for `@neko/agent-contracts`, `@neko/dsh-bridge`, `@neko/agent-runtime`, `@neko/project-webview` and `@neko/app-desktop`. Host is compiled through the Desktop consumer and has no package-local typecheck script.
 - Focused ESLint and Prettier checks passed.
 - Desktop Vite Main/Renderer build passed (`1354 modules transformed`).
@@ -16,6 +16,12 @@
 - Application, Agent and Webview boundary gates passed.
 - Storage authority and canonical legacy-debt gates passed.
 - `openspec validate --all --strict` passed (`116 items`).
+
+The stale-record regression path additionally proves that a user archive request removes the exact
+catalog/context/binding tuple only after a complete DSH `session/list` establishes that the bound
+Session no longer exists. A valid Session still invokes only DSH archive and retains local records;
+an exact-binding race or a later missing owned record rolls the SQLite transaction back, while sibling
+records remain unchanged.
 
 ## Real DSH profile
 

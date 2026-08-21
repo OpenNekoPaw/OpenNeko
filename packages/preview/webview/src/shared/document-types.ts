@@ -4,13 +4,37 @@
  */
 
 import type {
+  ContentPageSelector,
+  ContentTextRangeSelector,
   DocumentContentKind,
   DocumentExcerpt,
-  DocumentLocator,
   DocumentRange,
   DocumentRegion,
   DocumentSourceRef,
 } from '@neko/content';
+
+export type DocumentViewerCoordinate =
+  | ContentPageSelector
+  | ContentTextRangeSelector
+  | {
+      readonly kind: 'chapter';
+      readonly chapterHref: string;
+      readonly spineIndex?: number;
+      readonly title?: string;
+      readonly cfi?: string;
+    }
+  | {
+      readonly kind: 'slide';
+      readonly slideNumber: number;
+      readonly slideIndex: number;
+    }
+  | {
+      readonly kind: 'region';
+      readonly pageNumber: number;
+      readonly pageIndex?: number;
+      readonly entryName?: string;
+      readonly region: DocumentRegion;
+    };
 
 // =============================================================================
 // Desktop host → Webview
@@ -32,7 +56,7 @@ export interface DocumentRestoreStateMessage {
 
 export interface DocumentNavigateMessage {
   type: 'document:navigate';
-  payload: { locator: DocumentLocator };
+  payload: { coordinate: DocumentViewerCoordinate };
 }
 
 export interface EpubNavigateMessage {
@@ -82,7 +106,7 @@ export interface DocumentSendToAiMessage {
       region?: DocumentRegion;
     };
     source?: DocumentSourceRef;
-    locator: DocumentLocator;
+    coordinate: DocumentViewerCoordinate;
     range?: DocumentRange;
     excerpt?: DocumentExcerpt;
   };

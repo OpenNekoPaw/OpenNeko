@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Model, Provider, ProviderCredentialReader } from '@neko/host/settings';
 
-import { createDesktopDshProviderRuntimeProjection } from './desktop-dsh-provider-runtime';
+import {
+  createDesktopDshProviderRuntimeProjection,
+  OPENNEKO_DSH_MAX_REQUEST_IMAGE_BYTES,
+} from './desktop-dsh-provider-runtime';
 
 describe('Desktop DSH provider runtime projection', () => {
   it('projects exact Host provider routes, API model names, and subprocess-only credentials', async () => {
@@ -67,6 +70,8 @@ describe('Desktop DSH provider runtime projection', () => {
     expect(serializedPatch).toContain('"baseURL":"https://gateway.example.test/v1"');
     expect(serializedPatch).toContain('"id":"gpt-5.6-luna"');
     expect(serializedPatch).toContain('"deepseek-chat"');
+    expect(serializedPatch.match(/"maxRequestImageBytes":12582912/gu)).toHaveLength(2);
+    expect(OPENNEKO_DSH_MAX_REQUEST_IMAGE_BYTES).toBe(12 * 1024 * 1024);
     expect(serializedPatch).not.toContain('secret');
     expect(projection.diagnostics).toEqual([]);
   });

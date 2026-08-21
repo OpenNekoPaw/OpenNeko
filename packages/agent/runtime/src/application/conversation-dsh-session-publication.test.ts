@@ -19,7 +19,9 @@ describe('Conversation DSH Session publication', () => {
       client,
       store,
       catalog,
+      staleConversations: memoryStaleCleanup(catalog, store),
       conversationIdentitySeed: '/workspace/publication',
+      activity: idleActivity(),
     });
 
     const result = await application.publication.publish({
@@ -52,11 +54,14 @@ describe('Conversation DSH Session publication', () => {
 
   it('keeps the Host catalog record unavailable when session/new fails', async () => {
     const catalog = memoryCatalog([]);
+    const store = memoryBindingStore([]);
     const application = createConversationDshSessionApplication({
       client: clientWith({ createError: new Error('session/new failed') }),
-      store: memoryBindingStore([]),
+      store,
       catalog,
+      staleConversations: memoryStaleCleanup(catalog, store),
       conversationIdentitySeed: '/workspace/create-failure',
+      activity: idleActivity(),
     });
 
     await expect(
@@ -87,7 +92,9 @@ describe('Conversation DSH Session publication', () => {
       client: clientWith({}),
       store,
       catalog,
+      staleConversations: memoryStaleCleanup(catalog, store),
       conversationIdentitySeed: '/workspace/bind-failure',
+      activity: idleActivity(),
     });
 
     await expect(
@@ -110,11 +117,14 @@ describe('Conversation DSH Session publication', () => {
       random: new Uint8Array(10),
     });
     const catalog = memoryCatalog([]);
+    const store = memoryBindingStore([]);
     const application = createConversationDshSessionApplication({
       client: clientWith({}),
-      store: memoryBindingStore([]),
+      store,
       catalog,
+      staleConversations: memoryStaleCleanup(catalog, store),
       conversationIdentitySeed: '/workspace/exact',
+      activity: idleActivity(),
     });
 
     await expect(
@@ -138,12 +148,16 @@ describe('Conversation DSH Session publication', () => {
 
   it('archives the exact bound Session and removes only its Home projection', async () => {
     const catalog = memoryCatalog([]);
+    const store = memoryBindingStore([]);
     const client = clientWith({});
+    const staleConversations = memoryStaleCleanup(catalog, store);
     const application = createConversationDshSessionApplication({
       client,
-      store: memoryBindingStore([]),
+      store,
       catalog,
+      staleConversations,
       conversationIdentitySeed: '/workspace/archive',
+      activity: idleActivity(),
     });
     const published = await application.publication.publish({
       title: 'Archive me',
@@ -160,6 +174,38 @@ describe('Conversation DSH Session publication', () => {
     });
     expect(application.home.readHomeProjection().conversations).toEqual([]);
     await expect(application.catalog.get(published.conversationId)).resolves.toBeDefined();
+    expect(staleConversations.discard).not.toHaveBeenCalled();
+  });
+
+  it('discards an exact stale old record without invoking DSH archive', async () => {
+    const catalog = memoryCatalog([]);
+    const store = memoryBindingStore([]);
+    const client = clientWith({});
+    const staleConversations = memoryStaleCleanup(catalog, store);
+    const application = createConversationDshSessionApplication({
+      client,
+      store,
+      catalog,
+      staleConversations,
+      conversationIdentitySeed: '/workspace/stale',
+      activity: idleActivity(),
+    });
+    const published = await application.publication.publish({
+      title: 'Stale conversation',
+      context: { kind: 'assistant', assistantSpaceId: 'assistant:one', baseGrantIds: [] },
+    });
+    client.sessionIds.clear();
+
+    await application.archive.archiveConversation(published.conversationId);
+
+    expect(staleConversations.discard).toHaveBeenCalledWith({
+      conversationId: published.conversationId,
+      dshSessionId: published.dshSessionId,
+    });
+    expect(client.archiveSession).not.toHaveBeenCalled();
+    await expect(application.catalog.get(published.conversationId)).resolves.toBeUndefined();
+    expect(store.records.has(published.conversationId)).toBe(false);
+    expect(application.home.readHomeProjection().conversations).toEqual([]);
   });
 
   it('derives a bounded title from the canonical first Composer input', () => {
@@ -168,6 +214,7 @@ describe('Conversation DSH Session publication', () => {
         kind: 'message',
         text: '  请分析\n当前工作区的角色设定  ',
         references: [],
+        images: [],
         contextPayloads: [],
       }),
     ).toBe('请分析 当前工作区的角色设定');
@@ -181,6 +228,7 @@ describe('Conversation DSH Session publication', () => {
             contentLocator: { file: { authority: 'workspace', path: '角色设定.md' } },
           },
         ],
+        images: [],
         contextPayloads: [],
       }),
     ).toBe('角色设定.md');
@@ -200,6 +248,7 @@ describe('Conversation DSH Session publication', () => {
         kind: 'message',
         text: 'Create a storyboard shot list for the rainy rooftop chase with lighting notes',
         references: [],
+        images: [],
         contextPayloads: [],
       }),
     ).toBe('Create a storyboard shot list for the rainy...');
@@ -253,10 +302,42 @@ function memoryBindingStore(order: string[]): ConversationDshSessionBindingStore
   };
 }
 
+function memoryStaleCleanup(
+  catalog: ReturnType<typeof memoryCatalog>,
+  store: ReturnType<typeof memoryBindingStore>,
+) {
+  return {
+    discard: vi.fn(
+      async (binding: { readonly conversationId: string; readonly dshSessionId: string }) => {
+        const current = store.records.get(binding.conversationId);
+        if (current?.dshSessionId !== binding.dshSessionId) {
+          throw new Error('Stale binding changed before cleanup.');
+        }
+        const index = catalog.records.findIndex(
+          (record) => record.conversationId === binding.conversationId,
+        );
+        if (index < 0) throw new Error('Stale catalog record is missing.');
+        store.records.delete(binding.conversationId);
+        catalog.records.splice(index, 1);
+      },
+    ),
+  };
+}
+
+function idleActivity() {
+  return {
+    snapshot(sessionId: string) {
+      return { sessionId, currentTurn: undefined, events: [], tools: [] };
+    },
+  };
+}
+
 function clientWith(options: { readonly order?: string[]; readonly createError?: Error }) {
   const order = options.order ?? [];
   const archived = new Set<string>();
+  const sessionIds = new Set(['dsh-session-new']);
   return {
+    sessionIds,
     async createSession() {
       order.push('session-new');
       if (options.createError) throw options.createError;
@@ -264,7 +345,9 @@ function clientWith(options: { readonly order?: string[]; readonly createError?:
     },
     async listSessions() {
       order.push('session-list');
-      return { sessions: [{ sessionId: 'dsh-session-new', cwd: '/workspace' }] };
+      return {
+        sessions: [...sessionIds].map((sessionId) => ({ sessionId, cwd: '/workspace' })),
+      };
     },
     loadSession: vi.fn(async () => ({})),
     async resumeSession() {

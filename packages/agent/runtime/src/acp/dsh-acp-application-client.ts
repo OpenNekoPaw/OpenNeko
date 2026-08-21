@@ -25,6 +25,7 @@ import {
 } from '@agentclientprotocol/sdk';
 import {
   DSH_ACP_EXTENSION_METHODS,
+  decodeDshAcpContextPressureNotification,
   decodeDshAcpArchivedSessionsProjection,
   DSH_ACP_EXTENSION_NOTIFICATIONS,
   decodeDshAcpDomainToolCancelRequest,
@@ -103,6 +104,9 @@ export interface DshAcpApplicationClientHandlers {
   readonly onSessionUpdate: (notification: SessionNotification) => Promise<void> | void;
   readonly onSessionEvent: (
     notification: ReturnType<typeof decodeDshAcpSessionEventNotification>,
+  ) => Promise<void> | void;
+  readonly onContextPressure: (
+    notification: ReturnType<typeof decodeDshAcpContextPressureNotification>,
   ) => Promise<void> | void;
 }
 
@@ -449,6 +453,20 @@ function createProtocolClient(
       throw new Error(`DSH ACP requested unsupported Host extension method ${method}.`);
     },
     async extNotification(method, input) {
+      if (method === DSH_ACP_EXTENSION_NOTIFICATIONS.contextPressure) {
+        const pressure = decodeDshAcpContextPressureNotification(input);
+        const projected = projection.acceptContextPressure(pressure);
+        const diagnosticEvent = projected.find(
+          (projectedEvent) => projectedEvent.kind === 'diagnostic',
+        );
+        if (diagnosticEvent !== undefined && diagnosticEvent.kind === 'diagnostic') {
+          throw new Error(
+            `DSH ACP projection rejected context pressure: ${diagnosticEvent.code}: ${diagnosticEvent.message}`,
+          );
+        }
+        await handlers.onContextPressure(pressure);
+        return;
+      }
       if (method !== DSH_ACP_EXTENSION_NOTIFICATIONS.sessionEvent) {
         throw new Error(`DSH ACP sent unsupported Host extension notification ${method}.`);
       }

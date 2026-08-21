@@ -1,8 +1,4 @@
-import {
-  isContentFingerprint,
-  normalizeWorkspaceContentPath,
-  type ContentFingerprint,
-} from '@neko/content';
+import { normalizeWorkspaceContentPath } from '@neko/content';
 
 import type { CutCommand } from './commands';
 import type { CutProjectSnapshot } from './cut-project-authoring-service';
@@ -46,7 +42,6 @@ export type CutDshToolInput =
       readonly operation: 'apply';
       readonly input: {
         readonly documentPath: string;
-        readonly expectedFingerprint: ContentFingerprint;
         readonly commands: readonly CutDshCommand[];
       };
     }
@@ -78,7 +73,6 @@ export interface CutDshExportFacts {
 
 export interface CutDshToolFacts {
   readonly documentPath: string;
-  readonly fingerprint: ContentFingerprint;
   readonly name: string;
   readonly durationSeconds: number;
   readonly trackCount: number;
@@ -128,15 +122,11 @@ export function decodeCutDshToolInput(operation: unknown, input: unknown): CutDs
   }
   if (operation === 'apply') {
     const record = requireRecord(input, 'input');
-    requireExactKeys(record, ['documentPath', 'expectedFingerprint', 'commands'], 'input');
+    requireExactKeys(record, ['documentPath', 'commands'], 'input');
     return {
       operation,
       input: {
         documentPath: requireDocumentPath(record.documentPath, 'input.documentPath'),
-        expectedFingerprint: requireFingerprint(
-          record.expectedFingerprint,
-          'input.expectedFingerprint',
-        ),
         commands: requireCommands(record.commands, 'input.commands'),
       },
     };
@@ -216,7 +206,6 @@ export function projectCutDshToolFacts(snapshot: CutProjectSnapshot): CutDshTool
   }));
   return {
     documentPath: snapshot.documentPath,
-    fingerprint: snapshot.fingerprint,
     name: boundedText(snapshot.timeline.name),
     durationSeconds: snapshot.timeline.durationSeconds,
     trackCount: snapshot.timeline.tracks.length,
@@ -442,12 +431,6 @@ function requireExportSettings(input: unknown, field: string): CutExportSettings
     throw new Error(`${field}.outputName must be a file name.`);
   }
   return settings;
-}
-
-function requireFingerprint(input: unknown, field: string): ContentFingerprint {
-  if (!isContentFingerprint(input))
-    throw new Error(`${field} must be an exact content fingerprint.`);
-  return input;
 }
 
 function requireRecord(input: unknown, field: string): Record<string, unknown> {

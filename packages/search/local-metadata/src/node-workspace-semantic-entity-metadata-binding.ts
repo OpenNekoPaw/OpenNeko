@@ -12,7 +12,7 @@ import type {
   ProjectEntityProjectionRecord,
   ProjectEntityCandidateSourceOwner,
 } from '@neko/entity-domain';
-import type { DocumentLocator } from '@neko/content';
+import { contentLocatorsEqual, type ContentLocator } from '@neko/content';
 import { isSemanticSourceDescriptor } from '@neko/search-domain';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import type { LocalMetadataPartition, LocalMetadataStore } from '@neko/local-metadata';
@@ -46,7 +46,7 @@ export interface NodeWorkspaceSemanticEntityMetadataBinding extends ProjectEntit
   findEntityLinksByOccurrence(occurrenceId: string): Promise<SemanticOccurrenceEntityLinks | null>;
   findEntityLinksByLocator(
     sourceId: string,
-    locator: DocumentLocator,
+    locator: ContentLocator,
   ): Promise<readonly SemanticOccurrenceEntityLinks[]>;
   dispose(): Promise<void>;
 }
@@ -298,7 +298,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
         });
         const occurrences = await loadSemanticOccurrenceRecords(result.records);
         return occurrences
-          .filter((record) => sameDocumentLocator(record.occurrence.locator, locator))
+          .filter((record) => sameContentLocator(record.occurrence.locator, locator))
           .map(occurrenceLinks);
       },
       dispose: () => (ownsMetadataStore ? metadataStore.dispose() : Promise.resolve()),
@@ -346,8 +346,8 @@ function occurrenceLinks(
   };
 }
 
-function sameDocumentLocator(left: DocumentLocator | undefined, right: DocumentLocator): boolean {
-  return left !== undefined && JSON.stringify(left) === JSON.stringify(right);
+function sameContentLocator(left: ContentLocator | undefined, right: ContentLocator): boolean {
+  return left !== undefined && contentLocatorsEqual(left, right);
 }
 
 function semanticRecord(request: SemanticEntitySourceCommitRequest): SemanticProjectionRecord {

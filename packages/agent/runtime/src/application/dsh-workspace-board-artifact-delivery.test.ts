@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DshAcpProjectedEvent } from '../acp/dsh-acp-projection';
 import {
-  collectDshWorkspaceBoardArtifactBatch,
+  collectDshWorkspaceBoardArtifacts,
   createDshWorkspaceBoardTerminalDeliveryService,
   type DshWorkspaceBoardArtifactDeliveryInput,
 } from './dsh-workspace-board-artifact-delivery';
@@ -14,22 +14,13 @@ describe('DSH Workspace Board artifact collection', () => {
       imageTool('image-1'),
       assistant('# BLAME! 前 10 页分析\n\n分析内容。'),
     ];
-    expect(collectDshWorkspaceBoardArtifactBatch({ events, turn: 1 })).toBeUndefined();
+    expect(collectBatch(events)).toBeUndefined();
 
     events.push(turnEnd());
-    expect(collectDshWorkspaceBoardArtifactBatch({ events, turn: 1 })).toMatchObject({
+    expect(collectBatch(events)).toMatchObject({
       turn: 1,
       completedAt: 2_000,
       artifacts: [
-        {
-          kind: 'image',
-          role: 'source',
-          title: 'page-1.jpg',
-          contentLocator: {
-            file: { authority: 'workspace', path: 'books/blame.epub' },
-            selector: { kind: 'entry', path: 'images/page-1.jpg' },
-          },
-        },
         {
           kind: 'file-reference',
           role: 'source',
@@ -40,10 +31,7 @@ describe('DSH Workspace Board artifact collection', () => {
           kind: 'markdown',
           role: 'analysis',
           title: 'BLAME! 前 10 页分析',
-          sourceArtifactIds: expect.arrayContaining([
-            expect.stringMatching(/^content:/u),
-            expect.stringMatching(/^content:/u),
-          ]),
+          sourceArtifactIds: [expect.stringMatching(/^content:/u)],
         },
       ],
     });
@@ -57,47 +45,231 @@ describe('DSH Workspace Board artifact collection', () => {
       assistant('Analysis'),
       turnEnd(),
     ];
-    const first = collectDshWorkspaceBoardArtifactBatch({ events, turn: 1 });
-    const replay = collectDshWorkspaceBoardArtifactBatch({ events: [...events], turn: 1 });
+    const first = collectBatch(events);
+    const replay = collectBatch([...events]);
 
     expect(first).toEqual(replay);
     expect(first?.artifacts.filter((artifact) => artifact.role === 'source')).toHaveLength(1);
     expect(first?.artifacts[0]?.contentFingerprint).toMatch(/^locator:/u);
   });
 
+  it('compacts multiple document locations from one container to its root locator', () => {
+    const firstPage = {
+      file: { authority: 'workspace' as const, path: 'books/blame.pdf' },
+      selector: { kind: 'page' as const, pageNumber: 1, pageIndex: 0 },
+    };
+    const secondPage = {
+      file: firstPage.file,
+      selector: { kind: 'page' as const, pageNumber: 2, pageIndex: 1 },
+    };
+    const batch = collectBatch([
+      turnStart(),
+      documentTool('page-1', firstPage),
+      documentTool('page-1-repeat', firstPage),
+      documentTool('page-2', secondPage),
+      assistant('Page comparison'),
+      turnEnd(),
+    ]);
+
+    const sources = batch?.artifacts.filter((artifact) => artifact.role === 'source');
+    expect(sources).toEqual([
+      expect.objectContaining({
+        kind: 'file-reference',
+        contentLocator: { file: firstPage.file },
+      }),
+    ]);
+  });
+
+  it('retains one exact document selector when no container root was consumed', () => {
+    const page = {
+      file: { authority: 'workspace' as const, path: 'books/blame.pdf' },
+      selector: { kind: 'page' as const, pageNumber: 1, pageIndex: 0 },
+    };
+    const batch = collectBatch([
+      turnStart(),
+      documentTool('page-1', page),
+      assistant('Page analysis'),
+      turnEnd(),
+    ]);
+
+    expect(batch?.artifacts.filter((artifact) => artifact.role === 'source')).toEqual([
+      expect.objectContaining({ contentLocator: page }),
+    ]);
+  });
+
+  it('projects one image source for a Content-declared image-only document wrapper', () => {
+    const wrapper = {
+      file: { authority: 'workspace' as const, path: 'books/blame.epub' },
+      selector: { kind: 'entry' as const, path: 'chapters/opaque-wrapper.xhtml' },
+    };
+    const image = {
+      file: wrapper.file,
+      selector: { kind: 'entry' as const, path: 'assets/opaque-image.jpg' },
+    };
+    const batch = collectBatch([
+      turnStart(),
+      documentTool('wrapper', wrapper, {
+        excerpt: { contentKind: 'image' },
+        imageInfo: [{ contentLocator: image }],
+      }),
+      imageTool('perceived-image', image),
+      assistant('Image analysis'),
+      turnEnd(),
+    ]);
+
+    expect(batch?.artifacts.filter((artifact) => artifact.role === 'source')).toEqual([
+      expect.objectContaining({ kind: 'image', contentLocator: image }),
+    ]);
+    expect(batch?.artifacts.at(-1)).toMatchObject({
+      kind: 'markdown',
+      sourceArtifactIds: [expect.any(String)],
+    });
+  });
+
+  it.each(['text', 'mixed'] as const)(
+    'retains a %s document entry beside an embedded image source',
+    (contentKind) => {
+      const wrapper = {
+        file: { authority: 'workspace' as const, path: 'books/blame.epub' },
+        selector: { kind: 'entry' as const, path: 'chapters/opaque-wrapper.xhtml' },
+      };
+      const image = {
+        file: wrapper.file,
+        selector: { kind: 'entry' as const, path: 'assets/opaque-image.jpg' },
+      };
+      const batch = collectBatch([
+        turnStart(),
+        documentTool('wrapper', wrapper, {
+          excerpt: { contentKind },
+          imageInfo: [{ contentLocator: image }],
+        }),
+        imageTool('perceived-image', image),
+        assistant('Mixed analysis'),
+        turnEnd(),
+      ]);
+
+      expect(batch?.artifacts.filter((artifact) => artifact.role === 'source')).toHaveLength(2);
+    },
+  );
+
+  it('retains an image-only wrapper until every declared image was successfully consumed', () => {
+    const wrapper = {
+      file: { authority: 'workspace' as const, path: 'books/blame.epub' },
+      selector: { kind: 'entry' as const, path: 'chapters/opaque-wrapper.xhtml' },
+    };
+    const firstImage = {
+      file: wrapper.file,
+      selector: { kind: 'entry' as const, path: 'assets/first.jpg' },
+    };
+    const secondImage = {
+      file: wrapper.file,
+      selector: { kind: 'entry' as const, path: 'assets/second.jpg' },
+    };
+    const batch = collectBatch([
+      turnStart(),
+      documentTool('wrapper', wrapper, {
+        excerpt: { contentKind: 'image' },
+        imageInfo: [{ contentLocator: firstImage }, { contentLocator: secondImage }],
+      }),
+      imageTool('first-image', firstImage),
+      assistant('Partial image analysis'),
+      turnEnd(),
+    ]);
+
+    expect(batch?.artifacts.filter((artifact) => artifact.role === 'source')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'file-reference', contentLocator: wrapper }),
+        expect.objectContaining({ kind: 'image', contentLocator: firstImage }),
+      ]),
+    );
+  });
+
   it.each(['interrupted', 'max-tokens', 'failed', 'error', 'cancelled'])(
     'does not deliver a %s turn',
     (reason) => {
       const events = [turnStart(), documentTool('a'), assistant('Analysis'), turnEnd(reason)];
-      expect(collectDshWorkspaceBoardArtifactBatch({ events, turn: 1 })).toBeUndefined();
+      expect(collectBatch(events)).toBeUndefined();
     },
   );
 
-  it('does not promote ordinary text, source-only reads, or failed Tools', () => {
+  it('does not promote ordinary text, source-only reads, or turns without a successful source', () => {
+    expect(collectBatch([turnStart(), assistant('Hello'), turnEnd()])).toBeUndefined();
+    expect(collectBatch([turnStart(), documentTool('a'), turnEnd()])).toBeUndefined();
     expect(
-      collectDshWorkspaceBoardArtifactBatch({
-        events: [turnStart(), assistant('Hello'), turnEnd()],
-        turn: 1,
-      }),
+      collectBatch([
+        turnStart(),
+        { ...imageTool('failed'), status: 'failed' },
+        assistant('Analysis'),
+        turnEnd(),
+      ]),
     ).toBeUndefined();
-    expect(
-      collectDshWorkspaceBoardArtifactBatch({
-        events: [turnStart(), documentTool('a'), turnEnd()],
-        turn: 1,
+  });
+
+  it('isolates a failed sibling Tool and delivers completed source analysis', () => {
+    const batch = collectBatch([
+      turnStart(),
+      documentTool('ok'),
+      { ...imageTool('failed'), status: 'failed' },
+      assistant('Analysis'),
+      turnEnd(),
+    ]);
+
+    expect(batch?.artifacts).toMatchObject([
+      { kind: 'file-reference', role: 'source', title: 'blame.epub' },
+      { kind: 'markdown', role: 'analysis', sourceArtifactIds: [expect.any(String)] },
+    ]);
+  });
+
+  it('reports and isolates the retired internal ACP envelope', () => {
+    const collection = collectDshWorkspaceBoardArtifacts({
+      events: [
+        turnStart(),
+        {
+          ...documentTool('retired-envelope'),
+          rawInput: {
+            operation: 'read',
+            input: {
+              source: { file: { authority: 'workspace', path: 'books/blame.epub' } },
+            },
+          },
+        },
+        assistant('Analysis'),
+        turnEnd(),
+      ],
+      turn: 1,
+    });
+
+    expect(collection.batch).toBeUndefined();
+    expect(collection.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'DSH_WORKSPACE_BOARD_CONTENT_TOOL_PROJECTION_INVALID',
+        toolCallId: 'retired-envelope',
+        toolName: 'openneko.document',
+        message: expect.stringMatching(/arguments\.input is not supported/u),
       }),
-    ).toBeUndefined();
-    expect(
-      collectDshWorkspaceBoardArtifactBatch({
-        events: [
-          turnStart(),
-          documentTool('ok'),
-          { ...imageTool('failed'), status: 'failed' },
-          assistant('Analysis'),
-          turnEnd(),
-        ],
-        turn: 1,
+    ]);
+  });
+
+  it('isolates a completed non-JSON Document result and keeps valid sibling artifacts', () => {
+    const malformed = {
+      ...documentTool('malformed'),
+      rawOutput: [{ type: 'text', text: 'Error: document content could not be read.' }],
+    } satisfies DshAcpProjectedEvent;
+    const collection = collectDshWorkspaceBoardArtifacts({
+      events: [turnStart(), malformed, documentTool('valid'), assistant('Analysis'), turnEnd()],
+      turn: 1,
+    });
+
+    expect(collection.batch?.artifacts).toMatchObject([
+      { kind: 'file-reference', role: 'source', title: 'blame.epub' },
+      { kind: 'markdown', role: 'analysis', sourceArtifactIds: [expect.any(String)] },
+    ]);
+    expect(collection.diagnostics).toEqual([
+      expect.objectContaining({
+        toolCallId: 'malformed',
+        message: 'Completed openneko.document output is not valid JSON.',
       }),
-    ).toBeUndefined();
+    ]);
   });
 });
 
@@ -118,6 +290,7 @@ describe('DSH Workspace Board terminal delivery service', () => {
           return { status: 'accepted' };
         },
       },
+      diagnostics: { report: () => undefined },
     });
 
     const outcome = await service.deliverTerminal({
@@ -136,6 +309,41 @@ describe('DSH Workspace Board terminal delivery service', () => {
     });
   });
 
+  it('reports one invalid completed Tool while delivering valid sibling artifacts', async () => {
+    const diagnostics: string[] = [];
+    const deliveries: DshWorkspaceBoardArtifactDeliveryInput[] = [];
+    const service = createDshWorkspaceBoardTerminalDeliveryService({
+      contexts: {
+        readContext: async () => ({
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        }),
+      },
+      delivery: {
+        deliver: async (input) => {
+          deliveries.push(input);
+          return { status: 'accepted' };
+        },
+      },
+      diagnostics: { report: (diagnostic) => diagnostics.push(diagnostic.toolCallId) },
+    });
+    const malformed = {
+      ...documentTool('malformed'),
+      rawOutput: [{ type: 'text', text: 'Error: document content could not be read.' }],
+    } satisfies DshAcpProjectedEvent;
+
+    await expect(
+      service.deliverTerminal({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        events: [turnStart(), malformed, documentTool('valid'), assistant('Analysis'), turnEnd()],
+      }),
+    ).resolves.toEqual({ status: 'accepted' });
+    expect(diagnostics).toEqual(['malformed']);
+    expect(deliveries).toHaveLength(1);
+  });
+
   it('does not infer a Workspace for a non-Workspace Conversation', async () => {
     let deliveryCount = 0;
     const service = createDshWorkspaceBoardTerminalDeliveryService({
@@ -152,6 +360,7 @@ describe('DSH Workspace Board terminal delivery service', () => {
           return { status: 'accepted' };
         },
       },
+      diagnostics: { report: () => undefined },
     });
 
     await expect(
@@ -164,6 +373,12 @@ describe('DSH Workspace Board terminal delivery service', () => {
     expect(deliveryCount).toBe(0);
   });
 });
+
+function collectBatch(
+  events: readonly DshAcpProjectedEvent[],
+): ReturnType<typeof collectDshWorkspaceBoardArtifacts>['batch'] {
+  return collectDshWorkspaceBoardArtifacts({ events, turn: 1 }).batch;
+}
 
 function turnStart(): DshAcpProjectedEvent {
   return { kind: 'turn', sessionId: 'dsh-1', turn: 1, phase: 'start', startedAt: 1_000 };
@@ -194,7 +409,16 @@ function assistant(text: string): DshAcpProjectedEvent {
   };
 }
 
-function documentTool(toolCallId: string): DshAcpProjectedEvent {
+function documentTool(
+  toolCallId: string,
+  source: {
+    readonly file: { readonly authority: 'workspace'; readonly path: string };
+    readonly selector?:
+      | { readonly kind: 'entry'; readonly path: string }
+      | { readonly kind: 'page'; readonly pageNumber: number; readonly pageIndex: number };
+  } = { file: { authority: 'workspace', path: 'books/blame.epub' } },
+  result: Readonly<Record<string, unknown>> = {},
+): DshAcpProjectedEvent {
   return {
     kind: 'tool',
     sessionId: 'dsh-1',
@@ -204,15 +428,23 @@ function documentTool(toolCallId: string): DshAcpProjectedEvent {
     title: 'openneko.document',
     rawInput: {
       operation: 'read',
-      input: {
-        source: { file: { authority: 'workspace', path: 'books/blame.epub' } },
-        mode: 'content',
-      },
+      source,
+      ...(source.selector === undefined ? { mode: 'content' } : {}),
     },
+    rawOutput: [{ type: 'text', text: JSON.stringify({ status: 'ready', source, ...result }) }],
   };
 }
 
-function imageTool(toolCallId: string): DshAcpProjectedEvent {
+function imageTool(
+  toolCallId: string,
+  source: {
+    readonly file: { readonly authority: 'workspace'; readonly path: string };
+    readonly selector: { readonly kind: 'entry'; readonly path: string };
+  } = {
+    file: { authority: 'workspace', path: 'books/blame.epub' },
+    selector: { kind: 'entry', path: 'images/page-1.jpg' },
+  },
+): DshAcpProjectedEvent {
   return {
     kind: 'tool',
     sessionId: 'dsh-1',
@@ -220,11 +452,6 @@ function imageTool(toolCallId: string): DshAcpProjectedEvent {
     turn: 1,
     status: 'completed',
     title: 'openneko.read_image',
-    rawInput: {
-      source: {
-        file: { authority: 'workspace', path: 'books/blame.epub' },
-        selector: { kind: 'entry', path: 'images/page-1.jpg' },
-      },
-    },
+    rawInput: { source },
   };
 }

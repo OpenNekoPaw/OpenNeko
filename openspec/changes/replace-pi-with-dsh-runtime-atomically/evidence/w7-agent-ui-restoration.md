@@ -15,6 +15,7 @@ Date: 2026-08-19
 - `packages/agent/webview/src/index.css` continues to own the accepted component hierarchy and semantic
   tokens. The DSH projection did not introduce a parallel component or Desktop-owned Agent style system.
 - `DshAgentView` now mounts the existing `InputArea`, `InputAreaProvider`, `ComposerConfigMenu`, `ModeSelector`, `WorkspaceCanvasContextBar`, reference-token and attachment presentation files restored from the accepted UI source. DSH configuration is mapped into the existing component context; the standalone legacy `ModelSelector` remains covered by its presentation contract test, and no parallel selector or composer implementation remains.
+- The earlier visual restoration only proved that the retained Workspace/Canvas rail was mounted; its DSH configuration still projected one hard-coded Workspace Board and its selection callback was inert. That claim does not count as multi-Canvas functional evidence. Task 7.19 owns the canonical Canvas catalog, per-turn selection and queued-context restoration without changing this UI component.
 - Desktop no longer declares a parallel `.desktop-dsh-agent*` style surface.
 - Tool projection retains bounded JSON `rawInput` and `rawOutput` for expandable details. An invalid payload produces `ACP_TOOL_PAYLOAD_INVALID` for that item while sibling events remain available.
 - An unbound Draft keeps the same composer visible. Its first submitted message creates an exact Conversation and prompts only the returned Conversation identity.
@@ -132,6 +133,8 @@ No safe populated DSH transcript fixture exists in the retained local catalog: a
 ## Result And Remaining Risk
 
 Overall UI validation is `blocked`, not passed. The authoritative Desktop lane now passes the empty Entry Draft, localized old composer, model/media filtering, DSH permission modes, Character/World/Project selection cycles, Entry Project binding states and persisted Workspace grant restoration. Narrow-window settled pixels and populated transcript/Tool/approval/error states remain blocked. Character/World reference selection also does not by itself prove that the later DSH domain-Tool workstream consumed those references; that behavior remains part of W6/W7 rather than this presentation result. Task 7.7 stays open.
+
+Multi-Canvas behavior is also `blocked` until task 7.19 has deterministic contract/runtime coverage and a visible Desktop check showing at least two catalog options, exact selection and a model turn receiving that exact Canvas summary. Automatic terminal artifact delivery remains scoped to the Workspace Board because DSH terminal events do not yet return the Host-validated structured per-turn Canvas target; no prompt-text inference or shadow Host turn ledger is accepted as substitute evidence.
 
 The DSH Web review session also failed before execution with `QUOTA: Insufficient Balance`; it produced no repository changes and does not count as implementation evidence.
 

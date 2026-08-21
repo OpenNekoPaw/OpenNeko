@@ -1,5 +1,5 @@
 import type { AgentContextPayload } from '@neko/agent-contracts';
-import type { ContentLocator, DocumentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content';
 import { isContentLocator } from '@neko/content';
 import { projectContentLocatorPath } from './content-locator-presenter';
 
@@ -22,7 +22,7 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
   const image = asRecord(value.image);
   if (!document || !image) return null;
   if (
-    !hasExactKeys(document, ['filePath', 'source', 'locator', 'contentLocator']) ||
+    !hasExactKeys(document, ['filePath', 'source', 'contentLocator']) ||
     !hasExactKeys(image, ['index', 'width', 'height', 'byteSize', 'mimeType', 'contentLocator'])
   ) {
     return null;
@@ -36,14 +36,12 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
   }
 
   const source = asRecord(document.source);
-  const locator = parseDocumentLocator(document.locator);
   const contentLocator =
     parseStableContentLocator(image.contentLocator) ??
     parseStableContentLocator(document.contentLocator);
   if (!contentLocator) return null;
-  const label = locator
-    ? formatDocumentLocator(locator)
-    : contentLocator.selector
+  const label =
+    contentLocator.selector?.kind === 'entry'
       ? basename(contentLocator.selector.path)
       : basename(projectContentLocatorPath(contentLocator));
   const sourceFormat = readString(source?.format);
@@ -52,7 +50,6 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
     kind: 'document-image-reference',
     document: {
       contentLocator,
-      ...(locator ? { locator } : {}),
     },
     image: {
       ...optionalNumberField('index', image.index),
@@ -64,7 +61,9 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
     },
     navigationData: {
       source: sourceFormat ?? 'document',
-      ...(contentLocator.selector ? { entryPath: contentLocator.selector.path } : {}),
+      ...(contentLocator.selector?.kind === 'entry'
+        ? { entryPath: contentLocator.selector.path }
+        : {}),
     },
   };
 
@@ -73,7 +72,7 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
     id: stableContextId(
       'document-image',
       contentPath,
-      contentLocator.selector?.path ?? label,
+      contentLocator.selector?.kind === 'entry' ? contentLocator.selector.path : label,
       label,
     ),
     label,
@@ -124,103 +123,6 @@ function parseJsonObject(text: string): Record<string, unknown> | null {
     return asRecord(parsed) ?? null;
   } catch {
     return null;
-  }
-}
-
-function parseDocumentLocator(value: unknown): DocumentLocator | undefined {
-  const locator = asRecord(value);
-  if (!locator) return undefined;
-
-  if (locator.kind === 'page') {
-    const pageNumber = readFiniteNumber(locator.pageNumber);
-    const pageIndex = readFiniteNumber(locator.pageIndex);
-    if (pageNumber === undefined || pageIndex === undefined) return undefined;
-    return {
-      kind: 'page',
-      pageNumber,
-      pageIndex,
-      ...optionalStringField('entryName', locator.entryName),
-    };
-  }
-  if (locator.kind === 'region') {
-    const pageNumber = readFiniteNumber(locator.pageNumber);
-    const pageIndex = readFiniteNumber(locator.pageIndex);
-    const region = parseRegion(locator.region);
-    if (pageNumber === undefined || !region) return undefined;
-    return {
-      kind: 'region',
-      pageNumber,
-      region,
-      ...(pageIndex !== undefined ? { pageIndex } : {}),
-      ...optionalStringField('entryName', locator.entryName),
-    };
-  }
-  if (locator.kind === 'chapter') {
-    const chapterHref = readString(locator.chapterHref);
-    const spineIndex = readFiniteNumber(locator.spineIndex);
-    const title = readString(locator.title);
-    if (!chapterHref) return undefined;
-    return {
-      kind: 'chapter',
-      chapterHref,
-      ...(spineIndex !== undefined ? { spineIndex } : {}),
-      ...(title ? { title } : {}),
-      ...optionalStringField('cfi', locator.cfi),
-    };
-  }
-  if (locator.kind === 'slide') {
-    const slideNumber = readFiniteNumber(locator.slideNumber);
-    const slideIndex = readFiniteNumber(locator.slideIndex);
-    if (slideNumber === undefined || slideIndex === undefined) return undefined;
-    return { kind: 'slide', slideNumber, slideIndex };
-  }
-  if (locator.kind === 'text-range') {
-    return {
-      kind: 'text-range',
-      ...optionalNumberField('startChar', locator.startChar),
-      ...optionalNumberField('endChar', locator.endChar),
-      ...optionalNumberField('startLine', locator.startLine),
-      ...optionalNumberField('endLine', locator.endLine),
-      ...optionalNumberField('paragraphIndex', locator.paragraphIndex),
-      ...optionalStringField('heading', locator.heading),
-    };
-  }
-
-  return undefined;
-}
-
-function parseRegion(
-  value: unknown,
-): { x: number; y: number; width: number; height: number } | undefined {
-  const region = asRecord(value);
-  if (!region) return undefined;
-  const x = readFiniteNumber(region.x);
-  const y = readFiniteNumber(region.y);
-  const width = readFiniteNumber(region.width);
-  const height = readFiniteNumber(region.height);
-  if (x === undefined || y === undefined || width === undefined || height === undefined) {
-    return undefined;
-  }
-  return { x, y, width, height };
-}
-
-function formatDocumentLocator(locator: DocumentLocator): string {
-  switch (locator.kind) {
-    case 'page':
-      return `page:${locator.pageNumber}`;
-    case 'region':
-      return `page:${locator.pageNumber}:region`;
-    case 'chapter':
-      return locator.spineIndex !== undefined
-        ? `chapter:${locator.chapterHref}@${locator.spineIndex}`
-        : `chapter:${locator.chapterHref}`;
-    case 'slide':
-      return `slide:${locator.slideNumber}`;
-    case 'text-range':
-      if (locator.startLine !== undefined || locator.endLine !== undefined) {
-        return `lines:${locator.startLine ?? '?'}-${locator.endLine ?? '?'}`;
-      }
-      return `chars:${locator.startChar ?? '?'}-${locator.endChar ?? '?'}`;
   }
 }
 

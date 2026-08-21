@@ -97,7 +97,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     expect(jobs.submitGeneration).not.toHaveBeenCalled();
   });
 
-  it('queries Canvas bounded facts and rejects stale fingerprint mutations locally', async () => {
+  it('keeps the Canvas fingerprint internal and rejects stale CAS mutations locally', async () => {
     const service = createCanvasService();
     const adapter = new CanvasDshHostAdapter(service);
     const snapshot = createCanvasSnapshot();
@@ -116,7 +116,6 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
       outcome: 'success',
       result: {
         documentPath: 'boards/story.nkc',
-        fingerprint: { strategy: 'sha256', value: 'fingerprint' },
         nodeCount: 1,
         connectionCount: 0,
       },
@@ -125,7 +124,6 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     const staleResponse = await adapter.execute(
       request('openneko.canvas', 'create-node', {
         documentPath: 'boards/story.nkc',
-        expectedFingerprint: { strategy: 'sha256', value: 'stale' },
         node: { type: 'markdown' },
       }),
     );
@@ -135,7 +133,7 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
     expect(service.createNode).toHaveBeenCalledWith({
       documentPath: 'boards/story.nkc',
-      expectedFingerprint: { strategy: 'sha256', value: 'stale' },
+      expectedFingerprint: { strategy: 'sha256', value: 'fingerprint' },
       node: { type: 'markdown' },
     });
   });
@@ -172,7 +170,6 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     await adapter.execute(
       request('openneko.canvas', 'create-node', {
         documentPath: 'boards/story.nkc',
-        expectedFingerprint: { strategy: 'sha256', value: 'fingerprint' },
         node: { type: 'markdown' },
       }),
       controller.signal,

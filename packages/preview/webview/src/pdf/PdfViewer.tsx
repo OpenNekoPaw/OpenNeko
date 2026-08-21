@@ -68,9 +68,11 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
     } else if (!sourceUrl && msg.type === 'document:data') {
       void loadPdfFromUrl(msg.payload.url);
     } else if (msg.type === 'document:navigate') {
-      const locator = msg.payload.locator;
+      const coordinate = msg.payload.coordinate;
       const pageNumber =
-        locator.kind === 'page' || locator.kind === 'region' ? locator.pageNumber : undefined;
+        coordinate.kind === 'page' || coordinate.kind === 'region'
+          ? coordinate.pageNumber
+          : undefined;
       if (pageNumber !== undefined) {
         if (numPages === 0) {
           pendingPageRef.current = pageNumber;

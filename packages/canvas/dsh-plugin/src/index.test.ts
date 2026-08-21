@@ -41,7 +41,7 @@ describe('OpenNeko Canvas DSH plugin', () => {
             },
             {
               title: 'create-node input',
-              required: ['documentPath', 'expectedFingerprint', 'node'],
+              required: ['documentPath', 'node'],
               additionalProperties: false,
             },
           ],

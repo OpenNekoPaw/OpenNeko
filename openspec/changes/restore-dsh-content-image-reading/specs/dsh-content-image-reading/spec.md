@@ -29,6 +29,19 @@ access, persists it in the DSH attachment store, and emits a native image block.
 - **AND** every call uses the existing bounded per-Session Host admission path
 - **AND** the implementation does not create a second queue or increase the global Host budget
 
+#### Scenario: Valid document image exceeds the attachment side limit
+
+- **WHEN** an authorized image is within the active decoded-pixel and byte limits but one side exceeds the active DSH attachment dimension limit
+- **THEN** the image reader derives a bounded auto-oriented perception representation and persists that representation as the native DSH attachment
+- **AND** the Tool result and downstream Workspace artifacts preserve the exact original `ContentLocator`
+- **AND** no source bytes, Workspace file, attachment limit, provider, or model selection is modified
+
+#### Scenario: Source exceeds a non-resizable safety bound
+
+- **WHEN** the source exceeds the active decoded-pixel or byte limit, cannot be decoded, or uses an unsupported image format
+- **THEN** only the current image Tool call fails visibly
+- **AND** the implementation does not raise a limit or publish a partial image result
+
 ### Requirement: Document roots are selector-free
 
 `openneko.document` SHALL accept only a selector-free Workspace document source.

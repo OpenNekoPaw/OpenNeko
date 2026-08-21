@@ -9,6 +9,7 @@ openneko.document -> authorized image ContentLocator
   -> exact Conversation context + Workspace grant
   -> AgentContentAccessRuntime.loadContentAsset
   -> ContentReadService document-entry handler
+  -> bounded perceptual resize when only a side exceeds the active limit
   -> DSH AttachmentStore.saveImage
   -> native DSH image ToolResult block
 ```
@@ -32,6 +33,16 @@ filesystem path.
   model-facing Tool is exclusive because one call performs multiple ordered ACP
   Host reads and the Host owns a bounded per-Session admission queue.
 
+The plugin probes the assembled image before attachment persistence. If the
+decoded pixel count is within the active DSH limit but one side exceeds
+`maxImageDimension`, it uses the already packaged Sharp runtime to auto-orient
+and fit the pixels inside the active square bound, retaining the source MIME
+type. The attachment is only a model-context representation: Tool output keeps
+the exact source locator, while Workspace Board provenance and preview continue
+to reference the original content. Pixel-count overflow, byte overflow, decode
+failure, or an unsupported format remains fail-visible; limits are not raised
+or bypassed.
+
 ACP remains JSON-only. Each chunk is small enough to remain below the ACP JSON
 payload limit after base64 expansion. The first response carries total byte
 length, MIME type, and the first chunk; subsequent requests carry an explicit
@@ -51,9 +62,10 @@ document decoder rejects it instead of silently parsing a different source.
 
 ## User data
 
-No source file or project fact is modified. Image bytes are copied only into the
-DSH attachment store under its existing durable lifecycle. No archive extraction
-path is persisted or exposed.
+No source file or project fact is modified. Original or bounded perceptual image
+bytes are copied only into the DSH attachment store under its existing durable
+lifecycle. No derived locator, archive extraction path, or resized Workspace
+file is persisted or exposed.
 
 ## Evaluation
 

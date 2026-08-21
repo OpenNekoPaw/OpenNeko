@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createCanvasWorkspaceBoardTarget } from '@neko/canvas-domain';
+import { createCanvasWorkspaceBoardTarget, createExactCanvasTarget } from '@neko/canvas-domain';
 
 import { createDshConversationTurnContextResolver } from './dsh-conversation-turn-context';
 
@@ -102,6 +102,48 @@ describe('DSH Conversation turn context', () => {
       'workspace-1',
       createCanvasWorkspaceBoardTarget('workspace-1'),
     );
+  });
+
+  it('resolves the selected exact Canvas and rejects a cross-Workspace target', async () => {
+    const resolveTurnContext = vi.fn(async (_workspaceId: string, target: unknown) => ({
+      target: target as ReturnType<typeof createExactCanvasTarget>,
+      summary: {
+        canvasId: 'neko/boards/story.nkc',
+        name: 'story.nkc',
+        nodeTypeSummary: { text: 2 },
+      },
+    }));
+    const resolver = createDshConversationTurnContextResolver({
+      contexts: {
+        readContext: vi.fn(async () => ({
+          kind: 'workspace' as const,
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        })),
+      },
+      workspaceGrants: {
+        resolveAuthorizedWorkspace: vi.fn(async () => ({
+          workspace: { workspaceId: 'workspace-1' },
+        })),
+      },
+      canvas: { resolveTurnContext },
+    });
+    const target = createExactCanvasTarget('workspace-1', 'neko/boards/story.nkc');
+
+    await expect(resolver.resolve('conversation-1', [], [], target)).resolves.toContain(
+      'story.nkc',
+    );
+    expect(resolveTurnContext).toHaveBeenCalledWith('workspace-1', target);
+
+    await expect(
+      resolver.resolve(
+        'conversation-1',
+        [],
+        [],
+        createExactCanvasTarget('workspace-2', 'neko/boards/other.nkc'),
+      ),
+    ).rejects.toThrow(/does not match Conversation Workspace/u);
+    expect(resolveTurnContext).toHaveBeenCalledTimes(1);
   });
 
   it('resolves an exact Character Run only with its matching frozen turn context', async () => {

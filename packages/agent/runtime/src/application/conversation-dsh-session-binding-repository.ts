@@ -11,7 +11,7 @@ import type {
   ConversationDshSessionBindingStore,
 } from './conversation-dsh-session-binding';
 
-const BINDING_TABLE = 'agent_conversation_dsh_session_bindings';
+export const CONVERSATION_DSH_SESSION_BINDING_TABLE = 'agent_conversation_dsh_session_bindings';
 
 export function initializeConversationDshSessionBindingTables(
   store: LocalMetadataStore,
@@ -19,7 +19,7 @@ export function initializeConversationDshSessionBindingTables(
   return initializeLocalMetadataTables(store, {
     ownership: 'state',
     statements: [
-      `CREATE TABLE IF NOT EXISTS ${BINDING_TABLE} (
+      `CREATE TABLE IF NOT EXISTS ${CONVERSATION_DSH_SESSION_BINDING_TABLE} (
         conversation_id TEXT PRIMARY KEY,
         dsh_session_id TEXT NOT NULL UNIQUE
       ) STRICT`,
@@ -39,7 +39,7 @@ export function createPersistentConversationDshSessionBindingStore(options: {
           requireConversationId(conversationId);
           const rows = await sql.all(
             `SELECT conversation_id, dsh_session_id
-               FROM ${BINDING_TABLE}
+               FROM ${CONVERSATION_DSH_SESSION_BINDING_TABLE}
               WHERE conversation_id = ?`,
             [conversationId],
           );
@@ -60,7 +60,7 @@ export function createPersistentConversationDshSessionBindingStore(options: {
           requireDshSessionId(dshSessionId);
           const rows = await sql.all(
             `SELECT conversation_id, dsh_session_id
-               FROM ${BINDING_TABLE}
+               FROM ${CONVERSATION_DSH_SESSION_BINDING_TABLE}
               WHERE dsh_session_id = ?`,
             [dshSessionId],
           );
@@ -80,14 +80,14 @@ export function createPersistentConversationDshSessionBindingStore(options: {
         async ({ sql }) => {
           const binding = requireBinding(record);
           const inserted = await sql.run(
-            `INSERT INTO ${BINDING_TABLE}(conversation_id, dsh_session_id)
+            `INSERT INTO ${CONVERSATION_DSH_SESSION_BINDING_TABLE}(conversation_id, dsh_session_id)
              VALUES (?, ?)
              ON CONFLICT DO NOTHING`,
             [binding.conversationId, binding.dshSessionId],
           );
           const rows = await sql.all(
             `SELECT conversation_id, dsh_session_id
-               FROM ${BINDING_TABLE}
+               FROM ${CONVERSATION_DSH_SESSION_BINDING_TABLE}
               WHERE conversation_id = ? OR dsh_session_id = ?
               ORDER BY conversation_id`,
             [binding.conversationId, binding.dshSessionId],
@@ -132,7 +132,7 @@ export function createPersistentConversationDshSessionBindingStore(options: {
         async ({ sql }) => {
           const binding = requireBinding(expected);
           const deleted = await sql.run(
-            `DELETE FROM ${BINDING_TABLE}
+            `DELETE FROM ${CONVERSATION_DSH_SESSION_BINDING_TABLE}
               WHERE conversation_id = ? AND dsh_session_id = ?`,
             [binding.conversationId, binding.dshSessionId],
           );
@@ -140,7 +140,7 @@ export function createPersistentConversationDshSessionBindingStore(options: {
 
           const conversationRows = await sql.all(
             `SELECT conversation_id, dsh_session_id
-               FROM ${BINDING_TABLE}
+               FROM ${CONVERSATION_DSH_SESSION_BINDING_TABLE}
               WHERE conversation_id = ?`,
             [binding.conversationId],
           );
@@ -158,7 +158,7 @@ export function createPersistentConversationDshSessionBindingStore(options: {
 
           const sessionRows = await sql.all(
             `SELECT conversation_id, dsh_session_id
-               FROM ${BINDING_TABLE}
+               FROM ${CONVERSATION_DSH_SESSION_BINDING_TABLE}
               WHERE dsh_session_id = ?`,
             [binding.dshSessionId],
           );

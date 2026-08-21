@@ -123,6 +123,9 @@ export function createCanvasWorkspaceContextCatalog(input: {
   if (!defaultOption) {
     throw new Error('Canvas workspace context catalog requires the logical Board option.');
   }
+  if (catalog.options.some((option) => option.target.workspaceId !== workspaceId)) {
+    throw new Error('Canvas workspace context catalog options must match its Workspace.');
+  }
   if (
     catalog.options.some(
       (option, index) =>

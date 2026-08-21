@@ -359,6 +359,12 @@ session 的 sequence 可能在 preload 注册前或两次投影之间提前推�
 sequence 即应用最新完整 snapshot，`<=` 视为 stale/duplicate 丢弃，陌生 identity 拒绝。这不会形成
 active/current identity fallback 或 renderer 第二权威，也不会重放已完成 turn。
 
+`getSnapshot` 同时是 exact Canvas owner 的订阅重绑定边界。Main 必须先替换该 sender + Canvas identity
+下的旧 subscription，再从同一个 Host session 取得 snapshot；preload 在发起该 authoritative bootstrap
+时重置此 identity 的事件 cursor，使 session 重建后的低序号事件不会与已释放 session 的序号混用。失败的
+bootstrap 只撤销当前绑定，不回退旧 session、旧 snapshot 或 active Canvas。该处理不增加 session generation、
+epoch 或版本字段。
+
 已挂载 Media Library 内容不再用 `MediaLibraryContentLocator` 作为第二个内容路径。挂载文件与普通文件共享
 同一 `WorkspaceFileContentLocator`（路径 `neko/assets/<libraryName>/<relativePath>`）。全局目录注册与项目
 挂载（`neko/assets/<libraryName>` 下的 managed symlink/junction）的差异只属于 mount manager：关联、创建、
@@ -389,4 +395,5 @@ Webview 只把非 idle 的权威 state 投影到最后一条非 queued 用户消
 streaming、Tool 和 completed assistant record 继续按现有规则取代 generic activity。queued item 不进入
 transcript，composer queue 使用既有 `createdAt` 显示逐项“等待中”和时间，发送、重编辑、取消操作保持不变。
 消息与队列时间共用一个 package-local formatter，不新增状态 owner、contract 字段或 fallback。
+
 > **后继处置（2026-08-21）**：保留 UI、Scene 与生命周期回归约束；Pi-specific authority/path 不再是实现约束。

@@ -3,6 +3,7 @@ import {
   AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
   AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES,
   type AgentConversationContext,
+  type DshComposerImageInput,
 } from '@neko/agent-contracts';
 import { normalizeProviderImage } from '@neko/agent-runtime';
 import {
@@ -21,7 +22,9 @@ export interface DesktopDshPromptReference {
 }
 
 export interface DesktopDshPromptImage {
-  readonly referenceIndex: number;
+  readonly source:
+    | { readonly kind: 'reference'; readonly referenceIndex: number }
+    | { readonly kind: 'inline'; readonly imageIndex: number; readonly name: string };
   readonly data: string;
   readonly mimeType: SupportedImageMimeType;
 }
@@ -51,49 +54,86 @@ export function createDesktopDshPromptImageAdmission(options: {
       readonly conversationId: string;
       readonly windowId: string;
       readonly references: readonly DesktopDshPromptReference[];
+      readonly images: readonly DshComposerImageInput[];
       readonly modelSupportsImageInput: boolean;
     }): Promise<readonly DesktopDshPromptImage[]> {
-      if (input.references.length === 0) return [];
-      const context = await options.contexts.readContext(input.conversationId);
-      if (context === undefined) {
-        throw new Error(
-          `Conversation '${input.conversationId}' has no authoritative domain context.`,
-        );
-      }
-      if (context.kind !== 'workspace' && context.kind !== 'authoring') {
-        throw new Error('DSH Prompt references require an exact Workspace-bound Conversation.');
-      }
-      const authorized = await options.workspaceGrants.restore(
-        input.windowId,
-        context.workspaceGrantId,
-        context.workspaceId,
-      );
-      if (authorized.workspace.workspaceId !== context.workspaceId) {
-        throw new Error(
-          `Conversation Workspace '${context.workspaceId}' resolved to another Workspace.`,
-        );
-      }
-      const contentRead = options.createContentRead(authorized.workspace.workspacePath);
+      if (input.references.length === 0 && input.images.length === 0) return [];
       const candidates: {
-        readonly referenceIndex: number;
-        readonly reference: DesktopDshPromptReference;
+        readonly source: DesktopDshPromptImage['source'];
+        readonly label: string;
         readonly mimeType: SupportedImageMimeType;
+        readonly load: () => Promise<Uint8Array>;
       }[] = [];
-      for (const [referenceIndex, reference] of input.references.entries()) {
-        if (!isWorkspaceFileContentLocator(reference.contentLocator)) {
+      if (input.references.length > 0) {
+        const context = await options.contexts.readContext(input.conversationId);
+        if (context === undefined) {
           throw new Error(
-            `DSH Prompt reference '${reference.label}' is not an authorized Workspace file.`,
+            `Conversation '${input.conversationId}' has no authoritative domain context.`,
           );
         }
-        const stat = await contentRead.stat(reference.contentLocator);
-        if (stat.status === 'unavailable') {
+        if (context.kind !== 'workspace' && context.kind !== 'authoring') {
+          throw new Error('DSH Prompt references require an exact Workspace-bound Conversation.');
+        }
+        const authorized = await options.workspaceGrants.restore(
+          input.windowId,
+          context.workspaceGrantId,
+          context.workspaceId,
+        );
+        if (authorized.workspace.workspaceId !== context.workspaceId) {
           throw new Error(
-            `DSH Prompt reference '${reference.label}' is unavailable: ${stat.diagnostic.code}.`,
+            `Conversation Workspace '${context.workspaceId}' resolved to another Workspace.`,
           );
         }
-        if (stat.mimeType?.startsWith('image/') !== true) continue;
-        const mimeType = requireSupportedImageMimeType(stat.mimeType, reference.label);
-        candidates.push({ referenceIndex, reference, mimeType });
+        const contentRead = options.createContentRead(authorized.workspace.workspacePath);
+        for (const [referenceIndex, reference] of input.references.entries()) {
+          if (!isWorkspaceFileContentLocator(reference.contentLocator)) {
+            throw new Error(
+              `DSH Prompt reference '${reference.label}' is not an authorized Workspace file.`,
+            );
+          }
+          const stat = await contentRead.stat(reference.contentLocator);
+          if (stat.status === 'unavailable') {
+            throw new Error(
+              `DSH Prompt reference '${reference.label}' is unavailable: ${stat.diagnostic.code}.`,
+            );
+          }
+          if (stat.mimeType?.startsWith('image/') !== true) continue;
+          const mimeType = requireSupportedImageMimeType(stat.mimeType, reference.label);
+          candidates.push({
+            source: { kind: 'reference', referenceIndex },
+            label: reference.label,
+            mimeType,
+            load: async () => {
+              const loaded = await contentRead.read(reference.contentLocator, {
+                maxBytes: AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
+              });
+              if (loaded.status === 'unavailable') {
+                throw new Error(
+                  `DSH Prompt image '${reference.label}' is unavailable: ${loaded.diagnostic.code}.`,
+                );
+              }
+              const loadedMimeType = requireSupportedImageMimeType(
+                loaded.mimeType,
+                reference.label,
+              );
+              if (loadedMimeType !== mimeType) {
+                throw new Error(
+                  `DSH Prompt image '${reference.label}' changed MIME while it was read.`,
+                );
+              }
+              return loaded.bytes;
+            },
+          });
+        }
+      }
+      for (const [imageIndex, image] of input.images.entries()) {
+        const mimeType = requireSupportedImageMimeType(image.mimeType, image.name);
+        candidates.push({
+          source: { kind: 'inline', imageIndex, name: image.name },
+          label: image.name,
+          mimeType,
+          load: async () => decodeCanonicalBase64Image(image.data, image.name),
+        });
       }
       if (candidates.length === 0) return [];
       if (!input.modelSupportsImageInput) {
@@ -108,27 +148,11 @@ export function createDesktopDshPromptImageAdmission(options: {
       const admitted: DesktopDshPromptImage[] = [];
       let totalBytes = 0;
       for (const candidate of candidates) {
-        const loaded = await contentRead.read(candidate.reference.contentLocator, {
-          maxBytes: AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES,
-        });
-        if (loaded.status === 'unavailable') {
-          throw new Error(
-            `DSH Prompt image '${candidate.reference.label}' is unavailable: ${loaded.diagnostic.code}.`,
-          );
-        }
-        const loadedMimeType = requireSupportedImageMimeType(
-          loaded.mimeType,
-          candidate.reference.label,
-        );
-        if (loadedMimeType !== candidate.mimeType) {
-          throw new Error(
-            `DSH Prompt image '${candidate.reference.label}' changed MIME while it was read.`,
-          );
-        }
-        const normalized = await normalizeImage(loaded.bytes, loadedMimeType);
+        const loaded = await candidate.load();
+        const normalized = await normalizeImage(loaded, candidate.mimeType);
         const normalizedMimeType = requireSupportedImageMimeType(
           normalized.mimeType,
-          candidate.reference.label,
+          candidate.label,
         );
         totalBytes += normalized.bytes.byteLength;
         if (totalBytes > AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES) {
@@ -137,7 +161,7 @@ export function createDesktopDshPromptImageAdmission(options: {
           );
         }
         admitted.push({
-          referenceIndex: candidate.referenceIndex,
+          source: candidate.source,
           data: Buffer.from(normalized.bytes).toString('base64'),
           mimeType: normalizedMimeType,
         });
@@ -145,6 +169,22 @@ export function createDesktopDshPromptImageAdmission(options: {
       return admitted;
     },
   });
+}
+
+function decodeCanonicalBase64Image(data: string, label: string): Uint8Array {
+  if (data.length === 0 || data.length % 4 !== 0) {
+    throw new Error(`DSH Prompt image '${label}' must use canonical base64.`);
+  }
+  const bytes = Buffer.from(data, 'base64');
+  if (bytes.length === 0 || bytes.toString('base64') !== data) {
+    throw new Error(`DSH Prompt image '${label}' must use canonical base64.`);
+  }
+  if (bytes.byteLength > AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES) {
+    throw new Error(
+      `DSH Prompt image '${label}' exceeds ${AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES} source bytes.`,
+    );
+  }
+  return bytes;
 }
 
 function requireSupportedImageMimeType(

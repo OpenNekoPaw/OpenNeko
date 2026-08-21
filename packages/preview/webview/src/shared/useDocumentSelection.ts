@@ -6,8 +6,8 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import type { DocumentLocator } from '@neko/content';
 import { postMessage } from './useHostMessage';
+import type { DocumentViewerCoordinate } from './document-types';
 
 export interface DocumentSelection {
   /** Selected text content */
@@ -21,27 +21,27 @@ export interface UseDocumentSelectionOptions {
   pageNumber?: number;
   /** Current chapter title (EPUB) or undefined */
   chapterTitle?: string;
-  /** Stable locator for the current viewer position. */
-  locator?: DocumentLocator;
-  /** Resolve a locator for the current selection/page at send time. */
-  getLocator?: (input: {
+  /** Stable coordinate for the current viewer position. */
+  coordinate?: DocumentViewerCoordinate;
+  /** Resolve a coordinate for the current selection/page at send time. */
+  getCoordinate?: (input: {
     pageNumber?: number;
     chapterTitle?: string;
-  }) => DocumentLocator | undefined;
+  }) => DocumentViewerCoordinate | undefined;
   /** Whether selection is enabled */
   enabled?: boolean;
 }
 
 export function useDocumentSelection(options: UseDocumentSelectionOptions = {}) {
   const { pageNumber, chapterTitle, enabled = true } = options;
-  const getLocator = options.getLocator;
-  const explicitLocator = options.locator;
-  const currentLocator = useMemo(
+  const getCoordinate = options.getCoordinate;
+  const explicitCoordinate = options.coordinate;
+  const currentCoordinate = useMemo(
     () =>
-      getLocator?.({ pageNumber, chapterTitle }) ??
-      explicitLocator ??
-      buildDefaultLocator(pageNumber, chapterTitle),
-    [getLocator, explicitLocator, pageNumber, chapterTitle],
+      getCoordinate?.({ pageNumber, chapterTitle }) ??
+      explicitCoordinate ??
+      buildDefaultCoordinate(pageNumber, chapterTitle),
+    [getCoordinate, explicitCoordinate, pageNumber, chapterTitle],
   );
   const [selection, setSelection] = useState<DocumentSelection | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -85,7 +85,7 @@ export function useDocumentSelection(options: UseDocumentSelectionOptions = {}) 
           page: pageNumber,
           chapter: chapterTitle,
         },
-        locator: currentLocator,
+        coordinate: currentCoordinate,
         excerpt: {
           contentKind: 'text',
           text: selection.text,
@@ -95,7 +95,7 @@ export function useDocumentSelection(options: UseDocumentSelectionOptions = {}) 
     } as never);
     window.getSelection()?.removeAllRanges();
     setSelection(null);
-  }, [selection, pageNumber, chapterTitle, currentLocator]);
+  }, [selection, pageNumber, chapterTitle, currentCoordinate]);
 
   /** Send a page region as image (CBZ frame selection) */
   const sendRegionToAgent = useCallback(
@@ -113,7 +113,7 @@ export function useDocumentSelection(options: UseDocumentSelectionOptions = {}) 
             page: page ?? pageNumber,
             region,
           },
-          locator: {
+          coordinate: {
             kind: 'region',
             pageNumber: page ?? pageNumber ?? 1,
             pageIndex: Math.max(0, (page ?? pageNumber ?? 1) - 1),
@@ -140,14 +140,14 @@ export function useDocumentSelection(options: UseDocumentSelectionOptions = {}) 
           context: {
             page: page ?? pageNumber,
           },
-          locator:
-            getLocator?.({ pageNumber: page ?? pageNumber, chapterTitle }) ??
-            explicitLocator ??
-            buildDefaultLocator(page ?? pageNumber, chapterTitle),
+          coordinate:
+            getCoordinate?.({ pageNumber: page ?? pageNumber, chapterTitle }) ??
+            explicitCoordinate ??
+            buildDefaultCoordinate(page ?? pageNumber, chapterTitle),
         },
       } as never);
     },
-    [pageNumber, chapterTitle, getLocator, explicitLocator],
+    [pageNumber, chapterTitle, getCoordinate, explicitCoordinate],
   );
 
   return {
@@ -159,10 +159,10 @@ export function useDocumentSelection(options: UseDocumentSelectionOptions = {}) 
   };
 }
 
-function buildDefaultLocator(
+function buildDefaultCoordinate(
   pageNumber: number | undefined,
   chapterTitle: string | undefined,
-): DocumentLocator | undefined {
+): DocumentViewerCoordinate | undefined {
   if (pageNumber !== undefined) {
     return {
       kind: 'page',

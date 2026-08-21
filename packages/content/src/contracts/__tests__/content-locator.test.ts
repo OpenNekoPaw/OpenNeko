@@ -31,6 +31,39 @@ describe('content locator contracts', () => {
     expect(isProjectDurableContentLocator(locator)).toBe(true);
   });
 
+  it('addresses PDF pages and DOCX text ranges without a second locating object', () => {
+    const pdf = {
+      file: { authority: 'workspace', path: 'books/story.pdf' },
+      selector: { kind: 'page', pageNumber: 3, pageIndex: 2 },
+    } as const;
+    const docx = {
+      file: { authority: 'workspace', path: 'notes/story.docx' },
+      selector: { kind: 'text-range', startChar: 120, endChar: 240 },
+    } as const;
+
+    expect(validateContentLocator(pdf)).toEqual({ ok: true, locator: pdf });
+    expect(validateContentLocator(docx)).toEqual({ ok: true, locator: docx });
+    expect(contentLocatorKey(pdf)).not.toBe(
+      contentLocatorKey({ file: { authority: 'workspace', path: 'books/story.pdf' } }),
+    );
+  });
+
+  it('rejects ambiguous and unsupported document selectors', () => {
+    const source = { file: { authority: 'workspace', path: 'books/story.pdf' } };
+    const selectors = [
+      { kind: 'page', pageNumber: 3, pageIndex: 3 },
+      { kind: 'text-range', startChar: 20, endChar: 10 },
+      { kind: 'text-range', startChar: 0, paragraphIndex: 0 },
+      { kind: 'chapter', chapterHref: 'chapter-1.xhtml' },
+      { kind: 'region', pageNumber: 1 },
+      { kind: 'slide', slideNumber: 1, slideIndex: 0 },
+    ];
+
+    expect(selectors.map((selector) => validateContentLocator({ ...source, selector }).ok)).toEqual(
+      selectors.map(() => false),
+    );
+  });
+
   it('addresses an exact package file without manifest or digest metadata', () => {
     const locator = {
       file: {

@@ -24,6 +24,15 @@ export {
   type IDocumentReader,
 } from './document-reader';
 
+export type {
+  DocumentChapterCoordinate,
+  DocumentPageCoordinate,
+  DocumentReadCoordinate,
+  DocumentRegionCoordinate,
+  DocumentSlideCoordinate,
+  DocumentTextRangeCoordinate,
+} from '../contracts/document-read-coordinate';
+
 export {
   imageMetadataProbe,
   probeImageMetadata,
@@ -37,11 +46,15 @@ export {
   type DocumentContentAccessMode,
   type DocumentContentAccessResult,
   type DocumentContentAccessRuntimeDeps,
+  type ContentDocumentCursor,
+  type ContentDocumentManifest,
+  type ContentDocumentManifestUnit,
 } from './content-access-document-runtime';
 export {
   DOCUMENT_DSH_TOOL_NAME,
   DOCUMENT_DSH_TOOL_OPERATIONS,
   DOCUMENT_DSH_TOOL_PARAMETERS,
+  decodeDocumentDshToolArgs,
   decodeDocumentDshToolInput,
   documentDshJsonValue,
   type DocumentDshJsonValue,

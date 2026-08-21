@@ -20,6 +20,58 @@ afterEach(async () => {
 });
 
 describe('HostAgentContentAccessRuntime document representations', () => {
+  it('preserves the exact decoder failure instead of relabeling it unsupported-source', async () => {
+    const documentAccess = {
+      supports: () => true,
+      hasDRM: async () => false,
+      readContent: async () => ({ text: 'not used' }),
+      getManifest: async () => {
+        throw Object.assign(new Error("Cannot find module './epub-parser.cjs'"), {
+          code: 'MODULE_NOT_FOUND',
+        });
+      },
+      createBatchCursor: async () => {
+        throw new Error('not used');
+      },
+      readRange: async () => {
+        throw new Error('not used');
+      },
+      readNext: async () => {
+        throw new Error('not used');
+      },
+    } satisfies IDocumentAccessService;
+    const runtime = createHostAgentContentAccessRuntime({
+      contentRead: {
+        stat: async (locator) => ({
+          status: 'ready',
+          locator,
+          byteLength: 5,
+          fingerprint: { strategy: 'mtime-size', value: '1:5' },
+        }),
+        read: async () => {
+          throw new Error('not used');
+        },
+      },
+      documentAccess,
+      resolveDocumentHostFilePath: () => '/workspace/books/story.epub',
+    });
+
+    await expect(
+      runtime.resolveDocumentContent({
+        source: { file: { authority: 'workspace', path: 'books/story.epub' } },
+        mode: 'manifest',
+      }),
+    ).resolves.toMatchObject({
+      status: 'failed',
+      diagnostics: [
+        {
+          code: 'MODULE_NOT_FOUND',
+          message: "Document content could not be read: Cannot find module './epub-parser.cjs'",
+        },
+      ],
+    });
+  });
+
   it('reads a document through the managed Workspace media link without a Media Library locator', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'agent-linked-document-workspace-'));
     const libraryPath = await mkdtemp(path.join(tmpdir(), 'agent-linked-document-library-'));
@@ -81,11 +133,17 @@ describe('HostAgentContentAccessRuntime document representations', () => {
       imagesTruncated: true,
       imageInfo: [
         {
-          locator: { kind: 'page', pageNumber: 1, pageIndex: 0 },
+          contentLocator: {
+            file: { authority: 'workspace', path: 'docs/story.pdf' },
+            selector: { kind: 'page', pageNumber: 1, pageIndex: 0 },
+          },
           representationHandle: { kind: 'content-representation-handle' },
         },
         {
-          locator: { kind: 'page', pageNumber: 2, pageIndex: 1 },
+          contentLocator: {
+            file: { authority: 'workspace', path: 'docs/story.pdf' },
+            selector: { kind: 'page', pageNumber: 2, pageIndex: 1 },
+          },
           representationHandle: { kind: 'content-representation-handle' },
         },
       ],

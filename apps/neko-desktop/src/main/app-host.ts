@@ -1877,15 +1877,23 @@ export class DesktopAppHost {
     const window = this.windows.resolveSender(sender);
     const identity = parseCanvasHostRuntimeIdentity(payload);
     const runtime = this.requireCanvas();
-    const snapshot = await runtime.getSnapshot(window.windowId, identity);
     const subscriptions =
       this.canvasSubscriptions.get(sender.webContentsId) ?? new Map<string, () => void>();
     const key = canvasSubscriptionKey(identity);
-    if (!subscriptions.has(key)) {
-      subscriptions.set(key, await runtime.subscribe(window.windowId, identity, publish));
-      this.canvasSubscriptions.set(sender.webContentsId, subscriptions);
+    subscriptions.get(key)?.();
+    const disposeSubscription = await runtime.subscribe(window.windowId, identity, publish);
+    subscriptions.set(key, disposeSubscription);
+    this.canvasSubscriptions.set(sender.webContentsId, subscriptions);
+    try {
+      return await runtime.getSnapshot(window.windowId, identity);
+    } catch (error) {
+      if (subscriptions.get(key) === disposeSubscription) {
+        disposeSubscription();
+        subscriptions.delete(key);
+        if (subscriptions.size === 0) this.canvasSubscriptions.delete(sender.webContentsId);
+      }
+      throw error;
     }
-    return snapshot;
   }
 
   async executeCanvasIntent(

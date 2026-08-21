@@ -114,6 +114,7 @@ function projectTitleSource(input: DshComposerSubmitInput): string {
       const text = input.text.trim();
       if (text.length > 0) return text;
       return [
+        ...input.images.map((image) => image.name),
         ...input.references.map((reference) => reference.label),
         ...input.contextPayloads.map((context) => context.label),
       ].join(' ');

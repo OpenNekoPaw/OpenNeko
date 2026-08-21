@@ -160,7 +160,10 @@ function segment(
     unitId: `unit-${line}`,
     kind,
     text,
-    locator: { kind: 'text-range', startLine: line, endLine: line },
+    locator: {
+      file: { authority: 'workspace', path: 'story.fountain' },
+      selector: { kind: 'text-range', startLine: line, endLine: line },
+    },
     contentHash: `fnv1a32:segment-${line}`,
     range: {
       startOffset: line * 100,

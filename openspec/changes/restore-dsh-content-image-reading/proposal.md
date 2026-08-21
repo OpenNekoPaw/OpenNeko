@@ -14,6 +14,9 @@ pixels.
 - Load bytes through `AgentContentAccessRuntime`, transfer them over bounded ACP
   chunks, persist them in the DSH attachment store, and return a native image
   content block to an image-capable model.
+- When a valid source exceeds only the active DSH per-side attachment limit,
+  derive one bounded perceptual attachment representation before persistence;
+  preserve the original locator and source bytes as the content authority.
 - Compose the Node document-entry reader in Desktop so EPUB/CBZ entry locators
   are authorized and readable through the same workspace authority.
 - Reject selector-bearing document sources; archive entries are outputs consumed
@@ -25,6 +28,8 @@ pixels.
 - Do not replace or wrap DSH native `read_image` for ordinary files.
 - Do not expose absolute paths, archive extraction paths, or raw binary payloads
   as one unbounded ACP response.
+- Do not raise or bypass DSH attachment pixel/byte limits, mutate the source, or
+  persist the derived perception representation as a Workspace artifact.
 
 ## Impact
 
