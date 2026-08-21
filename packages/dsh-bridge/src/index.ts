@@ -23,7 +23,13 @@ import type { Context } from '@deepseek-ai/cordis';
 import { createUserMessage, errorChain, type ContentBlock } from '@deepseek-ai/dsh-llm';
 import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-session-persistence';
-import { isModelInvocable, isSkillName, isUserInvocable } from '@deepseek-ai/dsh-skill';
+import type {} from '@deepseek-ai/dsh-workspace';
+import {
+  isModelInvocable,
+  isSkillName,
+  isUserInvocable,
+  type SkillCatalogSnapshot,
+} from '@deepseek-ai/dsh-skill';
 import type {} from '@deepseek-ai/dsh-system-prompt';
 import type {} from '@deepseek-ai/dsh-permission-presets';
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
@@ -32,18 +38,22 @@ import Schema from '@deepseek-ai/schemastery';
 import {
   DSH_ACP_MODEL_CONFIG_ID,
   DSH_ACP_EXTENSION_METHODS,
+  decodeDshAcpSessionArchiveRequest,
   decodeDshAcpModelConfiguration,
   decodeDshAcpCommandExecuteRequest,
+  decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpSkillInvokeRequest,
   decodeDshAcpSessionContextSetRequest,
   decodeDshAcpPermissionPresetProjection,
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
   encodeDshAcpModelConfiguration,
+  type DshAcpExtensionProjection,
   type DshAcpHostToolPort,
   type DshAcpSessionEventNotification,
 } from '@neko/agent-contracts/dsh-acp';
 import { PromptAdmission } from './prompt-admission.js';
+import { OPENNEKO_PRODUCT_SYSTEM_PROMPT } from './product-system-prompt.js';
 
 export const name = 'openneko-acp';
 export const inject = [
@@ -57,6 +67,7 @@ export const inject = [
   'sessionPersistence',
   'skills',
   'systemPrompt',
+  'workspaceRegistry',
 ];
 
 declare module '@deepseek-ai/cordis' {
@@ -214,8 +225,11 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
     );
   };
 
-  ctx.on('agent/inbox/claimed', ({ agent, turn }) => {
-    const inflight = owned.get(agent.id)?.inflight;
+  ctx.on('agent/inbox/claimed', ({ agent, message, turn }) => {
+    const record = owned.get(agent.id);
+    const contextText = readOpenNekoRuntimeContext(message.source);
+    if (record !== undefined && contextText !== undefined) record.runtimeContext.text = contextText;
+    const inflight = record?.inflight;
     if (inflight !== undefined && inflight.turn === undefined) inflight.turn = turn;
   });
   ctx.on('agent/error', ({ agent, turn, error }) => {
@@ -476,6 +490,20 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       async extMethod(method, params) {
         requireOpen();
         switch (method) {
+          case DSH_ACP_EXTENSION_METHODS.archiveSession: {
+            const request = decodeDshAcpSessionArchiveRequest(params);
+            await ctx.workspaceRegistry.archiveSession(SessionId(request.sessionId));
+            return { sessionIds: [...ctx.workspaceRegistry.archivedSessionIds] };
+          }
+          case DSH_ACP_EXTENSION_METHODS.readArchivedSessions: {
+            if (Object.keys(params).length !== 0) {
+              throw RequestError.invalidParams(
+                undefined,
+                'Archived Session read does not accept parameters.',
+              );
+            }
+            return { sessionIds: [...ctx.workspaceRegistry.archivedSessionIds] };
+          }
           case DSH_ACP_EXTENSION_METHODS.setSessionContext: {
             const request = decodeDshAcpSessionContextSetRequest(params);
             const record = requireOwned(request.sessionId);
@@ -496,38 +524,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
               );
             }
             const snapshot = await ctx.skills.snapshot({ cwd: virtualCwd });
-            return {
-              skills: snapshot.skills.map((skill) => ({
-                name: skill.name,
-                description: skill.description,
-                source: skill.source,
-                provider: skill.provider,
-                userInvocable: isUserInvocable(skill),
-                modelInvocable: isModelInvocable(skill),
-              })),
-              mcp: [
-                {
-                  id: 'browser-use',
-                  name: 'Browser Use',
-                  description:
-                    'Official DSH MCP contribution; upstream management API is unavailable.',
-                  status: 'unsupported',
-                  diagnosticCode: 'dsh-mcp-management-api-unavailable',
-                },
-                {
-                  id: 'computer-use',
-                  name: 'Computer Use',
-                  description:
-                    'Official DSH MCP contribution; upstream management API is unavailable.',
-                  status: 'unsupported',
-                  diagnosticCode: 'dsh-mcp-management-api-unavailable',
-                },
-              ],
-              diagnostics: [
-                ...(snapshot.complete ? [] : [{ code: 'skill_catalog_incomplete', count: 1 }]),
-                { code: 'mcp_management_unsupported', count: 1 },
-              ],
-            };
+            return { ...projectDshExtensionCatalog(snapshot) };
           }
           case DSH_ACP_EXTENSION_METHODS.readPermissionPresets: {
             const keys = Object.keys(params);
@@ -599,6 +596,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
               const execution = await ctx.commands.execute(
                 record.handle.agent,
                 request.line,
+                [],
                 abort.signal,
               );
               if (execution === undefined) {
@@ -660,11 +658,46 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             );
             return { stopReason: response.stopReason };
           }
-          case 'openneko/session/inbox/read': {
+          case DSH_ACP_EXTENSION_METHODS.enqueueInboxMessage: {
+            const request = decodeDshAcpInboxEnqueueRequest(params);
+            const record = requireOwned(request.sessionId);
+            if (record.handle.agent.status !== 'running' || record.inflight === undefined) {
+              throw RequestError.invalidParams(
+                undefined,
+                `Inbox enqueue requires a running Session: ${request.sessionId}`,
+              );
+            }
+            const content = await admitAcpPrompt(request.prompt, ctx.attachments);
+            const displayContent = request.displayContent.map((block) =>
+              block.type === 'text'
+                ? { type: 'text' as const, text: block.text }
+                : { type: 'resource_link' as const, name: block.name, uri: block.uri },
+            );
+            try {
+              record.handle.agent.followup(
+                createUserMessage({
+                  content,
+                  source: {
+                    kind: 'user' as const,
+                    opennekoDisplayContent: displayContent,
+                    opennekoRuntimeContext: request.contextText,
+                  },
+                }),
+              );
+            } catch (error) {
+              throw RequestError.internalError(
+                undefined,
+                `Inbox message was not queued: ${errorChain(error)}`,
+              );
+            }
+            await ctx.sessions.flush(record.handle.agent.session);
+            return projectInbox(record);
+          }
+          case DSH_ACP_EXTENSION_METHODS.readInbox: {
             const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
             return projectInbox(record);
           }
-          case 'openneko/session/inbox/replace': {
+          case DSH_ACP_EXTENSION_METHODS.replaceInboxMessage: {
             const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
             const messageId = requireNonEmptyString(params.messageId, 'messageId');
             const current = findInboxMessage(record, messageId);
@@ -681,7 +714,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             await ctx.sessions.flush(record.handle.agent.session);
             return projectInbox(record);
           }
-          case 'openneko/session/inbox/remove': {
+          case DSH_ACP_EXTENSION_METHODS.removeInboxMessage: {
             const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
             const messageId = requireNonEmptyString(params.messageId, 'messageId');
             const current = findInboxMessage(record, messageId);
@@ -754,6 +787,23 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       );
     });
   }
+}
+
+export function projectDshExtensionCatalog(
+  snapshot: SkillCatalogSnapshot,
+): DshAcpExtensionProjection {
+  return {
+    skills: snapshot.skills.map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      source: skill.source,
+      provider: skill.provider,
+      userInvocable: isUserInvocable(skill),
+      modelInvocable: isModelInvocable(skill),
+    })),
+    mcp: [],
+    diagnostics: snapshot.complete ? [] : [{ code: 'skill_catalog_incomplete', count: 1 }],
+  };
 }
 
 export function listOpenNekoSessions(
@@ -943,6 +993,14 @@ function readOpenNekoDisplayContent(
     }
     throw new Error(`OpenNeko display content block ${index} is unsupported.`);
   });
+}
+
+function readOpenNekoRuntimeContext(source: unknown): string | undefined {
+  if (source === null || typeof source !== 'object' || Array.isArray(source)) return undefined;
+  const value = (source as Record<string, unknown>).opennekoRuntimeContext;
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') throw new Error('OpenNeko runtime context must be a string.');
+  return value;
 }
 
 function projectAcpDisplayContent(
@@ -1194,6 +1252,11 @@ function setupSessionRuntimeContext(
   return async (agentCtx: Context): Promise<void> => {
     await ctx.agentPresets.mount(agentCtx, preset);
     agentCtx.systemPrompt.context({
+      name: 'openneko:product-protocol',
+      order: -100,
+      text: OPENNEKO_PRODUCT_SYSTEM_PROMPT,
+    });
+    agentCtx.systemPrompt.context({
       name: 'openneko:product-context',
       order: 0,
       text: () => runtimeContext.text,
@@ -1413,25 +1476,58 @@ function decodeBase64Image(value: string): Uint8Array {
 
 function projectInbox(record: OwnedSession): Record<string, unknown> {
   return {
-    nextTurn: record.handle.agent.inbox.nextTurn.map(projectInboxMessage),
-    nextStep: record.handle.agent.inbox.nextStep.map(projectInboxMessage),
+    nextTurn: record.handle.agent.inbox.nextTurn.map((message) =>
+      projectInboxMessage(record, message),
+    ),
+    nextStep: record.handle.agent.inbox.nextStep.map((message) =>
+      projectInboxMessage(record, message),
+    ),
   };
 }
 
-function projectInboxMessage(message: {
-  readonly id: string;
-  readonly content: readonly { readonly type: string; readonly text?: string }[];
-}): Record<string, unknown> {
-  const content = message.content.map((block) => {
-    if (block.type !== 'text' || block.text === undefined) {
-      throw RequestError.internalError(
-        undefined,
-        `Inbox message ${message.id} contains unsupported content: ${block.type}`,
-      );
-    }
-    return { type: 'text', text: block.text };
-  });
-  return { messageId: message.id, content };
+function projectInboxMessage(
+  record: OwnedSession,
+  message: {
+    readonly id: string;
+    readonly source: unknown;
+    readonly content: readonly { readonly type: string; readonly text?: string }[];
+  },
+): Record<string, unknown> {
+  const displayContent = readOpenNekoDisplayContent(message.source);
+  const content =
+    displayContent === undefined
+      ? message.content.map((block) => {
+          if (block.type !== 'text' || block.text === undefined) {
+            throw RequestError.internalError(
+              undefined,
+              `Inbox message ${message.id} contains unsupported content: ${block.type}`,
+            );
+          }
+          return { type: 'text', text: block.text };
+        })
+      : displayContent.map((block) =>
+          block.type === 'text'
+            ? { type: 'text', text: block.text }
+            : { type: 'resource-link', name: block.name, uri: block.uri },
+        );
+  return {
+    messageId: message.id,
+    createdAt: inboxMessageCreatedAt(record, message.id),
+    content,
+  };
+}
+
+function inboxMessageCreatedAt(record: OwnedSession, messageId: string): number {
+  const events = record.handle.agent.session.events;
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.type !== 'agent/inbox/spliced') continue;
+    if (event.data.inserted.some((message) => message.id === messageId)) return event.time;
+  }
+  throw RequestError.internalError(
+    undefined,
+    `Inbox message ${messageId} has no durable insertion event.`,
+  );
 }
 
 function findInboxMessage(record: OwnedSession, messageId: string) {

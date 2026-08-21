@@ -334,12 +334,15 @@ async function startBridge(
   child.stderr.on('data', (chunk) => {
     stderr += chunk;
   });
-  void exitPromise.then((result) => {
-    if ((result.code !== 0 || result.signal !== null) && stderr.length > 0) {
-      process.stderr.write(`[${selectedProfile}]\n${stderr}`);
-      stderrReported = true;
-    }
-  }, () => undefined);
+  void exitPromise.then(
+    (result) => {
+      if ((result.code !== 0 || result.signal !== null) && stderr.length > 0) {
+        process.stderr.write(`[${selectedProfile}]\n${stderr}`);
+        stderrReported = true;
+      }
+    },
+    () => undefined,
+  );
   const inspectedStdout = new PassThrough();
   child.stdout.on('data', (chunk) => purity.push(chunk));
   child.stdout.pipe(inspectedStdout);
@@ -511,12 +514,33 @@ async function qualify() {
     if (removedInbox.nextTurn?.length !== 0 || removedInbox.nextStep?.length !== 0) {
       throw new Error('OpenNeko DSH bridge did not remove the exact inbox message');
     }
+    const firstArchive = await first.connection.extMethod('openneko/session/archive', {
+      sessionId: session.sessionId,
+    });
+    const repeatedArchive = await first.connection.extMethod('openneko/session/archive', {
+      sessionId: session.sessionId,
+    });
+    if (
+      firstArchive.sessionIds?.length !== 1 ||
+      firstArchive.sessionIds[0] !== session.sessionId ||
+      repeatedArchive.sessionIds?.length !== 1 ||
+      repeatedArchive.sessionIds[0] !== session.sessionId
+    ) {
+      throw new Error('OpenNeko DSH bridge did not archive the exact Session idempotently');
+    }
     await first.connection.closeSession({ sessionId: session.sessionId });
     await stopChild(first.child, first.exitPromise);
 
     const secondClient = new QualificationClient();
     const second = await startBridge(dshHome, dshBin, secondClient);
     processes.push(second);
+    const recoveredArchive = await second.connection.extMethod('openneko/session/archive/read', {});
+    if (
+      recoveredArchive.sessionIds?.length !== 1 ||
+      recoveredArchive.sessionIds[0] !== session.sessionId
+    ) {
+      throw new Error('OpenNeko DSH bridge did not recover the durable Session archive set');
+    }
     const listed = await second.connection.listSessions({ cwd: fixtureRoot });
     if (!listed.sessions.some((item) => item.sessionId === session.sessionId)) {
       throw new Error('OpenNeko DSH bridge did not list the persisted session after restart');
@@ -620,8 +644,13 @@ async function qualify() {
         promptBridge.connection.newSession({ cwd: fixtureRoot, mcpServers: [] }),
       ),
     );
-    const [firstPromptSession, secondPromptSession, thirdPromptSession, fourthPromptSession, cancelledPromptSession] =
-      promptSessions;
+    const [
+      firstPromptSession,
+      secondPromptSession,
+      thirdPromptSession,
+      fourthPromptSession,
+      cancelledPromptSession,
+    ] = promptSessions;
     if (
       firstPromptSession === undefined ||
       secondPromptSession === undefined ||
@@ -668,15 +697,14 @@ async function qualify() {
     );
     await promptBridge.connection.cancel({ sessionId: cancelledPromptSession.sessionId });
     const cancelledResult = await cancelledPromptResult;
-    if (
-      cancelledResult.outcome !== 'rejected' ||
-      !(cancelledResult.error instanceof Error)
-    ) {
+    if (cancelledResult.outcome !== 'rejected' || !(cancelledResult.error instanceof Error)) {
       throw new Error('Queued standard ACP Prompt cancellation did not fail visibly');
     }
     let promptObservations = await readPromptObservations(promptObservationsPath);
     if (promptObservations.filter((event) => event.kind === 'start').length !== 2) {
-      throw new Error('A queued standard ACP Prompt entered DSH before an active slot was released');
+      throw new Error(
+        'A queued standard ACP Prompt entered DSH before an active slot was released',
+      );
     }
 
     await appendFile(promptReleasesPath, `${firstPromptSession.sessionId}\n`);
@@ -701,7 +729,12 @@ async function qualify() {
       promptReleasesPath,
       `${fourthPromptSession.sessionId}\n${secondPromptSession.sessionId}\n`,
     );
-    const promptOutcomes = await Promise.all([firstPrompt, secondPrompt, thirdPrompt, fourthPrompt]);
+    const promptOutcomes = await Promise.all([
+      firstPrompt,
+      secondPrompt,
+      thirdPrompt,
+      fourthPrompt,
+    ]);
     if (
       promptOutcomes.some(
         (outcome) => outcome.outcome !== 'resolved' || outcome.value.stopReason !== 'end_turn',
@@ -724,7 +757,7 @@ async function qualify() {
     process.stdout.write(
       `${JSON.stringify({
         qualified: true,
-        dsh: '0.1.0-rc.7',
+        dsh: '0.1.0-rc.8',
         acp: '0.25.1',
         protocolVersion: third.initializeResponse.protocolVersion,
         sessionId: 'redacted',
@@ -757,7 +790,8 @@ async function qualify() {
         await process.exitPromise.catch(() => undefined);
       }
       const stderr = process.readStderr();
-      if (stderr.length > 0 && !process.hasReportedStderr()) globalThis.process.stderr.write(stderr);
+      if (stderr.length > 0 && !process.hasReportedStderr())
+        globalThis.process.stderr.write(stderr);
     }
     throw error;
   } finally {

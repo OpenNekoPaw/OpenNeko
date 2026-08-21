@@ -1,6 +1,9 @@
 export const DSH_ACP_EXTENSION_METHODS = {
   setSessionContext: 'openneko/session/context/set',
+  archiveSession: 'openneko/session/archive',
+  readArchivedSessions: 'openneko/session/archive/read',
   readPermissionPresets: 'openneko/session/permissions/read',
+  enqueueInboxMessage: 'openneko/session/inbox/enqueue',
   readInbox: 'openneko/session/inbox/read',
   replaceInboxMessage: 'openneko/session/inbox/replace',
   removeInboxMessage: 'openneko/session/inbox/remove',
@@ -34,7 +37,7 @@ export interface DshAcpExtensionProjection {
   readonly skills: readonly DshAcpExtensionSkill[];
   readonly mcp: readonly DshAcpExtensionMcp[];
   readonly diagnostics: readonly {
-    readonly code: 'skill_catalog_incomplete' | 'mcp_management_unsupported';
+    readonly code: 'skill_catalog_incomplete';
     readonly count: number;
   }[];
 }
@@ -89,10 +92,7 @@ export function decodeDshAcpExtensionProjection(
     (value, index) => {
       const diagnostic = requireRecord(value, `extensions.diagnostics[${index}]`);
       requireExactKeys(diagnostic, ['code', 'count'], `extensions.diagnostics[${index}]`);
-      if (
-        diagnostic.code !== 'skill_catalog_incomplete' &&
-        diagnostic.code !== 'mcp_management_unsupported'
-      ) {
+      if (diagnostic.code !== 'skill_catalog_incomplete') {
         throw new Error('DSH ACP extension diagnostic code is invalid.');
       }
       return {
@@ -119,6 +119,39 @@ export interface DshAcpModelConfiguration {
 export interface DshAcpSessionContextSetRequest {
   readonly sessionId: string;
   readonly text: string;
+}
+
+export interface DshAcpSessionArchiveRequest {
+  readonly sessionId: string;
+}
+
+export interface DshAcpArchivedSessionsProjection {
+  readonly sessionIds: readonly string[];
+}
+
+export function decodeDshAcpSessionArchiveRequest(
+  input: Record<string, unknown>,
+): DshAcpSessionArchiveRequest {
+  decodeDshAcpJsonPayload(input, 'Session archive request');
+  requireExactKeys(input, ['sessionId'], 'Session archive request');
+  return { sessionId: requireNonEmptyString(input.sessionId, 'sessionId') };
+}
+
+export function decodeDshAcpArchivedSessionsProjection(
+  input: Record<string, unknown>,
+): DshAcpArchivedSessionsProjection {
+  decodeDshAcpJsonPayload(input, 'archived Sessions projection');
+  requireExactKeys(input, ['sessionIds'], 'archived Sessions projection');
+  if (!Array.isArray(input.sessionIds)) {
+    throw new Error('DSH ACP archived Session identities must be an array.');
+  }
+  const sessionIds = input.sessionIds.map((value, index) =>
+    requireNonEmptyString(value, `archived Session identities[${index}]`),
+  );
+  if (new Set(sessionIds).size !== sessionIds.length) {
+    throw new Error('DSH ACP archived Session identities must be unique.');
+  }
+  return { sessionIds };
 }
 
 export interface DshAcpCommandDescriptor {
@@ -364,6 +397,7 @@ export type DshAcpInboxTarget = 'next-turn' | 'next-step';
 
 export interface DshAcpInboxMessage {
   readonly messageId: string;
+  readonly createdAt: number;
   readonly content: readonly DshAcpContentBlock[];
 }
 
@@ -379,6 +413,26 @@ export interface DshAcpResourceLinkContentBlock {
 }
 
 export type DshAcpContentBlock = DshAcpTextContentBlock | DshAcpResourceLinkContentBlock;
+
+export type DshAcpInboxPromptBlock =
+  | DshAcpTextContentBlock
+  | {
+      readonly type: 'resource_link';
+      readonly name: string;
+      readonly uri: string;
+    }
+  | {
+      readonly type: 'image';
+      readonly data: string;
+      readonly mimeType: string;
+    };
+
+export interface DshAcpInboxEnqueueRequest {
+  readonly sessionId: string;
+  readonly prompt: readonly DshAcpInboxPromptBlock[];
+  readonly displayContent: readonly DshAcpContentBlock[];
+  readonly contextText: string;
+}
 
 export interface DshAcpInboxSnapshot {
   readonly nextTurn: readonly DshAcpInboxMessage[];
@@ -521,6 +575,7 @@ export function decodeDshAcpDomainToolResponse(
 }
 
 export function decodeDshAcpInboxSnapshot(input: Record<string, unknown>): DshAcpInboxSnapshot {
+  requireExactKeys(input, ['nextTurn', 'nextStep'], 'inbox snapshot');
   return {
     nextTurn: decodeInboxMessages(input.nextTurn, 'nextTurn'),
     nextStep: decodeInboxMessages(input.nextStep, 'nextStep'),
@@ -531,17 +586,69 @@ function decodeInboxMessages(input: unknown, field: string): readonly DshAcpInbo
   if (!Array.isArray(input)) throw new Error(`DSH ACP ${field} must be an array.`);
   return input.map((message, index) => {
     const record = requireRecord(message, `${field}[${index}]`);
+    requireExactKeys(record, ['messageId', 'createdAt', 'content'], `${field}[${index}]`);
     const content = record.content;
     if (!Array.isArray(content)) {
       throw new Error(`DSH ACP ${field}[${index}].content must be an array.`);
     }
     return {
       messageId: requireNonEmptyString(record.messageId, `${field}[${index}].messageId`),
+      createdAt: requireNonNegativeInteger(record.createdAt, `${field}[${index}].createdAt`),
       content: content.map((block, blockIndex) =>
         decodeContentBlock(block, `${field}[${index}].content[${blockIndex}]`),
       ),
     };
   });
+}
+
+export function decodeDshAcpInboxEnqueueRequest(
+  input: Record<string, unknown>,
+): DshAcpInboxEnqueueRequest {
+  decodeDshAcpJsonPayload(input, 'inbox enqueue request');
+  requireExactKeys(
+    input,
+    ['sessionId', 'prompt', 'displayContent', 'contextText'],
+    'inbox enqueue request',
+  );
+  if (!Array.isArray(input.prompt) || input.prompt.length === 0) {
+    throw new Error('DSH ACP inbox enqueue prompt must be a non-empty array.');
+  }
+  if (!Array.isArray(input.displayContent) || input.displayContent.length === 0) {
+    throw new Error('DSH ACP inbox enqueue display content must be a non-empty array.');
+  }
+  return {
+    sessionId: requireNonEmptyString(input.sessionId, 'sessionId'),
+    prompt: input.prompt.map((block, index) => decodeInboxPromptBlock(block, `prompt[${index}]`)),
+    displayContent: input.displayContent.map((block, index) =>
+      decodeContentBlock(block, `displayContent[${index}]`),
+    ),
+    contextText: requireString(input.contextText, 'contextText'),
+  };
+}
+
+function decodeInboxPromptBlock(input: unknown, field: string): DshAcpInboxPromptBlock {
+  const record = requireRecord(input, field);
+  if (record.type === 'text') {
+    requireExactKeys(record, ['type', 'text'], field);
+    return { type: 'text', text: requireString(record.text, `${field}.text`) };
+  }
+  if (record.type === 'resource_link') {
+    requireExactKeys(record, ['type', 'name', 'uri'], field);
+    return {
+      type: 'resource_link',
+      name: requireNonEmptyString(record.name, `${field}.name`),
+      uri: requireNonEmptyString(record.uri, `${field}.uri`),
+    };
+  }
+  if (record.type === 'image') {
+    requireExactKeys(record, ['type', 'data', 'mimeType'], field);
+    return {
+      type: 'image',
+      data: requireNonEmptyString(record.data, `${field}.data`),
+      mimeType: requireNonEmptyString(record.mimeType, `${field}.mimeType`),
+    };
+  }
+  throw new Error(`DSH ACP ${field} is unsupported.`);
 }
 
 function decodeContentBlock(input: unknown, field: string): DshAcpContentBlock {

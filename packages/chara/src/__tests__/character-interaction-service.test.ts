@@ -131,7 +131,7 @@ class RecordingAgentConversations implements CharacterAgentConversationPort {
     readonly characterRunId: string;
   }): Promise<{ readonly primaryAgentSessionId: string }> {
     this.created.push(input.characterRunId);
-    return { primaryAgentSessionId: `pi-session:${input.characterRunId}` };
+    return { primaryAgentSessionId: `conversation:${input.characterRunId}` };
   }
 
   async releaseUnboundSession(primaryAgentSessionId: string): Promise<void> {
@@ -168,7 +168,7 @@ class StubRoomViews implements CharacterRoomViewPort {
           controller: {
             kind: 'agent',
             characterRunId: `character-run-${participantId.at(-1) ?? 'a'}`,
-            primaryAgentSessionId: `pi-session:character-run-${participantId.at(-1) ?? 'a'}`,
+            primaryAgentSessionId: `conversation:character-run-${participantId.at(-1) ?? 'a'}`,
           },
         },
       ],
@@ -224,7 +224,7 @@ function serviceFixture(presentationTurns?: {
 }
 
 describe('CharacterInteractionService', () => {
-  it('maps an agent-controlled companion Dialogue to one primary Pi AgentSession', async () => {
+  it('maps an agent-controlled companion Dialogue to one primary Agent Conversation', async () => {
     const fixture = serviceFixture();
     fixture.repository.versions.set('character-version-a', publication());
     fixture.repository.relationships.set(
@@ -258,7 +258,7 @@ describe('CharacterInteractionService', () => {
     expect(fixture.agentConversations.created).toEqual(['character-run-a']);
     expect(created.characterRun.controller).toEqual({
       kind: 'agent',
-      primaryAgentSessionId: 'pi-session:character-run-a',
+      primaryAgentSessionId: 'conversation:character-run-a',
     });
     expect(fixture.agentConversations.turns).toHaveLength(1);
     expect(prepared.context.characterVersion.characterVersionId).toBe('character-version-a');
@@ -279,7 +279,7 @@ describe('CharacterInteractionService', () => {
       characterRunId: 'character-run-a',
       characterVersionId: 'character-version-a',
       participantId: 'participant-character',
-      controller: { kind: 'agent', primaryAgentSessionId: 'pi-session:character-run-a' },
+      controller: { kind: 'agent', primaryAgentSessionId: 'conversation:character-run-a' },
       runtimeBinding: {
         kind: 'narrative',
         storyline: {
@@ -350,7 +350,6 @@ describe('CharacterInteractionService', () => {
       'request-narrative-a',
       'The gate scene is complete. Transition us to the successor node now.',
     );
-    await fixture.service.freezePreparedTurn(prepared, result.turnId);
 
     const context = prepared.context;
     expect(context?.narrative?.storylineNodeId).toBe('arrival');
@@ -364,7 +363,7 @@ describe('CharacterInteractionService', () => {
     expect(result.content).toContain('Transition us to the successor node now.');
     expect(fixture.repository.narrativeTurnReceipts.get(result.turnId)).toEqual({
       turnId: result.turnId,
-      primaryAgentSessionId: 'pi-session:character-run-a',
+      primaryAgentSessionId: 'conversation:character-run-a',
       characterRunId: 'character-run-a',
       characterVersionId: 'character-version-a',
       conversation: { topology: 'dialogue', dialogueRunId: 'dialogue-a' },
@@ -441,12 +440,11 @@ describe('CharacterInteractionService', () => {
       ...configuration,
       tts: { ...configuration.tts, speed: 1.25 },
     };
-    const result = await fixture.service.submitPreparedTurn(
+    await fixture.service.submitPreparedTurn(
       prepared,
       'request-presentation-a',
       'Use the prepared voice.',
     );
-    await fixture.service.freezePreparedTurn(prepared, result.turnId);
 
     expect(prepared.context.presentationConfiguration?.tts.speed).toBe(1);
     expect(frozen).toEqual([{ turnId: 'turn:character-run-a', speed: 1 }]);
@@ -500,7 +498,7 @@ describe('CharacterInteractionService', () => {
         participantId: `participant-${suffix}`,
         controller: {
           kind: 'agent',
-          primaryAgentSessionId: `pi-session:character-run-${suffix}`,
+          primaryAgentSessionId: `conversation:character-run-${suffix}`,
         },
         runtimeBinding: {
           kind: 'companion',
@@ -522,7 +520,7 @@ describe('CharacterInteractionService', () => {
         controller: {
           kind: 'agent',
           characterRunId: `character-run-${suffix}`,
-          primaryAgentSessionId: `pi-session:character-run-${suffix}`,
+          primaryAgentSessionId: `conversation:character-run-${suffix}`,
         },
       })),
       schedulingPolicy: { kind: 'mentioned' },
@@ -537,7 +535,7 @@ describe('CharacterInteractionService', () => {
       const prepared = await fixture.service.prepareTurn({
         topology: 'chatroom',
         roomRunId: 'room-run-a',
-        primaryAgentSessionId: `pi-session:character-run-${suffix}`,
+        primaryAgentSessionId: `conversation:character-run-${suffix}`,
       });
       preparedTurns.push(prepared);
       await fixture.service.submitPreparedTurn(
@@ -548,8 +546,8 @@ describe('CharacterInteractionService', () => {
     }
 
     expect(fixture.agentConversations.turns.map((turn) => turn.primaryAgentSessionId)).toEqual([
-      'pi-session:character-run-a',
-      'pi-session:character-run-b',
+      'conversation:character-run-a',
+      'conversation:character-run-b',
     ]);
     expect(
       preparedTurns.map((prepared) => prepared.context.roomView?.events[0]?.roomEventId),

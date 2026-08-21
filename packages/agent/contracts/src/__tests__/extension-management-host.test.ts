@@ -20,16 +20,8 @@ function projection() {
         modelInvocable: true,
       },
     ],
-    mcp: [
-      {
-        id: 'computer-use',
-        name: 'Computer Use',
-        description: 'Official contribution.',
-        status: 'unsupported' as const,
-        diagnosticCode: 'dsh-mcp-management-api-unavailable',
-      },
-    ],
-    diagnostics: [{ code: 'mcp_management_unsupported' as const, count: 1 }],
+    mcp: [],
+    diagnostics: [],
   };
 }
 
@@ -51,7 +43,7 @@ describe('DSH extension management contract', () => {
     ).toThrow('Unknown DSH extension management route');
   });
 
-  it('rejects stale owner and preserves DSH diagnostics', () => {
+  it('rejects a stale owner while preserving the canonical empty MCP catalog', () => {
     const request = createAgentExtensionManagementHostRequest({
       requestId: 'request-3',
       identity,
@@ -61,8 +53,8 @@ describe('DSH extension management contract', () => {
       parseAgentExtensionManagementHostResult(
         { requestId: request.requestId, route: request.route, projection: projection() },
         request,
-      ).projection.mcp[0]?.status,
-    ).toBe('unsupported');
+      ).projection.mcp,
+    ).toEqual([]);
     expect(() =>
       parseAgentExtensionManagementHostResult(
         {

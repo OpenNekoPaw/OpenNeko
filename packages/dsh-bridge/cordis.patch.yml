@@ -68,6 +68,22 @@
   disabled: true
 
 - insert:
+    - id: openneko-storage
+      name: '@deepseek-ai/dsh-storage'
+
+    - id: openneko-storage-json
+      name: '@deepseek-ai/dsh-storage-json'
+      config:
+        root: !!js dshHomePath('storages')
+
+    - id: openneko-storage-domain
+      name: '@deepseek-ai/dsh-storage-domain'
+      config:
+        backend: json
+
+    - id: openneko-workspace
+      name: '@deepseek-ai/dsh-workspace'
+
     - id: agent-presets
       name: '@deepseek-ai/dsh-agent-presets'
       config:

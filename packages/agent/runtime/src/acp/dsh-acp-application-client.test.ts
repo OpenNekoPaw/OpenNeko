@@ -57,6 +57,12 @@ function createHandlers(): DshAcpApplicationClientHandlers {
       outcome: 'success' as const,
       result: {},
     })),
+    executeContentImageTool: vi.fn(
+      async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
+        outcome: 'success' as const,
+        result: {},
+      }),
+    ),
     executeCharacterTool: vi.fn(
       async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
         outcome: 'success' as const,
@@ -101,6 +107,61 @@ function createFixture(initializeResponse: InitializeResponse) {
 }
 
 describe('DshAcpApplicationClient', () => {
+  it('archives one exact Session and reads the strict DSH archive projection', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    fixture.connection.extMethod = vi.fn(async (method) => {
+      if (method === 'openneko/session/archive') return { sessionIds: ['session-1'] };
+      if (method === 'openneko/session/archive/read') return { sessionIds: ['session-1'] };
+      throw new Error(`Unexpected extension method ${method}.`);
+    });
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await expect(client.archiveSession('session-1')).resolves.toEqual({
+      sessionIds: ['session-1'],
+    });
+    await expect(client.readArchivedSessions()).resolves.toEqual({
+      sessionIds: ['session-1'],
+    });
+    expect(fixture.connection.extMethod).toHaveBeenNthCalledWith(1, 'openneko/session/archive', {
+      sessionId: 'session-1',
+    });
+    expect(fixture.connection.extMethod).toHaveBeenNthCalledWith(
+      2,
+      'openneko/session/archive/read',
+      {},
+    );
+  });
+
+  it('sends one exact inbox enqueue extension request and decodes its DSH snapshot', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await expect(
+      client.enqueueInboxMessage({
+        sessionId: 'session-1',
+        prompt: [{ type: 'text', text: 'next' }],
+        displayContent: [{ type: 'text', text: 'next' }],
+        contextText: 'workspace context',
+      }),
+    ).resolves.toEqual({ nextTurn: [], nextStep: [] });
+    expect(fixture.connection.extMethod).toHaveBeenCalledWith('openneko/session/inbox/enqueue', {
+      sessionId: 'session-1',
+      prompt: [{ type: 'text', text: 'next' }],
+      displayContent: [{ type: 'text', text: 'next' }],
+      contextText: 'workspace context',
+    });
+  });
+
   it('blocks session recovery when the exact ACP capability is absent', async () => {
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     await expect(
@@ -199,7 +260,7 @@ describe('DshAcpApplicationClient', () => {
     }
   });
 
-  it('routes only the two frozen exact domain tools and one notification', async () => {
+  it('routes exact domain tools and one notification', async () => {
     const handlers = createHandlers();
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     await DshAcpApplicationClient.connect({
@@ -217,6 +278,20 @@ describe('DshAcpApplicationClient', () => {
       tool: 'openneko.generation',
       operation: 'submit',
       input: {},
+    });
+    await protocolClient.extMethod?.('openneko/domain-tool/execute', {
+      sessionId: 'session-1',
+      turn: 0,
+      toolCallId: 'call-content-image',
+      tool: 'openneko.read_image',
+      operation: 'read-chunk',
+      input: {
+        source: {
+          file: { authority: 'workspace', path: 'story.epub' },
+          selector: { kind: 'entry', path: 'OEBPS/page.png' },
+        },
+        offset: 0,
+      },
     });
     await protocolClient.extMethod?.('openneko/domain-tool/execute', {
       sessionId: 'session-1',
@@ -252,6 +327,10 @@ describe('DshAcpApplicationClient', () => {
     );
     expect(handlers.executeCutTool).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-1', toolCallId: 'call-cut' }),
+      expect.any(AbortSignal),
+    );
+    expect(handlers.executeContentImageTool).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'session-1', toolCallId: 'call-content-image' }),
       expect.any(AbortSignal),
     );
     expect(handlers.onSessionEvent).toHaveBeenCalledWith(

@@ -192,6 +192,7 @@ export function resolveExecutionCase(selection) {
 
 const DESKTOP_WORKFLOW_STEP_KINDS = new Set([
   'submit',
+  'submit-with-followup',
   'wait-for-idle',
   'cancel',
   'confirm',

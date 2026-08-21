@@ -1,0 +1,82 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "content-locator-document-images",
+  "suiteId": "agent-runtime.perception-routing",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "An image-capable Agent reads EPUB image locators through OpenNeko Content access and reports facts visible only in the pixels.",
+    "canonicalPath": [
+      "visible Desktop submit",
+      "openneko.document read-images",
+      "document-entry ContentLocator",
+      "openneko.read_image",
+      "Host-authorized Content bytes",
+      "DSH durable attachment",
+      "native multimodal continuation"
+    ],
+    "observables": [
+      {
+        "ref": "document-image-facts",
+        "kind": "runtime-fact",
+        "description": "Exact model, successful canonical document and Content image Tools, pixel-only codes, terminal idle state, and absence of runtime errors.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent reports both synthetic pixel codes N7Q4 and Q47N after reading the two EPUB images.",
+    "expectedFailure": "Missing canonical Tool calls, failed entry authorization, use of raw extraction paths, guessed codes, runtime errors, or non-idle completion fails visibly."
+  },
+  "fixtureRefs": ["document-image-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["native-vision"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "读取工作区 synthetic-document.epub 中的两张内嵌图片并报告每张图黑色区域里的四位字符。必须先调用 openneko.document 的 read-images 获得原样 ContentLocator，再分别调用 openneko.read_image 读取图片像素；不要使用原始解压路径、不要猜测。最终只需列出两组字符。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 1200000 }
+  ],
+  "assertions": [
+    {
+      "id": "model",
+      "kind": "model",
+      "profileId": "native-vision",
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "document-tool",
+      "kind": "tool-call",
+      "name": "openneko.document",
+      "status": "success",
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "content-image-tool",
+      "kind": "tool-call",
+      "name": "openneko.read_image",
+      "status": "success",
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "pixel-codes",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["N7Q4", "Q47N"],
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "document-image-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 1200000, "repetitions": 1 }
+}

@@ -57,6 +57,13 @@ async function executeStep(input) {
         ...(step.contextPayloads ? { contextPayloads: step.contextPayloads } : {}),
         ...resolveModelOverride(step, input.modelProfiles),
       });
+    case 'submit-with-followup':
+      return driver.submitWithFollowup({
+        conversationId: requireConversationId(conversationId),
+        prompt: step.prompt,
+        followupPrompt: step.followupPrompt,
+        activeTimeoutMs: step.activeTimeoutMs,
+      });
     case 'wait-for-idle': {
       const idle = await driver.waitForIdle(requireConversationId(conversationId), step.timeoutMs);
       if (typeof driver.readFacts !== 'function') return idle;
@@ -225,6 +232,7 @@ async function createWorkflowStepEvidence(input) {
 function workflowMethod(kind) {
   switch (kind) {
     case 'submit':
+    case 'submit-with-followup':
     case 'feedback':
       return 'message.submit';
     case 'wait-for-idle':

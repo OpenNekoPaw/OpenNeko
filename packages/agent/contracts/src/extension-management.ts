@@ -25,8 +25,7 @@ export interface AgentExtensionManagementProjection {
   readonly skills: readonly AgentManagedSkillItem[];
   readonly mcp: readonly AgentManagedMcpItem[];
   readonly diagnostics: readonly {
-    readonly code:
-      'skill_catalog_incomplete' | 'mcp_management_unsupported' | 'runtime_unavailable';
+    readonly code: 'skill_catalog_incomplete' | 'runtime_unavailable';
     readonly count: number;
   }[];
 }
@@ -116,11 +115,7 @@ function parseDiagnostic(
     'DSH extension diagnostic is invalid.',
   );
   const code = record.code;
-  if (
-    code !== 'skill_catalog_incomplete' &&
-    code !== 'mcp_management_unsupported' &&
-    code !== 'runtime_unavailable'
-  ) {
+  if (code !== 'skill_catalog_incomplete' && code !== 'runtime_unavailable') {
     throw new Error('DSH extension diagnostic code is invalid.');
   }
   return { code, count: requirePositiveInteger(record.count, 'DSH extension diagnostic count') };

@@ -6,7 +6,7 @@ import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createConversationId } from '../session/conversation-id';
-import { initializeAgentConversationLifecycleTables } from './agent-conversation-lifecycle-repository';
+import { initializeAgentConversationContextAuthorityTable } from './agent-conversation-context-authority';
 import {
   createPersistentDshConversationCatalogStore,
   initializeDshConversationCatalogTables,
@@ -105,7 +105,7 @@ async function createFixture() {
   const databasePath = join(root, '.neko', 'neko.db');
   const store = createNodeSqliteLocalMetadataStore({ homedir: root });
   await store.open({ databasePath, busyTimeoutMs: 1_000 });
-  await initializeAgentConversationLifecycleTables(store);
+  await initializeAgentConversationContextAuthorityTable(store);
   await initializeDshConversationCatalogTables(store);
   return {
     root,

@@ -25,6 +25,7 @@ import {
   createDshConversationHomeProjection,
   type DshConversationHomeProjection,
 } from './dsh-conversation-home-projection';
+import type { DshAcpProjection } from '../acp/dsh-acp-projection';
 
 const MAX_SESSION_LIST_PAGES = 100;
 
@@ -32,11 +33,21 @@ export interface DshSessionCatalogAcpClient {
   listSessions(input?: Omit<ListSessionsRequest, 'cwd'>): Promise<ListSessionsResponse>;
 }
 
+export interface DshSessionArchiveAcpClient {
+  archiveSession(sessionId: string): Promise<{ readonly sessionIds: readonly string[] }>;
+  readArchivedSessions(): Promise<{ readonly sessionIds: readonly string[] }>;
+}
+
+export interface ConversationDshSessionArchive {
+  archiveConversation(conversationId: string): Promise<void>;
+}
+
 export interface ConversationDshSessionApplication {
   readonly binding: ConversationDshSessionBindingService;
   readonly activation: ConversationDshSessionActivation;
   readonly conversations: ConversationDshSessionBoundClient;
   readonly home: DshConversationHomeProjection;
+  readonly archive: ConversationDshSessionArchive;
   readonly publication: ConversationDshSessionPublication;
   readonly catalog: Pick<DshConversationCatalogStore, 'get'>;
 }
@@ -44,10 +55,12 @@ export interface ConversationDshSessionApplication {
 export interface ConversationDshSessionApplicationOptions {
   readonly client: ConversationDshSessionAcpClient &
     DshSessionCatalogAcpClient &
+    DshSessionArchiveAcpClient &
     DshSessionCreationClient;
   readonly store: ConversationDshSessionBindingStore;
   readonly catalog: DshConversationCatalogStore;
   readonly conversationIdentitySeed: string;
+  readonly activity: Pick<DshAcpProjection, 'snapshot'>;
 }
 
 export function createConversationDshSessionApplication(
@@ -61,6 +74,8 @@ export function createConversationDshSessionApplication(
   const home = createDshConversationHomeProjection({
     catalog: options.catalog,
     bindings: options.store,
+    archivedSessions: options.client,
+    activity: options.activity,
   });
   return {
     binding,
@@ -71,6 +86,18 @@ export function createConversationDshSessionApplication(
       activation,
     }),
     home,
+    archive: Object.freeze({
+      async archiveConversation(conversationId: string) {
+        const resolution = await binding.resolve(conversationId);
+        if (!resolution.ok) {
+          throw new Error(
+            `DSH Conversation archive failed: ${resolution.code}: ${resolution.message}`,
+          );
+        }
+        await options.client.archiveSession(resolution.binding.dshSessionId);
+        await home.refresh();
+      },
+    }),
     publication: createConversationDshSessionPublication({
       client: options.client,
       binding,

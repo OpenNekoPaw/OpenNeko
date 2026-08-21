@@ -90,6 +90,8 @@ export interface CharacterAgentConversationPort {
       readonly primaryAgentSessionId: string;
       readonly characterRunId: string;
       readonly message: string;
+      readonly mode: 'companion' | 'narrative';
+      readonly context: CharacterAgentTurnContext;
     },
     signal?: AbortSignal,
   ): Promise<CharacterAgentTurnResult>;
@@ -365,7 +367,14 @@ export class CharacterInteractionService {
       return { characterRun, dialogueRun };
     } catch (error) {
       if (primaryAgentSessionId) {
-        await this.options.agentConversations.releaseUnboundSession(primaryAgentSessionId);
+        try {
+          await this.options.agentConversations.releaseUnboundSession(primaryAgentSessionId);
+        } catch (releaseError) {
+          throw new AggregateError(
+            [error, releaseError],
+            'Character Dialogue commit failed and the published Agent Conversation was preserved.',
+          );
+        }
       }
       throw error;
     }
@@ -376,15 +385,19 @@ export class CharacterInteractionService {
     signal?: AbortSignal,
   ): Promise<CharacterAgentTurnResult> {
     const prepared = await this.prepareTurn(input, signal);
-    return this.options.agentConversations.submitTurn(
+    const result = await this.options.agentConversations.submitTurn(
       {
         requestId: input.requestId,
         primaryAgentSessionId: prepared.primaryAgentSessionId,
         characterRunId: prepared.characterRunId,
         message: input.message,
+        mode: prepared.mode,
+        context: prepared.context,
       },
       signal,
     );
+    await this.freezePreparedTurn(prepared, result.turnId, signal);
+    return result;
   }
 
   async submitPreparedTurn(
@@ -393,15 +406,19 @@ export class CharacterInteractionService {
     message: string,
     signal?: AbortSignal,
   ): Promise<CharacterAgentTurnResult> {
-    return this.options.agentConversations.submitTurn(
+    const result = await this.options.agentConversations.submitTurn(
       {
         requestId,
         primaryAgentSessionId: prepared.primaryAgentSessionId,
         characterRunId: prepared.characterRunId,
         message,
+        mode: prepared.mode,
+        context: prepared.context,
       },
       signal,
     );
+    await this.freezePreparedTurn(prepared, result.turnId, signal);
+    return result;
   }
 
   async freezePreparedTurn(

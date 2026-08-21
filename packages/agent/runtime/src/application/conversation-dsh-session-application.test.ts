@@ -127,6 +127,8 @@ function createClient(pages: readonly ListSessionsResponse[]): ConversationDshSe
     prompt,
     cancel: vi.fn(async () => undefined),
     setSessionContext: vi.fn(async () => undefined),
+    archiveSession: vi.fn(async (sessionId: string) => ({ sessionIds: [sessionId] })),
+    readArchivedSessions: vi.fn(async () => ({ sessionIds: [] })),
     readInbox: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     replaceInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     removeInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),

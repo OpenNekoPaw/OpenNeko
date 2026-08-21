@@ -49,6 +49,13 @@
       "source": "repository",
       "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
       "mutable": true
+    },
+    {
+      "id": "document-image-workspace",
+      "root": "shared-fixtures/document-image-workspace",
+      "source": "repository",
+      "digest": "sha256:05fb3ce37742e4103192352ace48f569adba98f4008e4c12f1ea0bddcf8fb1d2",
+      "mutable": true
     }
   ],
   "cases": [
@@ -68,6 +75,12 @@
       "id": "missing-image-understanding-binding",
       "file": "cases/missing-image-understanding-binding.json",
       "group": "boundary",
+      "visibility": "public"
+    },
+    {
+      "id": "content-locator-document-images",
+      "file": "cases/content-locator-document-images.json",
+      "group": "canonical",
       "visibility": "public"
     }
   ],

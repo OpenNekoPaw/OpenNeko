@@ -21,6 +21,7 @@ import { CanvasDshHostAdapter } from './canvas-host-adapter';
 import { CutDshHostAdapter } from './cut-host-adapter';
 import { GenerationDshHostAdapter } from './generation-host-adapter';
 import { DocumentDshHostAdapter } from './document-host-adapter';
+import { ContentImageDshHostAdapter } from './content-image-host-adapter';
 import { CharacterDshHostAdapter } from './character-host-adapter';
 import { WorldDshHostAdapter } from './world-host-adapter';
 
@@ -38,6 +39,10 @@ export interface DshDomainToolHandlers {
     signal: AbortSignal,
   ): Promise<DshAcpDomainToolResponse>;
   executeDocumentTool(
+    request: DshAcpDomainToolRequest,
+    signal: AbortSignal,
+  ): Promise<DshAcpDomainToolResponse>;
+  executeContentImageTool(
     request: DshAcpDomainToolRequest,
     signal: AbortSignal,
   ): Promise<DshAcpDomainToolResponse>;
@@ -148,6 +153,13 @@ export function createDshDomainToolHandlers(options: {
 
     async executeDocumentTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
       return new DocumentDshHostAdapter(async () => {
+        const context = await options.contexts.resolve(request.sessionId);
+        return options.document.resolveRuntime(context);
+      }).execute(request, signal);
+    },
+
+    async executeContentImageTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
+      return new ContentImageDshHostAdapter(async () => {
         const context = await options.contexts.resolve(request.sessionId);
         return options.document.resolveRuntime(context);
       }).execute(request, signal);

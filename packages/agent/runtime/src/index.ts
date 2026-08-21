@@ -67,26 +67,6 @@ export {
   type PromptFileSaveResult,
   type PromptConfigFilePlan,
   type SavePromptFileInput,
-  // System Prompt Builder
-  SystemPromptBuilder,
-  createSystemPromptBuilder,
-  runSystemPromptAgentsFileLoadRuntime,
-  getDefaultPersonalPath,
-  hasAgentsFile,
-  BUILTIN_PROMPTS,
-  BUILTIN_DEFAULT_PROMPT_EN,
-  BUILTIN_DEFAULT_PROMPT_ZH,
-  BUILTIN_PLAN_PROMPT_EN,
-  BUILTIN_PLAN_PROMPT_ZH,
-  type SystemPromptBuilderConfig,
-  type SystemPromptAgentsFileRuntimeDeps,
-  type SystemPromptAgentsFileRuntimeInput,
-  type PromptExecutionMode,
-  type PromptLocale,
-  type AgentsSource,
-  type AgentsLoadResult,
-  type BuiltinPromptKey,
-  type PromptCompositionFragmentProjection,
 } from './prompt';
 
 // Export session management

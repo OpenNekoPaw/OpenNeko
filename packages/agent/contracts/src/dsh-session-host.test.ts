@@ -570,6 +570,7 @@ function projection() {
     dshSessionId: 'session-1',
     title: 'Hello',
     currentTurn: 1,
+    inbox: { nextTurn: [], nextStep: [] },
     events: [
       {
         kind: 'message',

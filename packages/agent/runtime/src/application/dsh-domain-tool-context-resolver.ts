@@ -1,6 +1,6 @@
 import type { AgentConversationContext } from '@neko/agent-contracts';
 
-import type { AgentConversationContextAuthorityPort } from './agent-conversation-lifecycle-repository';
+import type { AgentConversationContextAuthorityPort } from './agent-conversation-context-authority';
 import type { ConversationDshSessionBindingStore } from './conversation-dsh-session-binding';
 
 export interface DshDomainToolContext {

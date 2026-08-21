@@ -230,11 +230,20 @@ export class CharacterRoomInteractionService {
       });
       return await this.options.roomRuns.createPreparedRun({ run, characterRuns }, signal);
     } catch (error) {
-      await Promise.allSettled(
+      const releases = await Promise.allSettled(
         createdSessions.map((sessionId) =>
           this.options.agentConversations.releaseUnboundSession(sessionId),
         ),
       );
+      const releaseErrors = releases.flatMap((release) =>
+        release.status === 'rejected' ? [release.reason] : [],
+      );
+      if (releaseErrors.length > 0) {
+        throw new AggregateError(
+          [error, ...releaseErrors],
+          'Character Room commit failed and published Agent Conversations were preserved.',
+        );
+      }
       throw error;
     }
   }

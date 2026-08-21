@@ -11,6 +11,7 @@ import type {
 import type {
   DshAcpContentBlock,
   DshAcpInboxSnapshot,
+  DshAcpInboxEnqueueRequest,
   DshAcpInputCatalogProjection,
   DshAcpPermissionPresetProjection,
   DshAcpCommandExecuteProjection,
@@ -49,6 +50,7 @@ export interface ConversationDshSessionAcpClient {
     readonly args?: string;
   }): Promise<DshAcpSkillInvokeProjection>;
   readInbox(sessionId: string): Promise<DshAcpInboxSnapshot>;
+  enqueueInboxMessage(input: DshAcpInboxEnqueueRequest): Promise<DshAcpInboxSnapshot>;
   replaceInboxMessage(input: {
     readonly sessionId: string;
     readonly messageId: string;
@@ -90,6 +92,9 @@ export interface ConversationDshSessionBoundClient {
     readonly args?: string;
   }): Promise<DshAcpSkillInvokeProjection>;
   readInbox(conversationId: string): Promise<DshAcpInboxSnapshot>;
+  enqueueInboxMessage(
+    input: Omit<DshAcpInboxEnqueueRequest, 'sessionId'> & { readonly conversationId: string },
+  ): Promise<DshAcpInboxSnapshot>;
   replaceInboxMessage(input: {
     readonly conversationId: string;
     readonly messageId: string;
@@ -177,6 +182,10 @@ export function createConversationDshSessionBoundClient(
     async readInbox(conversationId) {
       const dshSessionId = await resolveForOperation(options, conversationId);
       return options.client.readInbox(dshSessionId);
+    },
+    async enqueueInboxMessage({ conversationId, ...request }) {
+      const dshSessionId = await resolveForOperation(options, conversationId);
+      return options.client.enqueueInboxMessage({ ...request, sessionId: dshSessionId });
     },
     async replaceInboxMessage({ conversationId, ...request }) {
       const dshSessionId = await resolveForOperation(options, conversationId);

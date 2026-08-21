@@ -6,7 +6,12 @@ import { Session, SessionId, type SessionHeader } from '@deepseek-ai/dsh-session
 import { CallId, MessageId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm';
 import { describe, expect, it } from 'vitest';
 
-import { listOpenNekoSessions, projectExtensionSessionEvent, projectSessionEvent } from './index';
+import {
+  listOpenNekoSessions,
+  projectDshExtensionCatalog,
+  projectExtensionSessionEvent,
+  projectSessionEvent,
+} from './index';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -22,6 +27,48 @@ const header = (input: Partial<SessionHeader> & Pick<SessionHeader, 'id'>): Sess
 });
 
 describe('OpenNeko DSH ACP bridge projections', () => {
+  it('mounts the DSH-owned Workspace archive services and does not publish delete', () => {
+    const patch = readPackageFile('cordis.patch.yml');
+    expect(patch).toContain("name: '@deepseek-ai/dsh-storage-domain'");
+    expect(patch).toContain("name: '@deepseek-ai/dsh-workspace'");
+    expect(patch).not.toContain('session/delete');
+  });
+
+  it('projects the real Skill catalog without fabricating unavailable MCP contributions', () => {
+    expect(
+      projectDshExtensionCatalog({
+        complete: true,
+        skills: [
+          {
+            name: 'storyboard',
+            description: 'Create a storyboard.',
+            invocation: { userInvocable: true, modelInvocable: false },
+            source: 'bundled',
+            provider: 'openneko-builtin',
+          },
+        ],
+      }),
+    ).toEqual({
+      skills: [
+        {
+          name: 'storyboard',
+          description: 'Create a storyboard.',
+          source: 'bundled',
+          provider: 'openneko-builtin',
+          userInvocable: true,
+          modelInvocable: false,
+        },
+      ],
+      mcp: [],
+      diagnostics: [],
+    });
+    expect(projectDshExtensionCatalog({ complete: false, skills: [] })).toEqual({
+      skills: [],
+      mcp: [],
+      diagnostics: [{ code: 'skill_catalog_incomplete', count: 1 }],
+    });
+  });
+
   it('lists only exact profile sessions without fabricating cwd', () => {
     expect(
       listOpenNekoSessions(
@@ -414,6 +461,8 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toMatch(/DSH_ACP_EXTENSION_METHODS\.setSessionContext/u);
     expect(source).toMatch(/decodeDshAcpSessionContextSetRequest\(params\)/u);
     expect(source).toMatch(/agentCtx\.systemPrompt\.context\(/u);
+    expect(source).toMatch(/name: 'openneko:product-protocol'/u);
+    expect(source).toMatch(/text: OPENNEKO_PRODUCT_SYSTEM_PROMPT/u);
     expect(source).toMatch(/name: 'openneko:product-context'/u);
     expect(source).toMatch(
       /setup: setupSessionRuntimeContext\(ctx, preset, current\.runtimeContext\)/u,

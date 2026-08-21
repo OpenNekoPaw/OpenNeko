@@ -343,7 +343,14 @@ export class CharacterConversationLaunchService {
         primaryAgentSessionId: session.primaryAgentSessionId,
       };
     } catch (error) {
-      await this.options.agentConversations.releaseUnboundSession(session.primaryAgentSessionId);
+      try {
+        await this.options.agentConversations.releaseUnboundSession(session.primaryAgentSessionId);
+      } catch (releaseError) {
+        throw new AggregateError(
+          [error, releaseError],
+          'Character launch commit failed and the published Agent Conversation was preserved.',
+        );
+      }
       throw error;
     }
   }

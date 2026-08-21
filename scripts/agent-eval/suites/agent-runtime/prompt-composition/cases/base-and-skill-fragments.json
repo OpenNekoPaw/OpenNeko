@@ -5,12 +5,13 @@
   "caseGroup": "canonical",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Run an explicit Skill turn with the canonical base and Skill prompt fragments actually composed.",
+    "userBehavior": "Run an explicit Skill turn through the real DSH bridge with the product protocol and mounted Skill fragments actually composed.",
     "canonicalPath": [
-      "Desktop Agent runtime assembly",
-      "base prompt fragment",
-      "explicit storyboard activation",
-      "skill.injection fragment",
+      "visible Desktop Agent composer",
+      "DSH standard preset",
+      "openneko:product-protocol fragment",
+      "explicit storyboard Skill activation",
+      "DSH Skill fragment",
       "assistant output"
     ],
     "observables": [
@@ -21,8 +22,8 @@
         "required": true
       }
     ],
-    "expectedResult": "Facts include the base and canonical storyboard Skill fragments without exposing their content.",
-    "expectedFailure": "Missing base/Skill fragment or incomplete composition facts fails."
+    "expectedResult": "Facts include the OpenNeko DSH product protocol and canonical storyboard Skill fragments without exposing their content.",
+    "expectedFailure": "Missing product/Skill fragment, a non-DSH execution path, or incomplete composition facts fails."
   },
   "fixtureRefs": [
     "empty-workspace"
@@ -54,7 +55,7 @@
       "kind": "prompt-composition",
       "requiredFragments": [
         {
-          "id": "base",
+          "id": "openneko:product-protocol",
           "source": "base"
         },
         {

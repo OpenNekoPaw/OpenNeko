@@ -1,3 +1,5 @@
+import { setTimeout as delay } from 'node:timers/promises';
+
 const DSH_DRIVER_STATE_KEY = '__openNekoDshDesktopDriver';
 
 /**
@@ -20,6 +22,52 @@ export function createDshDesktopAgentDriver(input) {
     },
     async submit(command) {
       return evaluate({ kind: 'submit', ...command });
+    },
+    async submitWithFollowup(command) {
+      const firstSubmission = evaluate({
+        kind: 'submit',
+        conversationId: command.conversationId,
+        prompt: command.prompt,
+      });
+      const guardedFirstSubmission = firstSubmission.then(
+        (receipt) => ({ ok: true, receipt }),
+        (error) => ({ ok: false, error }),
+      );
+      const deadline = Date.now() + command.activeTimeoutMs;
+      let activeSnapshot;
+      while (Date.now() < deadline) {
+        activeSnapshot = await evaluate({
+          kind: 'snapshot',
+          conversationId: command.conversationId,
+        });
+        if (activeSnapshot?.currentTurn !== undefined) break;
+        await delay(25);
+      }
+      if (activeSnapshot?.currentTurn === undefined) {
+        await guardedFirstSubmission;
+        throw new Error('DSH Desktop Session did not expose an active turn for inbox enqueue.');
+      }
+      const followup = await evaluate({
+        kind: 'submit',
+        conversationId: command.conversationId,
+        prompt: command.followupPrompt,
+      });
+      const queued = followup?.projection?.inbox?.nextTurn;
+      if (!Array.isArray(queued) || queued.length === 0) {
+        await guardedFirstSubmission;
+        throw new Error('DSH Desktop follow-up did not project a pending next-turn inbox item.');
+      }
+      const first = await guardedFirstSubmission;
+      if (!first.ok) throw first.error;
+      return {
+        ...followup,
+        accepted: true,
+        facts: {
+          inboxEnqueued: true,
+          queuedMessageId: queued[queued.length - 1]?.messageId,
+          activeTurn: activeSnapshot.currentTurn,
+        },
+      };
     },
     async markEventOffset() {
       return { eventOffset: 0 };

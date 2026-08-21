@@ -117,6 +117,26 @@ describe('Conversation DSH Session bound client', () => {
       expectedArgs: 'dsh-session-table',
     },
     {
+      name: 'enqueueInboxMessage',
+      invoke: (
+        bound: ReturnType<typeof createConversationDshSessionBoundClient>,
+        conversationId: string,
+      ) =>
+        bound.enqueueInboxMessage({
+          conversationId,
+          prompt: [{ type: 'text', text: 'next' }],
+          displayContent: [{ type: 'text', text: 'next' }],
+          contextText: 'workspace context',
+        }),
+      expectedMethod: 'enqueueInboxMessage' as const,
+      expectedArgs: {
+        sessionId: 'dsh-session-table',
+        prompt: [{ type: 'text', text: 'next' }],
+        displayContent: [{ type: 'text', text: 'next' }],
+        contextText: 'workspace context',
+      },
+    },
+    {
       name: 'replaceInboxMessage',
       invoke: (
         bound: ReturnType<typeof createConversationDshSessionBoundClient>,
@@ -304,6 +324,7 @@ function createFixture(
     cancel: vi.fn(async () => undefined),
     setSessionContext: vi.fn(async () => undefined),
     readInbox: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
+    enqueueInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     replaceInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     removeInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
   } satisfies ConversationDshSessionAcpClient;

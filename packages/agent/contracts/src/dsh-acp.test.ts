@@ -3,18 +3,61 @@ import { describe, expect, it } from 'vitest';
 import {
   DSH_ACP_MAX_JSON_DEPTH,
   DSH_ACP_MAX_PAYLOAD_BYTES,
+  decodeDshAcpArchivedSessionsProjection,
   decodeDshAcpDomainToolCancelRequest,
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
   decodeDshAcpInboxSnapshot,
+  decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpJsonPayload,
   decodeDshAcpModelConfiguration,
   decodeDshAcpSessionContextSetRequest,
+  decodeDshAcpSessionArchiveRequest,
   decodeDshAcpSessionEventNotification,
   encodeDshAcpModelConfiguration,
 } from './dsh-acp';
 
 describe('DSH ACP extension contract', () => {
+  it('accepts exact Session archive requests and unique archive projections', () => {
+    expect(decodeDshAcpSessionArchiveRequest({ sessionId: 'session-1' })).toEqual({
+      sessionId: 'session-1',
+    });
+    expect(
+      decodeDshAcpArchivedSessionsProjection({ sessionIds: ['session-1', 'session-2'] }),
+    ).toEqual({ sessionIds: ['session-1', 'session-2'] });
+    expect(() =>
+      decodeDshAcpSessionArchiveRequest({ sessionId: 'session-1', delete: true }),
+    ).toThrow(/must contain exactly/u);
+    expect(() =>
+      decodeDshAcpArchivedSessionsProjection({ sessionIds: ['session-1', 'session-1'] }),
+    ).toThrow(/must be unique/u);
+  });
+
+  it('accepts one exact bounded live inbox message with its model context', () => {
+    expect(
+      decodeDshAcpInboxEnqueueRequest({
+        sessionId: 'session-1',
+        prompt: [{ type: 'text', text: 'next' }],
+        displayContent: [{ type: 'text', text: 'next' }],
+        contextText: 'workspace context',
+      }),
+    ).toEqual({
+      sessionId: 'session-1',
+      prompt: [{ type: 'text', text: 'next' }],
+      displayContent: [{ type: 'text', text: 'next' }],
+      contextText: 'workspace context',
+    });
+    expect(() =>
+      decodeDshAcpInboxEnqueueRequest({
+        sessionId: 'session-1',
+        prompt: [{ type: 'text', text: 'next' }],
+        displayContent: [{ type: 'text', text: 'next' }],
+        contextText: 'workspace context',
+        fallbackQueue: true,
+      }),
+    ).toThrow(/must contain exactly/u);
+  });
+
   it('accepts only the exact bounded Session context payload', () => {
     expect(
       decodeDshAcpSessionContextSetRequest({ sessionId: 'session-1', text: 'Workspace Board' }),
@@ -155,9 +198,12 @@ describe('DSH ACP extension contract', () => {
         data: { turn: 1 },
       }),
     ).toThrow(/time must be a non-negative safe integer/u);
-    expect(() => decodeDshAcpInboxSnapshot({ nextTurn: [], nextStep: [{ content: [] }] })).toThrow(
-      /messageId must be a string/,
-    );
+    expect(() =>
+      decodeDshAcpInboxSnapshot({
+        nextTurn: [],
+        nextStep: [{ messageId: 'message-1', createdAt: 0, content: [], extra: true }],
+      }),
+    ).toThrow(/must contain exactly/u);
   });
 
   it('decodes exact typed Host Tool success and failure responses', () => {

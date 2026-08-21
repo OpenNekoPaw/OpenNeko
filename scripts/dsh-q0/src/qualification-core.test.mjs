@@ -14,10 +14,10 @@ test('qualification pins every direct protocol and DSH runtime dependency', asyn
   const root = await mkdtemp(join(tmpdir(), 'openneko-dsh-q0-versions-'))
   const expected = new Map([
     ['@agentclientprotocol/sdk', '0.25.1'],
-    ['@deepseek-ai/dsh', '0.1.0-rc.7'],
-    ['@deepseek-ai/dsh-base', '0.1.0-rc.7'],
-    ['@deepseek-ai/dsh-headless', '0.1.0-rc.7'],
-    ['@deepseek-ai/dsh-llm', '0.1.0-rc.7'],
+    ['@deepseek-ai/dsh', '0.1.0-rc.8'],
+    ['@deepseek-ai/dsh-base', '0.1.0-rc.8'],
+    ['@deepseek-ai/dsh-headless', '0.1.0-rc.8'],
+    ['@deepseek-ai/dsh-llm', '0.1.0-rc.8'],
   ])
   const manifests = new Map()
   const resolved = []

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createConversationId } from '../session/conversation-id';
 import { createConversationDshSessionApplication } from './conversation-dsh-session-application';
 import { projectDshConversationTitle } from './conversation-dsh-session-publication';
 import type { ConversationDshSessionBindingStore } from './conversation-dsh-session-binding';
@@ -103,6 +104,64 @@ describe('Conversation DSH Session publication', () => {
     expect(application.home.readHomeProjection().conversations[0]?.unavailable).toBeDefined();
   });
 
+  it('publishes a caller-owned exact Conversation identity without generating another one', async () => {
+    const conversationId = createConversationId('/workspace/character', {
+      now: 1,
+      random: new Uint8Array(10),
+    });
+    const catalog = memoryCatalog([]);
+    const application = createConversationDshSessionApplication({
+      client: clientWith({}),
+      store: memoryBindingStore([]),
+      catalog,
+      conversationIdentitySeed: '/workspace/exact',
+    });
+
+    await expect(
+      application.publication.publish({
+        conversationId,
+        title: 'Neko',
+        context: {
+          kind: 'character',
+          characterId: 'character-1',
+          characterVersionId: 'version-1',
+          characterRunId: 'run-1',
+          dialogueRunId: 'dialogue-1',
+        },
+      }),
+    ).resolves.toEqual({
+      conversationId,
+      dshSessionId: 'dsh-session-new',
+    });
+    expect(catalog.records[0]?.conversationId).toBe(conversationId);
+  });
+
+  it('archives the exact bound Session and removes only its Home projection', async () => {
+    const catalog = memoryCatalog([]);
+    const client = clientWith({});
+    const application = createConversationDshSessionApplication({
+      client,
+      store: memoryBindingStore([]),
+      catalog,
+      conversationIdentitySeed: '/workspace/archive',
+    });
+    const published = await application.publication.publish({
+      title: 'Archive me',
+      context: { kind: 'assistant', assistantSpaceId: 'assistant:one', baseGrantIds: [] },
+    });
+
+    await application.archive.archiveConversation(published.conversationId);
+    await application.archive.archiveConversation(published.conversationId);
+
+    expect(client.archiveSession).toHaveBeenNthCalledWith(1, published.dshSessionId);
+    expect(client.archiveSession).toHaveBeenNthCalledWith(2, published.dshSessionId);
+    await expect(client.readArchivedSessions()).resolves.toEqual({
+      sessionIds: [published.dshSessionId],
+    });
+    expect(application.home.readHomeProjection().conversations).toEqual([]);
+    await expect(application.catalog.get(published.conversationId)).resolves.toBeDefined();
+  });
+
   it('derives a bounded title from the canonical first Composer input', () => {
     expect(
       projectDshConversationTitle({
@@ -196,6 +255,7 @@ function memoryBindingStore(order: string[]): ConversationDshSessionBindingStore
 
 function clientWith(options: { readonly order?: string[]; readonly createError?: Error }) {
   const order = options.order ?? [];
+  const archived = new Set<string>();
   return {
     async createSession() {
       order.push('session-new');
@@ -216,6 +276,11 @@ function clientWith(options: { readonly order?: string[]; readonly createError?:
     },
     prompt: vi.fn(async () => ({ stopReason: 'end_turn' as const })),
     cancel: vi.fn(async () => undefined),
+    archiveSession: vi.fn(async (sessionId: string) => {
+      archived.add(sessionId);
+      return { sessionIds: [...archived] };
+    }),
+    readArchivedSessions: vi.fn(async () => ({ sessionIds: [...archived] })),
     readInbox: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     replaceInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     removeInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),

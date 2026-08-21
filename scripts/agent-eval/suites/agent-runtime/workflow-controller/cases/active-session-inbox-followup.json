@@ -1,0 +1,89 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "active-session-inbox-followup",
+  "suiteId": "agent-runtime.workflow-controller",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "visible-ui",
+    "protected": true,
+    "lifecycleChecks": ["composer-focus", "graceful-close"]
+  },
+  "evidenceContract": {
+    "userBehavior": "While one visible Desktop turn is running, submit a second ordinary message through the same OpenNeko composer and let DSH execute it as the next turn.",
+    "canonicalPath": [
+      "visible OpenNeko composer",
+      "sender-bound Desktop DSH Session host",
+      "exact Conversation-to-DSH Session binding",
+      "DSH Agent inbox nextTurn",
+      "DSH inbox claim",
+      "same DSH Session turn lineage",
+      "terminal sidebar and transcript projection"
+    ],
+    "observables": [
+      {
+        "ref": "active-inbox-facts",
+        "kind": "runtime-fact",
+        "description": "The follow-up submit receipt contains a pending DSH next-turn Message identity while the first turn remains active, followed by two terminal turns in the exact Session.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The second message is observed in the DSH inbox, is claimed as the next turn, and completes in the same Conversation and DSH Session.",
+    "expectedFailure": "An idle fallback submit, changed Session identity, missing inbox Message, shadow queue, runtime diagnostic, or non-terminal follow-up fails visibly."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "active-followup",
+      "kind": "submit-with-followup",
+      "prompt": "Give a careful multi-paragraph explanation of why local-first applications need explicit state ownership, then end with ACTIVE_FIRST_DONE.",
+      "followupPrompt": "After the current response finishes, reply with exactly QUEUED_SECOND_DONE.",
+      "activeTimeoutMs": 120000
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "active-inbox-facts" },
+    {
+      "id": "order",
+      "kind": "process-order",
+      "events": [
+        {
+          "kind": "workflow-step",
+          "stepId": "active-followup",
+          "method": "message.submit"
+        },
+        {
+          "kind": "workflow-step",
+          "stepId": "idle",
+          "method": "session.waitForIdle"
+        }
+      ],
+      "evidenceRef": "active-inbox-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "active-inbox-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["QUEUED_SECOND_DONE"],
+      "evidenceRef": "active-inbox-facts"
+    },
+    {
+      "id": "lifecycle",
+      "kind": "desktop-lifecycle",
+      "checks": ["composer-focus", "graceful-close"],
+      "evidenceRef": "active-inbox-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 300000, "repetitions": 1 }
+}

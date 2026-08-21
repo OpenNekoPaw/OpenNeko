@@ -1,7 +1,9 @@
 import {
   decodeDshAcpInputCatalogProjection,
+  decodeDshAcpInboxSnapshot,
   decodeDshAcpJsonPayload,
   type DshAcpInputCatalogProjection,
+  type DshAcpInboxSnapshot,
   type DshAcpJsonValue,
 } from './dsh-acp';
 import { isAgentContextType, type AgentContextPayload } from './agent-context';
@@ -95,6 +97,7 @@ export interface DshSessionHostProjection {
   readonly dshSessionId: string;
   readonly title: string;
   readonly currentTurn?: number;
+  readonly inbox: DshAcpInboxSnapshot;
   readonly events: readonly DshSessionHostEvent[];
 }
 
@@ -208,6 +211,10 @@ export type DshSessionHostRequest =
       readonly input: DshComposerSubmitInput;
     })
   | (DshSessionHostConversationRequest & { readonly operation: 'cancel' })
+  | (DshSessionHostConversationRequest & {
+      readonly operation: 'inbox-remove';
+      readonly messageId: string;
+    })
   | (DshSessionHostSenderRequest & {
       readonly operation: 'composer-snapshot';
       readonly workbenchInstanceId: string;
@@ -282,6 +289,10 @@ export interface OpenNekoDshSessionBridge {
     getSnapshot(conversationId: string): Promise<DshSessionHostProjection>;
     submit(conversationId: string, input: DshComposerSubmitInput): Promise<DshSessionHostResult>;
     cancel(conversationId: string): Promise<DshSessionHostProjection>;
+    removeInboxMessage(
+      conversationId: string,
+      messageId: string,
+    ): Promise<DshSessionHostProjection>;
     getComposerConfiguration(
       workbenchInstanceId: string,
       agentSurfaceId: string,
@@ -420,6 +431,22 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
       'conversationId',
     ]);
     return { ...base, operation: record.operation, conversationId };
+  }
+  if (record.operation === 'inbox-remove') {
+    requireExactKeys(record, [
+      'requestId',
+      'operation',
+      'windowId',
+      'rendererSessionId',
+      'conversationId',
+      'messageId',
+    ]);
+    return {
+      ...base,
+      operation: 'inbox-remove',
+      conversationId,
+      messageId: requireIdentity(record.messageId, 'messageId'),
+    };
   }
   if (record.operation === 'submit') {
     requireExactKeys(record, [
@@ -938,8 +965,8 @@ export function parseDshSessionHostProjection(value: unknown): DshSessionHostPro
   const record = requireRecord(value, 'DSH Session projection');
   requireAllowedKeys(
     record,
-    ['conversationId', 'dshSessionId', 'title', 'currentTurn', 'events'],
-    ['conversationId', 'dshSessionId', 'title', 'events'],
+    ['conversationId', 'dshSessionId', 'title', 'currentTurn', 'inbox', 'events'],
+    ['conversationId', 'dshSessionId', 'title', 'inbox', 'events'],
   );
   if (!Array.isArray(record.events)) throw new Error('DSH Session events must be an array.');
   return {
@@ -949,6 +976,7 @@ export function parseDshSessionHostProjection(value: unknown): DshSessionHostPro
     ...(record.currentTurn === undefined
       ? {}
       : { currentTurn: requireNonNegativeInteger(record.currentTurn, 'currentTurn') }),
+    inbox: decodeDshAcpInboxSnapshot(requireRecord(record.inbox, 'inbox')),
     events: record.events.map(parseEvent),
   };
 }

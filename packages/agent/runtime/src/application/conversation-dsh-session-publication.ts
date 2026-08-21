@@ -15,6 +15,7 @@ import type { DshConversationHomeProjection } from './dsh-conversation-home-proj
 
 export interface ConversationDshSessionPublication {
   publish(input: {
+    readonly conversationId?: string;
     readonly context: AgentConversationContext;
     readonly title: string;
   }): Promise<{ readonly conversationId: string; readonly dshSessionId: string }>;
@@ -39,8 +40,15 @@ export function createConversationDshSessionPublication(options: {
   const now = options.now ?? (() => new Date());
   const createIdentity = options.createConversationIdentity ?? createConversationId;
   return Object.freeze({
-    async publish(input: { readonly context: AgentConversationContext; readonly title: string }) {
-      const conversationId = createIdentity(options.conversationIdentitySeed);
+    async publish(input: {
+      readonly conversationId?: string;
+      readonly context: AgentConversationContext;
+      readonly title: string;
+    }) {
+      const conversationId =
+        input.conversationId === undefined
+          ? createIdentity(options.conversationIdentitySeed)
+          : requireConversationId(input.conversationId);
       const timestamp = now().toISOString();
       await options.catalog.reserve({
         conversationId,
@@ -76,6 +84,11 @@ function requireTitle(value: string): string {
 
 function requireSessionId(value: string): string {
   if (value.trim().length === 0) throw new Error('DSH session/new returned an empty Session id.');
+  return value;
+}
+
+function requireConversationId(value: string): string {
+  if (value.trim().length === 0) throw new Error('Conversation identity is required.');
   return value;
 }
 

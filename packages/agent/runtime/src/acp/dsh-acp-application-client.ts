@@ -25,6 +25,7 @@ import {
 } from '@agentclientprotocol/sdk';
 import {
   DSH_ACP_EXTENSION_METHODS,
+  decodeDshAcpArchivedSessionsProjection,
   DSH_ACP_EXTENSION_NOTIFICATIONS,
   decodeDshAcpDomainToolCancelRequest,
   decodeDshAcpCommandExecuteProjection,
@@ -32,10 +33,12 @@ import {
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
   decodeDshAcpExtensionProjection,
+  decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpInboxSnapshot,
   decodeDshAcpInputCatalogProjection,
   decodeDshAcpPermissionPresetProjection,
   decodeDshAcpSessionContextSetRequest,
+  decodeDshAcpSessionArchiveRequest,
   decodeDshAcpSessionEventNotification,
   decodeDshAcpSkillInvokeProjection,
   decodeDshAcpSkillInvokeRequest,
@@ -43,16 +46,19 @@ import {
   type DshAcpDomainToolRequest,
   type DshAcpDomainToolResponse,
   type DshAcpInboxSnapshot,
+  type DshAcpInboxEnqueueRequest,
   type DshAcpInputCatalogProjection,
   type DshAcpPermissionPresetProjection,
   type DshAcpCommandExecuteProjection,
   type DshAcpSkillInvokeProjection,
   type DshAcpExtensionProjection,
+  type DshAcpArchivedSessionsProjection,
 } from '@neko/agent-contracts/dsh-acp';
 import { CANVAS_DSH_TOOL_NAME } from '@neko/canvas-domain';
 import { CUT_DSH_TOOL_NAME } from '@neko/cut-domain';
 import { GENERATION_DSH_TOOL_NAME } from '@neko/generation';
 import { DOCUMENT_DSH_TOOL_NAME } from '@neko/content/document';
+import { CONTENT_IMAGE_DSH_TOOL_NAME } from '@neko/content';
 import { CHARACTER_DSH_TOOL_NAME } from '@neko/chara/application';
 import { WORLD_DSH_TOOL_NAME } from '@neko/world/application';
 import { DshAcpProjection } from './dsh-acp-projection';
@@ -79,6 +85,10 @@ export interface DshAcpApplicationClientHandlers {
     signal: AbortSignal,
   ) => Promise<DshAcpDomainToolResponse>;
   readonly executeDocumentTool: (
+    request: DshAcpDomainToolRequest,
+    signal: AbortSignal,
+  ) => Promise<DshAcpDomainToolResponse>;
+  readonly executeContentImageTool?: (
     request: DshAcpDomainToolRequest,
     signal: AbortSignal,
   ) => Promise<DshAcpDomainToolResponse>;
@@ -260,6 +270,22 @@ export class DshAcpApplicationClient {
     await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.setSessionContext, { ...request });
   }
 
+  async archiveSession(sessionId: string): Promise<DshAcpArchivedSessionsProjection> {
+    const request = decodeDshAcpSessionArchiveRequest({ sessionId });
+    const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.archiveSession, {
+      ...request,
+    });
+    return decodeDshAcpArchivedSessionsProjection(response);
+  }
+
+  async readArchivedSessions(): Promise<DshAcpArchivedSessionsProjection> {
+    const response = await this.connection.extMethod(
+      DSH_ACP_EXTENSION_METHODS.readArchivedSessions,
+      {},
+    );
+    return decodeDshAcpArchivedSessionsProjection(response);
+  }
+
   async readPermissionPresets(sessionId?: string): Promise<DshAcpPermissionPresetProjection> {
     const response = await this.connection.extMethod(
       DSH_ACP_EXTENSION_METHODS.readPermissionPresets,
@@ -310,6 +336,19 @@ export class DshAcpApplicationClient {
     const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.readInbox, {
       sessionId,
     });
+    return decodeDshAcpInboxSnapshot(response);
+  }
+
+  async enqueueInboxMessage(input: DshAcpInboxEnqueueRequest): Promise<DshAcpInboxSnapshot> {
+    const request = decodeDshAcpInboxEnqueueRequest({
+      ...input,
+      prompt: [...input.prompt],
+      displayContent: [...input.displayContent],
+    });
+    const response = await this.connection.extMethod(
+      DSH_ACP_EXTENSION_METHODS.enqueueInboxMessage,
+      { ...request, prompt: [...request.prompt], displayContent: [...request.displayContent] },
+    );
     return decodeDshAcpInboxSnapshot(response);
   }
 
@@ -600,6 +639,12 @@ class HostToolAdmission {
     if (tool === CANVAS_DSH_TOOL_NAME) return this.handlers.executeCanvasTool;
     if (tool === CUT_DSH_TOOL_NAME) return this.handlers.executeCutTool;
     if (tool === DOCUMENT_DSH_TOOL_NAME) return this.handlers.executeDocumentTool;
+    if (tool === CONTENT_IMAGE_DSH_TOOL_NAME) {
+      if (this.handlers.executeContentImageTool === undefined) {
+        throw new Error('DSH ACP Content image Tool handler is unavailable.');
+      }
+      return this.handlers.executeContentImageTool;
+    }
     if (tool === CHARACTER_DSH_TOOL_NAME) return this.handlers.executeCharacterTool;
     if (tool === WORLD_DSH_TOOL_NAME) {
       if (this.handlers.executeWorldTool === undefined)

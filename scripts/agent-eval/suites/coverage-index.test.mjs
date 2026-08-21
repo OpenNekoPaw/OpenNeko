@@ -49,7 +49,7 @@ describe('Agent Evaluation coverage index', () => {
     ).toEqual([]);
   });
 
-  it('records DSH-owned generic behavior as excluded instead of duplicating Pi-era tests', async () => {
+  it('keeps DSH-owned generic behavior excluded while evaluating the public active inbox path', async () => {
     const coverage = await loadCoverageIndex();
     const dshTargets = coverage.targets.filter(
       (item) => item.kind === 'agent-runtime-capability' && item.id.startsWith('dsh-'),
@@ -58,10 +58,14 @@ describe('Agent Evaluation coverage index', () => {
     expect(dshTargets.map((item) => item.id).sort()).toEqual(
       EXPECTED_RUNTIME_CAPABILITIES.filter((id) => id.startsWith('dsh-')).sort(),
     );
-    expect(dshTargets.every((item) => item.disposition === 'excluded')).toBe(true);
-    expect(dshTargets.every((item) => item.deterministicValidation.reason.includes('DSH'))).toBe(
-      true,
-    );
+    const inbox = dshTargets.find((item) => item.id === 'dsh-active-session-inbox');
+    expect(inbox).toMatchObject({
+      disposition: 'suite',
+      suiteIds: ['agent-runtime.workflow-controller'],
+    });
+    const generic = dshTargets.filter((item) => item.id !== 'dsh-active-session-inbox');
+    expect(generic.every((item) => item.disposition === 'excluded')).toBe(true);
+    expect(generic.every((item) => item.deterministicValidation.reason.includes('DSH'))).toBe(true);
   });
 
   it('keeps active scenarios free of retired Pi runtime assertions', async () => {

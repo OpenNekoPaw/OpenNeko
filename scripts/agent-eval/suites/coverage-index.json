@@ -93,8 +93,8 @@
       "id": "schema",
       "disposition": "excluded",
       "deterministicValidation": {
-        "command": "pnpm --dir packages/agent/runtime exec vitest run src/session/__tests__/system-prompt-builder.test.ts",
-        "reason": "The canonical Builder has no independent runtime schema-module path; its supported composition inputs and secret-free projection are deterministic and covered by the Builder contract tests."
+        "command": "pnpm --dir packages/dsh-bridge exec vitest run src/product-system-prompt.test.ts src/index.test.ts",
+        "reason": "The DSH bridge product protocol is a static fragment mounted after the locked standard preset; its content and exact registration are deterministic bridge contract checks."
       }
     },
     {
@@ -114,8 +114,8 @@
       "id": "ephemeral",
       "disposition": "excluded",
       "deterministicValidation": {
-        "command": "pnpm --dir packages/agent/runtime exec vitest run src/session/__tests__/system-prompt-builder.test.ts",
-        "reason": "The canonical Builder has no Orchestrator-owned ephemeral module path; execution-mode selection and non-mutating composition are deterministic and covered by the Builder contract tests."
+        "command": "pnpm --dir packages/dsh-bridge exec vitest run src/index.test.ts",
+        "reason": "Per-Conversation product context uses one exact DSH systemPrompt context registration and is covered by the bridge Session rebuild contract test."
       }
     },
 
@@ -176,11 +176,8 @@
     {
       "kind": "agent-runtime-capability",
       "id": "dsh-active-session-inbox",
-      "disposition": "excluded",
-      "deterministicValidation": {
-        "command": "pnpm --dir packages/dsh-bridge run test -- --run",
-        "reason": "The DSH bridge owns active-session inbox read/replace/remove, but Desktop exposes no public inbox product operation and DSH rc.7 cannot preserve pending inbox across owner release. Evaluation must not restore the retired OpenNeko queue or advertise a user path that does not exist."
-      }
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.workflow-controller"]
     },
     {
       "kind": "agent-runtime-capability",
@@ -250,11 +247,8 @@
     {
       "kind": "agent-runtime-capability",
       "id": "media-library-content",
-      "disposition": "excluded",
-      "deterministicValidation": {
-        "command": "pnpm --filter @neko/content test -- --run && pnpm --filter @neko/agent-runtime exec vitest run src/acp/document-host-adapter.test.ts",
-        "reason": "The retired pre-DSH media-library document/image scenarios cannot execute against the canonical Session path. Canonical document decoding and exact Host delegation are covered deterministically until a DSH-native complete-session case is authored."
-      }
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.perception-routing"]
     },
     {
       "kind": "agent-runtime-capability",

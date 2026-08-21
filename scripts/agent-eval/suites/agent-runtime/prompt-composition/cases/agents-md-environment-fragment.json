@@ -5,11 +5,13 @@
   "caseGroup": "boundary",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Apply workspace AGENTS.md guidance as an environment-layer fragment while preserving the base prompt.",
+    "userBehavior": "Apply workspace AGENTS.md guidance through the DSH standard preset while preserving the OpenNeko product protocol.",
     "canonicalPath": [
       "isolated AGENTS.md fixture",
-      "Desktop Agent session assembly",
-      "agents-md environment fragment",
+      "visible Desktop Agent composer",
+      "DSH standard preset and exact Session assembly",
+      "openneko:product-protocol fragment",
+      "AGENTS.md environment fragment",
       "assistant marker"
     ],
     "observables": [
@@ -20,8 +22,8 @@
         "required": true
       }
     ],
-    "expectedResult": "Facts contain base and agents-md:override fragments and output follows the fixture marker instruction.",
-    "expectedFailure": "Missing base/environment fragment, replacement behavior, or absent marker fails."
+    "expectedResult": "Facts contain the OpenNeko product protocol and AGENTS.md fragments and output follows the fixture marker instruction.",
+    "expectedFailure": "Missing product/environment fragment, a non-DSH execution path, replacement behavior, or absent marker fails."
   },
   "fixtureRefs": [
     "prompt-environment-workspace"
@@ -53,7 +55,7 @@
       "kind": "prompt-composition",
       "requiredFragments": [
         {
-          "id": "base",
+          "id": "openneko:product-protocol",
           "source": "base"
         },
         {

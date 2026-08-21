@@ -298,6 +298,13 @@ const STEP_SCHEMA = s.union([
       modelProfileId: ID,
     },
   ),
+  s.object({
+    id: ID,
+    kind: s.literal('submit-with-followup'),
+    prompt: TEXT,
+    followupPrompt: TEXT,
+    activeTimeoutMs: s.integer({ min: 1, max: 600_000 }),
+  }),
   s.object({ id: ID, kind: s.literal('wait-for-idle'), timeoutMs: s.integer({ min: 1 }) }),
   s.object({ id: ID, kind: s.literal('cancel'), afterStepId: ID }),
   s.object({
@@ -1014,6 +1021,7 @@ const FAILURE_ATTRIBUTION_SCHEMA = s.object({
 const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
   stepKinds: new Set([
     'submit',
+    'submit-with-followup',
     'wait-for-idle',
     'cancel',
     'confirm',
@@ -1255,7 +1263,7 @@ function validateWorkflowSteps(steps) {
     if (step.kind === 'feedback' && !step.prompt.includes('${lastAssistant}')) {
       throw new Error(`feedback ${step.id} prompt must include \${lastAssistant}`);
     }
-    if (step.kind === 'submit') {
+    if (step.kind === 'submit' || step.kind === 'submit-with-followup') {
       if (state !== 'idle') {
         throw new Error(`submit ${step.id} requires idle state`);
       }

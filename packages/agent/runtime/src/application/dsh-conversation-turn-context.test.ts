@@ -104,21 +104,62 @@ describe('DSH Conversation turn context', () => {
     );
   });
 
-  it('rejects unsupported domain context instead of emitting empty success', async () => {
+  it('resolves an exact Character Run only with its matching frozen turn context', async () => {
     const resolver = createDshConversationTurnContextResolver({
       contexts: {
         readContext: vi.fn(async () => ({
           kind: 'character' as const,
           characterId: 'character-1',
           characterVersionId: 'version-1',
+          characterRunId: 'character-run-1',
         })),
       },
       workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
       canvas: { resolveTurnContext: vi.fn() },
     });
 
+    await expect(
+      resolver.resolve('conversation-character', [
+        {
+          type: 'character',
+          id: 'character-run-1',
+          label: 'Neko',
+          summary: 'Frozen Character context.',
+          data: { text: '{}' },
+        },
+      ]),
+    ).resolves.toContain('CharacterRun "character-run-1"');
     await expect(resolver.resolve('conversation-character')).rejects.toThrow(
-      /no canonical DSH product-context provider/u,
+      /exactly one frozen Character context/u,
     );
+  });
+
+  it('resolves an exact Room participant without falling back to another Character', async () => {
+    const resolver = createDshConversationTurnContextResolver({
+      contexts: {
+        readContext: vi.fn(async () => ({
+          kind: 'room' as const,
+          scope: 'participant' as const,
+          roomId: 'room-1',
+          roomRunId: 'room-run-1',
+          participantId: 'participant-1',
+          characterRunId: 'character-run-1',
+        })),
+      },
+      workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
+      canvas: { resolveTurnContext: vi.fn() },
+    });
+
+    await expect(
+      resolver.resolve('conversation-room-participant', [
+        {
+          type: 'character',
+          id: 'character-run-2',
+          label: 'Wrong participant',
+          summary: 'Wrong frozen context.',
+          data: { text: '{}' },
+        },
+      ]),
+    ).rejects.toThrow(/CharacterRun 'character-run-1'/u);
   });
 });
