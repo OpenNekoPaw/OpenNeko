@@ -66,4 +66,43 @@ describe('storage authority quality gate', () => {
       ],
     );
   });
+
+  it('rejects the retired first-submit Agent lifecycle while allowing DSH catalog metadata', () => {
+    assert.deepEqual(
+      validateRetiredAgentStorageSources({
+        'old-schema.ts':
+          'CREATE TABLE IF NOT EXISTS agent_conversation_records (conversation_id TEXT);',
+        'old-service.ts': 'export interface AgentDomainConversationService {}',
+        'dsh-catalog.ts':
+          'CREATE TABLE IF NOT EXISTS agent_dsh_conversation_catalog (conversation_id TEXT);',
+        'context.ts':
+          'CREATE TABLE IF NOT EXISTS agent_conversation_authority (conversation_id TEXT);',
+      }),
+      [
+        'old-schema.ts: retired first-submit Agent Conversation SQLite table',
+        'old-service.ts: retired first-submit Agent Conversation lifecycle contract',
+      ],
+    );
+  });
+
+  it('allows retired Pi table deletion only in the canonical cleanup owner', () => {
+    const cleanupPath = 'packages/agent/runtime/src/application/retired-pi-storage-cleanup.ts';
+    const canonicalCleanup = `
+      const tables = [
+        'agent_conversation_records',
+        'conversations',
+        'pi_conversations',
+        'pi_messages',
+      ];
+      await sql.run(\`DROP TABLE IF EXISTS \${table}\`);
+    `;
+
+    assert.deepEqual(validateRetiredAgentStorageSources({ [cleanupPath]: canonicalCleanup }), []);
+    assert.deepEqual(
+      validateRetiredAgentStorageSources({
+        'other-cleanup.ts': 'DROP TABLE IF EXISTS pi_messages',
+      }),
+      [`other-cleanup.ts: retired Pi table pi_messages may only be removed by ${cleanupPath}`],
+    );
+  });
 });

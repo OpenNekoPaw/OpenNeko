@@ -14,6 +14,10 @@ const forbiddenField = ['schema', 'Version'].join('');
 const externalField = ['protocol', 'Version'].join('');
 
 describe('internal versioning audit', () => {
+  it('keeps generated DSH packaging stages outside the source audit', () => {
+    assert.equal(isGeneratedDirectoryName('.dsh-runtime-stage'), true);
+  });
+
   it('rejects versioned table generations and SQLite table version pragmas', () => {
     const generatedSchemaPath = ['packages/example/src/m1', 'schema.ts'].join('-');
     const generatedTableIdentifier = ['M1', 'TABLES'].join('_');

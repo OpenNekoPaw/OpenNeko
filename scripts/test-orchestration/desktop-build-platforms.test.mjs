@@ -36,13 +36,18 @@ describe('Desktop build platform contract', () => {
     const hostGuardSource = await readFile('scripts/assert-supported-desktop-host.mjs', 'utf8');
     const outputGuardSource = await readFile('scripts/assert-desktop-package-output.mjs', 'utf8');
     const scripts = packageJson.scripts ?? {};
-    for (const command of ['build', 'make', 'package']) {
+    for (const command of ['build', 'package']) {
       assert.match(
         scripts[command] ?? '',
-        /^node \.\.\/\.\.\/scripts\/assert-dsh-cutover-release-ready\.mjs && node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && /u,
+        /^node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && node \.\.\/\.\.\/scripts\/prepare-dsh-runtime-stage\.mjs --development && /u,
         `${command} must reject unsupported hosts before Forge`,
       );
     }
+    assert.match(
+      scripts.make ?? '',
+      /^node \.\.\/\.\.\/scripts\/assert-dsh-cutover-release-ready\.mjs && node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && /u,
+      'make must remain behind the release guard',
+    );
     assert.match(
       scripts.dev ?? '',
       /^node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && /u,

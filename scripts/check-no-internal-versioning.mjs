@@ -27,6 +27,7 @@ const exactExcludedFiles = new Set([
 const generatedDirectoryNames = new Set([
   '.git',
   '.dsh-development-runtime',
+  '.dsh-runtime-stage',
   '.neko',
   '.vite',
   'build',

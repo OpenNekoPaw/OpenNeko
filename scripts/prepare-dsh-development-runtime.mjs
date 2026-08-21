@@ -19,7 +19,7 @@ import { assertDshRuntimeDirectory, fingerprintDirectory } from './dsh-runtime-c
 
 const TARGET = 'darwin-arm64';
 const NODE_RELEASE = '24.18.0';
-const DSH_RELEASE = '0.1.0-rc.7';
+const DSH_RELEASE = '0.1.0-rc.8';
 const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const developmentInputRoot = resolve(
   fileURLToPath(new URL('./dsh-development-runtime/', import.meta.url)),
@@ -36,6 +36,16 @@ const packageInputs = Object.freeze([
   Object.freeze({ name: '@neko/cut-dsh-plugin', path: 'packages/cut/dsh-plugin' }),
   Object.freeze({ name: '@neko/content-dsh-plugin', path: 'packages/content/dsh-plugin' }),
 ]);
+const workspaceSourceInputs = Object.freeze([
+  ...packageInputs.map(({ path }) => path),
+  'packages/agent/contracts',
+  'packages/canvas/domain',
+  'packages/chara',
+  'packages/content',
+  'packages/cut/domain',
+  'packages/generation',
+  'packages/world',
+]);
 const profileBundles = Object.freeze([
   '@deepseek-ai/dsh-base',
   ...packageInputs.map(({ name }) => name),
@@ -43,6 +53,30 @@ const profileBundles = Object.freeze([
 
 export function resolveDshDevelopmentRuntimeRoot(appRoot) {
   return join(realpathSync(appRoot), '.dsh-development-runtime', TARGET);
+}
+
+export function listDshDevelopmentInputFiles(options = {}) {
+  const projectRoot = realpathSync(options.repositoryRoot ?? repositoryRoot);
+  const inputRoot = realpathSync(options.inputRoot ?? developmentInputRoot);
+  const files = [
+    join(inputRoot, 'package.json'),
+    join(inputRoot, 'pnpm-lock.yaml'),
+    fileURLToPath(import.meta.url),
+  ];
+  for (const relativeRoot of workspaceSourceInputs) {
+    const packageRoot = join(projectRoot, relativeRoot);
+    for (const name of [
+      'package.json',
+      'cordis.patch.yml',
+      'tsconfig.json',
+      'tsconfig.build.json',
+    ]) {
+      const path = join(packageRoot, name);
+      if (existsSync(path)) files.push(path);
+    }
+    collectInputFiles(join(packageRoot, 'src'), files);
+  }
+  return Object.freeze(files.sort());
 }
 
 export function prepareDshDevelopmentRuntime(options = {}) {
@@ -231,21 +265,7 @@ function verifyDevelopmentRuntime(runtimeRoot) {
 
 function fingerprintDevelopmentInputs(projectRoot, inputRoot) {
   const digest = createHash('sha256');
-  const files = [
-    join(inputRoot, 'package.json'),
-    join(inputRoot, 'pnpm-lock.yaml'),
-    fileURLToPath(import.meta.url),
-  ];
-  for (const packageInput of packageInputs) {
-    const packageRoot = join(projectRoot, packageInput.path);
-    files.push(join(packageRoot, 'package.json'), join(packageRoot, 'cordis.patch.yml'));
-    collectInputFiles(join(packageRoot, 'src'), files);
-    for (const name of ['tsconfig.json', 'tsconfig.build.json']) {
-      const path = join(packageRoot, name);
-      if (existsSync(path)) files.push(path);
-    }
-  }
-  files.sort();
+  const files = listDshDevelopmentInputFiles({ repositoryRoot: projectRoot, inputRoot });
   for (const path of files) {
     digest.update(relative(projectRoot, path).split(sep).join('/'));
     digest.update('\0');

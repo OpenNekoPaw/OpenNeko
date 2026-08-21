@@ -21,7 +21,7 @@ describe('OpenNeko DSH runtime closure', () => {
   it('verifies the canonical payload and complete dependency tree fingerprint', () => {
     const root = createFixtureRuntime();
     const resolved = assertDshRuntimeDirectory(root, 'darwin-arm64', { verifyTree: true });
-    assert.equal(resolved.descriptor.dsh.release, '0.1.0-rc.7');
+    assert.equal(resolved.descriptor.dsh.release, '0.1.0-rc.8');
 
     writeFileSync(resolved.dshEntrypoint, 'modified');
     assert.throws(
@@ -108,7 +108,7 @@ function createFixtureRuntime() {
       executable: { file: 'payload/bin/node', sha256: sha256(files.node) },
     },
     dsh: {
-      release: '0.1.0-rc.7',
+      release: '0.1.0-rc.8',
       entrypoint: {
         file: 'payload/lib/node_modules/@deepseek-ai/dsh/lib/bin.js',
         sha256: sha256(files.dsh),

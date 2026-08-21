@@ -328,6 +328,55 @@
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
+      "path": "packages/dsh-bridge",
+      "owner": "packages/dsh-bridge",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/canvas/dsh-plugin",
+      "owner": "packages/canvas/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/chara/dsh-plugin",
+      "owner": "packages/chara/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/content/dsh-plugin",
+      "owner": "packages/content/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/cut/dsh-plugin",
+      "owner": "packages/cut/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/generation/dsh-plugin",
+      "owner": "packages/generation/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/world/dsh-plugin",
+      "owner": "packages/world/dsh-plugin",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
     }
   ]
 }

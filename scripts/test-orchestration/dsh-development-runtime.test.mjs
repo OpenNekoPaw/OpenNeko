@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  listDshDevelopmentInputFiles,
   prepareDshDevelopmentRuntime,
   resolveDshDevelopmentRuntimeRoot,
 } from '../prepare-dsh-development-runtime.mjs';
@@ -15,6 +16,22 @@ const repositoryRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const inputRoot = join(repositoryRoot, 'scripts', 'dsh-development-runtime');
 
 describe('Desktop development DSH runtime builder', () => {
+  it('tracks bridge, shared contract, and every domain Tool source as closure inputs', () => {
+    const inputs = listDshDevelopmentInputFiles({ repositoryRoot, inputRoot });
+    for (const path of [
+      'packages/dsh-bridge/src/index.ts',
+      'packages/agent/contracts/src/dsh-acp.ts',
+      'packages/canvas/domain/src/dsh-tool.ts',
+      'packages/chara/src/application/character-dsh-tool.ts',
+      'packages/content/src/document/dsh-tool.ts',
+      'packages/cut/domain/src/dsh-tool.ts',
+      'packages/generation/src/dsh-tool.ts',
+      'packages/world/src/application/world-dsh-tool.ts',
+    ]) {
+      assert.ok(inputs.includes(join(repositoryRoot, path)), `missing development input ${path}`);
+    }
+  });
+
   it('atomically builds, verifies, and reuses a content-fresh generated runtime', async () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'openneko-dsh-development-runtime-'));
     try {
@@ -94,8 +111,8 @@ describe('Desktop development DSH runtime builder', () => {
   it('pins the relocatable Node and DSH inputs without workspace or range dependencies', async () => {
     const manifest = JSON.parse(await readFile(join(inputRoot, 'package.json'), 'utf8'));
     assert.equal(manifest.dependencies['node-bin-darwin-arm64'], '24.18.0');
-    assert.equal(manifest.dependencies['@deepseek-ai/dsh'], '0.1.0-rc.7');
-    assert.equal(manifest.dependencies['@deepseek-ai/dsh-base'], '0.1.0-rc.7');
+    assert.equal(manifest.dependencies['@deepseek-ai/dsh'], '0.1.0-rc.8');
+    assert.equal(manifest.dependencies['@deepseek-ai/dsh-base'], '0.1.0-rc.8');
     for (const dependency of Object.values(manifest.dependencies)) {
       assert.doesNotMatch(dependency, /^(?:workspace:|[~^])/u);
     }

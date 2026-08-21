@@ -8,7 +8,6 @@
     "./acp": "./src/acp/index.ts",
     "./input/mention-excludes": "./src/input/mention-excludes.ts",
     "./input/workspace-ignore": "./src/input/workspace-ignore.ts",
-    "./prompt/system-prompt-builder": "./src/prompt/system-prompt-builder.ts",
     "./session/conversation-id": "./src/session/conversation-id.ts",
     "./runtime": "./src/runtime/index.ts",
     "./workspace": "./src/workspace/index.ts"

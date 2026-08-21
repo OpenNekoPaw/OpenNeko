@@ -6,16 +6,21 @@ import test from 'node:test';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 
-test('blocks every Desktop packaging entry while the DSH cutover is integration-only', () => {
+test('allows local validation packages while keeping release make blocked', () => {
   const manifest = JSON.parse(
     readFileSync(resolve(repositoryRoot, 'apps/neko-desktop/package.json'), 'utf8'),
   );
-  for (const name of ['build', 'package', 'make']) {
+  for (const name of ['build', 'package']) {
     assert.match(
       manifest.scripts[name],
-      /^node \.\.\/\.\.\/scripts\/assert-dsh-cutover-release-ready\.mjs &&/u,
+      /^node \.\.\/\.\.\/scripts\/assert-supported-desktop-host\.mjs && node \.\.\/\.\.\/scripts\/prepare-dsh-runtime-stage\.mjs --development &&/u,
     );
+    assert.doesNotMatch(manifest.scripts[name], /assert-dsh-cutover-release-ready/u);
   }
+  assert.match(
+    manifest.scripts.make,
+    /^node \.\.\/\.\.\/scripts\/assert-dsh-cutover-release-ready\.mjs &&/u,
+  );
 
   const result = spawnSync(
     process.execPath,
@@ -49,9 +54,10 @@ test('keeps the Q0 fixture outside every Desktop product artifact input', () => 
     /electron-forge|apps\/neko-desktop|runtime-stage/u,
   );
   assert.match(stage, /NEKO_DSH_RUNTIME_ROOT/u);
+  assert.match(stage, /prepareDshDevelopmentRuntime/u);
+  assert.match(stage, /--development/u);
   assert.match(closure, /verified DSH runtime closure/u);
   assert.doesNotMatch(forge, /prepare-dsh-development-runtime/u);
-  assert.doesNotMatch(stage, /prepare-dsh-development-runtime/u);
 });
 
 test('keeps release and tag automation unavailable while the guard is integration-only', () => {

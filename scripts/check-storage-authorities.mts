@@ -15,22 +15,62 @@ interface NonCanonicalDatabasePath {
   readonly literal: string;
 }
 
+const retiredPiCleanupSource =
+  'packages/agent/runtime/src/application/retired-pi-storage-cleanup.ts';
+const retiredPiTables = [
+  'agent_conversation_records',
+  'conversations',
+  'pi_conversations',
+  'pi_messages',
+] as const;
+
 export function validateRetiredAgentStorageSources(
   sources: Readonly<Record<string, string>>,
 ): readonly string[] {
   const findings: string[] = [];
   for (const [sourcePath, source] of Object.entries(sources)) {
+    for (const table of retiredPiTables) {
+      if (
+        sourcePath !== retiredPiCleanupSource &&
+        new RegExp(`DROP\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?${table}\\b`, 'iu').test(source)
+      ) {
+        findings.push(
+          `${sourcePath}: retired Pi table ${table} may only be removed by ${retiredPiCleanupSource}`,
+        );
+      }
+    }
     if (/\b(?:ConversationCatalogRepository|ConversationCatalogSource)\b/u.test(source)) {
       findings.push(`${sourcePath}: retired generic Conversation SQLite catalog contract`);
     }
     if (/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?conversations\b/iu.test(source)) {
       findings.push(`${sourcePath}: retired generic Conversation SQLite catalog table`);
     }
+    if (/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?agent_conversation_records\b/iu.test(source)) {
+      findings.push(`${sourcePath}: retired first-submit Agent Conversation SQLite table`);
+    }
+    if (
+      /\b(?:AgentConversationLifecycleService|AgentConversationLifecycleRepository|AgentDomainConversationService)\b/u.test(
+        source,
+      )
+    ) {
+      findings.push(`${sourcePath}: retired first-submit Agent Conversation lifecycle contract`);
+    }
     if (
       source.includes("'conversation-journals'") ||
       /join\(root,\s*['"](?:journals|conversations)['"]\)/u.test(source)
     ) {
       findings.push(`${sourcePath}: retired Pi conversation file layout`);
+    }
+  }
+  const cleanupSource = sources[retiredPiCleanupSource];
+  if (cleanupSource !== undefined) {
+    for (const table of retiredPiTables) {
+      if (!cleanupSource.includes(`'${table}'`)) {
+        findings.push(`${retiredPiCleanupSource}: missing exact retired Pi table ${table}`);
+      }
+    }
+    if (!cleanupSource.includes('DROP TABLE IF EXISTS ${table}')) {
+      findings.push(`${retiredPiCleanupSource}: missing canonical retired Pi table cleanup`);
     }
   }
   return findings;
