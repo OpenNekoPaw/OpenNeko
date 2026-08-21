@@ -48,6 +48,8 @@
 - [x] 4.23 Omit project/global Media Library archival actions from every Canvas selected-node toolbar position and flatten More into one ordered operation list without category headings or grouped containers.
 - [x] 4.24 Move duplicate/content editing and Canvas-local Image full-screen preview into the selected-node toolbar, remove duplicated edit commands from the node context menu, omit Finder/resource-management actions from Canvas, and order local document synchronization before capability resolution for newly duplicated nodes.
 - [x] 4.25 Extend the Canvas-local Image preview into one presentation-only gallery for an exact Generation Job, with direct-result double-click entry, previous/next and thumbnail navigation, shared Preview Viewer zoom/pan and complete input isolation from the covered Canvas viewport without mutating selected-output facts.
+- [x] 4.26 Reduce the canonical default and minimum Canvas node dimensions to the former 50%-zoom linear footprint across Domain authoring, Webview creation and Workspace Board projection, preserve intrinsic image ratios and persisted creator sizes, and add exact density regressions.
+- [x] 4.27 Project MiniMap top-level nodes and the visible Canvas viewport through one shared world-space scale so compact node dimensions remain proportionally compact, with focused geometry regressions.
 
 ## 5. Agent Direct-Mode Removal
 

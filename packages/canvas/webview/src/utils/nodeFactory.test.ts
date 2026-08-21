@@ -31,7 +31,7 @@ describe('buildCanvasNode', () => {
     });
     expect(media).toMatchObject({
       type: 'media',
-      size: { width: 240, height: 180 },
+      size: { width: 120, height: 90 },
       data: { assetPath: 'media/hero.png', mediaType: 'image' },
     });
     expect(group).toMatchObject({
@@ -72,7 +72,7 @@ describe('buildCanvasNode', () => {
       unsupportedPrompt: 'must not survive',
     });
 
-    expect(node.size.height).toBe(120);
+    expect(node.size.height).toBe(60);
     expect(node.data).not.toHaveProperty('unsupportedPrompt');
     expect((node.data as Record<string, unknown>).duration).toBeUndefined();
   });
@@ -82,9 +82,9 @@ describe('buildCanvasNode', () => {
     const image = createNode('generation', { ...createCanvasGenerationNodeData('image') });
     const audio = createNode('generation', { ...createCanvasGenerationNodeData('audio') });
 
-    expect(prompt.size).toEqual({ width: 240, height: 160 });
-    expect(image.size).toEqual({ width: 240, height: 180 });
-    expect(audio.size).toEqual({ width: 240, height: 120 });
+    expect(prompt.size).toEqual({ width: 120, height: 80 });
+    expect(image.size).toEqual({ width: 120, height: 90 });
+    expect(audio.size).toEqual({ width: 120, height: 60 });
   });
 
   it('rejects unsupported node types at the authoring boundary', () => {

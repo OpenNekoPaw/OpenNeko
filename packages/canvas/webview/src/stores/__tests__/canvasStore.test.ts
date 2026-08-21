@@ -368,12 +368,12 @@ describe('canvasStore canonical workspace', () => {
 
     expect(
       useCanvasStore.getState().canvasData?.nodes.find((node) => node.id === 'tiny-group')?.size,
-    ).toEqual({ width: 220, height: 150 });
+    ).toEqual({ width: 110, height: 75 });
 
     useCanvasStore.getState().updateNode('tiny-group', { size: { width: 100, height: 100 } });
 
     expect(
       useCanvasStore.getState().canvasData?.nodes.find((node) => node.id === 'tiny-group')?.size,
-    ).toEqual({ width: 220, height: 150 });
+    ).toEqual({ width: 110, height: 100 });
   });
 });

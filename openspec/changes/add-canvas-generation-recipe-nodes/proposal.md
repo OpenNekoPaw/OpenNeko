@@ -12,6 +12,8 @@ Canvas 当前的添加菜单直接创建 Markdown/Media/File 内容节点，而�
 - Canvas 选中态拆分为悬浮操作栏、内容节点和独立生成输入 composer：普通/引用节点只显示带节点类型和直接操作的工具栏与内容节点，Generation Node 额外显示跟随精确选中节点的紧凑 composer；三者形成固定附件栈，操作栏始终位于节点上方、composer 始终位于节点下方，空间不足时平移 Canvas 视口容纳整组而不独立夹取或翻转附件。Generation Node 按 Text/Image/Audio/Video 对应内容节点样式渲染并使用白色或轻玻璃不透明度的中性节点表面、统一细边框和克制阴影，空态与结果态不显示“生成节点”任务卡标题。composer、操作栏和弹层使用同一白色玻璃 surface 家族，按钮默认不叠加独立背景，仅在 hover/selected/focus 时显示轻量状态；composer 不重复节点标题/状态、不复用 Canvas 灰色背景，也不再以独立灰色 footer 或饱和危险色块制造第四套背景，是可重建 presentation，不是第二个 Canvas 节点或事实来源。
 - composer 的 `+` 通过 Canvas Host 授权选择 Workspace 参考素材并以同一串行命令原子创建素材节点和指向精确 Generation Node 的 `reference` 连接；Renderer 不读取本地路径。模型选择项将模型和 provider 在同一行展示，typed 参数弹层继承 composer 宽度上下文并限制在 Canvas 可视边界内，以分组网格和内部滚动呈现，禁止收缩为跨越画布的单列长条。
 - Canvas Domain 统一拥有新建节点的紧凑默认尺寸和最小缩放尺寸；Webview、Headless authoring、Generation authoring 与 Workspace Board 投影复用同一密度契约。新建文本、媒体、生成与投影节点减少画布占用，图片仍保持原始宽高比；已有 `.nkc` 节点的用户尺寸不因默认值变化而被改写。
+- 紧凑默认尺寸进一步收敛为原 50% 画布缩放时的线性占用，使 100% 视图也能容纳密集节点概览；节点内容、标签、端口和选中附件仍沿用既有缩放与屏幕空间契约，不引入第二套概览渲染路径。
+- MiniMap 使用顶层节点与当前可见视口的联合世界坐标边界，并以同一比例投影节点和视口框；节点默认尺寸缩小时，MiniMap 轮廓同步缩小，不再因仅按内容包围盒自适应而重新铺满预览。
 - Canvas 素材节点操作栏按 Text/Image/Video/Audio 使用固定、可预测的 action 槽位和顺序。运行时 capability 暂时消失时保留原槽位并禁用，避免按钮重排；从未由该类型声明的操作不进入工具栏。保存素材、Finder、复制到项目或全局媒体库等资源管理操作只在资源管理界面提供，不得出现在 Canvas 主操作或更多菜单。更多菜单保持单层短列表，节点右键菜单只保留最小图布局操作；删除不在工具栏、更多菜单、右键菜单或提示文案中出现，只由 Canvas 焦点边界内的 Delete/Backspace 快捷键处理。
 - 工作区资源浏览器的 `ContentLocator` 可直接拖入 composer 参考区，保留 Workspace 引用而不复制；其他目录素材必须通过显式“导入到工作区”操作获得 durable locator 后再连接，不得将绝对路径作为参考事实。
 - 新 Generation Node 从精确 Workspace ConfigManager 的 purpose-qualified 默认绑定初始化模型，并按 kind 写入 canonical typed 默认参数；只有默认绑定缺失或已失效时才要求用户选择，不允许当前选择器推测 provider 或回退到列表首项。

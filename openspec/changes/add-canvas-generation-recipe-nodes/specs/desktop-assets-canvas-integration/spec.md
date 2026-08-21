@@ -37,6 +37,8 @@ focus treatment.
 
 - **WHEN** Canvas authors a new Text, Image, Video, Audio or Generation content node through the Webview, Headless authoring or Workspace Board projection path
 - **THEN** the node uses the canonical compact Canvas default for its exact content kind rather than a runtime-specific oversized default
+- **AND** at 100% Canvas zoom its default width and height match the former node footprint at 50% zoom, allowing more nodes in the overview without changing the viewport zoom
 - **AND** an image projection preserves its intrinsic aspect ratio while using the compact media width
 - **AND** manually authored sizes already persisted in `.nkc` remain unchanged when the document is reopened or projected again
 - **AND** the creator can still resize the node down to the canonical accessible minimum
+- **AND** MiniMap projects top-level node silhouettes and the current visible viewport through one shared world-space scale, so compact dimensions remain proportionally compact instead of being enlarged by content-only normalization

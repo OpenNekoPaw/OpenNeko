@@ -1093,7 +1093,7 @@ async function exerciseCanvasGenerationAuthoring({
       label: ['Text', '文本'],
       modelLabel: 'Canvas Text',
       emptyIconClass: 'codicon-file-text',
-      expectedSize: { width: 240, height: 160 },
+      expectedSize: { width: 120, height: 80 },
     },
     {
       actionId: 'image',
@@ -1102,7 +1102,7 @@ async function exerciseCanvasGenerationAuthoring({
       label: ['Image', '图片'],
       modelLabel: 'Canvas Image',
       emptyIconClass: 'codicon-file-media',
-      expectedSize: { width: 240, height: 180 },
+      expectedSize: { width: 120, height: 90 },
     },
     {
       actionId: 'video',
@@ -1111,7 +1111,7 @@ async function exerciseCanvasGenerationAuthoring({
       label: ['Video', '视频'],
       modelLabel: 'Canvas Video',
       emptyIconClass: 'codicon-play',
-      expectedSize: { width: 240, height: 180 },
+      expectedSize: { width: 120, height: 90 },
     },
     {
       actionId: 'audio',
@@ -1120,7 +1120,7 @@ async function exerciseCanvasGenerationAuthoring({
       label: ['Audio', '音频'],
       modelLabel: 'Canvas Audio',
       emptyIconClass: 'codicon-music',
-      expectedSize: { width: 240, height: 120 },
+      expectedSize: { width: 120, height: 60 },
     },
   ];
   let maximumNodeCount = 0;

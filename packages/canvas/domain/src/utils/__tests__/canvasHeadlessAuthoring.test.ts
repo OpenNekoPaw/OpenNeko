@@ -89,12 +89,12 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
       'canvas-embed',
     ]);
     expect(canvas.nodes.map((node) => node.size)).toEqual([
-      { width: 240, height: 160 },
-      { width: 240, height: 180 },
-      { width: 320, height: 220 },
-      { width: 240, height: 150 },
-      { width: 220, height: 150 },
-      { width: 240, height: 160 },
+      { width: 120, height: 80 },
+      { width: 120, height: 90 },
+      { width: 160, height: 110 },
+      { width: 120, height: 75 },
+      { width: 110, height: 75 },
+      { width: 120, height: 80 },
     ]);
     expect(canvas.nodes.find((node) => node.type === 'group')?.container).toMatchObject({
       policy: 'group',

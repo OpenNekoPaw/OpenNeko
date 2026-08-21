@@ -10,27 +10,27 @@ import {
 describe('Canvas node sizing', () => {
   it('uses one compact default catalog for canonical authoring paths', () => {
     expect(CANVAS_NODE_DEFAULT_SIZES).toEqual({
-      markdown: { width: 240, height: 160 },
-      media: { width: 240, height: 180 },
-      group: { width: 320, height: 220 },
-      job: { width: 240, height: 150 },
-      file: { width: 220, height: 150 },
-      'canvas-embed': { width: 240, height: 160 },
-      generation: { width: 240, height: 180 },
+      markdown: { width: 120, height: 80 },
+      media: { width: 120, height: 90 },
+      group: { width: 160, height: 110 },
+      job: { width: 120, height: 75 },
+      file: { width: 110, height: 75 },
+      'canvas-embed': { width: 120, height: 80 },
+      generation: { width: 120, height: 90 },
     });
-    expect(CANVAS_AUDIO_NODE_DEFAULT_SIZE).toEqual({ width: 240, height: 120 });
+    expect(CANVAS_AUDIO_NODE_DEFAULT_SIZE).toEqual({ width: 120, height: 60 });
   });
 
   it('resolves kind-specific Generation defaults without exposing mutable catalog state', () => {
     const prompt = resolveCanvasGenerationNodeDefaultSize('prompt');
-    expect(prompt).toEqual({ width: 240, height: 160 });
-    expect(resolveCanvasGenerationNodeDefaultSize('image')).toEqual({ width: 240, height: 180 });
-    expect(resolveCanvasGenerationNodeDefaultSize('audio')).toEqual({ width: 240, height: 120 });
-    expect(resolveCanvasGenerationNodeDefaultSize('video')).toEqual({ width: 240, height: 180 });
+    expect(prompt).toEqual({ width: 120, height: 80 });
+    expect(resolveCanvasGenerationNodeDefaultSize('image')).toEqual({ width: 120, height: 90 });
+    expect(resolveCanvasGenerationNodeDefaultSize('audio')).toEqual({ width: 120, height: 60 });
+    expect(resolveCanvasGenerationNodeDefaultSize('video')).toEqual({ width: 120, height: 90 });
 
     (prompt as { width: number }).width = 999;
-    expect(resolveCanvasGenerationNodeDefaultSize('prompt')).toEqual({ width: 240, height: 160 });
-    expect(resolveCanvasNodeDefaultSize('markdown')).toEqual({ width: 240, height: 160 });
+    expect(resolveCanvasGenerationNodeDefaultSize('prompt')).toEqual({ width: 120, height: 80 });
+    expect(resolveCanvasNodeDefaultSize('markdown')).toEqual({ width: 120, height: 80 });
   });
 
   it('keeps resize minimums below authoring defaults', () => {

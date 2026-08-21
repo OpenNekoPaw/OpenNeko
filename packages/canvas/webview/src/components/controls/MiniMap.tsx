@@ -21,13 +21,26 @@ export interface MiniMapProps {
   height?: number;
 }
 
-interface Bounds {
+export interface MiniMapBounds {
   minX: number;
   minY: number;
   maxX: number;
   maxY: number;
   width: number;
   height: number;
+}
+
+export interface MiniMapRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface MiniMapGeometry {
+  bounds: MiniMapBounds;
+  scale: number;
+  viewportRect: MiniMapRect;
 }
 
 interface MiniMapNodeStyle {
@@ -45,6 +58,7 @@ type MiniMapNodeStyleRegistry = Readonly<Record<CanonicalCanvasNodeType, MiniMap
 const DEFAULT_WIDTH = 200;
 const DEFAULT_HEIGHT = 150;
 const PADDING = 20;
+const CONTENT_INSET = 10;
 const DEFAULT_NODE_OPACITY = 0.8;
 const DEFAULT_NODE_RADIUS = 1;
 
@@ -52,8 +66,11 @@ const DEFAULT_NODE_RADIUS = 1;
 // Helpers
 // =============================================================================
 
-function calculateBounds(nodes: CanvasNode[]): Bounds {
-  if (nodes.length === 0) {
+function calculateBounds(
+  nodes: readonly CanvasNode[],
+  visibleCanvasRect: MiniMapRect | undefined,
+): MiniMapBounds {
+  if (nodes.length === 0 && !visibleCanvasRect) {
     return {
       minX: -500,
       minY: -500,
@@ -64,10 +81,10 @@ function calculateBounds(nodes: CanvasNode[]): Bounds {
     };
   }
 
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
+  let minX = visibleCanvasRect?.x ?? Infinity;
+  let minY = visibleCanvasRect?.y ?? Infinity;
+  let maxX = visibleCanvasRect ? visibleCanvasRect.x + visibleCanvasRect.width : -Infinity;
+  let maxY = visibleCanvasRect ? visibleCanvasRect.y + visibleCanvasRect.height : -Infinity;
 
   for (const node of nodes) {
     minX = Math.min(minX, node.position.x);
@@ -90,6 +107,43 @@ function calculateBounds(nodes: CanvasNode[]): Bounds {
     width: maxX - minX,
     height: maxY - minY,
   };
+}
+
+export function resolveMiniMapGeometry({
+  nodes,
+  viewport,
+  containerWidth,
+  containerHeight,
+  width = DEFAULT_WIDTH,
+  height = DEFAULT_HEIGHT,
+}: Pick<
+  MiniMapProps,
+  'nodes' | 'viewport' | 'containerWidth' | 'containerHeight' | 'width' | 'height'
+>): MiniMapGeometry {
+  const visibleCanvasRect =
+    containerWidth > 0 && containerHeight > 0
+      ? {
+          x: -viewport.pan.x / viewport.zoom,
+          y: -viewport.pan.y / viewport.zoom,
+          width: containerWidth / viewport.zoom,
+          height: containerHeight / viewport.zoom,
+        }
+      : undefined;
+  const bounds = calculateBounds(nodes, visibleCanvasRect);
+  const scaleX = (width - CONTENT_INSET * 2) / bounds.width;
+  const scaleY = (height - CONTENT_INSET * 2) / bounds.height;
+  const scale = Math.min(scaleX, scaleY, 1);
+
+  const viewportRect = visibleCanvasRect
+    ? {
+        x: (visibleCanvasRect.x - bounds.minX) * scale + CONTENT_INSET,
+        y: (visibleCanvasRect.y - bounds.minY) * scale + CONTENT_INSET,
+        width: visibleCanvasRect.width * scale,
+        height: visibleCanvasRect.height * scale,
+      }
+    : { x: CONTENT_INSET, y: CONTENT_INSET, width: 0, height: 0 };
+
+  return { bounds, scale, viewportRect };
 }
 
 export function createBuiltInMiniMapNodeStyleRegistry(): MiniMapNodeStyleRegistry {
@@ -131,32 +185,19 @@ export function MiniMap({
   // Filter out container-managed children; containers expose compact summaries.
   const visibleNodes = useMemo(() => getTopLevelCanvasNodes(nodes), [nodes]);
 
-  // Calculate content bounds
-  const bounds = useMemo(() => calculateBounds(visibleNodes), [visibleNodes]);
-
-  // Calculate scale to fit content in minimap
-  const scale = useMemo(() => {
-    const scaleX = (width - 20) / bounds.width;
-    const scaleY = (height - 20) / bounds.height;
-    return Math.min(scaleX, scaleY, 1);
-  }, [width, height, bounds]);
-
-  // Calculate viewport rectangle in minimap coordinates
-  const viewportRect = useMemo(() => {
-    // Visible area in canvas coordinates
-    const visibleWidth = containerWidth / viewport.zoom;
-    const visibleHeight = containerHeight / viewport.zoom;
-    const visibleX = -viewport.pan.x / viewport.zoom;
-    const visibleY = -viewport.pan.y / viewport.zoom;
-
-    // Convert to minimap coordinates
-    return {
-      x: (visibleX - bounds.minX) * scale + 10,
-      y: (visibleY - bounds.minY) * scale + 10,
-      width: visibleWidth * scale,
-      height: visibleHeight * scale,
-    };
-  }, [viewport, containerWidth, containerHeight, bounds, scale]);
+  // Nodes and the visible Canvas viewport share one world-space projection.
+  const { bounds, scale, viewportRect } = useMemo(
+    () =>
+      resolveMiniMapGeometry({
+        nodes: visibleNodes,
+        viewport,
+        containerWidth,
+        containerHeight,
+        width,
+        height,
+      }),
+    [visibleNodes, viewport, containerWidth, containerHeight, width, height],
+  );
 
   // Handle click on minimap to pan
   const handleClick = useCallback(
@@ -165,9 +206,9 @@ export function MiniMap({
       const rect = miniMapRef.current?.getBoundingClientRect();
       if (!rect) return;
 
-      // Click position relative to SVG content area (account for 10px border offset)
-      const clickX = e.clientX - rect.left - 10;
-      const clickY = e.clientY - rect.top - 10;
+      // Click position relative to the shared projected content area.
+      const clickX = e.clientX - rect.left - CONTENT_INSET;
+      const clickY = e.clientY - rect.top - CONTENT_INSET;
 
       // Convert minimap pixel → canvas coordinate
       const canvasX = clickX / scale + bounds.minX;
@@ -201,7 +242,7 @@ export function MiniMap({
         <rect width={width} height={height} fill="var(--canvas-bg)" />
 
         {/* Nodes */}
-        <g transform={`translate(10, 10)`}>
+        <g transform={`translate(${CONTENT_INSET}, ${CONTENT_INSET})`}>
           {visibleNodes.map((node) => {
             const x = (node.position.x - bounds.minX) * scale;
             const y = (node.position.y - bounds.minY) * scale;
