@@ -56,7 +56,6 @@ type DshWorkspaceBoardSourceArtifact = Extract<
 
 interface CollectedContentToolSource {
   readonly artifact: DshWorkspaceBoardSourceArtifact;
-  readonly origin: 'document' | 'image';
   readonly imageOnlyReplacementLocators: readonly ContentLocator[];
 }
 
@@ -152,7 +151,6 @@ export function collectDshWorkspaceBoardArtifacts(input: {
   if (!isReviewableTurnEnd(terminal.reason)) return { diagnostics };
   const sources = new Map<string, DshWorkspaceBoardSourceArtifact>();
   const imageOnlyReplacements = new Map<string, readonly ContentLocator[]>();
-  const documentLocatorsByFile = new Map<string, Map<string, ContentLocator>>();
   for (const event of input.events) {
     if (event.kind !== 'tool' || event.turn !== input.turn || event.status !== 'completed')
       continue;
@@ -183,15 +181,8 @@ export function collectDshWorkspaceBoardArtifacts(input: {
     if (source.imageOnlyReplacementLocators.length > 0) {
       imageOnlyReplacements.set(locatorIdentity, source.imageOnlyReplacementLocators);
     }
-    if (source.origin === 'document') {
-      const fileIdentity = contentFileKey(source.artifact.contentLocator);
-      const locators = documentLocatorsByFile.get(fileIdentity) ?? new Map();
-      locators.set(locatorIdentity, source.artifact.contentLocator);
-      documentLocatorsByFile.set(fileIdentity, locators);
-    }
   }
   collapseConsumedImageOnlyDocumentWrappers(sources, imageOnlyReplacements);
-  collapseMultiLocationDocumentSources(sources, documentLocatorsByFile);
   if (sources.size === 0) return { diagnostics };
 
   const markdown = collectFinalAssistantMarkdown(input.events, input.turn);
@@ -232,7 +223,6 @@ function collectContentToolSource(
 ): CollectedContentToolSource | undefined {
   let locator: ContentLocator;
   let kind: 'file-reference' | 'image';
-  let origin: 'document' | 'image';
   let imageOnlyReplacementLocators: readonly ContentLocator[] = [];
   if (event.title === DOCUMENT_DSH_TOOL_NAME) {
     const requested = decodeDocumentDshToolArgs(event.rawInput).input.source;
@@ -244,19 +234,16 @@ function collectContentToolSource(
     }
     locator = completed.source;
     kind = 'file-reference';
-    origin = 'document';
     imageOnlyReplacementLocators = readImageOnlyReplacementLocators(completed.result, locator);
   } else if (event.title === CONTENT_IMAGE_DSH_TOOL_NAME) {
     const rawInput = requireRecord(event.rawInput, `${CONTENT_IMAGE_DSH_TOOL_NAME} input`);
     locator = decodeContentImageDshToolSource(rawInput['source']);
     kind = 'image';
-    origin = 'image';
   } else {
     return undefined;
   }
   return {
     artifact: createSourceArtifact(locator, kind),
-    origin,
     imageOnlyReplacementLocators,
   };
 }
@@ -325,27 +312,6 @@ function collapseConsumedImageOnlyDocumentWrappers(
       sources.delete(wrapperIdentity);
     }
   }
-}
-
-function collapseMultiLocationDocumentSources(
-  sources: Map<string, DshWorkspaceBoardSourceArtifact>,
-  documentLocatorsByFile: ReadonlyMap<string, ReadonlyMap<string, ContentLocator>>,
-): void {
-  for (const [fileIdentity, documentLocators] of documentLocatorsByFile) {
-    const firstLocator = documentLocators.values().next().value;
-    if (firstLocator === undefined) continue;
-    const rootLocator: ContentLocator = { file: firstLocator.file };
-    const rootIdentity = contentLocatorKey(rootLocator);
-    if (!sources.has(rootIdentity) && documentLocators.size < 2) continue;
-    for (const [sourceIdentity, source] of sources) {
-      if (contentFileKey(source.contentLocator) === fileIdentity) sources.delete(sourceIdentity);
-    }
-    sources.set(rootIdentity, createSourceArtifact(rootLocator, 'file-reference'));
-  }
-}
-
-function contentFileKey(locator: ContentLocator): string {
-  return contentLocatorKey({ file: locator.file });
 }
 
 function parseProjectedToolOutput(value: unknown): unknown {

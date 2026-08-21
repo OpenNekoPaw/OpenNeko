@@ -17,23 +17,24 @@ describe('DSH Workspace Board artifact collection', () => {
     expect(collectBatch(events)).toBeUndefined();
 
     events.push(turnEnd());
-    expect(collectBatch(events)).toMatchObject({
-      turn: 1,
-      completedAt: 2_000,
-      artifacts: [
-        {
+    const batch = collectBatch(events);
+    expect(batch).toMatchObject({ turn: 1, completedAt: 2_000 });
+    expect(batch?.artifacts.filter((artifact) => artifact.role === 'source')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
           kind: 'file-reference',
           role: 'source',
           title: 'blame.epub',
           contentLocator: { file: { authority: 'workspace', path: 'books/blame.epub' } },
-        },
-        {
-          kind: 'markdown',
-          role: 'analysis',
-          title: 'BLAME! 前 10 页分析',
-          sourceArtifactIds: [expect.stringMatching(/^content:/u)],
-        },
-      ],
+        }),
+        expect.objectContaining({ kind: 'image', role: 'source', title: 'page-1.jpg' }),
+      ]),
+    );
+    expect(batch?.artifacts.at(-1)).toMatchObject({
+      kind: 'markdown',
+      role: 'analysis',
+      title: 'BLAME! 前 10 页分析',
+      sourceArtifactIds: [expect.stringMatching(/^content:/u), expect.stringMatching(/^content:/u)],
     });
   });
 
@@ -53,7 +54,7 @@ describe('DSH Workspace Board artifact collection', () => {
     expect(first?.artifacts[0]?.contentFingerprint).toMatch(/^locator:/u);
   });
 
-  it('compacts multiple document locations from one container to its root locator', () => {
+  it('deduplicates exact locators while retaining distinct selectors in one container', () => {
     const firstPage = {
       file: { authority: 'workspace' as const, path: 'books/blame.pdf' },
       selector: { kind: 'page' as const, pageNumber: 1, pageIndex: 0 },
@@ -72,12 +73,45 @@ describe('DSH Workspace Board artifact collection', () => {
     ]);
 
     const sources = batch?.artifacts.filter((artifact) => artifact.role === 'source');
-    expect(sources).toEqual([
-      expect.objectContaining({
-        kind: 'file-reference',
-        contentLocator: { file: firstPage.file },
-      }),
+    expect(sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'file-reference',
+          contentLocator: firstPage,
+        }),
+        expect.objectContaining({
+          kind: 'file-reference',
+          contentLocator: secondPage,
+        }),
+      ]),
+    );
+    expect(sources).toHaveLength(2);
+  });
+
+  it('retains a consumed root locator beside exact selectors from the same container', () => {
+    const root = {
+      file: { authority: 'workspace' as const, path: 'books/blame.epub' },
+    };
+    const entry = {
+      file: root.file,
+      selector: { kind: 'entry' as const, path: 'chapters/page.xhtml' },
+    };
+    const batch = collectBatch([
+      turnStart(),
+      documentTool('root', root),
+      documentTool('entry', entry),
+      assistant('Root and page analysis'),
+      turnEnd(),
     ]);
+
+    const sources = batch?.artifacts.filter((artifact) => artifact.role === 'source');
+    expect(sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ contentLocator: root }),
+        expect.objectContaining({ contentLocator: entry }),
+      ]),
+    );
+    expect(sources).toHaveLength(2);
   });
 
   it('retains one exact document selector when no container root was consumed', () => {
@@ -93,7 +127,9 @@ describe('DSH Workspace Board artifact collection', () => {
     ]);
 
     expect(batch?.artifacts.filter((artifact) => artifact.role === 'source')).toEqual([
-      expect.objectContaining({ contentLocator: page }),
+      expect.objectContaining({
+        contentLocator: page,
+      }),
     ]);
   });
 
@@ -124,6 +160,61 @@ describe('DSH Workspace Board artifact collection', () => {
       kind: 'markdown',
       sourceArtifactIds: [expect.any(String)],
     });
+  });
+
+  it('indexes distinct EPUB page images once without retaining their image-only wrappers', () => {
+    const root = {
+      file: { authority: 'workspace' as const, path: 'books/blame.epub' },
+    };
+    const firstWrapper = {
+      file: root.file,
+      selector: { kind: 'entry' as const, path: 'chapters/first.xhtml' },
+    };
+    const secondWrapper = {
+      file: root.file,
+      selector: { kind: 'entry' as const, path: 'chapters/second.xhtml' },
+    };
+    const firstImage = {
+      file: root.file,
+      selector: { kind: 'entry' as const, path: 'images/first.jpg' },
+    };
+    const secondImage = {
+      file: root.file,
+      selector: { kind: 'entry' as const, path: 'images/second.jpg' },
+    };
+    const batch = collectBatch([
+      turnStart(),
+      documentTool('manifest', root),
+      documentTool('first-wrapper', firstWrapper, {
+        excerpt: { contentKind: 'image' },
+        imageInfo: [{ contentLocator: firstImage }],
+      }),
+      imageTool('first-image', firstImage),
+      imageTool('first-image-repeat', firstImage),
+      documentTool('second-wrapper', secondWrapper, {
+        excerpt: { contentKind: 'image' },
+        imageInfo: [{ contentLocator: secondImage }],
+      }),
+      imageTool('second-image', secondImage),
+      assistant('Two-page analysis'),
+      turnEnd(),
+    ]);
+
+    const sources = batch?.artifacts.filter((artifact) => artifact.role === 'source');
+    expect(sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'file-reference', contentLocator: root }),
+        expect.objectContaining({ kind: 'image', contentLocator: firstImage }),
+        expect.objectContaining({ kind: 'image', contentLocator: secondImage }),
+      ]),
+    );
+    expect(sources).toHaveLength(3);
+    expect(sources).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ contentLocator: firstWrapper }),
+        expect.objectContaining({ contentLocator: secondWrapper }),
+      ]),
+    );
   });
 
   it.each(['text', 'mixed'] as const)(

@@ -26,3 +26,6 @@
       Desktop validation evidence. The reported EPUB turn now projects one root file node, one analysis node and one
       relation in the already-open visible Board; Agent Runtime (`52` files, `369` tests), Desktop (`103` files, `614`
       tests), affected typechecks, Desktop build and strict OpenSpec validation passed.
+- [x] 12. Restore complete-`ContentLocator` index semantics after runtime evidence showed that same-file selector
+      collapse erased EPUB page sources; retain only the Content-declared image-only wrapper replacement, add
+      regression coverage, and rerun the focused Agent/Canvas/Desktop validation gates.

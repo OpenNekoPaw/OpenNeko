@@ -58,10 +58,11 @@
   source 或请求/结果 locator 不一致时，collector 记录包含 `toolCallId` 与 Tool 名的 diagnostic 并排除该
   source；有效 sibling 仍参与同一 terminal batch。该行为不是把非法结果伪装为成功，transcript 和 Host
   diagnostic 都保留失败事实。
-- Board 是分析索引而不是 Tool 调用日志。同轮已有无 selector 的容器 source，或成功 Document Tool 读取了
-  同一文件的多个不同 selector 时，collector 将该文件下的 source 收敛为纯文件 `ContentLocator`；只有一个
-  明确 selector 且没有容器根 source 时保持页、entry 或 text-range 的精确 source。该规则只使用
-  `ContentLocator.file` 与成功 Document Tool 事实，不猜测 EPUB 内部 `page`/`moe` 文件名，也不执行 HTML。
+- Board 是内容索引而不是 Tool 调用日志。collector 只按完整 `ContentLocator` 去重，不得因为多个 locator
+  共享同一个 `file` 就把不同 page、entry 或 text-range selector 收敛成根文件；否则跨应用定位信息会丢失，
+  Board 也无法展示 Agent 实际消费的内容位置。唯一允许的语义折叠是 Content result 明确声明的
+  image-only wrapper → embedded image 关系，且对应图片必须已在同轮成功读取。该规则不猜测 EPUB 内部
+  `page`/`moe` 文件名，也不执行 HTML。
 
 ## Commit timing and failure semantics
 

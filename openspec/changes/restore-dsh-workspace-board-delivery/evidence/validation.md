@@ -88,3 +88,28 @@ UI itself was not replaced or restyled.
   multi-page container compaction, replay dedupe, and preservation of a single exact page selector. Strict OpenSpec
   validation, both affected typechecks, full Agent Runtime/Desktop tests, Desktop production build and `git diff
   --check` passed.
+
+## 2026-08-22 complete ContentLocator index correction
+
+- The reported `workspace.nkc` was not missing its terminal analysis delivery: its newest Markdown provenance was
+  created at `2026-08-21T19:40:45.960Z`, the same second that the visible 13-minute turn completed. The persisted graph
+  contained the root EPUB source plus three analysis nodes. This isolated the visible defect to source projection rather
+  than terminal timing, ledger admission, Canvas mutation, or live refresh.
+- The task-11 same-file compaction was the regression. It used `ContentLocator.file` to replace every distinct selector
+  consumed from one EPUB with one root locator, so page-level cross-application identities disappeared even though the
+  analysis node was written. The collector now deduplicates only identical complete `ContentLocator` values.
+- Content-declared image-only wrapper replacement remains canonical: when an XHTML/HTML entry declares image content
+  and its embedded image was successfully consumed, Board receives the image locator and not both wrapper and image.
+  A combined EPUB regression proves one root source plus two distinct page images, one copy of a repeated image, no
+  wrapper nodes, and the terminal analysis relation.
+- Validation passed: Agent Runtime focused collector (`22` tests), full Agent Runtime (`52` files, `371` tests before
+  the final added regression; the focused rerun covers the added case), Canvas Domain (`37` files, `300` tests), focused
+  Desktop Board/subscription (`2` files, `6` tests), Agent Runtime and Desktop typechecks, `pnpm test:agent:eval`
+  (`45` files, `314` harness tests; `26` suites and `69` dry-run cases), Agent/content boundary gates, strict OpenSpec
+  validation (`119` items), and `git diff --check`.
+- Desktop production packaging passed for `darwin-arm64`; the exact development owner was stopped before packaging and
+  the same development runtime was restarted afterward, preserving the single Vite bundle-writer invariant.
+- Post-fix visible UI acceptance remains blocked in this implementation turn because it requires a new user-driven real
+  provider turn; no direct IPC, database injection, dry-run, or unit result is substituted for that evidence. The
+  authoritative manual check is that a new multi-page EPUB analysis updates the already-open configured Board with
+  distinct image/page sources plus one analysis node, without duplicate wrappers or reopening the Board.

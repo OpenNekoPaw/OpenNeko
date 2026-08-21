@@ -69,9 +69,10 @@ ledger, and Canvas projection boundaries without adding content fingerprints or 
 
 - **WHEN** a turn successfully consumes multiple different selectors from the same EPUB, PDF, DOCX, CBZ, or other
   document container, or also consumes that container's root locator
-- **THEN** the terminal batch SHALL contain one root file `ContentLocator` source for that container
-- **AND** it SHALL NOT create one Board node per internal Tool read
-- **AND** a single exact selector without a root source SHALL remain exact
+- **THEN** the terminal batch SHALL retain one source for every distinct complete `ContentLocator`
+- **AND** repeated reads of an identical locator SHALL still produce only one source
+- **AND** sharing the same `ContentLocator.file` SHALL NOT erase a page, entry, or text-range selector
+- **AND** a root locator SHALL remain a separate source when it was itself consumed
 
 #### Scenario: An image-only EPUB page wrapper resolves to an image source
 
