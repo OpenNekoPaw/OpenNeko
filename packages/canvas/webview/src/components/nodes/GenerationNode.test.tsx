@@ -52,6 +52,11 @@ describe('GenerationNode', () => {
     expect(container.textContent).not.toContain('Text generation');
     expect(container.textContent).toContain('Failed');
     expect(container.querySelector('[data-canvas-content-kind="text"]')).not.toBeNull();
+    expect(
+      container
+        .querySelector('.canvas-generation-node__text-output')
+        ?.getAttribute('data-canvas-wheel-owner'),
+    ).toBe('content');
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.querySelector('select')).toBeNull();
     expect(container.querySelector('button[title="Run"]')).toBeNull();

@@ -52,6 +52,11 @@ describe('MarkdownNode', () => {
     expect(container.querySelector('[data-markdown-document="ready"]')?.textContent).toContain(
       '这是画布分析。',
     );
+    expect(
+      container
+        .querySelector('.canvas-markdown-node__preview')
+        ?.getAttribute('data-canvas-wheel-owner'),
+    ).toBe('content');
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.querySelector('.ProseMirror')).toBeNull();
 
@@ -63,6 +68,11 @@ describe('MarkdownNode', () => {
     await vi.waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
 
     expect(container.querySelector('.ProseMirror')?.textContent).toContain('这是画布分析。');
+    expect(
+      container
+        .querySelector('.canvas-markdown-node__editor')
+        ?.getAttribute('data-canvas-wheel-owner'),
+    ).toBe('content');
     expect(container.querySelector('textarea')).toBeNull();
 
     await act(async () => {

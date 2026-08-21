@@ -89,7 +89,7 @@ export function MarkdownNode({
           </div>
         ) : null}
         {editActive ? (
-          <div className="canvas-markdown-node__editor">
+          <div className="canvas-markdown-node__editor" data-canvas-wheel-owner="content">
             <Suspense
               fallback={
                 <div className="canvas-markdown-node__status" role="status">
@@ -120,7 +120,7 @@ export function MarkdownNode({
             ) : null}
           </div>
         ) : (
-          <div className="canvas-markdown-node__preview">
+          <div className="canvas-markdown-node__preview" data-canvas-wheel-owner="content">
             <MarkdownDocumentView
               value={node.data.content}
               className="canvas-markdown-node__document"
@@ -463,7 +463,7 @@ function CanvasFileNodeContent({
       <div className="canvas-file-node__format" aria-label={resolvePreviewKindLabel(preview.kind)}>
         {resolvePreviewKindLabel(preview.kind)}
       </div>
-      <div className="canvas-file-node__scroll">
+      <div className="canvas-file-node__scroll" data-canvas-wheel-owner="content">
         {preview.kind === 'markdown' ? (
           <MarkdownDocumentView
             value={preview.text}

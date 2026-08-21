@@ -149,6 +149,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     pressKey,
     restartApplication,
     screenshot,
+    scroll,
     waitForSelector,
   }) {
     await resizeWindow(evaluate, 1200, 800);
@@ -276,6 +277,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       markdownPreview.editing ||
       markdownPreview.textareaCount !== 0 ||
       markdownPreview.proseMirrorCount !== 0 ||
+      markdownPreview.wheelOwner !== 'content' ||
+      markdownPreview.scrollHeight <= markdownPreview.clientHeight ||
       markdownPreview.headingSize > 18 ||
       markdownPreview.width > 262 ||
       markdownPreview.height > 182
@@ -285,6 +288,23 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       );
     }
     const markdownPreviewScreenshot = await screenshot('canvas-markdown-node-compact-preview');
+    await scroll(`${markdownSelector} .canvas-markdown-node__preview`, 0, { deltaY: 120 });
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 100))');
+    const markdownScrolled = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
+    if (
+      markdownScrolled.scrollTop <= markdownPreview.scrollTop ||
+      Math.abs(markdownScrolled.left - markdownPreview.left) > 0.5 ||
+      Math.abs(markdownScrolled.top - markdownPreview.top) > 0.5
+    ) {
+      throw new Error(
+        `Canvas Markdown wheel ownership is invalid: ${JSON.stringify({ before: markdownPreview, after: markdownScrolled })}`,
+      );
+    }
+    checkpoint('canvas-markdown-node-nested-scroll', {
+      before: markdownPreview,
+      after: markdownScrolled,
+    });
+    const markdownScrolledScreenshot = await screenshot('canvas-markdown-node-nested-scroll');
     await click(markdownSelector);
     const selectedMarkdownPreview = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
     if (
@@ -859,6 +879,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       epubImageScreenshot,
       markdownPreview,
       markdownPreviewScreenshot,
+      markdownScrolled,
+      markdownScrolledScreenshot,
       markdownEditing,
       markdownEditingScreenshot,
       quietConnections,
@@ -930,6 +952,10 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evidence.markdownPreview.editing ||
       evidence.markdownPreview.textareaCount !== 0 ||
       evidence.markdownPreview.proseMirrorCount !== 0 ||
+      evidence.markdownPreview.wheelOwner !== 'content' ||
+      evidence.markdownScrolled.scrollTop <= evidence.markdownPreview.scrollTop ||
+      Math.abs(evidence.markdownScrolled.left - evidence.markdownPreview.left) > 0.5 ||
+      Math.abs(evidence.markdownScrolled.top - evidence.markdownPreview.top) > 0.5 ||
       !evidence.markdownEditing.editing ||
       evidence.markdownEditing.proseMirrorCount !== 1 ||
       evidence.markdownEditing.textareaCount !== 0
@@ -2104,6 +2130,12 @@ function markdownNode(nodeId) {
         '',
         '- 选中保持阅读模式',
         '- 双击进入富文本编辑',
+        '- 节点内容独立滚动',
+        '- 画布空白区域继续平移',
+        '- 修饰键滚轮继续缩放画布',
+        '- 滚动边界不会把手势交还画布',
+        '- 文件预览采用相同滚动契约',
+        '- 生成文本输出采用相同滚动契约',
       ].join('\n'),
     },
   };
@@ -2154,7 +2186,11 @@ function inspectCanvasMarkdownNode(evaluate, selector) {
     const card = node.querySelector('.node-card');
     const markdown = node.querySelector('.canvas-markdown-node');
     const heading = node.querySelector('h1');
+    const scrollSurface = node.querySelector(
+      '.canvas-markdown-node__preview, .canvas-markdown-node__editor',
+    );
     const rect = card?.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
     return {
       editing: markdown?.getAttribute('data-editing') === 'true',
       textareaCount: node.querySelectorAll('textarea').length,
@@ -2162,6 +2198,15 @@ function inspectCanvasMarkdownNode(evaluate, selector) {
       headingSize: heading ? Number.parseFloat(getComputedStyle(heading).fontSize) : 0,
       width: rect?.width ?? 0,
       height: rect?.height ?? 0,
+      left: nodeRect.left,
+      top: nodeRect.top,
+      scrollTop: scrollSurface instanceof HTMLElement ? scrollSurface.scrollTop : 0,
+      scrollHeight: scrollSurface instanceof HTMLElement ? scrollSurface.scrollHeight : 0,
+      clientHeight: scrollSurface instanceof HTMLElement ? scrollSurface.clientHeight : 0,
+      wheelOwner:
+        scrollSurface instanceof HTMLElement
+          ? scrollSurface.getAttribute('data-canvas-wheel-owner')
+          : null,
       text: node.textContent ?? '',
     };
   })()`);

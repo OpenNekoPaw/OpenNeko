@@ -77,7 +77,12 @@ export function GenerationNode({
         <div className="canvas-generation-node__content">
           {recipe.kind === 'prompt' ? (
             textOutput ? (
-              <div className="canvas-generation-node__text-output">{textOutput}</div>
+              <div
+                className="canvas-generation-node__text-output"
+                data-canvas-wheel-owner="content"
+              >
+                {textOutput}
+              </div>
             ) : (
               <EmptyGenerationContent kind={recipe.kind} />
             )

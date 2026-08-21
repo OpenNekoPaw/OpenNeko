@@ -20,6 +20,7 @@ const ZOOM_WHEEL_SENSITIVITY = 0.001;
 const RIGHT_BUTTON = 2;
 const RIGHT_DRAG_THRESHOLD_PX = 4;
 const WHEEL_LINE_HEIGHT_PX = 16;
+const CANVAS_CONTENT_WHEEL_OWNER_SELECTOR = '[data-canvas-wheel-owner="content"]';
 
 // =============================================================================
 // Types
@@ -193,6 +194,8 @@ export function useViewportTransform(
     if (!container || disabled) return;
 
     const handleWheel = (e: WheelEvent) => {
+      if (shouldDeferWheelToCanvasContent(e, container)) return;
+
       e.preventDefault();
 
       const vp = viewportRef.current;
@@ -307,6 +310,15 @@ export function useViewportTransform(
     fitContent,
     resetViewport,
   };
+}
+
+function shouldDeferWheelToCanvasContent(
+  event: Pick<WheelEvent, 'target' | 'ctrlKey' | 'metaKey'>,
+  container: HTMLElement,
+): boolean {
+  if (event.ctrlKey || event.metaKey || !(event.target instanceof Element)) return false;
+  const owner = event.target.closest(CANVAS_CONTENT_WHEEL_OWNER_SELECTOR);
+  return owner !== null && container.contains(owner);
 }
 
 function normalizeWheelDelta(delta: number, deltaMode: number, pageHeight: number): number {

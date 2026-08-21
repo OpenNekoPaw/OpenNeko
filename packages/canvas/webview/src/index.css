@@ -1627,6 +1627,10 @@ html.canvas-webview-document #root,
   overflow: auto;
 }
 
+.canvas-webview-root [data-canvas-wheel-owner='content'] {
+  overscroll-behavior: contain;
+}
+
 .canvas-markdown-node__document {
   color: var(--node-fg);
   font-size: 12px;

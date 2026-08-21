@@ -74,6 +74,9 @@ describe('Canvas File node text preview', () => {
     expect(container.querySelector('.canvas-file-node__text')?.textContent).toContain(
       '"name": "OpenNeko"',
     );
+    expect(
+      container.querySelector('.canvas-file-node__scroll')?.getAttribute('data-canvas-wheel-owner'),
+    ).toBe('content');
     expect(container.querySelectorAll('.canvas-node-external-label')).toHaveLength(1);
     expect(container.querySelector('.canvas-node-external-label')?.textContent).toContain(
       'project.json',

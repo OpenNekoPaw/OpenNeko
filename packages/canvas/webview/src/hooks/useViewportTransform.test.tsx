@@ -38,7 +38,11 @@ function ViewportHarness({
         onMouseUp={handlers.onMouseUp}
         onMouseLeave={handlers.onMouseLeave}
         onContextMenu={handlers.onContextMenu}
-      />
+      >
+        <div data-canvas-wheel-owner="content" data-testid="content-scroll-owner">
+          <span data-testid="content-scroll-child" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -105,6 +109,43 @@ describe('useViewportTransform', () => {
 
     expect(wheel.defaultPrevented).toBe(true);
     expect(onViewportChange).toHaveBeenLastCalledWith({ pan: { x: 8, y: -10 } });
+  });
+
+  it('leaves ordinary wheel input inside Canvas content to its nested scroll owner', () => {
+    const onViewportChange = vi.fn();
+    const element = renderHarness(onViewportChange);
+    const content = element.querySelector<HTMLElement>('[data-testid="content-scroll-child"]');
+    if (!content) throw new Error('Content scroll child did not render');
+    const wheel = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 40,
+    });
+
+    act(() => content.dispatchEvent(wheel));
+
+    expect(wheel.defaultPrevented).toBe(false);
+    expect(onViewportChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps modifier wheel as Canvas zoom inside a nested content scroll owner', () => {
+    const onViewportChange = vi.fn();
+    const element = renderHarness(onViewportChange);
+    const content = element.querySelector<HTMLElement>('[data-testid="content-scroll-child"]');
+    if (!content) throw new Error('Content scroll child did not render');
+    const wheel = new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+      clientX: 100,
+      clientY: 80,
+      deltaY: -100,
+    });
+
+    act(() => content.dispatchEvent(wheel));
+
+    expect(wheel.defaultPrevented).toBe(true);
+    expect(onViewportChange).toHaveBeenCalledTimes(1);
   });
 
   it('keeps pointer-anchored zoom for modifier wheel input', () => {
