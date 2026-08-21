@@ -54,7 +54,7 @@ export function acquireDesktopDevelopmentBundleOwner(options = {}) {
     const existing = readOwnerRecord(lockPath, appRoot);
     if (isProcessAlive(existing.pid)) {
       throw new Error(
-        `Desktop development process ${String(existing.pid)} already owns the Vite bundle for this checkout. Stop that process before starting another development app or functional scenario.`,
+        `Desktop process ${String(existing.pid)} already owns the Vite bundle for this checkout. Stop that process before starting another development app, package build, or functional scenario.`,
       );
     }
 
@@ -69,21 +69,7 @@ export function acquireDesktopDevelopmentBundleOwner(options = {}) {
 }
 
 export async function runDesktopDevelopment(options = {}) {
-  const appRoot = realpathSync(options.appRoot ?? desktopAppRoot);
-  const ownership = acquireDesktopDevelopmentBundleOwner({
-    appRoot,
-    ...(options.lockPath === undefined ? {} : { lockPath: options.lockPath }),
-    ...(options.temporaryDirectory === undefined
-      ? {}
-      : { temporaryDirectory: options.temporaryDirectory }),
-    ...(options.pid === undefined ? {} : { pid: options.pid }),
-    ...(options.token === undefined ? {} : { token: options.token }),
-    ...(options.isProcessAlive === undefined ? {} : { isProcessAlive: options.isProcessAlive }),
-  });
-  const releaseOnExit = () => ownership.release();
-  process.once('exit', releaseOnExit);
-
-  try {
+  return runWithDesktopViteBundleOwner(options, async (appRoot) => {
     const command = (options.platform ?? process.platform) === 'win32' ? 'pnpm.cmd' : 'pnpm';
     const argv = normalizeForwardedArguments(options.argv ?? process.argv.slice(2));
     const environment = resolveDesktopDevelopmentEnvironment({
@@ -102,6 +88,47 @@ export async function runDesktopDevelopment(options = {}) {
       },
     );
     return await waitForChild(child);
+  });
+}
+
+export async function runDesktopForgeBuild(options = {}) {
+  const forgeCommand = options.forgeCommand;
+  if (forgeCommand !== 'package' && forgeCommand !== 'make') {
+    throw new Error('Desktop Forge build command must be package or make.');
+  }
+  return runWithDesktopViteBundleOwner(options, async (appRoot) => {
+    const command = (options.platform ?? process.platform) === 'win32' ? 'pnpm.cmd' : 'pnpm';
+    const argv = normalizeForwardedArguments(options.argv ?? []);
+    const child = (options.spawnProcess ?? spawn)(
+      command,
+      ['exec', 'electron-forge', forgeCommand, ...argv],
+      {
+        cwd: appRoot,
+        env: options.environment ?? process.env,
+        stdio: 'inherit',
+      },
+    );
+    return await waitForChild(child);
+  });
+}
+
+async function runWithDesktopViteBundleOwner(options, execute) {
+  const appRoot = realpathSync(options.appRoot ?? desktopAppRoot);
+  const ownership = acquireDesktopDevelopmentBundleOwner({
+    appRoot,
+    ...(options.lockPath === undefined ? {} : { lockPath: options.lockPath }),
+    ...(options.temporaryDirectory === undefined
+      ? {}
+      : { temporaryDirectory: options.temporaryDirectory }),
+    ...(options.pid === undefined ? {} : { pid: options.pid }),
+    ...(options.token === undefined ? {} : { token: options.token }),
+    ...(options.isProcessAlive === undefined ? {} : { isProcessAlive: options.isProcessAlive }),
+  });
+  const releaseOnExit = () => ownership.release();
+  process.once('exit', releaseOnExit);
+
+  try {
+    return await execute(appRoot);
   } finally {
     process.off('exit', releaseOnExit);
     ownership.release();

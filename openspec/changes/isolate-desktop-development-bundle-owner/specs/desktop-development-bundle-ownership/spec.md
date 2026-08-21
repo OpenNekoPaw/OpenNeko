@@ -1,8 +1,8 @@
 ## ADDED Requirements
 
-### Requirement: Development Vite output has one live owner
+### Requirement: Desktop Vite output has one live writer
 
-The Desktop development command SHALL acquire exclusive ownership for the current repository checkout before Electron Forge can delete or write the shared `.vite` output. A second canonical development launch MUST fail visibly while the owner process is alive and MUST NOT start Forge or mutate the active output.
+Every canonical Desktop Forge command SHALL acquire exclusive ownership for the current repository checkout before Electron Forge can delete or write the shared `.vite` output. A second canonical development or package build MUST fail visibly while the owner process is alive and MUST NOT start Forge or mutate the active output.
 
 #### Scenario: Functional scenario starts while a developer app is running
 
@@ -15,6 +15,12 @@ The Desktop development command SHALL acquire exclusive ownership for the curren
 - **WHEN** Desktop development starts from a different canonical repository checkout
 - **THEN** it uses a distinct owner identity
 - **AND** the other checkout does not block or share its Vite output
+
+#### Scenario: Package build starts while a developer app is running
+
+- **WHEN** one canonical Desktop development command owns the checkout and `build`, `package`, or `make` is requested
+- **THEN** the package construction fails before Electron Forge writes `.vite`
+- **AND** the running Electron Main retains a coherent lazy-chunk graph
 
 ### Requirement: Ownership recovery is exact and fail-visible
 
@@ -37,9 +43,9 @@ The development launcher SHALL reclaim a well-formed owner record only after the
 - **THEN** it reports a build-ownership diagnostic and does not start Forge
 - **AND** it does not guess that the record is stale or delete `.vite`
 
-### Requirement: Canonical development command preserves launch semantics
+### Requirement: Canonical Desktop commands preserve launch semantics
 
-The `@neko/app-desktop dev` command SHALL remain the single successful development entry used by root development and functional scenarios. After ownership succeeds, it SHALL forward Electron arguments and environment to Electron Forge and propagate its terminal status. Packaged Desktop scenarios SHALL remain outside development ownership.
+The `@neko/app-desktop dev`, `build`, `package`, and `make` commands SHALL remain the public entries used by root development, packaging, and functional scenarios. After ownership succeeds, the launcher SHALL invoke exactly the explicitly requested Forge command, forward arguments and environment, and propagate its terminal status. Execution of an already-built packaged Desktop artifact SHALL remain outside bundle ownership.
 
 #### Scenario: Development launch acquires ownership
 
@@ -51,3 +57,9 @@ The `@neko/app-desktop dev` command SHALL remain the single successful developme
 
 - **WHEN** the Desktop functional runner selects a fingerprint-verified packaged executable
 - **THEN** it starts that executable directly without acquiring the development bundle owner
+
+#### Scenario: Package construction acquires ownership
+
+- **WHEN** no live owner exists and `@neko/app-desktop package` is invoked
+- **THEN** the launcher invokes `electron-forge package` exactly once
+- **AND** it retains ownership until package construction terminates

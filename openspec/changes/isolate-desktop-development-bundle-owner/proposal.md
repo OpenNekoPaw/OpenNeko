@@ -4,11 +4,11 @@ Electron Forge removes the shared `apps/neko-desktop/.vite` directory whenever a
 
 ## What Changes
 
-- Establish one exclusive owner for the development Vite bundle directory per repository checkout.
-- Make every `@neko/app-desktop dev` launch acquire ownership before Electron Forge can delete or rebuild `.vite`.
-- Reject a concurrent development launch with an explicit diagnostic while leaving the active application and its build output untouched.
+- Establish one exclusive writer for the shared Vite bundle directory per repository checkout.
+- Make every `@neko/app-desktop dev`, `build`, `package`, and `make` launch acquire ownership before Electron Forge can delete or rebuild `.vite`.
+- Reject a concurrent development or packaging launch with an explicit diagnostic while leaving the active application and its build output untouched.
 - Reclaim an owner record only when its process is no longer alive, and release only the exact ownership token acquired by the current launcher.
-- Keep packaged Desktop functional scenarios independent from the development bundle owner.
+- Keep execution of an already-built packaged Desktop artifact independent from the bundle writer; package construction still owns the shared output.
 - Add deterministic orchestration tests and real development-launch evidence for conflict rejection and later owner reuse.
 
 ## Capabilities
@@ -23,7 +23,7 @@ None.
 
 ## Impact
 
-- `scripts/desktop-functional` owns the repository-local Desktop development launcher and functional-runner orchestration. It gains the exclusive owner lifecycle and tests.
-- `apps/neko-desktop` remains the thin Electron composition root; its `dev` script delegates to the launcher before Electron Forge starts. No Main, preload, renderer, Agent, provider or package-owned business contract changes.
-- Development startup behavior changes: a second development instance from the same checkout is rejected instead of deleting the active instance's Vite chunks. Packaged application behavior and user data are unchanged.
+- `scripts/desktop-functional` owns the repository-local Desktop Forge launcher and functional-runner orchestration. It gains the exclusive writer lifecycle and tests.
+- `apps/neko-desktop` remains the thin Electron composition root; its Forge scripts delegate to the launcher before Electron Forge starts. No Main, preload, renderer, Agent, provider or package-owned business contract changes.
+- Forge startup behavior changes: a development or package build from the same checkout is rejected while another writer is live instead of replacing the active instance's Vite chunks. Packaged application behavior and user data are unchanged.
 - No dependency, persisted project, configuration, credential, conversation or artifact migration is introduced.

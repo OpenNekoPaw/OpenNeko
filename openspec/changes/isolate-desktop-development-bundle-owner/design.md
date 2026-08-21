@@ -1,6 +1,6 @@
 ## Context
 
-`@electron-forge/plugin-vite` owns the development build lifecycle and removes `apps/neko-desktop/.vite` in its `preStart` hook. Both the normal developer command and `scripts/desktop-functional/runner.mjs` currently invoke the same `@neko/app-desktop dev` script. A second invocation can therefore erase hashed Main chunks while the first Electron Main still holds an older entry graph in memory. Lazy provider loading then requests a chunk that no longer exists.
+`@electron-forge/plugin-vite` owns both development and package build lifecycles and writes `apps/neko-desktop/.vite`. A second development invocation can remove the directory in `preStart`, while a package build can replace the same hashed graph without starting a second development app. Either writer can therefore erase hashed Main chunks while the first Electron Main still holds an older entry graph in memory. Lazy provider or document decoder loading then requests a chunk that no longer exists.
 
 This is a local build-output ownership problem. Agent provider routing correctly requests the OpenAI completions adapter, and the current build contains that adapter under a newer hash. Recovering inside the provider or transcript would hide the build defect and leave every other lazy Main chunk exposed to the same race.
 
@@ -15,10 +15,10 @@ Five-layer analysis:
 Ownership evidence:
 
 - **Owner / package role:** repository test/development tooling under `scripts/desktop-functional`; `apps/neko-desktop` only wires its development command to that tooling.
-- **Canonical path:** root or functional runner -> `pnpm --filter @neko/app-desktop dev` -> development owner launcher -> `pnpm exec electron-forge start`.
+- **Canonical path:** root, package script, or functional runner -> Desktop Forge owner launcher -> the explicitly requested `electron-forge start|package|make` command.
 - **Producer / consumers:** the launcher produces one process-owned lock record; normal developers and the Desktop functional runner consume the same command. Electron Forge consumes the unchanged application configuration only after acquisition succeeds.
 - **Runtime boundary:** host Node tooling outside Electron Main/preload/renderer.
-- **Replaced path:** direct package-script invocation of `electron-forge start` is removed. There is no alternate successful development launch in this checkout.
+- **Replaced path:** direct package-script invocation of `electron-forge start`, `package`, and `make` is removed. There is no alternate successful shared-output writer in this checkout.
 - **User data:** no user storage is read or changed. The lock is disposable tooling state under the OS temporary directory.
 
 ## Goals / Non-Goals
@@ -60,9 +60,9 @@ If the existing record is valid and its process is alive, the second launch thro
 
 The record contains the launcher PID and a random ownership token. Cleanup rereads the record and removes it only when the token still matches, preventing an exiting older launcher from deleting a newer owner's record.
 
-### Keep the existing public development command
+### Keep the existing public Desktop commands
 
-`@neko/app-desktop` continues exposing `dev`, so root commands, functional scenarios and developer workflows do not gain a parallel entry. The launcher forwards all arguments to `electron-forge start` and propagates the exact exit status.
+`@neko/app-desktop` continues exposing `dev`, `build`, `package`, and `make`, so root commands, functional scenarios and developer workflows do not gain a parallel entry. The launcher accepts only the explicit repository-owned Forge commands, forwards their arguments, and propagates the exact exit status.
 
 ### Evaluation disposition
 

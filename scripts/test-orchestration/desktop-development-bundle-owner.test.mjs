@@ -9,6 +9,7 @@ import {
   acquireDesktopDevelopmentBundleOwner,
   resolveDesktopDevelopmentOwnerPath,
   runDesktopDevelopment,
+  runDesktopForgeBuild,
 } from '../desktop-functional/run-development.mjs';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -269,6 +270,77 @@ describe('Desktop development bundle ownership', () => {
     }
   });
 
+  it('holds the same bundle owner for package construction and forwards Forge once', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'openneko-package-owner-launch-'));
+    try {
+      const appRoot = join(fixtureRoot, 'app');
+      await mkdir(appRoot);
+      const calls = [];
+      const result = runDesktopForgeBuild({
+        appRoot,
+        temporaryDirectory: fixtureRoot,
+        forgeCommand: 'package',
+        argv: ['--arch=arm64'],
+        pid: 808,
+        token: 'owner-package',
+        environment: { OPENNEKO_PACKAGE_ENV: 'preserved' },
+        spawnProcess(command, args, options) {
+          calls.push({ command, args, options });
+          const child = new EventEmitter();
+          void Promise.resolve().then(() => child.emit('exit', 0, null));
+          return child;
+        },
+      });
+
+      assert.equal(await result, 0);
+      assert.equal(calls.length, 1);
+      assert.deepEqual(calls[0].args, ['exec', 'electron-forge', 'package', '--arch=arm64']);
+      assert.equal(calls[0].options.env.OPENNEKO_PACKAGE_ENV, 'preserved');
+      await assert.rejects(() => stat(resolveDesktopDevelopmentOwnerPath(appRoot, fixtureRoot)), {
+        code: 'ENOENT',
+      });
+    } finally {
+      await rm(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects package construction before Forge while development owns the bundle', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'openneko-package-owner-conflict-'));
+    try {
+      const appRoot = join(fixtureRoot, 'app');
+      await mkdir(appRoot);
+      const lockPath = resolveDesktopDevelopmentOwnerPath(appRoot, fixtureRoot);
+      const owner = acquireDesktopDevelopmentBundleOwner({
+        appRoot,
+        lockPath,
+        pid: 909,
+        token: 'owner-development',
+      });
+      let spawnCount = 0;
+
+      await assert.rejects(
+        () =>
+          runDesktopForgeBuild({
+            appRoot,
+            lockPath,
+            forgeCommand: 'package',
+            pid: 1001,
+            token: 'owner-package-rejected',
+            isProcessAlive: (pid) => pid === 909,
+            spawnProcess() {
+              spawnCount += 1;
+              return new EventEmitter();
+            },
+          }),
+        /already owns the Vite bundle/u,
+      );
+      assert.equal(spawnCount, 0);
+      assert.equal(owner.release(), true);
+    } finally {
+      await rm(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
   it('keeps root development and functional scenarios on the guarded package command', async () => {
     const [rootManifest, desktopManifest, runnerSource] = await Promise.all([
       readFile(join(repositoryRoot, 'package.json'), 'utf8').then(JSON.parse),
@@ -282,6 +354,10 @@ describe('Desktop development bundle ownership', () => {
       'node ../../scripts/assert-supported-desktop-host.mjs && node ../../scripts/desktop-functional/run-development.mjs',
     );
     assert.doesNotMatch(desktopManifest.scripts.dev, /electron-forge start/u);
+    for (const script of ['build', 'package', 'make']) {
+      assert.match(desktopManifest.scripts[script], /run-forge-build\.mjs/u);
+      assert.doesNotMatch(desktopManifest.scripts[script], /&& electron-forge (?:package|make)/u);
+    }
     assert.match(
       runnerSource,
       /Object\.freeze\(\['--filter', '@neko\/app-desktop', 'dev', '--', \.\.\.commonArgs\]\)/u,

@@ -49,3 +49,14 @@ No blocking or suggestion-level finding remains in the scoped diff.
 - The first migration requires fully stopping the pre-change Forge parent and Electron child; `rs` or window reload does not switch the parent command to the guarded launcher.
 - Direct manual invocation of the third-party Forge CLI remains outside repository command governance.
 - Real-provider visible acceptance is blocked by missing explicit authorization and is not claimed as passed.
+
+## Package writer follow-up
+
+Date: 2026-08-22
+
+- The live Electron process started at `02:41:18`, while the checkout `.vite/build` graph was overwritten at `02:42:47`. That ordering explains why eager Main code continued running but later EPUB/provider lazy imports became unresolvable until Main restarted.
+- Canonical `build`, `package`, and `make` scripts now acquire the same checkout owner as development before Electron Forge can write `.vite`.
+- A real package attempt while the development owner was live failed before Forge with the owner diagnostic. The focused owner suite passed 9/9, including uncontended package lifetime and development-versus-package exclusion.
+- Content (148 tests), Agent Runtime (370 tests), focused Desktop DSH tests (35 tests), Content/Agent/Desktop typechecks, package/application boundary checks, strict affected OpenSpec validation, key-free Agent Evaluation (45 files / 314 tests; 26 suites / 69 cases), formatting, ESLint, and `git diff --check` passed.
+- Because the active development owner correctly blocked a full package run, production Main was built into an isolated temporary output directory instead; 780 modules compiled successfully without touching the live `.vite` graph.
+- The already-corrupted pre-guard process required one Main restart. Subsequent canonical runs are protected from the same repository-command race; direct third-party Forge CLI invocation remains outside repository governance.
