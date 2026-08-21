@@ -40,7 +40,12 @@ interface ComposerSurfaceIdentity {
 type ComposerConfigManager = Pick<
   ConfigManager,
   'getAssistantConfigState' | 'setAssistantSettings' | 'setDefaultModelPurposeRefs'
->;
+> & {
+  getEffectiveAgentWorkspaceConfigSnapshot(): Pick<
+    ReturnType<ConfigManager['getEffectiveAgentWorkspaceConfigSnapshot']>,
+    'blockingDiagnostic'
+  >;
+};
 
 export function createDesktopDshComposerConfiguration(options: {
   resolveSurface(input: ComposerSurfaceIdentity): Promise<ComposerSurfaceScope>;
@@ -258,16 +263,28 @@ export function createDesktopDshComposerConfiguration(options: {
       }
       const selected = matches[0];
       if (!selected) throw new Error(`Composer model '${input.modelOptionId}' is unavailable.`);
-      if (options.executionCatalog.resolve(selected.providerId, selected.modelId) === undefined) {
+      const execution = options.executionCatalog.resolve(selected.providerId, selected.modelId);
+      if (execution === undefined) {
         throw new Error(
           `Composer model '${selected.providerId}/${selected.modelId}' is not executable by the current DSH runtime.`,
+        );
+      }
+      if (scope.conversationId !== undefined) {
+        const state = config.getAssistantConfigState();
+        await options.sessions.setSessionConfigOption(
+          scope.conversationId,
+          DSH_ACP_MODEL_CONFIG_ID,
+          encodeDshAcpModelConfiguration({
+            providerId: execution.providerId,
+            modelId: execution.apiModelName,
+            maxTokens: state.maxTokens,
+          }),
         );
       }
       await config.setAssistantSettings({
         selectedProviderId: selected.providerId,
         selectedModelId: selected.modelId,
       });
-      if (scope.conversationId !== undefined) await apply(scope.conversationId, config);
       return projectConfiguration(
         config,
         options.executionCatalog,
@@ -348,6 +365,19 @@ export function createDesktopDshComposerConfiguration(options: {
       const resolved = await resolveConfiguration(binding, windowId);
       return apply(conversationId, resolved.config);
     },
+
+    async readConversationExecution(
+      conversationId: string,
+      windowId: string,
+    ): Promise<{ readonly supportsImageInput: boolean }> {
+      const binding = await options.contexts.readContext(conversationId);
+      if (binding === undefined) {
+        throw new Error(`Conversation '${conversationId}' has no authoritative domain context.`);
+      }
+      const resolved = await resolveConfiguration(binding, windowId);
+      const effective = requireEffectiveConfiguration(resolved.config, options.executionCatalog);
+      return { supportsImageInput: effective.supportsImageInput };
+    },
   });
 }
 
@@ -413,8 +443,9 @@ function projectConfiguration(
     (model) =>
       model.providerId === state.selectedProviderId && model.modelId === state.selectedModelId,
   );
+  const blockingDiagnostic = config.getEffectiveAgentWorkspaceConfigSnapshot().blockingDiagnostic;
   const diagnostic =
-    state.configDiagnostic?.message ??
+    blockingDiagnostic?.message ??
     (selected === undefined ? 'The selected chat model is not executable by DSH.' : undefined);
   return {
     models,
@@ -448,6 +479,8 @@ function requireEffectiveConfiguration(
   readonly supportsImageInput: boolean;
 } {
   const state = config.getAssistantConfigState();
+  const blockingDiagnostic = config.getEffectiveAgentWorkspaceConfigSnapshot().blockingDiagnostic;
+  if (blockingDiagnostic) throw new Error(blockingDiagnostic.message);
   const selected = state.chatModelOptions.filter(
     (model) =>
       model.providerId === state.selectedProviderId && model.modelId === state.selectedModelId,

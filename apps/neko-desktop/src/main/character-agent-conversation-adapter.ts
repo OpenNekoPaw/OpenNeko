@@ -1,13 +1,18 @@
-import type { AgentDomainConversationService } from '@neko/agent-runtime/application';
-import type { CharacterAgentConversationPort } from '@neko/chara/application';
+import { createHash } from 'node:crypto';
+
+import type { AgentContextPayload } from '@neko/agent-contracts';
+import type { DshDomainConversationService } from '@neko/agent-runtime/application';
+import { createConversationId as createCanonicalConversationId } from '@neko/agent-runtime/session/conversation-id';
+import type {
+  CharacterAgentConversationPort,
+  CharacterAgentTurnContext,
+} from '@neko/chara/application';
 
 export function createCharacterAgentConversationAdapter(options: {
-  readonly conversations: AgentDomainConversationService;
+  readonly conversations: DshDomainConversationService;
   readonly createConversationId?: (characterRunId: string) => string;
 }): CharacterAgentConversationPort {
-  const createConversationId =
-    options.createConversationId ??
-    ((characterRunId: string) => `conversation:character:${characterRunId}`);
+  const createConversationId = options.createConversationId ?? createCharacterConversationId;
   return {
     async createPrimarySession(input, signal) {
       signal?.throwIfAborted();
@@ -15,8 +20,12 @@ export function createCharacterAgentConversationAdapter(options: {
         createConversationId(input.characterRunId),
         'Character Agent Conversation',
       );
-      await options.conversations.reserve({
+      await options.conversations.publish({
         conversationId,
+        title:
+          input.owner.kind === 'character'
+            ? `Character ${input.characterVersionId}`
+            : `Room ${input.owner.roomId}`,
         context:
           input.owner.kind === 'character'
             ? {
@@ -45,7 +54,7 @@ export function createCharacterAgentConversationAdapter(options: {
     },
 
     releaseUnboundSession(primaryAgentSessionId) {
-      return options.conversations.releaseReservation(primaryAgentSessionId);
+      return options.conversations.archivePublishedConversation(primaryAgentSessionId);
     },
 
     async submitTurn(input, signal) {
@@ -63,7 +72,50 @@ export function createCharacterAgentConversationAdapter(options: {
         requestId: input.requestId,
         conversationId: input.primaryAgentSessionId,
         message: input.message,
+        contextPayloads: [
+          projectCharacterAgentContextPayload(input.characterRunId, input.mode, input.context),
+        ],
       });
+    },
+  };
+}
+
+function createCharacterConversationId(characterRunId: string): string {
+  const identity = requireIdentity(characterRunId, 'Character Run');
+  const entropy = createHash('sha256').update(identity).digest().subarray(0, 10);
+  return createCanonicalConversationId(`character:${identity}`, { now: 0, random: entropy });
+}
+
+function projectCharacterAgentContextPayload(
+  characterRunId: string,
+  mode: 'companion' | 'narrative',
+  context: CharacterAgentTurnContext,
+): AgentContextPayload {
+  return {
+    type: 'character',
+    id: characterRunId,
+    label: context.characterVersion.label,
+    summary: `Frozen Character context for ${context.characterVersion.label}.`,
+    data: {
+      text: JSON.stringify({
+        kind: 'character-primary-turn-context',
+        characterRunId,
+        mode,
+        instruction:
+          mode === 'narrative'
+            ? 'Respond only as this Character within the selected narrative context and knowledge boundary.'
+            : 'Respond as this Character while acting as an identity-bearing companion assistant.',
+        characterPublication: context.characterVersion,
+        ...(context.narrative === undefined ? {} : { narrative: context.narrative }),
+        ...(context.companionContinuity === undefined
+          ? {}
+          : { companionContinuity: context.companionContinuity }),
+        ...(context.relationship === undefined ? {} : { relationship: context.relationship }),
+        ...(context.roomView === undefined ? {} : { roomView: context.roomView }),
+        ...(context.presentationConfiguration === undefined
+          ? {}
+          : { presentationConfiguration: context.presentationConfiguration }),
+      }),
     },
   };
 }

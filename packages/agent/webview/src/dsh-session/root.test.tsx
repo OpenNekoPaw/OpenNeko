@@ -15,6 +15,41 @@ afterEach(() => {
 });
 
 describe('DshAgentView content-creation composer', () => {
+  it('keeps the OpenNeko composer active and projects the DSH inbox queue during a turn', () => {
+    const onRemoveQueuedMessage = vi.fn();
+    renderAgent(
+      <DshComposerHarness
+        onSubmit={vi.fn(async () => true)}
+        onRemoveQueuedMessage={onRemoveQueuedMessage}
+        projection={{
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          title: 'Workspace planning',
+          currentTurn: 2,
+          inbox: {
+            nextTurn: [
+              {
+                messageId: 'message-next',
+                createdAt: 1_000,
+                content: [{ type: 'text', text: 'queued request' }],
+              },
+            ],
+            nextStep: [],
+          },
+          events: [{ kind: 'turn', turn: 2, phase: 'start', startedAt: 1_000 }],
+        }}
+      />,
+    );
+
+    const titlebar = screen.getByLabelText('会话标题');
+    expect(titlebar.textContent).toBe('Workspace planning');
+    expect(titlebar.nextElementSibling?.classList.contains('agent-message-list')).toBe(true);
+    expect(screen.getByText('消息队列（1 条待处理）')).toBeTruthy();
+    expect(screen.getByText('queued request')).toBeTruthy();
+    fireEvent.click(screen.getByTitle('取消排队消息'));
+    expect(onRemoveQueuedMessage).toHaveBeenCalledWith('message-next');
+  });
+
   it('dispatches DSH commands and Skills from the retained Composer menus without prompt fallback', async () => {
     const onSubmit = vi.fn(async () => true);
     renderAgent(<DshComposerHarness onSubmit={onSubmit} />);
@@ -323,6 +358,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
               kind: 'command',
@@ -351,13 +387,72 @@ describe('DshAgentView content-creation composer', () => {
       />,
     );
 
-    const titlebar = screen.getByLabelText('会话标题');
-    expect(titlebar.textContent).toBe('Workspace planning');
-    expect(titlebar.nextElementSibling?.classList.contains('agent-message-list')).toBe(true);
     expect(view.container.querySelectorAll('[data-agent-command-id="command-1"]')).toHaveLength(1);
     expect(screen.getByText('/help models')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /help models/u }));
     expect(screen.getByText('Available models')).toBeTruthy();
+  });
+
+  it('copies and fully expands complete DSH Tool payloads', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const rawOutput = {
+      diagnostics: Array.from({ length: 40 }, (_, index) => ({
+        code: `diagnostic-${index}`,
+        message: `detail-${index}`,
+      })),
+    };
+    const view = renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-tool"
+        surfaceKind="assistant"
+        conversationId="conversation-1"
+        projection={{
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          title: 'Workspace planning',
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [
+            {
+              kind: 'tool',
+              turn: 1,
+              toolCallId: 'tool-1',
+              title: 'openneko.document',
+              status: 'completed',
+              rawInput: { operation: 'read' },
+              rawOutput,
+            },
+          ],
+        }}
+        configuring={false}
+        draft=""
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /openneko\.document/u }));
+    const output = view.container.querySelector('[data-agent-tool-payload="结果"]');
+    expect(output?.className).toContain('overflow-y-auto');
+    fireEvent.click(screen.getAllByRole('button', { name: '复制' })[1]!);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(JSON.stringify(rawOutput, null, 2)));
+    expect(screen.getByRole('button', { name: '已复制' })).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: '展开全部' })[1]!);
+    expect(output?.className).toContain('max-h-none');
+    expect(screen.getByRole('button', { name: '收起' })).toBeTruthy();
   });
 
   it('keeps the final title, context rail, model, mode, attachment, and send controls', () => {
@@ -749,6 +844,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          inbox: { nextTurn: [], nextStep: [] },
           currentTurn: 1,
           events: [{ kind: 'turn', turn: 1, phase: 'start', startedAt: 10_000 }],
         }}
@@ -787,6 +883,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          inbox: { nextTurn: [], nextStep: [] },
           events: [
             { kind: 'turn', turn: 1, phase: 'start', startedAt: 10_000 },
             {
@@ -831,6 +928,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          inbox: { nextTurn: [], nextStep: [] },
           events: [
             { kind: 'turn', turn: 2, phase: 'start', startedAt: 1_000 },
             {
@@ -873,6 +971,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          inbox: { nextTurn: [], nextStep: [] },
           currentTurn: 4,
           events: [
             { kind: 'turn', turn: 4, phase: 'start', startedAt: 1_000 },
@@ -927,6 +1026,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          inbox: { nextTurn: [], nextStep: [] },
           events: [
             { kind: 'turn', turn: 4, phase: 'start', startedAt: 1_000 },
             {
@@ -989,6 +1089,7 @@ describe('DshAgentView content-creation composer', () => {
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
           title: 'Workspace planning',
+          inbox: { nextTurn: [], nextStep: [] },
           events: [
             {
               kind: 'message',
@@ -1063,12 +1164,18 @@ function DshComposerHarness({
   mentionItems = [],
   onRequestMentions = vi.fn(),
   onMaterializeAsset,
+  onRemoveQueuedMessage,
+  projection,
   onSubmit,
 }: {
   readonly conversationId?: string;
   readonly mentionItems?: React.ComponentProps<typeof DshAgentView>['mentionItems'];
   readonly onRequestMentions?: (filter: string) => void;
   readonly onMaterializeAsset?: React.ComponentProps<typeof DshAgentView>['onMaterializeAsset'];
+  readonly onRemoveQueuedMessage?: React.ComponentProps<
+    typeof DshAgentView
+  >['onRemoveQueuedMessage'];
+  readonly projection?: React.ComponentProps<typeof DshAgentView>['projection'];
   readonly onSubmit: React.ComponentProps<typeof DshAgentView>['onSubmit'];
 }): JSX.Element {
   const [draft, setDraft] = useState('');
@@ -1077,6 +1184,7 @@ function DshComposerHarness({
       agentSurfaceId="surface-input-catalog"
       surfaceKind="workspace"
       conversationId={conversationId}
+      projection={projection}
       composerConfiguration={{
         models: [
           {
@@ -1125,6 +1233,7 @@ function DshComposerHarness({
       onDraftChange={setDraft}
       onModelChange={vi.fn()}
       onPermissionPresetChange={vi.fn()}
+      onRemoveQueuedMessage={onRemoveQueuedMessage}
       onRequestMentions={onRequestMentions}
       onMaterializeAsset={onMaterializeAsset}
       onRestartRuntime={vi.fn()}

@@ -1720,7 +1720,7 @@ describe('DesktopApplication scene lifecycle', () => {
       'button[aria-label="New conversation in Empty project"]',
     );
     const cleanupButton = group?.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete Workspace conversations for Empty project"]',
+      'button[aria-label="Archive Workspace conversations for Empty project"]',
     );
     if (!group || !projectButton || !newConversationButton || !cleanupButton) {
       throw new Error('Desktop fixture requires empty Project navigation actions.');
@@ -1805,19 +1805,19 @@ describe('DesktopApplication scene lifecycle', () => {
       requestId: 'recent-transition',
       scene: activeScene(projection),
     }));
-    const deleteConversation = vi.fn(async () => projection);
+    const archiveConversation = vi.fn(async () => projection);
     const removedProjection: DesktopShellProjection = {
       ...projection,
       catalog: { projects: [] },
       conversationNavigation: projectDesktopConversationNavigation({ projects: [] }, agentHome, []),
     };
     const removeProjects = vi.fn(async () => removedProjection);
-    const deleteProjectConversations = vi.fn(async () => projection);
+    const archiveProjectConversations = vi.fn(async () => projection);
     installBridge({
       projection,
       transition,
-      deleteConversation,
-      deleteProjectConversations,
+      archiveConversation,
+      archiveProjectConversations,
       removeProjects,
     });
     const confirm = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
@@ -1883,28 +1883,28 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(collapseButton.getAttribute('aria-expanded')).toBe('true');
 
     const cleanupProjectButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete Workspace conversations for Project one"]',
+      'button[aria-label="Archive Workspace conversations for Project one"]',
     );
     const removeProjectButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Remove Project one"]',
     );
-    const deleteButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete conversation Conversation one"]',
+    const archiveButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Archive conversation Conversation one"]',
     );
-    if (!cleanupProjectButton || !removeProjectButton || !deleteButton) {
+    if (!cleanupProjectButton || !removeProjectButton || !archiveButton) {
       throw new Error('Desktop fixture requires Project removal and conversation cleanup actions.');
     }
-    await act(async () => deleteButton.click());
-    await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(deleteConversation).toHaveBeenCalledWith([conversation.navigation]);
+    await act(async () => archiveButton.click());
+    await waitFor(() => archiveConversation.mock.calls.length === 1);
+    expect(archiveConversation).toHaveBeenCalledWith([conversation.navigation]);
     confirm.mockReturnValueOnce(false).mockReturnValueOnce(true);
     await act(async () => cleanupProjectButton.click());
-    expect(deleteProjectConversations).not.toHaveBeenCalled();
+    expect(archiveProjectConversations).not.toHaveBeenCalled();
     await act(async () => cleanupProjectButton.click());
-    await waitFor(() => deleteProjectConversations.mock.calls.length === 1);
-    expect(deleteProjectConversations).toHaveBeenCalledWith([project.projectId]);
+    await waitFor(() => archiveProjectConversations.mock.calls.length === 1);
+    expect(archiveProjectConversations).toHaveBeenCalledWith([project.projectId]);
     expect(confirm).toHaveBeenCalledWith(
-      'Permanently delete 1 Workspace conversations for “Project one”? The project and its files will be retained.',
+      'Archive 1 Workspace conversations for “Project one”? Their records, project, and files will be retained.',
     );
     await act(async () => removeProjectButton.click());
     await waitFor(() => removeProjects.mock.calls.length === 1);
@@ -1951,9 +1951,9 @@ describe('DesktopApplication scene lifecycle', () => {
       requestId: 'context-menu-transition',
       scene: activeScene(projection),
     }));
-    const deleteConversation = vi.fn(async () => projection);
+    const archiveConversation = vi.fn(async () => projection);
     const removeProjects = vi.fn(async () => projection);
-    const deleteProjectConversations = vi.fn(async () => projection);
+    const archiveProjectConversations = vi.fn(async () => projection);
     const inspectPortability = vi.fn(async (request: DesktopProjectPortabilityRequest) => ({
       requestId: request.requestId,
       identity: request.identity,
@@ -1974,9 +1974,9 @@ describe('DesktopApplication scene lifecycle', () => {
     installBridge({
       projection,
       transition,
-      deleteConversation,
+      archiveConversation,
       removeProjects,
-      deleteProjectConversations,
+      archiveProjectConversations,
       projectPortability,
     });
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
@@ -2049,9 +2049,9 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => closePortability.click());
 
     await openContextMenu(projectRow);
-    await selectContextMenuItem('Delete Workspace conversations for Context menu project');
-    await waitFor(() => deleteProjectConversations.mock.calls.length === 1);
-    expect(deleteProjectConversations).toHaveBeenCalledWith([project.projectId]);
+    await selectContextMenuItem('Archive Workspace conversations for Context menu project');
+    await waitFor(() => archiveProjectConversations.mock.calls.length === 1);
+    expect(archiveProjectConversations).toHaveBeenCalledWith([project.projectId]);
 
     await openContextMenu(projectRow);
     await selectContextMenuItem('Remove Context menu project');
@@ -2068,9 +2068,9 @@ describe('DesktopApplication scene lifecycle', () => {
     );
 
     await openContextMenu(conversationRow);
-    await selectContextMenuItem('Delete conversation');
-    await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(deleteConversation).toHaveBeenCalledWith([conversation.navigation]);
+    await selectContextMenuItem('Archive conversation');
+    await waitFor(() => archiveConversation.mock.calls.length === 1);
+    expect(archiveConversation).toHaveBeenCalledWith([conversation.navigation]);
 
     await act(async () => root.unmount());
   });
@@ -2089,7 +2089,13 @@ describe('DesktopApplication scene lifecycle', () => {
       createSidebarConversation(project.workspaceId, 'running', 'Running task', 'running'),
       createSidebarConversation(project.workspaceId, 'input', 'Input task', 'needs-input'),
       createSidebarConversation(project.workspaceId, 'review', 'Review task', 'needs-review'),
-      createSidebarConversation(project.workspaceId, 'idle', 'Idle task', 'none'),
+      {
+        ...createSidebarConversation(project.workspaceId, 'completed', 'Completed task', 'none'),
+        lastActivity: {
+          kind: 'turn-completed' as const,
+          occurredAt: '2026-08-07T00:00:01.000Z',
+        },
+      },
       {
         ...createSidebarConversation(
           project.workspaceId,
@@ -2123,8 +2129,8 @@ describe('DesktopApplication scene lifecycle', () => {
       requestId: 'execution-status-transition',
       scene: activeScene(projection),
     }));
-    const deleteConversation = vi.fn(async () => projection);
-    installBridge({ projection, transition, deleteConversation });
+    const archiveConversation = vi.fn(async () => projection);
+    installBridge({ projection, transition, archiveConversation });
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     const { container, root } = await renderApplication();
 
@@ -2143,18 +2149,20 @@ describe('DesktopApplication scene lifecycle', () => {
       iconVisible: true,
       inlineText: '',
     });
-    expect(readConversationStatus(container, 'Idle task')).toBeUndefined();
+    expect(readConversationStatus(container, 'Completed task')?.accessibleName).toBe(
+      'Turn completed',
+    );
     expect(readConversationStatus(container, 'Unavailable running task')).toBeUndefined();
 
     const unavailableRow = findConversationRow(container, 'Unavailable running task');
     await openContextMenu(unavailableRow);
     const openItem = findContextMenuItem('Open conversation');
-    const deleteItem = findContextMenuItem('Delete conversation');
+    const archiveItem = findContextMenuItem('Archive conversation');
     expect(openItem.hasAttribute('data-disabled')).toBe(true);
-    expect(deleteItem.hasAttribute('data-disabled')).toBe(false);
-    await act(async () => deleteItem.click());
-    await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(deleteConversation).toHaveBeenCalledWith([conversations[4].navigation]);
+    expect(archiveItem.hasAttribute('data-disabled')).toBe(false);
+    await act(async () => archiveItem.click());
+    await waitFor(() => archiveConversation.mock.calls.length === 1);
+    expect(archiveConversation).toHaveBeenCalledWith([conversations[4].navigation]);
     expect(transition).not.toHaveBeenCalled();
 
     await act(async () => root.unmount());
@@ -2227,9 +2235,9 @@ describe('DesktopApplication scene lifecycle', () => {
       requestId: 'valid-transition',
       scene: activeScene(projection),
     }));
-    const deleteConversation = vi.fn(async () => projection);
+    const archiveConversation = vi.fn(async () => projection);
     const removeProjects = vi.fn(async () => projection);
-    installBridge({ projection, transition, deleteConversation, removeProjects });
+    installBridge({ projection, transition, archiveConversation, removeProjects });
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     const { container, root } = await renderApplication();
 
@@ -2304,24 +2312,24 @@ describe('DesktopApplication scene lifecycle', () => {
     const removeButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Remove Unavailable Project"]',
     );
-    const deleteButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete conversation Unavailable conversation"]',
+    const archiveButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Archive conversation Unavailable conversation"]',
     );
-    if (!removeButton || !deleteButton) {
+    if (!removeButton || !archiveButton) {
       throw new Error('Desktop fixture requires unavailable cleanup actions.');
     }
     expect(removeButton.disabled).toBe(false);
-    expect(deleteButton.disabled).toBe(false);
+    expect(archiveButton.disabled).toBe(false);
     await act(async () => removeButton.click());
     await waitFor(() => removeProjects.mock.calls.length === 1);
-    await act(async () => deleteButton.click());
-    await waitFor(() => deleteConversation.mock.calls.length === 1);
+    await act(async () => archiveButton.click());
+    await waitFor(() => archiveConversation.mock.calls.length === 1);
     expect(removeProjects).toHaveBeenCalledWith([project.projectId]);
-    expect(deleteConversation).toHaveBeenCalledWith([unavailableConversation.navigation]);
+    expect(archiveConversation).toHaveBeenCalledWith([unavailableConversation.navigation]);
     await act(async () => root.unmount());
   });
 
-  it('keeps unavailable Workspace groups collapsible and deletes their exact conversations as one batch', async () => {
+  it('keeps unavailable Workspace groups collapsible and archives their exact conversations as one batch', async () => {
     const base = createProjection();
     const conversation = {
       navigation: {
@@ -2360,8 +2368,8 @@ describe('DesktopApplication scene lifecycle', () => {
       conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
     };
     const transition = vi.fn();
-    const deleteConversation = vi.fn(async () => projection);
-    installBridge({ projection, transition, deleteConversation });
+    const archiveConversation = vi.fn(async () => projection);
+    installBridge({ projection, transition, archiveConversation });
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     const { container, root } = await renderApplication();
 
@@ -2407,23 +2415,23 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(group.querySelector('.primary-recent-conversation-row')).not.toBeNull();
     expect(transition).not.toHaveBeenCalled();
 
-    const deleteButton = heading?.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete unavailable Workspace conversations"]',
+    const archiveButton = heading?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Archive unavailable Workspace conversations"]',
     );
-    if (!deleteButton) throw new Error('Unavailable Workspace cleanup action is missing.');
-    await act(async () => deleteButton.click());
-    await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(deleteConversation).toHaveBeenCalledWith([
+    if (!archiveButton) throw new Error('Unavailable Workspace archive action is missing.');
+    await act(async () => archiveButton.click());
+    await waitFor(() => archiveConversation.mock.calls.length === 1);
+    expect(archiveConversation).toHaveBeenCalledWith([
       conversation.navigation,
       secondConversation.navigation,
     ]);
-    deleteConversation.mockClear();
+    archiveConversation.mockClear();
 
     if (!heading) throw new Error('Unavailable Workspace heading is missing.');
     await openContextMenu(heading);
-    await selectContextMenuItem('Delete unavailable Workspace conversations');
-    await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(deleteConversation).toHaveBeenCalledWith([
+    await selectContextMenuItem('Archive unavailable Workspace conversations');
+    await waitFor(() => archiveConversation.mock.calls.length === 1);
+    expect(archiveConversation).toHaveBeenCalledWith([
       conversation.navigation,
       secondConversation.navigation,
     ]);
@@ -2823,8 +2831,8 @@ function installBridge({
   projection,
   subscribe = vi.fn(() => () => undefined),
   transition = vi.fn(),
-  deleteConversation = vi.fn(),
-  deleteProjectConversations = vi.fn(),
+  archiveConversation = vi.fn(),
+  archiveProjectConversations = vi.fn(),
   removeProjects = vi.fn(),
   updateApplicationSidebar = vi.fn(),
   updateWorkbench = vi.fn(),
@@ -2882,8 +2890,8 @@ function installBridge({
   readonly projection: DesktopShellProjection;
   readonly subscribe?: (listener: (event: DesktopShellProjectionEvent) => void) => () => void;
   readonly transition?: ReturnType<typeof vi.fn>;
-  readonly deleteConversation?: ReturnType<typeof vi.fn>;
-  readonly deleteProjectConversations?: ReturnType<typeof vi.fn>;
+  readonly archiveConversation?: ReturnType<typeof vi.fn>;
+  readonly archiveProjectConversations?: ReturnType<typeof vi.fn>;
   readonly removeProjects?: ReturnType<typeof vi.fn>;
   readonly updateApplicationSidebar?: ReturnType<typeof vi.fn>;
   readonly updateWorkbench?: ReturnType<typeof vi.fn>;
@@ -2912,8 +2920,8 @@ function installBridge({
       shell: { getSnapshot, subscribe },
       lifecycle: { subscribe: lifecycleSubscribe },
       scenes: { transition },
-      conversations: { delete: deleteConversation },
-      projects: { remove: removeProjects, deleteConversations: deleteProjectConversations },
+      conversations: { archive: archiveConversation },
+      projects: { remove: removeProjects, archiveConversations: archiveProjectConversations },
       applicationSidebar: { update: updateApplicationSidebar },
       workbench: { update: updateWorkbench },
       assetCenter: { execute: assetCenterExecute },

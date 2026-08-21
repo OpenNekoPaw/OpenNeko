@@ -57,10 +57,12 @@ import {
   createAgentRuntimeSettingsAuthority,
   createAgentRuntimeSettingsRepository,
   createPersistentAgentConversationContextAuthority,
+  createDshDomainConversationService,
   createDshConversationTurnContextResolver,
+  createDshWorkspaceBoardTerminalDeliveryService,
   projectDshConversationTitle,
-  initializeAgentConversationLifecycleTables,
-  type AgentDomainConversationService,
+  removeRetiredPiStorage,
+  type DshDomainConversationService,
 } from '@neko/agent-runtime/application';
 import { createCanvasWorkspaceIndexService } from '@neko/canvas-domain';
 import { createCanvasWorkspaceIndexNodeAdapter } from '@neko/canvas-node';
@@ -84,6 +86,8 @@ import {
 } from './desktop-functional-fixture';
 import { createDesktopMediaExecutionProviderResolver } from './desktop-media-execution-provider';
 import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-port';
+import { DesktopRetiredPiStorageFilePort } from './desktop-retired-pi-storage-file-port';
+import { DesktopDshWorkspaceBoardDelivery } from './desktop-dsh-workspace-board-delivery';
 import { closeDesktopWindows } from './window-lifecycle';
 import {
   DESKTOP_STATE_AUTHORITY_KEYS,
@@ -361,6 +365,10 @@ async function startDesktop(): Promise<void> {
   let agentRuntimeSettings;
   let stateRejections: readonly InvalidJsonStateRejection[] = [];
   try {
+    await removeRetiredPiStorage({
+      metadataStore: localMetadataStore,
+      files: new DesktopRetiredPiStorageFilePort(homedir),
+    });
     await shellStateRepository.prepare();
     const rejections = await Promise.all([
       shellStateRepository.inspectInvalidState(),
@@ -370,7 +378,6 @@ async function startDesktop(): Promise<void> {
       (rejection): rejection is InvalidJsonStateRejection => rejection !== undefined,
     );
     await initializeAssetLibraryMembershipTables(localMetadataStore);
-    await initializeAgentConversationLifecycleTables(localMetadataStore);
     await initializeCharacterRuntimePersistenceTables(localMetadataStore);
     await initializeWorldRuntimePersistenceTables(localMetadataStore);
     agentRuntimeSettings = await createAgentRuntimeSettingsAuthority({
@@ -1228,6 +1235,17 @@ async function startDesktop(): Promise<void> {
     releasePreviewResourceProjection: (descriptorId) =>
       canvasPreviewResources.release(descriptorId),
   });
+  const dshWorkspaceBoardDelivery = new DesktopDshWorkspaceBoardDelivery({
+    applicationInstanceId,
+    metadataStore: localMetadataStore,
+    workspaceRegistry,
+    host,
+    coordinateCanvasMutation: (workspaceId, operation) =>
+      canvasRuntime.coordinateWorkspaceBoardMutation(workspaceId, operation),
+    createContentRead: (workspacePath) =>
+      createNodeHostContentReadService({ workspaceRoot: workspacePath }),
+    createIdentity: randomUUID,
+  });
   const resourceBrowser = new ResourceBrowserNodeRuntime({
     globalAssetRoot: globalStorage.assets,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
@@ -1429,21 +1447,25 @@ async function startDesktop(): Promise<void> {
   const agentConversationContexts = createPersistentAgentConversationContextAuthority({
     metadataStore: localMetadataStore,
   });
+  const dshWorkspaceBoardTerminalDelivery = createDshWorkspaceBoardTerminalDeliveryService({
+    contexts: agentConversationContexts,
+    delivery: dshWorkspaceBoardDelivery,
+  });
   // Composed after its dependency callbacks while preserving an explicit unavailable state.
   // eslint-disable-next-line prefer-const
-  let agentDomainConversations: AgentDomainConversationService | undefined;
-  const requireAgentDomainConversations = (): AgentDomainConversationService => {
-    if (!agentDomainConversations) {
-      throw new Error('Agent domain Conversation service is not composed.');
+  let dshDomainConversations: DshDomainConversationService | undefined;
+  const requireDshDomainConversations = (): DshDomainConversationService => {
+    if (!dshDomainConversations) {
+      throw new Error('DSH domain Conversation service is not composed.');
     }
-    return agentDomainConversations;
+    return dshDomainConversations;
   };
   const characterAgentConversations = createCharacterAgentConversationAdapter({
     conversations: {
-      reserve: (input) => requireAgentDomainConversations().reserve(input),
-      releaseReservation: (conversationId) =>
-        requireAgentDomainConversations().releaseReservation(conversationId),
-      submitTurn: (input) => requireAgentDomainConversations().submitTurn(input),
+      publish: (input) => requireDshDomainConversations().publish(input),
+      archivePublishedConversation: (conversationId) =>
+        requireDshDomainConversations().archivePublishedConversation(conversationId),
+      submitTurn: (input) => requireDshDomainConversations().submitTurn(input),
     },
   });
   const characterPresentation = new CharacterPresentationService(
@@ -1505,8 +1527,12 @@ async function startDesktop(): Promise<void> {
   const projectManagement = new DesktopProjectRegistrationService({
     shell: shellService,
     conversations: {
-      deleteConversations: async () => {
-        throw new Error('Conversation deletion requires DSH durable Session delete support.');
+      archiveConversations: async (navigations) => {
+        for (const navigation of navigations) {
+          await requireDshDomainConversations().archivePublishedConversation(
+            navigation.conversationId,
+          );
+        }
       },
     },
   });
@@ -1884,6 +1910,15 @@ async function startDesktop(): Promise<void> {
     instanceId: applicationInstanceId,
   });
   let dshHandlers: DesktopDshProductHandlerAssembly | undefined;
+  const dshHomeProjectionRefresh: { current?: () => Promise<void> } = {};
+  let dshHomeRefreshPending = false;
+  const refreshDshHomeAfterProjectionChange = async (): Promise<void> => {
+    if (dshHomeProjectionRefresh.current === undefined) {
+      dshHomeRefreshPending = true;
+      return;
+    }
+    await dshHomeProjectionRefresh.current();
+  };
   const publishDshChanged = (channel: string, event: { readonly conversationId: string }) => {
     for (const owner of windowsById.values()) {
       if (!owner.isDestroyed()) owner.webContents.send(channel, event);
@@ -1907,6 +1942,9 @@ async function startDesktop(): Promise<void> {
       message: diagnostic.message,
     });
   }
+  const dshTerminalArtifactDelivery: {
+    current?: (dshSessionId: string, conversationId: string) => Promise<void>;
+  } = {};
   const dshProduct = await startDesktopDshProductRuntime({
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
@@ -1979,16 +2017,50 @@ async function startDesktop(): Promise<void> {
               `DSH Session '${notification.sessionId}' event has no Conversation binding.`,
             );
           }
+          if (notification.type === 'turn/end') {
+            if (dshTerminalArtifactDelivery.current === undefined) {
+              throw new Error('DSH terminal artifact delivery is not initialized.');
+            }
+            await dshTerminalArtifactDelivery.current(
+              notification.sessionId,
+              binding.conversationId,
+            );
+          }
           publishDshChanged(DSH_SESSION_CHANGED_CHANNEL, {
             conversationId: binding.conversationId,
           });
+          if (notification.type === 'turn/start' || notification.type === 'turn/end') {
+            await refreshDshHomeAfterProjectionChange();
+          }
         },
       });
       dshHandlers = assembly;
       return assembly;
     },
   });
+  dshTerminalArtifactDelivery.current = async (dshSessionId, conversationId) => {
+    try {
+      const snapshot = dshProduct.runtime.client.projection.snapshot(dshSessionId);
+      await dshWorkspaceBoardTerminalDelivery.deliverTerminal({
+        conversationId,
+        dshSessionId,
+        events: snapshot.events,
+      });
+    } catch (error) {
+      host.diagnostics?.report({
+        code: 'dsh-workspace-board-artifact-delivery-failed',
+        severity: 'error',
+        message: error instanceof Error ? error.message : String(error),
+        metadata: { dshSessionId, conversationId },
+      });
+    }
+  };
   if (!dshHandlers) throw new Error('DSH runtime did not compose its product handlers.');
+  dshHomeProjectionRefresh.current = () => dshProduct.runtime.conversations.home.refresh();
+  if (dshHomeRefreshPending) {
+    dshHomeRefreshPending = false;
+    await dshHomeProjectionRefresh.current();
+  }
   shellService.setAgentHomeProjectionSource(dshProduct.runtime.conversations.home);
   shellService.setAgentCapabilityReady(true);
   const dshPermissionHost = new DesktopDshPermissionHost({
@@ -2121,6 +2193,13 @@ async function startDesktop(): Promise<void> {
     contexts: agentConversationContexts,
     workspaceGrants: workspaceGrantAuthority,
     canvas: canvasWorkspaceIndexService,
+  });
+  dshDomainConversations = createDshDomainConversationService({
+    publication: dshProduct.runtime.conversations.publication,
+    archive: dshProduct.runtime.conversations.archive,
+    conversations: dshProduct.runtime.conversations.conversations,
+    turnContext: dshPromptContext,
+    projection: dshProduct.runtime.client.projection,
   });
   const dshPromptImages = createDesktopDshPromptImageAdmission({
     contexts: agentConversationContexts,

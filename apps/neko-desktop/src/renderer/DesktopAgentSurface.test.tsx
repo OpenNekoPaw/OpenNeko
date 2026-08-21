@@ -7,6 +7,7 @@ import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime
 import type {
   DshComposerConfigurationProjection,
   DshSessionHostProjection,
+  DshSessionHostResult,
 } from '@neko/agent-contracts/dsh-session-host';
 
 vi.mock('@neko/ui/i18n/react', async (importOriginal) => {
@@ -24,6 +25,7 @@ const projection: DshSessionHostProjection = {
   dshSessionId: 'dsh-session-1',
   title: 'Workspace planning',
   currentTurn: 3,
+  inbox: { nextTurn: [], nextStep: [] },
   events: [
     {
       kind: 'message',
@@ -127,8 +129,13 @@ let permissionListener: ((event: { readonly conversationId: string }) => void) |
 const dshSessions = {
   create: vi.fn(async () => projection),
   getSnapshot: vi.fn<() => Promise<DshSessionHostProjection>>(async () => projection),
-  submit: vi.fn(async () => ({ requestId: 'request-1', projection, stopReason: 'end_turn' })),
+  submit: vi.fn<() => Promise<DshSessionHostResult>>(async () => ({
+    requestId: 'request-1',
+    projection,
+    stopReason: 'end_turn',
+  })),
   cancel: vi.fn(async () => projection),
+  removeInboxMessage: vi.fn(async () => projection),
   getComposerConfiguration: vi.fn(async () => composerConfiguration),
   searchComposerMentions: vi.fn(async () => []),
   selectComposerModel: vi.fn(async () => ({
@@ -181,6 +188,7 @@ beforeEach(() => {
     stopReason: 'end_turn',
   });
   dshSessions.cancel.mockResolvedValue(projection);
+  dshSessions.removeInboxMessage.mockResolvedValue(projection);
   dshSessions.getComposerConfiguration.mockResolvedValue(composerConfiguration);
   dshSessions.selectComposerModel.mockResolvedValue({
     ...composerConfiguration,
@@ -349,16 +357,18 @@ describe('DesktopAgentSurface', () => {
     await waitFor(() => expect(dshSessions.cancel).toHaveBeenCalledWith('conversation-1'));
   });
 
-  it('keeps the draft editable while the DSH submit request is still running', async () => {
+  it('keeps the composer active and submits a second message to the DSH queue', async () => {
     const idleProjection = { ...projection, currentTurn: undefined };
     const pendingSubmit = deferred<{
       readonly requestId: string;
       readonly projection: DshSessionHostProjection;
       readonly stopReason: string;
     }>();
-    dshSessions.getSnapshot.mockResolvedValueOnce(idleProjection);
+    dshSessions.getSnapshot.mockResolvedValueOnce(idleProjection).mockResolvedValue(projection);
     dshPermissions.list.mockResolvedValueOnce([]);
-    dshSessions.submit.mockReturnValueOnce(pendingSubmit.promise);
+    dshSessions.submit
+      .mockReturnValueOnce(pendingSubmit.promise)
+      .mockResolvedValueOnce({ requestId: 'request-queued', projection });
     render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
@@ -379,6 +389,17 @@ describe('DesktopAgentSurface', () => {
     expect(screen.getByLabelText('Stop response (Esc)')).toBeTruthy();
     fireEvent.change(composer, { target: { value: 'next request' } });
     expect(composer.value).toBe('next request');
+
+    await act(async () => sessionListener?.({ conversationId: 'conversation-1' }));
+    const queueButton = await screen.findByLabelText('Queue message (Enter)');
+    fireEvent.click(queueButton);
+    await waitFor(() => expect(dshSessions.submit).toHaveBeenCalledTimes(2));
+    expect(dshSessions.submit).toHaveBeenLastCalledWith('conversation-1', {
+      kind: 'message',
+      text: 'next request',
+      references: [],
+      contextPayloads: [],
+    });
 
     await act(async () =>
       pendingSubmit.resolve({
@@ -527,6 +548,7 @@ describe('DesktopAgentSurface', () => {
       conversationId: projection.conversationId,
       dshSessionId: projection.dshSessionId,
       title: projection.title,
+      inbox: { nextTurn: [], nextStep: [] },
       events: projection.events,
     });
     const { container } = render(

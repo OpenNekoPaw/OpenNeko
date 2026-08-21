@@ -8,6 +8,7 @@ import {
 } from '../shared/bridge-contract';
 import {
   parseDesktopProfileRequest,
+  parseDesktopConversationArchiveRequest,
   parseDesktopProjectOpenRequest,
   parseDesktopProjectSelectionRequest,
   parseDesktopShellRequest,
@@ -1204,7 +1205,7 @@ export class DesktopAppHost {
     };
   }
 
-  async deleteProjectConversations(
+  async archiveProjectConversations(
     sender: DesktopSenderIdentity,
     payload: unknown,
   ): Promise<DesktopShellResponse> {
@@ -1213,10 +1214,27 @@ export class DesktopAppHost {
     const window = this.windows.resolveSender(sender);
     return {
       requestId: request.requestId,
-      projection: await this.projectManagement.deleteProjectConversations(
+      projection: await this.projectManagement.archiveProjectConversations(
         window.windowId,
         request.rendererSessionId,
         request.projectIds,
+      ),
+    };
+  }
+
+  async archiveConversations(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopShellResponse> {
+    this.requireActive();
+    const request = parseDesktopConversationArchiveRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    return {
+      requestId: request.requestId,
+      projection: await this.projectManagement.archiveConversations(
+        window.windowId,
+        request.rendererSessionId,
+        request.navigations,
       ),
     };
   }
@@ -1319,7 +1337,6 @@ export class DesktopAppHost {
       projection,
     };
   }
-
 
   async executeAutomationLocalRuntimeManagement(
     sender: DesktopSenderIdentity,

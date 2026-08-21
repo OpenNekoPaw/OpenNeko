@@ -80,8 +80,10 @@ export function registerDesktopIpc(
     );
   }
   if (options.dshExtensions) {
-    ipcMain.handle(AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
-      options.dshExtensions?.execute(requireSender(event), payload),
+    ipcMain.handle(
+      AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
+      (event: IpcMainInvokeEvent, payload: unknown) =>
+        options.dshExtensions?.execute(requireSender(event), payload),
     );
   }
   ipcMain.handle(CHARACTER_FOUNDATION_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
@@ -418,9 +420,14 @@ export function registerDesktopIpc(
       appHost.removeProjects(requireSender(event), payload),
   );
   ipcMain.handle(
-    DESKTOP_SHELL_CHANNELS.projectConversationDelete,
+    DESKTOP_SHELL_CHANNELS.projectConversationArchive,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.deleteProjectConversations(requireSender(event), payload),
+      appHost.archiveProjectConversations(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_SHELL_CHANNELS.conversationArchive,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.archiveConversations(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectRequestProfile,
@@ -509,7 +516,8 @@ export function registerDesktopIpc(
       DESKTOP_SHELL_CHANNELS.projectOpenContent,
       DESKTOP_SHELL_CHANNELS.projectOpenCatalog,
       DESKTOP_SHELL_CHANNELS.projectRemove,
-      DESKTOP_SHELL_CHANNELS.projectConversationDelete,
+      DESKTOP_SHELL_CHANNELS.projectConversationArchive,
+      DESKTOP_SHELL_CHANNELS.conversationArchive,
       DESKTOP_SHELL_CHANNELS.projectRequestProfile,
       DESKTOP_SHELL_CHANNELS.homeActivate,
       DESKTOP_SHELL_CHANNELS.tabActivate,

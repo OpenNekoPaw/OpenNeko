@@ -82,6 +82,8 @@ export function createDesktopDshProductHandlers(options: {
     executeCanvasTool: (request, signal) => domainTools.executeCanvasTool(request, signal),
     executeCutTool: (request, signal) => domainTools.executeCutTool(request, signal),
     executeDocumentTool: (request, signal) => domainTools.executeDocumentTool(request, signal),
+    executeContentImageTool: (request, signal) =>
+      domainTools.executeContentImageTool(request, signal),
     executeCharacterTool: (request, signal) => domainTools.executeCharacterTool(request, signal),
     executeWorldTool: (request, signal) => domainTools.executeWorldTool(request, signal),
     onSessionUpdate: options.onSessionUpdate,

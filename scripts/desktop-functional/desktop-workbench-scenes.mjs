@@ -2567,7 +2567,7 @@ async function exerciseProjectConversationGroups({
   })()`);
   if (
     unavailableWorkspaceAction.actionCount !== 1 ||
-    !/Delete unavailable Workspace conversations|删除不可用工作区的会话/u.test(
+    !/Archive unavailable Workspace conversations|归档不可用工作区的会话/u.test(
       unavailableWorkspaceAction.actionLabel,
     ) ||
     unavailableWorkspaceAction.statusOpacity !== '0' ||
@@ -2822,9 +2822,9 @@ function assertProjectContextMenu(menu) {
     !has('New conversation', '新建会话') ||
     !has('Project management', '项目管理') ||
     !has('Project portability', '项目可移植性') ||
-    !has('Delete Workspace conversations', '删除') ||
+    !has('Archive Workspace conversations', '归档') ||
     !has('Remove', '移除') ||
-    menu.items.filter((item) => item.danger).length !== 2
+    menu.items.filter((item) => item.danger).length !== 1
   ) {
     throw new Error(`Project context menu is incomplete: ${JSON.stringify(menu)}`);
   }
@@ -2839,8 +2839,8 @@ function assertConversationContextMenu(menu) {
     !menu.withinViewport ||
     menu.background === 'rgba(0, 0, 0, 0)' ||
     !has('Open conversation', '打开会话') ||
-    !has('Delete conversation', '删除会话') ||
-    menu.items.filter((item) => item.danger).length !== 1
+    !has('Archive conversation', '归档会话') ||
+    menu.items.filter((item) => item.danger).length !== 0
   ) {
     throw new Error(`Conversation context menu is incomplete: ${JSON.stringify(menu)}`);
   }
@@ -2854,8 +2854,8 @@ function assertWorkspaceContextMenu(menu) {
     !menu.withinViewport ||
     menu.background === 'rgba(0, 0, 0, 0)' ||
     item?.disabled ||
-    !item?.danger ||
-    !/Delete unavailable Workspace conversations|删除不可用工作区的会话/u.test(item?.text ?? '')
+    item?.danger ||
+    !/Archive unavailable Workspace conversations|归档不可用工作区的会话/u.test(item?.text ?? '')
   ) {
     throw new Error(`Unavailable Workspace context menu is incomplete: ${JSON.stringify(menu)}`);
   }
@@ -4310,7 +4310,7 @@ async function exerciseAssistantConversationGroup(evaluate, click, type, origina
     'Assistant group did not return to its bounded collapsed state.',
   );
 
-  const deletion = await evaluate(`(async () => {
+  const archive = await evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     ${requireActiveWorkbenchProjection('projection')}
     const context = activeWorkbench.scene.context;
@@ -4318,25 +4318,25 @@ async function exerciseAssistantConversationGroup(evaluate, click, type, origina
       (candidate) => candidate.kind === 'assistant',
     );
     if (context.kind !== 'agent' || context.scope.kind !== 'assistant' || !group) {
-      throw new Error('Assistant deletion requires the exact active group and Scene.');
+      throw new Error('Assistant archive requires the exact active group and Scene.');
     }
-    const deletedConversationId = group.conversations[1]?.navigation.conversationId;
-    if (!deletedConversationId || deletedConversationId === context.scope.conversationId) {
-      throw new Error('Assistant deletion fixture did not select a non-active conversation.');
+    const archivedConversationId = group.conversations[1]?.navigation.conversationId;
+    if (!archivedConversationId || archivedConversationId === context.scope.conversationId) {
+      throw new Error('Assistant archive fixture did not select a non-active conversation.');
     }
     globalThis.confirm = () => true;
-    const deleteButtons = document.querySelectorAll(
+    const archiveButtons = document.querySelectorAll(
       '.primary-conversation-group[data-group-kind="assistant"] ' +
         '.primary-recent-conversation-row > .primary-navigation-row-actions button:last-child',
     );
-    const deleteButton = deleteButtons[1];
-    if (!(deleteButton instanceof HTMLButtonElement) || deleteButton.disabled) {
-      throw new Error('Assistant conversation delete control is unavailable.');
+    const archiveButton = archiveButtons[1];
+    if (!(archiveButton instanceof HTMLButtonElement) || archiveButton.disabled) {
+      throw new Error('Assistant conversation archive control is unavailable.');
     }
-    deleteButton.click();
+    archiveButton.click();
     return {
       activeConversationId: context.scope.conversationId,
-      deletedConversationId,
+      archivedConversationId,
     };
   })()`);
   await waitForCondition(
@@ -4348,31 +4348,31 @@ async function exerciseAssistantConversationGroup(evaluate, click, type, origina
       return projection.agentHome.conversations.length === 5 &&
         !projection.agentHome.conversations.some(
           (conversation) => conversation.navigation.conversationId === ${JSON.stringify(
-            deletion.deletedConversationId,
+            archive.archivedConversationId,
           )},
         ) &&
         context.kind === 'agent' &&
         context.scope.kind === 'assistant' &&
-        context.scope.conversationId === ${JSON.stringify(deletion.activeConversationId)} &&
+        context.scope.conversationId === ${JSON.stringify(archive.activeConversationId)} &&
         !document.querySelector(
           '.primary-conversation-group[data-group-kind="assistant"] ' +
             '.primary-conversation-group__expand',
         );
     })()`,
-    'Assistant conversation deletion did not preserve the exact active session.',
+    'Assistant conversation archive did not preserve the exact active session.',
   );
-  const afterDelete = await inspectAssistantConversationGroup(evaluate);
+  const afterArchive = await inspectAssistantConversationGroup(evaluate);
   if (
-    afterDelete.totalConversationCount !== 5 ||
-    afterDelete.visibleConversationCount !== 5 ||
-    afterDelete.expandControlVisible ||
-    !afterDelete.conversationIds.includes(originalConversationId)
+    afterArchive.totalConversationCount !== 5 ||
+    afterArchive.visibleConversationCount !== 5 ||
+    afterArchive.expandControlVisible ||
+    !afterArchive.conversationIds.includes(originalConversationId)
   ) {
     throw new Error(
-      `Assistant group did not update after exact deletion: ${JSON.stringify(afterDelete)}`,
+      `Assistant group did not update after exact archive: ${JSON.stringify(afterArchive)}`,
     );
   }
-  return { collapsed, expanded, deletion, afterDelete };
+  return { collapsed, expanded, archive, afterArchive };
 }
 
 async function inspectAssistantConversationGroup(evaluate) {

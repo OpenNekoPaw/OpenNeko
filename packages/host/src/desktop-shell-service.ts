@@ -1234,24 +1234,36 @@ export class DesktopShellService {
     rendererSessionId: string,
     navigation: DesktopAgentHomeNavigationIdentity,
   ): Promise<void> {
+    await this.resolveAgentHomeConversations(windowId, [navigation], rendererSessionId);
+  }
+
+  async resolveAgentHomeConversations(
+    windowId: string,
+    navigations: readonly DesktopAgentHomeNavigationIdentity[],
+    rendererSessionId: string,
+  ): Promise<readonly DesktopAgentHomeNavigationIdentity[]> {
     return this.enqueue(async () => {
       this.requireActive();
       this.assertMutationContext(windowId, rendererSessionId);
       const state = await this.options.stateRepository.read();
       requireStoredWindow(state, windowId);
       const agentHome = this.readAgentHomeProjection();
-      const conversation = agentHome.conversations.find(
-        (candidate) =>
-          candidate.navigation.conversationId === navigation.conversationId &&
-          isSameAgentConversationOwner(candidate.navigation.owner, navigation.owner),
-      );
-      if (!conversation) {
-        throw new DesktopShellContractError(
-          'desktop-shell-conversation-not-found',
-          `Desktop Agent Home conversation '${navigation.conversationId}' is not present in the authoritative projection.`,
+      const conversations = navigations.map((navigation) => {
+        const conversation = agentHome.conversations.find(
+          (candidate) =>
+            candidate.navigation.conversationId === navigation.conversationId &&
+            isSameAgentConversationOwner(candidate.navigation.owner, navigation.owner),
         );
-      }
+        if (!conversation) {
+          throw new DesktopShellContractError(
+            'desktop-shell-conversation-not-found',
+            `Desktop Agent Home conversation '${navigation.conversationId}' is not present in the authoritative projection.`,
+          );
+        }
+        return conversation.navigation;
+      });
       this.assertMutationContext(windowId, rendererSessionId);
+      return Object.freeze(conversations);
     });
   }
 

@@ -1020,6 +1020,14 @@ code {
   color: var(--neko-desktop-accent);
 }
 
+.home-conversation-status.is-turn-completed {
+  color: var(--neko-desktop-accent);
+}
+
+.home-conversation-status.is-turn-failed {
+  color: var(--neko-desktop-danger-foreground);
+}
+
 .primary-navigation-row-actions {
   position: absolute;
   z-index: 1;

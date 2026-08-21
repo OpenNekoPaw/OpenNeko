@@ -10,16 +10,8 @@ describe('DesktopExtensionManagementRuntime', () => {
       projection: {
         identity: { windowId: 'window-1' },
         skills: [],
-        mcp: [
-          {
-            id: 'browser-use',
-            name: 'Browser Use',
-            description: 'Official contribution.',
-            status: 'unsupported' as const,
-            diagnosticCode: 'dsh-mcp-management-api-unavailable',
-          },
-        ],
-        diagnostics: [{ code: 'mcp_management_unsupported' as const, count: 1 }],
+        mcp: [],
+        diagnostics: [],
       },
     }));
     const runtime = new DesktopExtensionManagementRuntime(
@@ -27,7 +19,8 @@ describe('DesktopExtensionManagementRuntime', () => {
       { extensionManagement: { execute } },
     );
     await expect(runtime.getSnapshot()).resolves.toMatchObject({
-      mcp: [{ id: 'browser-use', status: 'unsupported' }],
+      mcp: [],
+      diagnostics: [],
     });
     expect(execute).toHaveBeenCalledTimes(1);
   });

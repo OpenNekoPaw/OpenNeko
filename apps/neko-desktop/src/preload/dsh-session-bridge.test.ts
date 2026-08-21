@@ -48,7 +48,8 @@ describe('DSH Session preload bridge', () => {
         projection: {
           conversationId: 'conversation-created',
           dshSessionId: 'session-created',
-          title: 'Conversation title',
+          title: 'Create in project',
+          inbox: { nextTurn: [], nextStep: [] },
           events: [],
         },
       };
@@ -91,7 +92,8 @@ describe('DSH Session preload bridge', () => {
         projection: {
           conversationId: 'conversation-1',
           dshSessionId: 'session-1',
-          title: 'Conversation title',
+          title: 'Hello',
+          inbox: { nextTurn: [], nextStep: [] },
           events: [],
         },
       };
@@ -291,7 +293,8 @@ describe('DSH Session preload bridge', () => {
         projection: {
           conversationId: 'conversation-other',
           dshSessionId: 'session-other',
-          title: 'Conversation title',
+          title: 'Other',
+          inbox: { nextTurn: [], nextStep: [] },
           events: [],
         },
       };
@@ -317,7 +320,8 @@ describe('DSH Session preload bridge', () => {
           projection: {
             conversationId: 'conversation-1',
             dshSessionId: 'session-1',
-            title: 'Conversation title',
+            title: 'Hello',
+            inbox: { nextTurn: [], nextStep: [] },
             events: [],
             [field]: value,
           },

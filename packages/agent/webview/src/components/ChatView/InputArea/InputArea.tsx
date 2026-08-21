@@ -121,6 +121,7 @@ interface InputAreaProps {
     readonly current: string;
     readonly options: readonly ModeSelectorOption[];
     readonly onChange: (mode: string) => void;
+    readonly disabled?: boolean;
   };
   /** Session-bound attached files (managed by parent for conversation isolation) */
   attachedFiles?: MessageAttachment[];
@@ -1383,7 +1384,7 @@ export function InputArea({
                     onExecutionModeChange(mode);
                   }}
                   options={runtimeMode?.options}
-                  disabled={executionModeLocked}
+                  disabled={executionModeLocked || runtimeMode?.disabled === true}
                   disabledReason={
                     executionModePolicy?.status === 'locked'
                       ? executionModePolicy.reason

@@ -16,17 +16,17 @@ export const en = {
     'Remove “{project}” from OpenNeko? Its conversations and files will be retained.',
   'shell.removeProjectsConfirm':
     'Remove {count} selected projects from OpenNeko? Their conversations and files will be retained.',
-  'shell.deleteProjectConversations': 'Delete Workspace conversations for {project}',
-  'shell.deleteProjectConversationsConfirm':
-    'Permanently delete {count} Workspace conversations for “{project}”? The project and its files will be retained.',
-  'shell.deleteProjectsConversationsConfirm':
-    'Permanently delete {conversationCount} Workspace conversations from {projectCount} selected projects? The projects and their files will be retained.',
-  'shell.deleteConversation': 'Delete conversation {conversation}',
-  'shell.deleteConversationConfirm':
-    'Permanently delete the conversation “{conversation}”? This cannot be undone.',
-  'shell.deleteWorkspaceConversations': 'Delete unavailable Workspace conversations',
-  'shell.deleteConversationsConfirm':
-    'Permanently delete these {count} conversations? This cannot be undone.',
+  'shell.archiveProjectConversations': 'Archive Workspace conversations for {project}',
+  'shell.archiveProjectConversationsConfirm':
+    'Archive {count} Workspace conversations for “{project}”? Their records, project, and files will be retained.',
+  'shell.archiveProjectsConversationsConfirm':
+    'Archive {conversationCount} Workspace conversations from {projectCount} selected projects? Their records, projects, and files will be retained.',
+  'shell.archiveConversation': 'Archive conversation {conversation}',
+  'shell.archiveConversationConfirm':
+    'Archive the conversation “{conversation}”? Its record will be retained.',
+  'shell.archiveWorkspaceConversations': 'Archive unavailable Workspace conversations',
+  'shell.archiveConversationsConfirm':
+    'Archive these {count} conversations? Their records will be retained.',
   'shell.openProject': 'Open content project',
   'shell.settingsUnavailable': 'Settings are not available in this build',
   'shell.settingsLabel': 'Desktop settings',
@@ -160,7 +160,7 @@ export const en = {
   'home.projectManagement': 'Project management',
   'home.projects.openDirectory': 'Open folder',
   'home.openConversation': 'Open conversation',
-  'home.deleteConversation': 'Delete conversation',
+  'home.archiveConversation': 'Archive conversation',
   'home.noConversations': 'No Agent conversations',
   'home.projectProfiles': 'Project profiles',
   'home.available': 'Available',

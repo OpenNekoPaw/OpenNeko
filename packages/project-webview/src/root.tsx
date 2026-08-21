@@ -4,9 +4,9 @@ import {
   GridIcon,
   LayersIcon,
   LoadingIcon,
+  PackageIcon,
   RemoveIcon,
   SearchIcon,
-  TrashIcon,
   UserIcon,
   UsersIcon,
   WarningIcon,
@@ -315,14 +315,14 @@ export interface ProjectCatalogRootProps {
   readonly projects: readonly ProjectCatalogItem[];
   readonly onOpenDirectory: () => void;
   readonly onOpen: (projectId: string) => void;
-  readonly onDeleteAssociatedConversations: (projects: readonly ProjectCatalogItem[]) => void;
+  readonly onArchiveAssociatedConversations: (projects: readonly ProjectCatalogItem[]) => void;
   readonly onRemove: (projects: readonly ProjectCatalogItem[]) => void;
 }
 
 export function ProjectCatalogRoot({
   associatedConversationCounts,
   interactive,
-  onDeleteAssociatedConversations,
+  onArchiveAssociatedConversations,
   onOpenDirectory,
   onOpen,
   onRemove,
@@ -429,16 +429,16 @@ export function ProjectCatalogRoot({
             <span className="management-surface-row-actions">
               <button
                 type="button"
-                aria-label={t('shell.deleteProjectConversations', {
+                aria-label={t('shell.archiveProjectConversations', {
                   project: project.displayName,
                 })}
                 disabled={
                   !interactive || (associatedConversationCounts[project.projectId] ?? 0) === 0
                 }
-                title={t('shell.deleteProjectConversations', { project: project.displayName })}
-                onClick={() => onDeleteAssociatedConversations([project])}
+                title={t('shell.archiveProjectConversations', { project: project.displayName })}
+                onClick={() => onArchiveAssociatedConversations([project])}
               >
-                <TrashIcon size={15} />
+                <PackageIcon size={15} />
               </button>
               <button
                 type="button"

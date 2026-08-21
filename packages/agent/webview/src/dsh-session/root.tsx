@@ -82,6 +82,7 @@ export interface DshAgentViewProps {
     modelOptionId: string,
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
+  readonly onRemoveQueuedMessage?: (messageId: string) => void;
   readonly onRestartRuntime: () => void;
   readonly onRequestMentions?: (filter: string) => void;
   readonly onMaterializeAsset?: (
@@ -121,7 +122,6 @@ export function DshAgentView(props: DshAgentViewProps): JSX.Element {
 function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const { locale } = useTranslation();
   const copy = locale === 'zh-cn' ? ZH_COPY : EN_COPY;
-  const conversationTitle = props.projection?.title ?? copy.newConversation;
   const [entryExperience, setEntryExperience] = useState<'assistant' | 'authoring'>('assistant');
   const [entryDetail, setEntryDetail] = useState<'project' | 'character' | 'world'>('character');
   const [entryDetailExpanded, setEntryDetailExpanded] = useState(true);
@@ -143,6 +143,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   >([]);
   const [entryWorldLaunch, setEntryWorldLaunch] = useState<SelectedWorldLaunch>();
   const [entryContextDiagnostic, setEntryContextDiagnostic] = useState<string>();
+  const conversationTitle = props.projection?.title ?? copy.newConversation;
   const runtimeReady = props.runtime?.status === 'running';
   const hasEvents = (props.projection?.events.length ?? 0) > 0;
   const activeTurnStart = findActiveTurnStart(props.projection);
@@ -228,11 +229,13 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       copy={copy}
       surfaceKind={props.surfaceKind}
       configuration={props.composerConfiguration}
+      conversationId={props.conversationId}
       configurationError={props.composerConfigurationError}
       mentionItems={props.mentionItems ?? []}
       mentionDiagnostic={props.mentionDiagnostic}
       configuring={props.configuring}
       currentTurn={props.projection?.currentTurn}
+      inbox={props.projection?.inbox}
       submitting={props.submitting}
       disabled={!runtimeReady}
       draft={props.draft}
@@ -241,6 +244,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       onModelChange={props.onModelChange}
       onMediaModelChange={props.onMediaModelChange}
       onPermissionPresetChange={props.onPermissionPresetChange}
+      onRemoveQueuedMessage={props.onRemoveQueuedMessage}
       onRequestMentions={props.onRequestMentions}
       onMaterializeAsset={props.onMaterializeAsset}
       onSubmit={props.onSubmit}
@@ -418,11 +422,13 @@ function DshComposer({
   copy,
   surfaceKind,
   configuration,
+  conversationId,
   configurationError,
   mentionItems,
   mentionDiagnostic,
   configuring,
   currentTurn,
+  inbox,
   submitting,
   disabled,
   draft,
@@ -431,6 +437,7 @@ function DshComposer({
   onModelChange,
   onMediaModelChange,
   onPermissionPresetChange,
+  onRemoveQueuedMessage,
   onRequestMentions,
   onMaterializeAsset,
   onSubmit,
@@ -448,11 +455,13 @@ function DshComposer({
   readonly copy: DshAgentCopy;
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
   readonly configuration?: DshComposerConfigurationProjection;
+  readonly conversationId?: string;
   readonly configurationError?: string;
   readonly mentionItems: readonly DshComposerMentionProjection[];
   readonly mentionDiagnostic?: string;
   readonly configuring: boolean;
   readonly currentTurn?: number;
+  readonly inbox?: DshSessionHostProjection['inbox'];
   readonly submitting: boolean;
   readonly disabled: boolean;
   readonly draft: string;
@@ -464,6 +473,7 @@ function DshComposer({
     modelOptionId: string,
   ) => void;
   readonly onPermissionPresetChange: (permissionPresetId: string) => void;
+  readonly onRemoveQueuedMessage?: (messageId: string) => void;
   readonly onRequestMentions?: (filter: string) => void;
   readonly onMaterializeAsset?: (
     assetId: string,
@@ -523,6 +533,17 @@ function DshComposer({
     entryExperience === 'authoring' &&
     entryWorkspaceTarget === undefined;
   const submissionBlocked = configurationDiagnostic !== undefined || entryTargetMissing;
+  const queuedMessages = [...(inbox?.nextTurn ?? []), ...(inbox?.nextStep ?? [])].map(
+    (message) => ({
+      id: message.messageId,
+      conversationId: conversationId ?? '',
+      content: message.content
+        .map((block) => (block.type === 'text' ? block.text : `@${block.name}`))
+        .join(' '),
+      createdAt: message.createdAt,
+      source: 'user' as const,
+    }),
+  );
   const submitTarget = (): DshConversationCreationTarget =>
     entryExperience === 'authoring' && entryWorkspaceTarget !== undefined
       ? { kind: 'project', projectId: entryWorkspaceTarget.projectId }
@@ -643,7 +664,10 @@ function DshComposer({
           inputValue={draft}
           isThinking={submitting || currentTurn !== undefined}
           isRunActive={submitting || currentTurn !== undefined}
-          queueingEnabled={false}
+          queueingEnabled={currentTurn !== undefined}
+          queuedMessageCount={queuedMessages.length}
+          queuedMessages={queuedMessages}
+          onCancelQueuedMessage={onRemoveQueuedMessage}
           onInputChange={(value) => {
             if (suppressInputDiagnosticClearRef.current) {
               suppressInputDiagnosticClearRef.current = false;
@@ -700,6 +724,7 @@ function DshComposer({
                       : { description: preset.description }),
                   })),
                   onChange: onPermissionPresetChange,
+                  disabled: currentTurn !== undefined || submitting,
                 }
           }
           submissionBlocked={submissionBlocked}
@@ -1086,8 +1111,8 @@ function DshToolEvent({
             </button>
             {expanded ? (
               <div className="border-t border-[var(--agent-divider)] px-3 py-2 text-[10px]">
-                <ToolPayload label={copy.input} value={event.rawInput} />
-                <ToolPayload label={copy.output} value={event.rawOutput} />
+                <ToolPayload copy={copy} label={copy.input} value={event.rawInput} />
+                <ToolPayload copy={copy} label={copy.output} value={event.rawOutput} />
               </div>
             ) : null}
           </div>
@@ -1160,18 +1185,59 @@ function DshCommandEvent({
 }
 
 function ToolPayload({
+  copy,
   label,
   value,
 }: {
+  readonly copy: DshAgentCopy;
   readonly label: string;
   readonly value: unknown;
 }): JSX.Element | null {
+  const [fullyExpanded, setFullyExpanded] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   if (value === undefined) return null;
+  const serialized = JSON.stringify(value, null, 2);
+  const copyPayload = async (): Promise<void> => {
+    try {
+      if (navigator.clipboard?.writeText === undefined) {
+        throw new Error('Clipboard API is unavailable.');
+      }
+      await navigator.clipboard.writeText(serialized);
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('failed');
+    }
+  };
   return (
     <div className="mb-2 last:mb-0">
-      <div className="mb-0.5 text-[var(--agent-fg-secondary)] opacity-80">{label}</div>
-      <pre className="agent-code-block max-h-[150px] w-full max-w-full overflow-x-auto p-1.5 font-mono">
-        {JSON.stringify(value, null, 2)}
+      <div className="mb-0.5 flex items-center gap-2 text-[var(--agent-fg-secondary)]">
+        <span className="mr-auto opacity-80">{label}</span>
+        <button
+          className="rounded px-1 py-0.5 text-[10px] hover:bg-[var(--agent-bg-hover)]"
+          type="button"
+          onClick={() => setFullyExpanded((current) => !current)}
+        >
+          {fullyExpanded ? copy.collapsePayload : copy.expandPayload}
+        </button>
+        <button
+          className="rounded px-1 py-0.5 text-[10px] hover:bg-[var(--agent-bg-hover)]"
+          type="button"
+          onClick={() => void copyPayload()}
+        >
+          {copyStatus === 'copied'
+            ? copy.copiedPayload
+            : copyStatus === 'failed'
+              ? copy.copyPayloadFailed
+              : copy.copyPayload}
+        </button>
+      </div>
+      <pre
+        className={`agent-code-block w-full max-w-full overflow-x-auto p-1.5 font-mono ${
+          fullyExpanded ? 'max-h-none overflow-y-visible' : 'max-h-[150px] overflow-y-auto'
+        }`}
+        data-agent-tool-payload={label}
+      >
+        {serialized}
       </pre>
     </div>
   );
@@ -1291,12 +1357,16 @@ function eventKey(event: DshSessionHostEvent, index: number): string {
 
 interface DshAgentCopy {
   readonly agent: string;
-  readonly conversationTitle: string;
   readonly assistantEmptyTitle: string;
   readonly cancelPermission: string;
   readonly cancelTurn: string;
   readonly cancelled: string;
   readonly composer: string;
+  readonly conversationTitle: string;
+  readonly collapsePayload: string;
+  readonly copiedPayload: string;
+  readonly copyPayload: string;
+  readonly copyPayloadFailed: string;
   readonly attach: string;
   readonly attachmentsUnavailable: string;
   readonly board: string;
@@ -1310,11 +1380,12 @@ interface DshAgentCopy {
   readonly entryConversation: string;
   readonly entryCreation: string;
   readonly entryExperience: string;
+  readonly expandPayload: string;
   readonly input: string;
   readonly loadingConfiguration: string;
   readonly model: string;
-  readonly modelRequired: string;
   readonly newConversation: string;
+  readonly modelRequired: string;
   readonly loading: string;
   readonly output: string;
   readonly permissions: string;
@@ -1341,12 +1412,16 @@ interface DshAgentCopy {
 
 const EN_COPY: DshAgentCopy = {
   agent: 'Agent',
-  conversationTitle: 'Conversation title',
   assistantEmptyTitle: 'What would you like to talk about?',
   cancelPermission: 'Cancel request',
   cancelTurn: 'Cancel current turn',
   cancelled: 'The operation was cancelled.',
   composer: 'Message',
+  conversationTitle: 'Conversation title',
+  collapsePayload: 'Collapse',
+  copiedPayload: 'Copied',
+  copyPayload: 'Copy',
+  copyPayloadFailed: 'Copy failed',
   attach: 'Add context',
   attachmentsUnavailable:
     'Attachments are unavailable until the authorized resource picker is connected.',
@@ -1361,13 +1436,14 @@ const EN_COPY: DshAgentCopy = {
   entryConversation: 'Conversation',
   entryCreation: 'Creation',
   entryExperience: 'Entry experience',
+  expandPayload: 'Show all',
   input: 'Input',
   loadingConfiguration: 'Loading model configuration…',
   loading: 'Loading DSH session…',
   output: 'Result',
   model: 'Model',
-  modelRequired: 'Select a configured model before sending.',
   newConversation: 'New conversation',
+  modelRequired: 'Select a configured model before sending.',
   permissions: 'Pending permissions',
   placeholder: 'Ask the DSH Agent…',
   restartRuntime: 'Restart DSH',
@@ -1397,12 +1473,16 @@ const EN_COPY: DshAgentCopy = {
 
 const ZH_COPY: DshAgentCopy = {
   agent: 'Agent',
-  conversationTitle: '会话标题',
   assistantEmptyTitle: '想聊些什么？',
   cancelPermission: '取消请求',
   cancelTurn: '取消当前回合',
   cancelled: '操作已取消。',
   composer: '消息',
+  conversationTitle: '会话标题',
+  collapsePayload: '收起',
+  copiedPayload: '已复制',
+  copyPayload: '复制',
+  copyPayloadFailed: '复制失败',
   attach: '添加上下文',
   attachmentsUnavailable: '授权资源选择器接入前，附件上下文暂不可用。',
   board: '画板',
@@ -1416,13 +1496,14 @@ const ZH_COPY: DshAgentCopy = {
   entryConversation: '对话',
   entryCreation: '创作',
   entryExperience: '入口模式',
+  expandPayload: '展开全部',
   input: '输入',
   loadingConfiguration: '正在加载模型配置…',
   loading: '正在加载 DSH 会话…',
   output: '结果',
   model: '模型',
-  modelRequired: '发送前请选择已配置的模型。',
   newConversation: '新会话',
+  modelRequired: '发送前请选择已配置的模型。',
   permissions: '待处理权限',
   placeholder: '向 DSH Agent 提问…',
   restartRuntime: '重启 DSH',

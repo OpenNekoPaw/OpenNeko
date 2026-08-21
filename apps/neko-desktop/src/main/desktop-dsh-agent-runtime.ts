@@ -2,7 +2,7 @@ import {
   createConversationDshSessionApplication,
   createPersistentDshConversationCatalogStore,
   createPersistentConversationDshSessionBindingStore,
-  initializeAgentConversationLifecycleTables,
+  initializeAgentConversationContextAuthorityTable,
   initializeDshConversationCatalogTables,
   initializeConversationDshSessionBindingTables,
   type ConversationDshSessionApplication,
@@ -10,6 +10,7 @@ import {
   type ConversationDshSessionAcpClient,
   type DshSessionCreationClient,
   type DshSessionCatalogAcpClient,
+  type DshSessionArchiveAcpClient,
 } from '@neko/agent-runtime/application';
 import {
   DshAcpApplicationClient,
@@ -27,7 +28,10 @@ import type {
 } from './desktop-dsh-subprocess-supervisor';
 
 export interface DesktopDshAgentClient
-  extends ConversationDshSessionAcpClient, DshSessionCatalogAcpClient, DshSessionCreationClient {
+  extends ConversationDshSessionAcpClient,
+    DshSessionCatalogAcpClient,
+    DshSessionArchiveAcpClient,
+    DshSessionCreationClient {
   readonly closed: Promise<void>;
   readonly projection: DshAcpProjection;
   readExtensions(): Promise<DshAcpExtensionProjection>;
@@ -64,7 +68,7 @@ export interface DesktopDshAgentHandlerAssembly {
 export async function startDesktopDshAgentRuntime(
   options: DesktopDshAgentRuntimeOptions,
 ): Promise<DesktopDshAgentRuntime> {
-  await initializeAgentConversationLifecycleTables(options.metadataStore);
+  await initializeAgentConversationContextAuthorityTable(options.metadataStore);
   await initializeConversationDshSessionBindingTables(options.metadataStore);
   await initializeDshConversationCatalogTables(options.metadataStore);
   const bindings = createPersistentConversationDshSessionBindingStore({
@@ -149,6 +153,7 @@ export async function startDesktopDshAgentRuntime(
     store: bindings,
     catalog,
     conversationIdentitySeed: options.virtualCwd,
+    activity: projection,
   });
   await conversations.home.refresh();
   return Object.freeze({
@@ -265,6 +270,12 @@ function createStableDesktopDshAgentClient(
     async closeSession(sessionId) {
       return requireClient().closeSession(sessionId);
     },
+    async archiveSession(sessionId) {
+      return requireClient().archiveSession(sessionId);
+    },
+    async readArchivedSessions() {
+      return requireClient().readArchivedSessions();
+    },
     async setSessionMode(input) {
       return requireClient().setSessionMode(input);
     },
@@ -297,6 +308,9 @@ function createStableDesktopDshAgentClient(
     },
     async readInbox(sessionId) {
       return requireClient().readInbox(sessionId);
+    },
+    async enqueueInboxMessage(input) {
+      return requireClient().enqueueInboxMessage(input);
     },
     async replaceInboxMessage(input) {
       return requireClient().replaceInboxMessage(input);

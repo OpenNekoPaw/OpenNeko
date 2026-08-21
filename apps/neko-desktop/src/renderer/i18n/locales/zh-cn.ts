@@ -15,15 +15,15 @@ export const zhCN = {
   'shell.removeProjectConfirm': '要从 OpenNeko 移除“{project}”吗？会话和项目文件都会保留。',
   'shell.removeProjectsConfirm':
     '要从 OpenNeko 移除选中的 {count} 个项目吗？会话和项目文件都会保留。',
-  'shell.deleteProjectConversations': '删除 {project} 的工作区会话',
-  'shell.deleteProjectConversationsConfirm':
-    '要永久删除“{project}”的 {count} 个工作区会话吗？项目及其文件都会保留。',
-  'shell.deleteProjectsConversationsConfirm':
-    '要永久删除所选 {projectCount} 个项目中的 {conversationCount} 个工作区会话吗？项目及其文件都会保留。',
-  'shell.deleteConversation': '删除会话 {conversation}',
-  'shell.deleteConversationConfirm': '要永久删除会话“{conversation}”吗？此操作无法撤销。',
-  'shell.deleteWorkspaceConversations': '删除不可用工作区的会话',
-  'shell.deleteConversationsConfirm': '要永久删除这 {count} 个会话吗？此操作无法撤销。',
+  'shell.archiveProjectConversations': '归档 {project} 的工作区会话',
+  'shell.archiveProjectConversationsConfirm':
+    '要归档“{project}”的 {count} 个工作区会话吗？会话记录、项目及其文件都会保留。',
+  'shell.archiveProjectsConversationsConfirm':
+    '要归档所选 {projectCount} 个项目中的 {conversationCount} 个工作区会话吗？会话记录、项目及其文件都会保留。',
+  'shell.archiveConversation': '归档会话 {conversation}',
+  'shell.archiveConversationConfirm': '要归档会话“{conversation}”吗？会话记录会被保留。',
+  'shell.archiveWorkspaceConversations': '归档不可用工作区的会话',
+  'shell.archiveConversationsConfirm': '要归档这 {count} 个会话吗？会话记录会被保留。',
   'shell.openProject': '打开内容项目',
   'shell.settingsUnavailable': '当前版本尚未接入设置',
   'shell.settingsLabel': 'Desktop 设置',
@@ -145,7 +145,7 @@ export const zhCN = {
   'home.projectManagement': '项目管理',
   'home.projects.openDirectory': '打开目录',
   'home.openConversation': '打开会话',
-  'home.deleteConversation': '删除会话',
+  'home.archiveConversation': '归档会话',
   'home.noConversations': '暂无 Agent 会话',
   'home.projectProfiles': '项目类型',
   'home.available': '可用',

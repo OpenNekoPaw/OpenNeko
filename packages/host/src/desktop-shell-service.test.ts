@@ -760,6 +760,13 @@ describe('DesktopShellService', () => {
       ),
     ).resolves.toBeUndefined();
     await expect(
+      fixture.service.resolveAgentHomeConversations(
+        windowId,
+        [navigation],
+        projection.rendererSessionId,
+      ),
+    ).resolves.toEqual([navigation]);
+    await expect(
       fixture.service.assertAgentHomeConversation(windowId, projection.rendererSessionId, {
         conversationId: navigation.conversationId,
         owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:other' },

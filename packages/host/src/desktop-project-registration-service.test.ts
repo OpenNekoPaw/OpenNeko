@@ -27,17 +27,17 @@ describe('DesktopProjectRegistrationService', () => {
     expect(source).not.toMatch(/@neko\/project|ContentProjectComposition|project-composition/u);
   });
 
-  it('removes Project registration without invoking Agent conversation deletion', async () => {
+  it('removes Project registration without invoking Agent conversation archive', async () => {
     const retainedConversation = workspaceConversation('conversation:project-1');
     const removedProjection = projection([retainedConversation]);
     const shell = createShell({
       conversations: [retainedConversation],
       projection: removedProjection,
     });
-    const deleteConversations = vi.fn(async () => undefined);
+    const archiveConversations = vi.fn(async () => undefined);
     const service = new DesktopProjectRegistrationService({
       shell,
-      conversations: { deleteConversations },
+      conversations: { archiveConversations },
     });
 
     await expect(
@@ -49,31 +49,33 @@ describe('DesktopProjectRegistrationService', () => {
       'renderer-session-1',
     );
     expect(shell.resolveProjectWorkspaceConversations).not.toHaveBeenCalled();
-    expect(deleteConversations).not.toHaveBeenCalled();
+    expect(archiveConversations).not.toHaveBeenCalled();
   });
 
-  it('deletes only exact Workspace conversations selected by Shell authority', async () => {
+  it('archives only exact Workspace conversations selected by Shell authority', async () => {
     const conversations = [
       workspaceConversation('conversation:project-1'),
       workspaceConversation('conversation:project-2'),
     ];
     const finalProjection = projection([]);
     const shell = createShell({ conversations, projection: finalProjection });
-    const deleteConversations = vi.fn(async () => undefined);
+    const archiveConversations = vi.fn(async () => undefined);
     const service = new DesktopProjectRegistrationService({
       shell,
-      conversations: { deleteConversations },
+      conversations: { archiveConversations },
     });
 
     await expect(
-      service.deleteProjectConversations('window-1', 'renderer-session-1', ['content:workspace-1']),
+      service.archiveProjectConversations('window-1', 'renderer-session-1', [
+        'content:workspace-1',
+      ]),
     ).resolves.toBe(finalProjection);
     expect(shell.resolveProjectWorkspaceConversations).toHaveBeenCalledWith(
       'window-1',
       ['content:workspace-1'],
       'renderer-session-1',
     );
-    expect(deleteConversations).toHaveBeenCalledWith(conversations);
+    expect(archiveConversations).toHaveBeenCalledWith(conversations);
     expect(shell.getProjection).toHaveBeenCalledWith('window-1');
     expect(shell.removeProjectsFromCatalog).not.toHaveBeenCalled();
   });
@@ -81,33 +83,91 @@ describe('DesktopProjectRegistrationService', () => {
   it('keeps an empty cleanup request inside Shell validation without invoking Agent authority', async () => {
     const finalProjection = projection([]);
     const shell = createShell({ conversations: [], projection: finalProjection });
-    const deleteConversations = vi.fn(async () => undefined);
+    const archiveConversations = vi.fn(async () => undefined);
     const service = new DesktopProjectRegistrationService({
       shell,
-      conversations: { deleteConversations },
+      conversations: { archiveConversations },
     });
 
     await expect(
-      service.deleteProjectConversations('window-1', 'renderer-session-1', ['content:workspace-1']),
+      service.archiveProjectConversations('window-1', 'renderer-session-1', [
+        'content:workspace-1',
+      ]),
     ).resolves.toBe(finalProjection);
-    expect(deleteConversations).not.toHaveBeenCalled();
+    expect(archiveConversations).not.toHaveBeenCalled();
   });
 
-  it('does not delete conversations when complete Project validation fails', async () => {
+  it('does not archive conversations when complete Project validation fails', async () => {
     const validationError = new Error('Unknown Desktop Project');
     const shell = createShell({ conversations: [], projection: projection([]) });
     shell.resolveProjectWorkspaceConversations.mockRejectedValue(validationError);
-    const deleteConversations = vi.fn(async () => undefined);
+    const archiveConversations = vi.fn(async () => undefined);
     const service = new DesktopProjectRegistrationService({
       shell,
-      conversations: { deleteConversations },
+      conversations: { archiveConversations },
     });
 
     await expect(
-      service.deleteProjectConversations('window-1', 'renderer-session-1', ['content:missing']),
+      service.archiveProjectConversations('window-1', 'renderer-session-1', ['content:missing']),
     ).rejects.toBe(validationError);
-    expect(deleteConversations).not.toHaveBeenCalled();
+    expect(archiveConversations).not.toHaveBeenCalled();
     expect(shell.getProjection).not.toHaveBeenCalled();
+  });
+
+  it('archives only the exact Conversations revalidated by Shell authority', async () => {
+    const requested = [workspaceConversation('conversation:project-1')];
+    const authoritative = [workspaceConversation('conversation:project-1')];
+    const finalProjection = projection([]);
+    const shell = createShell({ conversations: authoritative, projection: finalProjection });
+    const archiveConversations = vi.fn(async () => undefined);
+    const service = new DesktopProjectRegistrationService({
+      shell,
+      conversations: { archiveConversations },
+    });
+
+    await expect(
+      service.archiveConversations('window-1', 'renderer-session-1', requested),
+    ).resolves.toBe(finalProjection);
+    expect(shell.resolveAgentHomeConversations).toHaveBeenCalledWith(
+      'window-1',
+      requested,
+      'renderer-session-1',
+    );
+    expect(archiveConversations).toHaveBeenCalledWith(authoritative);
+    expect(shell.getProjection).toHaveBeenCalledWith('window-1');
+  });
+
+  it('preserves every Conversation when authoritative navigation validation fails', async () => {
+    const requested = [workspaceConversation('conversation:missing')];
+    const validationError = new Error('Unknown Desktop Conversation');
+    const shell = createShell({ conversations: [], projection: projection([]) });
+    shell.resolveAgentHomeConversations.mockRejectedValue(validationError);
+    const archiveConversations = vi.fn(async () => undefined);
+    const service = new DesktopProjectRegistrationService({
+      shell,
+      conversations: { archiveConversations },
+    });
+
+    await expect(
+      service.archiveConversations('window-1', 'renderer-session-1', requested),
+    ).rejects.toBe(validationError);
+    expect(archiveConversations).not.toHaveBeenCalled();
+    expect(shell.getProjection).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty Conversation archive instead of reporting no-op success', async () => {
+    const shell = createShell({ conversations: [], projection: projection([]) });
+    const archiveConversations = vi.fn(async () => undefined);
+    const service = new DesktopProjectRegistrationService({
+      shell,
+      conversations: { archiveConversations },
+    });
+
+    await expect(
+      service.archiveConversations('window-1', 'renderer-session-1', []),
+    ).rejects.toThrow(/At least one Agent Home Conversation/u);
+    expect(shell.resolveAgentHomeConversations).not.toHaveBeenCalled();
+    expect(archiveConversations).not.toHaveBeenCalled();
   });
 });
 
@@ -119,11 +179,13 @@ function createShell({
   readonly projection: DesktopShellProjection;
 }): DesktopProjectRegistrationShellPort & {
   readonly getProjection: ReturnType<typeof vi.fn>;
+  readonly resolveAgentHomeConversations: ReturnType<typeof vi.fn>;
   readonly removeProjectsFromCatalog: ReturnType<typeof vi.fn>;
   readonly resolveProjectWorkspaceConversations: ReturnType<typeof vi.fn>;
 } {
   return {
     removeProjectsFromCatalog: vi.fn(async () => ({ projection: finalProjection })),
+    resolveAgentHomeConversations: vi.fn(async () => conversations),
     resolveProjectWorkspaceConversations: vi.fn(async () => conversations),
     getProjection: vi.fn(async () => finalProjection),
   };

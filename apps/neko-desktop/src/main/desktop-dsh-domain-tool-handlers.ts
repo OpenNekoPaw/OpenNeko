@@ -12,6 +12,7 @@ import {
   createNodeDocumentAccessService,
   NodeAuthorizedWorkspaceWriter,
 } from '@neko/content/node';
+import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
 import { join } from 'node:path';
 import { CutProjectAuthoringService } from '@neko/cut-domain';
 import type { CutExportApplicationService } from '@neko/cut-node';
@@ -183,8 +184,15 @@ export function createDesktopDshDomainToolHandlers(options: {
                     { code: 'DOCUMENT_DSH_CONTEXT_UNSUPPORTED' },
                   );
                 })();
+        const documentEntryAccess = createNodeDocumentLowLevelAccess();
         return createHostAgentContentAccessRuntime({
-          contentRead: createNodeHostContentReadService({ workspaceRoot: root }),
+          contentRead: createNodeHostContentReadService({
+            workspaceRoot: root,
+            documentEntryReader: {
+              readEntry: (sourcePath, entryPath) =>
+                documentEntryAccess.readEntry(sourcePath, entryPath),
+            },
+          }),
           documentAccess: createNodeDocumentAccessService(),
           resolveDocumentHostFilePath: (source) => join(root, ...source.file.path.split('/')),
         });

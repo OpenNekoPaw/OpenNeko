@@ -53,6 +53,7 @@ export function DesktopAgentSurface({
   const [mentionDiagnostic, setMentionDiagnostic] = useState<string>();
   const [operationError, setOperationError] = useState<string>();
   const [configuring, setConfiguring] = useState(false);
+  const submissionCount = useRef(0);
   const refreshSequence = useRef(0);
   const composerRefreshSequence = useRef(0);
   const mentionRequestSequence = useRef(0);
@@ -216,8 +217,10 @@ export function DesktopAgentSurface({
     creationTarget: DshConversationCreationTarget,
     input: DshComposerSubmitInput,
   ): Promise<boolean> => {
-    if (submitting) return false;
+    const runActive = state.kind === 'ready' && state.projection.currentTurn !== undefined;
+    if (submitting && !runActive) return false;
     setOperationError(undefined);
+    submissionCount.current += 1;
     setSubmitting(true);
     try {
       const permissionPresetId = composerConfiguration?.permissionPresetId;
@@ -244,7 +247,28 @@ export function DesktopAgentSurface({
       setOperationError(describeError(error));
       return false;
     } finally {
-      setSubmitting(false);
+      submissionCount.current = Math.max(0, submissionCount.current - 1);
+      setSubmitting(submissionCount.current > 0);
+    }
+  };
+
+  const removeQueuedMessage = async (messageId: string): Promise<void> => {
+    const targetConversationId =
+      conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined);
+    if (!targetConversationId) return;
+    setOperationError(undefined);
+    try {
+      const projection = await window.openNekoDesktop.dshSessions.removeInboxMessage(
+        targetConversationId,
+        messageId,
+      );
+      setState((current) =>
+        current.kind === 'ready'
+          ? requireReadyState(targetConversationId, projection, current.permissions)
+          : current,
+      );
+    } catch (error) {
+      setOperationError(describeError(error));
     }
   };
 
@@ -382,6 +406,7 @@ export function DesktopAgentSurface({
       onPermissionPresetChange={(permissionPresetId) =>
         void selectPermissionPreset(permissionPresetId)
       }
+      onRemoveQueuedMessage={(messageId) => void removeQueuedMessage(messageId)}
       onRestartRuntime={() => void restartRuntime()}
       onRequestMentions={(filter) => void requestMentions(filter)}
       onMaterializeAsset={materializeAsset}

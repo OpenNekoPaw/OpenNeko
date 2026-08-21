@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createDesktopConversationDeleteRequest,
+  createDesktopConversationArchiveRequest,
   createDesktopProfileRequest,
   createDesktopProjectSelectionRequest,
   createDesktopProjectOpenRequest,
   createDesktopTabMutationRequest,
   DesktopShellContractError,
-  parseDesktopConversationDeleteRequest,
+  parseDesktopConversationArchiveRequest,
   parseDesktopProjectSelectionRequest,
   parseDesktopShellProjection,
   parseDesktopShellProjectionEvent,
@@ -210,7 +210,7 @@ describe('Desktop Shell contract', () => {
       projectIds: ['content:workspace-1', 'content:workspace-2'],
     });
     expect(
-      createDesktopConversationDeleteRequest(
+      createDesktopConversationArchiveRequest(
         'request-5',
         [
           {
@@ -234,7 +234,7 @@ describe('Desktop Shell contract', () => {
 
   it('strictly requires a non-empty unique Conversation identity array', () => {
     expect(() =>
-      parseDesktopConversationDeleteRequest({
+      parseDesktopConversationArchiveRequest({
         requestId: 'request-1',
         rendererSessionId: 'renderer-session-1',
         navigation: {
@@ -244,10 +244,10 @@ describe('Desktop Shell contract', () => {
       }),
     ).toThrowError(DesktopShellContractError);
     expect(() =>
-      createDesktopConversationDeleteRequest('request-2', [], 'renderer-session-1'),
+      createDesktopConversationArchiveRequest('request-2', [], 'renderer-session-1'),
     ).toThrowError('At least one Desktop Agent Home conversation identity is required.');
     expect(() =>
-      createDesktopConversationDeleteRequest(
+      createDesktopConversationArchiveRequest(
         'request-3',
         [
           {

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -85,6 +85,59 @@ describe('Desktop DSH domain Tool handlers', () => {
         new AbortController().signal,
       ),
     ).resolves.toMatchObject({ outcome: 'success', result: { text: '# Linked story' } });
+  });
+
+  it('reads an EPUB image entry through the Content-owned DSH image path', async () => {
+    const root = await createRoot();
+    await copyFile(
+      new URL(
+        '../../../../scripts/agent-eval/shared-fixtures/document-image-workspace/synthetic-document.epub',
+        import.meta.url,
+      ),
+      join(root, 'story.epub'),
+    );
+    const handlers = createDesktopDshDomainToolHandlers({
+      bindings: {
+        async getByDshSessionId() {
+          return sessionBinding();
+        },
+      },
+      contexts: {
+        async readContext() {
+          return workspaceContext();
+        },
+      },
+      workspaceGrants: {
+        resolveAuthorizedWorkspace: vi.fn(async () => workspaceResolution(root)),
+      },
+      generationRuntime: { getJobs: vi.fn() },
+      configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
+      assistant: { assistantSpaceId: 'assistant:one', root },
+      cutRuntime: undefined,
+    });
+
+    await expect(
+      handlers.executeContentImageTool(
+        {
+          sessionId: 'dsh-session:one',
+          turn: 1,
+          toolCallId: 'tool:image',
+          tool: 'openneko.read_image',
+          operation: 'read-chunk',
+          input: {
+            source: {
+              file: { authority: 'workspace', path: 'story.epub' },
+              selector: { kind: 'entry', path: 'OEBPS/images/page-1.png' },
+            },
+            offset: 0,
+          },
+        },
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'success',
+      result: { offset: 0, totalBytes: 808, mimeType: 'image/png' },
+    });
   });
 
   it('resolves exact Workspace grant and purpose model for Generation', async () => {

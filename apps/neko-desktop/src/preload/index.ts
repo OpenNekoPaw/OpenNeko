@@ -34,7 +34,7 @@ import {
   type OpenNekoDesktopBridge,
 } from '../shared/bridge-contract';
 import {
-  createDesktopConversationDeleteRequest,
+  createDesktopConversationArchiveRequest,
   createDesktopProfileRequest,
   createDesktopProjectSelectionRequest,
   createDesktopProjectOpenRequest,
@@ -473,6 +473,22 @@ const bridge: OpenNekoDesktopBridge &
         windowId: context.windowId,
         rendererSessionId: context.rendererSessionId,
         conversationId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      return requireDshSessionConversation(
+        parseDshSessionHostResult(response, request.requestId),
+        conversationId,
+      ).projection;
+    },
+    async removeInboxMessage(conversationId, messageId) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-session-inbox-remove'),
+        operation: 'inbox-remove' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        conversationId,
+        messageId,
       };
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return requireDshSessionConversation(
@@ -1753,15 +1769,15 @@ const bridge: OpenNekoDesktopBridge &
         parseDesktopShellResponse(response, request.requestId).projection,
       );
     },
-    async deleteConversations(projectIds) {
+    async archiveConversations(projectIds) {
       const context = requireShellMutationContext();
       const request = createDesktopProjectSelectionRequest(
-        nextRequestId('desktop-project-conversation-delete'),
+        nextRequestId('desktop-project-conversation-archive'),
         projectIds,
         context.rendererSessionId,
       );
       const response: unknown = await ipcRenderer.invoke(
-        DESKTOP_SHELL_CHANNELS.projectConversationDelete,
+        DESKTOP_SHELL_CHANNELS.projectConversationArchive,
         request,
       );
       return rememberShellProjection(
@@ -1783,15 +1799,15 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   conversations: {
-    async delete(navigations) {
+    async archive(navigations) {
       const context = requireShellMutationContext();
-      const request = createDesktopConversationDeleteRequest(
-        nextRequestId('desktop-conversation-delete'),
+      const request = createDesktopConversationArchiveRequest(
+        nextRequestId('desktop-conversation-archive'),
         navigations,
         context.rendererSessionId,
       );
       const response: unknown = await ipcRenderer.invoke(
-        DESKTOP_SHELL_CHANNELS.conversationDelete,
+        DESKTOP_SHELL_CHANNELS.conversationArchive,
         request,
       );
       return rememberShellProjection(

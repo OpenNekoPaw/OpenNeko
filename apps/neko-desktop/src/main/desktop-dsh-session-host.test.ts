@@ -178,6 +178,48 @@ describe('Desktop DSH Session Host', () => {
     );
   });
 
+  it('enqueues an ordinary message into the exact running DSH Session without reconfiguring it', async () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 0,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 1 },
+    });
+    const enqueueInboxMessage = vi.fn(async () => ({ nextTurn: [], nextStep: [] }));
+    const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
+    const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
+    const readConversationExecution = vi.fn(async () => ({ supportsImageInput: false }));
+    const setSessionContext = vi.fn(async () => undefined);
+    const host = createHost({
+      projection,
+      enqueueInboxMessage,
+      prompt,
+      applyConversation,
+      readConversationExecution,
+      setSessionContext,
+    });
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      request('submit', {
+        input: { kind: 'message', text: 'next request', references: [], contextPayloads: [] },
+      }),
+    );
+
+    expect(enqueueInboxMessage).toHaveBeenCalledWith({
+      conversationId: identity.conversationId,
+      prompt: [{ type: 'text', text: 'next request' }],
+      displayContent: [{ type: 'text', text: 'next request' }],
+      contextText: 'OpenNeko test context',
+    });
+    expect(readConversationExecution).toHaveBeenCalledWith(identity.conversationId, 'window-1');
+    expect(prompt).not.toHaveBeenCalled();
+    expect(applyConversation).not.toHaveBeenCalled();
+    expect(setSessionContext).not.toHaveBeenCalled();
+  });
+
   it('adds an admitted native image block after its resource identity', async () => {
     const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
     const admitPromptImages = vi.fn(async () => [
@@ -686,6 +728,11 @@ function createHost(overrides: {
     conversationId: string,
     windowId: string,
   ) => Promise<{ readonly supportsImageInput: boolean }>;
+  readonly readConversationExecution?: (
+    conversationId: string,
+    windowId: string,
+  ) => Promise<{ readonly supportsImageInput: boolean }>;
+  readonly enqueueInboxMessage?: ConversationDshSessionBoundClient['enqueueInboxMessage'];
   readonly admitPromptImages?: (input: {
     readonly conversationId: string;
     readonly windowId: string;
@@ -751,6 +798,10 @@ function createHost(overrides: {
         vi.fn(async () => ({ commandId: 'command-1', outcome: 'success' as const })),
       invokeSkill:
         overrides.invokeSkill ?? vi.fn(async () => ({ stopReason: 'end_turn' as const })),
+      readInbox: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
+      enqueueInboxMessage:
+        overrides.enqueueInboxMessage ?? vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
+      removeInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     },
     composer: {
       project: vi.fn(async () => composerConfiguration()),
@@ -771,6 +822,8 @@ function createHost(overrides: {
         })),
       applyConversation:
         overrides.applyConversation ?? vi.fn(async () => ({ supportsImageInput: false })),
+      readConversationExecution:
+        overrides.readConversationExecution ?? vi.fn(async () => ({ supportsImageInput: false })),
     },
     promptImages: {
       admit: overrides.admitPromptImages ?? vi.fn(async () => []),

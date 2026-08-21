@@ -4,12 +4,17 @@ import type {
 } from './desktop-shell-contract';
 import type { DesktopProjectCatalogRemovalResult } from './desktop-shell-service';
 
-export interface DesktopConversationDeletionPort {
-  deleteConversations(conversations: readonly DesktopAgentHomeNavigationIdentity[]): Promise<void>;
+export interface DesktopConversationArchivePort {
+  archiveConversations(conversations: readonly DesktopAgentHomeNavigationIdentity[]): Promise<void>;
 }
 
 export interface DesktopProjectRegistrationShellPort {
   getProjection(windowId: string): Promise<DesktopShellProjection>;
+  resolveAgentHomeConversations(
+    windowId: string,
+    navigations: readonly DesktopAgentHomeNavigationIdentity[],
+    rendererSessionId: string,
+  ): Promise<readonly DesktopAgentHomeNavigationIdentity[]>;
   removeProjectsFromCatalog(
     windowId: string,
     projectIds: readonly string[],
@@ -23,7 +28,7 @@ export interface DesktopProjectRegistrationShellPort {
 }
 
 export interface DesktopProjectRegistrationServiceOptions {
-  readonly conversations: DesktopConversationDeletionPort;
+  readonly conversations: DesktopConversationArchivePort;
   readonly shell: DesktopProjectRegistrationShellPort;
 }
 
@@ -43,7 +48,7 @@ export class DesktopProjectRegistrationService {
     return result.projection;
   }
 
-  async deleteProjectConversations(
+  async archiveProjectConversations(
     windowId: string,
     rendererSessionId: string,
     projectIds: readonly string[],
@@ -54,8 +59,25 @@ export class DesktopProjectRegistrationService {
       rendererSessionId,
     );
     if (conversations.length > 0) {
-      await this.options.conversations.deleteConversations(conversations);
+      await this.options.conversations.archiveConversations(conversations);
     }
+    return this.options.shell.getProjection(windowId);
+  }
+
+  async archiveConversations(
+    windowId: string,
+    rendererSessionId: string,
+    navigations: readonly DesktopAgentHomeNavigationIdentity[],
+  ): Promise<DesktopShellProjection> {
+    if (navigations.length === 0) {
+      throw new Error('At least one Agent Home Conversation is required for archive.');
+    }
+    const conversations = await this.options.shell.resolveAgentHomeConversations(
+      windowId,
+      navigations,
+      rendererSessionId,
+    );
+    await this.options.conversations.archiveConversations(conversations);
     return this.options.shell.getProjection(windowId);
   }
 }

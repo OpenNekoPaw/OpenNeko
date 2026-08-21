@@ -24,4 +24,15 @@ describe('Desktop Main retired Pi composition poison', () => {
     expect(index).toContain('DSH Conversation reference authority is not composed.');
     expect(existsSync(path.join(mainRoot, 'macos-protected-auth-prompt.ts'))).toBe(false);
   });
+
+  it('composes Character Conversations through the live DSH application service', () => {
+    const index = readFileSync(path.join(mainRoot, 'index.ts'), 'utf8');
+
+    expect(index).toContain('dshDomainConversations = createDshDomainConversationService({');
+    expect(index).toContain('publication: dshProduct.runtime.conversations.publication');
+    expect(index).toContain('turnContext: dshPromptContext');
+    expect(index).toContain('projection: dshProduct.runtime.client.projection');
+    expect(index).not.toContain('AgentDomainConversationService');
+    expect(index).not.toContain('agentDomainConversations');
+  });
 });

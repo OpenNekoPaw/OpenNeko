@@ -34,6 +34,9 @@ export class DesktopDshSessionHost {
         | 'setSessionContext'
         | 'executeCommand'
         | 'invokeSkill'
+        | 'readInbox'
+        | 'enqueueInboxMessage'
+        | 'removeInboxMessage'
       >;
       readonly promptContext: {
         resolve(
@@ -83,6 +86,10 @@ export class DesktopDshSessionHost {
           readonly assetId: string;
         }): Promise<DshComposerMaterializedAssetHostResult['materialized']>;
         applyConversation(
+          conversationId: string,
+          windowId: string,
+        ): Promise<{ readonly supportsImageInput: boolean }>;
+        readConversationExecution(
           conversationId: string,
           windowId: string,
         ): Promise<{ readonly supportsImageInput: boolean }>;
@@ -208,13 +215,17 @@ export class DesktopDshSessionHost {
       ).conversationId;
     } else if (request.operation === 'submit') {
       conversationId = request.conversationId;
+      const dshSessionId = await this.options.conversations.ensureLoaded(conversationId);
+      const isRunning = this.options.projection.snapshot(dshSessionId).currentTurn !== undefined;
+      if (isRunning && request.input.kind !== 'message') {
+        throw new Error('Only ordinary messages can enter a running DSH Session inbox.');
+      }
       if (request.input.kind === 'command') {
         await this.options.conversations.executeCommand(conversationId, request.input.line);
       } else {
-        const appliedModel = await this.options.composer.applyConversation(
-          conversationId,
-          request.windowId,
-        );
+        const appliedModel = isRunning
+          ? await this.options.composer.readConversationExecution(conversationId, request.windowId)
+          : await this.options.composer.applyConversation(conversationId, request.windowId);
         const context = await this.options.promptContext.resolve(
           conversationId,
           request.input.kind === 'message' ? request.input.contextPayloads : [],
@@ -244,40 +255,62 @@ export class DesktopDshSessionHost {
           const imageByReferenceIndex = new Map(
             images.map((image) => [image.referenceIndex, image] as const),
           );
-          await this.options.conversations.setSessionContext(conversationId, context);
-          const response = await this.options.conversations.prompt({
-            conversationId,
-            prompt: [
-              ...(request.input.text.length === 0
-                ? []
-                : [{ type: 'text' as const, text: request.input.text }]),
-              ...request.input.references.flatMap((reference, referenceIndex) => {
-                const image = imageByReferenceIndex.get(referenceIndex);
-                return [
-                  {
-                    type: 'resource_link' as const,
-                    name: reference.label,
-                    uri: serializeContentLocatorResourceUri(reference.contentLocator),
-                  },
-                  ...(image === undefined
-                    ? []
-                    : [
-                        {
-                          type: 'image' as const,
-                          data: image.data,
-                          mimeType: image.mimeType,
-                        },
-                      ]),
-                ];
-              }),
-            ],
-          });
-          stopReason = response.stopReason;
+          const prompt = [
+            ...(request.input.text.length === 0
+              ? []
+              : [{ type: 'text' as const, text: request.input.text }]),
+            ...request.input.references.flatMap((reference, referenceIndex) => {
+              const image = imageByReferenceIndex.get(referenceIndex);
+              return [
+                {
+                  type: 'resource_link' as const,
+                  name: reference.label,
+                  uri: serializeContentLocatorResourceUri(reference.contentLocator),
+                },
+                ...(image === undefined
+                  ? []
+                  : [
+                      {
+                        type: 'image' as const,
+                        data: image.data,
+                        mimeType: image.mimeType,
+                      },
+                    ]),
+              ];
+            }),
+          ];
+          if (isRunning) {
+            await this.options.conversations.enqueueInboxMessage({
+              conversationId,
+              prompt,
+              displayContent: [
+                ...(request.input.text.length === 0
+                  ? []
+                  : [{ type: 'text' as const, text: request.input.text }]),
+                ...request.input.references.map((reference) => ({
+                  type: 'resource-link' as const,
+                  name: reference.label,
+                  uri: serializeContentLocatorResourceUri(reference.contentLocator),
+                })),
+              ],
+              contextText: context,
+            });
+          } else {
+            await this.options.conversations.setSessionContext(conversationId, context);
+            const response = await this.options.conversations.prompt({ conversationId, prompt });
+            stopReason = response.stopReason;
+          }
         }
       }
     } else if (request.operation === 'cancel') {
       conversationId = request.conversationId;
       await this.options.conversations.cancel(request.conversationId);
+    } else if (request.operation === 'inbox-remove') {
+      conversationId = request.conversationId;
+      await this.options.conversations.removeInboxMessage({
+        conversationId,
+        messageId: request.messageId,
+      });
     } else {
       conversationId = request.conversationId;
     }
@@ -303,11 +336,13 @@ export class DesktopDshSessionHost {
     }
     const dshSessionId = await this.options.conversations.ensureLoaded(conversationId);
     const snapshot = this.options.projection.snapshot(dshSessionId);
+    const inbox = await this.options.conversations.readInbox(conversationId);
     return {
       conversationId,
       dshSessionId,
       title: record.title,
       ...(snapshot.currentTurn === undefined ? {} : { currentTurn: snapshot.currentTurn }),
+      inbox,
       events: projectEvents(snapshot.events),
     };
   }

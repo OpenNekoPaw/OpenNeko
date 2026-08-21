@@ -32,9 +32,9 @@ export const DESKTOP_SHELL_CHANNELS = {
   projectOpenContent: 'openneko:desktop:project:content:open',
   projectOpenCatalog: 'openneko:desktop:project:catalog:open',
   projectRemove: 'openneko:desktop:project:remove',
-  projectConversationDelete: 'openneko:desktop:project:conversation:delete',
+  projectConversationArchive: 'openneko:desktop:project:conversation:archive',
   projectRequestProfile: 'openneko:desktop:project:profile:request',
-  conversationDelete: 'openneko:desktop:home:conversation:delete',
+  conversationArchive: 'openneko:desktop:home:conversation:archive',
   homeActivate: 'openneko:desktop:home:activate',
   tabActivate: 'openneko:desktop:tab:activate',
   tabClose: 'openneko:desktop:tab:close',
@@ -151,7 +151,7 @@ export type DesktopAgentHomeActivityKind = AgentHomeActivityKind;
 
 export type DesktopAgentHomeNavigationIdentity = AgentHomeNavigationIdentity;
 
-export interface DesktopConversationDeleteRequest extends DesktopWindowMutationRequest {
+export interface DesktopConversationArchiveRequest extends DesktopWindowMutationRequest {
   readonly navigations: readonly DesktopAgentHomeNavigationIdentity[];
 }
 
@@ -352,11 +352,11 @@ export interface OpenNekoDesktopShellBridge {
     openContent(): Promise<DesktopOpenContentResult>;
     open(projectId: string): Promise<DesktopOpenContentResult>;
     remove(projectIds: readonly string[]): Promise<DesktopShellProjection>;
-    deleteConversations(projectIds: readonly string[]): Promise<DesktopShellProjection>;
+    archiveConversations(projectIds: readonly string[]): Promise<DesktopShellProjection>;
     requestProfile(profile: DesktopUnavailableProjectProfile): Promise<DesktopProfileRequestResult>;
   };
   readonly conversations: {
-    delete(
+    archive(
       navigations: readonly DesktopAgentHomeNavigationIdentity[],
     ): Promise<DesktopShellProjection>;
   };
@@ -645,11 +645,11 @@ export function createDesktopProjectSelectionRequest(
   };
 }
 
-export function createDesktopConversationDeleteRequest(
+export function createDesktopConversationArchiveRequest(
   requestId: string,
   navigations: readonly DesktopAgentHomeNavigationIdentity[],
   rendererSessionId: string,
-): DesktopConversationDeleteRequest {
+): DesktopConversationArchiveRequest {
   return {
     ...createDesktopWindowMutationRequest(requestId, rendererSessionId),
     navigations: requireUniqueConversationNavigations(navigations),
@@ -738,17 +738,17 @@ export function parseDesktopProjectSelectionRequest(
   );
 }
 
-export function parseDesktopConversationDeleteRequest(
+export function parseDesktopConversationArchiveRequest(
   value: unknown,
-): DesktopConversationDeleteRequest {
+): DesktopConversationArchiveRequest {
   const record = requireRecord(
     value,
-    'Desktop Agent Home conversation delete request must be an object.',
+    'Desktop Agent Home conversation archive request must be an object.',
   );
   requireExactKeys(
     record,
     ['requestId', 'navigations', 'rendererSessionId'],
-    'Desktop Agent Home conversation delete request',
+    'Desktop Agent Home conversation archive request',
   );
   return {
     requestId: parseDesktopShellRequestId(record),

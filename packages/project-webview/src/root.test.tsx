@@ -276,7 +276,7 @@ describe('ProjectCatalogRoot', () => {
       <ProjectCatalogRoot
         associatedConversationCounts={{}}
         interactive
-        onDeleteAssociatedConversations={vi.fn()}
+        onArchiveAssociatedConversations={vi.fn()}
         onOpen={vi.fn()}
         onOpenDirectory={vi.fn()}
         onRemove={vi.fn()}

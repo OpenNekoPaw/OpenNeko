@@ -360,6 +360,8 @@ function createClient(
     loadSession: async () => unsupported(),
     resumeSession: async () => unsupported(),
     closeSession: async () => unsupported(),
+    archiveSession: async () => unsupported(),
+    readArchivedSessions: async () => ({ sessionIds: [] }),
     setSessionMode: async () => unsupported(),
     setSessionConfigOption: async () => unsupported(),
     prompt: async () => unsupported(),
@@ -371,6 +373,7 @@ function createClient(
     invokeSkill: async () => unsupported(),
     readExtensions: async () => unsupported(),
     readInbox: async () => unsupported(),
+    enqueueInboxMessage: async () => unsupported(),
     replaceInboxMessage: async () => unsupported(),
     removeInboxMessage: async () => unsupported(),
   };

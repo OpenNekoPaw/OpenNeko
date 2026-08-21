@@ -94,6 +94,9 @@ describe('Desktop DSH composer configuration', () => {
       'model',
       '["openai","gpt-5-api",8192]',
     );
+    expect(setSessionConfigOption.mock.invocationCallOrder[0]).toBeLessThan(
+      workspaceConfig.setAssistantSettings.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
     expect(applicationConfig.setAssistantSettings).not.toHaveBeenCalled();
 
     await expect(
@@ -125,6 +128,57 @@ describe('Desktop DSH composer configuration', () => {
         modelOptionId: 'nekoapi-media:gpt-image-2',
       }),
     ).rejects.toThrow(/Composer video model/u);
+  });
+
+  it('does not block an executable model on a recoverable config diagnostic', async () => {
+    const config = createConfig();
+    config.getAssistantConfigState.mockReturnValue({
+      ...createState(),
+      configDiagnostic: {
+        code: 'invalidConfigField',
+        filePath: '/tmp/.neko/config.toml',
+        path: 'mcp_servers',
+        message: 'Retired MCP field.',
+      },
+    });
+    const service = createDesktopDshComposerConfiguration({
+      resolveSurface: vi.fn(async () => ({
+        windowId: 'window-1',
+        binding: { kind: 'assistant' as const, assistantSpaceId: 'assistant-1', baseGrantIds: [] },
+      })),
+      contexts: { readContext: vi.fn(async () => undefined) },
+      workspaceGrants: {
+        restore: vi.fn(async () => {
+          throw new Error('Workspace resolution must not run.');
+        }),
+      },
+      configuration: {
+        getApplicationConfig: () => config,
+        getWorkspaceConfig: () => config,
+      },
+      sessions: {
+        setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
+        readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
+      },
+      executionCatalog: createExecutionCatalog(),
+      resourceBrowser: unavailableResourceBrowser(),
+      assets: unavailableAssets(),
+      entities: unavailableEntities(),
+      permissions: {
+        read: vi.fn(async () => permissionPresets('workspace-write')),
+        set: vi.fn(async () => permissionPresets('workspace-write')),
+      },
+    });
+
+    const projection = await service.project({
+      windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'surface-1',
+    });
+    expect(projection).toMatchObject({
+      selectedModelOptionId: 'deepseek-official:deepseek-v4',
+    });
+    expect(projection).not.toHaveProperty('diagnostic');
   });
 
   it('rejects unadvertised presets and a missing authoritative Conversation context visibly', async () => {
@@ -486,6 +540,7 @@ function createConfig() {
   let state = createState();
   return {
     getAssistantConfigState: vi.fn(() => state),
+    getEffectiveAgentWorkspaceConfigSnapshot: vi.fn(() => ({})),
     setAssistantSettings: vi.fn(async (updates: Partial<AssistantSettingsSnapshot>) => {
       state = { ...state, ...updates };
     }),

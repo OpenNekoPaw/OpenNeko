@@ -18,9 +18,10 @@ import {
   RemoveIcon,
   SearchIcon,
   SettingsIcon,
+  SuccessIcon,
+  ErrorIcon,
   Tooltip,
   TooltipProvider,
-  TrashIcon,
   UserIcon,
   UsersIcon,
   WarningIcon,
@@ -238,11 +239,11 @@ interface ShellActions {
   readonly onSelectProject: (projectId: string) => void;
   readonly onOpenWorkspaceDirectory: () => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-  readonly onDeleteConversations: (
+  readonly onArchiveConversations: (
     conversations: readonly DesktopAgentHomeConversationSummary[],
   ) => void;
   readonly onRemoveProjects: (projects: readonly DesktopProjectCatalogItem[]) => void;
-  readonly onDeleteProjectConversations: (projects: readonly DesktopProjectCatalogItem[]) => void;
+  readonly onArchiveProjectConversations: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly onUpdateWorkbench: (
     workbenchInstanceId: string,
     workbench: DesktopWorkbenchLayoutProjection,
@@ -543,19 +544,19 @@ export function DesktopApplication(): JSX.Element {
         kind: 'restore-conversation',
         navigation: conversation.navigation,
       }),
-    onDeleteConversations: (conversations) => {
+    onArchiveConversations: (conversations) => {
       if (conversations.length === 0) {
-        throw new Error('At least one Conversation is required for deletion.');
+        throw new Error('At least one Conversation is required for archive.');
       }
       const confirmation =
         conversations.length === 1 && conversations[0]
-          ? t('shell.deleteConversationConfirm', { conversation: conversations[0].title })
-          : t('shell.deleteConversationsConfirm', { count: conversations.length });
+          ? t('shell.archiveConversationConfirm', { conversation: conversations[0].title })
+          : t('shell.archiveConversationsConfirm', { count: conversations.length });
       if (!globalThis.confirm(confirmation)) {
         return;
       }
       void runMutation('navigation', () =>
-        window.openNekoDesktop.conversations.delete(
+        window.openNekoDesktop.conversations.archive(
           conversations.map((conversation) => conversation.navigation),
         ),
       );
@@ -575,9 +576,9 @@ export function DesktopApplication(): JSX.Element {
         window.openNekoDesktop.projects.remove(projects.map((project) => project.projectId)),
       );
     },
-    onDeleteProjectConversations: (projects) => {
+    onArchiveProjectConversations: (projects) => {
       if (projects.length === 0) {
-        throw new Error('At least one Project is required for conversation cleanup.');
+        throw new Error('At least one Project is required for Conversation archive.');
       }
       const conversationCount = projects.reduce(
         (count, project) =>
@@ -590,21 +591,21 @@ export function DesktopApplication(): JSX.Element {
         0,
       );
       if (conversationCount === 0) {
-        throw new Error('Selected Projects have no Workspace conversations to delete.');
+        throw new Error('Selected Projects have no Workspace conversations to archive.');
       }
       const confirmation =
         projects.length === 1 && projects[0]
-          ? t('shell.deleteProjectConversationsConfirm', {
+          ? t('shell.archiveProjectConversationsConfirm', {
               project: projects[0].displayName,
               count: conversationCount,
             })
-          : t('shell.deleteProjectsConversationsConfirm', {
+          : t('shell.archiveProjectsConversationsConfirm', {
               projectCount: projects.length,
               conversationCount,
             });
       if (!globalThis.confirm(confirmation)) return;
       void runMutation('navigation', () =>
-        window.openNekoDesktop.projects.deleteConversations(
+        window.openNekoDesktop.projects.archiveConversations(
           projects.map((project) => project.projectId),
         ),
       );
@@ -1110,9 +1111,9 @@ export function DesktopShellView({
     onSelectProject: () => undefined,
     onOpenWorkspaceDirectory: () => undefined,
     onOpenConversation: () => undefined,
-    onDeleteConversations: () => undefined,
+    onArchiveConversations: () => undefined,
     onRemoveProjects: () => undefined,
-    onDeleteProjectConversations: () => undefined,
+    onArchiveProjectConversations: () => undefined,
     onUpdateWorkbench: () => undefined,
     onCreateCutDraft: () => undefined,
     onCloseCutView: () => undefined,
@@ -1626,9 +1627,9 @@ function DesktopSceneWorkbench({
             compact={compact}
             disabled={interactionLocks.navigation || interactionLocks.sidebar}
             activeProjectId={workspaceProject?.projectId}
-            onDeleteConversations={actions.onDeleteConversations}
-            onDeleteProjectConversations={(project) =>
-              actions.onDeleteProjectConversations([project])
+            onArchiveConversations={actions.onArchiveConversations}
+            onArchiveProjectConversations={(project) =>
+              actions.onArchiveProjectConversations([project])
             }
             onManageProjects={() =>
               actions.onTransitionScene({
@@ -1669,9 +1670,7 @@ function DesktopSceneWorkbench({
         mainComposition="continuous"
         mainSplit={mainSplit}
         mainSplitRatio={
-          assetPreviewVisible ||
-          characterDetailVisible ||
-          worldDetailVisible
+          assetPreviewVisible || characterDetailVisible || worldDetailVisible
             ? managementSplitRatio
             : activeWorkbench.layout.main.split?.ratio
         }
@@ -1910,7 +1909,7 @@ function DesktopWorkbenchRuntimePortals({
           interactive={interactive}
           onOpenDirectory={actions.onOpenWorkspaceDirectory}
           onOpen={actions.onSelectProject}
-          onDeleteAssociatedConversations={actions.onDeleteProjectConversations}
+          onArchiveAssociatedConversations={actions.onArchiveProjectConversations}
           onRemove={actions.onRemoveProjects}
           projects={projection.catalog.projects}
         />
@@ -4032,8 +4031,8 @@ function ApplicationPrimarySidebar({
   activeSection,
   compact,
   disabled = false,
-  onDeleteConversations,
-  onDeleteProjectConversations,
+  onArchiveConversations,
+  onArchiveProjectConversations,
   onManageProjects,
   onNavigate,
   onOpenConversation,
@@ -4048,10 +4047,10 @@ function ApplicationPrimarySidebar({
   readonly activeSection?: HomeSection;
   readonly compact: boolean;
   readonly disabled?: boolean;
-  readonly onDeleteConversations: (
+  readonly onArchiveConversations: (
     conversations: readonly DesktopAgentHomeConversationSummary[],
   ) => void;
-  readonly onDeleteProjectConversations: (project: DesktopProjectCatalogItem) => void;
+  readonly onArchiveProjectConversations: (project: DesktopProjectCatalogItem) => void;
   readonly onManageProjects: () => void;
   readonly onNavigate: (section: HomeSection) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
@@ -4122,8 +4121,8 @@ function ApplicationPrimarySidebar({
       <PrimaryRecentNavigation
         activeProjectId={activeProjectId}
         disabled={disabled}
-        onDeleteConversations={onDeleteConversations}
-        onDeleteProjectConversations={onDeleteProjectConversations}
+        onArchiveConversations={onArchiveConversations}
+        onArchiveProjectConversations={onArchiveProjectConversations}
         onManageProjects={onManageProjects}
         onOpenConversation={onOpenConversation}
         onOpenPortability={
@@ -4194,8 +4193,8 @@ function partitionPrimaryNavigationGroups(groups: readonly DesktopConversationNa
 function PrimaryRecentNavigation({
   activeProjectId,
   disabled = false,
-  onDeleteConversations,
-  onDeleteProjectConversations,
+  onArchiveConversations,
+  onArchiveProjectConversations,
   onManageProjects,
   onOpenConversation,
   onOpenPortability,
@@ -4205,10 +4204,10 @@ function PrimaryRecentNavigation({
 }: {
   readonly activeProjectId?: string;
   readonly disabled?: boolean;
-  readonly onDeleteConversations: (
+  readonly onArchiveConversations: (
     conversations: readonly DesktopAgentHomeConversationSummary[],
   ) => void;
-  readonly onDeleteProjectConversations: (project: DesktopProjectCatalogItem) => void;
+  readonly onArchiveProjectConversations: (project: DesktopProjectCatalogItem) => void;
   readonly onManageProjects: () => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenPortability?: (project: DesktopProjectCatalogItem) => void;
@@ -4287,7 +4286,7 @@ function PrimaryRecentNavigation({
           <ContextMenu
             items={createProjectNavigationMenuItems({
               disabled,
-              onDeleteConversations: () => onDeleteProjectConversations(project),
+              onArchiveConversations: () => onArchiveProjectConversations(project),
               onManageProjects,
               onOpen: () => onOpenRecent(project.projectId),
               onOpenPortability: onOpenPortability ? () => onOpenPortability(project) : undefined,
@@ -4355,14 +4354,14 @@ function PrimaryRecentNavigation({
                   <IconButton
                     disabled={disabled || workspaceConversationCount === 0}
                     size="xs"
-                    label={t('shell.deleteProjectConversations', {
+                    label={t('shell.archiveProjectConversations', {
                       project: project.displayName,
                     })}
-                    title={t('shell.deleteProjectConversations', {
+                    title={t('shell.archiveProjectConversations', {
                       project: project.displayName,
                     })}
-                    icon={<TrashIcon size={13} />}
-                    onClick={() => onDeleteProjectConversations(project)}
+                    icon={<PackageIcon size={13} />}
+                    onClick={() => onArchiveProjectConversations(project)}
                   />
                   <IconButton
                     disabled={disabled}
@@ -4381,7 +4380,7 @@ function PrimaryRecentNavigation({
             collapsed={collapsed}
             disabled={disabled}
             group={group}
-            onDeleteConversations={() => onDeleteConversations(group.conversations)}
+            onArchiveConversations={() => onArchiveConversations(group.conversations)}
             onToggle={() => toggleCollapsed(group)}
           />
         )}
@@ -4396,7 +4395,7 @@ function PrimaryRecentNavigation({
                 navigationDisabled={
                   disabled || group.kind === 'workspace' || projectUnavailable !== undefined
                 }
-                onDelete={(conversation) => onDeleteConversations([conversation])}
+                onArchive={(conversation) => onArchiveConversations([conversation])}
                 onOpen={onOpenConversation}
               />
             ))}
@@ -4452,13 +4451,13 @@ function StandaloneConversationGroupHeader({
   collapsed,
   disabled,
   group,
-  onDeleteConversations,
+  onArchiveConversations,
   onToggle,
 }: {
   readonly collapsed: boolean;
   readonly disabled: boolean;
   readonly group: DesktopConversationNavigationGroup;
-  readonly onDeleteConversations: () => void;
+  readonly onArchiveConversations: () => void;
   readonly onToggle: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -4498,10 +4497,10 @@ function StandaloneConversationGroupHeader({
           <IconButton
             disabled={disabled}
             size="xs"
-            label={t('shell.deleteWorkspaceConversations')}
-            title={t('shell.deleteWorkspaceConversations')}
-            icon={<TrashIcon size={13} />}
-            onClick={onDeleteConversations}
+            label={t('shell.archiveWorkspaceConversations')}
+            title={t('shell.archiveWorkspaceConversations')}
+            icon={<PackageIcon size={13} />}
+            onClick={onArchiveConversations}
           />
         </span>
       ) : null}
@@ -4511,7 +4510,7 @@ function StandaloneConversationGroupHeader({
     <ContextMenu
       items={createWorkspaceNavigationMenuItems({
         disabled,
-        onDeleteConversations,
+        onArchiveConversations,
         t,
       })}
       trigger={header}
@@ -4528,14 +4527,14 @@ function ConversationNavigationRow({
   conversation,
   disabled,
   navigationDisabled,
-  onDelete,
+  onArchive,
   onOpen,
 }: {
   readonly active: boolean;
   readonly conversation: DesktopAgentHomeConversationSummary;
   readonly disabled: boolean;
   readonly navigationDisabled: boolean;
-  readonly onDelete: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onArchive: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpen: (conversation: DesktopAgentHomeConversationSummary) => void;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -4545,7 +4544,7 @@ function ConversationNavigationRow({
         conversation,
         disabled,
         navigationDisabled,
-        onDelete: () => onDelete(conversation),
+        onArchive: () => onArchive(conversation),
         onOpen: () => onOpen(conversation),
         t,
       })}
@@ -4572,20 +4571,57 @@ function ConversationNavigationRow({
               <NavigationUnavailableStatus message={conversation.unavailable.message} />
             ) : conversation.attention !== 'none' ? (
               <ConversationAttentionStatus attention={conversation.attention} />
+            ) : isTerminalConversationActivity(conversation.lastActivity.kind) ? (
+              <ConversationTerminalStatus activity={conversation.lastActivity.kind} />
             ) : null}
           </span>
           <span className="primary-navigation-row-actions">
             <IconButton
               disabled={disabled}
               size="xs"
-              label={t('shell.deleteConversation', { conversation: conversation.title })}
-              icon={<TrashIcon size={13} />}
-              onClick={() => onDelete(conversation)}
+              label={t('shell.archiveConversation', { conversation: conversation.title })}
+              icon={<PackageIcon size={13} />}
+              onClick={() => onArchive(conversation)}
             />
           </span>
         </div>
       }
     />
+  );
+}
+
+function ConversationTerminalStatus({
+  activity,
+}: {
+  readonly activity: 'turn-completed' | 'turn-cancelled' | 'turn-failed';
+}): JSX.Element {
+  const { t } = useTranslation();
+  const label = t(`activity.${camelCase(activity)}`);
+  return (
+    <Tooltip content={label} side="right">
+      <span
+        className={`home-conversation-status is-${activity}`}
+        role="status"
+        title={label}
+        aria-label={label}
+      >
+        {activity === 'turn-completed' ? (
+          <SuccessIcon size={12} />
+        ) : activity === 'turn-cancelled' ? (
+          <CloseIcon size={12} />
+        ) : (
+          <ErrorIcon size={12} />
+        )}
+      </span>
+    </Tooltip>
+  );
+}
+
+function isTerminalConversationActivity(
+  activity: DesktopAgentHomeConversationSummary['lastActivity']['kind'],
+): activity is 'turn-completed' | 'turn-cancelled' | 'turn-failed' {
+  return (
+    activity === 'turn-completed' || activity === 'turn-cancelled' || activity === 'turn-failed'
   );
 }
 
@@ -4625,7 +4661,7 @@ function conversationAttentionIcon(
 
 function createProjectNavigationMenuItems(input: {
   readonly disabled: boolean;
-  readonly onDeleteConversations: () => void;
+  readonly onArchiveConversations: () => void;
   readonly onManageProjects: () => void;
   readonly onOpen: () => void;
   readonly onOpenPortability?: () => void;
@@ -4681,20 +4717,19 @@ function createProjectNavigationMenuItems(input: {
           } satisfies ContextMenuItem,
         ]
       : []),
-    { id: 'project-destructive-separator', type: 'separator' },
+    { id: 'project-management-separator', type: 'separator' },
     {
-      id: 'delete-project-conversations',
+      id: 'archive-project-conversations',
       label: (
         <NavigationMenuLabel
-          icon={<TrashIcon size={14} />}
-          text={input.t('shell.deleteProjectConversations', {
+          icon={<PackageIcon size={14} />}
+          text={input.t('shell.archiveProjectConversations', {
             project: input.project.displayName,
           })}
         />
       ),
       disabled: input.disabled || input.workspaceConversationCount === 0,
-      danger: true,
-      onSelect: input.onDeleteConversations,
+      onSelect: input.onArchiveConversations,
     },
     {
       id: 'remove-project',
@@ -4715,7 +4750,7 @@ function createConversationNavigationMenuItems(input: {
   readonly conversation: DesktopAgentHomeConversationSummary;
   readonly disabled: boolean;
   readonly navigationDisabled: boolean;
-  readonly onDelete: () => void;
+  readonly onArchive: () => void;
   readonly onOpen: () => void;
   readonly t: TranslationFunction;
 }): readonly ContextMenuItem[] {
@@ -4732,39 +4767,37 @@ function createConversationNavigationMenuItems(input: {
         input.navigationDisabled || input.conversation.unavailable !== undefined || input.disabled,
       onSelect: input.onOpen,
     },
-    { id: 'conversation-destructive-separator', type: 'separator' },
+    { id: 'conversation-management-separator', type: 'separator' },
     {
-      id: 'delete-conversation',
+      id: 'archive-conversation',
       label: (
         <NavigationMenuLabel
-          icon={<TrashIcon size={14} />}
-          text={input.t('home.deleteConversation')}
+          icon={<PackageIcon size={14} />}
+          text={input.t('home.archiveConversation')}
         />
       ),
       disabled: input.disabled,
-      danger: true,
-      onSelect: input.onDelete,
+      onSelect: input.onArchive,
     },
   ];
 }
 
 function createWorkspaceNavigationMenuItems(input: {
   readonly disabled: boolean;
-  readonly onDeleteConversations: () => void;
+  readonly onArchiveConversations: () => void;
   readonly t: TranslationFunction;
 }): readonly ContextMenuItem[] {
   return [
     {
-      id: 'delete-workspace-conversations',
+      id: 'archive-workspace-conversations',
       label: (
         <NavigationMenuLabel
-          icon={<TrashIcon size={14} />}
-          text={input.t('shell.deleteWorkspaceConversations')}
+          icon={<PackageIcon size={14} />}
+          text={input.t('shell.archiveWorkspaceConversations')}
         />
       ),
       disabled: input.disabled,
-      danger: true,
-      onSelect: input.onDeleteConversations,
+      onSelect: input.onArchiveConversations,
     },
   ];
 }
