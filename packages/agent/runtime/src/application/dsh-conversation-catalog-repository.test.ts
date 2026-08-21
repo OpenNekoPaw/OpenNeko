@@ -28,6 +28,7 @@ describe('persistent DSH Conversation catalog', () => {
     const reopened = createNodeSqliteLocalMetadataStore({ homedir: fixture.root });
     await reopened.open({ databasePath: fixture.databasePath, busyTimeoutMs: 1_000 });
     const catalog = createPersistentDshConversationCatalogStore({ metadataStore: reopened });
+    await expect(catalog.get(record.conversationId)).resolves.toEqual(record);
     await expect(catalog.read()).resolves.toEqual({ records: [record], diagnostics: [] });
     await reopened.dispose();
   });

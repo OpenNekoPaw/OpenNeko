@@ -93,6 +93,7 @@ export type DshSessionHostEvent =
 export interface DshSessionHostProjection {
   readonly conversationId: string;
   readonly dshSessionId: string;
+  readonly title: string;
   readonly currentTurn?: number;
   readonly events: readonly DshSessionHostEvent[];
 }
@@ -199,6 +200,7 @@ export type DshSessionHostRequest =
       readonly agentSurfaceId: string;
       readonly permissionPresetId: string;
       readonly target: DshConversationCreationTarget;
+      readonly initialInput: DshComposerSubmitInput;
     })
   | (DshSessionHostConversationRequest & { readonly operation: 'snapshot' })
   | (DshSessionHostConversationRequest & {
@@ -275,6 +277,7 @@ export interface OpenNekoDshSessionBridge {
       agentSurfaceId: string,
       permissionPresetId: string,
       target: DshConversationCreationTarget,
+      initialInput: DshComposerSubmitInput,
     ): Promise<DshSessionHostProjection>;
     getSnapshot(conversationId: string): Promise<DshSessionHostProjection>;
     submit(conversationId: string, input: DshComposerSubmitInput): Promise<DshSessionHostResult>;
@@ -330,6 +333,7 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
       'agentSurfaceId',
       'permissionPresetId',
       'target',
+      'initialInput',
     ]);
     return {
       ...base,
@@ -338,6 +342,7 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
       agentSurfaceId: requireIdentity(record.agentSurfaceId, 'agentSurfaceId'),
       permissionPresetId: requireIdentity(record.permissionPresetId, 'permissionPresetId'),
       target: parseConversationCreationTarget(record.target),
+      initialInput: parseComposerSubmitInput(record.initialInput),
     };
   }
   if (
@@ -933,13 +938,14 @@ export function parseDshSessionHostProjection(value: unknown): DshSessionHostPro
   const record = requireRecord(value, 'DSH Session projection');
   requireAllowedKeys(
     record,
-    ['conversationId', 'dshSessionId', 'currentTurn', 'events'],
-    ['conversationId', 'dshSessionId', 'events'],
+    ['conversationId', 'dshSessionId', 'title', 'currentTurn', 'events'],
+    ['conversationId', 'dshSessionId', 'title', 'events'],
   );
   if (!Array.isArray(record.events)) throw new Error('DSH Session events must be an array.');
   return {
     conversationId: requireIdentity(record.conversationId, 'conversationId'),
     dshSessionId: requireIdentity(record.dshSessionId, 'dshSessionId'),
+    title: requireIdentity(record.title, 'title'),
     ...(record.currentTurn === undefined
       ? {}
       : { currentTurn: requireNonNegativeInteger(record.currentTurn, 'currentTurn') }),

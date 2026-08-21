@@ -418,7 +418,7 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   dshSessions: {
-    async create(workbenchInstanceId, agentSurfaceId, permissionPresetId, target) {
+    async create(workbenchInstanceId, agentSurfaceId, permissionPresetId, target, initialInput) {
       const context = requireDesktopWindowContext();
       const request = {
         requestId: nextRequestId('dsh-session-create'),
@@ -429,6 +429,7 @@ const bridge: OpenNekoDesktopBridge &
         agentSurfaceId,
         permissionPresetId,
         target,
+        initialInput,
       };
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       return parseDshSessionHostResult(response, request.requestId).projection;

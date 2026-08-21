@@ -16,6 +16,12 @@ OpenNeko SHALL own durable Conversation identity, user-visible metadata, Workspa
 - **THEN** the record remains visible with a Conversation-scoped runtime-unavailable diagnostic
 - **AND** no empty Session, recent Session or Pi transcript is substituted
 
+#### Scenario: First Composer input publishes the Conversation title
+
+- **WHEN** an unbound Draft submits its first strict-decoded message, Command or Skill input
+- **THEN** the package-owned Agent application derives one bounded single-line title and publishes it with the durable Conversation catalog record
+- **AND** Agent Home and the exact Session projection expose that same catalog title without Renderer-local title state or a fixed placeholder success path
+
 ### Requirement: Agent projections are rebuildable and never fallback authorities
 
 Transcript, Timeline, inbox, Tool progress and extension management projections SHALL be rebuilt from ACP replay/events plus current owning-domain facts. Projection loss MAY trigger recomputation from those authorities. A stale or invalid projection MUST NOT replace facts, fabricate empty success, mutate DSH state or switch to Pi, raw Session bytes, cached transcript or Renderer state. A single invalid projection SHALL remain local to its record or surface.

@@ -22,6 +22,7 @@ import { DesktopAgentSurface } from './DesktopAgentSurface';
 const projection: DshSessionHostProjection = {
   conversationId: 'conversation-1',
   dshSessionId: 'dsh-session-1',
+  title: 'Workspace planning',
   currentTurn: 3,
   events: [
     {
@@ -229,6 +230,7 @@ describe('DesktopAgentSurface', () => {
     );
 
     expect(await screen.findByText('Create a node')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Workspace planning' })).toBeTruthy();
     expect(screen.getByText('Canvas create node')).toBeTruthy();
     expect(screen.getByText('Running')).toBeTruthy();
     expect(screen.getByText('Allow Canvas write?')).toBeTruthy();
@@ -524,6 +526,7 @@ describe('DesktopAgentSurface', () => {
     dshSessions.getSnapshot.mockResolvedValueOnce({
       conversationId: projection.conversationId,
       dshSessionId: projection.dshSessionId,
+      title: projection.title,
       events: projection.events,
     });
     const { container } = render(
@@ -607,6 +610,12 @@ describe('DesktopAgentSurface', () => {
         'surface-draft',
         'workspace-write',
         { kind: 'surface' },
+        {
+          kind: 'message',
+          text: 'first message',
+          references: [],
+          contextPayloads: [],
+        },
       ),
     );
     expect(dshSessions.submit).toHaveBeenCalledWith('conversation-created', {
@@ -661,6 +670,12 @@ describe('DesktopAgentSurface', () => {
         'surface-project-draft',
         'workspace-write',
         { kind: 'project', projectId: 'project-1' },
+        {
+          kind: 'message',
+          text: 'create in project',
+          references: [],
+          contextPayloads: [],
+        },
       ),
     );
     expect(dshSessions.submit).toHaveBeenCalledWith('conversation-project', {

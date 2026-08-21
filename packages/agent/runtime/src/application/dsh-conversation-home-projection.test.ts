@@ -98,6 +98,9 @@ function catalogWith(
 ): DshConversationCatalogStore {
   return {
     reserve: vi.fn(async () => undefined),
+    get: vi.fn(async (conversationId: string) =>
+      records.find((record) => record.conversationId === conversationId),
+    ),
     read: vi.fn(async () => ({ records, diagnostics: [] })),
   };
 }

@@ -5,6 +5,7 @@ import type {
   ResumeSessionResponse,
 } from '@agentclientprotocol/sdk';
 import type { AgentConversationContext } from '@neko/agent-contracts';
+import type { DshComposerSubmitInput } from '@neko/agent-contracts/dsh-session-host';
 
 import { createConversationId } from '../session/conversation-id';
 import type { ConversationDshSessionBindingService } from './conversation-dsh-session-binding';
@@ -76,4 +77,37 @@ function requireTitle(value: string): string {
 function requireSessionId(value: string): string {
   if (value.trim().length === 0) throw new Error('DSH session/new returned an empty Session id.');
   return value;
+}
+
+const DSH_CONVERSATION_TITLE_MAX_SOURCE_LENGTH = 50;
+
+export function projectDshConversationTitle(input: DshComposerSubmitInput): string {
+  const normalized = projectTitleSource(input).trim().replace(/\s+/gu, ' ');
+  if (normalized.length === 0) {
+    throw new Error('DSH Conversation title source must not be empty.');
+  }
+  const characters = Array.from(normalized);
+  if (characters.length <= DSH_CONVERSATION_TITLE_MAX_SOURCE_LENGTH) return normalized;
+
+  let title = characters.slice(0, DSH_CONVERSATION_TITLE_MAX_SOURCE_LENGTH).join('').trim();
+  const lastSpace = title.lastIndexOf(' ');
+  if (lastSpace > 20) title = title.slice(0, lastSpace);
+  return `${title}...`;
+}
+
+function projectTitleSource(input: DshComposerSubmitInput): string {
+  switch (input.kind) {
+    case 'message': {
+      const text = input.text.trim();
+      if (text.length > 0) return text;
+      return [
+        ...input.references.map((reference) => reference.label),
+        ...input.contextPayloads.map((context) => context.label),
+      ].join(' ');
+    }
+    case 'command':
+      return input.line;
+    case 'skill':
+      return input.displayText;
+  }
 }

@@ -261,12 +261,21 @@ Product clear SHALL create a new Conversation identity bound to a newly created 
 
 The package-owned Agent application SHALL own the only new-Conversation publication path. It SHALL reserve canonical Host Conversation metadata and exact domain context, create one DSH Session through standard ACP `session/new`, revalidate that exact Session through the complete bounded `session/list` path, and publish one Conversation-to-Session binding. Desktop Main SHALL resolve the exact sender-bound Agent Surface and attach the published Conversation to that draft only after durable publication. Renderer MUST NOT provide Workspace authority, provider/model facts, cwd or a DSH Session identity, and no active/recent Conversation fallback is allowed.
 
+For a Conversation created by the native Composer's first submission, the same strict-decoded input SHALL be the sole title source. The package-owned publication logic SHALL normalize it to one bounded catalog title before Session creation. The retained Agent Webview SHALL render a dedicated top title bar from the exact Session projection's catalog title, and PrimarySidebar SHALL render the same title from Agent Home. Neither surface may independently derive, cache or override the title.
+
 #### Scenario: Entry creates a Project-bound Conversation
 
 - **WHEN** the user selects a stable Project in the unbound Entry and submits its first prompt
 - **THEN** Renderer submits only that Project choice with the exact Agent Surface identity
 - **AND** Desktop Main resolves the Project to its exact Workspace, signs a process-scoped grant, publishes a Workspace Conversation and attaches the original Draft before prompting
 - **AND** it does not publish an Assistant Conversation or switch Scene when the Project is merely selected
+
+#### Scenario: Published title appears in both Agent surfaces
+
+- **WHEN** the first Composer submission publishes a Conversation whose derived title is available
+- **THEN** the Agent Webview displays that title in a centered top title bar without a prominent divider above the transcript
+- **AND** the matching PrimarySidebar row displays the identical catalog title after the Home projection refresh
+- **AND** long or multiline input cannot overlap, clip or push transcript content into the window top edge
 
 #### Scenario: Persisted Workspace Conversation reattaches after restart
 

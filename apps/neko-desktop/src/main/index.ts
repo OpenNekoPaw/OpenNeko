@@ -58,6 +58,7 @@ import {
   createAgentRuntimeSettingsRepository,
   createPersistentAgentConversationContextAuthority,
   createDshConversationTurnContextResolver,
+  projectDshConversationTitle,
   initializeAgentConversationLifecycleTables,
   type AgentDomainConversationService,
 } from '@neko/agent-runtime/application';
@@ -2129,6 +2130,7 @@ async function startDesktop(): Promise<void> {
   });
   const dshSessionHost = new DesktopDshSessionHost({
     bindings: dshProduct.runtime.bindings,
+    catalog: dshProduct.runtime.conversations.catalog,
     conversations: dshProduct.runtime.conversations.conversations,
     promptContext: dshPromptContext,
     promptImages: dshPromptImages,
@@ -2140,6 +2142,7 @@ async function startDesktop(): Promise<void> {
       agentSurfaceId,
       permissionPresetId,
       target,
+      initialInput,
     }) => {
       const resolved = await resolveDshAgentSurfaceScope({
         windowId,
@@ -2162,7 +2165,7 @@ async function startDesktop(): Promise<void> {
       });
       const published = await dshProduct.runtime.conversations.publication.publish({
         context: context.context,
-        title: app.getLocale().toLocaleLowerCase().startsWith('zh') ? '新会话' : 'New conversation',
+        title: projectDshConversationTitle(initialInput),
       });
       await dshProduct.runtime.conversations.conversations.setSessionMode(
         published.conversationId,

@@ -30,6 +30,7 @@ export interface DshConversationCatalogSnapshot {
 
 export interface DshConversationCatalogStore {
   reserve(input: DshConversationCatalogRecord): Promise<void>;
+  get(conversationId: string): Promise<DshConversationCatalogRecord | undefined>;
   read(): Promise<DshConversationCatalogSnapshot>;
 }
 
@@ -85,6 +86,35 @@ export function createPersistentDshConversationCatalogStore(options: {
               `Agent Conversation '${record.conversationId}' was not added to the catalog.`,
             );
           }
+        },
+      );
+    },
+
+    get(conversationId: string) {
+      const identity = requireIdentity(conversationId, 'Conversation');
+      return options.metadataStore.transaction(
+        { mode: 'read', ownership: 'state', operation: 'get-dsh-conversation' },
+        async ({ sql }) => {
+          const rows = await sql.all(
+            `SELECT catalog.conversation_id,
+                    catalog.title,
+                    catalog.created_at,
+                    catalog.updated_at,
+                    authority.context_json
+               FROM agent_dsh_conversation_catalog AS catalog
+               LEFT JOIN agent_conversation_authority AS authority
+                 ON authority.conversation_id = catalog.conversation_id
+              WHERE catalog.conversation_id = ?`,
+            [identity],
+          );
+          if (rows.length > 1) {
+            throw persistenceError(
+              'get-dsh-conversation',
+              `Agent Conversation '${identity}' resolves to multiple catalog records.`,
+            );
+          }
+          const [row] = rows;
+          return row === undefined ? undefined : decodeCatalogRow(row);
         },
       );
     },

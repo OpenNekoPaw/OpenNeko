@@ -8,11 +8,13 @@ import {
   type DshComposerConfigurationHostResult,
   type DshComposerMentionsHostResult,
   type DshComposerMaterializedAssetHostResult,
+  type DshComposerSubmitInput,
 } from '@neko/agent-contracts/dsh-session-host';
 import { decodeDshAcpJsonPayload } from '@neko/agent-contracts/dsh-acp';
 import type {
   ConversationDshSessionBindingStore,
   ConversationDshSessionBoundClient,
+  DshConversationCatalogStore,
 } from '@neko/agent-runtime/application';
 import type { DshAcpProjection, DshAcpProjectedEvent } from '@neko/agent-runtime/acp';
 import { validateContentLocator, type ContentLocator } from '@neko/content';
@@ -23,6 +25,7 @@ export class DesktopDshSessionHost {
   constructor(
     private readonly options: {
       readonly bindings: Pick<ConversationDshSessionBindingStore, 'getByDshSessionId'>;
+      readonly catalog: Pick<DshConversationCatalogStore, 'get'>;
       readonly conversations: Pick<
         ConversationDshSessionBoundClient,
         | 'ensureLoaded'
@@ -108,6 +111,7 @@ export class DesktopDshSessionHost {
         readonly agentSurfaceId: string;
         readonly permissionPresetId: string;
         readonly target: DshConversationCreationTarget;
+        readonly initialInput: DshComposerSubmitInput;
       }) => Promise<{ readonly conversationId: string }>;
       readonly projection: Pick<DshAcpProjection, 'snapshot'>;
       readonly windows: {
@@ -199,6 +203,7 @@ export class DesktopDshSessionHost {
           agentSurfaceId: request.agentSurfaceId,
           permissionPresetId: request.permissionPresetId,
           target: request.target,
+          initialInput: request.initialInput,
         })
       ).conversationId;
     } else if (request.operation === 'submit') {
@@ -292,11 +297,16 @@ export class DesktopDshSessionHost {
   }
 
   private async project(conversationId: string): Promise<DshSessionHostProjection> {
+    const record = await this.options.catalog.get(conversationId);
+    if (record === undefined) {
+      throw new Error(`Agent Conversation '${conversationId}' is missing from the catalog.`);
+    }
     const dshSessionId = await this.options.conversations.ensureLoaded(conversationId);
     const snapshot = this.options.projection.snapshot(dshSessionId);
     return {
       conversationId,
       dshSessionId,
+      title: record.title,
       ...(snapshot.currentTurn === undefined ? {} : { currentTurn: snapshot.currentTurn }),
       events: projectEvents(snapshot.events),
     };

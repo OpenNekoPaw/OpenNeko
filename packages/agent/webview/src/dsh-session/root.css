@@ -6,6 +6,29 @@
   color: var(--agent-fg);
 }
 
+.dsh-agent-titlebar {
+  display: flex;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 48px;
+  background: var(--agent-bg);
+}
+
+.dsh-agent-titlebar__title {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--agent-fg);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dsh-agent-view .agent-inline-header:disabled {
   cursor: default;
 }

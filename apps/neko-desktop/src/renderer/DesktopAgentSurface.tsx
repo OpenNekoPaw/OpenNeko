@@ -233,6 +233,7 @@ export function DesktopAgentSurface({
             agentSurfaceId,
             permissionPresetId,
             creationTarget,
+            input,
           )
         ).conversationId;
       const result = await window.openNekoDesktop.dshSessions.submit(targetConversationId, input);

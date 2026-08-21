@@ -33,6 +33,12 @@ describe('Desktop DSH Session Host', () => {
           agentSurfaceId: 'surface-1',
           permissionPresetId: 'workspace-write',
           target: { kind: 'project', projectId: 'project-1' },
+          initialInput: {
+            kind: 'message',
+            text: 'Create in project',
+            references: [],
+            contextPayloads: [],
+          },
         },
       ),
     );
@@ -44,8 +50,14 @@ describe('Desktop DSH Session Host', () => {
       agentSurfaceId: 'surface-1',
       permissionPresetId: 'workspace-write',
       target: { kind: 'project', projectId: 'project-1' },
+      initialInput: {
+        kind: 'message',
+        text: 'Create in project',
+        references: [],
+        contextPayloads: [],
+      },
     });
-    expect(result.projection).toMatchObject(identity);
+    expect(result.projection).toMatchObject({ ...identity, title: 'Create in project' });
   });
 
   it('rejects a stale sender before creating a Conversation', async () => {
@@ -64,6 +76,12 @@ describe('Desktop DSH Session Host', () => {
           agentSurfaceId: 'surface-1',
           permissionPresetId: 'workspace-write',
           target: { kind: 'surface' },
+          initialInput: {
+            kind: 'message',
+            text: 'Hello',
+            references: [],
+            contextPayloads: [],
+          },
         },
       ),
     ).rejects.toThrow(/sender-bound/u);
@@ -662,6 +680,7 @@ function createHost(overrides: {
     readonly permissionPresetId: string;
     readonly target:
       { readonly kind: 'surface' } | { readonly kind: 'project'; readonly projectId: string };
+    readonly initialInput: import('@neko/agent-contracts/dsh-session-host').DshComposerSubmitInput;
   }) => Promise<{ readonly conversationId: string }>;
   readonly applyConversation?: (
     conversationId: string,
@@ -708,6 +727,19 @@ function createHost(overrides: {
   return new DesktopDshSessionHost({
     bindings: {
       getByDshSessionId: overrides.getByDshSessionId ?? (async () => ({ ...identity })),
+    },
+    catalog: {
+      get: vi.fn(async (conversationId: string) => ({
+        conversationId,
+        title: 'Create in project',
+        createdAt: '2026-08-21T00:00:00.000Z',
+        updatedAt: '2026-08-21T00:00:00.000Z',
+        context: {
+          kind: 'assistant' as const,
+          assistantSpaceId: 'assistant-space:test',
+          baseGrantIds: [],
+        },
+      })),
     },
     conversations: {
       ensureLoaded: vi.fn(async () => identity.dshSessionId),

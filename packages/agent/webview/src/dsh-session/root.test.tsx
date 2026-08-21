@@ -322,6 +322,7 @@ describe('DshAgentView content-creation composer', () => {
         projection={{
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
+          title: 'Workspace planning',
           events: [
             {
               kind: 'command',
@@ -350,6 +351,9 @@ describe('DshAgentView content-creation composer', () => {
       />,
     );
 
+    const titlebar = screen.getByLabelText('会话标题');
+    expect(titlebar.textContent).toBe('Workspace planning');
+    expect(titlebar.nextElementSibling?.classList.contains('agent-message-list')).toBe(true);
     expect(view.container.querySelectorAll('[data-agent-command-id="command-1"]')).toHaveLength(1);
     expect(screen.getByText('/help models')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /help models/u }));
@@ -744,6 +748,7 @@ describe('DshAgentView content-creation composer', () => {
         projection={{
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
+          title: 'Workspace planning',
           currentTurn: 1,
           events: [{ kind: 'turn', turn: 1, phase: 'start', startedAt: 10_000 }],
         }}
@@ -781,6 +786,7 @@ describe('DshAgentView content-creation composer', () => {
         projection={{
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
+          title: 'Workspace planning',
           events: [
             { kind: 'turn', turn: 1, phase: 'start', startedAt: 10_000 },
             {
@@ -824,6 +830,7 @@ describe('DshAgentView content-creation composer', () => {
         projection={{
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
+          title: 'Workspace planning',
           events: [
             { kind: 'turn', turn: 2, phase: 'start', startedAt: 1_000 },
             {
@@ -865,6 +872,7 @@ describe('DshAgentView content-creation composer', () => {
         projection={{
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
+          title: 'Workspace planning',
           currentTurn: 4,
           events: [
             { kind: 'turn', turn: 4, phase: 'start', startedAt: 1_000 },
@@ -918,6 +926,7 @@ describe('DshAgentView content-creation composer', () => {
         projection={{
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
+          title: 'Workspace planning',
           events: [
             { kind: 'turn', turn: 4, phase: 'start', startedAt: 1_000 },
             {
@@ -979,6 +988,7 @@ describe('DshAgentView content-creation composer', () => {
         projection={{
           conversationId: 'conversation-1',
           dshSessionId: 'dsh-session-1',
+          title: 'Workspace planning',
           events: [
             {
               kind: 'message',

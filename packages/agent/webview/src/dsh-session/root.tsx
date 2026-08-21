@@ -121,6 +121,7 @@ export function DshAgentView(props: DshAgentViewProps): JSX.Element {
 function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const { locale } = useTranslation();
   const copy = locale === 'zh-cn' ? ZH_COPY : EN_COPY;
+  const conversationTitle = props.projection?.title ?? copy.newConversation;
   const [entryExperience, setEntryExperience] = useState<'assistant' | 'authoring'>('assistant');
   const [entryDetail, setEntryDetail] = useState<'project' | 'character' | 'world'>('character');
   const [entryDetailExpanded, setEntryDetailExpanded] = useState(true);
@@ -276,6 +277,11 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       data-empty-state={showEmptyState}
       data-presentation="desktop-dock"
     >
+      <header className="dsh-agent-titlebar" aria-label={copy.conversationTitle}>
+        <h1 className="dsh-agent-titlebar__title" title={conversationTitle}>
+          {conversationTitle}
+        </h1>
+      </header>
       {showEmptyState ? (
         <div className={`${compositionClass} flex-1`}>
           {props.surfaceKind === 'entry' ? (
@@ -1285,6 +1291,7 @@ function eventKey(event: DshSessionHostEvent, index: number): string {
 
 interface DshAgentCopy {
   readonly agent: string;
+  readonly conversationTitle: string;
   readonly assistantEmptyTitle: string;
   readonly cancelPermission: string;
   readonly cancelTurn: string;
@@ -1307,6 +1314,7 @@ interface DshAgentCopy {
   readonly loadingConfiguration: string;
   readonly model: string;
   readonly modelRequired: string;
+  readonly newConversation: string;
   readonly loading: string;
   readonly output: string;
   readonly permissions: string;
@@ -1333,6 +1341,7 @@ interface DshAgentCopy {
 
 const EN_COPY: DshAgentCopy = {
   agent: 'Agent',
+  conversationTitle: 'Conversation title',
   assistantEmptyTitle: 'What would you like to talk about?',
   cancelPermission: 'Cancel request',
   cancelTurn: 'Cancel current turn',
@@ -1358,6 +1367,7 @@ const EN_COPY: DshAgentCopy = {
   output: 'Result',
   model: 'Model',
   modelRequired: 'Select a configured model before sending.',
+  newConversation: 'New conversation',
   permissions: 'Pending permissions',
   placeholder: 'Ask the DSH Agent…',
   restartRuntime: 'Restart DSH',
@@ -1387,6 +1397,7 @@ const EN_COPY: DshAgentCopy = {
 
 const ZH_COPY: DshAgentCopy = {
   agent: 'Agent',
+  conversationTitle: '会话标题',
   assistantEmptyTitle: '想聊些什么？',
   cancelPermission: '取消请求',
   cancelTurn: '取消当前回合',
@@ -1411,6 +1422,7 @@ const ZH_COPY: DshAgentCopy = {
   output: '结果',
   model: '模型',
   modelRequired: '发送前请选择已配置的模型。',
+  newConversation: '新会话',
   permissions: '待处理权限',
   placeholder: '向 DSH Agent 提问…',
   restartRuntime: '重启 DSH',

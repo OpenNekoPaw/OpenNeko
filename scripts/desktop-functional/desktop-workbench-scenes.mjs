@@ -1852,7 +1852,7 @@ export const desktopConversationNavigationScenario = Object.freeze({
         !['Running', '运行中'].includes(runningStatus.label) ||
         runningStatus.inlineText !== '' ||
         !runningStatus.iconVisible ||
-        runningStatus.conversationTitle.length === 0
+        runningStatus.conversationTitle !== 'Verify atomic Assistant session activation.'
       ) {
         throw new Error(
           `Conversation running status was not visible in PrimarySidebar: ${JSON.stringify(runningStatus)}`,
@@ -4175,6 +4175,21 @@ async function waitForAssistantSession(evaluate, expectedConversationId) {
     if (!(agent instanceof HTMLElement) || previousManagementVisible) {
       throw new Error('Assistant session restored through the previous management layout.');
     }
+    const conversation = projection.agentHome.conversations.find(
+      (candidate) => candidate.navigation.conversationId === context.scope.conversationId,
+    );
+    const conversationLink = [...document.querySelectorAll('.home-conversation-link')]
+      .find((candidate) => candidate.textContent?.trim() === conversation?.title);
+    const titlebar = agent.querySelector('.dsh-agent-titlebar');
+    const titlebarTitle = titlebar?.querySelector('.dsh-agent-titlebar__title');
+    const messageList = agent.querySelector('.agent-message-list');
+    const titlebarRect = titlebar?.getBoundingClientRect();
+    const titlebarTitleRect = titlebarTitle?.getBoundingClientRect();
+    const messageListRect = messageList?.getBoundingClientRect();
+    const titlebarStyle = titlebar instanceof HTMLElement ? getComputedStyle(titlebar) : undefined;
+    const titleStyle = titlebarTitle instanceof HTMLElement
+      ? getComputedStyle(titlebarTitle)
+      : undefined;
     return {
       conversationId: context.scope.conversationId,
       phase: activeWorkbench.scene.slots.interaction?.kind === 'agent'
@@ -4193,6 +4208,21 @@ async function waitForAssistantSession(evaluate, expectedConversationId) {
       packageHistoryVisible: Boolean(document.querySelector('.agent-header-action-history')),
       transcriptContainsSubmittedMessage:
         document.body.textContent?.includes('Verify atomic Assistant session activation.') ?? false,
+      conversationTitle: conversation?.title ?? '',
+      sidebarTitle: conversationLink?.textContent?.trim() ?? '',
+      titlebarTitle: titlebarTitle?.textContent?.trim() ?? '',
+      titlebarHeight: titlebarRect?.height ?? 0,
+      titlebarBorderBottomWidth: titlebarStyle?.borderBottomWidth,
+      titlebarTextAlign: titleStyle?.textAlign,
+      titlebarTitleCentered:
+        titlebarRect !== undefined && titlebarTitleRect !== undefined &&
+        Math.abs(
+          (titlebarTitleRect.left + titlebarTitleRect.width / 2) -
+          (titlebarRect.left + titlebarRect.width / 2),
+        ) <= 1,
+      titlebarPrecedesTranscript:
+        titlebarRect !== undefined && messageListRect !== undefined &&
+        titlebarRect.bottom <= messageListRect.top + 1,
     };
   })()`);
 }
@@ -6097,11 +6127,7 @@ function assertExtensionsCatalogOnly(detail, view, tab) {
   assertSingleWorkbench(detail);
   assertManagementMain(detail, 'extension-management');
   assertSharedManagementPanel(detail, 'extension-management');
-  if (
-    detail.view !== view ||
-    detail.activeTab !== tab ||
-    detail.selectedCount !== 0
-  ) {
+  if (detail.view !== view || detail.activeTab !== tab || detail.selectedCount !== 0) {
     throw new Error(
       `Extensions management reserved configuration without a selection: ${JSON.stringify(detail)}`,
     );
@@ -6192,7 +6218,15 @@ function assertAssistantConversationNavigation(detail) {
     detail.conversationCount < 1 ||
     detail.visibleConversationChildCount !== Math.min(detail.conversationCount, 5) ||
     detail.packageConversationTabsVisible ||
-    detail.packageHistoryVisible
+    detail.packageHistoryVisible ||
+    detail.conversationTitle !== 'Verify atomic Assistant session activation.' ||
+    detail.sidebarTitle !== detail.conversationTitle ||
+    detail.titlebarTitle !== detail.conversationTitle ||
+    detail.titlebarHeight < 40 ||
+    detail.titlebarBorderBottomWidth !== '0px' ||
+    detail.titlebarTextAlign !== 'center' ||
+    !detail.titlebarTitleCentered ||
+    !detail.titlebarPrecedesTranscript
   ) {
     throw new Error(
       `Assistant session did not use PrimarySidebar as its only conversation switcher: ${JSON.stringify(detail)}`,

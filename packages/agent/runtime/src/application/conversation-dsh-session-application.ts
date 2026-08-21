@@ -38,6 +38,7 @@ export interface ConversationDshSessionApplication {
   readonly conversations: ConversationDshSessionBoundClient;
   readonly home: DshConversationHomeProjection;
   readonly publication: ConversationDshSessionPublication;
+  readonly catalog: Pick<DshConversationCatalogStore, 'get'>;
 }
 
 export interface ConversationDshSessionApplicationOptions {
@@ -78,6 +79,7 @@ export function createConversationDshSessionApplication(
       home,
       conversationIdentitySeed: options.conversationIdentitySeed,
     }),
+    catalog: options.catalog,
   };
 }
 

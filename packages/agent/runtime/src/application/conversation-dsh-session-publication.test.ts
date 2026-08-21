@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createConversationDshSessionApplication } from './conversation-dsh-session-application';
+import { projectDshConversationTitle } from './conversation-dsh-session-publication';
 import type { ConversationDshSessionBindingStore } from './conversation-dsh-session-binding';
 import type {
   DshConversationCatalogRecord,
@@ -39,6 +40,9 @@ describe('Conversation DSH Session publication', () => {
       'binding-write',
     ]);
     expect(catalog.records).toHaveLength(1);
+    await expect(application.catalog.get(result.conversationId)).resolves.toMatchObject({
+      title: 'New conversation',
+    });
     expect(store.records.get(result.conversationId)).toEqual({
       conversationId: result.conversationId,
       dshSessionId: 'dsh-session-new',
@@ -98,6 +102,49 @@ describe('Conversation DSH Session publication', () => {
     expect(catalog.records).toHaveLength(1);
     expect(application.home.readHomeProjection().conversations[0]?.unavailable).toBeDefined();
   });
+
+  it('derives a bounded title from the canonical first Composer input', () => {
+    expect(
+      projectDshConversationTitle({
+        kind: 'message',
+        text: '  请分析\n当前工作区的角色设定  ',
+        references: [],
+        contextPayloads: [],
+      }),
+    ).toBe('请分析 当前工作区的角色设定');
+    expect(
+      projectDshConversationTitle({
+        kind: 'message',
+        text: '',
+        references: [
+          {
+            label: '角色设定.md',
+            contentLocator: { file: { authority: 'workspace', path: '角色设定.md' } },
+          },
+        ],
+        contextPayloads: [],
+      }),
+    ).toBe('角色设定.md');
+    expect(projectDshConversationTitle({ kind: 'command', line: '/goal clear' })).toBe(
+      '/goal clear',
+    );
+    expect(
+      projectDshConversationTitle({
+        kind: 'skill',
+        skillName: 'storyboard',
+        displayText: '$storyboard Draft three beats',
+        args: 'Draft three beats',
+      }),
+    ).toBe('$storyboard Draft three beats');
+    expect(
+      projectDshConversationTitle({
+        kind: 'message',
+        text: 'Create a storyboard shot list for the rainy rooftop chase with lighting notes',
+        references: [],
+        contextPayloads: [],
+      }),
+    ).toBe('Create a storyboard shot list for the rainy...');
+  });
 });
 
 function memoryCatalog(order: string[]): DshConversationCatalogStore & {
@@ -109,6 +156,9 @@ function memoryCatalog(order: string[]): DshConversationCatalogStore & {
     async reserve(record) {
       order.push('catalog-reserve');
       records.push(record);
+    },
+    async get(conversationId) {
+      return records.find((record) => record.conversationId === conversationId);
     },
     async read() {
       order.push('catalog-read');

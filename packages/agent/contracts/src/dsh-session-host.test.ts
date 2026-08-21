@@ -27,6 +27,7 @@ const createRequest = {
   operation: 'create' as const,
   permissionPresetId: 'workspace-write',
   target: { kind: 'surface' as const },
+  initialInput: { kind: 'message' as const, text: 'hello', references: [], contextPayloads: [] },
 };
 
 describe('DSH Session Host contract', () => {
@@ -567,6 +568,7 @@ function projection() {
   return {
     conversationId: 'conversation-1',
     dshSessionId: 'session-1',
+    title: 'Hello',
     currentTurn: 1,
     events: [
       {

@@ -48,16 +48,20 @@ describe('DSH Session preload bridge', () => {
         projection: {
           conversationId: 'conversation-created',
           dshSessionId: 'session-created',
+          title: 'Conversation title',
           events: [],
         },
       };
     });
     await requireBridge().bootstrap.get();
 
-    await requireBridge().dshSessions.create('workbench-1', 'surface-1', 'workspace-write', {
-      kind: 'project',
-      projectId: 'project-1',
-    });
+    await requireBridge().dshSessions.create(
+      'workbench-1',
+      'surface-1',
+      'workspace-write',
+      { kind: 'project', projectId: 'project-1' },
+      { kind: 'message', text: 'Create in project', references: [], contextPayloads: [] },
+    );
 
     expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
       requestId: expect.any(String),
@@ -68,6 +72,12 @@ describe('DSH Session preload bridge', () => {
       agentSurfaceId: 'surface-1',
       permissionPresetId: 'workspace-write',
       target: { kind: 'project', projectId: 'project-1' },
+      initialInput: {
+        kind: 'message',
+        text: 'Create in project',
+        references: [],
+        contextPayloads: [],
+      },
     });
   });
 
@@ -81,6 +91,7 @@ describe('DSH Session preload bridge', () => {
         projection: {
           conversationId: 'conversation-1',
           dshSessionId: 'session-1',
+          title: 'Conversation title',
           events: [],
         },
       };
@@ -280,6 +291,7 @@ describe('DSH Session preload bridge', () => {
         projection: {
           conversationId: 'conversation-other',
           dshSessionId: 'session-other',
+          title: 'Conversation title',
           events: [],
         },
       };
@@ -305,6 +317,7 @@ describe('DSH Session preload bridge', () => {
           projection: {
             conversationId: 'conversation-1',
             dshSessionId: 'session-1',
+            title: 'Conversation title',
             events: [],
             [field]: value,
           },
