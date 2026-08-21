@@ -5,6 +5,7 @@ import {
   CanvasHostVisibleEffectError,
   projectDerivedCanvasMaterialToCanvas,
   projectResolvedCanvasMaterialToCanvas,
+  readCanvasImageDimensions,
   replaceCanvasEntityRepresentationOnCanvas,
   type CanvasHostRuntimeIdentity,
   type ResolvedCanvasMaterialDescriptor,
@@ -15,6 +16,7 @@ import {
   isPackageResourceContentLocator,
   isWorkspaceFileContentLocator,
   validateContentLocator,
+  probeImageMetadata,
   type ContentLocator,
   type PackageResourceContentLocator,
   type WorkspaceFileContentLocator,
@@ -50,6 +52,11 @@ export interface CanvasMaterialAuthoringOptions {
 
 interface RegisteredExternalSource extends CanvasExternalSource {
   readonly workspaceId: string;
+}
+
+interface ImportedCanvasFile {
+  readonly locator: WorkspaceFileContentLocator;
+  readonly intrinsicDimensions?: { readonly width: number; readonly height: number };
 }
 
 /**
@@ -139,15 +146,25 @@ export class CanvasMaterialAuthoringService {
     request: CanvasMaterialAuthoringRequest,
   ): Promise<ResolvedCanvasMaterialDescriptor | undefined> {
     switch (request.kind) {
-      case 'direct-reference':
-        await this.authorizeReferencedLocator(workspace, projectId, request.locator);
+      case 'direct-reference': {
+        const authorizedPath = await this.authorizeReferencedLocator(
+          workspace,
+          projectId,
+          request.locator,
+        );
+        const intrinsicDimensions = await this.resolveImageDimensions(
+          request.mediaKind,
+          authorizedPath,
+        );
         return {
           locator: request.locator,
           title: request.title ?? titleForLocator(request.locator),
           mediaKind: request.mediaKind,
           ...(request.position ? { position: request.position } : {}),
           ...(request.entity ? { entity: request.entity } : {}),
+          ...(intrinsicDimensions ? { intrinsicDimensions } : {}),
         };
+      }
       case 'entity-representation-replace':
         throw new Error(
           'Entity representation replacement must use the explicit replacement transaction.',
@@ -157,7 +174,7 @@ export class CanvasMaterialAuthoringService {
         if (selected.sourceName !== request.sourceName) {
           throw visible('The selected source identity changed before import.');
         }
-        const locator = await this.importOwnedFile({
+        const imported = await this.importOwnedFile({
           workspace,
           sourcePath: selected.absolutePath,
           sourceName: request.sourceName,
@@ -165,10 +182,13 @@ export class CanvasMaterialAuthoringService {
           conflictPolicy: request.conflictPolicy,
         });
         return {
-          locator,
+          locator: imported.locator,
           title: request.sourceName,
           mediaKind: request.mediaKind,
           ...(request.position ? { position: request.position } : {}),
+          ...(imported.intrinsicDimensions
+            ? { intrinsicDimensions: imported.intrinsicDimensions }
+            : {}),
         };
       }
       case 'global-library-link': {
@@ -188,7 +208,7 @@ export class CanvasMaterialAuthoringService {
         if (!isInside(resolvedSource, resolvedLibraryRoot)) {
           throw visible('The selected global Media Library entry is outside its library.');
         }
-        const locator = await this.importOwnedFile({
+        const imported = await this.importOwnedFile({
           workspace,
           sourcePath: resolvedSource,
           sourceName: path.posix.basename(entryPath),
@@ -196,21 +216,29 @@ export class CanvasMaterialAuthoringService {
           conflictPolicy: request.conflictPolicy,
         });
         return {
-          locator,
+          locator: imported.locator,
           title: path.posix.basename(entryPath),
           mediaKind: request.mediaKind,
           ...(request.position ? { position: request.position } : {}),
+          ...(imported.intrinsicDimensions
+            ? { intrinsicDimensions: imported.intrinsicDimensions }
+            : {}),
         };
       }
-      case 'generated-output-commit':
-        await resolveWorkspaceContentLocator(workspace, request.locator);
+      case 'generated-output-commit': {
+        const authorizedPath = await resolveWorkspaceContentLocator(workspace, request.locator);
+        const intrinsicDimensions =
+          dimensionsFromImageMetadata(request.generation.summary) ??
+          (await this.resolveImageDimensions(request.mediaKind, authorizedPath));
         return {
           locator: request.locator,
           title: request.title,
           mediaKind: request.mediaKind,
           generation: request.generation,
           ...(request.position ? { position: request.position } : {}),
+          ...(intrinsicDimensions ? { intrinsicDimensions } : {}),
         };
+      }
       case 'derived-output-commit':
         throw new Error('Derived Canvas output must use the derivation transaction.');
     }
@@ -220,13 +248,21 @@ export class CanvasMaterialAuthoringService {
     workspace: AssetWorkspaceResolution,
     request: Extract<CanvasMaterialAuthoringRequest, { readonly kind: 'derived-output-commit' }>,
   ): Promise<ResolvedCanvasMaterialDescriptor> {
-    await this.authorizeReferencedLocator(workspace, request.identity.projectId, request.locator);
+    const authorizedPath = await this.authorizeReferencedLocator(
+      workspace,
+      request.identity.projectId,
+      request.locator,
+    );
+    const intrinsicDimensions =
+      dimensionsFromImageMetadata(request.generation?.summary) ??
+      (await this.resolveImageDimensions(request.mediaKind, authorizedPath));
     return {
       locator: request.locator,
       title: request.title,
       mediaKind: request.mediaKind,
       ...(request.generation ? { generation: request.generation } : {}),
       ...(request.position ? { position: request.position } : {}),
+      ...(intrinsicDimensions ? { intrinsicDimensions } : {}),
     };
   }
 
@@ -234,7 +270,7 @@ export class CanvasMaterialAuthoringService {
     workspace: AssetWorkspaceResolution,
     projectId: string,
     locator: ContentLocator,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     const result = validateContentLocator(locator);
     if (!result.ok) throw visible('Canvas requires a valid canonical ContentLocator.');
     const context = {
@@ -243,8 +279,7 @@ export class CanvasMaterialAuthoringService {
       globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
     };
     if (isWorkspaceFileContentLocator(result.locator)) {
-      await resolveProjectWorkspaceContentLocator(context, result.locator);
-      return;
+      return resolveProjectWorkspaceContentLocator(context, result.locator);
     }
     if (isPackageResourceContentLocator(result.locator)) {
       const authorize = this.options.authorizePackageResource;
@@ -252,9 +287,19 @@ export class CanvasMaterialAuthoringService {
         throw visible('The package that owns this resource is unavailable.');
       }
       await authorize(result.locator, workspace);
-      return;
+      return undefined;
     }
     throw visible('Canvas requires a supported ContentLocator authority.');
+  }
+
+  private async resolveImageDimensions(
+    mediaKind: CanvasMaterialMediaKind,
+    authorizedPath: string | undefined,
+  ): Promise<{ readonly width: number; readonly height: number } | undefined> {
+    if (mediaKind !== 'image' || !authorizedPath) return undefined;
+    return dimensionsFromImageMetadata(
+      probeImageMetadata(await readBoundedFilePrefix(authorizedPath, 1024 * 1024)),
+    );
   }
 
   private consumeExternalSource(
@@ -275,7 +320,7 @@ export class CanvasMaterialAuthoringService {
     readonly sourceName: string;
     readonly mediaKind: CanvasMaterialMediaKind;
     readonly conflictPolicy: 'reject' | 'rename' | 'replace';
-  }): Promise<WorkspaceFileContentLocator> {
+  }): Promise<ImportedCanvasFile> {
     const sourceName = requireSafeSourceName(input.sourceName);
     const bytes = await readBoundedFile(input.sourcePath, this.maxImportBytes);
     const relativeDirectory = `neko/imports/${input.mediaKind}`;
@@ -308,11 +353,19 @@ export class CanvasMaterialAuthoringService {
       if (error instanceof CanvasHostVisibleEffectError) throw error;
       throw visible('The selected source could not be imported.');
     }
-    return {
+    const locator = {
       file: {
-        authority: 'workspace',
+        authority: 'workspace' as const,
         path: `${relativeDirectory}/${destinationName}`,
       },
+    };
+    const intrinsicDimensions =
+      input.mediaKind === 'image'
+        ? dimensionsFromImageMetadata(probeImageMetadata(bytes))
+        : undefined;
+    return {
+      locator,
+      ...(intrinsicDimensions ? { intrinsicDimensions } : {}),
     };
   }
 
@@ -366,6 +419,30 @@ async function readBoundedFile(filePath: string, maxBytes: number): Promise<Uint
   } finally {
     await handle.close();
   }
+}
+
+async function readBoundedFilePrefix(filePath: string, maxBytes: number): Promise<Uint8Array> {
+  const handle = await open(filePath, 'r');
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw visible('The selected source is not a file.');
+    const bytes = new Uint8Array(Math.min(stat.size, maxBytes));
+    let offset = 0;
+    while (offset < bytes.byteLength) {
+      const { bytesRead } = await handle.read(bytes, offset, bytes.byteLength - offset, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    return offset === bytes.byteLength ? bytes : bytes.subarray(0, offset);
+  } finally {
+    await handle.close();
+  }
+}
+
+function dimensionsFromImageMetadata(
+  metadata: { readonly width?: number; readonly height?: number } | undefined | null,
+): { readonly width: number; readonly height: number } | undefined {
+  return readCanvasImageDimensions(metadata);
 }
 
 function assertCanvasIdentity(

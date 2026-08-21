@@ -42,6 +42,37 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
     });
   });
 
+  it('accepts a validated planner-owned size without exposing it through Agent input', () => {
+    const created = planCanvasNodeCreation(
+      { canvasData: emptyCanvas(), generateId: () => 'intrinsic-image-node' },
+      {
+        type: 'media',
+        size: { width: 80, height: 120 },
+        data: {
+          assetPath: 'media/portrait.png',
+          mediaType: 'image',
+          contentLocator: { file: { authority: 'workspace', path: 'media/portrait.png' } },
+        },
+      },
+    );
+
+    expect(created.result.node.size).toEqual({ width: 80, height: 120 });
+    expect(() =>
+      planCanvasNodeCreation(
+        { canvasData: emptyCanvas(), generateId: () => 'invalid-size-node' },
+        {
+          type: 'media',
+          size: { width: Number.NaN, height: 120 },
+          data: {
+            assetPath: 'media/portrait.png',
+            mediaType: 'image',
+            contentLocator: { file: { authority: 'workspace', path: 'media/portrait.png' } },
+          },
+        },
+      ),
+    ).toThrow('finite positive width and height');
+  });
+
   it('creates all canonical node projections from valid data', () => {
     let canvas = emptyCanvas();
     const generateId = ids();

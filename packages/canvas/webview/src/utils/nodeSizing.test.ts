@@ -22,6 +22,23 @@ describe('nodeSizing', () => {
     expect(resolveNodeMinSize({ type: 'job' })).toEqual({ width: 100, height: 60 });
   });
 
+  it('preserves an image node ratio when deriving its resize minimum', () => {
+    expect(
+      resolveNodeMinSize({
+        type: 'media',
+        size: { width: 40, height: 120 },
+        data: { mediaType: 'image' },
+      }),
+    ).toEqual({ width: 50 / 3, height: 50 });
+    expect(
+      resolveNodeMinSize({
+        type: 'media',
+        size: { width: 120, height: 40 },
+        data: { mediaType: 'video' },
+      }),
+    ).toEqual({ width: 80, height: 50 });
+  });
+
   it('uses conservative fallback minimums for unknown nodes', () => {
     expect(resolveNodeMinSize({ type: 'custom-node' })).toEqual({ width: 80, height: 50 });
     expect(resolveNodeMinSize({ type: 'custom-container', container: {} })).toEqual({

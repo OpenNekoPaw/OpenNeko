@@ -34,6 +34,58 @@ afterEach(async () => {
 });
 
 describe('CanvasMaterialAuthoringService', () => {
+  it('sizes authorized and imported images from their intrinsic dimensions', async () => {
+    const fixture = await createFixture();
+    await writeFixtureBytes(
+      fixture.workspace.workspacePath,
+      'media/portrait.png',
+      pngHeader(800, 1200),
+    );
+    const externalRoot = await mkdtemp(path.join(tmpdir(), 'openneko-image-source-'));
+    roots.push(externalRoot);
+    const externalPath = path.join(externalRoot, 'landscape.png');
+    await writeFile(externalPath, pngHeader(1600, 900));
+    const service = new CanvasMaterialAuthoringService({
+      host: fixture.host,
+      globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
+    });
+
+    let canvas = await service.author({
+      canvas: emptyCanvas(),
+      identity: fixture.identity,
+      workspace: fixture.workspace,
+      request: directRequest(
+        fixture.identity,
+        { file: { authority: 'workspace', path: 'media/portrait.png' } },
+        'image',
+      ),
+    });
+    const token = service.registerExternalSource(fixture.workspace, {
+      absolutePath: externalPath,
+      sourceName: 'landscape.png',
+    });
+    canvas = await service.author({
+      canvas,
+      identity: fixture.identity,
+      workspace: fixture.workspace,
+      request: {
+        kind: 'external-import',
+        identity: materialIdentity(fixture.identity),
+        sourceToken: token,
+        sourceName: 'landscape.png',
+        mediaKind: 'image',
+        conflictPolicy: 'reject',
+      },
+    });
+
+    expect(canvas.nodes.map((node) => node.size)).toEqual([
+      { width: 80, height: 120 },
+      { width: 120, height: 67.5 },
+    ]);
+    expect(canvas.nodes.every((node) => !('intrinsicDimensions' in node.data))).toBe(true);
+    service.dispose();
+  });
+
   it('projects authorized workspace, linked-library, document and package locators exactly', async () => {
     const fixture = await createFixture();
     await writeFixtureFile(fixture.workspace.workspacePath, 'media/cat.png', 'cat');
@@ -77,7 +129,10 @@ describe('CanvasMaterialAuthoringService', () => {
       workspace: fixture.workspace,
       request: directRequest(
         fixture.identity,
-        { file: { authority: 'workspace', path: 'documents/story.epub' }, selector: { kind: 'entry', path: 'chapters/one.xhtml' } },
+        {
+          file: { authority: 'workspace', path: 'documents/story.epub' },
+          selector: { kind: 'entry', path: 'chapters/one.xhtml' },
+        },
         'document',
       ),
     });
@@ -87,7 +142,10 @@ describe('CanvasMaterialAuthoringService', () => {
       workspace: fixture.workspace,
       request: directRequest(
         fixture.identity,
-        { file: { authority: 'workspace', path: 'neko/assets/Editorial/books/story.epub' }, selector: { kind: 'entry', path: 'chapters/two.xhtml' } },
+        {
+          file: { authority: 'workspace', path: 'neko/assets/Editorial/books/story.epub' },
+          selector: { kind: 'entry', path: 'chapters/two.xhtml' },
+        },
         'document',
       ),
     });
@@ -97,7 +155,14 @@ describe('CanvasMaterialAuthoringService', () => {
       workspace: fixture.workspace,
       request: directRequest(
         fixture.identity,
-        { file: { authority: 'package', packageId: 'character-pack', revision: '1', path: 'models/hero.glb' } },
+        {
+          file: {
+            authority: 'package',
+            packageId: 'character-pack',
+            revision: '1',
+            path: 'models/hero.glb',
+          },
+        },
         'model',
       ),
     });
@@ -105,9 +170,22 @@ describe('CanvasMaterialAuthoringService', () => {
     expect(canvas.nodes.map(contentLocatorOf)).toEqual([
       { file: { authority: 'workspace', path: 'media/cat.png' } },
       { file: { authority: 'workspace', path: 'neko/assets/Editorial/shots/clip.mp4' } },
-      { file: { authority: 'workspace', path: 'documents/story.epub' }, selector: { kind: 'entry', path: 'chapters/one.xhtml' } },
-      { file: { authority: 'workspace', path: 'neko/assets/Editorial/books/story.epub' }, selector: { kind: 'entry', path: 'chapters/two.xhtml' } },
-      { file: { authority: 'package', packageId: 'character-pack', revision: '1', path: 'models/hero.glb' } },
+      {
+        file: { authority: 'workspace', path: 'documents/story.epub' },
+        selector: { kind: 'entry', path: 'chapters/one.xhtml' },
+      },
+      {
+        file: { authority: 'workspace', path: 'neko/assets/Editorial/books/story.epub' },
+        selector: { kind: 'entry', path: 'chapters/two.xhtml' },
+      },
+      {
+        file: {
+          authority: 'package',
+          packageId: 'character-pack',
+          revision: '1',
+          path: 'models/hero.glb',
+        },
+      },
     ]);
     expect(authorizePackageResource).toHaveBeenCalledOnce();
     expect(await readFile(path.join(linkedRoot, 'shots/clip.mp4'), 'utf8')).toBe('clip');
@@ -152,7 +230,9 @@ describe('CanvasMaterialAuthoringService', () => {
     const expectedDigest = createHash('sha256').update('first').digest('hex');
     expect(canvas.nodes.map(contentLocatorOf)).toEqual([
       { file: { authority: 'workspace', path: 'neko/imports/video/clip.mp4' } },
-      expect.objectContaining({ file: { authority: 'workspace', path: 'neko/imports/video/clip 2.mp4' } }),
+      expect.objectContaining({
+        file: { authority: 'workspace', path: 'neko/imports/video/clip 2.mp4' },
+      }),
     ]);
     expect(
       await readFile(
@@ -218,7 +298,9 @@ describe('CanvasMaterialAuthoringService', () => {
     });
     expect(copied.nodes).toHaveLength(1);
     expect(contentLocatorOf(copied.nodes[0])).toEqual(
-      expect.objectContaining({ file: { authority: 'workspace', path: 'neko/imports/image/frame.png' } }),
+      expect.objectContaining({
+        file: { authority: 'workspace', path: 'neko/imports/image/frame.png' },
+      }),
     );
     expect(
       await readFile(
@@ -319,7 +401,9 @@ describe('CanvasMaterialAuthoringService', () => {
 
     expect(derived.nodes).toHaveLength(2);
     expect(derived.nodes[0]).toEqual(sourceNode);
-    expect(contentLocatorOf(derived.nodes[1])).toEqual({ file: { authority: 'workspace', path: 'neko/derived/crop/source-cropped.png' } });
+    expect(contentLocatorOf(derived.nodes[1])).toEqual({
+      file: { authority: 'workspace', path: 'neko/derived/crop/source-cropped.png' },
+    });
     expect(derived.nodes[1]?.data).not.toHaveProperty('generation');
     expect(derived.connections).toEqual([
       expect.objectContaining({
@@ -409,7 +493,9 @@ describe('CanvasMaterialAuthoringService', () => {
     expect(replaced.nodes[0]).toMatchObject({
       id: node.id,
       data: {
-        contentLocator: { file: { authority: 'workspace', path: 'characters/neko-replacement.png' } },
+        contentLocator: {
+          file: { authority: 'workspace', path: 'characters/neko-replacement.png' },
+        },
         entityRepresentation: {
           entityId: 'character-neko',
           bindingId: 'binding-neko-replacement',
@@ -538,4 +624,23 @@ async function writeFixtureFile(
   const absolutePath = path.join(root, relativePath);
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, contents);
+}
+
+async function writeFixtureBytes(
+  root: string,
+  relativePath: string,
+  contents: Uint8Array,
+): Promise<void> {
+  const absolutePath = path.join(root, relativePath);
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, contents);
+}
+
+function pngHeader(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(24);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return bytes;
 }

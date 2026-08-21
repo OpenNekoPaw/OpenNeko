@@ -61,6 +61,19 @@ describe('PreviewRoot', () => {
     ]);
   });
 
+  it('gives the shared image element a definite two-axis contain box', () => {
+    const imageRule = rootStyles.match(/\.neko-preview-viewer--image > img\s*\{([^}]*)\}/u)?.[1];
+
+    expect(imageRule).toBeDefined();
+    expect(imageRule).toMatch(/position:\s*absolute;/u);
+    expect(imageRule).toMatch(/inset:\s*0;/u);
+    expect(imageRule).toMatch(/width:\s*100%;/u);
+    expect(imageRule).toMatch(/height:\s*100%;/u);
+    expect(imageRule).toMatch(/object-fit:\s*contain;/u);
+    expect(imageRule).not.toMatch(/max-width:/u);
+    expect(imageRule).not.toMatch(/max-height:/u);
+  });
+
   it('uses one package-owned presentation and viewer registry for Workspace and authorized previews', async () => {
     const descriptor = {
       descriptorId: 'descriptor-shared-image',

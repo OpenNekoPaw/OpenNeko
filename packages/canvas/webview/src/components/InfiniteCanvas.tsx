@@ -34,6 +34,7 @@ import {
   resolveCanvasFullscreenPreviewRequest,
   type CanvasFullscreenPreviewRequest,
 } from './selection/CanvasImagePreviewOverlay';
+import { CanvasMarkdownEditorOverlay } from './selection/CanvasMarkdownEditorOverlay';
 import {
   resolveGenerationSelectionSafePan,
   SelectionGenerationInputPanel,
@@ -98,6 +99,16 @@ export interface InfiniteCanvasProps {
   onFullscreenPreviewOpenChange?: (open: boolean) => void;
 }
 
+type CanvasFullscreenSurface =
+  | {
+      readonly kind: 'preview';
+      readonly request: CanvasFullscreenPreviewRequest;
+    }
+  | {
+      readonly kind: 'markdown-editor';
+      readonly nodeId: string;
+    };
+
 // =============================================================================
 // Component
 // =============================================================================
@@ -133,8 +144,7 @@ export function InfiniteCanvas({
     readonly nodeId: string;
     readonly height: number;
   }>();
-  const [fullscreenPreviewRequest, setFullscreenPreviewRequest] =
-    useState<CanvasFullscreenPreviewRequest>();
+  const [fullscreenSurface, setFullscreenSurface] = useState<CanvasFullscreenSurface>();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [transformingNodeIds, setTransformingNodeIds] = useState<readonly string[]>([]);
@@ -146,8 +156,8 @@ export function InfiniteCanvas({
   const renderPlan = useMemo(() => projectCanvasNodeRenderPlan(nodes), [nodes]);
 
   useEffect(() => {
-    onFullscreenPreviewOpenChange?.(fullscreenPreviewRequest !== undefined);
-  }, [fullscreenPreviewRequest, onFullscreenPreviewOpenChange]);
+    onFullscreenPreviewOpenChange?.(fullscreenSurface !== undefined);
+  }, [fullscreenSurface, onFullscreenPreviewOpenChange]);
 
   useEffect(() => () => onFullscreenPreviewOpenChange?.(false), [onFullscreenPreviewOpenChange]);
 
@@ -158,7 +168,7 @@ export function InfiniteCanvas({
     containerRef,
     isPanMode,
     isSpacePanActive,
-    disabled: fullscreenPreviewRequest !== undefined,
+    disabled: fullscreenSurface !== undefined,
   });
 
   // Connection drag hook - enables drag-to-connect with mouse-follow preview
@@ -176,7 +186,7 @@ export function InfiniteCanvas({
       validateCanvasConnectionDraft(nodes, connections, connection),
     onConnectionCancel,
     onConnectionStateChange,
-    enabled: fullscreenPreviewRequest === undefined,
+    enabled: fullscreenSurface === undefined,
   });
 
   // Marquee selection hook
@@ -190,7 +200,7 @@ export function InfiniteCanvas({
     nodes: [...renderPlan.nodes],
     onSelect: onMarqueeSelect,
     enabled:
-      fullscreenPreviewRequest === undefined &&
+      fullscreenSurface === undefined &&
       !viewportState.isPanning &&
       !isDraggingConnection &&
       !isPanMode,
@@ -309,9 +319,22 @@ export function InfiniteCanvas({
       if (!request) {
         throw new Error(`Canvas node "${nodeId}" does not expose an preview resource.`);
       }
-      setFullscreenPreviewRequest(request);
+      setFullscreenSurface({ kind: 'preview', request });
     },
     [interactionNodes],
+  );
+  const openMarkdownEditor = useCallback(
+    (nodeId: string) => {
+      if (!onNodeUpdateData) {
+        throw new Error('Canvas Markdown editing requires the node update owner.');
+      }
+      const node = interactionNodes.find((candidate) => candidate.id === nodeId);
+      if (!node || node.type !== 'markdown') {
+        throw new Error(`Canvas Markdown node "${nodeId}" is not rendered.`);
+      }
+      setFullscreenSurface({ kind: 'markdown-editor', nodeId });
+    },
+    [interactionNodes, onNodeUpdateData],
   );
 
   const dropTargetPreview = useMemo(() => {
@@ -421,7 +444,7 @@ export function InfiniteCanvas({
       ref={containerRef}
       data-canvas-viewport-root="true"
       data-canvas-zoom-detail={viewport.zoom < 0.55 ? 'distant' : 'readable'}
-      data-canvas-interaction-suspended={fullscreenPreviewRequest ? 'true' : undefined}
+      data-canvas-interaction-suspended={fullscreenSurface ? 'true' : undefined}
       className="relative w-full h-full overflow-hidden select-none"
       style={{ cursor: getCursor() }}
       {...getKeyboardBoundaryMetadata({
@@ -431,7 +454,7 @@ export function InfiniteCanvas({
       })}
       tabIndex={-1}
       onMouseDown={(e) => {
-        if (fullscreenPreviewRequest) return;
+        if (fullscreenSurface) return;
         if (
           e.target === e.currentTarget ||
           (e.target as HTMLElement).hasAttribute('data-canvas-viewport-layer') ||
@@ -444,20 +467,20 @@ export function InfiniteCanvas({
         handleCanvasClick(e);
       }}
       onMouseMove={(e) => {
-        if (fullscreenPreviewRequest) return;
+        if (fullscreenSurface) return;
         viewportHandlers.onMouseMove(e);
         marqueeHandlers.onMouseMove(e);
       }}
       onMouseUp={(e) => {
-        if (fullscreenPreviewRequest) return;
+        if (fullscreenSurface) return;
         viewportHandlers.onMouseUp();
         marqueeHandlers.onMouseUp(e);
       }}
       onMouseLeave={() => {
-        if (!fullscreenPreviewRequest) viewportHandlers.onMouseLeave();
+        if (!fullscreenSurface) viewportHandlers.onMouseLeave();
       }}
       onContextMenu={(event) => {
-        if (!fullscreenPreviewRequest) viewportHandlers.onContextMenu(event);
+        if (!fullscreenSurface) viewportHandlers.onContextMenu(event);
       }}
     >
       {isGridVisible && (
@@ -525,6 +548,7 @@ export function InfiniteCanvas({
             onRotateEnd: handleNodeRotateEnd,
             onUpdateData: onNodeUpdateData,
             onFullscreenPreview: openFullscreenPreview,
+            onMarkdownEdit: onNodeUpdateData ? openMarkdownEditor : undefined,
             onConnectionStart: startDragConnection,
             isConnecting: isDraggingConnection,
             connectionTargetState,
@@ -544,8 +568,9 @@ export function InfiniteCanvas({
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}
         viewportSize={containerSize}
+        onMarkdownEdit={onNodeUpdateData ? openMarkdownEditor : undefined}
         hidden={
-          fullscreenPreviewRequest !== undefined ||
+          fullscreenSurface !== undefined ||
           (transformingNodeIds.length > 0 && !dragPreview) ||
           isMarqueeSelecting
         }
@@ -557,7 +582,7 @@ export function InfiniteCanvas({
         viewport={viewport}
         viewportSize={containerSize}
         hidden={
-          fullscreenPreviewRequest !== undefined ||
+          fullscreenSurface !== undefined ||
           (transformingNodeIds.length > 0 && !dragPreview) ||
           isMarqueeSelecting
         }
@@ -569,9 +594,7 @@ export function InfiniteCanvas({
         viewport={viewport}
         viewportSize={containerSize}
         hidden={
-          fullscreenPreviewRequest !== undefined ||
-          transformingNodeIds.length > 0 ||
-          isMarqueeSelecting
+          fullscreenSurface !== undefined || transformingNodeIds.length > 0 || isMarqueeSelecting
         }
       />
       {/* Marquee selection rectangle */}
@@ -604,10 +627,20 @@ export function InfiniteCanvas({
           </span>
         )}
       </div>
-      {fullscreenPreviewRequest ? (
+      {fullscreenSurface?.kind === 'preview' ? (
         <CanvasFullscreenPreviewOverlay
-          request={fullscreenPreviewRequest}
-          onClose={() => setFullscreenPreviewRequest(undefined)}
+          request={fullscreenSurface.request}
+          onClose={() => setFullscreenSurface(undefined)}
+        />
+      ) : fullscreenSurface?.kind === 'markdown-editor' && onNodeUpdateData ? (
+        <CanvasMarkdownEditorOverlay
+          nodeId={fullscreenSurface.nodeId}
+          node={nodes.find(
+            (candidate): candidate is Extract<CanvasNode, { type: 'markdown' }> =>
+              candidate.id === fullscreenSurface.nodeId && candidate.type === 'markdown',
+          )}
+          onUpdateData={onNodeUpdateData}
+          onClose={() => setFullscreenSurface(undefined)}
         />
       ) : null}
     </div>

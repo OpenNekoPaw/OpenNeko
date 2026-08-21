@@ -15,6 +15,7 @@ import {
   isCanvasNodeType,
   parseDocumentResourceStatus,
   resolveCanvasGenerationNodeDefaultSize,
+  resolveCanvasImageNodeSize,
 } from '@neko/canvas-domain';
 import { isJobRef } from '@neko/shared/job-lifecycle';
 
@@ -86,7 +87,12 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       return {
         ...base,
         type,
-        size: mediaType === 'audio' ? { ...CANVAS_AUDIO_NODE_DEFAULT_SIZE } : base.size,
+        size:
+          mediaType === 'audio'
+            ? { ...CANVAS_AUDIO_NODE_DEFAULT_SIZE }
+            : mediaType === 'image'
+              ? (resolveCanvasImageNodeSize(data.intrinsicDimensions) ?? base.size)
+              : base.size,
         data: {
           assetPath,
           contentLocator,

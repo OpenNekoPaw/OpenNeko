@@ -20,8 +20,7 @@ import {
 } from './canvasHeadlessAuthoring';
 import {
   CANVAS_AUDIO_NODE_DEFAULT_SIZE,
-  CANVAS_IMAGE_PROJECTION_DEFAULT_WIDTH,
-  CANVAS_IMAGE_PROJECTION_MIN_HEIGHT,
+  resolveCanvasImageNodeSize,
   resolveCanvasNodeDefaultSize,
 } from '../canvas-node-sizing';
 
@@ -572,14 +571,10 @@ function createArtifactNode(
 }
 
 function artifactNodeSize(artifact: CanvasWorkspaceProjectionArtifact): CanvasNode['size'] {
-  const imageAspectRatio = artifactImageAspectRatio(artifact);
-  if (imageAspectRatio !== undefined) {
-    const defaultWidth = CANVAS_IMAGE_PROJECTION_DEFAULT_WIDTH;
-    const minimumHeight = CANVAS_IMAGE_PROJECTION_MIN_HEIGHT;
-    const heightAtDefaultWidth = defaultWidth / imageAspectRatio;
-    return heightAtDefaultWidth >= minimumHeight
-      ? { width: defaultWidth, height: heightAtDefaultWidth }
-      : { width: minimumHeight * imageAspectRatio, height: minimumHeight };
+  const imageDimensions = artifactImageDimensions(artifact);
+  const imageSize = resolveCanvasImageNodeSize(imageDimensions);
+  if (imageSize) {
+    return imageSize;
   }
   switch (artifact.kind) {
     case 'markdown':
@@ -596,25 +591,13 @@ function artifactNodeSize(artifact: CanvasWorkspaceProjectionArtifact): CanvasNo
   }
 }
 
-function artifactImageAspectRatio(artifact: CanvasWorkspaceProjectionArtifact): number | undefined {
+function artifactImageDimensions(
+  artifact: CanvasWorkspaceProjectionArtifact,
+):
+  { readonly width?: number; readonly height?: number; readonly aspectRatio?: string } | undefined {
   if (artifact.kind !== 'image') return undefined;
   const summary = artifact.generation?.summary;
-  const dimensions = artifact.intrinsicDimensions ?? summary;
-  if (
-    typeof dimensions?.width === 'number' &&
-    Number.isFinite(dimensions.width) &&
-    dimensions.width > 0 &&
-    typeof dimensions.height === 'number' &&
-    Number.isFinite(dimensions.height) &&
-    dimensions.height > 0
-  ) {
-    return dimensions.width / dimensions.height;
-  }
-  const match = summary?.aspectRatio?.match(/^\s*(\d+(?:\.\d+)?)\s*[:/]\s*(\d+(?:\.\d+)?)\s*$/);
-  if (!match) return undefined;
-  const width = Number(match[1]);
-  const height = Number(match[2]);
-  return width > 0 && height > 0 ? width / height : undefined;
+  return artifact.intrinsicDimensions ?? summary;
 }
 
 function createSerializableProvenance(

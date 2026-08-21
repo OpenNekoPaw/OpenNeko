@@ -1,4 +1,5 @@
 import type { WorkspaceFileContentLocator } from '@neko/content';
+import type { CanvasImageDimensions } from './canvas-node-sizing';
 
 export type CanvasDroppedAssetKind = 'media' | 'text' | 'file' | 'canvas';
 export type CanvasTextFileFormat = 'plain' | 'markdown';
@@ -13,6 +14,8 @@ export interface DroppedMediaCanvasAsset {
   runtimeAssetPath?: string;
   /** Original local file path, never persisted by the Webview. */
   originalPath?: string;
+  /** Intrinsic image pixels used only to calculate the new node's initial durable size. */
+  intrinsicDimensions?: CanvasImageDimensions;
 }
 
 export interface DroppedTextCanvasAsset {

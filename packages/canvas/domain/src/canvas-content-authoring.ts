@@ -7,6 +7,7 @@ import {
 } from './types/canvas-material-contracts';
 import { planCanvasNodeCreation } from './utils/canvasHeadlessAuthoring';
 import { type CanvasData, type CanvasConnection } from './types/canvas';
+import { resolveCanvasImageNodeSize, type CanvasImageDimensions } from './canvas-node-sizing';
 
 /**
  * Host-resolved, portable material ready for a Canvas commit.
@@ -19,6 +20,7 @@ export interface ResolvedCanvasMaterialDescriptor {
   readonly position?: { readonly x: number; readonly y: number };
   readonly generation?: CanvasGenerationEvidence;
   readonly entity?: CanvasEntityRepresentationEvidence;
+  readonly intrinsicDimensions?: CanvasImageDimensions;
 }
 
 export function projectResolvedCanvasMaterialToCanvas(input: {
@@ -50,11 +52,16 @@ export function projectResolvedCanvasMaterialToCanvas(input: {
   }
 
   if (isRenderableMediaKind(material.mediaKind)) {
+    const imageSize =
+      material.mediaKind === 'image'
+        ? resolveCanvasImageNodeSize(material.intrinsicDimensions ?? material.generation?.summary)
+        : undefined;
     return planCanvasNodeCreation(
       { canvasData: input.canvas, ...(input.generateId ? { generateId: input.generateId } : {}) },
       {
         type: 'media',
         position,
+        ...(imageSize ? { size: imageSize } : {}),
         data: {
           assetPath: material.locator.selector ? '' : portablePath,
           contentLocator: material.locator,

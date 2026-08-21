@@ -42,6 +42,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   EditIcon,
+  FullscreenIcon,
   GridIcon,
   LayersIcon,
   LoadingIcon,
@@ -98,6 +99,7 @@ interface SelectionContextToolbarProps {
   readonly viewport: CanvasViewport;
   readonly viewportSize: { readonly width: number; readonly height: number };
   readonly hidden?: boolean;
+  readonly onMarkdownEdit?: (nodeId: string) => void;
 }
 
 interface ToolbarAction {
@@ -127,6 +129,7 @@ export function SelectionContextToolbar({
   viewport,
   viewportSize,
   hidden = false,
+  onMarkdownEdit,
 }: SelectionContextToolbarProps): ReactNode {
   const host = useOptionalCanvasHost();
   const canvasStore = useCanvasStoreApi();
@@ -188,6 +191,7 @@ export function SelectionContextToolbar({
         clipboardStore,
         historyStore,
         setExecutionDiagnostic,
+        onMarkdownEdit,
       ),
     [
       canvasStore,
@@ -195,6 +199,7 @@ export function SelectionContextToolbar({
       historyStore,
       host,
       materialActionState.descriptors,
+      onMarkdownEdit,
       selectedNodes,
     ],
   );
@@ -350,6 +355,7 @@ function resolveActions(
   clipboardStore: ReturnType<typeof useClipboardStoreApi>,
   historyStore: ReturnType<typeof useHistoryStoreApi>,
   reportExecutionDiagnostic: (message: string | undefined) => void,
+  onMarkdownEdit: ((nodeId: string) => void) | undefined,
 ): ToolbarAction[] {
   const selectedIds = selectedNodes.map((node) => node.id);
   if (selectedNodes.length > 1) {
@@ -383,6 +389,19 @@ function resolveActions(
     host,
     reportExecutionDiagnostic,
   );
+  if (node.type === 'markdown') {
+    actions.push({
+      key: 'canvas:edit-markdown',
+      label: t('action.editMarkdownInCanvas'),
+      icon: <FullscreenIcon size={14} />,
+      placement: 'visible',
+      priority: 10,
+      display: 'label',
+      section: 'edit',
+      run: onMarkdownEdit ? () => onMarkdownEdit(node.id) : undefined,
+      disabledReason: onMarkdownEdit ? undefined : t('selection.capabilityUnavailable'),
+    });
+  }
   if (node.type === 'canvas-embed' && node.data.canvasPath) {
     const path = node.data.canvasPath;
     actions.push({
@@ -435,8 +454,11 @@ function resolveOwnerActions(
   host: ReturnType<typeof useOptionalCanvasHost>,
   reportExecutionDiagnostic: (message: string | undefined) => void,
 ): ToolbarAction[] {
+  const inlineMarkdown = selectedNodes.length === 1 && selectedNodes[0]?.type === 'markdown';
   const availableDescriptors = descriptors.filter(
-    (descriptor) => !isResourceManagementAction(descriptor.id),
+    (descriptor) =>
+      !isResourceManagementAction(descriptor.id) &&
+      !(inlineMarkdown && descriptor.id === CANVAS_EDIT_TEXT_ACTION_ID),
   );
   const descriptorById = new Map(
     availableDescriptors.map((descriptor) => [descriptor.id, descriptor] as const),
@@ -492,7 +514,10 @@ function createOwnerAction(
 
 function stableMaterialActionIds(selectedNodes: readonly CanvasNode[]): readonly string[] {
   if (selectedNodes.length !== 1) return [];
-  const kind = materialKindForNode(selectedNodes[0]!);
+  const node = selectedNodes[0];
+  if (!node) return [];
+  if (node.type === 'markdown') return [CANVAS_PREVIEW_ACTION_ID];
+  const kind = materialKindForNode(node);
   return kind ? STABLE_MATERIAL_ACTION_IDS[kind] : [];
 }
 

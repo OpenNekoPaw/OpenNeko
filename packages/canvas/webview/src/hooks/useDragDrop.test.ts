@@ -262,6 +262,54 @@ describe('useDragDrop add-source contract', () => {
     expect(JSON.stringify(request)).not.toContain('blob:');
   });
 
+  it('projects intrinsic image dimensions through add-source without persisting image bytes', () => {
+    const file = {
+      name: 'portrait.png',
+      size: 24,
+      type: 'image/png',
+      lastModified: 1,
+      arrayBuffer: async () => new ArrayBuffer(0),
+    } as File;
+    const bytes = new Uint8Array([1, 2, 3]);
+    const request = createCanvasMediaAddSourceInput({
+      file,
+      bytes,
+      mediaType: 'image',
+      dropPosition: { x: 12, y: 34 },
+      intrinsicDimensions: { width: 800, height: 1200 },
+    });
+
+    expect(request.bytes).toBe(bytes);
+    expect(request.metadata).toMatchObject({ intrinsicWidth: 800, intrinsicHeight: 1200 });
+
+    const onDropAssets = vi.fn();
+    applyCanvasAddSourceResult({
+      result: {
+        requestId: 'portrait',
+        ok: true,
+        durablePath: 'media/portrait.png',
+        contentLocator: { file: { authority: 'workspace', path: 'media/portrait.png' } },
+        diagnostics: [],
+        metadata: request.metadata,
+      },
+      sourceNameHint: 'portrait.png',
+      mediaTypeHint: 'image',
+      dropPosition: { x: 12, y: 34 },
+      addMediaAt: vi.fn(),
+      onDropAssets,
+    });
+
+    expect(onDropAssets).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          kind: 'media',
+          intrinsicDimensions: { width: 800, height: 1200 },
+        }),
+      ],
+      { x: 12, y: 34 },
+    );
+  });
+
   it('adds the first and second media assets only after durable source success', () => {
     const addMediaAt = vi.fn();
     const onDropAssets = vi.fn();

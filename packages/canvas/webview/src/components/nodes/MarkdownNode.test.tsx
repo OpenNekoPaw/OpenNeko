@@ -21,10 +21,11 @@ beforeAll(() => {
 afterEach(() => document.body.replaceChildren());
 
 describe('MarkdownNode', () => {
-  it('keeps selection read-only and enters Rich editing only after explicit activation', async () => {
+  it('keeps the compact node read-only and delegates explicit activation to Canvas', async () => {
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
+    const onMarkdownEdit = vi.fn();
     const node: MarkdownCanvasNode = {
       id: 'markdown-1',
       type: 'markdown',
@@ -45,6 +46,7 @@ describe('MarkdownNode', () => {
           isSelected
           containerRef={{ current: container }}
           onUpdateData={vi.fn()}
+          onMarkdownEdit={onMarkdownEdit}
         />,
       );
     });
@@ -65,21 +67,8 @@ describe('MarkdownNode', () => {
         .querySelector('[data-node-id="markdown-1"]')
         ?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     });
-    await vi.waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
-
-    expect(container.querySelector('.ProseMirror')?.textContent).toContain('这是画布分析。');
-    expect(
-      container
-        .querySelector('.canvas-markdown-node__editor')
-        ?.getAttribute('data-canvas-wheel-owner'),
-    ).toBe('content');
-    expect(container.querySelector('textarea')).toBeNull();
-
-    await act(async () => {
-      container
-        .querySelector('.ProseMirror')
-        ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    });
+    expect(onMarkdownEdit).toHaveBeenCalledOnce();
+    expect(onMarkdownEdit).toHaveBeenCalledWith(node.id);
     expect(container.querySelector('.ProseMirror')).toBeNull();
     expect(container.querySelector('[data-markdown-document="ready"]')).not.toBeNull();
 

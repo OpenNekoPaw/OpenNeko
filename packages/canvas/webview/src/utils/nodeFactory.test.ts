@@ -77,6 +77,18 @@ describe('buildCanvasNode', () => {
     expect((node.data as Record<string, unknown>).duration).toBeUndefined();
   });
 
+  it('uses intrinsic image dimensions for initial geometry without persisting metadata', () => {
+    const node = createNode('media', {
+      assetPath: 'media/portrait.png',
+      contentLocator: { file: { authority: 'workspace', path: 'media/portrait.png' } },
+      mediaType: 'image',
+      intrinsicDimensions: { width: 800, height: 1200 },
+    });
+
+    expect(node.size).toEqual({ width: 80, height: 120 });
+    expect(node.data).not.toHaveProperty('intrinsicDimensions');
+  });
+
   it('uses the compact content-specific Generation size', () => {
     const prompt = createNode('generation', { ...createCanvasGenerationNodeData('prompt') });
     const image = createNode('generation', { ...createCanvasGenerationNodeData('image') });

@@ -316,31 +316,125 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         `Canvas Markdown selection mounted a mutable editor: ${JSON.stringify(selectedMarkdownPreview)}`,
       );
     }
+    const markdownActions = await inspectCanvasSelectionActions(
+      evaluate,
+      'canvas:functional:audio',
+    );
+    if (
+      markdownActions.actionIds.join('|') !== 'canvas:edit-markdown|node:duplicate|preview:open' ||
+      markdownActions.disabledActionIds.length !== 0 ||
+      markdownActions.overflowActionIds.length !== 0
+    ) {
+      throw new Error(`Canvas Markdown actions are invalid: ${JSON.stringify(markdownActions)}`);
+    }
+    const markdownEditorContextBefore = await inspectCanvasSelectionAndViewport(
+      evaluate,
+      'canvas:functional:audio',
+    );
+    await click(
+      '[data-owner-view-id="canvas:functional:audio"] [data-selection-action="canvas:edit-markdown"]',
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:audio"] [data-canvas-markdown-editor="true"] .ProseMirror[contenteditable="true"]',
+    );
+    const markdownEditing = await inspectCanvasMarkdownEditor(evaluate, 'canvas:functional:audio');
+    if (
+      markdownEditing.overlayCount !== 1 ||
+      markdownEditing.modal !== 'true' ||
+      markdownEditing.editorState !== 'ready' ||
+      markdownEditing.canvasInteractionSuspended !== 'true' ||
+      markdownEditing.nodeProseMirrorCount !== 0 ||
+      markdownEditing.editorProseMirrorCount !== 1 ||
+      markdownEditing.contentEditable !== 'true' ||
+      markdownEditing.wheelOwner !== 'content' ||
+      markdownEditing.overlayWidth < markdownEditing.viewportWidth - 1 ||
+      markdownEditing.overlayHeight < markdownEditing.viewportHeight - 1 ||
+      !markdownEditing.text.includes('这是一个紧凑的画布分析节点')
+    ) {
+      throw new Error(
+        `Canvas Markdown immersive editing is invalid: ${JSON.stringify(markdownEditing)}`,
+      );
+    }
+    const markdownEditingScreenshot = await screenshot('canvas-markdown-immersive-editing');
+    await scroll(
+      '[data-owner-view-id="canvas:functional:audio"] .canvas-markdown-editor-overlay__body',
+      0,
+      { deltaY: 180 },
+    );
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 100))');
+    const markdownEditorScrolled = await inspectCanvasMarkdownEditor(
+      evaluate,
+      'canvas:functional:audio',
+    );
+    if (
+      markdownEditorScrolled.scrollTop <= markdownEditing.scrollTop ||
+      markdownEditorScrolled.viewportTransform !== markdownEditing.viewportTransform
+    ) {
+      throw new Error(
+        `Canvas Markdown immersive scroll changed the Canvas viewport: ${JSON.stringify({ before: markdownEditing, after: markdownEditorScrolled })}`,
+      );
+    }
+    await evaluate(`(() => {
+      const editor = document.querySelector(
+        '[data-owner-view-id="canvas:functional:audio"] [data-canvas-markdown-editor="true"] .ProseMirror[contenteditable="true"]',
+      );
+      if (!(editor instanceof HTMLElement)) throw new Error('Canvas Markdown editor is unavailable.');
+      editor.focus();
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      if (!document.execCommand('insertText', false, ' 沉浸式编辑验收')) {
+        throw new Error('Canvas Markdown editor rejected inserted text.');
+      }
+    })()`);
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 100))');
+    const markdownEdited = await inspectCanvasMarkdownEditor(evaluate, 'canvas:functional:audio');
+    if (!markdownEdited.text.includes('沉浸式编辑验收')) {
+      throw new Error(
+        `Canvas Markdown edit did not update the Rich Surface: ${JSON.stringify(markdownEdited)}`,
+      );
+    }
+    await click(
+      '[data-owner-view-id="canvas:functional:audio"] [data-canvas-markdown-editor-action="close"]',
+    );
+    await waitForSelector(`${markdownSelector} [data-markdown-document="ready"]`);
+    const markdownEditorContextAfter = await inspectCanvasSelectionAndViewport(
+      evaluate,
+      'canvas:functional:audio',
+    );
+    const markdownAfterEdit = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
+    if (
+      JSON.stringify(markdownEditorContextAfter) !== JSON.stringify(markdownEditorContextBefore) ||
+      !markdownAfterEdit.text.includes('沉浸式编辑验收')
+    ) {
+      throw new Error(
+        `Canvas Markdown immersive editor did not preserve return state: ${JSON.stringify({ markdownEditorContextBefore, markdownEditorContextAfter, markdownAfterEdit })}`,
+      );
+    }
     await evaluate(`(() => {
       const node = document.querySelector(${JSON.stringify(markdownSelector)});
       if (!(node instanceof HTMLElement)) throw new Error('Canvas Markdown node is unavailable.');
       node.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
     })()`);
-    await waitForSelector(`${markdownSelector} .ProseMirror[contenteditable="true"]`);
-    const markdownEditing = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
-    if (
-      !markdownEditing.editing ||
-      markdownEditing.textareaCount !== 0 ||
-      markdownEditing.proseMirrorCount !== 1 ||
-      !markdownEditing.text.includes('这是一个紧凑的画布分析节点')
-    ) {
-      throw new Error(
-        `Canvas Markdown Rich editing is invalid: ${JSON.stringify(markdownEditing)}`,
-      );
-    }
-    const markdownEditingScreenshot = await screenshot('canvas-markdown-node-rich-editing');
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:audio"] [data-canvas-markdown-editor="true"]',
+    );
     await pressKey('Escape');
     await waitForSelector(`${markdownSelector} [data-markdown-document="ready"]`);
     await pressKey('Escape');
-    checkpoint('canvas-markdown-node-rich-surface', {
+    checkpoint('canvas-markdown-immersive-editor', {
       preview: markdownPreview,
       selectedPreview: selectedMarkdownPreview,
+      actions: markdownActions,
       editing: markdownEditing,
+      scrolled: markdownEditorScrolled,
+      edited: markdownEdited,
+      afterEdit: markdownAfterEdit,
+      contextBefore: markdownEditorContextBefore,
+      contextAfter: markdownEditorContextAfter,
     });
     await evaluate(`(() => {
       const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
@@ -881,8 +975,14 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       markdownPreviewScreenshot,
       markdownScrolled,
       markdownScrolledScreenshot,
+      markdownActions,
       markdownEditing,
       markdownEditingScreenshot,
+      markdownEditorScrolled,
+      markdownEdited,
+      markdownAfterEdit,
+      markdownEditorContextBefore,
+      markdownEditorContextAfter,
       quietConnections,
       quietConnectionsScreenshot,
       selectedConnectionVisual,
@@ -956,11 +1056,21 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evidence.markdownScrolled.scrollTop <= evidence.markdownPreview.scrollTop ||
       Math.abs(evidence.markdownScrolled.left - evidence.markdownPreview.left) > 0.5 ||
       Math.abs(evidence.markdownScrolled.top - evidence.markdownPreview.top) > 0.5 ||
-      !evidence.markdownEditing.editing ||
-      evidence.markdownEditing.proseMirrorCount !== 1 ||
-      evidence.markdownEditing.textareaCount !== 0
+      evidence.markdownActions.actionIds.join('|') !==
+        'canvas:edit-markdown|node:duplicate|preview:open' ||
+      evidence.markdownEditing.overlayCount !== 1 ||
+      evidence.markdownEditing.editorProseMirrorCount !== 1 ||
+      evidence.markdownEditing.nodeProseMirrorCount !== 0 ||
+      evidence.markdownEditing.canvasInteractionSuspended !== 'true' ||
+      evidence.markdownEditorScrolled.scrollTop <= evidence.markdownEditing.scrollTop ||
+      evidence.markdownEditorScrolled.viewportTransform !==
+        evidence.markdownEditing.viewportTransform ||
+      !evidence.markdownEdited.text.includes('沉浸式编辑验收') ||
+      !evidence.markdownAfterEdit.text.includes('沉浸式编辑验收') ||
+      JSON.stringify(evidence.markdownEditorContextAfter) !==
+        JSON.stringify(evidence.markdownEditorContextBefore)
     ) {
-      throw new Error('Canvas Markdown preview and Rich activation were not proven.');
+      throw new Error('Canvas Markdown preview and immersive editing were not proven.');
     }
     if (
       evidence.quietConnections.connectionCount !== 6 ||
@@ -2129,7 +2239,7 @@ function markdownNode(nodeId) {
         '这是一个紧凑的画布分析节点，默认显示所见所得内容。',
         '',
         '- 选中保持阅读模式',
-        '- 双击进入富文本编辑',
+        '- 双击进入画布内全屏编辑',
         '- 节点内容独立滚动',
         '- 画布空白区域继续平移',
         '- 修饰键滚轮继续缩放画布',
@@ -2184,15 +2294,12 @@ function inspectCanvasMarkdownNode(evaluate, selector) {
     const node = document.querySelector(${JSON.stringify(selector)});
     if (!(node instanceof HTMLElement)) throw new Error('Canvas Markdown node is unavailable.');
     const card = node.querySelector('.node-card');
-    const markdown = node.querySelector('.canvas-markdown-node');
     const heading = node.querySelector('h1');
-    const scrollSurface = node.querySelector(
-      '.canvas-markdown-node__preview, .canvas-markdown-node__editor',
-    );
+    const scrollSurface = node.querySelector('.canvas-markdown-node__preview');
     const rect = card?.getBoundingClientRect();
     const nodeRect = node.getBoundingClientRect();
     return {
-      editing: markdown?.getAttribute('data-editing') === 'true',
+      editing: false,
       textareaCount: node.querySelectorAll('textarea').length,
       proseMirrorCount: node.querySelectorAll('.ProseMirror').length,
       headingSize: heading ? Number.parseFloat(getComputedStyle(heading).fontSize) : 0,
@@ -2208,6 +2315,39 @@ function inspectCanvasMarkdownNode(evaluate, selector) {
           ? scrollSurface.getAttribute('data-canvas-wheel-owner')
           : null,
       text: node.textContent ?? '',
+    };
+  })()`);
+}
+
+function inspectCanvasMarkdownEditor(evaluate, viewId) {
+  return evaluate(`(() => {
+    const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
+    const viewport = root?.querySelector('[data-canvas-viewport-root="true"]');
+    const overlay = root?.querySelector('[data-canvas-markdown-editor="true"]');
+    const body = overlay?.querySelector('.canvas-markdown-editor-overlay__body');
+    const editor = overlay?.querySelector('.ProseMirror');
+    const overlayRect = overlay?.getBoundingClientRect();
+    const viewportRect = viewport?.getBoundingClientRect();
+    return {
+      overlayCount: root?.querySelectorAll('[data-canvas-markdown-editor="true"]').length ?? 0,
+      modal: overlay?.getAttribute('aria-modal'),
+      editorState: overlay?.getAttribute('data-editor-state'),
+      canvasInteractionSuspended: viewport?.getAttribute('data-canvas-interaction-suspended'),
+      nodeProseMirrorCount:
+        root?.querySelectorAll('[data-node-id="markdown-node"] .ProseMirror').length ?? 0,
+      editorProseMirrorCount: overlay?.querySelectorAll('.ProseMirror').length ?? 0,
+      contentEditable: editor?.getAttribute('contenteditable'),
+      wheelOwner: body?.getAttribute('data-canvas-wheel-owner'),
+      scrollTop: body instanceof HTMLElement ? body.scrollTop : 0,
+      scrollHeight: body instanceof HTMLElement ? body.scrollHeight : 0,
+      clientHeight: body instanceof HTMLElement ? body.clientHeight : 0,
+      overlayWidth: overlayRect?.width ?? 0,
+      overlayHeight: overlayRect?.height ?? 0,
+      viewportWidth: viewportRect?.width ?? 0,
+      viewportHeight: viewportRect?.height ?? 0,
+      viewportTransform:
+        root?.querySelector('[data-canvas-viewport-layer]')?.getAttribute('style') ?? '',
+      text: overlay?.textContent ?? '',
     };
   })()`);
 }

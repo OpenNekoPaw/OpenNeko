@@ -4,21 +4,35 @@ import { resolveCanvasFileName, resolveCanvasNodeName } from './CanonicalContent
 
 const source = readFileSync(new URL('./CanonicalContentNodes.tsx', import.meta.url), 'utf8');
 const baseNodeSource = readFileSync(new URL('./BaseNode.tsx', import.meta.url), 'utf8');
+const markdownEditorSource = readFileSync(
+  new URL('../selection/CanvasMarkdownEditorOverlay.tsx', import.meta.url),
+  'utf8',
+);
+const fullscreenPreviewSource = readFileSync(
+  new URL('../selection/CanvasImagePreviewOverlay.tsx', import.meta.url),
+  'utf8',
+);
 
 describe('canonical content node runtime boundaries', () => {
   it('keeps Markdown rendering and routes audio/video through the Preview stream surface', () => {
     expect(source).toContain('<MarkdownDocumentView');
-    expect(source).toContain("import('@neko/markdown/rich-surface')");
+    expect(source).not.toContain("import('@neko/markdown/rich-surface')");
+    expect(markdownEditorSource).toContain("import('@neko/markdown/rich-surface')");
     expect(source).not.toContain('streamdown');
+    expect(markdownEditorSource).not.toContain('streamdown');
     expect(source).not.toContain('@neko/text-editor');
+    expect(markdownEditorSource).not.toContain('@neko/text-editor');
     expect(source).not.toContain('TextEditor');
-    expect(source).toContain('<CanvasMilkdownRichSurface');
-    expect(source).toContain('onActivate={() => setIsEditing(true)}');
+    expect(markdownEditorSource).not.toContain('TextEditor');
+    expect(source).not.toContain('<CanvasMilkdownRichSurface');
+    expect(markdownEditorSource).toContain('<CanvasMilkdownRichSurface');
+    expect(source).toContain('onActivate={onMarkdownEdit ? () => onMarkdownEdit(node.id)');
     expect(source).not.toContain('<textarea');
     expect(source).toContain('<PreviewSurface');
     expect(source).toContain('surfaceKind="inline"');
     expect(source).not.toContain('audioPresentation');
     expect(source).toContain('audioLayout={mediaType ===');
+    expect(source).toContain("className={mediaType === 'image' ? 'canvas-image-node-frame'");
     expect(source).toContain("'node-card'");
     expect(source).not.toContain('canvas-audio-node-title');
     expect(source).not.toContain('onPointerEnter');
@@ -29,6 +43,10 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).not.toContain('hoverRequestId');
     expect(source).not.toContain('<audio');
     expect(source).not.toContain('<video');
+    expect(source).not.toContain('<img');
+    expect(fullscreenPreviewSource).toContain('<LightweightPreview');
+    expect(fullscreenPreviewSource).not.toContain('<img');
+    expect(fullscreenPreviewSource).not.toContain('objectFit');
   });
 
   it('renders missing ContentLocators as explicit unavailable content without path fallback', () => {

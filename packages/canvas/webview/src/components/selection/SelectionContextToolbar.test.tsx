@@ -26,6 +26,57 @@ Object.assign(globalThis, {
 enableDefaultCanvasTestStoreScope();
 
 describe('SelectionContextToolbar', () => {
+  it('routes inline Markdown editing to the Canvas fullscreen Surface', async () => {
+    const node: CanvasNode = {
+      id: 'markdown',
+      type: 'markdown',
+      position: { x: 100, y: 100 },
+      size: { width: 320, height: 220 },
+      zIndex: 1,
+      data: { title: 'Analysis', content: '# Analysis' },
+    };
+    const onMarkdownEdit = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <CanvasHostProvider
+          host={createMaterialHost([
+            descriptor('text:edit', 'Edit text', 'handoff'),
+            descriptor('preview:open', 'Main Preview', 'read'),
+          ])}
+        >
+          <SelectionContextToolbar
+            nodes={[node]}
+            selectedNodeIds={[node.id]}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            viewportSize={{ width: 800, height: 600 }}
+            onMarkdownEdit={onMarkdownEdit}
+          />
+        </CanvasHostProvider>,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(container.querySelector('[data-selection-action="text:edit"]')).toBeNull();
+    expect(container.querySelector('[data-selection-action="preview:open"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-selection-action="canvas:edit-markdown"]')?.textContent,
+    ).toContain('Edit full screen');
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[data-selection-action="canvas:edit-markdown"]')
+        ?.click();
+    });
+    expect(onMarkdownEdit).toHaveBeenCalledWith(node.id);
+
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
   it('projects owner-contributed media preview without synthesizing unavailable or delete actions', async () => {
     const node: CanvasNode = {
       id: 'media',

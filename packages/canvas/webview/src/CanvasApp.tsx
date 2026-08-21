@@ -304,6 +304,9 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
             addMediaAt(dropPos, asset.mediaType, asset.path, asset.name, {
               contentLocator: asset.contentLocator,
               ...(asset.runtimeAssetPath ? { runtimeAssetPath: asset.runtimeAssetPath } : {}),
+              ...(asset.intrinsicDimensions
+                ? { intrinsicDimensions: asset.intrinsicDimensions }
+                : {}),
             });
             break;
           case 'text':

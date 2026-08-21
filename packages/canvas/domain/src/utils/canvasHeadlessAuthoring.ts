@@ -57,6 +57,10 @@ export interface CanvasHeadlessAuthoringPlannerContext {
   readonly generateId?: () => string;
 }
 
+export interface CanvasNodeCreationPlanInput extends CanvasNodeCreateSpec {
+  readonly size?: { readonly width: number; readonly height: number };
+}
+
 export interface CanvasHeadlessAuthoringIdFactoryOptions {
   readonly prefix?: string;
   readonly existingIds?: readonly string[];
@@ -111,7 +115,7 @@ export function createEmptyCanvasData(name = DEFAULT_CANVAS_DATA.name): CanvasDa
 
 export function planCanvasNodeCreation(
   context: CanvasHeadlessAuthoringPlannerContext,
-  request: CanvasNodeCreateSpec,
+  request: CanvasNodeCreationPlanInput,
 ): CanvasHeadlessAuthoringPlan<{ nodeId: string; node: CanvasNode }> {
   const type = requireCanonicalNodeType(request.type);
   const provenanceMessageId = readProvenanceMessageId(request.data);
@@ -501,7 +505,7 @@ function applyAgentContentToNode(
 
 function createNodeFromSpec(
   type: CanonicalCanvasNodeType,
-  spec: CanvasNodeCreateSpec,
+  spec: CanvasNodeCreationPlanInput,
   id: string,
   zIndex: number,
 ): CanvasNode {
@@ -509,7 +513,7 @@ function createNodeFromSpec(
   const base = {
     id,
     position: spec.position ?? DEFAULT_INSERT_POSITION,
-    size: resolveCanvasNodeDefaultSize(type),
+    size: readOptionalNodeSize(spec.size) ?? resolveCanvasNodeDefaultSize(type),
     zIndex,
   };
   switch (type) {
@@ -630,6 +634,21 @@ function createNodeFromSpec(
         data: input,
       };
   }
+}
+
+function readOptionalNodeSize(
+  size: CanvasNodeCreationPlanInput['size'],
+): { width: number; height: number } | undefined {
+  if (size === undefined) return undefined;
+  if (
+    !Number.isFinite(size.width) ||
+    size.width <= 0 ||
+    !Number.isFinite(size.height) ||
+    size.height <= 0
+  ) {
+    throw new Error('Canvas node size must contain finite positive width and height');
+  }
+  return { width: size.width, height: size.height };
 }
 
 function readRequiredJobRef(value: unknown): import('@neko/shared/job-lifecycle').JobRef {

@@ -3,6 +3,9 @@ import {
   CANVAS_AUDIO_NODE_DEFAULT_SIZE,
   CANVAS_NODE_DEFAULT_SIZES,
   CANVAS_NODE_MIN_SIZES,
+  resolveCanvasImageNodeMinSize,
+  resolveCanvasImageNodeSize,
+  readCanvasImageDimensions,
   resolveCanvasGenerationNodeDefaultSize,
   resolveCanvasNodeDefaultSize,
 } from '../canvas-node-sizing';
@@ -39,5 +42,48 @@ describe('Canvas node sizing', () => {
       expect(minimum.width).toBeLessThanOrEqual(defaultSize.width);
       expect(minimum.height).toBeLessThanOrEqual(defaultSize.height);
     }
+  });
+
+  it('fits image dimensions into one compact square bound without changing aspect ratio', () => {
+    expect(resolveCanvasImageNodeSize({ width: 1600, height: 900 })).toEqual({
+      width: 120,
+      height: 67.5,
+    });
+    expect(resolveCanvasImageNodeSize({ width: 800, height: 1200 })).toEqual({
+      width: 80,
+      height: 120,
+    });
+    expect(resolveCanvasImageNodeSize({ width: 400, height: 400 })).toEqual({
+      width: 120,
+      height: 120,
+    });
+    expect(resolveCanvasImageNodeSize({ width: 100, height: 10_000 })).toEqual({
+      width: 1.2,
+      height: 120,
+    });
+  });
+
+  it('rejects invalid image dimensions and derives a proportional image minimum', () => {
+    expect(resolveCanvasImageNodeSize(undefined)).toBeUndefined();
+    expect(resolveCanvasImageNodeSize({ width: 0, height: 10 })).toBeUndefined();
+    expect(resolveCanvasImageNodeSize({ width: Number.NaN, height: 10 })).toBeUndefined();
+    expect(resolveCanvasImageNodeSize({ aspectRatio: '2:3' })).toEqual({
+      width: 80,
+      height: 120,
+    });
+    expect(resolveCanvasImageNodeSize({ aspectRatio: 'invalid' })).toBeUndefined();
+    expect(readCanvasImageDimensions({ width: 800, height: 1200 })).toEqual({
+      width: 800,
+      height: 1200,
+    });
+    expect(readCanvasImageDimensions({ width: 800, height: 0 })).toBeUndefined();
+    expect(resolveCanvasImageNodeMinSize({ width: 80, height: 120 })).toEqual({
+      width: 100 / 3,
+      height: 50,
+    });
+    expect(resolveCanvasImageNodeMinSize({ width: 10, height: 20 })).toEqual({
+      width: 10,
+      height: 20,
+    });
   });
 });

@@ -33,6 +33,43 @@ describe('Canvas ContentLocator authoring', () => {
     ]);
   });
 
+  it('fits a newly resolved image to intrinsic dimensions but keeps dimensions out of node data', () => {
+    const canvas = projectResolvedCanvasMaterialToCanvas({
+      canvas: createEmptyCanvasData('Fixture'),
+      material: {
+        locator: { file: { authority: 'workspace', path: 'media/portrait.png' } },
+        title: 'portrait.png',
+        mediaKind: 'image',
+        intrinsicDimensions: { width: 800, height: 1200 },
+      },
+    });
+
+    expect(canvas.nodes[0]?.size).toEqual({ width: 80, height: 120 });
+    expect(canvas.nodes[0]?.data).not.toHaveProperty('intrinsicDimensions');
+  });
+
+  it('uses Generation summary dimensions through the same image sizing policy', () => {
+    const canvas = projectResolvedCanvasMaterialToCanvas({
+      canvas: createEmptyCanvasData('Fixture'),
+      material: {
+        locator: { file: { authority: 'workspace', path: 'neko/generated/wide.png' } },
+        title: 'wide.png',
+        mediaKind: 'image',
+        generation: {
+          jobRef: { kind: 'generation', jobId: 'generation-job-wide' },
+          summary: {
+            prompt: 'A wide fixture',
+            model: 'fixture-model',
+            width: 1600,
+            height: 900,
+          },
+        },
+      },
+    });
+
+    expect(canvas.nodes[0]?.size).toEqual({ width: 120, height: 67.5 });
+  });
+
   it('projects every source-backed add action to a real supported Canvas node', () => {
     const sources = [
       { path: 'media/still.png', nodeType: 'media', mediaType: 'image' },
@@ -148,6 +185,7 @@ describe('Canvas ContentLocator authoring', () => {
     expect(replaced.nodes[0]).toMatchObject({
       id: 'entity-node',
       position: { x: 320, y: 180 },
+      size: original.nodes[0]?.size,
       data: {
         contentLocator: {
           file: { authority: 'workspace', path: 'characters/neko-replacement.png' },
