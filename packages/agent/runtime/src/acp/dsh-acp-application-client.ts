@@ -35,6 +35,8 @@ import {
   decodeDshAcpDomainToolResponse,
   decodeDshAcpExtensionProjection,
   decodeDshAcpInboxEnqueueRequest,
+  decodeDshAcpImageAttachmentReadProjection,
+  decodeDshAcpImageAttachmentReadRequest,
   decodeDshAcpInboxSnapshot,
   decodeDshAcpInputCatalogProjection,
   decodeDshAcpPermissionPresetProjection,
@@ -48,6 +50,7 @@ import {
   type DshAcpDomainToolResponse,
   type DshAcpInboxSnapshot,
   type DshAcpInboxEnqueueRequest,
+  type DshAcpImageAttachmentReadProjection,
   type DshAcpInputCatalogProjection,
   type DshAcpPermissionPresetProjection,
   type DshAcpCommandExecuteProjection,
@@ -341,6 +344,18 @@ export class DshAcpApplicationClient {
       sessionId,
     });
     return decodeDshAcpInboxSnapshot(response);
+  }
+
+  async readImageAttachment(input: {
+    readonly sessionId: string;
+    readonly attachmentId: string;
+  }): Promise<DshAcpImageAttachmentReadProjection> {
+    const request = decodeDshAcpImageAttachmentReadRequest(input);
+    const response = await this.connection.extMethod(
+      DSH_ACP_EXTENSION_METHODS.readImageAttachment,
+      { ...request },
+    );
+    return decodeDshAcpImageAttachmentReadProjection(response);
   }
 
   async enqueueInboxMessage(input: DshAcpInboxEnqueueRequest): Promise<DshAcpInboxSnapshot> {

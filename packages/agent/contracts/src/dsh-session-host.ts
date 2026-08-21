@@ -26,6 +26,7 @@ import {
   type ContentLocator,
   type WorkspaceFileContentLocator,
 } from '@neko/content';
+import { decodedBase64ByteLength, requireCanonicalBase64 } from './canonical-base64';
 
 export const DSH_SESSION_HOST_CHANNEL = 'openneko:dsh:session';
 export const DSH_SESSION_CHANGED_CHANNEL = 'openneko:dsh:session:changed';
@@ -34,12 +35,24 @@ const DSH_COMPOSER_MAX_SOURCE_BASE64_CHARS =
 
 export type DshSessionUserMessageBlock =
   | { readonly type: 'text'; readonly text: string }
-  | { readonly type: 'image'; readonly label: string }
+  | {
+      readonly type: 'image';
+      readonly label: string;
+      readonly attachment: DshSessionImageAttachmentIdentity;
+    }
   | {
       readonly type: 'resource';
       readonly label: string;
       readonly contentLocator: ContentLocator;
     };
+
+export interface DshSessionImageAttachmentIdentity {
+  readonly attachmentId: string;
+  readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+  readonly byteLength: number;
+  readonly width: number;
+  readonly height: number;
+}
 
 export type DshSessionHostEvent =
   | {
@@ -236,6 +249,11 @@ export type DshSessionHostRequest =
     })
   | (DshSessionHostConversationRequest & { readonly operation: 'cancel' })
   | (DshSessionHostConversationRequest & {
+      readonly operation: 'image-preview';
+      readonly attachmentId: string;
+    })
+  | (DshSessionHostConversationRequest & { readonly operation: 'image-previews-release' })
+  | (DshSessionHostConversationRequest & {
       readonly operation: 'inbox-remove';
       readonly messageId: string;
     })
@@ -282,6 +300,22 @@ export interface DshSessionHostResult {
   readonly stopReason?: string;
 }
 
+export interface DshImageAttachmentPreviewHostResult {
+  readonly requestId: string;
+  readonly preview: {
+    readonly url: string;
+    readonly mediaType: DshSessionImageAttachmentIdentity['mediaType'];
+    readonly byteLength: number;
+    readonly width: number;
+    readonly height: number;
+  };
+}
+
+export interface DshImageAttachmentPreviewsReleaseHostResult {
+  readonly requestId: string;
+  readonly released: true;
+}
+
 export interface DshComposerConfigurationHostResult {
   readonly requestId: string;
   readonly configuration: DshComposerConfigurationProjection;
@@ -317,6 +351,11 @@ export interface OpenNekoDshSessionBridge {
       conversationId: string,
       messageId: string,
     ): Promise<DshSessionHostProjection>;
+    getImageAttachmentPreview(
+      conversationId: string,
+      attachmentId: string,
+    ): Promise<DshImageAttachmentPreviewHostResult['preview']>;
+    releaseImageAttachmentPreviews(conversationId: string): Promise<void>;
     getComposerConfiguration(
       workbenchInstanceId: string,
       agentSurfaceId: string,
@@ -446,7 +485,11 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
     };
   }
   const conversationId = requireIdentity(record.conversationId, 'conversationId');
-  if (record.operation === 'snapshot' || record.operation === 'cancel') {
+  if (
+    record.operation === 'snapshot' ||
+    record.operation === 'cancel' ||
+    record.operation === 'image-previews-release'
+  ) {
     requireExactKeys(record, [
       'requestId',
       'operation',
@@ -455,6 +498,22 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
       'conversationId',
     ]);
     return { ...base, operation: record.operation, conversationId };
+  }
+  if (record.operation === 'image-preview') {
+    requireExactKeys(record, [
+      'requestId',
+      'operation',
+      'windowId',
+      'rendererSessionId',
+      'conversationId',
+      'attachmentId',
+    ]);
+    return {
+      ...base,
+      operation: 'image-preview',
+      conversationId,
+      attachmentId: requireIdentity(record.attachmentId, 'attachmentId'),
+    };
   }
   if (record.operation === 'inbox-remove') {
     requireExactKeys(record, [
@@ -863,7 +922,10 @@ function parseComposerSubmitInput(value: unknown): DshComposerSubmitInput {
           `DSH Composer image[${index}] exceeds ${AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES} source bytes.`,
         );
       }
-      const data = requireCanonicalBase64(image.data, `image[${index}].data`);
+      const data = requireCanonicalBase64(
+        image.data,
+        `DSH Composer image[${index}].data must be canonical base64.`,
+      );
       const sourceBytes = decodedBase64ByteLength(data);
       if (sourceBytes > AGENT_IMAGE_TRANSPORT_MAX_SOURCE_BYTES) {
         throw new Error(
@@ -956,50 +1018,6 @@ function parseComposerImageMimeType(value: unknown, index: number): DshComposerI
   throw new Error(`DSH Composer image[${index}] MIME '${String(value)}' is unsupported.`);
 }
 
-function requireCanonicalBase64(value: unknown, field: string): string {
-  if (typeof value !== 'string' || value.length === 0 || value.length % 4 !== 0) {
-    throw new Error(`DSH Composer ${field} must be canonical base64.`);
-  }
-  const firstPadding = value.indexOf('=');
-  const contentLength = firstPadding === -1 ? value.length : firstPadding;
-  const padding = value.length - contentLength;
-  if (padding > 2) {
-    throw new Error(`DSH Composer ${field} must be canonical base64.`);
-  }
-  for (let index = 0; index < contentLength; index += 1) {
-    if (base64Value(value[index]) < 0) {
-      throw new Error(`DSH Composer ${field} must be canonical base64.`);
-    }
-  }
-  for (let index = contentLength; index < value.length; index += 1) {
-    if (value[index] !== '=') {
-      throw new Error(`DSH Composer ${field} must be canonical base64.`);
-    }
-  }
-  const finalValue = base64Value(value[value.length - padding - 1]);
-  if ((padding === 2 && (finalValue & 15) !== 0) || (padding === 1 && (finalValue & 3) !== 0)) {
-    throw new Error(`DSH Composer ${field} must be canonical base64.`);
-  }
-  return value;
-}
-
-function decodedBase64ByteLength(value: string): number {
-  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
-  return (value.length / 4) * 3 - padding;
-}
-
-function base64Value(value: string | undefined): number {
-  if (value === undefined) return -1;
-  const code = value.codePointAt(0);
-  if (code === undefined) return -1;
-  if (code >= 65 && code <= 90) return code - 65;
-  if (code >= 97 && code <= 122) return code - 71;
-  if (code >= 48 && code <= 57) return code + 4;
-  if (value === '+') return 62;
-  if (value === '/') return 63;
-  return -1;
-}
-
 function parseAgentContextPayload(value: unknown, field: string): AgentContextPayload {
   const record = requireRecord(value, `DSH Composer ${field}`);
   requireAllowedKeys(
@@ -1090,6 +1108,49 @@ export function parseDshSessionHostResult(
       ? {}
       : { stopReason: requireIdentity(record.stopReason, 'stopReason') }),
   };
+}
+
+export function parseDshImageAttachmentPreviewHostResult(
+  value: unknown,
+  expectedRequestId: string,
+): DshImageAttachmentPreviewHostResult {
+  const record = requireRecord(value, 'DSH image attachment preview result');
+  requireExactKeys(record, ['requestId', 'preview']);
+  const requestId = requireIdentity(record.requestId, 'requestId');
+  if (requestId !== expectedRequestId) {
+    throw new Error(
+      `DSH image attachment preview result '${requestId}' does not match '${expectedRequestId}'.`,
+    );
+  }
+  const preview = requireRecord(record.preview, 'DSH image attachment preview');
+  requireExactKeys(preview, ['url', 'mediaType', 'byteLength', 'width', 'height']);
+  const url = requireIdentity(preview.url, 'preview.url');
+  if (!url.startsWith('openneko://resource/')) {
+    throw new Error('DSH image attachment preview must use an OpenNeko resource URL.');
+  }
+  return {
+    requestId,
+    preview: {
+      url,
+      mediaType: parseImageAttachmentMediaType(preview.mediaType),
+      byteLength: requirePositiveInteger(preview.byteLength, 'preview.byteLength'),
+      width: requirePositiveInteger(preview.width, 'preview.width'),
+      height: requirePositiveInteger(preview.height, 'preview.height'),
+    },
+  };
+}
+
+export function parseDshImageAttachmentPreviewsReleaseHostResult(
+  value: unknown,
+  expectedRequestId: string,
+): DshImageAttachmentPreviewsReleaseHostResult {
+  const record = requireRecord(value, 'DSH image attachment preview release result');
+  requireExactKeys(record, ['requestId', 'released']);
+  const requestId = requireIdentity(record.requestId, 'requestId');
+  if (requestId !== expectedRequestId || record.released !== true) {
+    throw new Error('DSH image attachment preview release result is invalid.');
+  }
+  return { requestId, released: true };
 }
 
 export function parseDshSessionChangedEvent(value: unknown): DshSessionChangedEvent {
@@ -1307,10 +1368,19 @@ function parseUserMessageContent(value: unknown): readonly DshSessionUserMessage
       };
     }
     if (record.type === 'image') {
-      requireExactKeys(record, ['type', 'label']);
+      requireExactKeys(record, ['type', 'label', 'attachment']);
+      const attachment = requireRecord(record.attachment, 'message image attachment');
+      requireExactKeys(attachment, ['attachmentId', 'mediaType', 'byteLength', 'width', 'height']);
       return {
         type: 'image' as const,
         label: requireIdentity(record.label, 'message image label'),
+        attachment: {
+          attachmentId: requireIdentity(attachment.attachmentId, 'message image attachmentId'),
+          mediaType: parseImageAttachmentMediaType(attachment.mediaType),
+          byteLength: requirePositiveInteger(attachment.byteLength, 'message image byteLength'),
+          width: requirePositiveInteger(attachment.width, 'message image width'),
+          height: requirePositiveInteger(attachment.height, 'message image height'),
+        },
       };
     }
     throw new Error(`DSH Session user message block ${index} is unsupported.`);
@@ -1320,6 +1390,20 @@ function parseUserMessageContent(value: unknown): readonly DshSessionUserMessage
 function parseAssistantOutputState(value: unknown): 'streaming' | 'final' {
   if (value === 'streaming' || value === 'final') return value;
   throw new Error(`DSH Session assistant output state '${String(value)}' is unsupported.`);
+}
+
+function parseImageAttachmentMediaType(
+  value: unknown,
+): DshSessionImageAttachmentIdentity['mediaType'] {
+  if (
+    value === 'image/png' ||
+    value === 'image/jpeg' ||
+    value === 'image/webp' ||
+    value === 'image/gif'
+  ) {
+    return value;
+  }
+  throw new Error(`DSH Session image MIME '${String(value)}' is unsupported.`);
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
@@ -1344,6 +1428,13 @@ function requireString(value: unknown, field: string): string {
 function requireNonNegativeInteger(value: unknown, field: string): number {
   if (!Number.isSafeInteger(value) || (value as number) < 0) {
     throw new Error(`DSH Session ${field} must be a non-negative safe integer.`);
+  }
+  return value as number;
+}
+
+function requirePositiveInteger(value: unknown, field: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+    throw new Error(`DSH Session ${field} must be a positive safe integer.`);
   }
   return value as number;
 }

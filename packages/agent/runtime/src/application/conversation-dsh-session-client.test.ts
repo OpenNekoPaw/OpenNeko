@@ -117,6 +117,15 @@ describe('Conversation DSH Session bound client', () => {
       expectedArgs: 'dsh-session-table',
     },
     {
+      name: 'readImageAttachment',
+      invoke: (
+        bound: ReturnType<typeof createConversationDshSessionBoundClient>,
+        conversationId: string,
+      ) => bound.readImageAttachment(conversationId, 'attachment-1'),
+      expectedMethod: 'readImageAttachment' as const,
+      expectedArgs: { sessionId: 'dsh-session-table', attachmentId: 'attachment-1' },
+    },
+    {
       name: 'enqueueInboxMessage',
       invoke: (
         bound: ReturnType<typeof createConversationDshSessionBoundClient>,
@@ -324,6 +333,16 @@ function createFixture(
     cancel: vi.fn(async () => undefined),
     setSessionContext: vi.fn(async () => undefined),
     readInbox: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
+    readImageAttachment: vi.fn(async () => ({
+      attachment: {
+        attachmentId: 'attachment-1',
+        mediaType: 'image/png' as const,
+        bytes: 4,
+        width: 1,
+        height: 1,
+      },
+      data: 'YWJjZA==',
+    })),
     enqueueInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     replaceInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     removeInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),

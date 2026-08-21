@@ -284,6 +284,50 @@ describe('DSH Session preload bridge', () => {
     });
   });
 
+  it('requests and releases an opaque image preview with bootstrap sender identity', async () => {
+    state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
+      if (channel.endsWith('bootstrap:get')) return bootstrap(request.requestId as string);
+      expect(channel).toBe(DSH_SESSION_HOST_CHANNEL);
+      return request.operation === 'image-preview'
+        ? {
+            requestId: request.requestId,
+            preview: {
+              url: 'openneko://resource/lease-1/image',
+              mediaType: 'image/png',
+              byteLength: 4,
+              width: 1,
+              height: 1,
+            },
+          }
+        : { requestId: request.requestId, released: true };
+    });
+    const bridge = requireBridge();
+    await bridge.bootstrap.get();
+
+    await expect(
+      bridge.dshSessions.getImageAttachmentPreview('conversation-1', 'attachment-1'),
+    ).resolves.toMatchObject({ url: 'openneko://resource/lease-1/image' });
+    expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
+      requestId: expect.any(String),
+      operation: 'image-preview',
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      conversationId: 'conversation-1',
+      attachmentId: 'attachment-1',
+    });
+
+    await expect(
+      bridge.dshSessions.releaseImageAttachmentPreviews('conversation-1'),
+    ).resolves.toBeUndefined();
+    expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
+      requestId: expect.any(String),
+      operation: 'image-previews-release',
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      conversationId: 'conversation-1',
+    });
+  });
+
   it('projects changed events by Conversation identity', () => {
     const listener = vi.fn();
     const dispose = requireBridge().dshSessions.subscribe(listener);

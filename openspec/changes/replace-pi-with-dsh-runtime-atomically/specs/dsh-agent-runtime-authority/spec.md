@@ -242,6 +242,21 @@ The product SHALL use the selected current model directly when its authoritative
 - **AND** DSH persists one native image attachment while replay projects a visible image token without duplicating the image bytes
 - **AND** the Renderer attachment object, Data URL and any local path do not become Session facts or an alternate provider input path
 
+#### Scenario: Conversation replay projects an authorized image thumbnail
+
+- **WHEN** an exact DSH Session user message references a persisted native image attachment
+- **THEN** replay projects the attachment identity and bounded MIME/dimension metadata without attachment bytes, Data URL, raw path or durable preview URL
+- **AND** Desktop Main verifies the sender-bound Window, exact Conversation and referenced attachment before registering a short-lived `openneko://resource`
+- **AND** the Webview lazily renders a thumbnail and opens the same authorized resource in a full preview only after an explicit user gesture
+- **AND** switching or unmounting the Conversation Surface releases its attachment preview resource lease
+
+#### Scenario: One replayed image cannot be projected
+
+- **WHEN** the exact attachment is missing, invalid or cannot be read through the DSH attachment store
+- **THEN** only that message image displays a visible unavailable diagnostic while preserving its image label
+- **AND** sibling messages and attachments remain usable
+- **AND** the Host does not try another Conversation, raw path, cache, provider or legacy attachment projector
+
 #### Scenario: Pasted image admission fails
 
 - **WHEN** the pasted image is malformed, unsupported, oversized, exceeds the batch bound or the exact selected model lacks image input

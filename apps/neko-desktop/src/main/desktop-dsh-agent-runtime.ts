@@ -315,6 +315,9 @@ function createStableDesktopDshAgentClient(
     async readInbox(sessionId) {
       return requireClient().readInbox(sessionId);
     },
+    async readImageAttachment(input) {
+      return requireClient().readImageAttachment(input);
+    },
     async enqueueInboxMessage(input) {
       return requireClient().enqueueInboxMessage(input);
     },

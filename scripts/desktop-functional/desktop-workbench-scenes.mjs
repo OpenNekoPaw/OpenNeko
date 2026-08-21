@@ -1428,14 +1428,21 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
           const imageTokens = [...(surface?.querySelectorAll(
             '.agent-user-prompt [data-reference-kind="image"]',
           ) ?? [])];
+          const imagePreview = [...(surface?.querySelectorAll(
+            '[data-agent-message-image="true"][data-image-preview-status="ready"]',
+          ) ?? [])].find((item) => item.textContent?.includes('pasted-image-'));
+          const thumbnail = imagePreview?.querySelector('.agent-message-image-thumbnail');
           return transcript.includes(${JSON.stringify(pastedImagePrompt)}) &&
             transcript.includes('OPENNEKO_FUNCTIONAL_RESPONSE_2') &&
             imageTokens.some((token) => token.textContent?.includes('pasted-image-')) &&
+            thumbnail instanceof HTMLImageElement &&
+            thumbnail.getAttribute('loading') === 'lazy' &&
+            thumbnail.src.startsWith('openneko://resource/') &&
             !surface?.querySelector('.agent-run-status') &&
             !surface?.querySelector('.agent-execution-activity') &&
             !surface?.querySelector('.agent-composer-stop');
         })()`,
-        'Pasted image submit did not complete with a replayable image token.',
+        'Pasted image submit did not complete with an authorized replay thumbnail.',
         45_000,
       );
       const finalProviderEvidence = providerServer.snapshot();
@@ -1452,6 +1459,31 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
         screenshot,
         'workspace-pasted-image-session-complete',
       );
+      await evaluate(`(() => {
+        const previews = [...document.querySelectorAll(
+          '${ACTIVE_AGENT_SURFACE_SELECTOR} [data-agent-message-image="true"][data-image-preview-status="ready"]',
+        )];
+        const preview = previews.find((item) => item.textContent?.includes('pasted-image-'));
+        const token = preview?.querySelector('[data-agent-reference-token="true"]');
+        if (!(token instanceof HTMLElement)) {
+          throw new Error('Replay image thumbnail token is unavailable for full preview.');
+        }
+        token.click();
+        return true;
+      })()`);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const image = document.querySelector('.agent-image-preview-dialog .agent-image-preview-full');
+          return image instanceof HTMLImageElement && image.src.startsWith('openneko://resource/');
+        })()`,
+        'Authorized replay image did not open its full preview.',
+      );
+      const pastedFullPreviewScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-pasted-image-full-preview',
+      );
+      await pressKey('Escape');
       checkpoint('workspace-pasted-image-session-complete', {
         prompt: pastedImagePrompt,
         provider: finalProviderEvidence,
@@ -1565,6 +1597,7 @@ export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
           completedScreenshot,
           pastedPreviewScreenshot,
           pastedCompletedScreenshot,
+          pastedFullPreviewScreenshot,
           unavailableLinkScreenshot,
           deletedLocalStateScreenshot,
           recoveryAfterUnlink.requiredScreenshot,

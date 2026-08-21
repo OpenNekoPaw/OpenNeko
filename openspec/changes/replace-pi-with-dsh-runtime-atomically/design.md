@@ -131,6 +131,8 @@ Composer 选择或粘贴的内联图片使用同一 canonical image path，不�
 
 Desktop 到 DSH 的普通 Prompt 和 live inbox 都携带 admission 后的同一有界 image blocks。Bridge 先通过 DSH `AttachmentStore` 原子持久化完整批次，再创建 user message；用户消息 source 只保存用于回放的图片名称与真实 DSH attachment identity，不复制 base64。Session replay 和 inbox projection 由该 metadata 重建图片 token，不能伪造 ContentLocator、暴露 attachment bytes 或用文本占位替代模型 image block。图片 payload 继续按图片数量/源字节/归一化总字节约束验证；非图片 JSON/context 仍受通用 ACP extension payload 上限约束，不能通过放宽全局 JSON limit 接纳任意大输入。
 
+对话中的图片展示继续消费同一 DSH attachment identity，但不把 attachment bytes、Data URL、原始文件路径或长期 URL 写回 Session projection。`@neko/dsh-bridge` 只允许读取 exact Session 已引用的图片 attachment；Desktop Main 在校验 sender-bound Window、exact Conversation 与该 attachment 引用后，才将读取能力注册为当前 Renderer Session 拥有的短生命周期 `openneko://resource`。Webview 只接收 opaque resource URL 和受限的 MIME/宽高元数据，以 lazy thumbnail 展示，并在用户显式点击时复用同一资源打开完整预览。图片读取、授权或解码失败必须只在对应消息图片位置显示明确 unavailable diagnostic，保留名称 token 和 sibling 消息；不得回退到 raw path、旧缓存、另一 Conversation 或文本伪装。Surface 卸载或切换 Conversation 时必须释放对应 resource lease，Window teardown 仍作为最终安全释放边界。
+
 感知模型由独立的 product perception configuration owner 选择。当前模型声明支持输入模态时直接处理；不支持时才由显式配置的感知模型处理资源并返回结构化 evidence。选择发生在提交前的单一 modality routing policy 中，必须记录 exact source/model/evidence identity；感知模型缺失或失败只拒绝当前附件，不得隐式切换 provider、伪造描述或把附件静默丢弃后继续普通文本 turn。Generation 模型与参数继续由 `@neko/generation` owning configuration/application service 管理，与 Agent LLM/感知模型目录分离。
 
 ### 5. 领域 Tools 是官方 DSH Tools，不是 MCP

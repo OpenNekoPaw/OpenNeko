@@ -10,6 +10,8 @@ import {
   decodeDshAcpDomainToolResponse,
   decodeDshAcpInboxSnapshot,
   decodeDshAcpInboxEnqueueRequest,
+  decodeDshAcpImageAttachmentReadProjection,
+  decodeDshAcpImageAttachmentReadRequest,
   decodeDshAcpJsonPayload,
   decodeDshAcpModelConfiguration,
   decodeDshAcpSessionContextSetRequest,
@@ -19,6 +21,51 @@ import {
 } from './dsh-acp';
 
 describe('DSH ACP extension contract', () => {
+  it('decodes an exact native image read without applying the generic JSON limit to bytes', () => {
+    expect(
+      decodeDshAcpImageAttachmentReadRequest({
+        sessionId: 'session-1',
+        attachmentId: 'attachment-1',
+      }),
+    ).toEqual({ sessionId: 'session-1', attachmentId: 'attachment-1' });
+    expect(
+      decodeDshAcpImageAttachmentReadProjection({
+        attachment: {
+          attachmentId: 'attachment-1',
+          mediaType: 'image/png',
+          bytes: 4,
+          width: 1,
+          height: 1,
+        },
+        data: 'YWJjZA==',
+      }),
+    ).toMatchObject({ attachment: { bytes: 4 }, data: 'YWJjZA==' });
+    expect(() =>
+      decodeDshAcpImageAttachmentReadProjection({
+        attachment: {
+          attachmentId: 'attachment-1',
+          mediaType: 'image/png',
+          bytes: 3,
+          width: 1,
+          height: 1,
+        },
+        data: 'YWJjZA==',
+      }),
+    ).toThrow(/byte length/u);
+    expect(() =>
+      decodeDshAcpImageAttachmentReadProjection({
+        attachment: {
+          attachmentId: 'attachment-oversized',
+          mediaType: 'image/png',
+          bytes: 4 * 1024 * 1024 + 1,
+          width: 1,
+          height: 1,
+        },
+        data: 'YQ==',
+      }),
+    ).toThrow(/exceeds/u);
+  });
+
   it('decodes exact bounded context pressure while allowing unavailable optional fields', () => {
     expect(
       decodeDshAcpContextPressureNotification({

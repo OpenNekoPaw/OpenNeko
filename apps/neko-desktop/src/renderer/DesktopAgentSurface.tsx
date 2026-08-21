@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ConsoleLogger } from '@neko/shared';
 import type {
   DshPermissionHostIdentity,
   DshPermissionHostProjection,
@@ -15,6 +16,8 @@ import {
   DshAgentView,
   type DshEntryContextPresentation,
 } from '@neko/agent-webview/dsh-session/root';
+
+const desktopAgentSurfaceLogger = new ConsoleLogger('DesktopAgentSurface');
 
 export interface DesktopAgentSurfaceProps {
   readonly agentSurfaceId: string;
@@ -370,13 +373,41 @@ export function DesktopAgentSurface({
     }
   };
 
+  const effectiveConversationId =
+    conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined);
+  const resolveImageAttachmentPreview = useCallback(
+    async (attachmentId: string) => {
+      if (effectiveConversationId === undefined) {
+        throw new Error('DSH image attachment preview requires an exact Conversation.');
+      }
+      return window.openNekoDesktop.dshSessions.getImageAttachmentPreview(
+        effectiveConversationId,
+        attachmentId,
+      );
+    },
+    [effectiveConversationId],
+  );
+
+  useEffect(
+    () => () => {
+      if (effectiveConversationId === undefined) return;
+      void window.openNekoDesktop.dshSessions
+        .releaseImageAttachmentPreviews(effectiveConversationId)
+        .catch((error: unknown) => {
+          desktopAgentSurfaceLogger.error('Failed to release DSH image attachment previews.', {
+            conversationId: effectiveConversationId,
+            error,
+          });
+        });
+    },
+    [effectiveConversationId],
+  );
+
   return (
     <DshAgentView
       agentSurfaceId={agentSurfaceId}
       conversationFeed={conversationFeed}
-      conversationId={
-        conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined)
-      }
+      conversationId={effectiveConversationId}
       surfaceKind={surfaceKind}
       entryContext={entryContext}
       draft={draft}
@@ -410,6 +441,7 @@ export function DesktopAgentSurface({
       onRestartRuntime={() => void restartRuntime()}
       onRequestMentions={(filter) => void requestMentions(filter)}
       onMaterializeAsset={materializeAsset}
+      onResolveImageAttachmentPreview={resolveImageAttachmentPreview}
       onSubmit={submit}
     />
   );

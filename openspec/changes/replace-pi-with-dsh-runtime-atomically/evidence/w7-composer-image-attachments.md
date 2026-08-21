@@ -60,3 +60,43 @@ Commands and results:
 - A visible full Desktop run with an explicitly authorized real vision provider is still required to prove pixel understanding rather than transport alone.
 - The Desktop scenario must pass its existing Entry Agent Root precondition before the paste assertions and screenshots can produce authoritative UI evidence.
 - Task 7.14 remains unchecked until that visible provider lane and a real Session restart replay pass.
+
+## Authorized replay thumbnail slice
+
+### Canonical path and ownership
+
+The replay token now carries the native DSH attachment identity plus verified MIME/byte/dimension metadata, never image bytes, a Data URL, a local path or a durable preview URL. The only successful preview path is:
+
+```text
+exact DSH user/message native ImageBlock
+  -> bridge verifies the attachment is displayed by the same Session
+  -> Conversation-bound ACP image read
+  -> sender-bound Desktop Session Host
+  -> DesktopResourceRegistry short-lived openneko://resource
+  -> Webview lazy thumbnail and explicit full-preview dialog
+```
+
+Desktop rejects an attachment identity that is not present in the exact Conversation projection. The resource-tree reader rechecks returned attachment metadata before serving bytes. Conversation Surface unmount releases the exact preview view; Window teardown remains the final resource safety boundary. A failed attachment read changes only that image card to an explicit unavailable token while preserving its label and sibling transcript content.
+
+The user-message presentation separates primary text/resource content from the attachment grid. Text remains in the first row; one image receives a bounded large preview card with an ellipsized filename, while multiple images occupy a responsive two-column grid. The same authorized URL is used only after a user gesture for the full-preview dialog. This avoids the reference screenshot's text/thumbnail horizontal competition in narrow Agent docks.
+
+### Deterministic verification
+
+- `pnpm exec vitest run ...` across the affected ACP contract/client, Conversation binding, DSH bridge, Desktop Host/resource registry/preload/Renderer and Agent Webview files — 193 passed in 13 files.
+- Focused post-layout Webview/Desktop Surface regression — 41 passed in 2 files.
+- Package typechecks passed for `@neko/agent-contracts`, `@neko/dsh-bridge`, `@neko/agent-runtime`, `@neko/agent-webview` and `@neko/app-desktop`.
+- `pnpm check:agent-boundaries`, `pnpm check:webview-boundaries`, `pnpm check:content-access-boundaries`, `pnpm check:application-boundaries` and `pnpm check:openspec` passed.
+- `pnpm test:agent:eval` passed 314 tests; the dry-run accepted 26 suites and 69 cases, including the six existing `agent-runtime.perception-routing` cases. The declarative Evaluation driver still has no attachment gesture and therefore is not claimed as replay-thumbnail UI evidence.
+
+### UI validation disposition
+
+- Applicability: applicable; this changes transcript attachment layout, loading/unavailable feedback, click interaction and a modal preview.
+- Authoritative runtime: isolated Electron Desktop, because attachment reads cross DSH ACP, sender authorization, the `openneko://resource` protocol, CSP and resource lifecycle.
+- Inventory: text plus one image, image-only, multiple images, loading, unavailable, click/open, Escape/close, narrow layout, and adjacent resource-token rendering.
+- Deterministic component evidence covers separation of text and attachment rows, lazy thumbnail metadata, explicit full preview, local unavailable state, resource tokens and Surface release.
+- The isolated `desktop-agent-linked-media-mention` run was blocked before CDP because an existing development process owned this checkout's Vite bundle (`Desktop process 95309 already owns the Vite bundle`). No current screenshot or visual pass is claimed. The report is `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-21T21-22-45.936Z-desktop-agent-linked-media-mention-development/report.json`.
+
+### Repository-level blocked checks
+
+- `pnpm check:no-internal-versioning` passed its 13 self-tests but the repository audit failed on the already-dirty worktree with 79 baseline-external occurrences and stale allowances across unrelated Canvas, Character, Content, project and existing DSH files. This slice adds no internal version field or version dispatch path.
+- `pnpm smoke:webview` built `@neko/assets-webview`, then stopped because the existing `@neko/canvas-webview` build script produced no `dist` directory. The Agent Webview has no standalone build script; its typecheck and owning Desktop integration tests passed.

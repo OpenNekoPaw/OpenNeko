@@ -253,7 +253,15 @@ describe('OpenNeko DSH ACP bridge projections', () => {
           kind: 'user',
           opennekoDisplayContent: [
             { type: 'text', text: '分析图片' },
-            { type: 'image', name: 'clipboard.png', attachmentId: 'attachment-1' },
+            {
+              type: 'image',
+              name: 'clipboard.png',
+              attachmentId: 'attachment-1',
+              mediaType: 'image/png',
+              bytes: 4,
+              width: 1,
+              height: 1,
+            },
           ],
         },
       }),
@@ -267,7 +275,15 @@ describe('OpenNeko DSH ACP bridge projections', () => {
         content: {
           type: 'resource_link',
           name: 'clipboard.png',
-          uri: 'openneko-dsh-attachment:attachment-1',
+          uri: `openneko-dsh-attachment:${encodeURIComponent(
+            JSON.stringify({
+              attachmentId: 'attachment-1',
+              mediaType: 'image/png',
+              bytes: 4,
+              width: 1,
+              height: 1,
+            }),
+          )}`,
         },
       }),
     ]);

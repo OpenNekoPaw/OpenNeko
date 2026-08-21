@@ -2275,6 +2275,39 @@ async function startDesktop(): Promise<void> {
     conversations: dshProduct.runtime.conversations.conversations,
     promptContext: dshPromptContext,
     promptImages: dshPromptImages,
+    imagePreviews: {
+      project: ({ windowId, rendererSessionId, conversationId, attachment, read }) => {
+        const lease = resourceRegistry.registerResourceTree(
+          {
+            windowId,
+            rendererSessionId,
+            sessionId: conversationId,
+            viewId: dshImagePreviewViewId(conversationId),
+          },
+          {
+            entries: [
+              {
+                virtualPath: 'image',
+                byteLength: attachment.byteLength,
+                contentType: attachment.mediaType,
+                read,
+              },
+            ],
+            release: () => undefined,
+          },
+        );
+        return {
+          url: new URL('image', lease.url).toString(),
+          mediaType: attachment.mediaType,
+          byteLength: attachment.byteLength,
+          width: attachment.width,
+          height: attachment.height,
+        };
+      },
+      release: (windowId, conversationId) => {
+        resourceRegistry.releaseView(windowId, dshImagePreviewViewId(conversationId));
+      },
+    },
     composer: dshComposerConfiguration,
     createConversation: async ({
       windowId,
@@ -2939,6 +2972,10 @@ function registerCanvasPreviewBytes(
     mediaType: contentType,
     release: () => lease.release(),
   };
+}
+
+function dshImagePreviewViewId(conversationId: string): string {
+  return `dsh-image-previews:${conversationId}`;
 }
 
 function requireCanvasPreviewContentType(

@@ -5,6 +5,8 @@ import {
   parseDshComposerConfigurationProjection,
   parseDshComposerMentionsHostResult,
   parseDshComposerMaterializedAssetHostResult,
+  parseDshImageAttachmentPreviewHostResult,
+  parseDshImageAttachmentPreviewsReleaseHostResult,
   parseDshSessionHostProjection,
   parseDshSessionHostRequest,
   parseDshSessionHostResult,
@@ -251,6 +253,55 @@ describe('DSH Session Host contract', () => {
         })),
       ),
     ).toThrow(/limit of 4/u);
+  });
+
+  it('strictly decodes sender-bound image preview requests and opaque resource results', () => {
+    expect(
+      parseDshSessionHostRequest({
+        requestId: 'request-preview',
+        operation: 'image-preview',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: 'conversation-1',
+        attachmentId: 'attachment-1',
+      }),
+    ).toMatchObject({ operation: 'image-preview', attachmentId: 'attachment-1' });
+    expect(
+      parseDshImageAttachmentPreviewHostResult(
+        {
+          requestId: 'request-preview',
+          preview: {
+            url: 'openneko://resource/lease-1/image',
+            mediaType: 'image/png',
+            byteLength: 4,
+            width: 1,
+            height: 1,
+          },
+        },
+        'request-preview',
+      ),
+    ).toMatchObject({ preview: { width: 1, height: 1 } });
+    expect(() =>
+      parseDshImageAttachmentPreviewHostResult(
+        {
+          requestId: 'request-preview',
+          preview: {
+            url: 'file:///private/image.png',
+            mediaType: 'image/png',
+            byteLength: 4,
+            width: 1,
+            height: 1,
+          },
+        },
+        'request-preview',
+      ),
+    ).toThrow(/OpenNeko resource URL/u);
+    expect(
+      parseDshImageAttachmentPreviewsReleaseHostResult(
+        { requestId: 'request-release', released: true },
+        'request-release',
+      ),
+    ).toEqual({ requestId: 'request-release', released: true });
   });
 
   it('strictly decodes the Canvas-owned composer catalog', () => {

@@ -2432,6 +2432,99 @@ body {
   background: color-mix(in srgb, var(--agent-accent) 15%, var(--agent-composer-bg));
 }
 
+.agent-user-prompt-primary {
+  min-width: 0;
+}
+
+.agent-message-image-grid {
+  display: grid;
+  width: min(620px, 70vw);
+  max-width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.agent-message-image-grid:has(> :only-child) {
+  width: min(300px, 56vw);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.agent-user-prompt-primary:empty + .agent-message-image-grid,
+.agent-user-prompt > .agent-message-image-grid:first-child {
+  margin-top: 0;
+}
+
+.agent-message-image-attachment {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.agent-message-image-preview-button {
+  display: inline-flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--agent-fg) 14%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--agent-bg) 72%, transparent);
+  color: var(--agent-fg);
+  cursor: pointer;
+  text-align: left;
+}
+
+.agent-message-image-preview-button:hover,
+.agent-message-image-preview-button:focus-visible {
+  border-color: color-mix(in srgb, var(--agent-accent) 42%, transparent);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--agent-accent) 18%, transparent);
+}
+
+.agent-message-image-thumbnail {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 5 / 3;
+  background: color-mix(in srgb, var(--agent-fg) 5%, transparent);
+  object-fit: contain;
+}
+
+.agent-message-image-label {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 6px 8px 7px;
+  font-size: 11.5px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-message-image-attachment[data-image-preview-status='unavailable'] .agent-reference-token {
+  border-color: color-mix(in srgb, var(--agent-warning-fg) 34%, transparent);
+  color: var(--agent-fg-secondary);
+}
+
+.agent-image-preview-dialog {
+  width: min(92vw, 960px);
+  max-height: 90vh;
+}
+
+.agent-image-preview-full {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: min(74vh, 900px);
+  margin: 0 auto;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
 .agent-reference-icon {
   display: inline-flex;
   flex: 0 0 auto;

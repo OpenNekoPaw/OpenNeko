@@ -1344,7 +1344,142 @@ describe('DshAgentView content-creation composer', () => {
     expect(view.container.textContent).not.toContain('[resource_link');
     expect(view.container.textContent).not.toContain('openneko-content:');
   });
+
+  it('loads replayed image thumbnails lazily and opens the authorized full preview', async () => {
+    const resolvePreview = vi.fn(async () => ({
+      url: 'openneko://resource/lease-1/image',
+      mediaType: 'image/png' as const,
+      byteLength: 4,
+      width: 1,
+      height: 1,
+    }));
+    const view = renderImageMessage(resolvePreview);
+
+    await waitFor(() => {
+      expect(
+        view.container
+          .querySelector('[data-agent-message-image="true"]')
+          ?.getAttribute('data-image-preview-status'),
+      ).toBe('ready');
+    });
+    expect(resolvePreview).toHaveBeenCalledWith('attachment-1');
+    const prompt = view.container.querySelector('.agent-user-prompt');
+    expect(prompt?.querySelector('.agent-user-prompt-primary')?.textContent).toContain('分析图片');
+    expect(
+      prompt?.querySelector('.agent-user-prompt-primary .agent-message-image-grid'),
+    ).toBeNull();
+    expect(prompt?.querySelector(':scope > .agent-message-image-grid')).toBeTruthy();
+    const thumbnail = view.container.querySelector('.agent-message-image-thumbnail');
+    expect(thumbnail?.getAttribute('src')).toBe('openneko://resource/lease-1/image');
+    expect(thumbnail?.getAttribute('loading')).toBe('lazy');
+
+    fireEvent.click(screen.getByRole('button', { name: '打开图片预览: clipboard.png' }));
+    expect(screen.getByAltText('clipboard.png').getAttribute('src')).toBe(
+      'openneko://resource/lease-1/image',
+    );
+  });
+
+  it('keeps the image token and displays a local unavailable state when preview resolution fails', async () => {
+    const view = renderImageMessage(vi.fn(async () => Promise.reject(new Error('missing image'))));
+
+    await waitFor(() => {
+      expect(
+        view.container
+          .querySelector('[data-agent-message-image="true"]')
+          ?.getAttribute('data-image-preview-status'),
+      ).toBe('unavailable');
+    });
+    expect(screen.getByText('clipboard.png')).toBeTruthy();
+    expect(screen.getByText('预览不可用')).toBeTruthy();
+    expect(view.container.querySelector('.agent-message-image-thumbnail')).toBeNull();
+  });
+
+  it('isolates one failed image while keeping a sibling thumbnail ready in the attachment grid', async () => {
+    const view = renderImageMessage(
+      vi.fn(async (attachmentId: string) => {
+        if (attachmentId === 'attachment-2') throw new Error('second image missing');
+        return {
+          url: 'openneko://resource/lease-1/image',
+          mediaType: 'image/png' as const,
+          byteLength: 4,
+          width: 1,
+          height: 1,
+        };
+      }),
+      2,
+    );
+
+    await waitFor(() => {
+      expect(view.container.querySelectorAll('[data-image-preview-status="ready"]')).toHaveLength(
+        1,
+      );
+      expect(
+        view.container.querySelectorAll('[data-image-preview-status="unavailable"]'),
+      ).toHaveLength(1);
+    });
+    expect(view.container.querySelectorAll('.agent-message-image-grid > *')).toHaveLength(2);
+    expect(view.container.querySelectorAll('.agent-message-image-thumbnail')).toHaveLength(1);
+    expect(screen.getByText('clipboard.png')).toBeTruthy();
+    expect(screen.getByText('clipboard-2.png')).toBeTruthy();
+  });
 });
+
+function renderImageMessage(
+  onResolveImageAttachmentPreview: NonNullable<
+    React.ComponentProps<typeof DshAgentView>['onResolveImageAttachmentPreview']
+  >,
+  imageCount = 1,
+) {
+  return renderAgent(
+    <DshAgentView
+      agentSurfaceId="surface-image"
+      surfaceKind="workspace"
+      conversationId="conversation-image"
+      projection={{
+        conversationId: 'conversation-image',
+        dshSessionId: 'dsh-image',
+        title: 'Image review',
+        inbox: { nextTurn: [], nextStep: [] },
+        events: [
+          {
+            kind: 'message',
+            role: 'user',
+            messageId: 'image-message',
+            content: [
+              { type: 'text', text: '分析图片' },
+              ...Array.from({ length: imageCount }, (_, index) => ({
+                type: 'image' as const,
+                label: index === 0 ? 'clipboard.png' : `clipboard-${index + 1}.png`,
+                attachment: {
+                  attachmentId: `attachment-${index + 1}`,
+                  mediaType: 'image/png' as const,
+                  byteLength: 4,
+                  width: 1,
+                  height: 1,
+                },
+              })),
+            ],
+          },
+        ],
+      }}
+      configuring={false}
+      draft=""
+      loading={false}
+      permissions={[]}
+      runtime={{ status: 'running' }}
+      submitting={false}
+      onCancelPermission={vi.fn()}
+      onCancelTurn={vi.fn()}
+      onDecidePermission={vi.fn()}
+      onDraftChange={vi.fn()}
+      onModelChange={vi.fn()}
+      onPermissionPresetChange={vi.fn()}
+      onResolveImageAttachmentPreview={onResolveImageAttachmentPreview}
+      onRestartRuntime={vi.fn()}
+      onSubmit={vi.fn()}
+    />,
+  );
+}
 
 function renderAgent(view: JSX.Element, locale: SupportedLocale = 'zh-cn') {
   return render(<I18nProvider service={new I18nService(locale)}>{view}</I18nProvider>);

@@ -16,7 +16,7 @@ import {
   type Stream,
 } from '@agentclientprotocol/sdk';
 import type { AgentHandle } from '@deepseek-ai/dsh-agent';
-import type { AttachmentStore } from '@deepseek-ai/dsh-attachment';
+import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
 import type {} from '@deepseek-ai/dsh-agent-presets';
 import type {} from '@deepseek-ai/dsh-commands';
 import type { Context } from '@deepseek-ai/cordis';
@@ -42,6 +42,7 @@ import {
   decodeDshAcpModelConfiguration,
   decodeDshAcpCommandExecuteRequest,
   decodeDshAcpInboxEnqueueRequest,
+  decodeDshAcpImageAttachmentReadRequest,
   decodeDshAcpSkillInvokeRequest,
   decodeDshAcpSessionContextSetRequest,
   decodeDshAcpPermissionPresetProjection,
@@ -119,7 +120,15 @@ interface DshSessionProjectionReader {
 type OpenNekoDisplayContentBlock =
   | { readonly type: 'text'; readonly text: string }
   | { readonly type: 'resource_link'; readonly name: string; readonly uri: string }
-  | { readonly type: 'image'; readonly name: string; readonly attachmentId: string };
+  | {
+      readonly type: 'image';
+      readonly name: string;
+      readonly attachmentId: string;
+      readonly mediaType: ImageAttachmentRef['mediaType'];
+      readonly bytes: number;
+      readonly width: number;
+      readonly height: number;
+    };
 
 interface DshSessionRuntimeContext {
   text: string;
@@ -725,6 +734,22 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
             return projectInbox(record);
           }
+          case DSH_ACP_EXTENSION_METHODS.readImageAttachment: {
+            const request = decodeDshAcpImageAttachmentReadRequest(params);
+            const record = requireOwned(request.sessionId);
+            const ref = findDisplayedImageAttachment(record, request.attachmentId);
+            if (ref.bytes > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
+              throw RequestError.invalidParams(
+                undefined,
+                `Image attachment '${request.attachmentId}' exceeds the OpenNeko preview limit.`,
+              );
+            }
+            const stored = await ctx.attachments.readImage(ref);
+            return {
+              attachment: projectImageAttachmentRef(stored.ref),
+              data: Buffer.from(stored.data).toString('base64'),
+            };
+          }
           case DSH_ACP_EXTENSION_METHODS.replaceInboxMessage: {
             const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
             const messageId = requireNonEmptyString(params.messageId, 'messageId');
@@ -967,6 +992,10 @@ function projectMessage(
     readonly name?: string;
     readonly uri?: string;
     readonly attachmentId?: string;
+    readonly mediaType?: ImageAttachmentRef['mediaType'];
+    readonly bytes?: number;
+    readonly width?: number;
+    readonly height?: number;
   }[],
   messageId?: string,
 ): readonly SessionNotification[] {
@@ -1004,7 +1033,11 @@ function projectMessage(
       sessionUpdate === 'user_message_chunk' &&
       block.type === 'image' &&
       block.name !== undefined &&
-      block.attachmentId !== undefined
+      block.attachmentId !== undefined &&
+      block.mediaType !== undefined &&
+      block.bytes !== undefined &&
+      block.width !== undefined &&
+      block.height !== undefined
     ) {
       return [
         {
@@ -1015,7 +1048,15 @@ function projectMessage(
             content: {
               type: 'resource_link',
               name: block.name,
-              uri: serializeDshAttachmentUri(block.attachmentId),
+              uri: serializeDshAttachmentUri({
+                type: 'image',
+                name: block.name,
+                attachmentId: block.attachmentId,
+                mediaType: block.mediaType,
+                bytes: block.bytes,
+                width: block.width,
+                height: block.height,
+              }),
             },
           },
         },
@@ -1060,17 +1101,32 @@ function readOpenNekoDisplayContent(
     if (
       record.type === 'image' &&
       Object.keys(record).every(
-        (key) => key === 'type' || key === 'name' || key === 'attachmentId',
+        (key) =>
+          key === 'type' ||
+          key === 'name' ||
+          key === 'attachmentId' ||
+          key === 'mediaType' ||
+          key === 'bytes' ||
+          key === 'width' ||
+          key === 'height',
       ) &&
       typeof record.name === 'string' &&
       record.name.length > 0 &&
       typeof record.attachmentId === 'string' &&
-      record.attachmentId.length > 0
+      record.attachmentId.length > 0 &&
+      isImageMediaType(record.mediaType) &&
+      isPositiveSafeInteger(record.bytes) &&
+      isPositiveSafeInteger(record.width) &&
+      isPositiveSafeInteger(record.height)
     ) {
       return {
         type: 'image' as const,
         name: record.name,
         attachmentId: record.attachmentId,
+        mediaType: record.mediaType,
+        bytes: record.bytes,
+        width: record.width,
+        height: record.height,
       };
     }
     throw new Error(`OpenNeko display content block ${index} is unsupported.`);
@@ -1111,7 +1167,7 @@ function projectAcpDisplayContent(
             {
               type: 'image',
               name,
-              attachmentId: String(admittedBlock.attachment.attachmentId),
+              ...projectImageAttachmentRef(admittedBlock.attachment),
             },
           ];
     }
@@ -1124,8 +1180,8 @@ function bindInboxDisplayContent(
   displayContent: readonly import('@neko/agent-contracts/dsh-acp').DshAcpContentBlock[],
   admitted: readonly ContentBlock[],
 ): readonly OpenNekoDisplayContentBlock[] {
-  const attachmentIds = admitted.flatMap((block) =>
-    block.type === 'image' ? [String(block.attachment.attachmentId)] : [],
+  const attachmentRefs = admitted.flatMap((block) =>
+    block.type === 'image' ? [block.attachment] : [],
   );
   let imageIndex = 0;
   return displayContent.map((block) => {
@@ -1133,15 +1189,15 @@ function bindInboxDisplayContent(
     if (block.type === 'resource-link') {
       return { type: 'resource_link' as const, name: block.name, uri: block.uri };
     }
-    const attachmentId = attachmentIds[imageIndex];
+    const attachment = attachmentRefs[imageIndex];
     imageIndex += 1;
-    if (attachmentId === undefined) {
+    if (attachment === undefined) {
       throw RequestError.internalError(
         undefined,
         `Inbox display image '${block.name}' has no admitted attachment.`,
       );
     }
-    return { type: 'image' as const, name: block.name, attachmentId };
+    return { type: 'image' as const, name: block.name, ...projectImageAttachmentRef(attachment) };
   });
 }
 
@@ -1156,8 +1212,80 @@ function readAcpImageDisplayName(
   return value;
 }
 
-function serializeDshAttachmentUri(attachmentId: string): string {
-  return `openneko-dsh-attachment:${encodeURIComponent(attachmentId)}`;
+function serializeDshAttachmentUri(
+  attachment: Extract<OpenNekoDisplayContentBlock, { readonly type: 'image' }>,
+): string {
+  return `openneko-dsh-attachment:${encodeURIComponent(
+    JSON.stringify(projectImageAttachmentRef(attachment)),
+  )}`;
+}
+
+function projectImageAttachmentRef(ref: {
+  readonly attachmentId: ImageAttachmentRef['attachmentId'] | string;
+  readonly mediaType: ImageAttachmentRef['mediaType'];
+  readonly bytes: number;
+  readonly width: number;
+  readonly height: number;
+}) {
+  return {
+    attachmentId: String(ref.attachmentId),
+    mediaType: ref.mediaType,
+    bytes: ref.bytes,
+    width: ref.width,
+    height: ref.height,
+  };
+}
+
+function findDisplayedImageAttachment(
+  record: OwnedSession,
+  attachmentId: string,
+): ImageAttachmentRef {
+  for (const event of record.handle.agent.session.events) {
+    if (event.type !== 'user/message' || event.data.source.kind !== 'user') continue;
+    const display = readOpenNekoDisplayContent(event.data.source)?.find(
+      (block) => block.type === 'image' && block.attachmentId === attachmentId,
+    );
+    if (display === undefined || display.type !== 'image') continue;
+    const image = event.data.content.find(
+      (block) => block.type === 'image' && String(block.attachment.attachmentId) === attachmentId,
+    );
+    if (image?.type !== 'image') {
+      throw RequestError.internalError(
+        undefined,
+        `Displayed image attachment '${attachmentId}' has no native DSH image block.`,
+      );
+    }
+    const projected = projectImageAttachmentRef(image.attachment);
+    if (
+      projected.mediaType !== display.mediaType ||
+      projected.bytes !== display.bytes ||
+      projected.width !== display.width ||
+      projected.height !== display.height
+    ) {
+      throw RequestError.internalError(
+        undefined,
+        `Displayed image attachment '${attachmentId}' metadata does not match its DSH image block.`,
+      );
+    }
+    return image.attachment;
+  }
+  throw RequestError.invalidParams(
+    undefined,
+    `Image attachment '${attachmentId}' is not displayed by this Session.`,
+  );
+}
+
+function isImageMediaType(value: unknown): value is ImageAttachmentRef['mediaType'] {
+  return (
+    value === 'image/png' ||
+    value === 'image/jpeg' ||
+    value === 'image/webp' ||
+    value === 'image/gif'
+  );
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) > 0;
 }
 
 function projectAssistantChunk(

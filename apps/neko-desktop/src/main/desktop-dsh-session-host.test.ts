@@ -455,7 +455,15 @@ describe('Desktop DSH Session Host', () => {
         content: {
           type: 'resource_link',
           name: 'clipboard.png',
-          uri: 'openneko-dsh-attachment:attachment-1',
+          uri: `openneko-dsh-attachment:${encodeURIComponent(
+            JSON.stringify({
+              attachmentId: 'attachment-1',
+              mediaType: 'image/png',
+              bytes: 4,
+              width: 1,
+              height: 1,
+            }),
+          )}`,
         },
       },
     });
@@ -480,9 +488,104 @@ describe('Desktop DSH Session Host', () => {
         kind: 'message',
         role: 'user',
         messageId: 'image-message',
-        content: [{ type: 'image', label: 'clipboard.png' }],
+        content: [
+          {
+            type: 'image',
+            label: 'clipboard.png',
+            attachment: {
+              attachmentId: 'attachment-1',
+              mediaType: 'image/png',
+              byteLength: 4,
+              width: 1,
+              height: 1,
+            },
+          },
+        ],
       },
     ]);
+  });
+
+  it('projects only an exact Conversation image through a sender-bound lazy resource reader', async () => {
+    const projection = new DshAcpProjection();
+    const attachment = {
+      attachmentId: 'attachment-1',
+      mediaType: 'image/png' as const,
+      bytes: 4,
+      width: 1,
+      height: 1,
+    };
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: { opennekoSequence: 0 },
+      update: {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'image-message',
+        content: {
+          type: 'resource_link',
+          name: 'clipboard.png',
+          uri: `openneko-dsh-attachment:${encodeURIComponent(JSON.stringify(attachment))}`,
+        },
+      },
+    });
+    const readImageAttachment = vi.fn(async () => ({ attachment, data: 'YWJjZA==' }));
+    let readResource: ((signal: AbortSignal) => Promise<Uint8Array>) | undefined;
+    const projectImagePreview = vi.fn(
+      (input: { readonly read: (signal: AbortSignal) => Promise<Uint8Array> }) => {
+        readResource = input.read;
+        return {
+          url: 'openneko://resource/lease-1/image',
+          mediaType: 'image/png' as const,
+          byteLength: 4,
+          width: 1,
+          height: 1,
+        };
+      },
+    );
+    const host = createHost({ projection, readImageAttachment, projectImagePreview });
+
+    const result = await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      {
+        requestId: 'request-image-preview',
+        operation: 'image-preview',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: identity.conversationId,
+        attachmentId: 'attachment-1',
+      },
+    );
+
+    expect(result).toEqual({
+      requestId: 'request-image-preview',
+      preview: {
+        url: 'openneko://resource/lease-1/image',
+        mediaType: 'image/png',
+        byteLength: 4,
+        width: 1,
+        height: 1,
+      },
+    });
+    expect(readImageAttachment).not.toHaveBeenCalled();
+    expect(readResource).toBeDefined();
+    await expect(
+      readResource?.(new AbortController().signal).then((bytes) => [...bytes]),
+    ).resolves.toEqual([97, 98, 99, 100]);
+    expect(readImageAttachment).toHaveBeenCalledWith(identity.conversationId, 'attachment-1');
+
+    await expect(
+      host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-foreign-preview',
+          operation: 'image-preview',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: identity.conversationId,
+          attachmentId: 'attachment-foreign',
+        },
+      ),
+    ).rejects.toThrow(/exact Conversation/u);
+    expect(projectImagePreview).toHaveBeenCalledTimes(1);
   });
 
   it('isolates an invalid ACP resource link as a local diagnostic', async () => {
@@ -965,6 +1068,11 @@ function createHost(overrides: {
     windowId: string,
   ) => Promise<{ readonly supportsImageInput: boolean }>;
   readonly enqueueInboxMessage?: ConversationDshSessionBoundClient['enqueueInboxMessage'];
+  readonly readImageAttachment?: ConversationDshSessionBoundClient['readImageAttachment'];
+  readonly projectImagePreview?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['imagePreviews']['project'];
+  readonly releaseImagePreviews?: (windowId: string, conversationId: string) => void;
   readonly admitPromptImages?: (input: {
     readonly conversationId: string;
     readonly windowId: string;
@@ -1027,6 +1135,11 @@ function createHost(overrides: {
       invokeSkill:
         overrides.invokeSkill ?? vi.fn(async () => ({ stopReason: 'end_turn' as const })),
       readInbox: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
+      readImageAttachment:
+        overrides.readImageAttachment ??
+        vi.fn(async () => {
+          throw new Error('Unexpected image attachment read.');
+        }),
       enqueueInboxMessage:
         overrides.enqueueInboxMessage ?? vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
       removeInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
@@ -1055,6 +1168,14 @@ function createHost(overrides: {
     },
     promptImages: {
       admit: overrides.admitPromptImages ?? vi.fn(async () => []),
+    },
+    imagePreviews: {
+      project:
+        overrides.projectImagePreview ??
+        vi.fn(() => {
+          throw new Error('Unexpected image attachment preview projection.');
+        }),
+      release: overrides.releaseImagePreviews ?? vi.fn(),
     },
     promptContext: overrides.promptContext ?? {
       resolve: vi.fn(async () => 'OpenNeko test context'),

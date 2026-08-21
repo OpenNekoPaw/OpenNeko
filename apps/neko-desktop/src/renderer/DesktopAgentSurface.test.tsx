@@ -151,6 +151,14 @@ const dshSessions = {
   })),
   cancel: vi.fn(async () => projection),
   removeInboxMessage: vi.fn(async () => projection),
+  getImageAttachmentPreview: vi.fn(async () => ({
+    url: 'openneko://resource/lease-1/image',
+    mediaType: 'image/png' as const,
+    byteLength: 4,
+    width: 1,
+    height: 1,
+  })),
+  releaseImageAttachmentPreviews: vi.fn(async () => undefined),
   getComposerConfiguration: vi.fn(async () => composerConfiguration),
   searchComposerMentions: vi.fn(async () => []),
   selectComposerModel: vi.fn(async () => ({
@@ -204,6 +212,7 @@ beforeEach(() => {
   });
   dshSessions.cancel.mockResolvedValue(projection);
   dshSessions.removeInboxMessage.mockResolvedValue(projection);
+  dshSessions.releaseImageAttachmentPreviews.mockResolvedValue(undefined);
   dshSessions.getComposerConfiguration.mockResolvedValue(composerConfiguration);
   dshSessions.selectComposerModel.mockResolvedValue({
     ...composerConfiguration,
@@ -242,6 +251,24 @@ afterEach(() => {
 });
 
 describe('DesktopAgentSurface', () => {
+  it('releases exact Conversation image preview resources when the Surface unmounts', async () => {
+    const view = render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        agentSurfaceId="surface-1"
+        conversationId="conversation-1"
+        surfaceKind="workspace"
+      />,
+    );
+    await screen.findByText('Create a node');
+
+    view.unmount();
+
+    await waitFor(() => {
+      expect(dshSessions.releaseImageAttachmentPreviews).toHaveBeenCalledWith('conversation-1');
+    });
+  });
+
   it('renders the bounded ACP projection and refreshes only its exact Conversation', async () => {
     const { container } = render(
       <DesktopAgentSurface

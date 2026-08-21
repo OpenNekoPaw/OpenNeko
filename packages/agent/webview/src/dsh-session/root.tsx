@@ -9,6 +9,9 @@ import type {
   DshComposerSubmitInput,
   DshSessionHostEvent,
   DshSessionHostProjection,
+  DshSessionImageAttachmentIdentity,
+  DshSessionUserMessageBlock,
+  DshImageAttachmentPreviewHostResult,
 } from '@neko/agent-contracts/dsh-session-host';
 import type {
   AgentContextPayload,
@@ -40,6 +43,7 @@ import { WorldExperienceTargetSelector } from '../components/ChatView/WorldExper
 import {
   ChevronDownIcon,
   CodeIcon,
+  Dialog,
   ErrorIcon,
   LoadingIcon,
   MarkdownDocumentView,
@@ -90,6 +94,9 @@ export interface DshAgentViewProps {
   readonly onMaterializeAsset?: (
     assetId: string,
   ) => Promise<DshComposerMaterializedAssetProjection | undefined>;
+  readonly onResolveImageAttachmentPreview?: (
+    attachmentId: string,
+  ) => Promise<DshImageAttachmentPreviewHostResult['preview']>;
   readonly onSubmit: (
     target: DshConversationCreationTarget,
     input: DshComposerSubmitInput,
@@ -397,7 +404,12 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
           >
             {props.conversationFeed}
             {props.projection?.events.map((event, index) => (
-              <DshSessionEvent copy={copy} event={event} key={eventKey(event, index)} />
+              <DshSessionEvent
+                copy={copy}
+                event={event}
+                key={eventKey(event, index)}
+                onResolveImageAttachmentPreview={props.onResolveImageAttachmentPreview}
+              />
             ))}
             {activeTurnStart ? (
               <DshActiveTurnStatus
@@ -978,12 +990,169 @@ function projectDshInputCatalog(
   return [...commands, ...skills];
 }
 
+type DshImagePreviewState =
+  | { readonly status: 'loading' }
+  | {
+      readonly status: 'ready';
+      readonly preview: DshImageAttachmentPreviewHostResult['preview'];
+    }
+  | { readonly status: 'unavailable'; readonly diagnostic: string };
+
+function UserMessageImageAttachment({
+  block,
+  copy,
+  onResolve,
+}: {
+  readonly block: Extract<
+    import('@neko/agent-contracts/dsh-session-host').DshSessionUserMessageBlock,
+    { readonly type: 'image' }
+  >;
+  readonly copy: DshAgentCopy;
+  readonly onResolve?: DshAgentViewProps['onResolveImageAttachmentPreview'];
+}): JSX.Element {
+  const [state, setState] = useState<DshImagePreviewState>({ status: 'loading' });
+  const [open, setOpen] = useState(false);
+  const { attachmentId, byteLength, height, mediaType, width } = block.attachment;
+  useEffect(() => {
+    let active = true;
+    setOpen(false);
+    if (onResolve === undefined) {
+      setState({
+        status: 'unavailable',
+        diagnostic: copy.imagePreviewResolverUnavailable,
+      });
+      return () => {
+        active = false;
+      };
+    }
+    setState({ status: 'loading' });
+    void onResolve(attachmentId).then(
+      (preview) => {
+        if (!active) return;
+        try {
+          assertImagePreviewMatches(
+            { attachmentId, byteLength, height, mediaType, width },
+            preview,
+          );
+          setState({ status: 'ready', preview });
+        } catch (error) {
+          setState({ status: 'unavailable', diagnostic: describeError(error) });
+        }
+      },
+      (error: unknown) => {
+        if (!active) return;
+        setState({ status: 'unavailable', diagnostic: describeError(error) });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [
+    attachmentId,
+    byteLength,
+    copy.imagePreviewResolverUnavailable,
+    height,
+    mediaType,
+    onResolve,
+    width,
+  ]);
+
+  const unavailable = state.status === 'unavailable';
+  const title = unavailable ? `${block.label}: ${state.diagnostic}` : block.label;
+  return (
+    <span
+      className="agent-message-image-attachment"
+      data-agent-message-image="true"
+      data-image-preview-status={state.status}
+    >
+      {state.status === 'ready' ? (
+        <button
+          aria-label={`${copy.openImagePreview}: ${block.label}`}
+          className="agent-message-image-preview-button"
+          data-agent-reference-token="true"
+          data-reference-kind="image"
+          title={block.label}
+          type="button"
+          onClick={() => setOpen(true)}
+        >
+          <img
+            alt=""
+            className="agent-message-image-thumbnail"
+            decoding="async"
+            loading="lazy"
+            src={state.preview.url}
+            onError={() => {
+              setOpen(false);
+              setState({
+                status: 'unavailable',
+                diagnostic: copy.imagePreviewLoadFailed,
+              });
+            }}
+          />
+          <span className="agent-message-image-label">{block.label}</span>
+        </button>
+      ) : (
+        <ReferenceToken
+          kind="image"
+          label={block.label}
+          meta={
+            state.status === 'loading' ? copy.imagePreviewLoading : copy.imagePreviewUnavailable
+          }
+          title={title}
+        />
+      )}
+      {state.status === 'ready' ? (
+        <Dialog
+          className="agent-image-preview-dialog"
+          closeLabel={copy.closeImagePreview}
+          description={`${state.preview.width} × ${state.preview.height}`}
+          onOpenChange={setOpen}
+          open={open}
+          title={block.label}
+        >
+          <img
+            alt={block.label}
+            className="agent-image-preview-full"
+            decoding="async"
+            src={state.preview.url}
+            onError={() => {
+              setOpen(false);
+              setState({
+                status: 'unavailable',
+                diagnostic: copy.imagePreviewLoadFailed,
+              });
+            }}
+          />
+        </Dialog>
+      ) : null}
+    </span>
+  );
+}
+
+function assertImagePreviewMatches(
+  attachment: DshSessionImageAttachmentIdentity,
+  preview: DshImageAttachmentPreviewHostResult['preview'],
+): void {
+  if (
+    preview.mediaType !== attachment.mediaType ||
+    preview.byteLength !== attachment.byteLength ||
+    preview.width !== attachment.width ||
+    preview.height !== attachment.height
+  ) {
+    throw new Error(
+      `DSH image attachment '${attachment.attachmentId}' preview metadata does not match.`,
+    );
+  }
+}
+
 function DshSessionEvent({
   copy,
   event,
+  onResolveImageAttachmentPreview,
 }: {
   readonly copy: DshAgentCopy;
   readonly event: DshSessionHostEvent;
+  readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
 }): JSX.Element | null {
   if (event.kind === 'thought') {
     return (
@@ -1032,25 +1201,11 @@ function DshSessionEvent({
                 className={`min-w-0 flex-1 ${isUser ? 'flex max-w-[85%] flex-col items-end' : 'max-w-none'}`}
               >
                 {isUser ? (
-                  <div className="agent-user-prompt block w-fit max-w-full min-w-0 whitespace-pre-wrap break-words">
-                    {event.content.map((block, index) =>
-                      block.type === 'text' ? (
-                        <span key={`text:${index}`}>{block.text}</span>
-                      ) : block.type === 'resource' ? (
-                        <UserMessageResourceToken
-                          key={`resource:${index}:${block.label}`}
-                          block={block}
-                        />
-                      ) : (
-                        <ReferenceToken
-                          key={`image:${index}:${block.label}`}
-                          kind="image"
-                          label={block.label}
-                          title={block.label}
-                        />
-                      ),
-                    )}
-                  </div>
+                  <UserMessageContent
+                    content={event.content}
+                    copy={copy}
+                    onResolveImageAttachmentPreview={onResolveImageAttachmentPreview}
+                  />
                 ) : (
                   <div className="agent-assistant-turn">
                     <div
@@ -1098,6 +1253,49 @@ function DshSessionEvent({
           </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+function UserMessageContent({
+  content,
+  copy,
+  onResolveImageAttachmentPreview,
+}: {
+  readonly content: readonly DshSessionUserMessageBlock[];
+  readonly copy: DshAgentCopy;
+  readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
+}): JSX.Element {
+  const primaryBlocks = content.filter((block) => block.type !== 'image');
+  const imageBlocks = content.filter(
+    (block): block is Extract<DshSessionUserMessageBlock, { readonly type: 'image' }> =>
+      block.type === 'image',
+  );
+  return (
+    <div className="agent-user-prompt block w-fit max-w-full min-w-0 whitespace-pre-wrap break-words">
+      {primaryBlocks.length > 0 ? (
+        <div className="agent-user-prompt-primary">
+          {primaryBlocks.map((block, index) =>
+            block.type === 'text' ? (
+              <span key={`text:${index}`}>{block.text}</span>
+            ) : (
+              <UserMessageResourceToken key={`resource:${index}:${block.label}`} block={block} />
+            ),
+          )}
+        </div>
+      ) : null}
+      {imageBlocks.length > 0 ? (
+        <div className="agent-message-image-grid">
+          {imageBlocks.map((block, index) => (
+            <UserMessageImageAttachment
+              key={`image:${index}:${block.attachment.attachmentId}`}
+              block={block}
+              copy={copy}
+              onResolve={onResolveImageAttachmentPreview}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1507,6 +1705,12 @@ interface DshAgentCopy {
   readonly entryExperience: string;
   readonly expandPayload: string;
   readonly input: string;
+  readonly imagePreviewLoading: string;
+  readonly imagePreviewUnavailable: string;
+  readonly imagePreviewResolverUnavailable: string;
+  readonly imagePreviewLoadFailed: string;
+  readonly closeImagePreview: string;
+  readonly openImagePreview: string;
   readonly loadingConfiguration: string;
   readonly model: string;
   readonly newConversation: string;
@@ -1563,6 +1767,12 @@ const EN_COPY: DshAgentCopy = {
   entryExperience: 'Entry experience',
   expandPayload: 'Show all',
   input: 'Input',
+  imagePreviewLoading: 'Loading preview',
+  imagePreviewUnavailable: 'Preview unavailable',
+  imagePreviewResolverUnavailable: 'Image preview authorization is unavailable.',
+  imagePreviewLoadFailed: 'The authorized image preview could not be loaded.',
+  closeImagePreview: 'Close image preview',
+  openImagePreview: 'Open image preview',
   loadingConfiguration: 'Loading model configuration…',
   loading: 'Loading DSH session…',
   output: 'Result',
@@ -1623,6 +1833,12 @@ const ZH_COPY: DshAgentCopy = {
   entryExperience: '入口模式',
   expandPayload: '展开全部',
   input: '输入',
+  imagePreviewLoading: '正在加载预览',
+  imagePreviewUnavailable: '预览不可用',
+  imagePreviewResolverUnavailable: '图片预览授权不可用。',
+  imagePreviewLoadFailed: '无法加载已授权的图片预览。',
+  closeImagePreview: '关闭图片预览',
+  openImagePreview: '打开图片预览',
   loadingConfiguration: '正在加载模型配置…',
   loading: '正在加载 DSH 会话…',
   output: '结果',

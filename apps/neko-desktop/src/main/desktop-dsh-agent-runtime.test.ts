@@ -373,6 +373,7 @@ function createClient(
     invokeSkill: async () => unsupported(),
     readExtensions: async () => unsupported(),
     readInbox: async () => unsupported(),
+    readImageAttachment: async () => unsupported(),
     enqueueInboxMessage: async () => unsupported(),
     replaceInboxMessage: async () => unsupported(),
     removeInboxMessage: async () => unsupported(),

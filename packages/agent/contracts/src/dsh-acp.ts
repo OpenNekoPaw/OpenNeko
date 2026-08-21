@@ -1,3 +1,6 @@
+import { AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES } from './agent-image-transport';
+import { decodedBase64ByteLength, requireCanonicalBase64 } from './canonical-base64';
+
 export const DSH_ACP_EXTENSION_METHODS = {
   setSessionContext: 'openneko/session/context/set',
   archiveSession: 'openneko/session/archive',
@@ -7,6 +10,7 @@ export const DSH_ACP_EXTENSION_METHODS = {
   readInbox: 'openneko/session/inbox/read',
   replaceInboxMessage: 'openneko/session/inbox/replace',
   removeInboxMessage: 'openneko/session/inbox/remove',
+  readImageAttachment: 'openneko/session/attachment/image/read',
   readInputCatalog: 'openneko/session/input-catalog/read',
   executeCommand: 'openneko/session/command/execute',
   invokeSkill: 'openneko/session/skill/invoke',
@@ -493,6 +497,84 @@ export type DshAcpJsonValue =
 export const DSH_ACP_MAX_PAYLOAD_BYTES = 262_144;
 export const DSH_ACP_MAX_JSON_DEPTH = 32;
 
+export type DshAcpImageAttachmentMediaType =
+  'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+
+export interface DshAcpImageAttachmentRefProjection {
+  readonly attachmentId: string;
+  readonly mediaType: DshAcpImageAttachmentMediaType;
+  readonly bytes: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface DshAcpImageAttachmentReadRequest {
+  readonly sessionId: string;
+  readonly attachmentId: string;
+}
+
+export interface DshAcpImageAttachmentReadProjection {
+  readonly attachment: DshAcpImageAttachmentRefProjection;
+  readonly data: string;
+}
+
+export function decodeDshAcpImageAttachmentReadRequest(
+  input: Record<string, unknown>,
+): DshAcpImageAttachmentReadRequest {
+  decodeDshAcpJsonPayload(input, 'image attachment read request');
+  requireExactKeys(input, ['sessionId', 'attachmentId'], 'image attachment read request');
+  return {
+    sessionId: requireNonEmptyString(input.sessionId, 'sessionId'),
+    attachmentId: requireNonEmptyString(input.attachmentId, 'attachmentId'),
+  };
+}
+
+export function decodeDshAcpImageAttachmentReadProjection(
+  input: Record<string, unknown>,
+): DshAcpImageAttachmentReadProjection {
+  decodeDshAcpJsonPayload(
+    { ...input, ...(typeof input.data === 'string' ? { data: '' } : {}) },
+    'image attachment read metadata',
+  );
+  requireExactKeys(input, ['attachment', 'data'], 'image attachment read projection');
+  const attachment = decodeDshAcpImageAttachmentRefProjection(input.attachment);
+  const data = requireCanonicalBase64(
+    input.data,
+    'DSH ACP image attachment data must be canonical base64.',
+  );
+  const decodedBytes = decodedBase64ByteLength(data);
+  if (decodedBytes !== attachment.bytes || decodedBytes > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
+    throw new Error(
+      `DSH ACP image attachment byte length is invalid: ${decodedBytes}/${attachment.bytes}.`,
+    );
+  }
+  return { attachment, data };
+}
+
+export function decodeDshAcpImageAttachmentRefProjection(
+  input: unknown,
+): DshAcpImageAttachmentRefProjection {
+  const record = requireRecord(input, 'image attachment reference');
+  requireExactKeys(
+    record,
+    ['attachmentId', 'mediaType', 'bytes', 'width', 'height'],
+    'image attachment reference',
+  );
+  const bytes = requirePositiveInteger(record.bytes, 'image attachment bytes');
+  if (bytes > AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES) {
+    throw new Error(
+      `DSH ACP image attachment exceeds ${AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES} bytes.`,
+    );
+  }
+  return {
+    attachmentId: requireNonEmptyString(record.attachmentId, 'attachmentId'),
+    mediaType: requireImageAttachmentMediaType(record.mediaType),
+    bytes,
+    width: requirePositiveInteger(record.width, 'image attachment width'),
+    height: requirePositiveInteger(record.height, 'image attachment height'),
+  };
+}
+
 export interface DshAcpHostToolPort<TExecution> {
   execute(
     request: {
@@ -831,6 +913,18 @@ function requirePositiveInteger(input: unknown, field: string): number {
     throw new Error(`DSH ACP ${field} must be a positive safe integer.`);
   }
   return input as number;
+}
+
+function requireImageAttachmentMediaType(input: unknown): DshAcpImageAttachmentMediaType {
+  if (
+    input === 'image/png' ||
+    input === 'image/jpeg' ||
+    input === 'image/webp' ||
+    input === 'image/gif'
+  ) {
+    return input;
+  }
+  throw new Error(`DSH ACP image attachment media type '${String(input)}' is unsupported.`);
 }
 
 function requireUniqueNames(entries: readonly { readonly name: string }[], label: string): void {

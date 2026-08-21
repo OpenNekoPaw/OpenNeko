@@ -12,6 +12,7 @@ import type {
   DshAcpContentBlock,
   DshAcpInboxSnapshot,
   DshAcpInboxEnqueueRequest,
+  DshAcpImageAttachmentReadProjection,
   DshAcpInputCatalogProjection,
   DshAcpPermissionPresetProjection,
   DshAcpCommandExecuteProjection,
@@ -50,6 +51,10 @@ export interface ConversationDshSessionAcpClient {
     readonly args?: string;
   }): Promise<DshAcpSkillInvokeProjection>;
   readInbox(sessionId: string): Promise<DshAcpInboxSnapshot>;
+  readImageAttachment(input: {
+    readonly sessionId: string;
+    readonly attachmentId: string;
+  }): Promise<DshAcpImageAttachmentReadProjection>;
   enqueueInboxMessage(input: DshAcpInboxEnqueueRequest): Promise<DshAcpInboxSnapshot>;
   replaceInboxMessage(input: {
     readonly sessionId: string;
@@ -92,6 +97,10 @@ export interface ConversationDshSessionBoundClient {
     readonly args?: string;
   }): Promise<DshAcpSkillInvokeProjection>;
   readInbox(conversationId: string): Promise<DshAcpInboxSnapshot>;
+  readImageAttachment(
+    conversationId: string,
+    attachmentId: string,
+  ): Promise<DshAcpImageAttachmentReadProjection>;
   enqueueInboxMessage(
     input: Omit<DshAcpInboxEnqueueRequest, 'sessionId'> & { readonly conversationId: string },
   ): Promise<DshAcpInboxSnapshot>;
@@ -182,6 +191,10 @@ export function createConversationDshSessionBoundClient(
     async readInbox(conversationId) {
       const dshSessionId = await resolveForOperation(options, conversationId);
       return options.client.readInbox(dshSessionId);
+    },
+    async readImageAttachment(conversationId, attachmentId) {
+      const dshSessionId = await resolveForOperation(options, conversationId);
+      return options.client.readImageAttachment({ sessionId: dshSessionId, attachmentId });
     },
     async enqueueInboxMessage({ conversationId, ...request }) {
       const dshSessionId = await resolveForOperation(options, conversationId);

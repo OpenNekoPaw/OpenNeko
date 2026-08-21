@@ -163,6 +163,34 @@ describe('DshAcpApplicationClient', () => {
     });
   });
 
+  it('reads one exact native image attachment through the bounded ACP extension', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    fixture.connection.extMethod = vi.fn(async () => ({
+      attachment: {
+        attachmentId: 'attachment-1',
+        mediaType: 'image/png',
+        bytes: 4,
+        width: 1,
+        height: 1,
+      },
+      data: 'YWJjZA==',
+    }));
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await expect(
+      client.readImageAttachment({ sessionId: 'session-1', attachmentId: 'attachment-1' }),
+    ).resolves.toMatchObject({ attachment: { bytes: 4 }, data: 'YWJjZA==' });
+    expect(fixture.connection.extMethod).toHaveBeenCalledWith(
+      'openneko/session/attachment/image/read',
+      { sessionId: 'session-1', attachmentId: 'attachment-1' },
+    );
+  });
+
   it('blocks session recovery when the exact ACP capability is absent', async () => {
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     await expect(

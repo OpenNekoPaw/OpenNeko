@@ -10,8 +10,15 @@ import {
   type DshComposerMaterializedAssetHostResult,
   type DshComposerSubmitInput,
   type DshComposerImageInput,
+  type DshImageAttachmentPreviewHostResult,
+  type DshImageAttachmentPreviewsReleaseHostResult,
+  type DshSessionImageAttachmentIdentity,
 } from '@neko/agent-contracts/dsh-session-host';
-import { decodeDshAcpJsonPayload } from '@neko/agent-contracts/dsh-acp';
+import {
+  decodeDshAcpImageAttachmentRefProjection,
+  decodeDshAcpJsonPayload,
+  type DshAcpImageAttachmentRefProjection,
+} from '@neko/agent-contracts/dsh-acp';
 import type {
   ConversationDshSessionBindingStore,
   ConversationDshSessionBoundClient,
@@ -37,9 +44,20 @@ export class DesktopDshSessionHost {
         | 'executeCommand'
         | 'invokeSkill'
         | 'readInbox'
+        | 'readImageAttachment'
         | 'enqueueInboxMessage'
         | 'removeInboxMessage'
       >;
+      readonly imagePreviews: {
+        project(input: {
+          readonly windowId: string;
+          readonly rendererSessionId: string;
+          readonly conversationId: string;
+          readonly attachment: DshSessionImageAttachmentIdentity;
+          readonly read: (signal: AbortSignal) => Promise<Uint8Array>;
+        }): DshImageAttachmentPreviewHostResult['preview'];
+        release(windowId: string, conversationId: string): void;
+      };
       readonly promptContext: {
         resolve(
           conversationId: string,
@@ -145,6 +163,8 @@ export class DesktopDshSessionHost {
     | DshComposerConfigurationHostResult
     | DshComposerMentionsHostResult
     | DshComposerMaterializedAssetHostResult
+    | DshImageAttachmentPreviewHostResult
+    | DshImageAttachmentPreviewsReleaseHostResult
   > {
     const request = parseDshSessionHostRequest(value);
     const window = this.options.windows.resolveSender(sender);
@@ -204,6 +224,40 @@ export class DesktopDshSessionHost {
                   permissionPresetId: request.permissionPresetId,
                 });
       return { requestId: request.requestId, configuration };
+    }
+    if (request.operation === 'image-previews-release') {
+      this.options.imagePreviews.release(request.windowId, request.conversationId);
+      return { requestId: request.requestId, released: true };
+    }
+    if (request.operation === 'image-preview') {
+      const dshSessionId = await this.options.conversations.ensureLoaded(request.conversationId);
+      const attachment = findProjectedImageAttachment(
+        projectEvents(this.options.projection.snapshot(dshSessionId).events),
+        request.attachmentId,
+      );
+      const preview = this.options.imagePreviews.project({
+        windowId: request.windowId,
+        rendererSessionId: request.rendererSessionId,
+        conversationId: request.conversationId,
+        attachment,
+        read: async (signal) => {
+          if (signal.aborted) throw signal.reason;
+          const stored = await this.options.conversations.readImageAttachment(
+            request.conversationId,
+            request.attachmentId,
+          );
+          assertImageAttachmentMatches(attachment, stored.attachment);
+          const bytes = Buffer.from(stored.data, 'base64');
+          if (signal.aborted) throw signal.reason;
+          if (bytes.byteLength !== attachment.byteLength) {
+            throw new Error(
+              `DSH image attachment '${attachment.attachmentId}' returned an invalid byte length.`,
+            );
+          }
+          return bytes;
+        },
+      });
+      return { requestId: request.requestId, preview };
     }
     let stopReason: string | undefined;
     let conversationId: string;
@@ -513,33 +567,43 @@ function projectUserMessageEvent(
   return {
     kind: 'message',
     role: 'user',
-    content: event.content.map((block) =>
-      block.type === 'text'
-        ? { type: 'text' as const, text: block.text }
-        : isDshAttachmentResourceUri(block.uri)
-          ? { type: 'image' as const, label: block.name }
-          : {
-              type: 'resource' as const,
-              label: block.name,
-              contentLocator: deserializeContentLocatorResourceUri(block.uri),
-            },
-    ),
+    content: event.content.map((block) => {
+      if (block.type === 'text') return { type: 'text' as const, text: block.text };
+      const attachment = deserializeDshAttachmentResourceUri(block.uri);
+      return attachment === undefined
+        ? {
+            type: 'resource' as const,
+            label: block.name,
+            contentLocator: deserializeContentLocatorResourceUri(block.uri),
+          }
+        : { type: 'image' as const, label: block.name, attachment };
+    }),
     ...(event.messageId === undefined ? {} : { messageId: event.messageId }),
   };
 }
 
-function isDshAttachmentResourceUri(uri: string): boolean {
+function deserializeDshAttachmentResourceUri(
+  uri: string,
+): DshSessionImageAttachmentIdentity | undefined {
   const prefix = 'openneko-dsh-attachment:';
-  if (!uri.startsWith(prefix)) return false;
-  const encodedIdentity = uri.slice(prefix.length);
-  if (encodedIdentity.length === 0) {
-    throw new Error('ACP DSH attachment resource has no identity.');
+  if (!uri.startsWith(prefix)) return undefined;
+  if (uri.length === prefix.length) {
+    throw new Error('ACP DSH attachment resource has no reference.');
   }
-  const identity = decodeURIComponent(encodedIdentity);
-  if (identity.trim().length === 0) {
-    throw new Error('ACP DSH attachment resource identity is invalid.');
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(decodeURIComponent(uri.slice(prefix.length)));
+  } catch (error) {
+    throw new Error('ACP DSH attachment resource reference is invalid.', { cause: error });
   }
-  return true;
+  const ref = decodeDshAcpImageAttachmentRefProjection(decoded);
+  return {
+    attachmentId: ref.attachmentId,
+    mediaType: ref.mediaType,
+    byteLength: ref.bytes,
+    width: ref.width,
+    height: ref.height,
+  };
 }
 
 function deserializeContentLocatorResourceUri(uri: string): ContentLocator {
@@ -562,4 +626,37 @@ function deserializeContentLocatorResourceUri(uri: string): ContentLocator {
     );
   }
   return validation.locator;
+}
+
+function findProjectedImageAttachment(
+  events: readonly DshSessionHostEvent[],
+  attachmentId: string,
+): DshSessionImageAttachmentIdentity {
+  for (const event of events) {
+    if (event.kind !== 'message' || event.role !== 'user') continue;
+    const image = event.content.find(
+      (block) => block.type === 'image' && block.attachment.attachmentId === attachmentId,
+    );
+    if (image?.type === 'image') return image.attachment;
+  }
+  throw new Error(
+    `DSH image attachment '${attachmentId}' is not projected by the exact Conversation.`,
+  );
+}
+
+function assertImageAttachmentMatches(
+  expected: DshSessionImageAttachmentIdentity,
+  actual: DshAcpImageAttachmentRefProjection,
+): void {
+  if (
+    actual.attachmentId !== expected.attachmentId ||
+    actual.mediaType !== expected.mediaType ||
+    actual.bytes !== expected.byteLength ||
+    actual.width !== expected.width ||
+    actual.height !== expected.height
+  ) {
+    throw new Error(
+      `DSH image attachment '${expected.attachmentId}' changed across the preview boundary.`,
+    );
+  }
 }

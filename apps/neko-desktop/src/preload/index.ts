@@ -13,6 +13,8 @@ import {
   parseDshComposerConfigurationHostResult,
   parseDshComposerMaterializedAssetHostResult,
   parseDshComposerMentionsHostResult,
+  parseDshImageAttachmentPreviewHostResult,
+  parseDshImageAttachmentPreviewsReleaseHostResult,
   parseDshSessionChangedEvent,
   parseDshSessionHostResult,
   type DshSessionHostResult,
@@ -496,6 +498,31 @@ const bridge: OpenNekoDesktopBridge &
         parseDshSessionHostResult(response, request.requestId),
         conversationId,
       ).projection;
+    },
+    async getImageAttachmentPreview(conversationId, attachmentId) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-session-image-preview'),
+        operation: 'image-preview' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        conversationId,
+        attachmentId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      return parseDshImageAttachmentPreviewHostResult(response, request.requestId).preview;
+    },
+    async releaseImageAttachmentPreviews(conversationId) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-session-image-previews-release'),
+        operation: 'image-previews-release' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        conversationId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      parseDshImageAttachmentPreviewsReleaseHostResult(response, request.requestId);
     },
     async getComposerConfiguration(workbenchInstanceId, agentSurfaceId) {
       const context = requireDesktopWindowContext();
