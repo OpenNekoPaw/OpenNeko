@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { DshAcpProjectedEvent } from '../acp/dsh-acp-projection';
 import {
+  collectDshWorkspaceBoardCompletedToolArtifacts,
   collectDshWorkspaceBoardArtifacts,
-  createDshWorkspaceBoardTerminalDeliveryService,
+  createDshWorkspaceBoardArtifactDeliveryService,
   type DshWorkspaceBoardArtifactDeliveryInput,
 } from './dsh-workspace-board-artifact-delivery';
 
@@ -18,7 +19,7 @@ describe('DSH Workspace Board artifact collection', () => {
 
     events.push(turnEnd());
     const batch = collectBatch(events);
-    expect(batch).toMatchObject({ turn: 1, completedAt: 2_000 });
+    expect(batch).toMatchObject({ turn: 1, createdAt: 2_000 });
     expect(batch?.artifacts.filter((artifact) => artifact.role === 'source')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -243,7 +244,7 @@ describe('DSH Workspace Board artifact collection', () => {
     },
   );
 
-  it('retains an image-only wrapper until every declared image was successfully consumed', () => {
+  it('projects every declared image without retaining an image-only wrapper', () => {
     const wrapper = {
       file: { authority: 'workspace' as const, path: 'books/blame.epub' },
       selector: { kind: 'entry' as const, path: 'chapters/opaque-wrapper.xhtml' },
@@ -262,17 +263,17 @@ describe('DSH Workspace Board artifact collection', () => {
         excerpt: { contentKind: 'image' },
         imageInfo: [{ contentLocator: firstImage }, { contentLocator: secondImage }],
       }),
-      imageTool('first-image', firstImage),
       assistant('Partial image analysis'),
       turnEnd(),
     ]);
 
     expect(batch?.artifacts.filter((artifact) => artifact.role === 'source')).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ kind: 'file-reference', contentLocator: wrapper }),
         expect.objectContaining({ kind: 'image', contentLocator: firstImage }),
+        expect.objectContaining({ kind: 'image', contentLocator: secondImage }),
       ]),
     );
+    expect(batch?.artifacts.filter((artifact) => artifact.role === 'source')).toHaveLength(2);
   });
 
   it.each(['interrupted', 'max-tokens', 'failed', 'error', 'cancelled'])(
@@ -362,12 +363,82 @@ describe('DSH Workspace Board artifact collection', () => {
       }),
     ]);
   });
+
+  it('collects one exact completed Tool after an earlier turn/start leaves the bounded event window', () => {
+    const collection = collectDshWorkspaceBoardCompletedToolArtifacts({
+      events: [documentTool('document-1'), documentTool('document-2')],
+      toolCallId: 'document-2',
+    });
+
+    expect(collection).toMatchObject({
+      batch: {
+        turn: 1,
+        createdAt: 1_000,
+        artifacts: [
+          {
+            kind: 'file-reference',
+            role: 'source',
+            contentLocator: { file: { authority: 'workspace', path: 'books/blame.epub' } },
+          },
+        ],
+      },
+      diagnostics: [],
+    });
+  });
+
+  it('does not collect pending, failed, or unsupported Tool updates', () => {
+    for (const event of [
+      { ...documentTool('pending'), status: 'pending' as const },
+      { ...documentTool('failed'), status: 'failed' as const },
+      { ...documentTool('unsupported'), title: 'bash' },
+    ]) {
+      expect(
+        collectDshWorkspaceBoardCompletedToolArtifacts({
+          events: [turnStart(), event],
+          toolCallId: event.toolCallId,
+        }).batch,
+      ).toBeUndefined();
+    }
+  });
+
+  it('projects image-only Document output directly and deduplicates its later image read', () => {
+    const wrapper = {
+      file: { authority: 'workspace' as const, path: 'books/blame.epub' },
+      selector: { kind: 'entry' as const, path: 'chapters/page.xhtml' },
+    };
+    const image = {
+      file: wrapper.file,
+      selector: { kind: 'entry' as const, path: 'images/page.jpg' },
+    };
+    const document = documentTool('document-image', wrapper, {
+      excerpt: { contentKind: 'image' },
+      imageInfo: [{ contentLocator: image }],
+    });
+    const incremental = collectDshWorkspaceBoardCompletedToolArtifacts({
+      events: [turnStart(), document],
+      toolCallId: 'document-image',
+    });
+    const terminal = collectBatch([
+      turnStart(),
+      document,
+      imageTool('image-read', image),
+      assistant('Image analysis'),
+      turnEnd(),
+    ]);
+
+    expect(incremental.batch?.artifacts).toEqual([
+      expect.objectContaining({ kind: 'image', contentLocator: image }),
+    ]);
+    expect(terminal?.artifacts.filter((artifact) => artifact.role === 'source')).toEqual([
+      expect.objectContaining({ kind: 'image', contentLocator: image }),
+    ]);
+  });
 });
 
-describe('DSH Workspace Board terminal delivery service', () => {
+describe('DSH Workspace Board artifact delivery service', () => {
   it('targets the exact authoritative Workspace after the terminal projection', async () => {
     const deliveries: DshWorkspaceBoardArtifactDeliveryInput[] = [];
-    const service = createDshWorkspaceBoardTerminalDeliveryService({
+    const service = createDshWorkspaceBoardArtifactDeliveryService({
       contexts: {
         readContext: async () => ({
           kind: 'workspace',
@@ -397,13 +468,14 @@ describe('DSH Workspace Board terminal delivery service', () => {
       conversationId: 'conversation-1',
       dshSessionId: 'dsh-1',
       turn: 1,
+      delivery: { kind: 'completed-turn' },
     });
   });
 
   it('reports one invalid completed Tool while delivering valid sibling artifacts', async () => {
     const diagnostics: string[] = [];
     const deliveries: DshWorkspaceBoardArtifactDeliveryInput[] = [];
-    const service = createDshWorkspaceBoardTerminalDeliveryService({
+    const service = createDshWorkspaceBoardArtifactDeliveryService({
       contexts: {
         readContext: async () => ({
           kind: 'workspace',
@@ -437,7 +509,7 @@ describe('DSH Workspace Board terminal delivery service', () => {
 
   it('does not infer a Workspace for a non-Workspace Conversation', async () => {
     let deliveryCount = 0;
-    const service = createDshWorkspaceBoardTerminalDeliveryService({
+    const service = createDshWorkspaceBoardArtifactDeliveryService({
       contexts: {
         readContext: async () => ({
           kind: 'assistant',
@@ -462,6 +534,50 @@ describe('DSH Workspace Board terminal delivery service', () => {
       }),
     ).resolves.toBeUndefined();
     expect(deliveryCount).toBe(0);
+  });
+
+  it('delivers a completed Tool source even when the later turn is interrupted', async () => {
+    const deliveries: DshWorkspaceBoardArtifactDeliveryInput[] = [];
+    const service = createDshWorkspaceBoardArtifactDeliveryService({
+      contexts: {
+        readContext: async () => ({
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        }),
+      },
+      delivery: {
+        deliver: async (input) => {
+          deliveries.push(input);
+          return { status: 'accepted' };
+        },
+      },
+      diagnostics: { report: () => undefined },
+    });
+    const runningEvents = [turnStart(), documentTool('document-1')];
+
+    await expect(
+      service.deliverCompletedTool({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        toolCallId: 'document-1',
+        events: runningEvents,
+      }),
+    ).resolves.toEqual({ status: 'accepted' });
+    await expect(
+      service.deliverTerminal({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        events: [...runningEvents, turnEnd('interrupted')],
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(deliveries).toEqual([
+      expect.objectContaining({
+        delivery: { kind: 'completed-content-tool', toolCallId: 'document-1' },
+        artifacts: [expect.objectContaining({ role: 'source' })],
+      }),
+    ]);
   });
 });
 
@@ -515,6 +631,7 @@ function documentTool(
     sessionId: 'dsh-1',
     toolCallId,
     turn: 1,
+    turnStartedAt: 1_000,
     status: 'completed',
     title: 'openneko.document',
     rawInput: {
@@ -541,6 +658,7 @@ function imageTool(
     sessionId: 'dsh-1',
     toolCallId,
     turn: 1,
+    turnStartedAt: 1_000,
     status: 'completed',
     title: 'openneko.read_image',
     rawInput: { source },

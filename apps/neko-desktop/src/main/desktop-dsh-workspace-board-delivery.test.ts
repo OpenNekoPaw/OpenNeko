@@ -23,7 +23,8 @@ describe('Desktop DSH Workspace Board projection request', () => {
       conversationId: 'conversation-1',
       dshSessionId: 'dsh-1',
       turn: 3,
-      completedAt: 2_000,
+      createdAt: 2_000,
+      delivery: { kind: 'completed-turn' as const },
       artifacts: [
         {
           kind: 'file-reference' as const,
@@ -78,7 +79,8 @@ describe('Desktop DSH Workspace Board projection request', () => {
       workspaceId: 'workspace-1',
       conversationId: 'conversation-1',
       dshSessionId: 'dsh-1',
-      completedAt: 2_000,
+      createdAt: 2_000,
+      delivery: { kind: 'completed-turn' as const },
       artifacts: [
         {
           kind: 'markdown' as const,
@@ -105,7 +107,8 @@ describe('Desktop DSH Workspace Board projection request', () => {
       conversationId: 'conversation-1',
       dshSessionId: 'dsh-1',
       turn: 1,
-      completedAt: 2_000,
+      createdAt: 2_000,
+      delivery: { kind: 'completed-content-tool' as const, toolCallId: 'tool-1' },
       artifacts: [
         {
           kind: 'file-reference' as const,
@@ -134,6 +137,123 @@ describe('Desktop DSH Workspace Board projection request', () => {
       contentFingerprint: 'content:sha256:book-content',
       contentLocator: { file: { authority: 'workspace', path: 'books/book.epub' } },
     });
+  });
+
+  it('gives completed Tools stable identities distinct from each other and the terminal turn', () => {
+    const workspace: AssetWorkspaceResolution = {
+      workspaceId: 'workspace-1',
+      workspacePath: '/tmp/openneko-workspace',
+      displayName: 'Workspace',
+      locator: { kind: 'relative', value: 'openneko-workspace' },
+    };
+    const base = {
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      dshSessionId: 'dsh-1',
+      turn: 1,
+      createdAt: 1_000,
+      artifacts: [
+        {
+          kind: 'file-reference' as const,
+          artifactId: 'content:source',
+          contentFingerprint: 'locator:source',
+          role: 'source' as const,
+          title: 'book.epub',
+          sourceId: 'content:source',
+          contentLocator: { file: { authority: 'workspace' as const, path: 'books/book.epub' } },
+        },
+      ],
+    };
+    const firstTool = createDshWorkspaceBoardProjectionRequest(
+      { ...base, delivery: { kind: 'completed-content-tool', toolCallId: 'tool-1' } },
+      workspace,
+    );
+    const firstToolReplay = createDshWorkspaceBoardProjectionRequest(
+      { ...base, delivery: { kind: 'completed-content-tool', toolCallId: 'tool-1' } },
+      workspace,
+    );
+    const secondTool = createDshWorkspaceBoardProjectionRequest(
+      { ...base, delivery: { kind: 'completed-content-tool', toolCallId: 'tool-2' } },
+      workspace,
+    );
+    const terminal = createDshWorkspaceBoardProjectionRequest(
+      { ...base, delivery: { kind: 'completed-turn' } },
+      workspace,
+    );
+
+    expect(firstTool).toEqual(firstToolReplay);
+    expect(firstTool.process.deliveryId).toMatch(/^dsh-tool:/u);
+    expect(secondTool.process.deliveryId).not.toBe(firstTool.process.deliveryId);
+    expect(terminal.process.deliveryId).toMatch(/^dsh-turn:/u);
+    expect(terminal.process.deliveryId).not.toBe(firstTool.process.deliveryId);
+  });
+
+  it('reuses an incrementally delivered source when terminal analysis arrives', () => {
+    const workspace: AssetWorkspaceResolution = {
+      workspaceId: 'workspace-1',
+      workspacePath: '/tmp/openneko-workspace',
+      displayName: 'Workspace',
+      locator: { kind: 'relative', value: 'openneko-workspace' },
+    };
+    const source = {
+      kind: 'image' as const,
+      artifactId: 'content:image',
+      contentFingerprint: 'content:sha256:image',
+      role: 'source' as const,
+      title: 'page.jpg',
+      sourceId: 'content:image',
+      contentLocator: {
+        file: { authority: 'workspace' as const, path: 'books/book.epub' },
+        selector: { kind: 'entry' as const, path: 'images/page.jpg' },
+      },
+    };
+    const base = {
+      workspaceId: 'workspace-1',
+      conversationId: 'conversation-1',
+      dshSessionId: 'dsh-1',
+      turn: 1,
+    };
+    const incremental = createDshWorkspaceBoardProjectionRequest(
+      {
+        ...base,
+        createdAt: 1_000,
+        delivery: { kind: 'completed-content-tool', toolCallId: 'document-1' },
+        artifacts: [source],
+      },
+      workspace,
+    );
+    const terminal = createDshWorkspaceBoardProjectionRequest(
+      {
+        ...base,
+        createdAt: 2_000,
+        delivery: { kind: 'completed-turn' },
+        artifacts: [
+          source,
+          {
+            kind: 'markdown',
+            artifactId: 'content-analysis:1',
+            contentFingerprint: 'markdown:analysis',
+            role: 'analysis',
+            title: 'Analysis',
+            sourceId: 'artifact:analysis',
+            sourceArtifactIds: [source.artifactId],
+            markdown: 'Analysis',
+          },
+        ],
+      },
+      workspace,
+    );
+
+    const afterIncremental = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      incremental,
+    );
+    const afterTerminal = planCanvasWorkspaceBoardProjection(afterIncremental.canvasData, terminal);
+
+    expect(afterIncremental.canvasData.nodes).toHaveLength(1);
+    expect(afterTerminal.canvasData.nodes).toHaveLength(2);
+    expect(afterTerminal.canvasData.connections).toHaveLength(1);
+    expect(afterTerminal.canvasData.nodes.filter((node) => node.type === 'media')).toHaveLength(1);
   });
 
   it('resolves document-entry ContentLocators through the canonical entry reader', async () => {

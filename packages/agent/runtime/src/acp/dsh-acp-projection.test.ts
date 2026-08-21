@@ -222,6 +222,7 @@ describe('DshAcpProjection', () => {
       sessionId: 's1',
       toolCallId: 'call-1',
       turn: 0,
+      turnStartedAt: 1_000,
       status: 'pending',
       rawInput: { prompt: 'x' },
     });
@@ -230,6 +231,7 @@ describe('DshAcpProjection', () => {
       sessionId: 's1',
       toolCallId: 'call-1',
       turn: 0,
+      turnStartedAt: 1_000,
       status: 'completed',
       rawOutput: { ok: true },
     });

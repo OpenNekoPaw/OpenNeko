@@ -1,4 +1,4 @@
-# Design: DSH terminal artifact delivery
+# Design: DSH completed-tool and terminal artifact delivery
 
 ## Five-layer analysis
 
@@ -8,8 +8,8 @@
 - **依赖：** collector 只依赖 canonical DSH projection、`ContentLocator` 和窄 delivery port；不依赖
   Electron、文件系统或 renderer。Desktop adapter 注入 LocalMetadata、Workspace registry、Host file port
   和 Canvas mutation coordinator。
-- **接口：** producer 在 `turn/end` 后提交 `{workspace, conversation, session turn, target, artifacts}`；
-  consumer 转换为一个 `CanvasWorkspaceProjectionRequest` 并返回 typed outcome。
+- **接口：** producer 在受支持内容 Tool 的 completed update 后提交 source-only delivery，在成功 `turn/end`
+  后提交 final analysis delivery；consumer 转换为一个 `CanvasWorkspaceProjectionRequest` 并返回 typed outcome。
 - **扩展：** 新 Tool 只有在返回稳定 locator 或 owning-domain durable artifact identity 后才可增加 collector；
   不使用 Tool 名 wildcard、模型自由判断或 transcript heuristic。
 - **测试：** collector contract 测试覆盖成功、失败、取消、重复 Tool、locator identity 和 Markdown identity；
@@ -18,17 +18,20 @@
 
 ## Canonical path
 
-1. DSH ACP application client 接受并投影 `turn/end`。
-2. Desktop 的 session-event composition 在发布 renderer changed event 前调用 package-owned terminal collector。
-3. collector 只读取该 turn 的 final assistant messages 和 completed content Tool events。Document source
+1. DSH ACP application client 先接受并投影 `tool_call_update(status=completed)` 或 `turn/end`。
+   每条 Tool projection 携带其已知的稳定 `turnStartedAt`；即使有界 event window 已淘汰较早的
+   `turn/start`，成功 Tool delivery 仍不依赖加载顺序或当前窗口残留事件。
+2. Desktop composition 分别调用 package-owned completed-tool collector 或 terminal collector。
+3. completed-tool collector 只读取精确 `toolCallId` 对应的 completed content Tool。terminal collector 读取该
+   turn 的 final assistant messages 和 completed content Tool events。Document source
    来自完成结果中的 canonical `ContentLocator`，并与 Content-owned decoder 解析出的请求 locator 严格
    比对；Content image source 使用同一 decoder 验证已成功消费的输入。内部 ACP envelope 不参与 DSH
    event decoding。
-4. collector 按 `contentLocatorKey` 合并 source；存在 source 且存在非空 final Markdown 时创建一个 analysis
-   artifact，并通过 `sourceArtifactIds` 关联全部 source。
+4. collector 按 `contentLocatorKey` 合并 source；completed-tool delivery 立即提交 source-only batch。成功终轮
+   存在 source 且存在非空 final Markdown 时创建一个 analysis artifact，并通过 `sourceArtifactIds` 关联全部 source。
    对 exact document-entry 结果，collector 同时读取 Content-owned `excerpt.contentKind` 与
-   `imageInfo[].contentLocator` 关系；只有 image-only wrapper 的已声明图片在同一 turn 被成功消费时，才以
-   图片 source 取代 wrapper 的可见 file-reference。文本、mixed、文件级 source 和未消费图片保持原 source，
+   `imageInfo[].contentLocator` 关系；image-only wrapper 直接以其已声明图片 source 取代可见
+   file-reference，后续成功的 Content Image Tool 对相同完整 locator 只会复用。文本、mixed 和文件级 source，
    不按 EPUB 内部文件名或扩展名猜测。
 5. Desktop delivery adapter 解析 Conversation 的精确 Workspace binding，生成稳定 `deliveryId`，先恢复
    ledger 中已有 pending delivery；仅对新的 delivery 读取 source fingerprint 并入账，再在 Canvas runtime
@@ -47,11 +50,12 @@
   重新读取信号。
 - analysis `artifactId` 从排序后的 source artifact identities、分析类别和 canonical final Markdown 派生；
   `contentFingerprint` 只由 Markdown 内容派生。
-- `deliveryId` 从 Workspace、Conversation、DSH Session、turn 和精确 Canvas target 派生；时间戳不参与。
+- completed-tool `deliveryId` 从 Workspace、Conversation、DSH Session、turn、精确 `toolCallId` 和 Canvas target
+  派生；terminal `deliveryId` 从 Workspace、Conversation、DSH Session、turn 和 target 派生；时间戳不参与。
 - 同一 turn 的重复 terminal notification 命中同一 ledger task/receipt；同一 batch 内重复 Tool locator 在
   collector 中先合并；不同 turn 产生完全相同的 source/analysis graph 时 Canvas planner 返回 node/connection
   reuse 或 noop。
-- locator 去重与文档语义折叠分层处理：前者只比较完整 `ContentLocator`；后者只消费 Document result 已声明
+- locator 去重与文档语义折叠分层处理：前者只比较完整 `ContentLocator`；后者只使用 Document result 已声明
   的 image-only wrapper → embedded image 关系。Canvas 不渲染或执行原始 EPUB HTML，Content owner 继续负责
   文档解析和安全的文本/图片投影。
 - completed content Tool 的 projection decode 以单个 tool-call 为最小失败边界。参数、结果 JSON、canonical
@@ -61,22 +65,22 @@
 - Board 是内容索引而不是 Tool 调用日志。collector 只按完整 `ContentLocator` 去重，不得因为多个 locator
   共享同一个 `file` 就把不同 page、entry 或 text-range selector 收敛成根文件；否则跨应用定位信息会丢失，
   Board 也无法展示 Agent 实际消费的内容位置。唯一允许的语义折叠是 Content result 明确声明的
-  image-only wrapper → embedded image 关系，且对应图片必须已在同轮成功读取。该规则不猜测 EPUB 内部
+  image-only wrapper → embedded image 关系。该规则不猜测 EPUB 内部
   `page`/`moe` 文件名，也不执行 HTML。
 
 ## Commit timing and failure semantics
 
-Tool 调用期间不写 Canvas。只有成功的 `turn/end` 且存在可审阅 source+analysis batch 时提交一次。
-`interrupted`、`max-tokens`、未完成 assistant stream、只有 source、只有普通聊天文本或没有任何成功 source
-都不提交。单个 content Tool 失败或 completed projection 无法通过 canonical decode 时只排除该 Tool；同轮
-已有成功 source 和最终分析时继续提交，失败记录仍在 transcript 与 Host diagnostic 中 fail-visible，不能
-伪装为 Canvas source。
+受支持的 content Tool 只有在 completed projection 可通过 canonical decode 时才立即提交 source-only batch；
+pending、in-progress、failed 或非法 projection 不提交。成功 `turn/end` 再提交一次包含最终 Markdown 与关系的
+terminal batch。`interrupted`、`max-tokens` 或未完成 assistant stream 不提交分析，但先前已成功 Tool 的 source
+保持可见。单个 content Tool 失败只排除该 Tool，失败记录仍在 transcript 与 Host diagnostic 中 fail-visible，
+不能伪装为 Canvas source。
 Canvas delivery 失败只记录当前 delivery 的 blocked/conflict diagnostic，不改变已保存 transcript、源文件或
 其他 Workspace。不得回退到 active/recent Workspace、另一个 Canvas、renderer mutation 或 raw `.nkc` 写入。
 
 ## Runtime boundary and replaced path
 
-- **Producer:** `packages/agent/runtime/src/application` DSH terminal collector。
+- **Producer:** `packages/agent/runtime/src/application` DSH completed-tool/terminal collector。
 - **Consumer:** Canvas Domain `WorkspaceBoardDeliveryCoordinator` public path。
 - **Runtime adapter:** `apps/neko-desktop/src/main` exact Workspace/SQLite/file wiring；保留在 Desktop 的原因仅为
   Electron Host authority 与 live Canvas session coordination。它组合 Content-owned workspace/document-entry

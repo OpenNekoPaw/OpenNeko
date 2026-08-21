@@ -29,3 +29,6 @@
 - [x] 12. Restore complete-`ContentLocator` index semantics after runtime evidence showed that same-file selector
       collapse erased EPUB page sources; retain only the Content-declared image-only wrapper replacement, add
       regression coverage, and rerun the focused Agent/Canvas/Desktop validation gates.
+- [x] 13. Deliver canonical sources at each successful content Tool completion, keep final Markdown terminal-only,
+      give Tool and terminal deliveries distinct stable identities, and make image-only Document results project
+      embedded image locators directly so chapter wrappers and later image reads do not duplicate Board nodes.

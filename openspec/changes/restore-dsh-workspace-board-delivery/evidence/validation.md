@@ -113,3 +113,29 @@ UI itself was not replaced or restyled.
   provider turn; no direct IPC, database injection, dry-run, or unit result is substituted for that evidence. The
   authoritative manual check is that a new multi-page EPUB analysis updates the already-open configured Board with
   distinct image/page sources plus one analysis node, without duplicate wrappers or reopening the Board.
+
+## 2026-08-22 completed Tool incremental delivery follow-up
+
+- 收尾边界审计补充：Tool projection 现在保存已知的稳定 `turnStartedAt`，completed-tool collector 不再要求
+  `turn/start` 仍位于最多 256 条的 event window 中；无匹配 turn/start 的非内容 Tool/隔离诊断场景保持原有
+  projection 语义，只有实际尝试交付的 completed content Tool 会产生局部 diagnostic。
+
+- Agent Runtime now receives the exact completed `toolCallId` after ACP projection, decodes only that supported Content
+  Tool, and submits a source-only delivery. A successful terminal projection submits final Markdown and relations through
+  a distinct turn-scoped delivery. Interrupted and failed turns create no analysis delivery and do not remove already
+  delivered sources.
+- Image-only Document results immediately project their declared same-container embedded image locators and omit the
+  chapter wrapper. Full-`ContentLocator` identity deduplicates a later Content Image Tool read and the terminal replay;
+  text, mixed, root and distinct selector sources remain independent.
+- Validation passed: Agent Runtime full suite (`52` files, `376` tests), Desktop full suite (`103` files, `621` tests),
+  focused Desktop incremental/terminal planner regression (`6` tests), Canvas Domain (`37` files, `300` tests), all three
+  affected typechecks, focused ESLint, Agent/content/application boundary gates, strict OpenSpec (`120` items),
+  `git diff --check`, and the key-free Agent Evaluation harness (`45` files, `314` tests; `26` suites and `69` dry-run
+  cases). The Evaluation result proves authoring/harness readiness only, not real provider Board behavior.
+- `check:legacy-debt` passed. `check:unused` remains failed on the repository baseline (7 unused files, 2 dependencies,
+  1 devDependency, 2 unlisted dependencies and 162 exports); none of the new delivery symbols were reported.
+- UI validation is blocked rather than inferred. The running real Electron Desktop was inspected read-only and exposes
+  the configured Board with its pre-change `12 nodes | 10 connections`, but proving completed-Tool timing requires a new
+  user-driven real-provider turn and an interruption check. No provider call, direct IPC, database injection or existing
+  Board replay was substituted. Desktop packaging was not run because that visible development owner is actively using
+  the single Forge/Vite bundle writer; it was not terminated for this validation.

@@ -1,10 +1,16 @@
 ## ADDED Requirements
 
-### Requirement: DSH creator-visible artifacts synchronize only at successful turn completion
+### Requirement: DSH sources synchronize at successful Tool completion and analysis at successful turn completion
 
-The system SHALL collect creator-visible candidates while a DSH turn runs and SHALL submit at most one Workspace
-Board delivery after the canonical `turn/end` projection completes successfully. The model and individual Tool calls
-SHALL NOT decide or directly perform Board synchronization.
+The system SHALL submit a source-only Workspace Board delivery when each supported content Tool reaches a canonically
+decoded completed projection and SHALL submit final analysis only after canonical `turn/end` completes successfully.
+The model and Tool implementation SHALL NOT decide or directly perform Board synchronization.
+
+#### Scenario: Content Tool completes before the turn
+
+- **WHEN** a supported content Tool reaches `completed` with a canonical consumed `ContentLocator`
+- **THEN** the Host SHALL immediately submit a source-only delivery for that exact Tool call without waiting for
+  assistant Markdown or `turn/end`
 
 #### Scenario: Document analysis completes
 
@@ -13,16 +19,18 @@ SHALL NOT decide or directly perform Board synchronization.
 - **THEN** the Host SHALL submit one batch containing the deduplicated source artifacts, one Markdown analysis
   artifact, and deterministic source-to-analysis relations to the configured Workspace Board
 
-#### Scenario: Tool calls are still running
+#### Scenario: Tool call is not completed
 
-- **WHEN** one or more content Tools are pending or in progress
-- **THEN** no Canvas delivery SHALL be persisted or applied
+- **WHEN** a content Tool is pending, in progress, failed, or cancelled
+- **THEN** no delivery SHALL be created for that Tool call
+- **AND** already completed sibling Tool sources SHALL remain visible
 
 #### Scenario: Turn does not produce a reviewable batch
 
-- **WHEN** the turn is interrupted, reaches max tokens, has no successfully consumed stable source, contains only
-  source reads, or contains ordinary assistant text without a successfully consumed stable source
-- **THEN** the system SHALL NOT create a Workspace Board delivery
+- **WHEN** the turn is interrupted, reaches max tokens, has no successfully consumed stable source, or contains
+  ordinary assistant text without a successfully consumed stable source
+- **THEN** the system SHALL NOT create a final analysis delivery
+- **AND** source-only deliveries from already completed content Tools SHALL remain visible
 
 #### Scenario: One sibling content Tool fails after another source succeeds
 
@@ -63,7 +71,7 @@ ledger, and Canvas projection boundaries without adding content fingerprints or 
 #### Scenario: One source is read repeatedly within a turn
 
 - **WHEN** multiple successful Tool calls use the same canonical `ContentLocator`
-- **THEN** the terminal batch SHALL contain one source artifact for that locator
+- **THEN** Canvas SHALL contain one source node for that locator across completed-tool and terminal deliveries
 
 #### Scenario: One analysis consumes multiple locations in the same document container
 
@@ -74,16 +82,18 @@ ledger, and Canvas projection boundaries without adding content fingerprints or 
 - **AND** sharing the same `ContentLocator.file` SHALL NOT erase a page, entry, or text-range selector
 - **AND** a root locator SHALL remain a separate source when it was itself consumed
 
-#### Scenario: An image-only EPUB page wrapper resolves to an image source
+#### Scenario: An image-only document entry resolves directly to image sources
 
-- **WHEN** a completed Document Tool result identifies an exact entry as image-only and exposes an embedded image `ContentLocator` that a completed Content Image Tool consumed in the same turn
-- **THEN** the terminal batch SHALL project the embedded image as the single user-visible page source
+- **WHEN** a completed Document Tool result identifies an exact entry as image-only and exposes one or more embedded
+  image `ContentLocator` values
+- **THEN** its completed-tool delivery SHALL project the embedded images as the user-visible sources
 - **AND** it SHALL NOT also project the XHTML or HTML wrapper as a generic file-reference node
 - **AND** the decision SHALL use Content-owned result semantics rather than entry filenames
+- **AND** a later completed Content Image Tool for the same locator SHALL reuse the existing image node
 
 #### Scenario: A document entry has independent text semantics
 
-- **WHEN** a completed Document Tool result is text or mixed content, or its embedded image was not successfully consumed
+- **WHEN** a completed Document Tool result is text or mixed content
 - **THEN** the exact document source SHALL remain a distinct source artifact
 - **AND** the collector SHALL NOT infer replacement from `page`, `moe`, extension, or basename patterns
 
@@ -92,6 +102,12 @@ ledger, and Canvas projection boundaries without adding content fingerprints or 
 - **WHEN** Desktop observes or retries the same DSH session turn completion more than once
 - **THEN** every attempt SHALL use the same `deliveryId` and request digest, exactly one Canvas mutation SHALL be
   committed, and equivalent attempts SHALL resolve through the existing task or receipt
+
+#### Scenario: The same completed Tool update is handled repeatedly
+
+- **WHEN** Desktop observes or retries the same completed content Tool more than once
+- **THEN** every attempt SHALL use the same tool-scoped `deliveryId` and request digest, exactly one source mutation
+  SHALL be committed, and the terminal delivery SHALL later reuse that source node
 
 #### Scenario: The same locator is analyzed in later turns
 

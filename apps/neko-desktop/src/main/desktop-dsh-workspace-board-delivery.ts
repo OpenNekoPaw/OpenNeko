@@ -7,10 +7,7 @@ import type {
   DshWorkspaceBoardArtifactDeliveryPort,
 } from '@neko/agent-runtime/application';
 import type { ContentReadService } from '@neko/content';
-import {
-  createNodeHostContentReadService,
-  type NodeDocumentEntryReader,
-} from '@neko/content/node';
+import { createNodeHostContentReadService, type NodeDocumentEntryReader } from '@neko/content/node';
 import {
   WorkspaceBoardDeliveryCoordinator,
   WorkspaceBoardDeliveryLedger,
@@ -197,14 +194,22 @@ export function createDshWorkspaceBoardProjectionRequest(
   if (input.artifacts.length === 0) {
     throw new Error('DSH Workspace Board delivery requires at least one artifact.');
   }
-  const deliveryId = `dsh-turn:${hashStableValue({
+  const identity = {
     workspaceId: input.workspaceId,
     conversationId: input.conversationId,
     dshSessionId: input.dshSessionId,
     turn: input.turn,
     target: 'workspace-board',
-  })}`;
-  const createdAt = new Date(input.completedAt).toISOString();
+  } as const;
+  const deliveryId =
+    input.delivery.kind === 'completed-content-tool'
+      ? `dsh-tool:${hashStableValue({ ...identity, toolCallId: input.delivery.toolCallId })}`
+      : `dsh-turn:${hashStableValue(identity)}`;
+  const operationId =
+    input.delivery.kind === 'completed-content-tool'
+      ? `${input.dshSessionId}:turn:${input.turn}:tool:${input.delivery.toolCallId}`
+      : `${input.dshSessionId}:turn:${input.turn}`;
+  const createdAt = new Date(input.createdAt).toISOString();
   return {
     target: {
       workspaceId: workspace.workspaceId,
@@ -214,7 +219,7 @@ export function createDshWorkspaceBoardProjectionRequest(
       deliveryId,
       sourceHost: 'desktop',
       createdAt,
-      operationId: `${input.dshSessionId}:turn:${input.turn}`,
+      operationId,
     },
     artifacts: input.artifacts.map((artifact): CanvasWorkspaceProjectionArtifact => {
       const provenance = {
@@ -227,7 +232,7 @@ export function createDshWorkspaceBoardProjectionRequest(
         ...('sourceArtifactIds' in artifact
           ? { sourceArtifactIds: artifact.sourceArtifactIds }
           : {}),
-        operationId: `${input.dshSessionId}:turn:${input.turn}`,
+        operationId,
         createdAt,
       };
       return artifact.kind === 'markdown'

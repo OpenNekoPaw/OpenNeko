@@ -59,7 +59,7 @@ import {
   createPersistentAgentConversationContextAuthority,
   createDshDomainConversationService,
   createDshConversationTurnContextResolver,
-  createDshWorkspaceBoardTerminalDeliveryService,
+  createDshWorkspaceBoardArtifactDeliveryService,
   projectDshConversationTitle,
   removeRetiredPiStorage,
   type DshDomainConversationService,
@@ -1456,7 +1456,7 @@ async function startDesktop(): Promise<void> {
   const agentConversationContexts = createPersistentAgentConversationContextAuthority({
     metadataStore: localMetadataStore,
   });
-  const dshWorkspaceBoardTerminalDelivery = createDshWorkspaceBoardTerminalDeliveryService({
+  const dshWorkspaceBoardArtifactDelivery = createDshWorkspaceBoardArtifactDeliveryService({
     contexts: agentConversationContexts,
     delivery: dshWorkspaceBoardDelivery,
     diagnostics: {
@@ -1960,8 +1960,14 @@ async function startDesktop(): Promise<void> {
       message: diagnostic.message,
     });
   }
-  const dshTerminalArtifactDelivery: {
-    current?: (dshSessionId: string, conversationId: string) => Promise<void>;
+  const dshWorkspaceBoardDeliveryTrigger: {
+    current?: (
+      dshSessionId: string,
+      conversationId: string,
+      trigger:
+        | { readonly kind: 'completed-content-tool'; readonly toolCallId: string }
+        | { readonly kind: 'completed-turn' },
+    ) => Promise<void>;
   } = {};
   const dshProduct = await startDesktopDshProductRuntime({
     isPackaged: app.isPackaged,
@@ -2024,6 +2030,22 @@ async function startDesktop(): Promise<void> {
               `DSH Session '${notification.sessionId}' update has no Conversation binding.`,
             );
           }
+          if (
+            notification.update.sessionUpdate === 'tool_call_update' &&
+            notification.update.status === 'completed'
+          ) {
+            if (dshWorkspaceBoardDeliveryTrigger.current === undefined) {
+              throw new Error('DSH Workspace Board artifact delivery is not initialized.');
+            }
+            await dshWorkspaceBoardDeliveryTrigger.current(
+              notification.sessionId,
+              binding.conversationId,
+              {
+                kind: 'completed-content-tool',
+                toolCallId: notification.update.toolCallId,
+              },
+            );
+          }
           publishDshChanged(DSH_SESSION_CHANGED_CHANNEL, {
             conversationId: binding.conversationId,
           });
@@ -2036,12 +2058,13 @@ async function startDesktop(): Promise<void> {
             );
           }
           if (notification.type === 'turn/end') {
-            if (dshTerminalArtifactDelivery.current === undefined) {
-              throw new Error('DSH terminal artifact delivery is not initialized.');
+            if (dshWorkspaceBoardDeliveryTrigger.current === undefined) {
+              throw new Error('DSH Workspace Board artifact delivery is not initialized.');
             }
-            await dshTerminalArtifactDelivery.current(
+            await dshWorkspaceBoardDeliveryTrigger.current(
               notification.sessionId,
               binding.conversationId,
+              { kind: 'completed-turn' },
             );
           }
           publishDshChanged(DSH_SESSION_CHANGED_CHANNEL, {
@@ -2067,14 +2090,23 @@ async function startDesktop(): Promise<void> {
       return assembly;
     },
   });
-  dshTerminalArtifactDelivery.current = async (dshSessionId, conversationId) => {
+  dshWorkspaceBoardDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
     try {
       const snapshot = dshProduct.runtime.client.projection.snapshot(dshSessionId);
-      await dshWorkspaceBoardTerminalDelivery.deliverTerminal({
-        conversationId,
-        dshSessionId,
-        events: snapshot.events,
-      });
+      if (trigger.kind === 'completed-content-tool') {
+        await dshWorkspaceBoardArtifactDelivery.deliverCompletedTool({
+          conversationId,
+          dshSessionId,
+          toolCallId: trigger.toolCallId,
+          events: snapshot.events,
+        });
+      } else {
+        await dshWorkspaceBoardArtifactDelivery.deliverTerminal({
+          conversationId,
+          dshSessionId,
+          events: snapshot.events,
+        });
+      }
     } catch (error) {
       host.diagnostics?.report({
         code: 'dsh-workspace-board-artifact-delivery-failed',

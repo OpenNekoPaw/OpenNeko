@@ -33,7 +33,7 @@ export type DshWorkspaceBoardArtifact =
 
 export interface DshWorkspaceBoardArtifactBatch {
   readonly turn: number;
-  readonly completedAt: number;
+  readonly createdAt: number;
   readonly artifacts: readonly DshWorkspaceBoardArtifact[];
 }
 
@@ -54,17 +54,15 @@ type DshWorkspaceBoardSourceArtifact = Extract<
   { readonly role: 'source' }
 >;
 
-interface CollectedContentToolSource {
-  readonly artifact: DshWorkspaceBoardSourceArtifact;
-  readonly imageOnlyReplacementLocators: readonly ContentLocator[];
-}
-
 export interface DshWorkspaceBoardArtifactDeliveryInput {
   readonly workspaceId: string;
   readonly conversationId: string;
   readonly dshSessionId: string;
   readonly turn: number;
-  readonly completedAt: number;
+  readonly createdAt: number;
+  readonly delivery:
+    | { readonly kind: 'completed-content-tool'; readonly toolCallId: string }
+    | { readonly kind: 'completed-turn' };
   readonly artifacts: readonly DshWorkspaceBoardArtifact[];
 }
 
@@ -87,17 +85,27 @@ export interface DshWorkspaceBoardTerminalDeliveryInput {
   readonly events: readonly DshAcpProjectedEvent[];
 }
 
-export interface DshWorkspaceBoardTerminalDeliveryService {
+export interface DshWorkspaceBoardCompletedToolDeliveryInput {
+  readonly conversationId: string;
+  readonly dshSessionId: string;
+  readonly toolCallId: string;
+  readonly events: readonly DshAcpProjectedEvent[];
+}
+
+export interface DshWorkspaceBoardArtifactDeliveryService {
+  deliverCompletedTool(
+    input: DshWorkspaceBoardCompletedToolDeliveryInput,
+  ): Promise<DshWorkspaceBoardArtifactDeliveryOutcome | undefined>;
   deliverTerminal(
     input: DshWorkspaceBoardTerminalDeliveryInput,
   ): Promise<DshWorkspaceBoardArtifactDeliveryOutcome | undefined>;
 }
 
 /**
- * Owns the terminal-turn application workflow. Desktop supplies the exact Conversation context
- * authority and the Canvas delivery port; it does not repeat collection or targeting rules.
+ * Owns the completed-Tool and terminal-turn application workflows. Desktop supplies the exact
+ * Conversation context authority and Canvas delivery port without repeating collection rules.
  */
-export function createDshWorkspaceBoardTerminalDeliveryService(options: {
+export function createDshWorkspaceBoardArtifactDeliveryService(options: {
   readonly contexts: {
     readContext(conversationId: string): Promise<AgentConversationContext | undefined>;
   };
@@ -105,8 +113,28 @@ export function createDshWorkspaceBoardTerminalDeliveryService(options: {
   readonly diagnostics: {
     report(diagnostic: DshWorkspaceBoardArtifactCollectionDiagnostic): void;
   };
-}): DshWorkspaceBoardTerminalDeliveryService {
+}): DshWorkspaceBoardArtifactDeliveryService {
   return Object.freeze({
+    async deliverCompletedTool(input: DshWorkspaceBoardCompletedToolDeliveryInput) {
+      const context = await options.contexts.readContext(input.conversationId);
+      if (context?.kind !== 'workspace' && context?.kind !== 'authoring') return undefined;
+      const collection = collectDshWorkspaceBoardCompletedToolArtifacts({
+        events: input.events,
+        toolCallId: input.toolCallId,
+      });
+      for (const diagnostic of collection.diagnostics) options.diagnostics.report(diagnostic);
+      const batch = collection.batch;
+      if (batch === undefined) return undefined;
+      return options.delivery.deliver({
+        workspaceId: context.workspaceId,
+        conversationId: input.conversationId,
+        dshSessionId: input.dshSessionId,
+        turn: batch.turn,
+        createdAt: batch.createdAt,
+        delivery: { kind: 'completed-content-tool', toolCallId: input.toolCallId },
+        artifacts: batch.artifacts,
+      });
+    },
     async deliverTerminal(input: DshWorkspaceBoardTerminalDeliveryInput) {
       const context = await options.contexts.readContext(input.conversationId);
       if (context?.kind !== 'workspace' && context?.kind !== 'authoring') return undefined;
@@ -128,16 +156,45 @@ export function createDshWorkspaceBoardTerminalDeliveryService(options: {
         conversationId: input.conversationId,
         dshSessionId: input.dshSessionId,
         turn: batch.turn,
-        completedAt: batch.completedAt,
+        createdAt: batch.createdAt,
+        delivery: { kind: 'completed-turn' },
         artifacts: batch.artifacts,
       });
     },
   });
 }
 
+/** Collects source artifacts for one exact completed content Tool call. */
+export function collectDshWorkspaceBoardCompletedToolArtifacts(input: {
+  readonly events: readonly DshAcpProjectedEvent[];
+  readonly toolCallId: string;
+}): DshWorkspaceBoardArtifactCollection {
+  const diagnostics: DshWorkspaceBoardArtifactCollectionDiagnostic[] = [];
+  const event = [...input.events]
+    .reverse()
+    .find((candidate) => candidate.kind === 'tool' && candidate.toolCallId === input.toolCallId);
+  if (event?.kind !== 'tool' || event.status !== 'completed' || !isSupportedContentTool(event)) {
+    return { diagnostics };
+  }
+  try {
+    if (event.turnStartedAt === undefined) {
+      throw new Error(`DSH Tool '${input.toolCallId}' has no projected turn start.`);
+    }
+    const artifacts = deduplicateSources(collectContentToolSources(event));
+    if (artifacts.length === 0) return { diagnostics };
+    return {
+      batch: { turn: event.turn, createdAt: event.turnStartedAt, artifacts },
+      diagnostics,
+    };
+  } catch (error) {
+    diagnostics.push(contentToolDiagnostic(event, error));
+    return { diagnostics };
+  }
+}
+
 /**
- * Collects one reviewable batch only after the exact DSH turn has reached a successful terminal
- * projection. Tool events are evidence; they never mutate Canvas directly.
+ * Collects final analysis and its canonical sources after the exact DSH turn reaches a successful
+ * terminal projection. Earlier completed-Tool deliveries are idempotently reused by Canvas.
  */
 export function collectDshWorkspaceBoardArtifacts(input: {
   readonly events: readonly DshAcpProjectedEvent[];
@@ -149,46 +206,25 @@ export function collectDshWorkspaceBoardArtifacts(input: {
   );
   if (terminal?.kind !== 'turn' || terminal.phase !== 'end') return { diagnostics };
   if (!isReviewableTurnEnd(terminal.reason)) return { diagnostics };
-  const sources = new Map<string, DshWorkspaceBoardSourceArtifact>();
-  const imageOnlyReplacements = new Map<string, readonly ContentLocator[]>();
+  const collectedSources: DshWorkspaceBoardSourceArtifact[] = [];
   for (const event of input.events) {
     if (event.kind !== 'tool' || event.turn !== input.turn || event.status !== 'completed')
       continue;
-    if (event.title !== DOCUMENT_DSH_TOOL_NAME && event.title !== CONTENT_IMAGE_DSH_TOOL_NAME) {
-      continue;
-    }
-    let source: CollectedContentToolSource | undefined;
+    if (!isSupportedContentTool(event)) continue;
     try {
-      source = collectContentToolSource(event);
+      collectedSources.push(...collectContentToolSources(event));
     } catch (error) {
-      diagnostics.push({
-        code: 'DSH_WORKSPACE_BOARD_CONTENT_TOOL_PROJECTION_INVALID',
-        toolCallId: event.toolCallId,
-        toolName: event.title,
-        message: error instanceof Error ? error.message : String(error),
-      });
+      diagnostics.push(contentToolDiagnostic(event, error));
       continue;
-    }
-    if (!source) continue;
-    const locatorIdentity = contentLocatorKey(source.artifact.contentLocator);
-    const existing = sources.get(locatorIdentity);
-    if (
-      existing === undefined ||
-      (existing.kind === 'file-reference' && source.artifact.kind === 'image')
-    ) {
-      sources.set(locatorIdentity, source.artifact);
-    }
-    if (source.imageOnlyReplacementLocators.length > 0) {
-      imageOnlyReplacements.set(locatorIdentity, source.imageOnlyReplacementLocators);
     }
   }
-  collapseConsumedImageOnlyDocumentWrappers(sources, imageOnlyReplacements);
-  if (sources.size === 0) return { diagnostics };
+  const sources = deduplicateSources(collectedSources);
+  if (sources.length === 0) return { diagnostics };
 
   const markdown = collectFinalAssistantMarkdown(input.events, input.turn);
   if (!markdown) return { diagnostics };
 
-  const orderedSources = [...sources.values()].sort((left, right) =>
+  const orderedSources = [...sources].sort((left, right) =>
     left.sourceId.localeCompare(right.sourceId),
   );
   const sourceArtifactIds = orderedSources.map((source) => source.artifactId);
@@ -211,19 +247,17 @@ export function collectDshWorkspaceBoardArtifacts(input: {
   return {
     batch: {
       turn: input.turn,
-      completedAt: terminal.completedAt,
+      createdAt: terminal.completedAt,
       artifacts: [...orderedSources, analysis],
     },
     diagnostics,
   };
 }
 
-function collectContentToolSource(
+function collectContentToolSources(
   event: Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }>,
-): CollectedContentToolSource | undefined {
+): readonly DshWorkspaceBoardSourceArtifact[] {
   let locator: ContentLocator;
-  let kind: 'file-reference' | 'image';
-  let imageOnlyReplacementLocators: readonly ContentLocator[] = [];
   if (event.title === DOCUMENT_DSH_TOOL_NAME) {
     const requested = decodeDocumentDshToolArgs(event.rawInput).input.source;
     const completed = readCompletedDocumentResult(event.rawOutput);
@@ -233,18 +267,52 @@ function collectContentToolSource(
       );
     }
     locator = completed.source;
-    kind = 'file-reference';
-    imageOnlyReplacementLocators = readImageOnlyReplacementLocators(completed.result, locator);
+    const imageLocators = readImageOnlyReplacementLocators(completed.result, locator);
+    if (imageLocators.length > 0) {
+      return imageLocators.map((imageLocator) => createSourceArtifact(imageLocator, 'image'));
+    }
+    return [createSourceArtifact(locator, 'file-reference')];
   } else if (event.title === CONTENT_IMAGE_DSH_TOOL_NAME) {
     const rawInput = requireRecord(event.rawInput, `${CONTENT_IMAGE_DSH_TOOL_NAME} input`);
     locator = decodeContentImageDshToolSource(rawInput['source']);
-    kind = 'image';
+    return [createSourceArtifact(locator, 'image')];
   } else {
-    return undefined;
+    return [];
   }
+}
+
+function deduplicateSources(
+  artifacts: readonly DshWorkspaceBoardSourceArtifact[],
+): readonly DshWorkspaceBoardSourceArtifact[] {
+  const sources = new Map<string, DshWorkspaceBoardSourceArtifact>();
+  for (const artifact of artifacts) {
+    const identity = contentLocatorKey(artifact.contentLocator);
+    const existing = sources.get(identity);
+    if (
+      existing === undefined ||
+      (existing.kind === 'file-reference' && artifact.kind === 'image')
+    ) {
+      sources.set(identity, artifact);
+    }
+  }
+  return [...sources.values()];
+}
+
+function isSupportedContentTool(
+  event: Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }>,
+): event is Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }> & { readonly title: string } {
+  return event.title === DOCUMENT_DSH_TOOL_NAME || event.title === CONTENT_IMAGE_DSH_TOOL_NAME;
+}
+
+function contentToolDiagnostic(
+  event: Extract<DshAcpProjectedEvent, { readonly kind: 'tool' }> & { readonly title: string },
+  error: unknown,
+): DshWorkspaceBoardArtifactCollectionDiagnostic {
   return {
-    artifact: createSourceArtifact(locator, kind),
-    imageOnlyReplacementLocators,
+    code: 'DSH_WORKSPACE_BOARD_CONTENT_TOOL_PROJECTION_INVALID',
+    toolCallId: event.toolCallId,
+    toolName: event.title,
+    message: error instanceof Error ? error.message : String(error),
   };
 }
 
@@ -294,24 +362,6 @@ function readImageOnlyReplacementLocators(
     }
     return [image];
   });
-}
-
-function collapseConsumedImageOnlyDocumentWrappers(
-  sources: Map<string, DshWorkspaceBoardSourceArtifact>,
-  replacements: ReadonlyMap<string, readonly ContentLocator[]>,
-): void {
-  for (const [wrapperIdentity, imageLocators] of replacements) {
-    if (imageLocators.length === 0) continue;
-    const imageIdentities = imageLocators.map(contentLocatorKey);
-    if (
-      imageIdentities.every((identity) => {
-        const source = sources.get(identity);
-        return source?.kind === 'image';
-      })
-    ) {
-      sources.delete(wrapperIdentity);
-    }
-  }
 }
 
 function parseProjectedToolOutput(value: unknown): unknown {

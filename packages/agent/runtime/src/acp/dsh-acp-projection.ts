@@ -19,6 +19,7 @@ export interface DshAcpProjectedToolEvent {
   readonly sessionId: string;
   readonly toolCallId: string;
   readonly turn: number;
+  readonly turnStartedAt?: number;
   readonly status: DshAcpProjectedToolStatus;
   readonly title?: string;
   readonly rawInput?: unknown;
@@ -760,6 +761,7 @@ export class DshAcpProjection {
         ),
       );
     }
+    const turnStartedAt = session.turnStartedAt.get(turn);
     const key = toolKey(turn, update.toolCallId);
     const existing = session.tools.get(key);
     if (existing !== undefined) {
@@ -799,6 +801,7 @@ export class DshAcpProjection {
         sessionId: session.sessionId,
         toolCallId: tool.toolCallId,
         turn,
+        ...(turnStartedAt === undefined ? {} : { turnStartedAt }),
         status: tool.status,
         title: tool.title,
         rawInput: tool.rawInput,
@@ -1078,6 +1081,7 @@ export class DshAcpProjection {
         ),
       );
     }
+    const turnStartedAt = session.turnStartedAt.get(tool.turn);
     return this.commit(
       session,
       {
@@ -1085,6 +1089,7 @@ export class DshAcpProjection {
         sessionId: session.sessionId,
         toolCallId: tool.toolCallId,
         turn: tool.turn,
+        ...(turnStartedAt === undefined ? {} : { turnStartedAt }),
         status,
         title: tool.title,
         rawInput: tool.rawInput,
