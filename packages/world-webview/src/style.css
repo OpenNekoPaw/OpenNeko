@@ -206,7 +206,7 @@
   min-width: 0;
   min-height: 0;
   color: var(--neko-fg, #202124);
-  background: var(--neko-bg, #f7f8f8);
+  background: var(--neko-bg, var(--neko-editor-background, #f7f8f8));
   font-size: 12px;
 }
 
@@ -261,7 +261,7 @@
 .world-management__header-copy > p {
   max-width: 620px;
   margin: 7px 0 0;
-  color: var(--neko-fg-muted, #73777d);
+  color: var(--neko-fg-secondary, var(--neko-descriptionForeground, #6c7178));
 }
 
 .world-management__toolbar {
@@ -290,6 +290,7 @@
   flex: 1;
   border: 0;
   outline: 0;
+  color: var(--neko-fg, #202124);
   background: transparent;
 }
 
@@ -328,10 +329,10 @@
   border: 1px solid var(--neko-border, #d7dadd);
   border-radius: 8px;
   padding: 0 12px;
+  color: var(--neko-fg-secondary, #656a70);
   background: var(--neko-elevated, #fff);
 }
 
-.world-management__header-actions .is-primary,
 .world-management__primary-actions button:first-child {
   border-color: var(--neko-accent, #2d6b54);
   color: #fff;
@@ -362,17 +363,18 @@
   border-radius: 10px;
   padding: 16px;
   color: inherit;
-  background: var(--neko-elevated, #fff);
+  background: var(--neko-surface, #fff);
   text-align: left;
 }
 
 button.world-management__world-card:hover {
   border-color: color-mix(in srgb, var(--neko-accent, #2d6b54) 35%, var(--neko-border));
-  background: color-mix(in srgb, var(--neko-accent, #2d6b54) 3%, var(--neko-elevated, #fff));
+  background: color-mix(in srgb, var(--neko-accent, #2d6b54) 3%, var(--neko-surface, #fff));
 }
 
 .world-management__world-card[aria-pressed='true'] {
   border-color: color-mix(in srgb, var(--neko-accent, #2d6b54) 65%, var(--neko-border));
+  background: color-mix(in srgb, var(--neko-accent, #2d6b54) 6%, var(--neko-surface, #fff));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neko-accent, #2d6b54) 22%, transparent);
 }
 
@@ -385,14 +387,19 @@ button.world-management__world-card:hover {
   width: 42px;
   height: 42px;
   place-items: center;
+  border: 1px solid var(--neko-border, #d7dadd);
   border-radius: 9px;
-  color: var(--neko-fg-muted, #73777d);
-  background: var(--neko-hover, #eef0f1);
+  color: var(--neko-fg-secondary, #656a70);
+  background: var(--neko-bg, var(--neko-editor-background, #f7f8f8));
 }
 
 .world-management__world-card.is-invalid .world-management__world-icon {
   color: #a02d2d;
-  background: color-mix(in srgb, #c43d3d 8%, var(--neko-bg, #f7f8f8));
+  background: color-mix(
+    in srgb,
+    #c43d3d 8%,
+    var(--neko-bg, var(--neko-editor-background, #f7f8f8))
+  );
 }
 
 .world-management__world-card-copy {
