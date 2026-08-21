@@ -217,6 +217,39 @@ describe('Canvas File node text preview', () => {
     expect(container.querySelector('.canvas-file-node__text')?.textContent).not.toContain('first');
   });
 
+  it('reloads the same locator when its source fingerprint changes', async () => {
+    const readTextFilePreview = vi.fn(async (request) => ({
+      requestId: request.requestId,
+      nodeId: request.nodeId,
+      status: 'ready' as const,
+      kind: 'plain' as const,
+      text: 'latest',
+      truncated: false,
+      empty: false,
+    }));
+    const host = createCanvasWebviewHost(runtime(readTextFilePreview));
+    const first = {
+      ...fileNode('file-text', 'notes/readme.txt', 'text/plain'),
+      data: {
+        ...fileNode('file-text', 'notes/readme.txt', 'text/plain').data,
+        provenance: { contentFingerprint: 'content:sha256:first' },
+      },
+    };
+    await renderFile(root, host, first);
+    await renderFile(root, host, {
+      ...first,
+      data: {
+        ...first.data,
+        provenance: { contentFingerprint: 'content:sha256:second' },
+      },
+    });
+
+    expect(readTextFilePreview).toHaveBeenCalledTimes(2);
+    expect(readTextFilePreview.mock.calls[0]?.[0].locator).toEqual(
+      readTextFilePreview.mock.calls[1]?.[0].locator,
+    );
+  });
+
   it('isolates a failed sibling and keeps unsupported files on the generic icon', async () => {
     const readTextFilePreview = vi.fn(async (request) => {
       if (request.nodeId === 'file-error') {

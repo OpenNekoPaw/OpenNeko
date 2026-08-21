@@ -43,14 +43,6 @@ const WORKSPACE_FILE_LOCATOR_SCHEMA = {
       additionalProperties: false,
       required: true,
     },
-    selector: {
-      type: 'object',
-      properties: {
-        kind: { type: 'string', const: 'entry', required: true },
-        path: { type: 'string', required: true },
-      },
-      additionalProperties: false,
-    },
   },
   additionalProperties: false,
 } as const;
@@ -214,6 +206,9 @@ export function documentDshJsonValue(value: unknown): DocumentDshJsonValue {
 function requireContentLocator(value: unknown, field: string): ContentLocator {
   if (!isContentLocator(value) || !isWorkspaceFileContentLocator(value)) {
     throw new Error(`${field} must be a canonical workspace-file ContentLocator.`);
+  }
+  if (value.selector !== undefined) {
+    throw new Error(`${field} must identify a document file and cannot contain a selector.`);
   }
   return value;
 }

@@ -11,6 +11,8 @@ export interface PreviewSourceDescriptor {
   nodeId?: string;
   outputId?: string;
   contentLocator?: ContentLocator;
+  /** Content freshness only; never used as durable identity or persisted location. */
+  sourceFingerprint?: string;
   asset?: AssetIdentityCapability;
   role: CanvasPreviewRole;
   variants?: CanvasPreviewVariant[];

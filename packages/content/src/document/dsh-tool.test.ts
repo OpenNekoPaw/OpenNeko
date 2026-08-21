@@ -39,5 +39,13 @@ describe('OpenNeko document DSH contract', () => {
         source: { file: { authority: 'workspace', path: '/tmp/story.epub' } },
       }),
     ).toThrow(/canonical workspace-file ContentLocator/u);
+    expect(() =>
+      decodeDocumentDshToolInput('read', {
+        source: {
+          ...source,
+          selector: { kind: 'entry', path: 'OPS/chapter.xhtml' },
+        },
+      }),
+    ).toThrow(/cannot contain a selector/u);
   });
 });

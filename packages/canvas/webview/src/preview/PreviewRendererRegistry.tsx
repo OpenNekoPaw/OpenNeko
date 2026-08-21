@@ -185,7 +185,16 @@ function useCanvasPreviewDescriptor(source: PreviewSourceDescriptor): {
         host.postMessage({ type: 'preview:releaseResource', descriptorId });
       }
     };
-  }, [host, locator, source.id, source.nodeId, source.outputId, source.role, source.title]);
+  }, [
+    host,
+    locator,
+    source.id,
+    source.nodeId,
+    source.outputId,
+    source.role,
+    source.sourceFingerprint,
+    source.title,
+  ]);
 
   return { ...(descriptor ? { descriptor } : {}), ...(diagnostic ? { diagnostic } : {}) };
 }

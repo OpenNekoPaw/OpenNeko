@@ -310,7 +310,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(new Set(plan.nodeIds).size).toBe(1);
   });
 
-  it('does not mutate an existing locator when a new content fingerprint arrives', () => {
+  it('refreshes content provenance without changing locator or creator layout', () => {
     const portablePath = 'references/books/volume-01.epub';
     const weak = sourceDocumentArtifact({
       artifactId: 'source-weak',
@@ -341,12 +341,21 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       request({ deliveryId: 'delivery:batch-2', artifacts: [hashed] }),
     );
 
-    expect(second.status).toBe('noop');
+    expect(second.status).toBe('projected');
     expect(second.canvasData.nodes).toHaveLength(1);
     expect(second.canvasData.nodes[0]).toMatchObject({
       id: existing.id,
       position: { x: 640, y: 320 },
       data: { contentLocator: { file: { authority: 'workspace', path: portablePath } } },
+    });
+    expect(second.canvasData.nodes[0]).toMatchObject({
+      data: {
+        provenance: {
+          artifactId: 'source-weak',
+          contentFingerprint: 'sha256:volume-01',
+          role: 'source',
+        },
+      },
     });
 
     const changedSource = sourceDocumentArtifact({
@@ -366,11 +375,14 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       request({ deliveryId: 'delivery:batch-3', artifacts: [changed] }),
     );
 
-    expect(third.status).toBe('noop');
+    expect(third.status).toBe('projected');
     expect(third.canvasData.nodes).toHaveLength(1);
     expect(third.canvasData.nodes[0]).toMatchObject({
       id: existing.id,
       position: { x: 640, y: 320 },
+    });
+    expect(third.canvasData.nodes[0]).toMatchObject({
+      data: { provenance: { contentFingerprint: 'sha256:volume-01-changed' } },
     });
   });
 
@@ -422,7 +434,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(second.canvasData.connections).toHaveLength(2);
   });
 
-  it('does not create a distinct content node when only provenance fingerprint changes', () => {
+  it('refreshes provenance without creating a distinct content node', () => {
     const first = planCanvasWorkspaceBoardProjection(
       createEmptyCanvasData('Workspace'),
       request({ artifacts: [outputArtifact('delivery:batch-1')] }),
@@ -444,9 +456,12 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       request({ deliveryId: 'delivery:batch-2', artifacts: [changed] }),
     );
 
-    expect(second.status).toBe('noop');
+    expect(second.status).toBe('projected');
     expect(second.canvasData.nodes).toHaveLength(1);
     expect(second.canvasData.nodes[0]!.id).toBe(first.canvasData.nodes[0]!.id);
+    expect(second.canvasData.nodes[0]).toMatchObject({
+      data: { provenance: { contentFingerprint: 'generated:sha256:shot-2' } },
+    });
   });
 
   it('fails atomically when a canonical content identity is occupied by unrelated data', () => {

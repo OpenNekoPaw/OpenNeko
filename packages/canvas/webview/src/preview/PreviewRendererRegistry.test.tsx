@@ -98,6 +98,78 @@ describe('PreviewSurface canonical descriptor lifecycle', () => {
       messages.filter((message) => messageType(message) === 'preview:releaseResource'),
     ).toHaveLength(1);
   });
+
+  it('resolves a fresh descriptor when the same locator fingerprint changes', async () => {
+    const messages: unknown[] = [];
+    const listeners = new Set<(message: unknown) => void>();
+    let descriptorSequence = 0;
+    const host = {
+      documentId: 'boards/image.nkc',
+      postMessage(message: unknown) {
+        messages.push(message);
+        if (!isRecord(message) || message['type'] !== 'preview:resolveResource') return;
+        descriptorSequence += 1;
+        const descriptorId = `canvas-descriptor-image-${descriptorSequence}`;
+        queueMicrotask(() => {
+          for (const listener of listeners) {
+            listener({
+              type: 'preview:resourceResolved',
+              requestId: message['requestId'],
+              descriptor: {
+                descriptorId,
+                sourceFingerprint: `resolved-${descriptorSequence}`,
+                contentLocator: message['contentLocator'],
+                url: `openneko://resource/${descriptorSequence.toString().padStart(32, 'a')}`,
+                contentKind: 'image',
+                mediaType: 'image/png',
+                displayName: 'image.png',
+                byteLength: 42,
+              },
+            });
+          }
+        });
+      },
+      supportsMessage: () => true,
+      getState: () => undefined,
+      setState: () => undefined,
+      subscribe(listener: (message: unknown) => void) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    } as unknown as CanvasWebviewHostPort;
+    const source: PreviewSourceDescriptor = {
+      id: 'canvas-node:image-1',
+      nodeId: 'image-1',
+      outputId: 'image-1',
+      role: 'image',
+      contentLocator: { file: { authority: 'workspace', path: 'media/image.png' } },
+      sourceFingerprint: 'content:sha256:first',
+    };
+
+    await act(async () => {
+      root.render(
+        <CanvasHostProvider host={host}>
+          <PreviewSurface source={source} />
+        </CanvasHostProvider>,
+      );
+      await Promise.resolve();
+    });
+    await act(async () => {
+      root.render(
+        <CanvasHostProvider host={host}>
+          <PreviewSurface source={{ ...source, sourceFingerprint: 'content:sha256:second' }} />
+        </CanvasHostProvider>,
+      );
+      await Promise.resolve();
+    });
+
+    expect(
+      messages.filter((message) => messageType(message) === 'preview:resolveResource'),
+    ).toHaveLength(2);
+    expect(
+      messages.filter((message) => messageType(message) === 'preview:releaseResource'),
+    ).toHaveLength(1);
+  });
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {

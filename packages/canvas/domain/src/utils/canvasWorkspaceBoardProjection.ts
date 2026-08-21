@@ -94,7 +94,11 @@ export function planCanvasWorkspaceBoardProjection(
     const exactExisting = existingContentNodes.get(contentIdentity)?.[0];
     const existing = exactExisting;
     if (existing) {
-      const resolved = { node: existing } as const;
+      const refreshed = refreshExistingResourceProvenance(existing, artifact);
+      if (refreshed !== existing) {
+        operations.push({ kind: 'node.replace', node: refreshed });
+      }
+      const resolved = { node: refreshed } as const;
       resolvedByContentIdentity.set(contentIdentity, resolved);
       resolvedByArtifactId.set(artifact.provenance.artifactId, resolved);
       continue;
@@ -221,6 +225,24 @@ export function planCanvasWorkspaceBoardProjection(
     nodeIds,
     connectionIds: projectedConnections.connectionIds,
   };
+}
+
+function refreshExistingResourceProvenance(
+  node: CanvasNode,
+  artifact: CanvasWorkspaceProjectionArtifact,
+): CanvasNode {
+  if (artifact.kind === 'markdown' || (node.type !== 'media' && node.type !== 'file')) return node;
+  const existing = node.data.provenance;
+  if (existing?.['contentFingerprint'] === artifact.provenance.contentFingerprint) return node;
+  return {
+    ...node,
+    data: {
+      ...node.data,
+      provenance: existing
+        ? { ...existing, contentFingerprint: artifact.provenance.contentFingerprint }
+        : createSerializableProvenance(artifact),
+    },
+  } as CanvasNode;
 }
 
 function sortArtifactsByDependencies(

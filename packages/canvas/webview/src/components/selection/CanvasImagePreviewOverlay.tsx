@@ -4,6 +4,7 @@ import {
   selectedCanvasGenerationOutput,
   type CanvasGenerationOutputBinding,
   type CanvasNode,
+  type CanvasSerializableRecord,
 } from '@neko/canvas-domain';
 import { validateContentLocator } from '@neko/content';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
@@ -92,6 +93,7 @@ export function resolveCanvasFullscreenPreviewRequest(
               : {}),
           },
           contentLocator: validation.locator,
+          sourceFingerprint: readSourceFingerprint(node.data.provenance),
           metadata: {},
         },
       ],
@@ -121,6 +123,7 @@ export function resolveCanvasFullscreenPreviewRequest(
           title: basename(node.data.title) || basename(node.data.path) || t(`node.${previewKind}`),
           asset: { kind: 'asset-identity', mediaType: previewKind },
           contentLocator: validation.locator,
+          sourceFingerprint: readSourceFingerprint(node.data.provenance),
           metadata: {},
         },
       ],
@@ -129,6 +132,13 @@ export function resolveCanvasFullscreenPreviewRequest(
   }
 
   return undefined;
+}
+
+function readSourceFingerprint(
+  provenance: CanvasSerializableRecord | undefined,
+): string | undefined {
+  const value = provenance?.['contentFingerprint'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 export function CanvasFullscreenPreviewOverlay({

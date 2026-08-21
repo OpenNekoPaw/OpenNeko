@@ -145,6 +145,7 @@ export function MediaNode({
     [contentLocatorIdentity],
   );
   const mediaType = node.data.mediaType ?? 'image';
+  const sourceFingerprint = readSourceFingerprint(node.data.provenance);
   const previewRole =
     mediaType === 'image' ? 'image' : mediaType === 'audio' ? 'audio-waveform' : 'video-proxy';
   const title =
@@ -163,11 +164,21 @@ export function MediaNode({
         mediaType,
       },
       ...(contentLocator ? { contentLocator } : {}),
+      ...(sourceFingerprint ? { sourceFingerprint } : {}),
       metadata: {
         ...(node.data.duration ? { duration: node.data.duration } : {}),
       },
     }),
-    [mediaType, contentLocator, node.data.duration, node.data.title, node.id, previewRole, source],
+    [
+      mediaType,
+      contentLocator,
+      node.data.duration,
+      node.data.title,
+      node.id,
+      previewRole,
+      source,
+      sourceFingerprint,
+    ],
   );
   return (
     <BaseNode
@@ -320,6 +331,7 @@ export function FileNode({
   const fileName = resolveCanvasFileName(node.data);
   const contentLocator = readCanonicalContentLocator(node.data.contentLocator);
   const contentLocatorIdentity = contentLocator ? contentLocatorKey(contentLocator) : undefined;
+  const sourceFingerprint = readSourceFingerprint(node.data.provenance);
   const contentLocatorRef = useRef(contentLocator);
   contentLocatorRef.current = contentLocator;
   const host = useOptionalCanvasHost();
@@ -349,7 +361,7 @@ export function FileNode({
     return () => {
       active = false;
     };
-  }, [contentLocatorIdentity, eligibleKind, host, node.id]);
+  }, [contentLocatorIdentity, eligibleKind, host, node.id, sourceFingerprint]);
 
   return (
     <BaseNode
@@ -380,6 +392,13 @@ export function FileNode({
       </div>
     </BaseNode>
   );
+}
+
+function readSourceFingerprint(
+  provenance: FileCanvasNode['data']['provenance'],
+): string | undefined {
+  const value = provenance?.['contentFingerprint'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function isFullscreenPreviewMediaKind(value: unknown): value is 'image' | 'video' | 'audio' {
