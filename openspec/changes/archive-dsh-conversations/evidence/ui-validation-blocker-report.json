@@ -1,0 +1,17 @@
+{
+  "status": "failed",
+  "scenario": {
+    "id": "desktop-project-sidebar-management",
+    "owner": "@neko/app-desktop"
+  },
+  "target": "development",
+  "error": "Desktop CDP target was not ready before timeout. Last error: fetch failed",
+  "checkpoints": [],
+  "process": {
+    "exit": {
+      "code": 1,
+      "signal": null
+    },
+    "cause": "An existing Desktop development process already owns the Vite bundle for this checkout. The process was preserved to avoid disrupting an active user runtime."
+  }
+}

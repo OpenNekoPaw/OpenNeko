@@ -25,3 +25,4 @@
 - [x] 3.2 Reuse the applicable real-provider Agent runtime evaluation case for basic conversation and
   record provider/model, terminal state, conversation identity, and any blocked evidence without using
   mocks, direct runtime execution, or another configuration source.
+> **后继处置（2026-08-21）**：停止所有未完成的 Pi execution lease 任务，不得建立兼容或迁移路径。

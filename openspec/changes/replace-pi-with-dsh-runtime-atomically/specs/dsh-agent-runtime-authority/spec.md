@@ -48,6 +48,13 @@ Each executable Conversation SHALL reference one exact DSH Session identity. DSH
 - **THEN** the bridge applies the corresponding DSH inbox operation and projects the resulting snapshot
 - **AND** OpenNeko does not mutate an independent pending map or queue
 
+#### Scenario: Enqueue pending input in a live Session
+
+- **WHEN** the user submits another message while the exact DSH Session has an active turn
+- **THEN** the bridge appends one identified message through the public DSH Agent inbox API and returns the resulting inbox snapshot
+- **AND** DSH remains the only executable queue authority while Host and Renderer retain no shadow pending map
+- **AND** the message's validated product context is applied only when that exact DSH message is claimed
+
 #### Scenario: Submit a Workspace turn with product context
 
 - **WHEN** the user submits from a Workspace Agent Surface
@@ -72,7 +79,7 @@ Each executable Conversation SHALL reference one exact DSH Session identity. DSH
 
 ### Requirement: The ACP bridge supplements DSH without becoming another runtime
 
-Because the official `dsh-acp` rc.7 bridge is automation-only, OpenNeko SHALL ship one thin official DSH ACP bridge plugin/profile. It SHALL reuse public DSH Agent/Session APIs to provide the standard ACP session list/load/resume/history replay, Tool/progress updates and per-session close required by the product. Only capabilities not expressible in standard ACP MAY use one canonical extension surface: DSH inbox snapshot/edit/remove, official extension inventory/readiness/configuration/diagnostics, and typed DSH-to-Host domain Tool requests and responses. The bridge MUST NOT implement an Agent loop, Session store, queue, Tool registry, Skill runtime, MCP runtime or Plugin runtime.
+Because the official `dsh-acp` rc.8 bridge is automation-only, OpenNeko SHALL ship one thin official DSH ACP bridge plugin/profile. It SHALL reuse public DSH Agent/Session APIs to provide the standard ACP session list/load/resume/history replay, Tool/progress updates and per-session close required by the product. Only capabilities not expressible in standard ACP MAY use one canonical extension surface: DSH live inbox enqueue/snapshot/edit/remove, official extension inventory/readiness/configuration/diagnostics, and typed DSH-to-Host domain Tool requests and responses. The bridge MUST NOT implement an Agent loop, Session store, queue, Tool registry, Skill runtime, MCP runtime or Plugin runtime.
 
 #### Scenario: Resume a known Session
 
@@ -225,9 +232,73 @@ The product SHALL use the selected current model directly when its authoritative
 - **THEN** the Composer reports the unsupported input and does not submit the turn
 - **AND** the attachment is not discarded or replaced by fabricated text
 
+### Requirement: Character and Room participants use the canonical DSH Conversation lifecycle
+
+Character and Room interaction services SHALL retain their domain-owned Run, participant, frozen turn
+context and presentation facts while delegating every model turn through one exact OpenNeko Conversation
+bound to one DSH Session. `@neko/agent-runtime/application` SHALL own publication, context-before-prompt
+ordering and terminal result projection. Desktop SHALL only adapt the Chara application port to that
+service. The retired first-submit lifecycle service, provider executor and Pi transcript path MUST NOT
+participate.
+
+#### Scenario: Create and run a Character participant
+
+- **WHEN** Chara creates an Agent-controlled CharacterRun or Room participant
+- **THEN** the adapter publishes its exact Conversation identity, durable Character/Room context, DSH Session and binding before Chara commits the Run reference
+- **AND** each submitted turn freezes the Chara-owned context, sets it on the exact bound DSH Session, prompts that Session and returns the exact new DSH turn's final assistant message
+- **AND** the returned turn identity is frozen back into the Chara presentation facts without creating a Host transcript
+
+#### Scenario: Character owner or DSH result is inconsistent
+
+- **WHEN** the CharacterRun names another Conversation, context resolution fails, no exact new terminal turn exists or the turn has no final assistant message
+- **THEN** only that Character/Room operation fails with an explicit owner-qualified diagnostic
+- **AND** no Assistant, active Conversation, previous assistant message, Pi lifecycle record or empty content is substituted
+
+#### Scenario: Chara commit fails after Session publication
+
+- **WHEN** a DSH Conversation has been published but the following Chara durable commit fails
+- **THEN** the published record is preserved and cleanup reports that the locked DSH release has no public Session delete operation
+- **AND** `session/close`, private DSH files and SQLite row deletion are not used to fabricate rollback success
+- **AND** the original Chara failure and cleanup diagnostic are both retained
+
+### Requirement: The DSH bridge owns the effective OpenNeko product prompt fragment
+
+Every executable DSH Agent SHALL receive one stable OpenNeko product-protocol fragment from the shipped
+bridge through the same agent-scoped `systemPrompt.context` composition as the runtime product context.
+The DSH `standard` preset SHALL remain the sole owner of the base Agent persona, modes, environment
+instructions and general Tool protocol. OpenNeko MUST NOT retain a disconnected SystemPromptBuilder,
+mode/locale prompt map, public prompt-builder subpath or Evaluation success path that is not consumed by
+the DSH runtime.
+
+#### Scenario: Create, resume or rebuild a DSH Agent
+
+- **WHEN** the bridge mounts the exact `standard` preset
+- **THEN** it also registers exactly one stable OpenNeko product-protocol context and one mutable per-Session product context
+- **AND** model replacement or Session resume reconstructs the same two owners without a Pi prompt builder or duplicate Tool instructions
+
+#### Scenario: Prompt evidence is evaluated
+
+- **WHEN** Evaluation claims that the OpenNeko base fragment participated
+- **THEN** path evidence identifies the real DSH bridge fragment and exact DSH Session composition
+- **AND** an isolated legacy Builder unit test cannot satisfy runtime prompt evidence
+
+### Requirement: Retired first-submit SQLite state is product-unreachable
+
+Normal startup SHALL initialize only the current DSH Conversation catalog, exact domain context and
+Conversation-to-DSH Session binding tables. It MUST NOT create, read or write the retired
+`agent_conversation_records` first-submit table, and the retired lifecycle repository/service/domain
+service MUST NOT remain in production public exports. Existing retired table bytes SHALL remain untouched;
+normal startup MUST NOT drop, migrate, repair or delete them.
+
+#### Scenario: A user database still contains retired first-submit rows
+
+- **WHEN** the DSH product starts and creates or runs current Conversations
+- **THEN** the exact retired table is dropped before current DSH tables initialize
+- **AND** current DSH tables operate independently without a compatibility reader or copied rows
+
 ### Requirement: DSH lifecycle remains minimal and does not create shadow state
 
-The product lifecycle SHALL use only create, bounded list/revalidation, load/resume, prompt, cancel, close/release and exact-binding reload after restart. OpenNeko MUST NOT mirror Agent handles, Session persistence or pending inbox. A missing public DSH delete or inbox-preserving close seam SHALL remain an explicit capability blocker; `session/close` MUST NOT be treated as deletion and a Host shadow queue MUST NOT be introduced.
+The product lifecycle SHALL use only create, bounded list/revalidation, load/resume, prompt, cancel, close/release and exact-binding reload after restart. OpenNeko MUST NOT mirror Agent handles, Session persistence or pending inbox. The release surface SHALL support inbox mutation only while the exact DSH Session is live; close/restart MAY discard pending inbox according to the public DSH lifecycle and MUST NOT advertise offline editing. A missing public DSH delete seam MUST NOT be replaced by treating `session/close` as deletion, reading raw DSH files or introducing a Host shadow queue.
 
 #### Scenario: Conversation publication fails after DSH Session creation
 
@@ -235,10 +306,19 @@ The product lifecycle SHALL use only create, bounded list/revalidation, load/res
 - **THEN** the reserved Conversation remains visible with an unavailable diagnostic and the created Session is not deleted through private storage access
 - **AND** the product does not report cleanup success
 
-#### Scenario: Pending inbox cannot survive release
+#### Scenario: User requests deletion while durable Session delete is unavailable
 
-- **WHEN** the public DSH handle lifecycle cannot close while preserving pending inbox
-- **THEN** offline inbox editing remains unavailable or is removed from the release surface
+- **WHEN** a sender-bound Desktop Window requests deletion of one or more exact Conversation navigation identities
+- **THEN** the typed Electron handler validates every identity against the current authoritative Agent Home projection and delegates to the single DSH domain Conversation application service
+- **AND** the request fails with an explicit durable-delete-unavailable diagnostic while the Conversation catalog, binding and DSH Session remain unchanged
+- **AND** a missing handler, raw Session deletion, metadata-only removal, Renderer-local hiding or success response cannot replace that diagnostic
+- **AND** unrelated Conversations and Desktop capabilities remain usable
+
+#### Scenario: Closing a Session discards unsupported offline inbox work
+
+- **WHEN** the user closes or restarts a Session with pending inbox work
+- **THEN** the bridge uses the public DSH handle lifecycle and does not promise that pending work survives
+- **AND** offline inbox editing is absent from the release surface
 - **AND** OpenNeko does not retain a shadow queue or leak the DSH owner
 
 ### Requirement: Clear and compact retain one authoritative path
@@ -307,6 +387,12 @@ For a Conversation created by the native Composer's first submission, the same s
 ### Requirement: Composer input triggers use DSH and Host canonical authorities
 
 The retained native Composer SHALL reuse its existing `/`, `$` and `@` presentation components. For an exact loaded DSH Session, slash commands SHALL be discovered and executed through DSH `commands`; user-invocable Skills SHALL be discovered through the DSH Skill catalog and submitted as the DSH-native `/skill-name` user gesture after exact catalog validation. Host mentions SHALL contain only sender-bound, authorized product resources with canonical identities. No trigger may fall back to an ordinary Prompt, Pi, a self-developed Skill/MCP/Plugin runtime, raw filesystem search or an active/recent Workspace.
+
+#### Scenario: Retired configuration has a recoverable local diagnostic
+
+- **WHEN** the current provider/model selection is executable and the user config also contains a retired non-authoritative Agent field
+- **THEN** the Composer remains enabled and uses the exact selected DSH model
+- **AND** only a genuinely blocking parse, provider/model binding or availability diagnostic can disable submission
 
 Product-shipped first-party Skills SHALL be exposed to the DSH `standard` preset only as the exact read-only bundled Skill resource resolved by Desktop and passed through the DSH-supported subprocess environment. DSH SHALL remain the discovery, parsing, catalog and execution authority. OpenNeko MUST NOT scan that directory into a second catalog or mix ordinary Workspace, personal or third-party roots into the bundled resource.
 

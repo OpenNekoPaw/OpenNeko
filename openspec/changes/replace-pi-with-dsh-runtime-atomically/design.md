@@ -2,7 +2,7 @@
 
 OpenNeko 当前由 `@neko/agent-runtime` 直接组合 Pi Agent/Session，并自研 Tool registry、消息队列、Timeline/history projector、Skill Host、MCP client/bootstrap、Plugin contribution runtime。`apps/neko-desktop` 通过 package public entries 完成 Electron Main/preload/renderer wiring。本变更用独立 DSH 子进程 + ACP JSON-RPC stdio 替换内嵌 runtime，同时保持 OpenNeko 产品 authority 和 Electron 原生 UI。
 
-DSH 官方 `dsh-acp` rc.7 是 automation-only：它提供 ACP 自动化能力，但没有完整覆盖 OpenNeko 所需的 session list/load/resume/history replay、tool/progress events、per-session close、inbox 管理、extension 管理面与 Host reverse tool 请求。因此需要一个 OpenNeko-owned、随产品发布的 DSH ACP bridge plugin/profile，在 DSH 内复用公开 Agent/Session API 补齐这些语义；bridge 不得成为第二套 runtime。
+DSH 官方 rc.8 profile 仍未完整覆盖 OpenNeko 所需的 session list/load/resume/history replay、tool/progress events、per-session close、inbox 管理、extension 管理面与 Host reverse tool 请求。因此保留一个 OpenNeko-owned、随产品发布的 DSH ACP bridge plugin/profile，在 DSH 内只复用公开 Agent/Session/Settings/Skill/MCP API 补齐这些语义；bridge 不得成为第二套 runtime。
 
 用户要求整体迁移并一次性原子发布，同时要求先删除旧执行栈，让真实缺口直接暴露。迁移集成分支因此允许在 D0 删除后暂时无法编译或运行；这种不可运行状态不得进入普通主线或发布流程。并行开发只用于缩短实现时间，不产生可单独发布的中间产品状态。一个总 OpenSpec 拥有交付边界；隔离分支/worktree 中的工作流必须在同一集成分支汇合，并通过统一门禁后一次切换。
 
@@ -19,9 +19,9 @@ DSH 官方 `dsh-acp` rc.7 是 automation-only：它提供 ACP 自动化能力，
 - Agent UI 的既有最终视觉和交互是 retained product surface，不属于待删除的 Pi runtime。`@neko/agent-webview` 继续拥有纯 presentation component、既有 `agent-*` DOM/CSS 契约和最终版样式；Desktop Renderer 只拥有 DSH Host bridge 状态编排并向该 presentation 传入 canonical DSH Session/Permission projection。不得在 Desktop 私建平行 Agent 样式或复制消息、Tool、approval、composer 设计。Tool projection 必须保留 ACP 已提供且通过 bounded lossless JSON 校验的 `rawInput`/`rawOutput`，用于原 Tool activity 的可展开详情；单个非法 payload 只产生对应 diagnostic，不得清空 sibling event。不得恢复旧 Host runtime adapter、旧 message handler 或 Pi contract，也不得用 ACP 原始事件调试列表替代产品 UI。未绑定 Draft 的首条输入可以通过 sender-bound create operation 原子创建 Conversation 后提交，不能要求用户先进入协议空态再创建。
 - 最终版 composer 中的模型选择、执行模式、Workspace/Canvas 上下文栏、附件入口和引用 token 是 OpenNeko 内容创作产品能力，不是 DSH Web 或 ACP 的调试控件。`@neko/host/settings` 继续拥有 secret-free 模型目录、用户选择和 execution mode；Shell/对应领域 owner 继续拥有 exact Workspace/Canvas/引用事实；`@neko/agent-webview` 只渲染 typed presentation。Desktop 只能从 sender-bound Agent Surface 和 exact Conversation context 解析这些 authority，禁止从 active/recent Workspace、DSH 默认模型或旧 Pi 状态猜测。没有 authoritative attachment/reference projection 时不得伪造 token 或把 `+` 显示成可成功的入口。
 - Agent presentation 的用户可见文案由 `@neko/agent-webview` 的精简 package-owned locale bundle 负责，并跟随 Desktop locale；外层 Desktop i18n 只提供 locale，不得要求其复制 Agent `chat.*` keys，也不得让缺失 key 直接泄漏到 UI。该 bundle 只覆盖保留的 presentation component，不恢复已删除的 SkillHost、MCP、Plugin 或 Pi runtime 文案与注册面。
-- 用薄的 OpenNeko-owned bridge plugin/profile 补齐 `dsh-acp` rc.7 automation-only 缺口，且不实现第二套 Agent loop、Session store、queue、tool registry、Skill/MCP/Plugin runtime。
+- 用薄的 OpenNeko-owned bridge plugin/profile 补齐 `dsh-acp` rc.8 automation-only 缺口，且不实现第二套 Agent loop、Session store、queue、tool registry、Skill/MCP/Plugin runtime。
 - Generation+Canvas 作为首批纵向官方领域 Tool slice 迁移；Cut、Character、World 等随后迁移。Assets 通过 `@` 与显式 Workspace copy 接入，不注册 Tool。
-- 保留旧 Pi 用户数据原始字节，局部显示不可执行状态，不增加 legacy reader、迁移器或 fallback。
+- 精确清理已确认由退休 Pi runtime 拥有的表和目录；不读取或迁移旧内容，不扫描未知文件，不保留 unavailable projection、legacy reader 或 fallback。
 - 通过 `scripts/dsh-q0` 非发布 fixture 验证子进程边界；真实 Provider 基线另由可见 Desktop UI 通过产品 Composer、DSH/ACP 和真实 API 验证，不能由 Q0 或 mock 替代。完整发布矩阵仍 fail-closed。
 
 **Non-Goals:**
@@ -31,7 +31,7 @@ DSH 官方 `dsh-acp` rc.7 是 automation-only：它提供 ACP 自动化能力，
 - 不实现 OpenNeko 自研第三方插件 runtime，不允许第三方 Webview JS 或任意第三方 JS 注入 Electron Main/DSH。
 - 不保留 OpenNeko Skill Host、MCP Manager、Plugin runtime；Skill/MCP/Plugin 的实际发现/加载/启停/执行归 DSH profile。
 - 不把 Generation、Canvas、Cut、Character、World 或感知能力包装成 MCP，也不把 Generation 参数并入通用 Agent/DSH settings；Assets 资源操作不进入 MCP 或 DSH Tool registry。
-- 不在本变更中转换旧 Pi transcript 为 DSH Session，也不提供正常产品可达的旧 transcript reader/repair/migration。
+- 不把旧 Pi transcript 转换为 DSH Session，也不提供旧 transcript reader/repair/migration；已知退休存储在 DSH 初始化前直接删除。
 - 不把 Evaluation 变成产品 Skill、第二个 Agent controller 或 direct runtime runner。
 - 不把领域能力用 MCP 包装；领域 Tools 是注册到 DSH 的官方 typed domain tools，UI 直接操作不绕 Agent。
 
@@ -55,9 +55,9 @@ Desktop Main 负责启动、配置、监督和按需重启 DSH 子进程。生�
 
 首版只允许随 OpenNeko 发布、由官方维护并精确锁定的 DSH profile/plugins。不使用 dist-tag、caret、tilde 或混合 RC；lockfile 必须唯一解析到同一审核过的闭包。Plugin 是 DSH 内部 composition unit，不是用户可见扩展类型；产品扩展 UI 只展示 Skill 与 MCP。OpenNeko 不提供自研第三方插件 runtime，不加载第三方 Webview JS，不允许任意第三方 JS 注入 Electron Main/DSH。未来若引入隔离的第三方扩展，必须由独立 OpenSpec 重新定义执行边界、沙箱和信任模型。
 
-产品 artifact 以只读 `resources/dsh-runtime/darwin-arm64` 作为唯一 executable/package authority，包含独立 Node、DSH CLI、完整 package closure、官方 OpenNeko profile template、tree fingerprint、关键文件 checksum 与第三方许可证清单。Desktop 不从系统 Node、全局 DSH、`PATH`、Electron `process.execPath`、普通 workspace `node_modules` 或 Q0 fixture 解析生产 runtime。DSH rc.7 启动会改写 profile `cordis.yml` 并维护 `$DSH_HOME/profiles/node_modules`，因此只读 template 不直接作为 `DSH_HOME`；Desktop 在 Electron `userData/dsh` 下维护唯一可写 DSH home，只将当前已验证 template 的 `package.json`、`cordis.patch.yml` 和指向只读 closure 中官方 OpenNeko package 的精确 links 重建到 `profiles/openneko`。当前 closure 包含 bridge、Generation、Canvas、Cut、Character 与 World DSH plugin；Assets 不进入 closure，官方 MCP contribution 只有完成对应 MCP slice 后才能加入同一生成清单。home-level `cordis.patch.yml` 固定为空，profile manifest 不声明 out-of-tree dependencies，普通本地包、Marketplace 与用户 patch 不得进入 production profile。
+产品 artifact 以只读 `resources/dsh-runtime/darwin-arm64` 作为唯一 executable/package authority，包含独立 Node、DSH CLI、完整 package closure、官方 OpenNeko profile template、tree fingerprint、关键文件 checksum 与第三方许可证清单。Desktop 不从系统 Node、全局 DSH、`PATH`、Electron `process.execPath`、普通 workspace `node_modules` 或 Q0 fixture 解析生产 runtime。DSH rc.8 启动会改写 profile `cordis.yml` 并维护 `$DSH_HOME/profiles/node_modules`，因此只读 template 不直接作为 `DSH_HOME`；Desktop 在 Electron `userData/dsh` 下维护唯一可写 DSH home，只将当前已验证 template 的 `package.json`、`cordis.patch.yml` 和指向只读 closure 中官方 OpenNeko package 的精确 links 重建到 `profiles/openneko`。当前 closure 包含 bridge、Generation、Canvas、Cut、Character 与 World DSH plugin；Assets 不进入 closure，官方 MCP contribution 只有完成对应 MCP slice 后才能加入同一生成清单。home-level `cordis.patch.yml` 固定为空，profile manifest 不声明 out-of-tree dependencies，普通本地包、Marketplace 与用户 patch 不得进入 production profile。
 
-开发启动同样只消费 verified closure，但由 repository-owned development builder 在 Forge 启动前生成到被忽略且不受 Forge `.vite` 清理管理的 `apps/neko-desktop/.dsh-development-runtime/darwin-arm64`。builder 的第三方输入只能来自独立、精确锁定的 development runtime manifest/lock，Node 来自该 lock 中的 `node-bin-darwin-arm64` 分发包；当前七个 OpenNeko bundle 必须先从当前 source build，再把各包声明的发布文件复制进 closure。普通 workspace `node_modules` 只可提供 builder/toolchain，不能被 runtime 直接解析；系统 Node 只可执行 builder，不能被复制或引用为 runtime executable。builder 必须删除 install-time symlink、生成许可证清单与 canonical descriptor/tree fingerprint、完整 qualification 后原子替换旧 cache，并以输入内容 fingerprint 判断 cache freshness。`scripts/dsh-q0` 的 manifest、lockfile、安装树和产物均不得成为任何 development/product closure 输入。
+开发启动同样只消费 verified closure，但由 repository-owned development builder 在 Forge 启动前生成到被忽略且不受 Forge `.vite` 清理管理的 `apps/neko-desktop/.dsh-development-runtime/darwin-arm64`。builder 的第三方输入只能来自独立、精确锁定的 development runtime manifest/lock，Node 来自该 lock 中的 `node-bin-darwin-arm64` 分发包；当前七个 OpenNeko bundle 必须先从当前 source build，再把各包声明的发布文件复制进 closure。普通 workspace `node_modules` 只可提供 builder/toolchain，不能被 runtime 直接解析；系统 Node 只可执行 builder，不能被复制或引用为 runtime executable。builder 必须删除 install-time symlink、生成许可证清单与 canonical descriptor/tree fingerprint、完整 qualification 后原子替换旧 cache，并以输入内容 fingerprint 判断 cache freshness。Forge development Main watcher 必须把同一组 builder 输入加入 watch graph；任何官方 bridge/domain plugin 输入变化时，必须先完成 content-fresh closure 的构建与 qualification，再请求 Electron Main 重启，使新 Main contract 与新 DSH producer 在同一 generation 生效。构建或 qualification 失败必须阻止重启，不能让新 consumer 连接驻留内存的旧 producer，也不能增加旧 contract decoder。`scripts/dsh-q0` 的 manifest、lockfile、安装树和产物均不得成为任何 development/product closure 输入。
 
 开发启动器对调用方显式提供的 `NEKO_DSH_RUNTIME_ROOT` 必须先执行完整 qualification 并原样使用；相对路径、损坏 closure 或版本不匹配必须在 Forge spawn 前失败，不能被自动生成结果覆盖。未配置时才允许调用 development builder，并只向该 Forge 子进程注入生成后的绝对路径。development builder 不参与 `build`/`package`/`make`，不能生成 release artifact、满足 release evidence 或绕过 integration-only release guard；发布 stage 仍只接受外部显式 `NEKO_DSH_RUNTIME_ROOT`。
 
@@ -74,7 +74,11 @@ Bridge 不得实现第二套 Agent loop、Session store、queue、tool registry�
 
 Preset 成功挂载只证明能力组成和注册可用，不等同于所有能力已完成产品验收。网页检索仍依赖 Host search provider/credential，真实 Shell/文件写入仍受 DSH sandbox 与 permission preset 约束，计划/目标/子代理/工作流仍需 ACP 事件、取消/恢复和 Electron presentation 的逐项验证。缺少依赖或投影时必须让当前能力 fail-visible，不得隐藏、伪造成功或切换到 OpenNeko 自研实现。
 
-Bridge 的产品 lifecycle 只保留 `create -> list/revalidate -> load/resume -> prompt -> cancel -> close/release -> restart 后按 exact binding load`。OpenNeko 不复制 DSH Agent handle、Session store 或 pending inbox。当前 rc.7 缺少公开 Session delete，且 `AgentHandle.dispose()` 无法在 close/restart 时保留 inbox，因此这两项保持上游 blocker：`session/close` 不得冒充删除，Host 也不得建立 shadow queue。若产品不接受 pending inbox 在 close/restart 时丢失，首版应移除离线 inbox 编辑入口，而不是扩大 bridge。
+Bridge 的产品 lifecycle 只保留 `create -> list/revalidate -> load/resume -> prompt/live inbox enqueue -> cancel -> close/release -> restart 后按 exact binding load`。OpenNeko 不复制 DSH Agent handle、Session store 或 pending inbox。运行中的后续用户消息通过 DSH 公开 `Agent.followup()` 进入 exact live Session 的 `next-turn` inbox，并以 DSH Message identity 作为唯一待处理 identity；Host/Renderer 只持有 snapshot 和短生命周期 optimistic receipt。每条 queued message 携带其提交时已经由 Host 校验的 model-facing context 与 display content，DSH 在该消息被 claim 时切换 exact turn context，禁止从 active/recent Workspace 或 Renderer draft 重新推断。rc.8 的公开 `AgentHandle.dispose()` 仍会丢弃 pending inbox，因此首版只支持 live Session enqueue/edit/remove；close/restart 丢弃尚未执行的 inbox 是 canonical 行为，产品不广告离线 inbox 编辑。rc.8 仍无公开 durable Session delete；publication 失败保留精确 unavailable catalog/binding diagnostic，不把 `session/close` 冒充删除，也不建立 shadow queue 或读取 raw DSH 文件。
+
+Agent Home 继续是 `@neko/agent-runtime` 从 Conversation catalog、exact binding 与 package-owned DSH event projection 计算出的轻量只读 read model。`currentTurn` 投影为 `running` attention；最新 `turn/end` 投影为 completed/cancelled/failed activity；单个 Session projection 失效只影响对应 Conversation。Shell 只消费该 read model 并复用既有侧栏状态 presentation，不订阅 raw DSH transport，也不持有后台 Agent runtime。
+
+Composer 继续复用现有 OpenNeko `InputArea`。idle submit 走标准 ACP prompt；active-turn submit 只走 DSH live inbox enqueue，同一用户意图不得在 Host queue 与 DSH inbox 之间选择。运行中的模型配置保持冻结，因为 DSH `Agent.options` 在一个 driver drain 内不可安全替换；权限 preset 也在 active turn 期间锁定，避免当前 Tool permission 语义被中途改变。配置选择只有在 exact idle Session 成功应用后才提交 Host settings，失败不得留下“UI 报错但下一 turn 已换模型”的部分状态。
 
 ### 4. DSH Session/transcript 与 Host catalog 分离
 
@@ -111,7 +115,9 @@ Conversation；不得因为 Entry UI token 未进入 Main authority 而静默创
 恢复失败只禁用当前 Conversation并返回 owner-qualified diagnostic。DSH `session/list` 不可解析的旧 preset
 Session 同样保持可见但不可执行；不得把它改绑到另一 DSH Session、自动新建 Session 或兼容加载旧 preset。
 
-当前 rc.7 没有公开 `session/delete` 或等价 persistence seam，因此 `session/new` 成功但 binding publication 失败时，Host 必须保留已创建的 Conversation catalog 记录并显示局部 diagnostic，不能删除 raw DSH 文件、调用私有模块、将 `session/close` 冒充删除或返回成功。该开发路径可以用于暴露和验证后续缺口，但不能完成 2.5、不能满足发布门禁；完整 provisional cleanup 与 provider/model publication 仍须等待公开 seam 或独立接受的边界变更。
+当前 rc.8 没有公开 `session/delete` 或等价 persistence seam，因此 `session/new` 成功但 binding publication 失败时，Host 必须保留已创建的 Conversation catalog 记录并显示局部 diagnostic，不能删除 raw DSH 文件、调用私有模块、将 `session/close` 冒充删除或返回成功。首版以该 fail-visible 结果作为 canonical publication failure policy；未来若上游增加公开 delete seam，再通过独立 OpenSpec 判断是否引入精确 provisional cleanup，不为等待该 seam 保留平行路径。
+
+原生会话删除入口同样必须始终注册完整的 typed preload/Main 路由，并在 Host projection 中逐项校验 sender-bound 的精确 Conversation identity，再委托唯一 DSH domain Conversation application service。当前 rc.8 缺少 durable delete seam 时，该 service 必须拒绝请求、保留 catalog/binding/Session，并返回 owner-qualified diagnostic；不得让漏注册的 Electron channel、Renderer 本地隐藏记录或直接清理 OpenNeko metadata 取代该失败语义。未来公开 delete seam 的接入必须原子更新 application workflow 与测试，而不是增加第二个 handler。
 
 Window 的当前 scene/presentation snapshot 必须保存并恢复 exact Conversation identity。应用进程重开时，Host 只能用已持久化 scene 中的 `conversationId` 和 owner 对 Home catalog/context/binding 做资格校验；合法记录原样恢复，单条失效只把该 Surface 重置为新的 canonical Draft 并保留 catalog diagnostic。禁止在重开时无条件进入 Entry，也禁止选择 first/active/recent Conversation。Renderer reload 只重建当前 Root，不改变 durable scene selection。
 
@@ -119,7 +125,7 @@ Window 的当前 scene/presentation snapshot 必须保存并恢复 exact Convers
 
 ACP Prompt content block 是 Desktop 到 DSH 的唯一消息输入协议。Bridge 必须按实际能力广告并严格接收 text、resource link、image、audio 与 embedded resource；不得把 resource link 降成模型可见的伪文本，也不得在广告 `false` 时让 UI 显示可成功的附件入口。
 
-DSH rc.7 当前只为 PNG、JPEG、WebP 与 GIF 提供持久 image attachment 和 provider-neutral `ImageBlock`。图片通过 Host 资源授权、字节/MIME 校验和 DSH attachment admission 后进入 exact Session，并由当前模型的 modality 声明决定能否直接执行。音频、视频、文档和其他文件尚无 DSH 原生持久 block：在上游公开契约补齐前，owning media/content service 只能产生有界、带来源 identity 的文本或感知 evidence，再通过 exact turn context 注入；原始资源、路径和 bearer URL 不进入 DSH Session。
+DSH rc.8 当前只为 PNG、JPEG、WebP 与 GIF 提供持久 image attachment 和 provider-neutral `ImageBlock`。图片通过 Host 资源授权、字节/MIME 校验和 DSH attachment admission 后进入 exact Session，并由当前模型的 modality 声明决定能否直接执行。音频、视频、文档和其他文件尚无 DSH 原生持久 block：在上游公开契约补齐前，owning media/content service 只能产生有界、带来源 identity 的文本或感知 evidence，再通过 exact turn context 注入；原始资源、路径和 bearer URL 不进入 DSH Session。
 
 感知模型由独立的 product perception configuration owner 选择。当前模型声明支持输入模态时直接处理；不支持时才由显式配置的感知模型处理资源并返回结构化 evidence。选择发生在提交前的单一 modality routing policy 中，必须记录 exact source/model/evidence identity；感知模型缺失或失败只拒绝当前附件，不得隐式切换 provider、伪造描述或把附件静默丢弃后继续普通文本 turn。Generation 模型与参数继续由 `@neko/generation` owning configuration/application service 管理，与 Agent LLM/感知模型目录分离。
 
@@ -148,11 +154,43 @@ DSH Conversation 的 durable context 使用单一 `AgentConversationContext` con
 
 反向 Host Tool 的产品上下文不进入 DSH request，也不从当前 Window、当前 Workspace 或最近 Conversation 推断。`@neko/agent-runtime` 必须用 request 的 exact DSH Session identity 反向读取唯一 Conversation binding，再读取该 Conversation 的 durable domain context；Desktop Host adapter 随后使用 context 中的 exact Workspace/grant 或 Assistant identity 解析 owning service。反向读取不得调用 `session/list`，避免处理 DSH→Host request 时产生 ACP 重入；missing、cross-Session、invalid context 与 unsupported domain 必须只拒绝当前 Tool call。
 
-内容创作 Composer 的上下文栏与模型实际收到的动态上下文必须来自同一 authoritative product context。`@neko/agent-runtime` 读取 durable Conversation context，并通过 Canvas-owned `CanvasWorkspaceTurnContext` 解析 Workspace 的 canonical Board；Desktop Main 只注入 Workspace 授权与 Canvas index port。Renderer 只消费 Host 投影，不提交 Workspace、Canvas、Character 或 reference authority。标准 ACP rc.7 未提供 embedded context，OpenNeko bridge 因此使用一个最小 `openneko/session/context/set` 扩展，在 exact DSH Session 的 idle 边界设置当前 turn context；bridge 仅把已验证文本注册为 agent-scoped `systemPrompt.context`，不解释业务数据、不保存第二份 transcript，也不改变用户消息。模型切换重建同一 Agent 时必须保留该 scoped context owner；Session resume 后 Host 必须在下一次 prompt 前重新设置，缺失或 unsupported domain context 必须使当前 prompt fail-visible。
+内容创作 Composer 的上下文栏与模型实际收到的动态上下文必须来自同一 authoritative product context。`@neko/agent-runtime` 读取 durable Conversation context，并通过 Canvas-owned `CanvasWorkspaceTurnContext` 解析 Workspace 的 canonical Board；Desktop Main 只注入 Workspace 授权与 Canvas index port。Renderer 只消费 Host 投影，不提交 Workspace、Canvas、Character 或 reference authority。标准 ACP rc.8 未提供 embedded context，OpenNeko bridge 因此使用一个最小 `openneko/session/context/set` 扩展，在 exact DSH Session 的 idle 边界设置当前 turn context；bridge 仅把已验证文本注册为 agent-scoped `systemPrompt.context`，不解释业务数据、不保存第二份 transcript，也不改变用户消息。模型切换重建同一 Agent 时必须保留该 scoped context owner；Session resume 后 Host 必须在下一次 prompt 前重新设置，缺失或 unsupported domain context 必须使当前 prompt fail-visible。
 
 ACP permission 由 `@neko/agent-runtime` 的短生命周期 pending approval owner 管理。它在 projection 已确定 exact turn 后，将 request 绑定到 Conversation/DSH Session/turn/toolCall 四元 identity，向 UI 只投影 ACP 广告的 option identity/name/kind，并只接受同一四元 identity 下仍被广告的 option。连接释放将未决请求结算为 ACP `cancelled`；不得 default allow/default deny、按 toolCallId 单独匹配、复用 Pi `runId/turnId` approval contract 或回退 active Window。
 
 Desktop permission IPC 使用单一 `openneko:dsh:permission` request channel 和 changed notification；每个 list/decide/cancel request 均携带 sender-bound Window/renderer session 与 exact Conversation identity，decide/cancel 额外携带 DSH Session/turn/toolCall 四元 identity。Preload 只构造并严格解析该 canonical shape，Renderer 不得提交 ACP 未广告的 option，也不得复用旧 `confirmTool`、`runId` 或 active Conversation fallback。
+
+#### Character/Room DSH Conversation、Prompt 与 SQLite 收口
+
+Character/Room 交互中的 participant Agent 不是另一套 Character model runtime。`@neko/chara`
+继续拥有 CharacterRun、DialogueRun、RoomRun、每回合冻结的角色/叙事/连续性上下文与
+`CharacterAgentConversationPort`；`@neko/agent-runtime/application` 拥有一条通用的 DSH domain
+Conversation publication/turn 链路，按 exact Conversation identity 发布 DSH Session/binding，在每次
+prompt 前设置 exact product context，并从同一 DSH projection 提取本次终态 turn 与最后
+assistant message。Desktop 只把 Chara 的窄 port 映射为该 application service，不持有角色
+prompt 策略、turn 状态机或第二 transcript。CharacterRun 中已有的
+`primaryAgentSessionId` 在本边界中保留为精确 OpenNeko Conversation identity；DSH Session identity
+只存在 canonical binding 中，不改写 Chara 事实。
+
+Character participant 创建在写入 Chara Run 前会先发布同一 exact Conversation/DSH Session，
+因为 Chara durable record 需要引用该 Conversation identity。当后续 Chara 事务失败时，当前
+DSH release 没有公开 Session delete 语义；因此 application 必须保留已发布记录并返回
+明确 cleanup diagnostic，不得把 `session/close` 冒充删除、不得直接改写 DSH 文件或静默
+报告回滚成功。Chara owner 同时保留原事务失败与 cleanup diagnostic。
+
+OpenNeko 通用产品 system Prompt 由实际执行的 `@neko/dsh-bridge` 拥有，并作为一个
+稳定 `systemPrompt.context` fragment 注入每个由 `standard` preset 创建/恢复的 Agent。
+DSH `standard` preset 继续唯一拥有基础 Agent 人设、模式、AGENTS/environment instructions
+与通用 Tool 协议；OpenNeko fragment 只表达产品跨领域输出、资源引用、感知、
+Skill 选择和副作用证据约束，不得重新定义 `ask/plan/auto` 或复制 preset Tool 协议。
+旧 `SystemPromptBuilder`、locale/mode prompt map、Host AGENTS file loader 和 composition projection 没有生产
+consumer，应与其 public subpath 原子删除；Evaluation 必须改为验证真实 DSH fragment
+身份/路径，不得再以旧 Builder unit test 作为 runtime prompt 证据。
+
+OpenNeko SQLite 仅保留 DSH Conversation catalog metadata、exact domain context 与
+Conversation↔DSH Session binding。旧 first-submit lifecycle 的 `agent_conversation_records` 表、repository、
+service 和 domain Conversation service 没有 DSH consumer，必须从生产 initializer/public exports 删除。
+已存在的表和字节保持原样，正常启动不执行 `DROP`、读取、转换、修复或删除。
 
 ### 6. OpenNeko 只拥有产品管理面与 Host adapters
 
@@ -180,9 +218,9 @@ sibling Session/Conversation 保持可用。取消、错误或连接释放不得
 
 OpenNeko 继续拥有 Conversation/Workspace binding、凭据、Host 权限/信任、产品管理 UI/命令入口、短生命周期 projection、领域事实/Job、typed domain tool contracts 和 Host adapters。Skill/MCP 的 catalog、configuration、readiness、发现、加载、启停与执行均由 DSH profile 拥有；DSH Plugin lifecycle 只服务官方 profile composition，不作为产品 catalog。OpenNeko 管理面只通过 bridge 读取 Skill/MCP inventory/readiness/config/diagnostics 和提交精确命令，不保留 extension catalog authority、自研 Skill Host、MCP Manager 或 Plugin runtime。
 
-`computer-use` 与 `browser-use` 是官方维护的 DSH MCP integration：DSH 内的官方 MCP contribution 拥有 connection、Tool discovery/registration、call 与 cancellation；OpenNeko Automation/Host 只提供 exact target、OS permission、sender-bound grant、action approval 与短生命周期 evidence。它们不能作为普通第三方 Plugin JS，也不能回到 Desktop Main 的 MCP Manager。当前 DSH rc.7 没有公开独立 MCP package，因此实现只能使用上游后续公开包，或在官方 OpenNeko DSH plugin 内按 DSH documented Tool registration seam 组合 MCP client；无论哪种方式，runtime owner 都在 DSH 子进程内。
+`computer-use` 与 `browser-use` 是官方维护的 DSH MCP integration：DSH 内的官方 MCP contribution 拥有 connection、Tool discovery/registration、call 与 cancellation；OpenNeko Automation/Host 只提供 exact target、OS permission、sender-bound grant、action approval 与短生命周期 evidence。它们不能作为普通第三方 Plugin JS，也不能回到 Desktop Main 的 MCP Manager。rc.8 已公开 `@deepseek-ai/dsh-mcp-client`，可以在 DSH profile 内连接 stdio/Streamable HTTP MCP 并向 DSH Tool registry 注册 qualified Tools；但该 package 不提供独立的全局 server inventory/config mutation service。产品管理投影只能列出实际由官方 profile 完成组合且能够证明 readiness 的 contribution，不得把未组合的 Browser/Computer slice 硬编码成 `unsupported` catalog item。
 
-Skill management 可以使用 `ctx.skills.snapshot/list/get` 与 invocation policy。Plugin inventory 的公开 snapshot 缺少 provenance/mutation/MCP catalog；Settings 的 redacted descriptor 也尚非 fail-closed wire contract。因此 bridge 只能暴露能够由公开 API 完整证明且不含 secret 的 exact Skill/MCP contract；未满足条件的配置项保持 unavailable diagnostic，不得读取 DSH 私有模块、直接暴露 raw settings schema 或用 OpenNeko旧 catalog 补齐。
+Skill management 可以使用 `ctx.skills.snapshot/list/get` 与 invocation policy。Plugin inventory 的公开 snapshot 缺少 provenance/mutation/MCP catalog；Settings 的 redacted descriptor 也尚非 fail-closed wire contract。因此 bridge 只能暴露能够由公开 API 完整证明且不含 secret 的 exact Skill/MCP contract；没有实际 contribution 时返回空 inventory，不生成虚假的 catalog issue。已存在但无法连接或验证的 exact contribution 才返回局部 unavailable diagnostic；不得读取 DSH 私有模块、直接暴露 raw settings schema 或用 OpenNeko 旧 catalog 补齐。
 
 Provider credential 的 host-neutral owner 是 `@neko/host/settings` public entry。它只接受精确 normalized provider identity，优先读取 `ProviderCredentialSource` 中的 config-owned API key；invalid config 必须在读取 SecretStorage 前失败。非 config-owned credential 只通过注入的 `HostSecretPort` 访问，Desktop concrete adapter 使用 Electron `safeStorage` 和独立 `provider-credentials.json`。新 authority 不读取、迁移、删除或重写旧 `agent-credentials.json` 与 `openneko.agent.pi.credential:*` keys。Desktop Main 只构造 authority；direct-UI Generation 继续使用 reader，DSH execution projection 则在 subprocess 启动前逐 Provider 读取同一 reader，并为 DSH 官方 `llm-pi-ai` route 生成独立、进程内 credential reference。profile patch 只保存 provider endpoint、protocol、bounded LLM catalog 与 reference name，不保存 secret；subprocess environment 只包含该 projection 明确生成的 credential values 和既有 shell allowlist。单个 credential 读取失败只排除对应 Provider 并产生 diagnostic，sibling Provider 保持可用；不得把 DSH base 默认 `deepseek-official`、父进程任意环境、DSH durable settings 或旧 Pi store 当作替代 credential/provider authority。
 
@@ -208,7 +246,7 @@ D0 只删除仓库代码和依赖，不得读取、修改或删除旧 Pi Session
 
 ## Risks / Trade-offs
 
-- **[DSH ACP rc.7 能力缺口]** → 用薄的 OpenNeko-owned bridge 补齐标准 ACP 与最小 canonical extension；bridge 只做协议适配，不拥有 runtime 状态。
+- **[DSH ACP rc.8 能力缺口]** → 用薄的 OpenNeko-owned bridge 补齐标准 ACP 与最小 canonical extension；bridge 只做协议适配，不拥有 runtime 状态。
 - **[子进程崩溃/重启导致会话状态丢失]** → DSH Session persistence 由 DSH profile 管理；Desktop supervisor 按 crash/restart 策略重启并 fail-local，Host 不伪造恢复成功。
 - **[stdout 混入非协议日志]** → `scripts/dsh-q0` 必须验证 stdout purity；协议日志/诊断走 ACP 或 stderr/受控通道。
 - **[双向 JSON-RPC 并发、背压或迟到响应污染其他请求]** → 每个请求携带精确 Session/turn/call/request identity，设置有界队列与 payload 上限；cancel/close/disconnect 后的迟到 frame 只结算或拒绝原请求，不能重开工作或阻塞 sibling Session。
@@ -234,8 +272,8 @@ D0 只删除仓库代码和依赖，不得读取、修改或删除旧 Pi Session
 
 ## Open Questions
 
-- `dsh-acp` rc.7 的 ACP method/event 精确集合与 bridge 需要补齐的最小 extension 最终 shape；由 Q0 证据和 contract freeze 确定。
-- 虚拟 cwd 配置如何在不暴露真实 Workspace path 的情况下满足 DSH rc.7 absolute-cwd contract；由 W1 contract 与完整 Desktop fixture 冻结。`DSH_HOME=userData/dsh`、`sessions/` authority、只读 closure 与可写官方 profile materialization 已冻结，不再作为开放设计项。
+- `dsh-acp` rc.8 的 ACP method/event 精确集合与 bridge 需要补齐的最小 extension 最终 shape；由 Q0 证据和 contract freeze 确定。
+- 虚拟 cwd 配置如何在不暴露真实 Workspace path 的情况下满足 DSH rc.8 absolute-cwd contract；由 W1 contract 与完整 Desktop fixture 冻结。`DSH_HOME=userData/dsh`、`sessions/` authority、只读 closure 与可写官方 profile materialization 已冻结，不再作为开放设计项。
 - 首批纵向 Tool slice 之外的后续领域迁移顺序与每个 domain 的 typed tool contract 冻结范围；W6 按 inventory 逐项推进。
 - DSH MCP 官方公开 package/management API 的交付时间，以及 browser/computer MCP contribution 的精确配置与 readiness contract。
 - DSH audio/video/document attachment 的公开生命周期与 provider adapter 支持；在此之前产品只承诺图片原生附件和经授权的感知 evidence。

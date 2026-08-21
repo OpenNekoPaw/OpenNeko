@@ -6,3 +6,4 @@
 - [ ] 1.2 Measure the production Desktop Agent bundle and startup time; audit Pi/provider licenses,
       secrets/provenance, OAuth callback/port/cancellation, and absolute/cache-path disclosure
       boundaries; document residual risk before declaring the Desktop runtime complete.
+> **后继处置（2026-08-21）**：未完成的 Pi runtime 任务全部停止，由 `replace-pi-with-dsh-runtime-atomically` 跟踪 DSH 收口。

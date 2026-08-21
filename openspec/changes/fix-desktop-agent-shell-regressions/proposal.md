@@ -35,7 +35,8 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
   当前会话，未知 connection 仍 fail-visible。
 - 保留缺失 canonical context、owner 冲突或所属 Project 失效的历史会话与 Project 展示，但将其
   投影为明确不可用项；主导航不得打开它们，Main/package service 也必须在读取会话 context、恢复
-  Workspace 或写入 Scene 前拒绝。删除会话和移除最近 Project 仍作为显式人工清理操作保留。
+  Workspace 或写入 Scene 前拒绝。归档会话和移除最近 Project 仍作为显式人工清理操作保留；归档只改变
+  DSH Workspace catalog 可见性，不删除 Conversation、Session、transcript 或产物。
 - Desktop 功能验收必须把 HOME、全局 SQLite、Electron userData 和 Workspace 全部放在同一个
   临时 fixture root 内；隔离条件不成立时在打开任何数据库前失败，不得读取或写入用户数据库。
 - 将“未知 Shell/Application Settings 元数据已原样保留”收敛为每次 Renderer 启动只出现一次的
@@ -104,3 +105,4 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
   及其 Webview/Electron 验收。
 - Agent ToolResult live/history projection、Desktop resource authorization、ReadImage perceptual identity 与
   terminal Workspace Board artifact delivery。
+> **后继处置（2026-08-21）**：本提案的 Webview/Shell UI 回归要求继续有效且不得改动现有 UI；其中 Pi runtime、catalog、prompt 与 execution 描述由 `replace-pi-with-dsh-runtime-atomically` 取代。

@@ -124,3 +124,4 @@
 - [x] 8.3 Add focused Webview, Canvas runtime, text-editor runtime and Workbench sibling-isolation regressions.
 - [ ] 8.4 Run affected tests/typechecks, strict OpenSpec, UI validation and quality review; inspect send auto-scroll and deletion-driven tab closure in visible Electron.
       Deterministic tests and affected typechecks pass. Computer Use proves the Workspace-bound draft rail and the unchanged Entry binding rail through the visible Electron accessibility tree, but native Canvas selection, send auto-scroll, deletion-driven tab closure and Workspace rail pixels remain UI-blocked: the native select menu is not exposed reliably, deleting the user's existing file is unsafe, and captured pixels remain a stale Entry frame while the authoritative accessibility tree is on the Workspace scene.
+> **后继处置（2026-08-21）**：继续跟踪非 Pi 的 UI/Shell 验收项；未完成的 Pi-specific 任务停止并转由 DSH 替换提案收口。

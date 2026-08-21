@@ -40,3 +40,4 @@ None.
   Existing transcript, conversation, branch, checkpoint, project, media, and configuration data stays
   untouched.
 - Dependencies: no new runtime dependency or alternate storage path.
+> **后继处置（2026-08-21）**：Pi execution lease 与存储路径已随 Pi runtime 退休，由 `replace-pi-with-dsh-runtime-atomically` 取代；本文仅保留历史证据。

@@ -52,3 +52,4 @@
 - [x] 8.2 Run repository architecture/storage/internal-versioning gates, `pnpm check:unused`, `pnpm check`, `pnpm build` and the focused local Agent evaluation entry; record exact passed, failed, blocked and intentionally unexecuted commands without substituting key-free evidence for real Agent behavior.
 - [x] 8.3 Record `rg` deletion evidence for overlay, invocation requirements, Skill external processor, command-artifact-in-SkillHost and `.neko/skills` production paths; document canonical producer/consumer hits for Pi SkillHost, CommandHost, management catalog and `.agents/skills` layouts.
 - [x] 8.4 Complete the repository quality review with findings classified by risk and document residual risks for Pi dependency drift, CommandHost coordination, retained legacy bytes, third-party portable metadata and any unexecuted visible/real-provider evaluation.
+> **后继处置（2026-08-21）**：本任务表已停止；不得继续实现 Pi Skill 兼容路径。

@@ -241,3 +241,4 @@ Screen Recording、Accessibility/Input 使用当前 OS 状态。Pause、Stop、T
 
 本变更不保留旧 contract 或 dual-read。旧的非 authoritative enable/local-runtime presentation state 按当前
 canonical fresh state 局部重置并显示 diagnostic，不影响插件文件、用户内容或其他 Workspace。
+> **后继处置（2026-08-21）**：Pi-specific browser/computer execution 设计仅作历史记录；保留的 Automation 安全与证据边界不变。

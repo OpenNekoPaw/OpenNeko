@@ -101,3 +101,4 @@ only rollback; no database rollback or rewrite is performed.
 ## Open Questions
 
 None.
+> **后继处置（2026-08-21）**：本文的 Pi execution lease 设计不再是当前实现约束，DSH Session 与 OpenNeko catalog/binding 的唯一权威见 `replace-pi-with-dsh-runtime-atomically`。

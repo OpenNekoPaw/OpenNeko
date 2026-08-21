@@ -389,3 +389,4 @@ Webview 只把非 idle 的权威 state 投影到最后一条非 queued 用户消
 streaming、Tool 和 completed assistant record 继续按现有规则取代 generic activity。queued item 不进入
 transcript，composer queue 使用既有 `createdAt` 显示逐项“等待中”和时间，发送、重编辑、取消操作保持不变。
 消息与队列时间共用一个 package-local formatter，不新增状态 owner、contract 字段或 fallback。
+> **后继处置（2026-08-21）**：保留 UI、Scene 与生命周期回归约束；Pi-specific authority/path 不再是实现约束。

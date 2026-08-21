@@ -34,3 +34,4 @@ OpenNeko 已依赖 Pi Agent 的标准 Skill discovery、progressive disclosure �
 - `@neko/local-metadata` continues to own `~/.neko` global storage layout while explicitly projecting Portable Skills under `~/.agents/skills`; the obsolete generic `.neko/skills` layout export is removed.
 - `packages/skills` remains content-only and Pi-compatible. Builtin Skill content is audited against the existing prompt/capability boundary without adding OpenNeko runtime protocols.
 - Active changes `unify-agent-launch-and-domain-bindings`, `clarify-desktop-capability-catalog`, `purify-agent-contracts` and the completed `unify-skill-creator-authoring-targets` must consume this single canonical boundary rather than retain compatibility paths.
+> **后继处置（2026-08-21）**：Pi Skill integration 已由 DSH standard preset 与 DSH Skill runtime 取代；本文仅保留历史证据。

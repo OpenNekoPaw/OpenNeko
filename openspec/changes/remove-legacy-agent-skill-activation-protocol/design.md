@@ -92,3 +92,4 @@ Evaluation case 中的 `GetContext` 改为当前完整 Desktop session 可执行
 ## Open Questions
 
 - 无。若实施发现 message runtime 的旧 surface 与用户当前修改重叠，只记录为后续 change，不扩展本次边界。
+> **后继处置（2026-08-21）**：保留“无 legacy activation 平行路径”不变量；Pi-specific 实现说明仅作历史记录。

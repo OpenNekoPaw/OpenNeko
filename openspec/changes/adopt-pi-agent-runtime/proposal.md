@@ -36,3 +36,4 @@ runtime，但生产包体、启动成本、provider license、CredentialStore/OA
 - `govern-local-storage-authorities` 定义的 portable conversation、canonical SQLite 与 secret/log
   authority；本变更最终验收必须消费该唯一边界。
 - 不保留 VS Code、TUI、旧 AgentSession/Executor、Platform chat 或旧 transcript 兼容路径。
+> **后继处置（2026-08-21）**：本提案中的 Pi execution、Session、prompt、Tool 与持久化路径已由 `replace-pi-with-dsh-runtime-atomically` 原子取代。本目录仅保留历史决策与证据，不得继续实施未完成的 Pi 任务。

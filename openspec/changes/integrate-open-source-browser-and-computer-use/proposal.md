@@ -65,3 +65,4 @@ Schema 摘要、声明权限接受和多维资格状态，却没有为普通第�
 
 用户项目、Workspace、Agent transcript 和第三方安装文件均不迁移。单个 Plugin、Skill、MCP、runtime 或
 Tool 失败只影响自身；其他扩展、会话和 Workspace 保持可用。
+> **后继处置（2026-08-21）**：旧 Pi Plugin/MCP execution path 已由 `replace-pi-with-dsh-runtime-atomically` 取代；Automation 的 upstream compatibility、target、OS permission、approval 与 evidence 规则继续有效。

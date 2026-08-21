@@ -95,3 +95,4 @@
       residual Browser/Cua privacy or write risks.
 - [x] 6.6 Re-run focused contract/runtime/Webview/Desktop tests, key-free external-Automation Evaluation selection,
       strict typecheck, OpenSpec validation, UI validation and quality review after the lifecycle cleanup.
+> **后继处置（2026-08-21）**：停止未完成的 Pi Plugin/MCP 路径任务；非 Pi 的 Automation compatibility、permission、approval 与 evidence 任务继续有效。

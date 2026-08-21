@@ -32,6 +32,22 @@ Before production consumer switching, Q0 SHALL establish or rebuild a non-releas
 - **THEN** Q0 fails and consumer cutover stops
 - **AND** the bridge scope is not expanded to bypass the failure
 
+### Requirement: Development runtime generations remain atomic
+
+The Desktop development watcher SHALL observe the complete official DSH bridge and domain Plugin input set owned by the development closure builder. When one of those inputs changes, it SHALL build and qualify the content-fresh closure before restarting Electron Main and its DSH subprocess. It MUST NOT allow a newly built Main contract consumer to continue against an older in-memory DSH producer, and it MUST NOT add a legacy decoder or compatibility path to accept that stale producer.
+
+#### Scenario: Bridge contract changes during Desktop development
+
+- **WHEN** an official bridge source or shared contract input changes while Forge development mode is running
+- **THEN** the watcher rebuilds and qualifies the DSH closure before requesting the Main restart
+- **AND** the restarted Main connects only to the new producer generation
+
+#### Scenario: Development closure rebuild fails
+
+- **WHEN** an observed DSH bundle input cannot build or qualify
+- **THEN** the Main restart is not requested and the failure remains visible
+- **AND** the current generation is not presented as compatible with the new consumer
+
 ### Requirement: Deferred real provider verification permits development but not release
 
 Real provider/API validation MAY be temporarily skipped by explicit user direction. While skipped, its tasks SHALL remain unchecked and labelled “not release evidence”. Deterministic Q0 MAY still authorize W1–W6 implementation, but the unified release guard MUST remain closed until this change's required real Desktop/provider evidence is completed or another accepted OpenSpec explicitly redefines that gate.

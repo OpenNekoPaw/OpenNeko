@@ -9,8 +9,8 @@ Agent + Home，以及 P1.4 Assets + Canvas 的确定性实现：
 - Home、Content Project Tab、Context Dock、Activity/Attention owner-derived 投影；
 - canonical Workspace/Project identity、Window/Tab/View state、CAS persistence；
 - sender-bound fixed IPC、renderer session identity/revision 检查和 restart recovery；
-- 真实 Pi conversation authority、Session/checkpoint、lease、Tool/Skill snapshot 和 Timeline
-  projection 的 AppHost composition；
+- 真实 DSH subprocess/profile 拥有 Agent execution、Session/transcript、Tool 与 Skill runtime；
+  OpenNeko 只组合 Conversation catalog、exact DSH Session binding、bounded projection 与 Host trust boundary；
 - 只通过 HostSecretPort 持久化的 credential runtime，以及 macOS 原生受保护认证输入；
 - workspace content/search/reveal/write effect、package-owned Agent Root、Conversation/Tool
   confirmation、Home Activity/Attention 和跨 reload/restart 生命周期测试；
@@ -58,9 +58,9 @@ Workspace 和新 View。Content Project 在 catalog 与 Tab state 完成 hydrati
 不回退到当前 active conversation。重启后也由同一 locator 惰性重连，identity 漂移会被拒绝。
 加密端口只在实际 credential 操作时触发 macOS safeStorage/Keychain 检查。
 
-冷启动最近会话由 Pi owning package 的只读 SQLite catalog reader 提供，并在首次 Shell
-snapshot 前按持久 Desktop Project catalog 限定 workspace scope；该路径不 attach Agent
-workspace runtime、不打开 transcript 或获取 execution lease。Agent Root 在 layout phase
+冷启动最近会话由 OpenNeko DSH Conversation catalog 与 exact Session binding projection 提供；
+SQLite 只保存轻量 Conversation metadata、领域上下文与 binding，DSH Session 文件仍是 transcript
+authority。该路径不打开 transcript 或启动无关 runtime。Agent Root 在 layout phase
 先建立 Host 订阅，再允许子组件请求 conversation/config/Skill snapshot。新会话 pending send
 使用稳定 message identity 保持用户消息可见；发送失败按目标 conversation 投影 diagnostic，
 不会留下空白的“执行中”面板。

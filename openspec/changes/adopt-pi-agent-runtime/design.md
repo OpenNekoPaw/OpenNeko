@@ -60,3 +60,4 @@ Measure the production Desktop Agent bundle and startup on a supported packaged 
 provider licenses, CredentialStore provenance/redaction, OAuth callback port and cancellation, and all
 absolute/cache-path disclosure surfaces. Record unavailable credentials, network or cross-platform
 targets as blockers without substituting a retired Host or mock provider.
+> **后继处置（2026-08-21）**：Pi runtime 设计已由 `replace-pi-with-dsh-runtime-atomically` 取代；本文仅作为历史记录，不再是实现约束。

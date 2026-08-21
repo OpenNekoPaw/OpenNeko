@@ -54,18 +54,17 @@ Conversation catalog enumeration SHALL not depend on the currently mounted Agent
 - **THEN** Agent Home still lists the Conversation with an unavailable Workspace projection where necessary
 - **AND** the Conversation is not rebound to the active Workspace
 
-### Requirement: Retired Agent storage remains product-unreachable
+### Requirement: Retired Agent storage is removed through one exact cleanup
 
-Normal product startup, listing, open, clear, compact and failure recovery MUST NOT open, import, archive, delete, convert or repair retired Agent databases, Pi Session files, Pi-only mappings or mixed configuration sources. Identifiable current catalog records MAY retain bounded metadata and a local unavailable diagnostic without decoding retired transcript content. Offline export, repair or deletion requires a separate product-unreachable workflow and explicit authorization.
+Before current DSH authority initialization, Desktop SHALL delete only the explicitly retired Agent SQLite tables `conversations`, `pi_conversations`, `pi_messages`, `agent_conversation_records` and the explicitly retired directories `~/.neko/journals/`, `~/.neko/conversations/`. The cleanup MUST NOT decode or migrate old content, glob unknown `pi_*` tables, delete unknown files, touch current DSH Session storage or modify unrelated SQLite records. Listing, open, clear, compact and failure recovery SHALL have no retired-data reader or compatibility projection.
 
-#### Scenario: Retired Pi database remains on disk
+#### Scenario: Retired Pi data exists at startup
 
-- **WHEN** the canonical DSH runtime starts
-- **THEN** the product leaves the retired database and Pi Session root untouched
-- **AND** canonical DSH Conversations continue independently
+- **WHEN** the canonical DSH runtime initializes
+- **THEN** every explicitly retired table and directory is absent before current DSH catalog initialization
+- **AND** unrelated tables, unknown files and DSH Session storage remain unchanged
 
-#### Scenario: User inspects a legacy Conversation
+#### Scenario: Retired Pi storage is absent
 
-- **WHEN** its stable identity is readable but its transcript authority is retired
-- **THEN** the record remains visible with execution disabled and a clear diagnostic
-- **AND** no DSH Session is created on its behalf
+- **WHEN** cleanup runs again
+- **THEN** the operation succeeds without creating a marker, fallback catalog or replacement legacy path

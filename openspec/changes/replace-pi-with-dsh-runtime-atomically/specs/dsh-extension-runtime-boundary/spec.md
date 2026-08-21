@@ -60,6 +60,12 @@ OpenNeko MAY present official Skill and MCP inventory, readiness, supported conf
 - **THEN** the product lists only the Skill and MCP contributions intended for user management
 - **AND** internal Plugin entries do not become install, enable or configuration controls
 
+#### Scenario: No official MCP contribution is composed
+
+- **WHEN** the current DSH profile has no qualified MCP contribution
+- **THEN** the MCP inventory is empty and the Skill inventory remains usable
+- **AND** the bridge does not fabricate Browser Use, Computer Use or an unsupported catalog diagnostic
+
 ### Requirement: Extension failures remain local and visible
 
 DSH profile/bridge integration SHALL isolate invalid Skill content, MCP configuration/connection and Plugin registration to the exact contribution. Duplicate identity, missing dependency, unsupported configuration or load failure MUST produce a stable diagnostic and MUST NOT clear sibling registries, stop unrelated Sessions or return empty success. Registry selection MUST be exact and MUST NOT use wildcard/default handlers, priority probing or try-next fallback.

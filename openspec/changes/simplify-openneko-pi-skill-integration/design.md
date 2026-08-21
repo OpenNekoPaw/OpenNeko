@@ -144,3 +144,4 @@ Rollback reverts the code replacement as a unit. It does not restore compatibili
 ## Open Questions
 
 None. A future user-visible legacy Skill import or structured Host overlay requires its own proposal with explicit consumers and authority.
+> **后继处置（2026-08-21）**：本文的 Pi Skill 路径不再是实现约束，当前唯一路径见 `replace-pi-with-dsh-runtime-atomically`。

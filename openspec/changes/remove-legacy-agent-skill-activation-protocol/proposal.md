@@ -30,3 +30,4 @@ Pi 已经是唯一 Agent loop、Session、transcript 和 Skill 发现/读取路�
 - `packages/chara` 删除对不存在 Skill activation 工具的 policy 阻止项；Character 领域 owner 与真实 capability policy 不变。
 - `scripts/agent-eval` 更新外部评测 fixture/hard gate，使其只引用当前可执行 Tool，并记录真实 Desktop provider-backed 验收是否可运行。
 - 不迁移或覆盖用户当前正在修改的 Agent launch/message queue 文件；若发现相邻旧 runtime surface，作为 `deferred-overlap` 独立记录。
+> **后继处置（2026-08-21）**：删除 legacy activation 的结论仍有效，但其中 Pi-specific runtime 描述已由 `replace-pi-with-dsh-runtime-atomically` 的 DSH Skill authority 取代。

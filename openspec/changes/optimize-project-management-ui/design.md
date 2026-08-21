@@ -2,13 +2,13 @@
 
 `DesktopProjectCatalogSurface` 当前同时承担窗口级目录展示与页面内多选 presentation：单击项目只更新本地 `selectedProjectIds`，双击才发送 `open-project-workspace` scene intent；只要有选择，组件就在搜索栏和集合之间插入批量工具条。项目数量通常较少且页面首要用途是进入 Workspace，这套批处理优先级造成了不必要的交互步骤和布局跳动。
 
-项目登记、Conversation 和本地文件具有不同 owner 与生命周期。`@neko/host` 的 `DesktopProjectManagementService` 分别提供 `removeProjects` 与 `deleteProjectConversations`；Agent runtime 拥有 Conversation 删除；项目目录和文件不在这两个命令的删除范围。本次只改 Desktop Renderer presentation，不能通过合并按钮重新耦合这些 owner。
+项目登记、Conversation 和本地文件具有不同 owner 与生命周期。`@neko/host` 的项目管理 service 分别提供 `removeProjects` 与 `archiveProjectConversations`；Agent runtime 拥有 Conversation 归档，DSH Workspace registry 持有 durable archive fact；项目目录和文件不在这两个命令的影响范围。本次只改 Desktop Renderer presentation，不能通过合并按钮重新耦合这些 owner。
 
 五层分析如下：
 
 - 职责：Desktop Renderer 决定当前 Window 内项目目录的布局、焦点与 scene intent；Host 决定项目登记和精确 Workspace Conversation 操作。
 - 依赖：组件只依赖 package-owned `@neko/host/desktop-shell-contract` 投影和 `@neko/ui`，不接触 Electron、Node、文件路径或持久化。
-- 接口：现有 `onOpen(projectId)`、`onRemove([project])` 和 `onDeleteConversations([project])` 足以表达全部动作，无需新增或改变 typed IPC。
+- 接口：`onOpen(projectId)`、`onRemove([project])` 和 `onArchiveAssociatedConversations([project])` 表达全部动作；归档通过唯一 typed IPC 委托 DSH authority。
 - 扩展：网格/列表只是当前组件的可丢弃 presentation state；移除 selection state 后不会形成新的 registry、snapshot 或替代路径。
 - 测试：组件测试覆盖单击、键盘、视图切换、失效项目和精确动作；Desktop Application 测试覆盖 scene delegation 与确认；真实 Electron 验收覆盖正常、紧凑、失效和操作状态。
 
@@ -23,7 +23,7 @@
 
 **Non-Goals:**
 
-- 不改变 `@neko/host` application service、Desktop Main/preload channel 或 Agent Conversation 删除逻辑。
+- 不改变 `@neko/host` 与 Agent runtime 的归档 ownership，不提供 Conversation 删除逻辑。
 - 不提供项目目录或项目文件删除，不增加“同时删除”组合命令。
 - 不持久化 view mode，不保留旧多选路径、快捷键或 feature flag。
 - 不改变搜索、排序、滚动、空状态和失效记录可见性。
@@ -47,9 +47,9 @@
 每个项目条目继续提供两个 icon action，并通过 tooltip/accessible label 明确区分：
 
 - 移除项目：撤销 Project/Workspace 登记和 Window 引用，保留全部 Conversation 与文件。
-- 删除项目会话：只删除该 Project 精确 Workspace-owned Conversations，保留 Project 登记与文件；无会话时 disabled。
+- 归档项目会话：只归档该 Project 精确 Workspace-owned Conversations，保留 Conversation、Session、Project 登记与文件；无会话时 disabled。
 
-二者继续委托现有单元素 project-id collection contract。这一选择符合用户数据保护，也避免“删除项目”在实际并不删除磁盘项目时产生错误承诺。把两个命令合并会重新跨越 Host/Agent 两个 authority，导致不可逆历史删除成为普通目录整理的副作用，因此不采用。
+二者继续委托单元素 project-id collection contract。这一选择符合用户数据保护，也避免“移除项目”被误解为删除磁盘项目。把两个命令合并会重新跨越 Host/Agent/DSH authority，导致项目登记整理和 Conversation 可见性产生错误耦合，因此不采用。
 
 ### 4. 生产逻辑继续位于 Desktop Application presentation boundary
 
