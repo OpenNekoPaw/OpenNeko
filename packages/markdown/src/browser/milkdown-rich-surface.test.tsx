@@ -3,7 +3,11 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { MilkdownRichSurface, type MilkdownRichSurfaceState } from './milkdown-rich-surface';
+import {
+  MilkdownRichSurface,
+  type MilkdownRichSurfaceActions,
+  type MilkdownRichSurfaceState,
+} from './milkdown-rich-surface';
 
 beforeAll(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -14,6 +18,14 @@ beforeAll(() => {
       unobserve(): void {}
       disconnect(): void {}
     },
+  });
+  Object.defineProperty(Range.prototype, 'getClientRects', {
+    configurable: true,
+    value: () => [],
+  });
+  Object.defineProperty(Range.prototype, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => rect(),
   });
 });
 
@@ -82,7 +94,56 @@ describe('MilkdownRichSurface', () => {
       expect(container?.textContent).toContain('script.md#Scene 2');
     });
   });
+
+  it('reveals the exact first, middle and last heading', async () => {
+    let actions: MilkdownRichSurfaceActions | undefined;
+    ({ root, container } = createTestRoot());
+    await act(async () => {
+      root?.render(
+        <MilkdownRichSurface
+          value={'# First\n\nBody\n\n## Middle\n\nBody\n\n### Last\n\nBody'}
+          ariaLabel="Canvas Markdown"
+          readOnly={false}
+          onChange={() => undefined}
+          onActions={(nextActions) => {
+            actions = nextActions;
+          }}
+          onStateChange={() => undefined}
+        />,
+      );
+    });
+
+    await vi.waitFor(() => expect(actions).toBeDefined());
+    for (const [headingIndex, label] of ['First', 'Middle', 'Last'].entries()) {
+      await act(async () => {
+        expect(actions?.revealHeading(headingIndex)).toBe(true);
+      });
+      await vi.waitFor(() => expect(selectedHeadingText()).toBe(label));
+    }
+    expect(actions?.revealHeading(3)).toBe(false);
+  });
 });
+
+function selectedHeadingText(): string | undefined {
+  const anchorNode = window.getSelection()?.anchorNode;
+  const anchorElement =
+    anchorNode instanceof Element ? anchorNode : (anchorNode?.parentElement ?? undefined);
+  return anchorElement?.closest('h1, h2, h3, h4, h5, h6')?.textContent ?? undefined;
+}
+
+function rect(): DOMRect {
+  return {
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 20,
+    top: 0,
+    right: 100,
+    bottom: 20,
+    left: 0,
+    toJSON: () => ({}),
+  };
+}
 
 function createTestRoot(): { readonly root: Root; readonly container: HTMLDivElement } {
   const nextContainer = document.createElement('div');

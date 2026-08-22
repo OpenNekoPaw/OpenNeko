@@ -512,10 +512,7 @@
   line-height: 1.35;
 }
 
-.neko-text-editor-codemirror
-  .cm-tooltip.neko-markdown-completion
-  > ul
-  > li[aria-selected] {
+.neko-text-editor-codemirror .cm-tooltip.neko-markdown-completion > ul > li[aria-selected] {
   background: var(--neko-list-activeSelectionBackground, #e6edf7);
   color: var(--neko-list-activeSelectionForeground, var(--neko-editor-foreground, #202124));
 }
@@ -730,6 +727,10 @@
 }
 
 @container (max-width: 720px) {
+  .neko-text-editor-body:has(.neko-text-editor-outline) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .neko-text-editor-body[data-presentation-mode='split'],
   .neko-text-editor-body[data-presentation-mode='split']:has(.neko-text-editor-outline) {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

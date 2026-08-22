@@ -603,4 +603,22 @@ describe('Desktop renderer styles', () => {
       /var\(--neko-(?:text-(?:primary|secondary|tertiary)|surface-(?:subtle|muted)|border-strong)/u,
     );
   });
+
+  it('lets compact Text Editor panes reclaim the hidden outline column', () => {
+    const packageStyles = readFileSync(
+      new URL('../../../packages/text-editor/webview/src/style.css', import.meta.url),
+      'utf8',
+    );
+    const compactStyles = packageStyles.slice(
+      packageStyles.indexOf('@container (max-width: 720px)'),
+    );
+
+    expect(compactStyles).toMatch(
+      /\.neko-text-editor-body:has\(\.neko-text-editor-outline\)\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);\s*\}/u,
+    );
+    expect(compactStyles).toMatch(
+      /\.neko-text-editor-body\[data-presentation-mode='split'\],[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\);/u,
+    );
+    expect(compactStyles).toMatch(/\.neko-text-editor-outline\s*\{\s*display:\s*none;\s*\}/u);
+  });
 });

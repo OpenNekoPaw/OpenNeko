@@ -254,17 +254,12 @@ async function createMilkdownRichSurfaceController({
     revealHeading: (headingIndex) =>
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
-        let currentIndex = 0;
-        let headingPosition: number | undefined;
+        const headingPositions: number[] = [];
         view.state.doc.descendants((node, position) => {
-          if (node.type.name !== 'heading') return true;
-          if (currentIndex === headingIndex) {
-            headingPosition = position;
-            return false;
-          }
-          currentIndex += 1;
+          if (node.type.name === 'heading') headingPositions.push(position);
           return true;
         });
+        const headingPosition = headingPositions[headingIndex];
         if (headingPosition === undefined) return false;
         const selection = TextSelection.near(view.state.doc.resolve(headingPosition + 1));
         view.dispatch(view.state.tr.setSelection(selection).scrollIntoView());
