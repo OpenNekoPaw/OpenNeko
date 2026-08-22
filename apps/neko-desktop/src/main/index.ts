@@ -39,7 +39,6 @@ import { createDesktopAutomationLocalRuntimeHost } from './desktop-automation-lo
 import { createDesktopAutomationHostPermission } from './desktop-automation-host-permission';
 import { registerDesktopIpc } from './ipc';
 import { DesktopRendererRecovery } from './renderer-recovery';
-import { projectDesktopCanvasGenerationModels } from './desktop-canvas-generation-model-catalog';
 import {
   configureDesktopWindowSecurity,
   desktopRendererContentSecurityPolicyOptions,
@@ -66,7 +65,10 @@ import {
   removeRetiredPiStorage,
   type DshDomainConversationService,
 } from '@neko/agent-runtime/application';
-import { createCanvasWorkspaceIndexService } from '@neko/canvas-domain';
+import {
+  createCanvasWorkspaceIndexService,
+  projectCanvasGenerationModels,
+} from '@neko/canvas-domain';
 import { createCanvasWorkspaceIndexNodeAdapter } from '@neko/canvas-node';
 import { createPersistentExportJobStore, initializeExportJobTables } from '@neko/cut-node';
 import { createCharacterAgentConversationAdapter } from './character-agent-conversation-adapter';
@@ -1017,7 +1019,13 @@ async function startDesktop(): Promise<void> {
         workspaceId: workspace.workspaceId,
         workspacePath: workspace.workspacePath,
       });
-      return projectDesktopCanvasGenerationModels(config);
+      return projectCanvasGenerationModels({
+        providers: config.getEnabledProviders(),
+        models: config.getEnabledModels(),
+        supportsPurpose: modelSupportsPurpose,
+        getDefaultModelPurposeRef: (purpose) => config.getDefaultModelPurposeRef(purpose),
+        getDefaultModelRef: (type) => config.getDefaultModelRef(type),
+      });
     },
     requestSource: async ({ identity, sourceKind, sourceMode, workspace }) => {
       const owner = requireOwnerWindow(identity.windowId);
