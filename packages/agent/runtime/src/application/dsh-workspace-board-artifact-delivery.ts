@@ -1,5 +1,6 @@
 import type { DshAcpProjectedEvent } from '../acp/dsh-acp-projection';
 import type { AgentConversationContext } from '@neko/agent-contracts';
+import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
 import { DOCUMENT_DSH_TOOL_NAME, decodeDocumentDshToolArgs } from '@neko/content/document';
 import {
   CONTENT_IMAGE_DSH_TOOL_NAME,
@@ -9,10 +10,29 @@ import {
   type ContentLocator,
 } from '@neko/content';
 import { hashStableValue } from '@neko/shared';
+import {
+  resolveWorkspaceGeneratedAssetRelativeDirectory,
+  sanitizeGeneratedAssetPathSegment,
+} from '@neko/generation';
 
 export type DshWorkspaceBoardArtifact =
+  | DshWorkspaceBoardSourceArtifact
   | {
-      readonly kind: 'markdown';
+      readonly kind: 'file-reference';
+      readonly artifactId: string;
+      readonly contentFingerprint: string;
+      readonly role: 'analysis';
+      readonly title: string;
+      readonly sourceId: string;
+      readonly sourceArtifactIds: readonly string[];
+      readonly mimeType: 'text/markdown';
+      readonly contentLocator: ContentLocator;
+    };
+
+type DshWorkspaceBoardCollectedArtifact =
+  | DshWorkspaceBoardSourceArtifact
+  | {
+      readonly kind: 'markdown-draft';
       readonly artifactId: string;
       readonly contentFingerprint: string;
       readonly role: 'analysis';
@@ -20,21 +40,22 @@ export type DshWorkspaceBoardArtifact =
       readonly sourceId: string;
       readonly sourceArtifactIds: readonly string[];
       readonly markdown: string;
-    }
-  | {
-      readonly kind: 'file-reference' | 'image';
-      readonly artifactId: string;
-      readonly contentFingerprint: string;
-      readonly role: 'source';
-      readonly title: string;
-      readonly sourceId: string;
-      readonly contentLocator: ContentLocator;
     };
+
+type DshWorkspaceBoardSourceArtifact = {
+  readonly kind: 'file-reference' | 'image';
+  readonly artifactId: string;
+  readonly contentFingerprint: string;
+  readonly role: 'source';
+  readonly title: string;
+  readonly sourceId: string;
+  readonly contentLocator: ContentLocator;
+};
 
 export interface DshWorkspaceBoardArtifactBatch {
   readonly turn: number;
   readonly createdAt: number;
-  readonly artifacts: readonly DshWorkspaceBoardArtifact[];
+  readonly artifacts: readonly DshWorkspaceBoardCollectedArtifact[];
 }
 
 export interface DshWorkspaceBoardArtifactCollectionDiagnostic {
@@ -49,17 +70,13 @@ export interface DshWorkspaceBoardArtifactCollection {
   readonly diagnostics: readonly DshWorkspaceBoardArtifactCollectionDiagnostic[];
 }
 
-type DshWorkspaceBoardSourceArtifact = Extract<
-  DshWorkspaceBoardArtifact,
-  { readonly role: 'source' }
->;
-
 export interface DshWorkspaceBoardArtifactDeliveryInput {
   readonly workspaceId: string;
   readonly conversationId: string;
   readonly dshSessionId: string;
   readonly turn: number;
   readonly createdAt: number;
+  readonly canvasTurnTarget: CanvasWorkspaceTurnTarget;
   readonly delivery:
     | { readonly kind: 'completed-content-tool'; readonly toolCallId: string }
     | { readonly kind: 'completed-turn' };
@@ -83,6 +100,7 @@ export interface DshWorkspaceBoardTerminalDeliveryInput {
   readonly conversationId: string;
   readonly dshSessionId: string;
   readonly events: readonly DshAcpProjectedEvent[];
+  readonly canvasTurnTarget?: CanvasWorkspaceTurnTarget;
 }
 
 export interface DshWorkspaceBoardCompletedToolDeliveryInput {
@@ -90,6 +108,16 @@ export interface DshWorkspaceBoardCompletedToolDeliveryInput {
   readonly dshSessionId: string;
   readonly toolCallId: string;
   readonly events: readonly DshAcpProjectedEvent[];
+  readonly canvasTurnTarget?: CanvasWorkspaceTurnTarget;
+}
+
+export interface DshDurableMarkdownArtifactPublicationPort {
+  publish(input: {
+    readonly workspaceId: string;
+    readonly contentLocator: ContentLocator;
+    readonly markdown: string;
+    readonly contentFingerprint: string;
+  }): Promise<{ readonly contentLocator: ContentLocator; readonly contentFingerprint: string }>;
 }
 
 export interface DshWorkspaceBoardArtifactDeliveryService {
@@ -110,6 +138,7 @@ export function createDshWorkspaceBoardArtifactDeliveryService(options: {
     readContext(conversationId: string): Promise<AgentConversationContext | undefined>;
   };
   readonly delivery: DshWorkspaceBoardArtifactDeliveryPort;
+  readonly publication: DshDurableMarkdownArtifactPublicationPort;
   readonly diagnostics: {
     report(diagnostic: DshWorkspaceBoardArtifactCollectionDiagnostic): void;
   };
@@ -117,7 +146,7 @@ export function createDshWorkspaceBoardArtifactDeliveryService(options: {
   return Object.freeze({
     async deliverCompletedTool(input: DshWorkspaceBoardCompletedToolDeliveryInput) {
       const context = await options.contexts.readContext(input.conversationId);
-      if (context?.kind !== 'workspace' && context?.kind !== 'authoring') return undefined;
+      if (context?.kind !== 'workspace') return undefined;
       const collection = collectDshWorkspaceBoardCompletedToolArtifacts({
         events: input.events,
         toolCallId: input.toolCallId,
@@ -125,19 +154,21 @@ export function createDshWorkspaceBoardArtifactDeliveryService(options: {
       for (const diagnostic of collection.diagnostics) options.diagnostics.report(diagnostic);
       const batch = collection.batch;
       if (batch === undefined) return undefined;
+      const canvasTurnTarget = resolveTurnTarget(context, input.canvasTurnTarget);
       return options.delivery.deliver({
         workspaceId: context.workspaceId,
         conversationId: input.conversationId,
         dshSessionId: input.dshSessionId,
         turn: batch.turn,
         createdAt: batch.createdAt,
+        canvasTurnTarget,
         delivery: { kind: 'completed-content-tool', toolCallId: input.toolCallId },
-        artifacts: batch.artifacts,
+        artifacts: requireSourceArtifacts(batch.artifacts),
       });
     },
     async deliverTerminal(input: DshWorkspaceBoardTerminalDeliveryInput) {
       const context = await options.contexts.readContext(input.conversationId);
-      if (context?.kind !== 'workspace' && context?.kind !== 'authoring') return undefined;
+      if (context?.kind !== 'workspace') return undefined;
       const terminal = [...input.events]
         .reverse()
         .find((event) => event.kind === 'turn' && event.phase === 'end');
@@ -151,14 +182,21 @@ export function createDshWorkspaceBoardArtifactDeliveryService(options: {
       for (const diagnostic of collection.diagnostics) options.diagnostics.report(diagnostic);
       const batch = collection.batch;
       if (batch === undefined) return undefined;
+      const canvasTurnTarget = resolveTurnTarget(context, input.canvasTurnTarget);
+      const artifacts = await publishTerminalArtifacts(
+        options.publication,
+        context.workspaceId,
+        batch.artifacts,
+      );
       return options.delivery.deliver({
         workspaceId: context.workspaceId,
         conversationId: input.conversationId,
         dshSessionId: input.dshSessionId,
         turn: batch.turn,
         createdAt: batch.createdAt,
+        canvasTurnTarget,
         delivery: { kind: 'completed-turn' },
-        artifacts: batch.artifacts,
+        artifacts,
       });
     },
   });
@@ -219,7 +257,10 @@ export function collectDshWorkspaceBoardArtifacts(input: {
     }
   }
   const sources = deduplicateSources(collectedSources);
-  if (sources.length === 0) return { diagnostics };
+  const attemptedContentTool = input.events.some(
+    (event) => event.kind === 'tool' && event.turn === input.turn && isSupportedContentTool(event),
+  );
+  if (sources.length === 0 && attemptedContentTool) return { diagnostics };
 
   const markdown = collectFinalAssistantMarkdown(input.events, input.turn);
   if (!markdown) return { diagnostics };
@@ -234,8 +275,8 @@ export function collectDshWorkspaceBoardArtifacts(input: {
     markdown,
   } as const;
   const analysisHash = hashStableValue(analysisIdentity);
-  const analysis: Extract<DshWorkspaceBoardArtifact, { role: 'analysis' }> = {
-    kind: 'markdown',
+  const analysis: Extract<DshWorkspaceBoardCollectedArtifact, { role: 'analysis' }> = {
+    kind: 'markdown-draft',
     artifactId: `content-analysis:${analysisHash}`,
     contentFingerprint: `markdown:${hashStableValue(markdown)}`,
     role: 'analysis',
@@ -252,6 +293,74 @@ export function collectDshWorkspaceBoardArtifacts(input: {
     },
     diagnostics,
   };
+}
+
+async function publishTerminalArtifacts(
+  publication: DshDurableMarkdownArtifactPublicationPort,
+  workspaceId: string,
+  artifacts: readonly DshWorkspaceBoardCollectedArtifact[],
+): Promise<readonly DshWorkspaceBoardArtifact[]> {
+  return Promise.all(
+    artifacts.map(async (artifact): Promise<DshWorkspaceBoardArtifact> => {
+      if (artifact.kind !== 'markdown-draft') return artifact;
+      const contentLocator = createAnalysisContentLocator(artifact.title, artifact.artifactId);
+      const published = await publication.publish({
+        workspaceId,
+        contentLocator,
+        markdown: artifact.markdown,
+        contentFingerprint: artifact.contentFingerprint,
+      });
+      if (contentLocatorKey(published.contentLocator) !== contentLocatorKey(contentLocator)) {
+        throw new Error('Durable Markdown publication returned another ContentLocator.');
+      }
+      return {
+        kind: 'file-reference',
+        artifactId: artifact.artifactId,
+        contentFingerprint: published.contentFingerprint,
+        role: 'analysis',
+        title: artifact.title,
+        sourceId: artifact.sourceId,
+        sourceArtifactIds: artifact.sourceArtifactIds,
+        mimeType: 'text/markdown',
+        contentLocator: published.contentLocator,
+      };
+    }),
+  );
+}
+
+function createAnalysisContentLocator(title: string, artifactId: string): ContentLocator {
+  const identity = hashStableValue(artifactId).slice(0, 20);
+  const stem = sanitizeGeneratedAssetPathSegment(title).slice(0, 80);
+  return {
+    file: {
+      authority: 'workspace',
+      path: `${resolveWorkspaceGeneratedAssetRelativeDirectory({ mimeType: 'text/markdown' })}/${stem}-${identity}.md`,
+    },
+  };
+}
+
+function resolveTurnTarget(
+  context: Extract<AgentConversationContext, { readonly kind: 'workspace' }>,
+  target: CanvasWorkspaceTurnTarget | undefined,
+): CanvasWorkspaceTurnTarget {
+  if (target === undefined) {
+    throw new Error('Workspace DSH turn has no admitted Canvas target.');
+  }
+  if (target.workspaceId !== context.workspaceId) {
+    throw new Error('DSH turn Canvas target does not match the Conversation Workspace.');
+  }
+  return target;
+}
+
+function requireSourceArtifacts(
+  artifacts: readonly DshWorkspaceBoardCollectedArtifact[],
+): readonly DshWorkspaceBoardSourceArtifact[] {
+  return artifacts.map((artifact) => {
+    if (artifact.kind === 'markdown-draft') {
+      throw new Error('Completed Content Tool delivery cannot contain a Markdown draft.');
+    }
+    return artifact;
+  });
 }
 
 function collectContentToolSources(

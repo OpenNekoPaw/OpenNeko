@@ -13,6 +13,7 @@ export * from './dsh-stale-conversation-cleanup';
 export * from './dsh-domain-tool-context-resolver';
 export * from './dsh-conversation-turn-context';
 export * from './dsh-workspace-board-artifact-delivery';
+export * from './dsh-turn-canvas-target-owner';
 export * from './dsh-permission-owner';
 export * from './agent-authoring-mutation-authority';
 export * from './agent-conversation-context-authority';

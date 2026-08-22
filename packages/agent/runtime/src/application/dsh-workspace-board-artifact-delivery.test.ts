@@ -32,7 +32,7 @@ describe('DSH Workspace Board artifact collection', () => {
       ]),
     );
     expect(batch?.artifacts.at(-1)).toMatchObject({
-      kind: 'markdown',
+      kind: 'markdown-draft',
       role: 'analysis',
       title: 'BLAME! 前 10 页分析',
       sourceArtifactIds: [expect.stringMatching(/^content:/u), expect.stringMatching(/^content:/u)],
@@ -158,7 +158,7 @@ describe('DSH Workspace Board artifact collection', () => {
       expect.objectContaining({ kind: 'image', contentLocator: image }),
     ]);
     expect(batch?.artifacts.at(-1)).toMatchObject({
-      kind: 'markdown',
+      kind: 'markdown-draft',
       sourceArtifactIds: [expect.any(String)],
     });
   });
@@ -284,8 +284,18 @@ describe('DSH Workspace Board artifact collection', () => {
     },
   );
 
-  it('does not promote ordinary text, source-only reads, or turns without a successful source', () => {
-    expect(collectBatch([turnStart(), assistant('Hello'), turnEnd()])).toBeUndefined();
+  it('promotes successful source-free Markdown but rejects incomplete content analysis', () => {
+    expect(
+      collectBatch([turnStart(), assistant('# Plan\n\nShip the first milestone.'), turnEnd()]),
+    ).toMatchObject({
+      artifacts: [
+        {
+          kind: 'markdown-draft',
+          role: 'analysis',
+          sourceArtifactIds: [],
+        },
+      ],
+    });
     expect(collectBatch([turnStart(), documentTool('a'), turnEnd()])).toBeUndefined();
     expect(
       collectBatch([
@@ -308,7 +318,7 @@ describe('DSH Workspace Board artifact collection', () => {
 
     expect(batch?.artifacts).toMatchObject([
       { kind: 'file-reference', role: 'source', title: 'blame.epub' },
-      { kind: 'markdown', role: 'analysis', sourceArtifactIds: [expect.any(String)] },
+      { kind: 'markdown-draft', role: 'analysis', sourceArtifactIds: [expect.any(String)] },
     ]);
   });
 
@@ -354,7 +364,7 @@ describe('DSH Workspace Board artifact collection', () => {
 
     expect(collection.batch?.artifacts).toMatchObject([
       { kind: 'file-reference', role: 'source', title: 'blame.epub' },
-      { kind: 'markdown', role: 'analysis', sourceArtifactIds: [expect.any(String)] },
+      { kind: 'markdown-draft', role: 'analysis', sourceArtifactIds: [expect.any(String)] },
     ]);
     expect(collection.diagnostics).toEqual([
       expect.objectContaining({
@@ -452,12 +462,18 @@ describe('DSH Workspace Board artifact delivery service', () => {
           return { status: 'accepted' };
         },
       },
+      publication: publication(),
       diagnostics: { report: () => undefined },
     });
 
     const outcome = await service.deliverTerminal({
       conversationId: 'conversation-1',
       dshSessionId: 'dsh-1',
+      canvasTurnTarget: {
+        kind: 'exact-canvas',
+        workspaceId: 'workspace-1',
+        canvasId: 'neko/boards/story.nkc',
+      },
       events: [turnStart(), documentTool('a'), assistant('Analysis'), turnEnd()],
     });
 
@@ -468,7 +484,138 @@ describe('DSH Workspace Board artifact delivery service', () => {
       conversationId: 'conversation-1',
       dshSessionId: 'dsh-1',
       turn: 1,
+      canvasTurnTarget: {
+        kind: 'exact-canvas',
+        workspaceId: 'workspace-1',
+        canvasId: 'neko/boards/story.nkc',
+      },
       delivery: { kind: 'completed-turn' },
+    });
+    expect(deliveries[0]?.artifacts.at(-1)).toMatchObject({
+      kind: 'file-reference',
+      role: 'analysis',
+      mimeType: 'text/markdown',
+      contentLocator: {
+        file: { authority: 'workspace', path: expect.stringMatching(/\.md$/u) },
+      },
+    });
+    expect(deliveries[0]?.artifacts.at(-1)).not.toHaveProperty('markdown');
+  });
+
+  it('publishes a source-free Workspace plan as one durable Markdown reference', async () => {
+    const deliveries: DshWorkspaceBoardArtifactDeliveryInput[] = [];
+    const service = createDshWorkspaceBoardArtifactDeliveryService({
+      contexts: {
+        readContext: async () => ({
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        }),
+      },
+      delivery: {
+        deliver: async (input) => {
+          deliveries.push(input);
+          return { status: 'accepted' };
+        },
+      },
+      publication: publication(),
+      diagnostics: { report: () => undefined },
+    });
+
+    await expect(
+      service.deliverTerminal({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        canvasTurnTarget: workspaceBoardTarget(),
+        events: [turnStart(), assistant('# Launch plan\n\nFirst milestone.'), turnEnd()],
+      }),
+    ).resolves.toEqual({ status: 'accepted' });
+    expect(deliveries[0]?.artifacts).toEqual([
+      expect.objectContaining({
+        kind: 'file-reference',
+        role: 'analysis',
+        sourceArtifactIds: [],
+        mimeType: 'text/markdown',
+      }),
+    ]);
+  });
+
+  it('rejects Canvas delivery when durable Markdown publication fails', async () => {
+    let deliveryCount = 0;
+    const service = createDshWorkspaceBoardArtifactDeliveryService({
+      contexts: {
+        readContext: async () => ({
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        }),
+      },
+      delivery: {
+        deliver: async () => {
+          deliveryCount += 1;
+          return { status: 'accepted' };
+        },
+      },
+      publication: {
+        publish: async () => {
+          throw new Error('Workspace Markdown write failed.');
+        },
+      },
+      diagnostics: { report: () => undefined },
+    });
+
+    await expect(
+      service.deliverTerminal({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        canvasTurnTarget: workspaceBoardTarget(),
+        events: [turnStart(), documentTool('a'), assistant('Analysis'), turnEnd()],
+      }),
+    ).rejects.toThrow('Workspace Markdown write failed');
+    expect(deliveryCount).toBe(0);
+  });
+
+  it('keeps the published Markdown reference when Canvas projection is blocked', async () => {
+    const published: import('@neko/content').ContentLocator[] = [];
+    const deliveries: DshWorkspaceBoardArtifactDeliveryInput[] = [];
+    const service = createDshWorkspaceBoardArtifactDeliveryService({
+      contexts: {
+        readContext: async () => ({
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        }),
+      },
+      publication: {
+        publish: async (input) => {
+          published.push(input.contentLocator);
+          return input;
+        },
+      },
+      delivery: {
+        deliver: async (input) => {
+          deliveries.push(input);
+          return {
+            status: 'blocked',
+            diagnostic: { code: 'canvas-conflict', message: 'Canvas is dirty.' },
+          };
+        },
+      },
+      diagnostics: { report: () => undefined },
+    });
+
+    await expect(
+      service.deliverTerminal({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        canvasTurnTarget: workspaceBoardTarget(),
+        events: [turnStart(), documentTool('a'), assistant('Analysis'), turnEnd()],
+      }),
+    ).resolves.toMatchObject({ status: 'blocked' });
+    expect(published).toHaveLength(1);
+    expect(deliveries[0]?.artifacts.at(-1)).toMatchObject({
+      kind: 'file-reference',
+      contentLocator: published[0],
     });
   });
 
@@ -489,6 +636,7 @@ describe('DSH Workspace Board artifact delivery service', () => {
           return { status: 'accepted' };
         },
       },
+      publication: publication(),
       diagnostics: { report: (diagnostic) => diagnostics.push(diagnostic.toolCallId) },
     });
     const malformed = {
@@ -500,6 +648,7 @@ describe('DSH Workspace Board artifact delivery service', () => {
       service.deliverTerminal({
         conversationId: 'conversation-1',
         dshSessionId: 'dsh-1',
+        canvasTurnTarget: workspaceBoardTarget(),
         events: [turnStart(), malformed, documentTool('valid'), assistant('Analysis'), turnEnd()],
       }),
     ).resolves.toEqual({ status: 'accepted' });
@@ -523,6 +672,7 @@ describe('DSH Workspace Board artifact delivery service', () => {
           return { status: 'accepted' };
         },
       },
+      publication: publication(),
       diagnostics: { report: () => undefined },
     });
 
@@ -533,6 +683,45 @@ describe('DSH Workspace Board artifact delivery service', () => {
         events: [turnStart(), documentTool('a'), assistant('Analysis'), turnEnd()],
       }),
     ).resolves.toBeUndefined();
+    expect(deliveryCount).toBe(0);
+  });
+
+  it('does not auto-persist an authoring Conversation result', async () => {
+    let publicationCount = 0;
+    let deliveryCount = 0;
+    const service = createDshWorkspaceBoardArtifactDeliveryService({
+      contexts: {
+        readContext: async () => ({
+          kind: 'authoring',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+          target: null,
+        }),
+      },
+      delivery: {
+        deliver: async () => {
+          deliveryCount += 1;
+          return { status: 'accepted' };
+        },
+      },
+      publication: {
+        publish: async (input) => {
+          publicationCount += 1;
+          return input;
+        },
+      },
+      diagnostics: { report: () => undefined },
+    });
+
+    await expect(
+      service.deliverTerminal({
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        canvasTurnTarget: workspaceBoardTarget(),
+        events: [turnStart(), documentTool('a'), assistant('Analysis'), turnEnd()],
+      }),
+    ).resolves.toBeUndefined();
+    expect(publicationCount).toBe(0);
     expect(deliveryCount).toBe(0);
   });
 
@@ -552,6 +741,7 @@ describe('DSH Workspace Board artifact delivery service', () => {
           return { status: 'accepted' };
         },
       },
+      publication: publication(),
       diagnostics: { report: () => undefined },
     });
     const runningEvents = [turnStart(), documentTool('document-1')];
@@ -561,6 +751,7 @@ describe('DSH Workspace Board artifact delivery service', () => {
         conversationId: 'conversation-1',
         dshSessionId: 'dsh-1',
         toolCallId: 'document-1',
+        canvasTurnTarget: workspaceBoardTarget(),
         events: runningEvents,
       }),
     ).resolves.toEqual({ status: 'accepted' });
@@ -568,6 +759,7 @@ describe('DSH Workspace Board artifact delivery service', () => {
       service.deliverTerminal({
         conversationId: 'conversation-1',
         dshSessionId: 'dsh-1',
+        canvasTurnTarget: workspaceBoardTarget(),
         events: [...runningEvents, turnEnd('interrupted')],
       }),
     ).resolves.toBeUndefined();
@@ -580,6 +772,22 @@ describe('DSH Workspace Board artifact delivery service', () => {
     ]);
   });
 });
+
+function publication() {
+  return {
+    publish: async (input: {
+      readonly contentLocator: import('@neko/content').ContentLocator;
+      readonly contentFingerprint: string;
+    }) => ({
+      contentLocator: input.contentLocator,
+      contentFingerprint: input.contentFingerprint,
+    }),
+  };
+}
+
+function workspaceBoardTarget() {
+  return { kind: 'workspace-board' as const, workspaceId: 'workspace-1' };
+}
 
 function collectBatch(
   events: readonly DshAcpProjectedEvent[],

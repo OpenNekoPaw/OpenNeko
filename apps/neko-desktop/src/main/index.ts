@@ -60,6 +60,7 @@ import {
   createPersistentAgentConversationContextAuthority,
   createDshDomainConversationService,
   createDshConversationTurnContextResolver,
+  createDshTurnCanvasTargetOwner,
   createDshWorkspaceBoardArtifactDeliveryService,
   projectDshConversationTitle,
   removeRetiredPiStorage,
@@ -200,7 +201,10 @@ import {
   createMediaPlatform,
   createNodeGenerationJobOwner,
 } from '@neko/generation/media';
-import { createNodeHostContentReadService } from '@neko/content/node';
+import {
+  createNodeHostContentReadService,
+  NodeAuthorizedWorkspaceWriter,
+} from '@neko/content/node';
 import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import { isWorkspaceFileContentLocator, type ContentLocator } from '@neko/content';
@@ -254,6 +258,7 @@ import { DesktopDshPermissionHost } from './desktop-dsh-permission-host';
 import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-configuration';
 import { DesktopDshSessionHost } from './desktop-dsh-session-host';
 import { createDesktopDshPromptReferenceBytePort } from './desktop-dsh-prompt-reference-byte-port';
+import { resolveDesktopDshSessionEventAdmission } from './desktop-dsh-turn-canvas-event-admission';
 import {
   resolveDesktopDshConversationContext,
   resolveDesktopDshSurfaceConversationContext,
@@ -1289,6 +1294,8 @@ async function startDesktop(): Promise<void> {
             canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
         },
       }),
+    createContentWriter: (workspacePath) =>
+      new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspacePath }),
     createIdentity: randomUUID,
   });
   const resourceBrowser = new ResourceBrowserNodeRuntime({
@@ -1495,6 +1502,7 @@ async function startDesktop(): Promise<void> {
   const dshWorkspaceBoardArtifactDelivery = createDshWorkspaceBoardArtifactDeliveryService({
     contexts: agentConversationContexts,
     delivery: dshWorkspaceBoardDelivery,
+    publication: dshWorkspaceBoardDelivery,
     diagnostics: {
       report: (diagnostic) =>
         logger.warn('DSH Workspace Board skipped an invalid content Tool projection.', {
@@ -1505,6 +1513,7 @@ async function startDesktop(): Promise<void> {
         }),
     },
   });
+  const dshTurnCanvasTargets = createDshTurnCanvasTargetOwner();
   // Composed after its dependency callbacks while preserving an explicit unavailable state.
   // eslint-disable-next-line prefer-const
   let dshDomainConversations: DshDomainConversationService | undefined;
@@ -2087,12 +2096,12 @@ async function startDesktop(): Promise<void> {
           });
         },
         onSessionEvent: async (notification) => {
-          const binding = await bindings.getByDshSessionId(notification.sessionId);
-          if (!binding) {
-            throw new Error(
-              `DSH Session '${notification.sessionId}' event has no Conversation binding.`,
-            );
-          }
+          const { binding } = await resolveDesktopDshSessionEventAdmission({
+            event: notification,
+            projection: dshProduct.runtime.client.projection,
+            targets: dshTurnCanvasTargets,
+            resolveBinding: () => bindings.getByDshSessionId(notification.sessionId),
+          });
           if (notification.type === 'turn/end') {
             if (dshWorkspaceBoardDeliveryTrigger.current === undefined) {
               throw new Error('DSH Workspace Board artifact delivery is not initialized.');
@@ -2127,20 +2136,36 @@ async function startDesktop(): Promise<void> {
     },
   });
   dshWorkspaceBoardDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
+    let terminalTurn: number | undefined;
     try {
       const snapshot = dshProduct.runtime.client.projection.snapshot(dshSessionId);
       if (trigger.kind === 'completed-content-tool') {
+        const tool = [...snapshot.events]
+          .reverse()
+          .find((event) => event.kind === 'tool' && event.toolCallId === trigger.toolCallId);
+        if (tool?.kind !== 'tool') {
+          throw new Error(`DSH Tool '${trigger.toolCallId}' has no projected turn identity.`);
+        }
         await dshWorkspaceBoardArtifactDelivery.deliverCompletedTool({
           conversationId,
           dshSessionId,
           toolCallId: trigger.toolCallId,
           events: snapshot.events,
+          canvasTurnTarget: dshTurnCanvasTargets.read(dshSessionId, tool.turn),
         });
       } else {
+        const terminal = [...snapshot.events]
+          .reverse()
+          .find((event) => event.kind === 'turn' && event.phase === 'end');
+        if (terminal?.kind !== 'turn' || terminal.phase !== 'end') {
+          throw new Error('DSH terminal delivery has no projected turn identity.');
+        }
+        terminalTurn = terminal.turn;
         await dshWorkspaceBoardArtifactDelivery.deliverTerminal({
           conversationId,
           dshSessionId,
           events: snapshot.events,
+          canvasTurnTarget: dshTurnCanvasTargets.read(dshSessionId, terminal.turn),
         });
       }
     } catch (error) {
@@ -2150,6 +2175,10 @@ async function startDesktop(): Promise<void> {
         message: error instanceof Error ? error.message : String(error),
         metadata: { dshSessionId, conversationId },
       });
+    } finally {
+      if (terminalTurn !== undefined) {
+        dshTurnCanvasTargets.releaseTurn(dshSessionId, terminalTurn);
+      }
     }
   };
   if (!dshHandlers) throw new Error('DSH runtime did not compose its product handlers.');
@@ -2297,6 +2326,7 @@ async function startDesktop(): Promise<void> {
     archive: dshProduct.runtime.conversations.archive,
     conversations: dshProduct.runtime.conversations.conversations,
     turnContext: dshPromptContext,
+    turnCanvasTargets: dshTurnCanvasTargets,
     projection: dshProduct.runtime.client.projection,
   });
   const dshPromptImageAdmission = createAgentPromptImageAdmissionService();
@@ -2319,6 +2349,7 @@ async function startDesktop(): Promise<void> {
     bindings: dshProduct.runtime.bindings,
     catalog: dshProduct.runtime.conversations.catalog,
     conversations: dshProduct.runtime.conversations.conversations,
+    turnCanvasTargets: dshTurnCanvasTargets,
     promptContext: dshPromptContext,
     promptImages: dshPromptImages,
     imagePreviews: {

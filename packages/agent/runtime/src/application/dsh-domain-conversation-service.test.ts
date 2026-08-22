@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createDshDomainConversationService } from './dsh-domain-conversation-service';
+import { createDshTurnCanvasTargetOwner } from './dsh-turn-canvas-target-owner';
 
 describe('DSH domain Conversation service', () => {
   it('publishes an exact domain Conversation identity', async () => {
@@ -159,6 +160,7 @@ describe('DSH domain Conversation service', () => {
 });
 
 function createFixture(order: string[] = []) {
+  const turnCanvasTargets = createDshTurnCanvasTargetOwner();
   const publication = {
     publish: vi.fn(async (input: { readonly conversationId?: string }) => ({
       conversationId: input.conversationId ?? 'generated',
@@ -175,6 +177,7 @@ function createFixture(order: string[] = []) {
     }),
     prompt: vi.fn(async () => {
       order.push('prompt');
+      turnCanvasTargets.bindStartedTurn('dsh-session-1', 2);
       return { stopReason: 'end_turn' as const };
     }),
   };
@@ -206,6 +209,7 @@ function createFixture(order: string[] = []) {
       archive,
       conversations,
       turnContext,
+      turnCanvasTargets,
       projection,
     }),
   };

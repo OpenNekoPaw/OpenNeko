@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createEmptyCanvasData, planCanvasWorkspaceBoardProjection } from '@neko/canvas-domain';
+import { NodeAuthorizedWorkspaceWriter } from '@neko/content/node';
 import {
   createDshWorkspaceBoardContentRead,
   createDshWorkspaceBoardProjectionRequest,
+  publishDshDurableMarkdownArtifact,
   resolveDshWorkspaceBoardSourceFingerprints,
 } from './desktop-dsh-workspace-board-delivery';
 
@@ -24,6 +26,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
       dshSessionId: 'dsh-1',
       turn: 3,
       createdAt: 2_000,
+      canvasTurnTarget: workspaceBoardTarget(),
       delivery: { kind: 'completed-turn' as const },
       artifacts: [
         {
@@ -35,16 +38,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
           sourceId: 'content:source',
           contentLocator: { file: { authority: 'workspace' as const, path: 'books/book.epub' } },
         },
-        {
-          kind: 'markdown' as const,
-          artifactId: 'content-analysis:analysis',
-          contentFingerprint: 'markdown:analysis',
-          role: 'analysis' as const,
-          title: 'Analysis',
-          sourceId: 'artifact:analysis',
-          sourceArtifactIds: ['content:source'],
-          markdown: 'Analysis',
-        },
+        analysisArtifact(['content:source']),
       ],
     };
 
@@ -62,6 +56,17 @@ describe('Desktop DSH Workspace Board projection request', () => {
     expect(projected).toMatchObject({ status: 'projected' });
     expect(projected.canvasData.nodes).toHaveLength(2);
     expect(projected.canvasData.connections).toHaveLength(1);
+    expect(projected.canvasData.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'file',
+          data: expect.objectContaining({
+            contentLocator: analysisArtifact(['content:source']).contentLocator,
+            mediaType: 'text/markdown',
+          }),
+        }),
+      ]),
+    );
     const replayed = planCanvasWorkspaceBoardProjection(projected.canvasData, replay);
     expect(replayed.status).toBe('noop');
     expect(replayed.canvasData.nodes).toHaveLength(2);
@@ -80,19 +85,9 @@ describe('Desktop DSH Workspace Board projection request', () => {
       conversationId: 'conversation-1',
       dshSessionId: 'dsh-1',
       createdAt: 2_000,
+      canvasTurnTarget: workspaceBoardTarget(),
       delivery: { kind: 'completed-turn' as const },
-      artifacts: [
-        {
-          kind: 'markdown' as const,
-          artifactId: 'analysis',
-          contentFingerprint: 'markdown:analysis',
-          role: 'analysis' as const,
-          title: 'Analysis',
-          sourceId: 'artifact:analysis',
-          sourceArtifactIds: ['source'],
-          markdown: 'Analysis',
-        },
-      ],
+      artifacts: [analysisArtifact(['source'])],
     };
     expect(
       createDshWorkspaceBoardProjectionRequest({ ...base, turn: 1 }, workspace).process.deliveryId,
@@ -108,6 +103,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
       dshSessionId: 'dsh-1',
       turn: 1,
       createdAt: 2_000,
+      canvasTurnTarget: workspaceBoardTarget(),
       delivery: { kind: 'completed-content-tool' as const, toolCallId: 'tool-1' },
       artifacts: [
         {
@@ -152,6 +148,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
       dshSessionId: 'dsh-1',
       turn: 1,
       createdAt: 1_000,
+      canvasTurnTarget: workspaceBoardTarget(),
       artifacts: [
         {
           kind: 'file-reference' as const,
@@ -212,6 +209,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
       conversationId: 'conversation-1',
       dshSessionId: 'dsh-1',
       turn: 1,
+      canvasTurnTarget: workspaceBoardTarget(),
     };
     const incremental = createDshWorkspaceBoardProjectionRequest(
       {
@@ -227,19 +225,7 @@ describe('Desktop DSH Workspace Board projection request', () => {
         ...base,
         createdAt: 2_000,
         delivery: { kind: 'completed-turn' },
-        artifacts: [
-          source,
-          {
-            kind: 'markdown',
-            artifactId: 'content-analysis:1',
-            contentFingerprint: 'markdown:analysis',
-            role: 'analysis',
-            title: 'Analysis',
-            sourceId: 'artifact:analysis',
-            sourceArtifactIds: [source.artifactId],
-            markdown: 'Analysis',
-          },
-        ],
+        artifacts: [source, analysisArtifact([source.artifactId])],
       },
       workspace,
     );
@@ -254,6 +240,34 @@ describe('Desktop DSH Workspace Board projection request', () => {
     expect(afterTerminal.canvasData.nodes).toHaveLength(2);
     expect(afterTerminal.canvasData.connections).toHaveLength(1);
     expect(afterTerminal.canvasData.nodes.filter((node) => node.type === 'media')).toHaveLength(1);
+  });
+
+  it('projects to the exact Canvas selected at turn admission', () => {
+    const workspace: AssetWorkspaceResolution = {
+      workspaceId: 'workspace-1',
+      workspacePath: '/tmp/openneko-workspace',
+      displayName: 'Workspace',
+      locator: { kind: 'relative', value: 'openneko-workspace' },
+    };
+    const request = createDshWorkspaceBoardProjectionRequest(
+      {
+        workspaceId: 'workspace-1',
+        conversationId: 'conversation-1',
+        dshSessionId: 'dsh-1',
+        turn: 1,
+        createdAt: 1_000,
+        canvasTurnTarget: {
+          kind: 'exact-canvas',
+          workspaceId: 'workspace-1',
+          canvasId: 'neko/boards/story.nkc',
+        },
+        delivery: { kind: 'completed-turn' },
+        artifacts: [analysisArtifact(['source'])],
+      },
+      workspace,
+    );
+
+    expect(request.target.documentUri).toBe('file:///tmp/openneko-workspace/neko/boards/story.nkc');
   });
 
   it('resolves document-entry ContentLocators through the canonical entry reader', async () => {
@@ -282,4 +296,61 @@ describe('Desktop DSH Workspace Board projection request', () => {
       fingerprint: { strategy: 'sha256' },
     });
   });
+
+  it('publishes Markdown once and accepts only byte-identical replay', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'openneko-dsh-markdown-'));
+    const read = createDshWorkspaceBoardContentRead({
+      workspacePath,
+      documentEntryReader: {
+        readEntry: async () => {
+          throw new Error('Unexpected document entry read.');
+        },
+      },
+    });
+    const writer = new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspacePath });
+    const input = {
+      workspaceId: 'workspace-1',
+      contentLocator: analysisArtifact(['source']).contentLocator,
+      markdown: '# Durable analysis\n\nResult.',
+      contentFingerprint: 'markdown:durable',
+    };
+
+    await expect(publishDshDurableMarkdownArtifact(input, { writer, read })).resolves.toEqual({
+      contentLocator: input.contentLocator,
+      contentFingerprint: input.contentFingerprint,
+    });
+    await expect(publishDshDurableMarkdownArtifact(input, { writer, read })).resolves.toEqual({
+      contentLocator: input.contentLocator,
+      contentFingerprint: input.contentFingerprint,
+    });
+    await expect(
+      publishDshDurableMarkdownArtifact({ ...input, markdown: '# Changed' }, { writer, read }),
+    ).rejects.toThrow('conflicts with existing Workspace content');
+    await expect(
+      readFile(join(workspacePath, input.contentLocator.file.path), 'utf8'),
+    ).resolves.toBe(input.markdown);
+  });
 });
+
+function workspaceBoardTarget() {
+  return { kind: 'workspace-board' as const, workspaceId: 'workspace-1' };
+}
+
+function analysisArtifact(sourceArtifactIds: readonly string[]) {
+  return {
+    kind: 'file-reference' as const,
+    artifactId: 'content-analysis:analysis',
+    contentFingerprint: 'markdown:analysis',
+    role: 'analysis' as const,
+    title: 'Analysis',
+    sourceId: 'artifact:analysis',
+    sourceArtifactIds,
+    mimeType: 'text/markdown' as const,
+    contentLocator: {
+      file: {
+        authority: 'workspace' as const,
+        path: 'neko/generated/file/analysis.md',
+      },
+    },
+  };
+}

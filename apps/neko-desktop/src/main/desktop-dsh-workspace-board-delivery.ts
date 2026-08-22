@@ -1,12 +1,18 @@
 import { randomUUID } from 'node:crypto';
+import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type {
   DshWorkspaceBoardArtifactDeliveryInput,
   DshWorkspaceBoardArtifactDeliveryOutcome,
   DshWorkspaceBoardArtifactDeliveryPort,
+  DshDurableMarkdownArtifactPublicationPort,
 } from '@neko/agent-runtime/application';
-import type { ContentReadService } from '@neko/content';
+import {
+  isWorkspaceFileContentLocator,
+  type AuthorizedWorkspaceWriter,
+  type ContentReadService,
+} from '@neko/content';
 import { createNodeHostContentReadService, type NodeDocumentEntryReader } from '@neko/content/node';
 import {
   WorkspaceBoardDeliveryCoordinator,
@@ -30,7 +36,8 @@ export interface DesktopDshWorkspaceBoardDeliveryOptions {
     workspaceId: string,
     operation: () => Promise<TResult>,
   ) => Promise<TResult>;
-  readonly createContentRead: (workspacePath: string) => Pick<ContentReadService, 'stat'>;
+  readonly createContentRead: (workspacePath: string) => ContentReadService;
+  readonly createContentWriter: (workspacePath: string) => AuthorizedWorkspaceWriter;
   readonly createIdentity?: () => string;
 }
 
@@ -50,7 +57,9 @@ export function createDshWorkspaceBoardContentRead(input: {
   });
 }
 
-export class DesktopDshWorkspaceBoardDelivery implements DshWorkspaceBoardArtifactDeliveryPort {
+export class DesktopDshWorkspaceBoardDelivery
+  implements DshWorkspaceBoardArtifactDeliveryPort, DshDurableMarkdownArtifactPublicationPort
+{
   private readonly bindings = new Map<string, WorkspaceBoardBinding>();
   private readonly createIdentity: () => string;
 
@@ -97,6 +106,16 @@ export class DesktopDshWorkspaceBoardDelivery implements DshWorkspaceBoardArtifa
       this.reportBlocked(input.workspaceId, code, message);
       return { status: 'blocked', diagnostic: { code, message } };
     }
+  }
+
+  async publish(
+    input: Parameters<DshDurableMarkdownArtifactPublicationPort['publish']>[0],
+  ): ReturnType<DshDurableMarkdownArtifactPublicationPort['publish']> {
+    const workspace = await this.restoreExactWorkspace(input.workspaceId);
+    return publishDshDurableMarkdownArtifact(input, {
+      writer: this.options.createContentWriter(workspace.workspacePath),
+      read: this.options.createContentRead(workspace.workspacePath),
+    });
   }
 
   private async resolveSourceFingerprints(
@@ -167,6 +186,47 @@ export class DesktopDshWorkspaceBoardDelivery implements DshWorkspaceBoardArtifa
   }
 }
 
+export async function publishDshDurableMarkdownArtifact(
+  input: Parameters<DshDurableMarkdownArtifactPublicationPort['publish']>[0],
+  ports: {
+    readonly writer: AuthorizedWorkspaceWriter;
+    readonly read: Pick<ContentReadService, 'read'>;
+  },
+): ReturnType<DshDurableMarkdownArtifactPublicationPort['publish']> {
+  if (
+    !isWorkspaceFileContentLocator(input.contentLocator) ||
+    input.contentLocator.selector !== undefined
+  ) {
+    throw new Error('Durable Markdown publication requires a Workspace file ContentLocator.');
+  }
+  const bytes = new TextEncoder().encode(input.markdown);
+  const result = await ports.writer.write(input.contentLocator, bytes, {
+    conflict: 'fail-if-exists',
+    maxBytes: bytes.byteLength,
+  });
+  if (result.status === 'written') {
+    return {
+      contentLocator: result.locator,
+      contentFingerprint: input.contentFingerprint,
+    };
+  }
+  if (result.diagnostic.code !== 'content-conflict') {
+    throw new Error(`Durable Markdown publication failed: ${result.diagnostic.code}.`);
+  }
+  const existing = await ports.read.read(input.contentLocator, { maxBytes: bytes.byteLength });
+  if (
+    existing.status !== 'ready' ||
+    existing.bytes.byteLength !== bytes.byteLength ||
+    !Buffer.from(existing.bytes).equals(Buffer.from(bytes))
+  ) {
+    throw new Error('Durable Markdown publication conflicts with existing Workspace content.');
+  }
+  return {
+    contentLocator: input.contentLocator,
+    contentFingerprint: input.contentFingerprint,
+  };
+}
+
 export async function resolveDshWorkspaceBoardSourceFingerprints(
   input: DshWorkspaceBoardArtifactDeliveryInput,
   contentRead: Pick<ContentReadService, 'stat'>,
@@ -199,7 +259,7 @@ export function createDshWorkspaceBoardProjectionRequest(
     conversationId: input.conversationId,
     dshSessionId: input.dshSessionId,
     turn: input.turn,
-    target: 'workspace-board',
+    target: input.canvasTurnTarget,
   } as const;
   const deliveryId =
     input.delivery.kind === 'completed-content-tool'
@@ -210,11 +270,9 @@ export function createDshWorkspaceBoardProjectionRequest(
       ? `${input.dshSessionId}:turn:${input.turn}:tool:${input.delivery.toolCallId}`
       : `${input.dshSessionId}:turn:${input.turn}`;
   const createdAt = new Date(input.createdAt).toISOString();
+  const target = resolveProjectionTarget(input, workspace);
   return {
-    target: {
-      workspaceId: workspace.workspaceId,
-      workspaceUri: pathToFileURL(workspace.workspacePath).href,
-    },
+    target,
     process: {
       deliveryId,
       sourceHost: 'desktop',
@@ -235,19 +293,45 @@ export function createDshWorkspaceBoardProjectionRequest(
         operationId,
         createdAt,
       };
-      return artifact.kind === 'markdown'
-        ? {
-            kind: 'markdown',
-            title: artifact.title,
-            markdown: artifact.markdown,
-            provenance,
-          }
-        : {
-            kind: artifact.kind,
-            title: artifact.title,
-            contentLocator: artifact.contentLocator,
-            provenance,
-          };
+      return {
+        kind: artifact.kind,
+        title: artifact.title,
+        ...('mimeType' in artifact ? { mimeType: artifact.mimeType } : {}),
+        contentLocator: artifact.contentLocator,
+        provenance,
+      };
     }),
   };
+}
+
+function resolveProjectionTarget(
+  input: DshWorkspaceBoardArtifactDeliveryInput,
+  workspace: AssetWorkspaceResolution,
+): CanvasWorkspaceProjectionRequest['target'] {
+  if (
+    input.workspaceId !== workspace.workspaceId ||
+    input.canvasTurnTarget.workspaceId !== workspace.workspaceId
+  ) {
+    throw new Error('DSH Canvas projection target does not match the exact Workspace.');
+  }
+  const base = {
+    workspaceId: workspace.workspaceId,
+    workspaceUri: pathToFileURL(workspace.workspacePath).href,
+  };
+  if (input.canvasTurnTarget.kind === 'workspace-board') return base;
+  const canvasId = input.canvasTurnTarget.canvasId;
+  if (
+    path.posix.isAbsolute(canvasId) ||
+    path.posix.normalize(canvasId) !== canvasId ||
+    canvasId.startsWith('../') ||
+    !canvasId.toLocaleLowerCase().endsWith('.nkc')
+  ) {
+    throw new Error(`Exact Canvas identity '${canvasId}' is not a normalized Workspace path.`);
+  }
+  const documentPath = path.resolve(workspace.workspacePath, ...canvasId.split('/'));
+  const relative = path.relative(workspace.workspacePath, documentPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Exact Canvas identity escapes the Workspace root.');
+  }
+  return { ...base, documentUri: pathToFileURL(documentPath).href };
 }

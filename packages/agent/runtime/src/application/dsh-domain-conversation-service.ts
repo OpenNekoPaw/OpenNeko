@@ -10,6 +10,7 @@ import type { ConversationDshSessionBoundClient } from './conversation-dsh-sessi
 import type { ConversationDshSessionPublication } from './conversation-dsh-session-publication';
 import type { ConversationDshSessionArchive } from './conversation-dsh-session-application';
 import type { DshConversationTurnContextResolver } from './dsh-conversation-turn-context';
+import type { DshTurnCanvasTargetOwner } from './dsh-turn-canvas-target-owner';
 
 export interface DshDomainConversationService {
   publish(input: {
@@ -34,6 +35,7 @@ export function createDshDomainConversationService(options: {
     'ensureLoaded' | 'setSessionContext' | 'prompt'
   >;
   readonly turnContext: Pick<DshConversationTurnContextResolver, 'resolve'>;
+  readonly turnCanvasTargets: Pick<DshTurnCanvasTargetOwner, 'admit' | 'releaseAdmission'>;
   readonly projection: Pick<DshAcpProjection, 'snapshot'>;
 }): DshDomainConversationService {
   return Object.freeze({
@@ -61,18 +63,27 @@ export function createDshDomainConversationService(options: {
       const conversationId = requireIdentity(input.conversationId, 'Conversation');
       const message = requireMessage(input.message);
       const dshSessionId = await options.conversations.ensureLoaded(conversationId);
+      const admission = options.turnCanvasTargets.admit(dshSessionId, undefined);
+      let retainAdmission = false;
       const before = options.projection.snapshot(dshSessionId);
       const previousTerminalTurns = new Set(
         before.events.flatMap((event) =>
           event.kind === 'turn' && event.phase === 'end' ? [event.turn] : [],
         ),
       );
-      const context = await options.turnContext.resolve(conversationId, input.contextPayloads);
-      await options.conversations.setSessionContext(conversationId, context);
-      await options.conversations.prompt({
-        conversationId,
-        prompt: [{ type: 'text', text: message }],
-      });
+      try {
+        const context = await options.turnContext.resolve(conversationId, input.contextPayloads);
+        await options.conversations.setSessionContext(conversationId, context);
+        await options.conversations.prompt({
+          conversationId,
+          prompt: [{ type: 'text', text: message }],
+        });
+        retainAdmission = true;
+      } finally {
+        if (!retainAdmission) {
+          options.turnCanvasTargets.releaseAdmission(admission.admissionId);
+        }
+      }
       const after = options.projection.snapshot(dshSessionId);
       const terminalTurns = after.events.filter(
         (event): event is Extract<DshAcpProjectedTurnEvent, { readonly phase: 'end' }> =>

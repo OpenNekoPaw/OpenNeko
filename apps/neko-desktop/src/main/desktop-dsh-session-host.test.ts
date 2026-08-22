@@ -5,13 +5,21 @@ import type {
   DshSessionChangedEvent,
   DshSessionHostResult,
 } from '@neko/agent-contracts/dsh-session-host';
-import type { ConversationDshSessionBoundClient } from '@neko/agent-runtime/application';
+import {
+  createDshTurnCanvasTargetOwner,
+  type ConversationDshSessionBoundClient,
+} from '@neko/agent-runtime/application';
 
 import { DesktopDshSessionHost } from './desktop-dsh-session-host';
 
 const identity = {
   conversationId: '00000000-01ARZ3NDEKTSV4RRFFQ69G5FAV',
   dshSessionId: 'dsh-session-1',
+};
+
+const workspaceBoardTarget = {
+  kind: 'workspace-board' as const,
+  workspaceId: 'workspace-1',
 };
 
 describe('Desktop DSH Session Host', () => {
@@ -195,6 +203,64 @@ describe('Desktop DSH Session Host', () => {
     );
   });
 
+  it('retains a successful direct prompt Canvas admission until terminal delivery', async () => {
+    const targets = createDshTurnCanvasTargetOwner();
+    const prompt = vi.fn(async () => {
+      targets.bindStartedTurn(identity.dshSessionId, 1);
+      return { stopReason: 'end_turn' as const };
+    });
+    const host = createHost({ prompt, turnCanvasTargets: targets });
+    const canvasTurnTarget = {
+      kind: 'exact-canvas' as const,
+      workspaceId: 'workspace-1',
+      canvasId: 'neko/boards/story.nkc',
+    };
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      request('submit', {
+        input: {
+          kind: 'message',
+          text: 'Analyze the selected Canvas',
+          references: [],
+          images: [],
+          contextPayloads: [],
+          canvasTurnTarget,
+        },
+      }),
+    );
+
+    expect(targets.read(identity.dshSessionId, 1)).toEqual(canvasTurnTarget);
+  });
+
+  it('releases a bound Canvas admission when the direct prompt fails', async () => {
+    const targets = createDshTurnCanvasTargetOwner();
+    const prompt = vi.fn(async () => {
+      targets.bindStartedTurn(identity.dshSessionId, 1);
+      throw new Error('Prompt failed.');
+    });
+    const host = createHost({ prompt, turnCanvasTargets: targets });
+
+    await expect(
+      host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        request('submit', {
+          input: {
+            kind: 'message',
+            text: 'Analyze the Board',
+            references: [],
+            images: [],
+            contextPayloads: [],
+            canvasTurnTarget: workspaceBoardTarget,
+          },
+        }),
+      ),
+    ).rejects.toThrow('Prompt failed');
+    expect(() => targets.read(identity.dshSessionId, 1)).toThrow(
+      'has no bound Canvas target admission',
+    );
+  });
+
   it('enqueues an ordinary message into the exact running DSH Session without reconfiguring it', async () => {
     const projection = new DshAcpProjection();
     projection.acceptSessionEvent({
@@ -204,7 +270,10 @@ describe('Desktop DSH Session Host', () => {
       type: 'turn/start',
       data: { turn: 1 },
     });
-    const enqueueInboxMessage = vi.fn(async () => ({ nextTurn: [], nextStep: [] }));
+    const enqueueInboxMessage = vi.fn(async () => ({
+      nextTurn: [{ messageId: 'queued-1', createdAt: 1, content: [] }],
+      nextStep: [],
+    }));
     const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
     const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
     const readConversationExecution = vi.fn(async () => ({ supportsImageInput: false }));
@@ -261,7 +330,10 @@ describe('Desktop DSH Session Host', () => {
       type: 'turn/start',
       data: { turn: 1 },
     });
-    const enqueueInboxMessage = vi.fn(async () => ({ nextTurn: [], nextStep: [] }));
+    const enqueueInboxMessage = vi.fn(async () => ({
+      nextTurn: [{ messageId: 'queued-1', createdAt: 1, content: [] }],
+      nextStep: [],
+    }));
     const admitPromptImages = vi.fn(async () => [
       {
         source: { kind: 'inline' as const, imageIndex: 0, name: 'clipboard.png' },
@@ -1082,7 +1154,7 @@ function createHost(overrides: {
     }[];
     readonly images: readonly import('@neko/agent-contracts').DshComposerImageInput[];
     readonly modelSupportsImageInput: boolean;
-  }) => Promise<readonly import('./desktop-dsh-prompt-image-admission').DesktopDshPromptImage[]>;
+  }) => Promise<readonly import('@neko/agent-runtime/application').AgentPromptImage[]>;
   readonly promptContext?: {
     resolve(
       conversationId: string,
@@ -1106,6 +1178,7 @@ function createHost(overrides: {
   readonly materializeAsset?: () => Promise<
     import('@neko/agent-contracts/dsh-session-host').DshComposerMaterializedAssetProjection
   >;
+  readonly turnCanvasTargets?: ReturnType<typeof createDshTurnCanvasTargetOwner>;
 }) {
   return new DesktopDshSessionHost({
     bindings: {
@@ -1141,9 +1214,14 @@ function createHost(overrides: {
           throw new Error('Unexpected image attachment read.');
         }),
       enqueueInboxMessage:
-        overrides.enqueueInboxMessage ?? vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
+        overrides.enqueueInboxMessage ??
+        vi.fn(async () => ({
+          nextTurn: [{ messageId: 'queued-default', createdAt: 1, content: [] }],
+          nextStep: [],
+        })),
       removeInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     },
+    turnCanvasTargets: overrides.turnCanvasTargets ?? createDshTurnCanvasTargetOwner(),
     composer: {
       project: vi.fn(async () => composerConfiguration()),
       selectModel: overrides.selectModel ?? vi.fn(async () => composerConfiguration()),

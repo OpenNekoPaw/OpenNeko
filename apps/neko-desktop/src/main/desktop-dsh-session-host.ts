@@ -20,9 +20,11 @@ import {
   type DshAcpImageAttachmentRefProjection,
 } from '@neko/agent-contracts/dsh-acp';
 import type {
+  AgentPromptImage,
   ConversationDshSessionBindingStore,
   ConversationDshSessionBoundClient,
   DshConversationCatalogStore,
+  DshTurnCanvasTargetOwner,
 } from '@neko/agent-runtime/application';
 import type { DshAcpProjection, DshAcpProjectedEvent } from '@neko/agent-runtime/acp';
 import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
@@ -47,6 +49,10 @@ export class DesktopDshSessionHost {
         | 'readImageAttachment'
         | 'enqueueInboxMessage'
         | 'removeInboxMessage'
+      >;
+      readonly turnCanvasTargets: Pick<
+        DshTurnCanvasTargetOwner,
+        'admit' | 'bindQueuedMessage' | 'releaseAdmission' | 'releaseQueuedMessage'
       >;
       readonly imagePreviews: {
         project(input: {
@@ -125,15 +131,7 @@ export class DesktopDshSessionHost {
           }[];
           readonly images: readonly DshComposerImageInput[];
           readonly modelSupportsImageInput: boolean;
-        }): Promise<
-          readonly {
-            readonly source:
-              | { readonly kind: 'reference'; readonly referenceIndex: number }
-              | { readonly kind: 'inline'; readonly imageIndex: number; readonly name: string };
-            readonly data: string;
-            readonly mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
-          }[]
-        >;
+        }): Promise<readonly AgentPromptImage[]>;
       };
       readonly createConversation: (input: {
         readonly windowId: string;
@@ -283,109 +281,129 @@ export class DesktopDshSessionHost {
       if (request.input.kind === 'command') {
         await this.options.conversations.executeCommand(conversationId, request.input.line);
       } else {
-        const appliedModel = isRunning
-          ? await this.options.composer.readConversationExecution(conversationId, request.windowId)
-          : await this.options.composer.applyConversation(conversationId, request.windowId);
-        const context = await this.options.promptContext.resolve(
-          conversationId,
-          request.input.kind === 'message' ? request.input.contextPayloads : [],
-          request.input.kind === 'message'
-            ? request.input.references.map((reference) => ({
-                label: reference.label,
-                contentLocator: reference.contentLocator,
-              }))
-            : [],
+        const admission = this.options.turnCanvasTargets.admit(
+          dshSessionId,
           request.input.canvasTurnTarget,
         );
-        if (request.input.kind === 'skill') {
-          await this.options.conversations.setSessionContext(conversationId, context);
-          const response = await this.options.conversations.invokeSkill({
+        let retainAdmission = false;
+        try {
+          const appliedModel = isRunning
+            ? await this.options.composer.readConversationExecution(
+                conversationId,
+                request.windowId,
+              )
+            : await this.options.composer.applyConversation(conversationId, request.windowId);
+          const context = await this.options.promptContext.resolve(
             conversationId,
-            skillName: request.input.skillName,
-            displayText: request.input.displayText,
-            ...(request.input.args === undefined ? {} : { args: request.input.args }),
-          });
-          stopReason = response.stopReason;
-        } else {
-          const images = await this.options.promptImages.admit({
-            conversationId,
-            windowId: request.windowId,
-            references: request.input.references,
-            images: request.input.images,
-            modelSupportsImageInput: appliedModel.supportsImageInput,
-          });
-          const imageByReferenceIndex = new Map(
-            images.flatMap((image) =>
-              image.source.kind === 'reference'
-                ? [[image.source.referenceIndex, image] as const]
-                : [],
-            ),
+            request.input.kind === 'message' ? request.input.contextPayloads : [],
+            request.input.kind === 'message'
+              ? request.input.references.map((reference) => ({
+                  label: reference.label,
+                  contentLocator: reference.contentLocator,
+                }))
+              : [],
+            request.input.canvasTurnTarget,
           );
-          const imageByInlineIndex = new Map(
-            images.flatMap((image) =>
-              image.source.kind === 'inline' ? [[image.source.imageIndex, image] as const] : [],
-            ),
-          );
-          const prompt = [
-            ...(request.input.text.length === 0
-              ? []
-              : [{ type: 'text' as const, text: request.input.text }]),
-            ...request.input.images.map((image, imageIndex) => {
-              const admitted = imageByInlineIndex.get(imageIndex);
-              if (admitted === undefined) {
-                throw new Error(`DSH Prompt inline image ${imageIndex} was not admitted.`);
-              }
-              return {
-                type: 'image' as const,
-                data: admitted.data,
-                mimeType: admitted.mimeType,
-                _meta: { opennekoDisplayName: image.name },
-              };
-            }),
-            ...request.input.references.flatMap((reference, referenceIndex) => {
-              const image = imageByReferenceIndex.get(referenceIndex);
-              return [
-                {
-                  type: 'resource_link' as const,
-                  name: reference.label,
-                  uri: serializeContentLocatorResourceUri(reference.contentLocator),
-                },
-                ...(image === undefined
-                  ? []
-                  : [
-                      {
-                        type: 'image' as const,
-                        data: image.data,
-                        mimeType: image.mimeType,
-                      },
-                    ]),
-              ];
-            }),
-          ];
-          if (isRunning) {
-            await this.options.conversations.enqueueInboxMessage({
-              conversationId,
-              prompt,
-              displayContent: [
-                ...(request.input.text.length === 0
-                  ? []
-                  : [{ type: 'text' as const, text: request.input.text }]),
-                ...request.input.images.map((image) => ({
-                  type: 'image' as const,
-                  name: image.name,
-                })),
-                ...request.input.references.map((reference) => ({
-                  type: 'resource-link' as const,
-                  name: reference.label,
-                  uri: serializeContentLocatorResourceUri(reference.contentLocator),
-                })),
-              ],
-              contextText: context,
-            });
-          } else {
+          if (request.input.kind === 'skill') {
             await this.options.conversations.setSessionContext(conversationId, context);
-            const response = await this.options.conversations.prompt({ conversationId, prompt });
+            const response = await this.options.conversations.invokeSkill({
+              conversationId,
+              skillName: request.input.skillName,
+              displayText: request.input.displayText,
+              ...(request.input.args === undefined ? {} : { args: request.input.args }),
+            });
             stopReason = response.stopReason;
+            retainAdmission = true;
+          } else {
+            const images = await this.options.promptImages.admit({
+              conversationId,
+              windowId: request.windowId,
+              references: request.input.references,
+              images: request.input.images,
+              modelSupportsImageInput: appliedModel.supportsImageInput,
+            });
+            const imageByReferenceIndex = new Map(
+              images.flatMap((image) =>
+                image.source.kind === 'reference'
+                  ? [[image.source.referenceIndex, image] as const]
+                  : [],
+              ),
+            );
+            const imageByInlineIndex = new Map(
+              images.flatMap((image) =>
+                image.source.kind === 'inline' ? [[image.source.imageIndex, image] as const] : [],
+              ),
+            );
+            const prompt = [
+              ...(request.input.text.length === 0
+                ? []
+                : [{ type: 'text' as const, text: request.input.text }]),
+              ...request.input.images.map((image, imageIndex) => {
+                const admitted = imageByInlineIndex.get(imageIndex);
+                if (admitted === undefined) {
+                  throw new Error(`DSH Prompt inline image ${imageIndex} was not admitted.`);
+                }
+                return {
+                  type: 'image' as const,
+                  data: admitted.data,
+                  mimeType: admitted.mimeType,
+                  _meta: { opennekoDisplayName: image.name },
+                };
+              }),
+              ...request.input.references.flatMap((reference, referenceIndex) => {
+                const image = imageByReferenceIndex.get(referenceIndex);
+                return [
+                  {
+                    type: 'resource_link' as const,
+                    name: reference.label,
+                    uri: serializeContentLocatorResourceUri(reference.contentLocator),
+                  },
+                  ...(image === undefined
+                    ? []
+                    : [
+                        {
+                          type: 'image' as const,
+                          data: image.data,
+                          mimeType: image.mimeType,
+                        },
+                      ]),
+                ];
+              }),
+            ];
+            if (isRunning) {
+              const before = await this.options.conversations.readInbox(conversationId);
+              const after = await this.options.conversations.enqueueInboxMessage({
+                conversationId,
+                prompt,
+                displayContent: [
+                  ...(request.input.text.length === 0
+                    ? []
+                    : [{ type: 'text' as const, text: request.input.text }]),
+                  ...request.input.images.map((image) => ({
+                    type: 'image' as const,
+                    name: image.name,
+                  })),
+                  ...request.input.references.map((reference) => ({
+                    type: 'resource-link' as const,
+                    name: reference.label,
+                    uri: serializeContentLocatorResourceUri(reference.contentLocator),
+                  })),
+                ],
+                contextText: context,
+              });
+              const messageId = resolveNewNextTurnMessageId(before, after);
+              this.options.turnCanvasTargets.bindQueuedMessage(admission.admissionId, messageId);
+              retainAdmission = true;
+            } else {
+              await this.options.conversations.setSessionContext(conversationId, context);
+              const response = await this.options.conversations.prompt({ conversationId, prompt });
+              stopReason = response.stopReason;
+              retainAdmission = true;
+            }
+          }
+        } finally {
+          if (!retainAdmission) {
+            this.options.turnCanvasTargets.releaseAdmission(admission.admissionId);
           }
         }
       }
@@ -398,6 +416,7 @@ export class DesktopDshSessionHost {
         conversationId,
         messageId: request.messageId,
       });
+      this.options.turnCanvasTargets.releaseQueuedMessage(request.messageId);
     } else {
       conversationId = request.conversationId;
     }
@@ -436,6 +455,22 @@ export class DesktopDshSessionHost {
       events: projectEvents(snapshot.events),
     };
   }
+}
+
+function resolveNewNextTurnMessageId(
+  before: import('@neko/agent-contracts/dsh-acp').DshAcpInboxSnapshot,
+  after: import('@neko/agent-contracts/dsh-acp').DshAcpInboxSnapshot,
+): string {
+  const existing = new Set(before.nextTurn.map((message) => message.messageId));
+  const added = after.nextTurn.filter((message) => !existing.has(message.messageId));
+  if (added.length !== 1) {
+    throw new Error('DSH Inbox enqueue did not create one exact next-turn message identity.');
+  }
+  const [message] = added;
+  if (message === undefined) {
+    throw new Error('DSH Inbox enqueue did not expose the created next-turn message identity.');
+  }
+  return message.messageId;
 }
 
 function serializeContentLocatorResourceUri(
