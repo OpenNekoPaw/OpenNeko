@@ -154,6 +154,14 @@ const composerConfiguration: DshComposerConfigurationProjection = {
   },
 };
 
+const entryComposerConfiguration: DshComposerConfigurationProjection = {
+  models: composerConfiguration.models,
+  selectedModelOptionId: composerConfiguration.selectedModelOptionId,
+  selectedMediaModelOptionIds: composerConfiguration.selectedMediaModelOptionIds,
+  permissionPresetId: composerConfiguration.permissionPresetId,
+  permissionPresets: composerConfiguration.permissionPresets,
+};
+
 let sessionListener: ((event: { readonly conversationId: string }) => void) | undefined;
 let permissionListener: ((event: { readonly conversationId: string }) => void) | undefined;
 const dshSessions = {
@@ -270,6 +278,7 @@ describe('DesktopAgentSurface', () => {
     const view = render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
         surfaceKind="workspace"
@@ -288,6 +297,7 @@ describe('DesktopAgentSurface', () => {
     const { container } = render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
         surfaceKind="workspace"
@@ -335,6 +345,7 @@ describe('DesktopAgentSurface', () => {
     render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
         surfaceKind="workspace"
@@ -379,6 +390,7 @@ describe('DesktopAgentSurface', () => {
     render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
         surfaceKind="workspace"
@@ -431,6 +443,7 @@ describe('DesktopAgentSurface', () => {
     render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
         surfaceKind="workspace"
@@ -478,6 +491,7 @@ describe('DesktopAgentSurface', () => {
     render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
         surfaceKind="workspace"
@@ -510,6 +524,7 @@ describe('DesktopAgentSurface', () => {
       render(
         <DesktopAgentSurface
           workbenchInstanceId="workbench-1"
+          sceneId="scene-1"
           agentSurfaceId="surface-1"
           conversationId="conversation-1"
           surfaceKind="workspace"
@@ -535,6 +550,7 @@ describe('DesktopAgentSurface', () => {
     render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-draft"
         surfaceKind="entry"
       />,
@@ -554,6 +570,125 @@ describe('DesktopAgentSurface', () => {
       ),
     );
     expect(dshSessions.create).not.toHaveBeenCalled();
+  });
+
+  it('refreshes Composer scope across a preserved Entry-to-Workspace Draft transition', async () => {
+    dshSessions.getComposerConfiguration
+      .mockResolvedValueOnce(entryComposerConfiguration)
+      .mockResolvedValueOnce(composerConfiguration);
+    const view = renderWithoutSnapshots(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-entry"
+          agentSurfaceId="surface-draft"
+          surfaceKind="entry"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+
+    const composer = screen.getByLabelText('Message') as HTMLTextAreaElement;
+    await waitFor(() => expect(composer.disabled).toBe(false));
+    fireEvent.change(composer, { target: { value: 'Preserve this draft' } });
+
+    view.rerender(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-workspace"
+          agentSurfaceId="surface-draft"
+          surfaceKind="workspace"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+
+    expect((screen.getByLabelText('Message') as HTMLTextAreaElement).value).toBe(
+      'Preserve this draft',
+    );
+    expect(await screen.findByText('My Film')).toBeTruthy();
+    expect(screen.getByText('Board')).toBeTruthy();
+    expect(view.container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
+    expect(dshSessions.getComposerConfiguration).toHaveBeenNthCalledWith(
+      2,
+      'workbench-1',
+      'surface-draft',
+    );
+    expect(dshSessions.create).not.toHaveBeenCalled();
+    expect(dshSessions.submit).not.toHaveBeenCalled();
+  });
+
+  it('rejects a late Entry configuration after the preserved Draft enters a Workspace Scene', async () => {
+    const staleEntryConfiguration = deferred<DshComposerConfigurationProjection>();
+    dshSessions.getComposerConfiguration
+      .mockReturnValueOnce(staleEntryConfiguration.promise)
+      .mockResolvedValueOnce(composerConfiguration);
+    const view = renderWithoutSnapshots(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-entry"
+          agentSurfaceId="surface-draft"
+          surfaceKind="entry"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+    await waitFor(() => expect(dshSessions.getComposerConfiguration).toHaveBeenCalledOnce());
+
+    view.rerender(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-workspace"
+          agentSurfaceId="surface-draft"
+          surfaceKind="workspace"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+
+    expect(await screen.findByText('My Film')).toBeTruthy();
+    await act(async () => staleEntryConfiguration.resolve(entryComposerConfiguration));
+    expect(screen.getByText('My Film')).toBeTruthy();
+    expect(view.container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
+    expect(dshSessions.create).not.toHaveBeenCalled();
+  });
+
+  it('refreshes Composer scope when the exact Scene changes between Workspace surfaces', async () => {
+    const authoringComposerConfiguration: DshComposerConfigurationProjection = {
+      ...composerConfiguration,
+      context: {
+        ...composerConfiguration.context!,
+        workspaceLabel: 'Character Studio',
+      },
+    };
+    dshSessions.getComposerConfiguration
+      .mockResolvedValueOnce(composerConfiguration)
+      .mockResolvedValueOnce(authoringComposerConfiguration);
+    const view = renderWithoutSnapshots(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-workspace"
+          agentSurfaceId="surface-draft"
+          surfaceKind="workspace"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+    expect(await screen.findByText('My Film')).toBeTruthy();
+
+    view.rerender(
+      <DshComposerPresentationSnapshotProvider>
+        <DesktopAgentSurface
+          workbenchInstanceId="workbench-1"
+          sceneId="scene-character-authoring"
+          agentSurfaceId="surface-draft"
+          surfaceKind="workspace"
+        />
+      </DshComposerPresentationSnapshotProvider>,
+    );
+
+    expect(screen.queryByText('My Film')).toBeNull();
+    expect(await screen.findByText('Character Studio')).toBeTruthy();
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(2);
   });
 
   it('passes the complete Entry context presentation to the retained selector components', async () => {
@@ -579,6 +714,7 @@ describe('DesktopAgentSurface', () => {
     const { container } = render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-draft"
         surfaceKind="entry"
         entryContext={{
@@ -616,6 +752,7 @@ describe('DesktopAgentSurface', () => {
       <DesktopAgentSurface
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
+        sceneId="scene-1"
         workbenchInstanceId="workbench-1"
         surfaceKind="workspace"
       />,
@@ -677,6 +814,7 @@ describe('DesktopAgentSurface', () => {
     render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-draft"
         surfaceKind="entry"
       />,
@@ -731,6 +869,7 @@ describe('DesktopAgentSurface', () => {
     const { container } = render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-project-draft"
         surfaceKind="entry"
         entryContext={{
@@ -784,6 +923,7 @@ describe('DesktopAgentSurface', () => {
     render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
         surfaceKind="workspace"
@@ -800,6 +940,7 @@ describe('DesktopAgentSurface', () => {
     render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
         surfaceKind="workspace"
@@ -843,6 +984,7 @@ describe('DesktopAgentSurface', () => {
     render(
       <DesktopAgentSurface
         workbenchInstanceId="workbench-1"
+        sceneId="scene-1"
         agentSurfaceId="surface-1"
         conversationId="conversation-1"
         surfaceKind="workspace"

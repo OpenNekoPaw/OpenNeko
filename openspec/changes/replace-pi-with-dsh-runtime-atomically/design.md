@@ -84,7 +84,7 @@ Composer 继续复用现有 OpenNeko `InputArea`。idle submit 走标准 ACP pro
 
 DSH 子进程/profile 拥有 Session/transcript、实际 model context、turn/call lineage、Inbox/queue 与 qualified compaction。OpenNeko catalog 只拥有 Conversation metadata、Workspace binding、当前 Session reference、权限/信任、领域 Job reference 和可重建 projection。Host 不直接读写 DSH Session 文件；history replay 通过 bridge/ACP 从 DSH 获得。唯一 production `DSH_HOME` 是 Electron `userData/dsh`，官方 `dsh-base` 因而将 Session 写入 `userData/dsh/sessions`；profile materializer 只能替换 `profiles/openneko` 的官方配置/links 和 home-level empty patch，必须保留 `sessions/`、settings、credentials 与其他 DSH-owned durable files原样不动。DSH Session persistence 使用 Host 提供的稳定虚拟 cwd 配置，不把真实 Workspace 绝对路径写入模型上下文、日志或 Renderer。
 
-Conversation title 是 OpenNeko catalog 拥有的用户可见 metadata，不属于 DSH transcript 或 Renderer presentation state。原生 Composer 在未绑定 Draft 的首提交中把同一条 strict-decoded input 一并交给 sender-bound create operation；`@neko/agent-runtime` 使用消息文本、资源/上下文标签、Command line 或 Skill display text，以 50 个 Unicode 字符为截断窗口生成 bounded 单行标题，并在 DSH Session 创建前随 catalog record 一次发布。Session projection 与 Agent Home projection 都从该 catalog record 读取同一 title；Webview 在 transcript 上方使用无明显分割线的固定居中标题栏，PrimarySidebar 不保存、不重算也不使用固定“新会话”作为已发布会话的成功标题。Character、Room 等显式领域标题仍由其 owning application service 提供，不经过首消息标题规则。
+Conversation title 是 OpenNeko catalog 拥有的用户可见 metadata，不属于 DSH transcript 或 Renderer presentation state。原生 Composer 在未绑定 Draft 的首提交中把同一条 strict-decoded input 一并交给 sender-bound create operation；`@neko/agent-runtime` 使用消息文本、资源/上下文标签、Command line 或 Skill display text，以 50 个 Unicode 字符为截断窗口生成 bounded 单行标题，并在 DSH Session 创建前随 catalog record 一次发布。Session projection 与 Agent Home projection 都从该 catalog record 读取同一 title；Webview 只在已发布 Conversation 的 transcript 上方使用无明显分割线的固定居中标题栏，未绑定 Entry Draft 不渲染标题栏。PrimarySidebar 不保存、不重算也不使用固定“新会话”作为已发布会话的成功标题。Character、Room 等显式领域标题仍由其 owning application service 提供，不经过首消息标题规则。
 
 模型与模式的 canonical 路径是 `@neko/host/settings` selection → sender-bound Desktop Host projection/validation → exact Conversation-to-DSH-Session binding → 标准 ACP `session/set_config_option` / `session/set_mode` → DSH Agent。DSH bridge 必须在 `session/new`、`session/load` 和 `session/resume` 响应中广告真实支持的 mode/config state，并在 set operation 中拒绝未知值、运行中不可安全切换的状态和未绑定 Session。DSH `Agent.options` 创建后只读，因此 model/provider/maxTokens 变化必须在 exact idle Session 上释放并按同一 Session identity 从 authoritative log 恢复 Agent；失败后该 Session 局部不可用并返回 diagnostic，不得继续使用旧模型、DSH profile 默认值或另一 provider。Host 在每次 prompt 前重申当前 exact configuration，使 subprocess 重启后也不会以默认 Agent 配置形成隐藏成功路径。
 
@@ -108,6 +108,13 @@ Window、Workbench、Agent Surface 与 Draft，通过稳定 Project catalog 解�
 process-scoped grant、发布 Workspace Conversation、attach 原 Draft。未选择项目的普通对话只发布 Assistant
 Conversation；不得因为 Entry UI token 未进入 Main authority 而静默创建 Assistant Conversation，也不得在选择
 项目时提前切换 Workspace scene。
+
+Entry Draft 导航到 Workspace 或 Character/World authoring Scene 时可以保留同一 `draftId` 与
+`agentSurfaceId`，以保留未发送输入和 package-owned presentation snapshot；这不代表 Composer authority
+保持不变。Desktop Renderer 必须以精确 Scene identity 作为 Composer configuration projection 的刷新边界：
+Scene 变化时立即停止展示旧 scope 配置，并通过现有 sender-bound typed Host operation 重新读取当前
+Workspace/authoring context、模型、permission preset、input catalog 与 Canvas catalog。不得用重挂载 Agent
+Surface、清空 Draft、复制 Workspace facts 到 Renderer store 或回退旧 application configuration 形成成功路径。
 
 持久 Workspace Conversation 重开后，当前 Agent Surface 的 composer attach 是恢复 process-scoped grant 的
 唯一边界。Desktop Main 必须用 exact `windowId + workspaceGrantId + workspaceId` 调用 canonical

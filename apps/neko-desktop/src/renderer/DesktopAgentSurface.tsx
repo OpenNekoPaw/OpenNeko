@@ -22,6 +22,7 @@ const desktopAgentSurfaceLogger = new ConsoleLogger('DesktopAgentSurface');
 export interface DesktopAgentSurfaceProps {
   readonly agentSurfaceId: string;
   readonly workbenchInstanceId: string;
+  readonly sceneId: string;
   readonly conversationId?: string;
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
   readonly entryContext?: DshEntryContextPresentation;
@@ -42,6 +43,7 @@ export function DesktopAgentSurface({
   conversationFeed,
   conversationId,
   entryContext,
+  sceneId,
   surfaceKind,
   workbenchInstanceId,
 }: DesktopAgentSurfaceProps): JSX.Element {
@@ -59,7 +61,12 @@ export function DesktopAgentSurface({
   const submissionCount = useRef(0);
   const refreshSequence = useRef(0);
   const composerRefreshSequence = useRef(0);
+  const activeSceneId = useRef(sceneId);
   const mentionRequestSequence = useRef(0);
+
+  useEffect(() => {
+    activeSceneId.current = sceneId;
+  }, [sceneId]);
 
   const refresh = useCallback(async (): Promise<void> => {
     if (!conversationId) return;
@@ -83,19 +90,30 @@ export function DesktopAgentSurface({
 
   const refreshComposerConfiguration = useCallback(async (): Promise<void> => {
     const sequence = ++composerRefreshSequence.current;
+    const requestedSceneId = sceneId;
     try {
       const configuration = await window.openNekoDesktop.dshSessions.getComposerConfiguration(
         workbenchInstanceId,
         agentSurfaceId,
       );
-      if (sequence !== composerRefreshSequence.current) return;
+      if (
+        sequence !== composerRefreshSequence.current ||
+        requestedSceneId !== activeSceneId.current
+      ) {
+        return;
+      }
       setComposerConfiguration(configuration);
       setComposerConfigurationError(undefined);
     } catch (error) {
-      if (sequence !== composerRefreshSequence.current) return;
+      if (
+        sequence !== composerRefreshSequence.current ||
+        requestedSceneId !== activeSceneId.current
+      ) {
+        return;
+      }
       setComposerConfigurationError(describeError(error));
     }
-  }, [agentSurfaceId, workbenchInstanceId]);
+  }, [agentSurfaceId, sceneId, workbenchInstanceId]);
 
   useEffect(() => {
     let active = true;
@@ -119,6 +137,8 @@ export function DesktopAgentSurface({
         }
       })();
     };
+    setComposerConfiguration(undefined);
+    setComposerConfigurationError(undefined);
     void refreshComposerConfiguration();
     if (conversationId) {
       setState({ kind: 'loading' });

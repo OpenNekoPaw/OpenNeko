@@ -51,9 +51,14 @@ describe('Desktop scene Workbench', () => {
       throw new Error('Agent projection requires an unbound interaction surface.');
     }
     expect(
-      createDesktopAgentSurfaceProps({ workbenchInstanceId: 'workbench-1', interaction }),
+      createDesktopAgentSurfaceProps({
+        workbenchInstanceId: 'workbench-1',
+        sceneId: 'scene-entry',
+        interaction,
+      }),
     ).toEqual({
       agentSurfaceId: interaction.agentSurfaceId,
+      sceneId: 'scene-entry',
       surfaceKind: 'entry',
       workbenchInstanceId: 'workbench-1',
     });
@@ -71,10 +76,12 @@ describe('Desktop scene Workbench', () => {
     expect(
       createDesktopAgentSurfaceProps({
         workbenchInstanceId: 'workbench-1',
+        sceneId: 'scene-assistant',
         interaction: sessionInteraction,
       }),
     ).toEqual({
       agentSurfaceId: interaction.agentSurfaceId,
+      sceneId: 'scene-assistant',
       surfaceKind: 'assistant',
       workbenchInstanceId: 'workbench-1',
       conversationId: 'conversation-1',
@@ -92,10 +99,12 @@ describe('Desktop scene Workbench', () => {
     expect(
       createDesktopAgentSurfaceProps({
         workbenchInstanceId: 'workbench-1',
+        sceneId: 'scene-workspace',
         interaction: workspaceInteraction,
       }),
     ).toEqual({
       agentSurfaceId: interaction.agentSurfaceId,
+      sceneId: 'scene-workspace',
       surfaceKind: 'workspace',
       workbenchInstanceId: 'workbench-1',
     });

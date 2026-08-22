@@ -400,6 +400,10 @@ The package-owned Agent application SHALL own the only new-Conversation publicat
 
 For a Conversation created by the native Composer's first submission, the same strict-decoded input SHALL be the sole title source. The package-owned publication logic SHALL normalize it to one bounded catalog title before Session creation. The retained Agent Webview SHALL render a dedicated top title bar from the exact Session projection's catalog title, and PrimarySidebar SHALL render the same title from Agent Home. Neither surface may independently derive, cache or override the title.
 
+The unbound Entry Draft SHALL NOT render a Conversation title bar before durable Conversation publication.
+
+When Desktop navigation preserves an Agent Draft Surface while changing its exact Scene scope, Renderer SHALL preserve the unsent Draft presentation and SHALL invalidate the previous Composer configuration projection. It SHALL re-read configuration through the same sender-bound Host operation for the new Scene before enabling submission. Renderer SHALL NOT retain the previous application or Workspace context as a successful projection, remount the Agent Surface to force state loss, or create a Conversation solely because navigation occurred.
+
 #### Scenario: Entry creates a Project-bound Conversation
 
 - **WHEN** the user selects a stable Project in the unbound Entry and submits its first prompt
@@ -407,12 +411,25 @@ For a Conversation created by the native Composer's first submission, the same s
 - **AND** Desktop Main resolves the Project to its exact Workspace, signs a process-scoped grant, publishes a Workspace Conversation and attaches the original Draft before prompting
 - **AND** it does not publish an Assistant Conversation or switch Scene when the Project is merely selected
 
+#### Scenario: Entry Draft navigates into a Workspace Draft
+
+- **WHEN** Desktop navigation changes an unbound Entry Draft to an exact Workspace Scene while preserving its `draftId` and Agent Surface identity
+- **THEN** the unsent Composer input remains available on the Workspace Agent panel
+- **AND** Renderer invalidates the Entry configuration and projects the exact Workspace label and Canvas catalog before submission is enabled
+- **AND** navigation alone does not publish a Conversation or inherit context from another Workspace
+
 #### Scenario: Published title appears in both Agent surfaces
 
 - **WHEN** the first Composer submission publishes a Conversation whose derived title is available
 - **THEN** the Agent Webview displays that title in a centered top title bar without a prominent divider above the transcript
 - **AND** the matching PrimarySidebar row displays the identical catalog title after the Home projection refresh
 - **AND** long or multiline input cannot overlap, clip or push transcript content into the window top edge
+
+#### Scenario: Unbound Entry has no Conversation title
+
+- **WHEN** the Entry Draft has not published a Conversation
+- **THEN** the Agent Webview does not render a Conversation title bar or a fixed new-Conversation heading
+- **AND** the Entry experience content remains the first visible content in the Agent surface
 
 #### Scenario: Persisted Workspace Conversation reattaches after restart
 

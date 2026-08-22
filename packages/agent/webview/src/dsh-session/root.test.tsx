@@ -960,6 +960,8 @@ describe('DshAgentView content-creation composer', () => {
       />,
     );
 
+    expect(screen.queryByLabelText('会话标题')).toBeNull();
+    expect(screen.queryByRole('heading', { name: '新会话' })).toBeNull();
     expect(screen.getByText('Hi，用对话开启创作')).toBeTruthy();
     expect(
       (view.container.querySelector('[data-entry-context-action="character"]') as HTMLButtonElement)

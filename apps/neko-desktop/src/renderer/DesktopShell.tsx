@@ -1405,6 +1405,7 @@ function DesktopSceneWorkbench({
     scene.slots.interaction?.kind === 'agent'
       ? createDesktopAgentSurfaceProps({
           workbenchInstanceId: activeWorkbench.workbenchInstanceId,
+          sceneId: scene.sceneId,
           interaction: scene.slots.interaction,
           ...(scene.slots.interaction.scope.kind === 'unbound'
             ? {
@@ -2574,6 +2575,7 @@ function hasCharacterVisualRepresentation(
 
 export function createDesktopAgentSurfaceProps(input: {
   readonly workbenchInstanceId: string;
+  readonly sceneId: string;
   readonly interaction: DesktopAgentInteractionSurfaceRef;
   readonly entryContext?: DesktopAgentSurfaceProps['entryContext'];
 }): DesktopAgentSurfaceProps {
@@ -2581,6 +2583,7 @@ export function createDesktopAgentSurfaceProps(input: {
   return {
     agentSurfaceId: interaction.agentSurfaceId,
     workbenchInstanceId: input.workbenchInstanceId,
+    sceneId: input.sceneId,
     surfaceKind:
       interaction.scope.kind === 'unbound'
         ? 'entry'

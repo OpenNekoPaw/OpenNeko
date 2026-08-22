@@ -1,6 +1,6 @@
 # W7 Conversation Title And Title Bar Evidence
 
-Date: 2026-08-21
+Date: 2026-08-22
 
 ## Scope And Canonical Path
 
@@ -12,9 +12,10 @@ Date: 2026-08-21
 - The DSH Conversation catalog remains the only title authority. The exact Session projection
   reads that catalog record, while Agent Home independently projects the same record for
   PrimarySidebar.
-- The retained Agent Webview renders the exact Session title in a fixed, centered top title bar.
-  The bar has no bottom border, remains above the transcript and truncates long titles locally
-  without creating another title source.
+- The retained Agent Webview renders the exact published Conversation title in a fixed, centered
+  top title bar. The unbound Entry Draft renders no Conversation title or placeholder bar. The bar
+  has no bottom border, remains above the transcript and truncates long titles locally without
+  creating another title source.
 - Existing Character and Room domain-owned explicit titles retain their current publication path.
   Existing records are not rewritten or migrated.
 
@@ -35,7 +36,7 @@ canonical path instead of adding a direct runtime runner or a second test-only p
 - Desktop Main/preload/Renderer tests cover forwarding the same first input, publishing its title,
   and returning that title through the exact Session projection.
 - Webview tests cover the title bar before the transcript, projected title rendering and the
-  existing new-Conversation Draft label.
+  absence of a title bar or fixed “新会话” heading on the unbound Entry Draft.
 - Existing Agent Home and Desktop sidebar tests continue to render `conversation.title` from the
   catalog-backed Home projection.
 - The isolated Desktop scenario now asserts that the first input, Session title bar and
@@ -50,6 +51,11 @@ Status: `blocked`.
   exposed both the Session title heading and the matching PrimarySidebar row. After a temporary
   hot-reload blank state recovered, direct image review confirmed that the final title is centered,
   has no visible divider and keeps the transcript below it.
+- On 2026-08-22 the same live window again exposed a centered long title for an existing published
+  Conversation after hot reload. A later acceptance pass navigated to the Entry Draft and confirmed
+  that the Entry experience begins directly with its content and renders no Conversation title bar.
+  The pass then selected the `Blame` Workspace and confirmed the published Conversation title bar
+  returned when the prior Conversation was reopened.
 - That historical Session and its sidebar row both display their existing catalog title “新会话”.
   This proves the shared visible projection for an existing record, but it does not replace the
   isolated first-submit check for a newly derived title.
@@ -62,6 +68,8 @@ Status: `blocked`.
 ## Verification
 
 - `pnpm exec openspec validate replace-pi-with-dsh-runtime-atomically --strict`: passed.
+- `pnpm --filter @neko/agent-webview test`: passed (4 files / 47 tests).
+- `pnpm --filter @neko/agent-webview typecheck`: passed.
 - An isolated worktree built from the staged snapshot passed full package tests for
   `@neko/agent-contracts` (32 files / 177 tests), `@neko/agent-runtime` (51 files / 383 tests) and
   `@neko/agent-webview` (3 files / 34 tests), plus the focused Desktop Host/preload/Renderer suite
@@ -76,7 +84,7 @@ Status: `blocked`.
 
 - Final visible acceptance of first-submit title derivation/synchronization, long-title ellipsis and
   narrow width remains pending until the existing development owner releases the Vite bundle and
-  the isolated scenario can run. Centered alignment, divider removal and transcript spacing passed
-  direct image review in the live development window.
+  the isolated scenario can run. Entry-Draft no-title behavior, centered alignment, divider removal
+  and transcript spacing passed direct review in the live development window.
 - Historical records that were already published as “新会话” / “New conversation” remain unchanged
   by design; newly published native Composer Conversations use the first-input title path.

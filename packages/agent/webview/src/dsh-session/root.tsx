@@ -166,6 +166,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const activeTurnStart = findActiveTurnStart(props.projection);
   const showEmptyState =
     props.conversationId === undefined && !hasEvents && !props.conversationFeed;
+  const showConversationTitle = props.conversationId !== undefined;
   const emptyTitle =
     props.surfaceKind === 'entry'
       ? entryExperience === 'assistant'
@@ -327,11 +328,13 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       data-empty-state={showEmptyState}
       data-presentation="desktop-dock"
     >
-      <header className="dsh-agent-titlebar" aria-label={copy.conversationTitle}>
-        <h1 className="dsh-agent-titlebar__title" title={conversationTitle}>
-          {conversationTitle}
-        </h1>
-      </header>
+      {showConversationTitle ? (
+        <header className="dsh-agent-titlebar" aria-label={copy.conversationTitle}>
+          <h1 className="dsh-agent-titlebar__title" title={conversationTitle}>
+            {conversationTitle}
+          </h1>
+        </header>
+      ) : null}
       {showEmptyState ? (
         <div className={`${compositionClass} flex-1`}>
           {props.surfaceKind === 'entry' ? (
