@@ -19,7 +19,7 @@ import { ConnectionLayer, InlineConnectionEditor } from './connections';
 import { useViewportTransform } from '../hooks/useViewportTransform';
 import { useViewportCulling } from '../hooks/useViewportCulling';
 import { useConnectionDrag } from '../hooks/useConnectionDrag';
-import { useMarqueeSelect } from '../hooks/useMarqueeSelect';
+import { isAdditiveCanvasSelectionModifier, useMarqueeSelect } from '../hooks/useMarqueeSelect';
 import { useThrottledCanvasViewport } from '../hooks/useThrottledCanvasViewport';
 import { projectCanvasNodeRenderPlan } from '../utils/canvasOrganization';
 import { createCoreNodeTypeDescriptors } from './nodes/coreNodeTypeDescriptors';
@@ -45,6 +45,7 @@ import {
   validateCanvasConnectionDraft,
   type CanvasConnectionMutationResult,
 } from '../utils/canvasConnectionAuthoring';
+import { translateCanvasSelection } from '../utils/selectionTransforms';
 
 // =============================================================================
 // Types
@@ -58,8 +59,11 @@ export interface InfiniteCanvasProps {
   selectedConnectionIds?: string[];
   onViewportChange: (viewport: Partial<ViewportType>) => void;
   onNodeSelect?: (nodeId: string, multi: boolean) => void;
-  /** Called on mouseup when node drag ends (final position + history) */
-  onNodeMove?: (nodeId: string, position: { x: number; y: number }) => void;
+  /** Called once on mouseup with the exact gesture selection and shared Canvas-space delta. */
+  onNodesMove?: (
+    nodeIds: readonly string[],
+    delta: { readonly x: number; readonly y: number },
+  ) => void;
   /** Called on mouseup when node resize ends */
   onNodeResizeEnd?: (
     nodeId: string,
@@ -121,7 +125,7 @@ export function InfiniteCanvas({
   selectedConnectionIds = [],
   onViewportChange,
   onNodeSelect,
-  onNodeMove,
+  onNodesMove,
   onNodeResizeEnd,
   onNodeUpdateData,
   onNodeRotateEnd,
@@ -149,8 +153,9 @@ export function InfiniteCanvas({
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [transformingNodeIds, setTransformingNodeIds] = useState<readonly string[]>([]);
   const [dragPreview, setDragPreview] = useState<{
-    readonly nodeId: string;
-    readonly position: { readonly x: number; readonly y: number };
+    readonly anchorNodeId: string;
+    readonly nodeIds: readonly string[];
+    readonly delta: { readonly x: number; readonly y: number };
   } | null>(null);
   const frozenVisibleNodeIdsRef = useRef<readonly string[] | null>(null);
   const renderPlan = useMemo(() => projectCanvasNodeRenderPlan(nodes), [nodes]);
@@ -286,30 +291,48 @@ export function InfiniteCanvas({
     [renderPlan.expandedSpatialContainerIds],
   );
 
-  const handleTransformStart = useCallback((nodeId: string) => {
-    setTransformingNodeIds((current) =>
-      current.includes(nodeId) ? current : [...current, nodeId],
-    );
-  }, []);
+  const resolveGestureNodeIds = useCallback(
+    (nodeId: string): readonly string[] =>
+      selectedNodeIds.includes(nodeId) ? selectedNodeIds : [nodeId],
+    [selectedNodeIds],
+  );
 
-  const handleTransformEnd = useCallback((nodeId: string) => {
-    setTransformingNodeIds((current) => current.filter((id) => id !== nodeId));
-    setDragPreview((current) => (current?.nodeId === nodeId ? null : current));
+  const handleTransformStart = useCallback(
+    (nodeId: string) => setTransformingNodeIds(resolveGestureNodeIds(nodeId)),
+    [resolveGestureNodeIds],
+  );
+
+  const handleTransformEnd = useCallback(() => {
+    setTransformingNodeIds([]);
+    setDragPreview(null);
   }, []);
 
   const handleNodeDrag = useCallback(
-    (nodeId: string, position: { x: number; y: number }) => setDragPreview({ nodeId, position }),
-    [],
+    (nodeId: string, position: { x: number; y: number }) => {
+      const anchor = nodes.find((node) => node.id === nodeId);
+      if (!anchor) throw new Error(`Canvas drag anchor not found: ${nodeId}`);
+      setDragPreview({
+        anchorNodeId: nodeId,
+        nodeIds: resolveGestureNodeIds(nodeId),
+        delta: {
+          x: position.x - anchor.position.x,
+          y: position.y - anchor.position.y,
+        },
+      });
+    },
+    [nodes, resolveGestureNodeIds],
   );
 
   const interactionNodes = useMemo(
     () =>
       dragPreview
-        ? nodes.map((node) =>
-            node.id === dragPreview.nodeId ? { ...node, position: dragPreview.position } : node,
-          )
+        ? translateCanvasSelection(nodes, dragPreview.nodeIds, dragPreview.delta).nodes
         : nodes,
     [dragPreview, nodes],
+  );
+  const interactionNodeById = useMemo(
+    () => new Map(interactionNodes.map((node) => [node.id, node])),
+    [interactionNodes],
   );
   const openFullscreenPreview = useCallback(
     (nodeId: string, outputId?: string) => {
@@ -338,26 +361,30 @@ export function InfiniteCanvas({
   );
 
   const dropTargetPreview = useMemo(() => {
-    if (!dragPreview) return undefined;
-    const movedNodes = nodes.map((node) =>
-      node.id === dragPreview.nodeId ? { ...node, position: dragPreview.position } : node,
-    );
-    const movedNode = movedNodes.find((node) => node.id === dragPreview.nodeId);
+    if (!dragPreview || dragPreview.nodeIds.length !== 1) return undefined;
+    const movedNode = interactionNodes.find((node) => node.id === dragPreview.anchorNodeId);
     if (!movedNode) return undefined;
-    const resolution = resolveCanvasDropContainer(movedNodes, movedNode.id, {
+    const resolution = resolveCanvasDropContainer(interactionNodes, movedNode.id, {
       movingSubtree: Boolean(movedNode.container),
     });
     return resolution.targetContainerId
-      ? movedNodes.find((node) => node.id === resolution.targetContainerId)
+      ? interactionNodes.find((node) => node.id === resolution.targetContainerId)
       : undefined;
-  }, [dragPreview, nodes]);
+  }, [dragPreview, interactionNodes]);
 
   const handleNodeMoveEnd = useCallback(
     (nodeId: string, position: { x: number; y: number }) => {
-      handleTransformEnd(nodeId);
-      onNodeMove?.(nodeId, position);
+      const anchor = nodes.find((node) => node.id === nodeId);
+      if (!anchor) throw new Error(`Canvas drag anchor not found: ${nodeId}`);
+      const nodeIds =
+        dragPreview?.anchorNodeId === nodeId ? dragPreview.nodeIds : resolveGestureNodeIds(nodeId);
+      onNodesMove?.(nodeIds, {
+        x: position.x - anchor.position.x,
+        y: position.y - anchor.position.y,
+      });
+      handleTransformEnd();
     },
-    [handleTransformEnd, onNodeMove],
+    [dragPreview, handleTransformEnd, nodes, onNodesMove, resolveGestureNodeIds],
   );
 
   const handleNodeResizeEnd = useCallback(
@@ -366,7 +393,7 @@ export function InfiniteCanvas({
       size: { width: number; height: number },
       position: { x: number; y: number },
     ) => {
-      handleTransformEnd(nodeId);
+      handleTransformEnd();
       onNodeResizeEnd?.(nodeId, size, position);
     },
     [handleTransformEnd, onNodeResizeEnd],
@@ -374,7 +401,7 @@ export function InfiniteCanvas({
 
   const handleNodeRotateEnd = useCallback(
     (nodeId: string, rotation: number) => {
-      handleTransformEnd(nodeId);
+      handleTransformEnd();
       onNodeRotateEnd?.(nodeId, rotation);
     },
     [handleTransformEnd, onNodeRotateEnd],
@@ -424,7 +451,9 @@ export function InfiniteCanvas({
         (e.target as HTMLElement).closest('[data-canvas-background]')
       ) {
         containerRef.current?.focus();
-        onCanvasClick?.();
+        if (!isAdditiveCanvasSelectionModifier(e.nativeEvent)) {
+          onCanvasClick?.();
+        }
       }
     },
     [onCanvasClick],
@@ -444,6 +473,7 @@ export function InfiniteCanvas({
       ref={containerRef}
       data-canvas-viewport-root="true"
       data-canvas-zoom-detail={viewport.zoom < 0.55 ? 'distant' : 'readable'}
+      data-canvas-selection-count={selectedNodeIds.length}
       data-canvas-interaction-suspended={fullscreenSurface ? 'true' : undefined}
       className="relative w-full h-full overflow-hidden select-none"
       style={{ cursor: getCursor() }}
@@ -533,10 +563,11 @@ export function InfiniteCanvas({
         {/* Node layer - 使用裁剪后的可见节点; container-managed children are summarized by containers */}
         {renderedNodes.map((node) => {
           const isSelected = selectedNodeIds.includes(node.id);
+          const interactionNode = interactionNodeById.get(node.id) ?? node;
 
           return renderNode(CORE_NODE_RENDERERS, {
-            node,
-            allNodes: nodes,
+            node: interactionNode,
+            allNodes: interactionNodes,
             viewport,
             isSelected,
             containerRef: containerRef as React.RefObject<HTMLElement | null>,
@@ -555,6 +586,7 @@ export function InfiniteCanvas({
             interactionRenderMode: renderRefreshDecision.shouldUseHeavyContentShell
               ? 'shell'
               : 'full',
+            showTransformHandles: selectedNodeIds.length === 1,
             onDocumentOpen,
             onCanvasEmbedOpen,
             selectedNodeIds,

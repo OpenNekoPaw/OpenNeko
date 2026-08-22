@@ -12,7 +12,9 @@ import type {
 } from '@neko/canvas-domain';
 import { createEmptyCanvasData } from '@neko/canvas-domain';
 import { CanvasHostProvider, type CanvasWebviewHostPort } from '../../host-runtime';
+import { useCanvasStore } from '../../stores/canvasStore';
 import { enableDefaultCanvasTestStoreScope } from '../../stores/canvasStoreScope';
+import { useHistoryStore } from '../../stores/historyStore';
 import { SelectionContextToolbar } from './SelectionContextToolbar';
 
 Object.assign(globalThis, {
@@ -759,7 +761,7 @@ describe('SelectionContextToolbar', () => {
     await toolbar.dispose();
   });
 
-  it('keeps Group visible without rendering Delete for multi-selection', () => {
+  it('keeps Group visible and exposes batch Duplicate and Delete for multi-selection', () => {
     const nodes: readonly CanvasNode[] = [
       {
         id: 'note-1',
@@ -789,9 +791,59 @@ describe('SelectionContextToolbar', () => {
 
     expect(markup).toContain('data-selection-action="group-selection"');
     expect(markup).toContain('data-selection-action-location="primary"');
-    expect(markup).not.toContain('delete-selection');
-    expect(markup).not.toContain('data-selection-overflow="true"');
-    expect(markup).not.toContain('node:duplicate');
+    expect(markup).toContain('delete-selection');
+    expect(markup).toContain('data-selection-overflow="true"');
+    expect(markup).toContain('node:duplicate');
+  });
+
+  it('duplicates the complete multi-selection through the toolbar action', async () => {
+    const nodes: readonly CanvasNode[] = [
+      {
+        id: 'note-1',
+        type: 'markdown',
+        position: { x: 20, y: 20 },
+        size: { width: 160, height: 100 },
+        zIndex: 1,
+        data: { content: 'One' },
+      },
+      {
+        id: 'note-2',
+        type: 'markdown',
+        position: { x: 220, y: 20 },
+        size: { width: 160, height: 100 },
+        zIndex: 2,
+        data: { content: 'Two' },
+      },
+    ];
+    useCanvasStore.getState().setCanvasData({
+      name: 'Toolbar batch duplicate',
+      viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+      nodes: [...nodes],
+      connections: [],
+    });
+    useCanvasStore.getState().selectNodes(nodes.map((node) => node.id));
+    useHistoryStore.setState({ undoStack: [], redoStack: [], maxHistory: 50 });
+    const toolbar = await renderToolbar(
+      nodes,
+      nodes.map((node) => node.id),
+      [],
+    );
+
+    await act(async () => {
+      toolbar.container
+        .querySelector<HTMLButtonElement>('[data-selection-action="node:duplicate"]')
+        ?.click();
+    });
+
+    const canvasData = useCanvasStore.getState().canvasData;
+    expect(canvasData?.nodes).toHaveLength(4);
+    expect(useCanvasStore.getState().selection.nodeIds).toHaveLength(2);
+    expect(useCanvasStore.getState().selection.nodeIds).not.toEqual(nodes.map((node) => node.id));
+    expect(useHistoryStore.getState().undoStack).toHaveLength(1);
+
+    await toolbar.dispose();
+    useCanvasStore.setState({ canvasData: null, selection: { nodeIds: [], connectionIds: [] } });
+    useHistoryStore.setState({ undoStack: [], redoStack: [], maxHistory: 50 });
   });
 
   it('renders outside Canvas scaling while remaining fixed to the selected node', () => {

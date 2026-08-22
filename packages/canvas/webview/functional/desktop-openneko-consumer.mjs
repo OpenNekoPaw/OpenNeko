@@ -557,6 +557,83 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     ) {
       throw new Error(`Canvas video primary actions are invalid: ${JSON.stringify(videoActions)}`);
     }
+    const multiSelectionBefore = await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      const image = view?.querySelector('[data-node-id="epub-image-node"]');
+      if (!(view instanceof HTMLElement) || !(image instanceof HTMLElement)) {
+        throw new Error('Canvas multi-selection fixture nodes are unavailable.');
+      }
+      image.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+      const readPosition = (nodeId) => {
+        const node = view.querySelector('[data-node-id="' + nodeId + '"]');
+        if (!(node instanceof HTMLElement)) throw new Error('Canvas node is unavailable: ' + nodeId);
+        return { left: Number.parseFloat(node.style.left), top: Number.parseFloat(node.style.top) };
+      };
+      return {
+        first: readPosition('video-node'),
+        second: readPosition('epub-image-node'),
+      };
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+        const toolbar = view?.querySelector('[data-selection-context-toolbar="true"]');
+        return toolbar?.getAttribute('data-selection-count') === '2';
+      })()`,
+      'Canvas did not retain two selected nodes.',
+    );
+    const multiSelectionPresentation = await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      if (!(view instanceof HTMLElement)) throw new Error('Canvas View is unavailable.');
+      return {
+        selectedNodeIds: [...view.querySelectorAll('[data-node-selected="true"]')].map((node) =>
+          node.getAttribute('data-node-id'),
+        ),
+        actionIds: [...view.querySelectorAll('[data-selection-action]')].map((action) =>
+          action.getAttribute('data-selection-action'),
+        ),
+        transformHandleCount: view.querySelectorAll('[data-node-transform-handle]').length,
+      };
+    })()`);
+    checkpoint('canvas-multi-selection-ready', multiSelectionPresentation);
+    const multiSelectionScreenshot = await screenshot('canvas-multi-selection-ready');
+    await drag(
+      '[data-owner-view-id="canvas:functional:video"] [data-node-id="video-node"]',
+      '[data-owner-view-id="canvas:functional:video"] [data-canvas-viewport-root="true"]',
+      {
+        sourcePosition: { xRatio: 0.5, yRatio: 0.5 },
+        targetPosition: { xRatio: 0.42, yRatio: 0.62 },
+      },
+    );
+    const multiSelectionAfter = await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      if (!(view instanceof HTMLElement)) throw new Error('Canvas View is unavailable.');
+      const readPosition = (nodeId) => {
+        const node = view.querySelector('[data-node-id="' + nodeId + '"]');
+        if (!(node instanceof HTMLElement)) throw new Error('Canvas node is unavailable: ' + nodeId);
+        return { left: Number.parseFloat(node.style.left), top: Number.parseFloat(node.style.top) };
+      };
+      const first = readPosition('video-node');
+      const second = readPosition('epub-image-node');
+      return {
+        first,
+        second,
+        firstDelta: {
+          x: first.left - ${String(multiSelectionBefore.first.left)},
+          y: first.top - ${String(multiSelectionBefore.first.top)},
+        },
+        secondDelta: {
+          x: second.left - ${String(multiSelectionBefore.second.left)},
+          y: second.top - ${String(multiSelectionBefore.second.top)},
+        },
+        selectedNodeIds: [...view.querySelectorAll('[data-node-selected="true"]')].map((node) =>
+          node.getAttribute('data-node-id'),
+        ),
+      };
+    })()`);
+    checkpoint('canvas-multi-selection-moved', multiSelectionAfter);
+    const multiSelectionMovedScreenshot = await screenshot('canvas-multi-selection-moved');
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="epub-image-node"]',
     );
@@ -991,6 +1068,10 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       generationAuthoring,
       selectedNodePresentation,
       selectedNodeScreenshot,
+      multiSelectionPresentation,
+      multiSelectionScreenshot,
+      multiSelectionAfter,
+      multiSelectionMovedScreenshot,
       videoActions,
       imageActions,
       imageActionsScreenshot,
@@ -1098,6 +1179,19 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         evidence.generationAuthoring.kinds[0]?.compact?.bodyClientWidth ||
       evidence.selectedNodePresentation.nodeLocalActionCount === 0 ||
       evidence.selectedNodePresentation.propertyDockCount !== 0 ||
+      evidence.multiSelectionPresentation.selectedNodeIds.length !== 2 ||
+      !evidence.multiSelectionPresentation.actionIds.includes('group-selection') ||
+      !evidence.multiSelectionPresentation.actionIds.includes('node:duplicate') ||
+      evidence.multiSelectionPresentation.transformHandleCount !== 0 ||
+      evidence.multiSelectionAfter.selectedNodeIds.length !== 2 ||
+      Math.abs(
+        evidence.multiSelectionAfter.firstDelta.x - evidence.multiSelectionAfter.secondDelta.x,
+      ) > 0.5 ||
+      Math.abs(
+        evidence.multiSelectionAfter.firstDelta.y - evidence.multiSelectionAfter.secondDelta.y,
+      ) > 0.5 ||
+      (Math.abs(evidence.multiSelectionAfter.firstDelta.x) < 1 &&
+        Math.abs(evidence.multiSelectionAfter.firstDelta.y) < 1) ||
       !evidence.isolatedUrls ||
       evidence.newDraftHandoff.clipCount !== 1 ||
       !evidence.otioActions.actionIds.includes('cut:open') ||

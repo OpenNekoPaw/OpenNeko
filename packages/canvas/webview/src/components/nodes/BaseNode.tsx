@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import type { CanvasViewport, CanvasNodeType, PortDefinition } from '@neko/canvas-domain';
 import { getDefaultPorts } from '@neko/canvas-domain';
-import { useNodeDrag } from '../../hooks/useNodeDrag';
+import { shouldStartNodeDrag, useNodeDrag } from '../../hooks/useNodeDrag';
 import { useNodeResize, type ResizeHandle } from '../../hooks/useNodeResize';
 import { useNodeRotate } from '../../hooks/useNodeRotate';
 import { clampNodeRenderSize, clampNodeSize, resolveNodeMinSize } from '../../utils/nodeSizing';
@@ -88,6 +88,8 @@ export interface BaseNodeProps {
   opaqueSurface?: boolean;
   renderZIndex?: number;
   onActivate?: (nodeId: string) => void;
+  /** Single-node resize/rotate affordances are hidden while a larger selection owns transforms. */
+  showTransformHandles?: boolean;
 }
 
 const NODE_TYPE_DESCRIPTORS = createBuiltInNodeTypeDescriptors();
@@ -118,6 +120,7 @@ export function BaseNode({
   containerRef,
   onSelect,
   onTransformStart,
+  onDrag,
   onMove,
   onResizeEnd,
   onRotateEnd,
@@ -134,7 +137,9 @@ export function BaseNode({
   opaqueSurface = false,
   renderZIndex,
   onActivate,
+  showTransformHandles = true,
 }: BaseNodeProps) {
+  const didDragRef = useRef(false);
   const nodeMinSize = minSize ?? resolveNodeMinSize(node);
   const initialResizeSize = useMemo(
     () => clampNodeSize(node.size, nodeMinSize),
@@ -150,7 +155,14 @@ export function BaseNode({
     nodeId: node.id,
     initialPosition: node.position,
     viewport,
-    onDragStart: onTransformStart,
+    onDragStart: (nodeId) => {
+      didDragRef.current = false;
+      onTransformStart?.(nodeId);
+    },
+    onDrag: (nodeId, position) => {
+      didDragRef.current = true;
+      onDrag?.(nodeId, position);
+    },
     onDragEnd: onMove,
     disabled: node.locked,
   });
@@ -214,9 +226,24 @@ export function BaseNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      onSelect?.(node.id, e.shiftKey || e.metaKey);
+      if (didDragRef.current) {
+        didDragRef.current = false;
+        return;
+      }
+      onSelect?.(node.id, e.shiftKey || e.metaKey || e.ctrlKey);
     },
     [node.id, onSelect],
+  );
+
+  const handleMouseDown = useCallback(
+    (event: React.MouseEvent) => {
+      didDragRef.current = false;
+      if (!isSelected && shouldStartNodeDrag(event.nativeEvent)) {
+        onSelect?.(node.id, false);
+      }
+      dragHandlers.onMouseDown(event);
+    },
+    [dragHandlers, isSelected, node.id, onSelect],
   );
 
   // Handle endpoint mousedown for drag-based connection
@@ -290,7 +317,7 @@ export function BaseNode({
         transform: currentRotation ? `rotate(${currentRotation}deg)` : undefined,
         transformOrigin: 'center center',
       }}
-      onMouseDown={dragHandlers.onMouseDown}
+      onMouseDown={handleMouseDown}
       onDragStart={(event) => event.preventDefault()}
       onClick={handleClick}
       onDoubleClick={(event) => {
@@ -301,7 +328,7 @@ export function BaseNode({
         if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          onSelect?.(node.id, event.shiftKey || event.metaKey);
+          onSelect?.(node.id, event.shiftKey || event.metaKey || event.ctrlKey);
         }
       }}
       tabIndex={0}
@@ -338,10 +365,12 @@ export function BaseNode({
       {/* Derive successor node — "+" button with type picker */}
       {/* Resize handles (visible when selected) */}
       {isSelected &&
+        showTransformHandles &&
         !node.locked &&
         RESIZE_HANDLES.map(({ handle, cursor, style }) => (
           <div
             key={handle}
+            data-node-transform-handle="resize"
             className="absolute z-20"
             style={{ ...style, cursor, position: 'absolute' }}
             onMouseDown={(e) => {
@@ -352,10 +381,11 @@ export function BaseNode({
         ))}
 
       {/* Rotation handle (visible when selected, above node top center) */}
-      {isSelected && !node.locked && (
+      {isSelected && showTransformHandles && !node.locked && (
         <>
           {/* Connector line from node top to rotation handle */}
           <div
+            data-node-transform-handle="rotate-line"
             className="absolute z-20 pointer-events-none"
             style={{
               left: '50%',
@@ -369,6 +399,7 @@ export function BaseNode({
           />
           {/* Rotation handle circle */}
           <div
+            data-node-transform-handle="rotate"
             className="absolute z-20 flex items-center justify-center transition-all duration-150 hover:scale-125"
             style={{
               left: '50%',

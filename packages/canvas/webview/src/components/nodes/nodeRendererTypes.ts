@@ -31,6 +31,7 @@ export interface NodeRendererCommonProps {
   onFullscreenPreview?: (nodeId: string, outputId?: string) => void;
   onMarkdownEdit?: (nodeId: string) => void;
   interactionRenderMode?: 'full' | 'shell';
+  showTransformHandles?: boolean;
 }
 
 export interface NodeRendererContext extends NodeRendererCommonProps {

@@ -35,6 +35,7 @@ export interface GroupNodeProps {
   isConnecting?: boolean;
   connectionTargetState?: ConnectionDragTargetState | null;
   onUpdateData?: (nodeId: string, data: Record<string, unknown>) => void;
+  showTransformHandles?: boolean;
 }
 
 export function GroupNode({
@@ -52,6 +53,7 @@ export function GroupNode({
   isConnecting,
   connectionTargetState,
   onUpdateData,
+  showTransformHandles,
 }: GroupNodeProps) {
   const setGroupCollapsed = useCanvasStore((state) => state.setGroupCollapsed);
   const childIds = getContainerChildIds(node);
@@ -99,6 +101,7 @@ export function GroupNode({
       presentation="spatial-container"
       renderZIndex={renderZIndex}
       renderHeight={collapsed ? 40 : undefined}
+      showTransformHandles={showTransformHandles}
     >
       <div
         className="spatial-group-frame h-full w-full"
@@ -106,11 +109,7 @@ export function GroupNode({
         data-spatial-group-collapsed={collapsed ? 'true' : 'false'}
         data-spatial-group-empty={childNodes.length === 0 ? 'true' : 'false'}
       >
-        <div
-          className="spatial-group-label"
-          data-spatial-group-label={node.id}
-          onMouseDown={(event) => onSelect?.(node.id, event.shiftKey || event.metaKey)}
-        >
+        <div className="spatial-group-label" data-spatial-group-label={node.id}>
           <button
             type="button"
             className="spatial-group-label-button"

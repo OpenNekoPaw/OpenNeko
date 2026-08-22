@@ -54,6 +54,7 @@ import {
   RotateIcon,
   ScissorsIcon,
   SettingsIcon,
+  TrashIcon,
   VolumeOffIcon,
   WarningIcon,
   ZoomInIcon,
@@ -377,6 +378,18 @@ function resolveActions(
         section: 'canvas',
         run: () => canvasStore.getState().groupNodes(selectedIds),
       },
+      createDuplicateAction(selectedIds, canvasStore, clipboardStore, historyStore),
+      {
+        key: 'delete-selection',
+        label: t('menu.delete'),
+        icon: <TrashIcon size={14} />,
+        placement: 'overflow',
+        priority: 100,
+        display: 'label',
+        section: 'canvas',
+        danger: true,
+        run: () => canvasStore.getState().deleteSelected(),
+      },
     ];
   }
 
@@ -443,7 +456,7 @@ function resolveActions(
       },
     );
   }
-  actions.push(createDuplicateAction(node.id, canvasStore, clipboardStore, historyStore));
+  actions.push(createDuplicateAction([node.id], canvasStore, clipboardStore, historyStore));
   return actions;
 }
 
@@ -685,7 +698,7 @@ function mediaEditOverflowPriority(actionId: string): number {
 }
 
 function createDuplicateAction(
-  nodeId: string,
+  nodeIds: readonly string[],
   canvasStore: ReturnType<typeof useCanvasStoreApi>,
   clipboardStore: ReturnType<typeof useClipboardStoreApi>,
   historyStore: ReturnType<typeof useHistoryStoreApi>,
@@ -704,7 +717,7 @@ function createDuplicateAction(
       if (!canvasData) return;
       const result = clipboardStore
         .getState()
-        .duplicate([nodeId], canvasData.nodes, canvasData.connections);
+        .duplicate([...nodeIds], canvasData.nodes, canvasData.connections);
       if (!result) return;
       historyStore.getState().pushState(canvasData);
       canvasState.setCanvasData({

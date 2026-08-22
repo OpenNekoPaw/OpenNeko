@@ -40,6 +40,12 @@ export interface UseMarqueeSelectReturn {
   };
 }
 
+export function isAdditiveCanvasSelectionModifier(
+  event: Pick<MouseEvent, 'shiftKey' | 'metaKey' | 'ctrlKey'>,
+): boolean {
+  return event.shiftKey || event.metaKey || event.ctrlKey;
+}
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -126,7 +132,7 @@ export function useMarqueeSelect({
       }
 
       startRef.current = { x: e.clientX, y: e.clientY };
-      isAdditiveRef.current = e.shiftKey;
+      isAdditiveRef.current = isAdditiveCanvasSelectionModifier(e.nativeEvent);
       activatedRef.current = false;
     },
     [enabled],
@@ -153,33 +159,30 @@ export function useMarqueeSelect({
     setMarqueeRect({ x, y, width, height });
   }, []);
 
-  const onMouseUp = useCallback(
-    (e: React.MouseEvent) => {
-      if (!startRef.current) return;
+  const onMouseUp = useCallback(() => {
+    if (!startRef.current) return;
 
-      if (activatedRef.current && marqueeRect) {
-        const container = containerRef.current;
-        if (container) {
-          const containerRect = container.getBoundingClientRect();
-          const selectionCanvasRect = screenRectToCanvas(marqueeRect, containerRect, viewport);
+    if (activatedRef.current && marqueeRect) {
+      const container = containerRef.current;
+      if (container) {
+        const containerRect = container.getBoundingClientRect();
+        const selectionCanvasRect = screenRectToCanvas(marqueeRect, containerRect, viewport);
 
-          const intersectedIds = nodes
-            .filter((node) => rectsIntersect(selectionCanvasRect, getNodeRect(node)))
-            .map((node) => node.id);
+        const intersectedIds = nodes
+          .filter((node) => rectsIntersect(selectionCanvasRect, getNodeRect(node)))
+          .map((node) => node.id);
 
-          if (intersectedIds.length > 0 || !isAdditiveRef.current) {
-            onSelect?.(intersectedIds, e.shiftKey || isAdditiveRef.current);
-          }
+        if (intersectedIds.length > 0 || !isAdditiveRef.current) {
+          onSelect?.(intersectedIds, isAdditiveRef.current);
         }
       }
+    }
 
-      startRef.current = null;
-      activatedRef.current = false;
-      setIsSelecting(false);
-      setMarqueeRect(null);
-    },
-    [marqueeRect, containerRef, viewport, nodes, onSelect],
-  );
+    startRef.current = null;
+    activatedRef.current = false;
+    setIsSelecting(false);
+    setMarqueeRect(null);
+  }, [marqueeRect, containerRef, viewport, nodes, onSelect]);
 
   // Clean up on unmount or when selection is interrupted
   useEffect(() => {

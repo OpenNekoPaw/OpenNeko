@@ -2,12 +2,30 @@
 
 import { describe, expect, it } from 'vitest';
 import { alignCanvasPosition, getNodeDragStartDecision, shouldStartNodeDrag } from './useNodeDrag';
+import { isAdditiveCanvasSelectionModifier } from './useMarqueeSelect';
 
 describe('alignCanvasPosition', () => {
   it('aligns nearby coordinates using a screen-space tolerance', () => {
     expect(alignCanvasPosition({ x: 37, y: 64 }, 1)).toEqual({ x: 40, y: 60 });
     expect(alignCanvasPosition({ x: 31, y: 69 }, 1)).toEqual({ x: 31, y: 69 });
     expect(alignCanvasPosition({ x: 31, y: 69 }, 0.5)).toEqual({ x: 40, y: 60 });
+  });
+});
+
+describe('isAdditiveCanvasSelectionModifier', () => {
+  it('supports Shift and platform primary modifiers', () => {
+    expect(
+      isAdditiveCanvasSelectionModifier({ shiftKey: true, metaKey: false, ctrlKey: false }),
+    ).toBe(true);
+    expect(
+      isAdditiveCanvasSelectionModifier({ shiftKey: false, metaKey: true, ctrlKey: false }),
+    ).toBe(true);
+    expect(
+      isAdditiveCanvasSelectionModifier({ shiftKey: false, metaKey: false, ctrlKey: true }),
+    ).toBe(true);
+    expect(
+      isAdditiveCanvasSelectionModifier({ shiftKey: false, metaKey: false, ctrlKey: false }),
+    ).toBe(false);
   });
 });
 

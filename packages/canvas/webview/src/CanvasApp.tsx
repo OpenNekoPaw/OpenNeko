@@ -145,7 +145,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
-  const moveNodeEnd = useCanvasStore((state) => state.moveNodeEnd);
+  const moveNodesEnd = useCanvasStore((state) => state.moveNodesEnd);
   const resizeNodeEnd = useCanvasStore((state) => state.resizeNodeEnd);
   const rotateNodeEnd = useCanvasStore((state) => state.rotateNodeEnd);
   const selectNodes = useCanvasStore((state) => state.selectNodes);
@@ -865,9 +865,10 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     setContextMenu(null);
     clearSelection();
   }, [clearSelection, setContextMenu]);
-  const handleNodeMove = useCallback(
-    (nodeId: string, position: { x: number; y: number }) => moveNodeEnd(nodeId, position),
-    [moveNodeEnd],
+  const handleNodesMove = useCallback(
+    (nodeIds: readonly string[], delta: { readonly x: number; readonly y: number }) =>
+      moveNodesEnd(nodeIds, delta),
+    [moveNodesEnd],
   );
   const handleNodeResizeEnd = useCallback(
     (nodeId: string, size: { width: number; height: number }, position: { x: number; y: number }) =>
@@ -1035,7 +1036,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
                   selectedConnectionIds={selectedConnectionIds}
                   onViewportChange={handleViewportChange}
                   onNodeSelect={handleNodeSelect}
-                  onNodeMove={handleNodeMove}
+                  onNodesMove={handleNodesMove}
                   onNodeResizeEnd={handleNodeResizeEnd}
                   onNodeRotateEnd={handleNodeRotateEnd}
                   onNodeUpdateData={handleNodeUpdateData}

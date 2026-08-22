@@ -8,6 +8,7 @@ export interface CanvasEmbedNodeProps {
   viewport: CanvasViewport;
   isSelected: boolean;
   onSelect?: (nodeId: string, multi: boolean) => void;
+  onTransformStart?: (nodeId: string) => void;
   onDrag?: (nodeId: string, position: { x: number; y: number }) => void;
   onMove?: (nodeId: string, position: { x: number; y: number }) => void;
   onResize?: (
@@ -22,6 +23,7 @@ export interface CanvasEmbedNodeProps {
   ) => void;
   onConnectionStart?: (nodeId: string, anchor: string, e: React.MouseEvent) => void;
   onOpenCanvas?: (canvasPath: string) => void;
+  showTransformHandles?: boolean;
 }
 
 export function CanvasEmbedNode({
@@ -29,12 +31,14 @@ export function CanvasEmbedNode({
   viewport,
   isSelected,
   onSelect,
+  onTransformStart,
   onDrag,
   onMove,
   onResize,
   onResizeEnd,
   onConnectionStart,
   onOpenCanvas,
+  showTransformHandles,
 }: CanvasEmbedNodeProps) {
   const { canvasPath, canvasTitle, thumbnailData } = node.data;
   const fileName = canvasPath.split('/').pop() ?? canvasPath;
@@ -45,11 +49,13 @@ export function CanvasEmbedNode({
       viewport={viewport}
       isSelected={isSelected}
       onSelect={onSelect}
+      onTransformStart={onTransformStart}
       onDrag={onDrag}
       onMove={onMove}
       onResize={onResize}
       onResizeEnd={onResizeEnd}
       onConnectionStart={onConnectionStart}
+      showTransformHandles={showTransformHandles}
     >
       <div className="flex flex-col h-full text-xs">
         <div

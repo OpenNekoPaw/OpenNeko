@@ -15,6 +15,8 @@ export interface CanvasDropContainerResolution {
 export interface CanvasDropContainerOptions {
   /** Descendants translate with a moved container and therefore cannot become new drop targets. */
   readonly movingSubtree?: boolean;
+  /** Other roots in the same atomic selection gesture cannot become implicit parents. */
+  readonly excludedContainerIds?: ReadonlySet<string>;
 }
 
 const CONTAINER_HEADER_HEIGHT = 48;
@@ -32,6 +34,7 @@ export function resolveCanvasDropContainer(
     : new Set<string>();
   const eligible = nodes.flatMap((container) => {
     if (container.id === movedNodeId || !container.container) return [];
+    if (options.excludedContainerIds?.has(container.id)) return [];
     if (!containsNodeCenter(container, movedNode)) return [];
     if (descendants.has(container.id)) {
       if (options.movingSubtree) return [];
