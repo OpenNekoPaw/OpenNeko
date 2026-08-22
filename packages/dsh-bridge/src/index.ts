@@ -155,6 +155,9 @@ interface Deferred<T> {
   readonly reject: (reason: unknown) => void;
 }
 
+const COMMAND_CONNECTION_CLOSED_DIAGNOSTIC =
+  'Command interrupted because the OpenNeko Agent runtime connection closed. Retry after the runtime is available.';
+
 export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
   const owned = new Map<string, OwnedSession>();
   const promptAdmission = new PromptAdmission<PromptResponse>();
@@ -797,7 +800,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
     const records = [...owned.values()];
     owned.clear();
     for (const record of records) {
-      record.commandAbort?.abort(new Error('OpenNeko ACP bridge closed.'));
+      record.commandAbort?.abort(new Error(COMMAND_CONNECTION_CLOSED_DIAGNOSTIC));
       if (record.inflight !== undefined) record.inflight.cancelRequested = true;
       record.handle.agent.cancel({ kind: 'user' });
       settlePrompt(record);

@@ -519,6 +519,20 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toMatch(/const quiesce[\s\S]*promptAdmission\.close\(\)/u);
   });
 
+  it('records an actionable command diagnostic when connection teardown interrupts compaction', () => {
+    const source = readPackageFile('src/index.ts');
+
+    expect(source).toContain(
+      'Command interrupted because the OpenNeko Agent runtime connection closed. Retry after the runtime is available.',
+    );
+    expect(source).toMatch(
+      /record\.commandAbort\?\.abort\(new Error\(COMMAND_CONNECTION_CLOSED_DIAGNOSTIC\)\)/u,
+    );
+    expect(source).not.toContain(
+      "record.commandAbort?.abort(new Error('OpenNeko ACP bridge closed.'))",
+    );
+  });
+
   it('uses standard ACP mode and model configuration on the same exact Session identity', () => {
     const source = readPackageFile('src/index.ts');
 
