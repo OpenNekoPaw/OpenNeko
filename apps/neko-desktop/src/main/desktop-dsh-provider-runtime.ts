@@ -1,4 +1,10 @@
-import type { Model, Provider, ProviderCredentialReader } from '@neko/host/settings';
+import type { AgentReasoningEffort } from '@neko/agent-contracts';
+import {
+  projectLlmModelCapabilities,
+  type Model,
+  type Provider,
+  type ProviderCredentialReader,
+} from '@neko/host/settings';
 
 const DSH_PI_AI_ROW_ID = 'llm-pi-ai';
 const DSH_CREDENTIAL_ENV_PREFIX = 'OPENNEKO_DSH_PROVIDER_CREDENTIAL_';
@@ -102,6 +108,7 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
           ? (['text', 'image'] as const)
           : (['text'] as const),
       });
+      const reasoningEfforts = projectDshReasoningEfforts(model, provider);
       providerExecutionModels.set(model.id, execution);
       dshModels.push(
         Object.freeze({
@@ -110,6 +117,7 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
           ...(isPositiveInteger(model.contextWindow) ? { contextWindow: model.contextWindow } : {}),
           ...(isPositiveInteger(model.maxOutputTokens) ? { maxTokens: model.maxOutputTokens } : {}),
           input: execution.input,
+          reasoningEfforts,
         }),
       );
     }
@@ -165,6 +173,47 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
     executionCatalog,
     diagnostics: Object.freeze(diagnostics),
   });
+}
+
+function projectDshReasoningEfforts(
+  model: Model,
+  provider: Provider,
+): false | Readonly<Record<string, string | null>> {
+  const capabilities = projectLlmModelCapabilities({ model, provider });
+  if (!capabilities.supportsReasoningEffort) return false;
+
+  const values = capabilities.reasoningEffortValues;
+  if (values === undefined || values.length === 0) {
+    throw new Error(
+      `Host model '${provider.id}/${model.id}' supports reasoning effort without an effort catalog.`,
+    );
+  }
+
+  return Object.freeze(
+    Object.fromEntries(
+      values.map((effort) => {
+        const dshEffort = toDshReasoningEffort(effort);
+        return [dshEffort, dshEffort === 'off' ? null : dshEffort] as const;
+      }),
+    ),
+  );
+}
+
+function toDshReasoningEffort(
+  effort: AgentReasoningEffort,
+): 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' {
+  switch (effort) {
+    case 'none':
+      return 'off';
+    case 'minimal':
+    case 'low':
+    case 'medium':
+    case 'high':
+    case 'xhigh':
+      return effort;
+    default:
+      return assertNever(effort);
+  }
 }
 
 function modelSupportsImageInput(capabilities: readonly string[]): boolean {
@@ -227,4 +276,8 @@ function isPositiveInteger(value: unknown): value is number {
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unsupported Host reasoning effort '${String(value)}'.`);
 }

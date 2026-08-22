@@ -100,6 +100,84 @@ describe('Desktop DSH provider runtime projection', () => {
     expect(JSON.stringify(projection.profilePatchEntries)).toContain('"input":["text","image"]');
   });
 
+  it('projects the canonical Host reasoning effort catalog into the DSH model profile', async () => {
+    const projection = await createDesktopDshProviderRuntimeProjection({
+      providers: [
+        provider({
+          id: 'openai-provider',
+          type: 'openai',
+          protocolProfile: 'openai-responses',
+          requiresApiKey: false,
+        }),
+      ],
+      models: [
+        model({
+          id: 'reasoning-model',
+          providerId: 'openai-provider',
+          capabilities: ['chat', 'reasoning'],
+        }),
+      ],
+      credentials: { read: vi.fn(async () => undefined) },
+    });
+
+    expect(JSON.parse(JSON.stringify(projection.profilePatchEntries))).toMatchObject([
+      {
+        config: {
+          providers: {
+            'openai-provider': {
+              models: [
+                {
+                  id: 'reasoning-model',
+                  reasoningEfforts: {
+                    off: null,
+                    minimal: 'minimal',
+                    low: 'low',
+                    medium: 'medium',
+                    high: 'high',
+                    xhigh: 'xhigh',
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    ]);
+  });
+
+  it('uses explicit custom-gateway effort metadata without inferring extra levels', async () => {
+    const projection = await createDesktopDshProviderRuntimeProjection({
+      providers: [provider({ id: 'custom-gateway', requiresApiKey: false })],
+      models: [
+        model({
+          id: 'custom-reasoning-model',
+          providerId: 'custom-gateway',
+          options: {
+            llmCapabilities: {
+              reasoningEffortValues: ['none', 'low', 'high'],
+            },
+          },
+        }),
+      ],
+      credentials: { read: vi.fn(async () => undefined) },
+    });
+
+    const serializedPatch = JSON.stringify(projection.profilePatchEntries);
+    expect(serializedPatch).toContain('"reasoningEfforts":{"off":null,"low":"low","high":"high"}');
+    expect(serializedPatch).not.toContain('"medium":"medium"');
+    expect(serializedPatch).not.toContain('"none"');
+  });
+
+  it('explicitly removes inherited DSH reasoning for models without Host support', async () => {
+    const projection = await createDesktopDshProviderRuntimeProjection({
+      providers: [provider({ id: 'text-provider', requiresApiKey: false })],
+      models: [model({ id: 'text-model', providerId: 'text-provider' })],
+      credentials: { read: vi.fn(async () => undefined) },
+    });
+
+    expect(JSON.stringify(projection.profilePatchEntries)).toContain('"reasoningEfforts":false');
+  });
+
   it('isolates missing credentials, unsupported providers, and duplicate API model names', async () => {
     const projection = await createDesktopDshProviderRuntimeProjection({
       providers: [

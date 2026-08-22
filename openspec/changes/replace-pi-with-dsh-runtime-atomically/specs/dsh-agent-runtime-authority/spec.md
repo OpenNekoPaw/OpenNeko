@@ -214,6 +214,28 @@ The canonical product contract SHALL preserve the qualified DSH Session, turn, c
 - **THEN** OpenNeko does not expose incomplete arguments or create Tool lifecycle facts from those deltas
 - **AND** the exact DSH `tool/call` and `tool/result` events remain the only Tool presentation authority
 
+### Requirement: Host model capabilities authoritatively configure DSH reasoning
+
+The Host model catalog SHALL remain the sole product authority for model reasoning capability. The Desktop DSH provider projection SHALL reuse the canonical Host capability projector and SHALL express the exact supported effort catalog in the corresponding DSH `llm-pi-ai` model profile. Host effort `none` SHALL map only to DSH `off`; the remaining canonical effort values SHALL preserve their names. A model without explicit Host reasoning support SHALL declare `reasoningEfforts: false` so an installed DSH catalog cannot invent capability through inheritance. OpenNeko SHALL NOT infer an effort from a model name, endpoint, provider default or thinking budget, and SHALL NOT synthesize visible thought content.
+
+#### Scenario: A Host model explicitly supports reasoning effort
+
+- **WHEN** the enabled Host provider/model catalog projects a non-empty canonical reasoning effort set
+- **THEN** the writable DSH profile advertises exactly the corresponding DSH effort keys, with Host `none` represented as DSH `off`
+- **AND** DSH remains responsible for provider request routing and for publishing any resulting reasoning blocks or deltas
+
+#### Scenario: A Host model does not explicitly support reasoning effort
+
+- **WHEN** the Host capability projector reports no reasoning effort support, including a custom gateway without explicit effort metadata
+- **THEN** the DSH model profile declares `reasoningEfforts: false`
+- **AND** OpenNeko does not inherit, guess or synthesize a reasoning capability or thought stream
+
+#### Scenario: The provider emits no reasoning content
+
+- **WHEN** a reasoning-capable DSH turn produces only ordinary assistant text
+- **THEN** the existing transcript renders only that text and the canonical turn status
+- **AND** no placeholder, fabricated summary or hidden chain-of-thought is exposed as reasoning
+
 ### Requirement: Domain Tools preserve package ownership
 
 Generation and Canvas SHALL be the first vertical official domain Tool slice registered in DSH; Cut, Character, World and remaining operation-bearing domain capabilities SHALL follow. DSH SHALL own Tool registration, selection, call identity and execution lifecycle. Each owning package SHALL remain authoritative for the Tool schema, semantic validation, authorization, exact resource identity, business transaction, durable facts and long-running Job. The Host adapter SHALL validate with the package-owned canonical validator before invoking the owning service. Domain capabilities SHALL NOT be wrapped in MCP merely to reach DSH, and direct UI operations SHALL call the same owning application service without creating a hidden Agent turn. Assets resource discovery SHALL NOT register a DSH Tool; it SHALL use the canonical Composer mention and Workspace materialization path.

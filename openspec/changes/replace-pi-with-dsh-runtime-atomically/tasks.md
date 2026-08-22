@@ -64,6 +64,8 @@
 - [x] 4.18 将无成功语义的 Conversation 删除入口原子替换为 DSH Workspace 归档：逐项校验 sender-bound authoritative navigation，再经唯一 DSH domain Conversation service 与 OpenNeko ACP extension 调用公开 `workspaceRegistry.archiveSession`；catalog/binding/Session 与 sibling Conversation 均保留，不通过 metadata-only 隐藏、raw 文件访问或 Renderer 状态伪造成功。生命周期评测 disposition 为 `extend` 现有隔离 Desktop 场景；focused Host/Main/domain 测试、真实 DSH profile 幂等/重启恢复及当前可见 UI blocker 见 `evidence/w4-conversation-archive-route.md` 与 `../archive-dsh-conversations/evidence/`。
 - [x] 4.17 将通用 Agent 能力原子切换到 DSH 官方 `standard` preset：profile 挂载公开 `agent-presets` roster，bridge 在 create/load/resume/model rebuild 时对 exact Agent 调用 `agentPresets.mount()`，并按官方 Web profile 的 agent-plane 清单禁用 `dsh-base` 全局重复 Tool rows。开发闭包经真实 Desktop materializer 启动后完成 ACP initialize、`session/new` 和原生 permission preset read，证明 preset 可挂载且无重复注册；网页 Provider、真实模型请求以及计划/目标/子代理/工作流的完整 ACP/UI 行为仍归 4.13、7.7 和真实 API 发布门禁，不能因本任务勾选而视为通过。
 
+- [x] 4.19 将 Host canonical model reasoning capability 投影到唯一 DSH `llm-pi-ai` model profile：明确 effort catalog 才广告 reasoning，`none` 映射为 DSH `off`，无明确支持时显式 `reasoningEfforts: false`；不得从模型名、endpoint、provider default 或 thinking budget 猜测，也不得新增 provider stream/伪 thought 路径。官方 Provider、custom gateway、non-reasoning、profile serialization 与 existing thought projection 的 97 个聚焦测试通过；当前配置没有显式 reasoning-capable 模型，因此不声明真实 provider reasoning pixels，完整证据和 residual risk 见 `evidence/w7-dsh-reasoning-profile.md`。
+
 ## 5. W2 First Vertical Tool Slice (Generation + Canvas)
 
 - [x] 5.1 冻结 Generation 高层 Tool contract 与最小 operation set，保留 Generation 对 schema、semantic validation、provider routing、authorization、事实与 Job 的 ownership。
