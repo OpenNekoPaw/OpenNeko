@@ -55,6 +55,7 @@ import {
 } from '@neko/host/desktop-shell-state';
 import {
   createAgentRuntimeSettingsAuthority,
+  createAgentPromptImageAdmissionService,
   createAgentRuntimeSettingsRepository,
   createPersistentAgentConversationContextAuthority,
   createDshDomainConversationService,
@@ -252,7 +253,7 @@ import {
 import { DesktopDshPermissionHost } from './desktop-dsh-permission-host';
 import { createDesktopDshComposerConfiguration } from './desktop-dsh-composer-configuration';
 import { DesktopDshSessionHost } from './desktop-dsh-session-host';
-import { createDesktopDshPromptImageAdmission } from './desktop-dsh-prompt-image-admission';
+import { createDesktopDshPromptReferenceBytePort } from './desktop-dsh-prompt-reference-byte-port';
 import {
   resolveDesktopDshConversationContext,
   resolveDesktopDshSurfaceConversationContext,
@@ -2298,12 +2299,22 @@ async function startDesktop(): Promise<void> {
     turnContext: dshPromptContext,
     projection: dshProduct.runtime.client.projection,
   });
-  const dshPromptImages = createDesktopDshPromptImageAdmission({
+  const dshPromptImageAdmission = createAgentPromptImageAdmissionService();
+  const dshPromptReferenceBytes = createDesktopDshPromptReferenceBytePort({
     contexts: agentConversationContexts,
     workspaceGrants: workspaceGrantAuthority,
     createContentRead: (workspacePath) =>
       createNodeHostContentReadService({ workspaceRoot: workspacePath }),
   });
+  const dshPromptImages: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['promptImages'] = {
+    admit: async ({ conversationId, windowId, ...input }) =>
+      dshPromptImageAdmission.admit({
+        ...input,
+        referenceBytes: dshPromptReferenceBytes.authorize({ conversationId, windowId }),
+      }),
+  };
   const dshSessionHost = new DesktopDshSessionHost({
     bindings: dshProduct.runtime.bindings,
     catalog: dshProduct.runtime.conversations.catalog,

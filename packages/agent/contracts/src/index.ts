@@ -11,6 +11,7 @@ export * from './agent-home';
 export * from './retired-conversation-unavailable';
 export * from './agent-image-transport';
 export * from './agent-availability';
+export * from './canonical-base64';
 export * from './agent-interaction-binding';
 export * from './agent-model-catalog';
 export {
