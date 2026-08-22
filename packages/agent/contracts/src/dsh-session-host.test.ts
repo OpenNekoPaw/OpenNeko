@@ -10,6 +10,7 @@ import {
   parseDshSessionHostProjection,
   parseDshSessionHostRequest,
   parseDshSessionHostResult,
+  parseDshTerminalArtifactOpenHostResult,
 } from './dsh-session-host';
 import {
   internalVersionFields,
@@ -730,6 +731,108 @@ describe('DSH Session Host contract', () => {
         ],
       }),
     ).toThrow(/unexpected=uri/u);
+  });
+
+  it('keeps a terminal Markdown artifact separate from the assistant summary', () => {
+    const contentLocator = {
+      file: { authority: 'workspace' as const, path: 'neko/generated/file/story-plan.md' },
+    };
+    expect(
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            kind: 'message',
+            role: 'assistant',
+            turn: 1,
+            step: 0,
+            text: '已完成故事规划。',
+            messageId: 'assistant-final',
+            state: 'final',
+            artifact: {
+              kind: 'reviewable-markdown',
+              title: '故事规划',
+              contentLocator,
+            },
+          },
+        ],
+      }).events,
+    ).toEqual([
+      {
+        kind: 'message',
+        role: 'assistant',
+        turn: 1,
+        step: 0,
+        text: '已完成故事规划。',
+        messageId: 'assistant-final',
+        state: 'final',
+        artifact: {
+          kind: 'reviewable-markdown',
+          title: '故事规划',
+          contentLocator,
+        },
+      },
+    ]);
+    expect(() =>
+      parseDshSessionHostProjection({
+        ...projection(),
+        events: [
+          {
+            kind: 'message',
+            role: 'assistant',
+            turn: 1,
+            step: 0,
+            text: '已完成故事规划。',
+            messageId: 'assistant-final',
+            state: 'final',
+            artifact: {
+              kind: 'reviewable-markdown',
+              title: '故事规划',
+              contentLocator: {
+                ...contentLocator,
+                selector: { kind: 'range', start: 0, end: 1 },
+              },
+            },
+          },
+        ],
+      }),
+    ).toThrow(/Workspace file ContentLocator/u);
+  });
+
+  it('opens a terminal artifact by exact conversation and message identity only', () => {
+    expect(
+      parseDshSessionHostRequest({
+        requestId: 'request-open-artifact',
+        operation: 'terminal-artifact-open',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: 'conversation-1',
+        messageId: 'assistant-final',
+      }),
+    ).toMatchObject({
+      operation: 'terminal-artifact-open',
+      conversationId: 'conversation-1',
+      messageId: 'assistant-final',
+    });
+    expect(
+      parseDshTerminalArtifactOpenHostResult(
+        { requestId: 'request-open-artifact', opened: true },
+        'request-open-artifact',
+      ),
+    ).toEqual({ requestId: 'request-open-artifact', opened: true });
+    expect(() =>
+      parseDshSessionHostRequest({
+        requestId: 'request-open-artifact',
+        operation: 'terminal-artifact-open',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: 'conversation-1',
+        messageId: 'assistant-final',
+        contentLocator: {
+          file: { authority: 'workspace', path: 'neko/generated/file/forged.md' },
+        },
+      }),
+    ).toThrow(/unexpected=contentLocator/u);
   });
 
   it('rejects compatibility fields and accepts only bounded JSON Tool payloads', () => {

@@ -1346,6 +1346,67 @@ describe('DshAgentView content-creation composer', () => {
     expect(view.container.querySelector('[data-agent-thought-state="final"]')).toBeTruthy();
   });
 
+  it('renders a persistent document reference separately from the assistant summary', () => {
+    const onOpenTerminalArtifact = vi.fn();
+    const view = renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-artifact"
+        surfaceKind="workspace"
+        conversationId="conversation-1"
+        projection={{
+          conversationId: 'conversation-1',
+          dshSessionId: 'dsh-session-1',
+          title: 'Workspace planning',
+          inbox: { nextTurn: [], nextStep: [] },
+          events: [
+            {
+              kind: 'message',
+              role: 'assistant',
+              turn: 1,
+              step: 0,
+              text: '已完成故事规划。',
+              messageId: 'assistant-final',
+              state: 'final',
+              artifact: {
+                kind: 'reviewable-markdown',
+                title: '故事规划',
+                contentLocator: {
+                  file: {
+                    authority: 'workspace',
+                    path: 'neko/generated/file/story-plan.md',
+                  },
+                },
+              },
+            },
+          ],
+        }}
+        configuring={false}
+        draft=""
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onOpenTerminalArtifact={onOpenTerminalArtifact}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('已完成故事规划。')).toBeTruthy();
+    const reference = view.container.querySelector(
+      '[data-agent-terminal-artifact="reviewable-markdown"]',
+    );
+    expect(reference).toBeTruthy();
+    fireEvent.click(screen.getByText('故事规划'));
+    expect(onOpenTerminalArtifact).toHaveBeenCalledWith('assistant-final');
+  });
+
   it('renders mixed and resource-only user messages as ordered reference tokens', () => {
     const view = renderAgent(
       <DshAgentView

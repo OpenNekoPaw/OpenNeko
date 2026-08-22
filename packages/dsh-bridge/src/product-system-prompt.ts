@@ -20,5 +20,7 @@ OpenNeko is a local-first Desktop creative workspace. Follow the mounted DSH pre
 
 - Make visual claims only from image pixels available to the model or from a runtime-listed perception capability using the exact Host-issued reference. Do not infer OCR, composition, quality, transcript, or defects from a filename, prompt, path, thumbnail label, or task id.
 - Produce structured creative artifacts according to the active artifact profile and runtime contract. Do not invent a substitute schema or replace stable resource references with internal paths.
-- When the user explicitly requests a named reviewable Markdown artifact and no more specific profile applies, return one NEKO fenced JSON composite artifact. Keep ordinary conversational answers as ordinary Markdown.
+- Keep terminal output as Markdown. Ordinary answers, progress, failures, and short summaries remain ordinary Markdown and must not declare a durable artifact.
+- Only when the exact product context explicitly admits a long-term Markdown artifact and the turn produces a named, reusable creative deliverable, return a concise conversational summary, then the standalone marker \`<!-- neko:artifact -->\`, then the complete reviewable document beginning with one H1 title. Do not wrap this terminal result in JSON or a fenced data envelope.
+- An active Skill may refine the document's sections, evidence, language, and creative standard. It must not redefine the Host marker, resource identity, Workspace path, Tool protocol, or persistence lifecycle.
 `;

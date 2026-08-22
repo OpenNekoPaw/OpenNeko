@@ -114,6 +114,50 @@ describe('DesktopTextEditorRuntime', () => {
     expect(await readFile(path.join(root, 'notes/readme.md'), 'utf8')).toBe('# Saved\n');
   });
 
+  it('opens a persisted Agent Markdown locator through the existing Text Editor path', async () => {
+    const root = await createWorkspace('neko/generated/file/story-plan.md', '# Story plan\n');
+    let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+    const shell = createShell(
+      root,
+      () => workbench,
+      (next) => {
+        workbench = next;
+      },
+    );
+    const runtime = new DesktopTextEditorRuntime({
+      shell,
+      referenceCatalog: emptyReferenceCatalog(),
+      media: emptyMediaService(),
+    });
+
+    const opened = await runtime.openWorkspaceFile({
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      workspaceId: 'workspace-1',
+      contentLocator: {
+        file: {
+          authority: 'workspace',
+          path: 'neko/generated/file/story-plan.md',
+        },
+      },
+      displayLabel: 'Story plan',
+    });
+
+    expect(opened).toMatchObject({
+      status: 'ready',
+      projection: {
+        source: '# Story plan\n',
+        identity: { workspaceId: 'workspace-1' },
+      },
+    });
+    expect(workbench.main.views).toEqual([
+      expect.objectContaining({
+        kind: 'text-editor',
+        documentId: 'neko/generated/file/story-plan.md',
+      }),
+    ]);
+  });
+
   it('delegates reference search to one exact catalog and discards a stale edit sequence', async () => {
     const root = await createWorkspace('notes/readme.md', '@小');
     let workbench = createDefaultDesktopWorkbenchLayout('window-1');
@@ -702,10 +746,7 @@ describe('DesktopTextEditorRuntime', () => {
   });
 });
 
-async function createWorkspace(
-  relativePath: string,
-  source: string,
-): Promise<string> {
+async function createWorkspace(relativePath: string, source: string): Promise<string> {
   const parent = tmpdir();
   await mkdir(parent, { recursive: true });
   const root = await mkdtemp(path.join(parent, 'openneko-text-editor-'));

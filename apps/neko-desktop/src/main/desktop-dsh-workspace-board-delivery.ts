@@ -72,25 +72,13 @@ export class DesktopDshWorkspaceBoardDelivery
   ): Promise<DshWorkspaceBoardArtifactDeliveryOutcome> {
     try {
       const workspace = await this.restoreExactWorkspace(input.workspaceId);
-      const binding = this.bindingFor(workspace);
       const deliveryId = createDshWorkspaceBoardProjectionRequest(input, workspace).process
         .deliveryId;
-      if (await binding.ledger.getReceipt(deliveryId)) return { status: 'accepted' };
-      const results = await this.options.coordinateCanvasMutation(
-        workspace.workspaceId,
-        async () => {
-          const resumed = await binding.coordinator.flush();
-          if (await binding.ledger.getReceipt(deliveryId)) return resumed;
-          const existing = (await binding.ledger.listPending()).some(
-            (task) => task.request.process.deliveryId === deliveryId,
-          );
-          if (existing) return resumed;
-          const request = createDshWorkspaceBoardProjectionRequest(
-            await this.resolveSourceFingerprints(input, workspace),
-            workspace,
-          );
-          return [...resumed, ...(await binding.coordinator.enqueue(request))];
-        },
+      const results = await this.enqueueProjection(workspace, deliveryId, async () =>
+        createDshWorkspaceBoardProjectionRequest(
+          await this.resolveResourceFingerprints(input, workspace),
+          workspace,
+        ),
       );
       const blocked = results.find(
         (result) =>
@@ -118,12 +106,39 @@ export class DesktopDshWorkspaceBoardDelivery
     });
   }
 
-  private async resolveSourceFingerprints(
+  async resolve(
+    input: Parameters<DshDurableMarkdownArtifactPublicationPort['resolve']>[0],
+  ): ReturnType<DshDurableMarkdownArtifactPublicationPort['resolve']> {
+    const workspace = await this.restoreExactWorkspace(input.workspaceId);
+    return resolveDshDurableMarkdownArtifact(input, {
+      read: this.options.createContentRead(workspace.workspacePath),
+    });
+  }
+
+  private async resolveResourceFingerprints(
     input: DshWorkspaceBoardArtifactDeliveryInput,
     workspace: AssetWorkspaceResolution,
   ): Promise<DshWorkspaceBoardArtifactDeliveryInput> {
     const contentRead = this.options.createContentRead(workspace.workspacePath);
-    return resolveDshWorkspaceBoardSourceFingerprints(input, contentRead);
+    return resolveDshWorkspaceBoardResourceFingerprints(input, contentRead);
+  }
+
+  private async enqueueProjection(
+    workspace: AssetWorkspaceResolution,
+    deliveryId: string,
+    createRequest: () => Promise<CanvasWorkspaceProjectionRequest>,
+  ): Promise<readonly CanvasWorkspaceProjectionResult[]> {
+    const binding = this.bindingFor(workspace);
+    if (await binding.ledger.getReceipt(deliveryId)) return [];
+    return this.options.coordinateCanvasMutation(workspace.workspaceId, async () => {
+      const resumed = await binding.coordinator.flush();
+      if (await binding.ledger.getReceipt(deliveryId)) return resumed;
+      const existing = (await binding.ledger.listPending()).some(
+        (task) => task.request.process.deliveryId === deliveryId,
+      );
+      if (existing) return resumed;
+      return [...resumed, ...(await binding.coordinator.enqueue(await createRequest()))];
+    });
   }
 
   private async restoreExactWorkspace(workspaceId: string): Promise<AssetWorkspaceResolution> {
@@ -227,13 +242,40 @@ export async function publishDshDurableMarkdownArtifact(
   };
 }
 
-export async function resolveDshWorkspaceBoardSourceFingerprints(
+export async function resolveDshDurableMarkdownArtifact(
+  input: Parameters<DshDurableMarkdownArtifactPublicationPort['resolve']>[0],
+  ports: { readonly read: Pick<ContentReadService, 'read'> },
+): ReturnType<DshDurableMarkdownArtifactPublicationPort['resolve']> {
+  if (
+    !isWorkspaceFileContentLocator(input.contentLocator) ||
+    input.contentLocator.selector !== undefined
+  ) {
+    throw new Error('Durable Markdown resolution requires a Workspace file ContentLocator.');
+  }
+  const expected = new TextEncoder().encode(input.markdown);
+  const existing = await ports.read.read(input.contentLocator, { maxBytes: expected.byteLength });
+  if (existing.status === 'unavailable') {
+    if (existing.diagnostic.code === 'content-missing') return undefined;
+    throw new Error(`Durable Markdown resolution failed: ${existing.diagnostic.code}.`);
+  }
+  if (
+    existing.bytes.byteLength !== expected.byteLength ||
+    !Buffer.from(existing.bytes).equals(Buffer.from(expected))
+  ) {
+    throw new Error('Durable Markdown resolution conflicts with existing Workspace content.');
+  }
+  return {
+    contentLocator: input.contentLocator,
+    contentFingerprint: input.contentFingerprint,
+  };
+}
+
+export async function resolveDshWorkspaceBoardResourceFingerprints(
   input: DshWorkspaceBoardArtifactDeliveryInput,
   contentRead: Pick<ContentReadService, 'stat'>,
 ): Promise<DshWorkspaceBoardArtifactDeliveryInput> {
   const artifacts = await Promise.all(
     input.artifacts.map(async (artifact) => {
-      if (artifact.role !== 'source') return artifact;
       const source = await contentRead.stat(artifact.contentLocator);
       if (source.status === 'unavailable') {
         throw new Error(`DSH Workspace Board source is unavailable: ${source.diagnostic.code}.`);
@@ -262,11 +304,11 @@ export function createDshWorkspaceBoardProjectionRequest(
     target: input.canvasTurnTarget,
   } as const;
   const deliveryId =
-    input.delivery.kind === 'completed-content-tool'
+    input.delivery.kind === 'completed-tool'
       ? `dsh-tool:${hashStableValue({ ...identity, toolCallId: input.delivery.toolCallId })}`
       : `dsh-turn:${hashStableValue(identity)}`;
   const operationId =
-    input.delivery.kind === 'completed-content-tool'
+    input.delivery.kind === 'completed-tool'
       ? `${input.dshSessionId}:turn:${input.turn}:tool:${input.delivery.toolCallId}`
       : `${input.dshSessionId}:turn:${input.turn}`;
   const createdAt = new Date(input.createdAt).toISOString();
@@ -296,7 +338,7 @@ export function createDshWorkspaceBoardProjectionRequest(
       return {
         kind: artifact.kind,
         title: artifact.title,
-        ...('mimeType' in artifact ? { mimeType: artifact.mimeType } : {}),
+        ...(artifact.mimeType === undefined ? {} : { mimeType: artifact.mimeType }),
         contentLocator: artifact.contentLocator,
         provenance,
       };

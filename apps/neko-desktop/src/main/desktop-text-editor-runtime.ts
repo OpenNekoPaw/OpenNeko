@@ -9,6 +9,7 @@ import {
   createNodeHostContentReadService,
   NodeAuthorizedWorkspaceWriter,
 } from '@neko/content/node';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { NodeTextEditorMarkdownMediaService } from '@neko/text-editor-node';
 import {
@@ -89,6 +90,56 @@ export class DesktopTextEditorRuntime {
   constructor(private readonly options: DesktopTextEditorRuntimeOptions) {
     this.createIdentity = options.createIdentity ?? randomUUID;
     this.watchFile = options.watchFile ?? watchWorkspaceFile;
+  }
+
+  async openWorkspaceFile(input: {
+    readonly windowId: string;
+    readonly rendererSessionId: string;
+    readonly workspaceId: string;
+    readonly contentLocator: WorkspaceFileContentLocator;
+    readonly displayLabel: string;
+  }): Promise<TextEditorHostResult> {
+    if (input.contentLocator.selector !== undefined) {
+      throw new Error('Desktop Text Editor requires a Workspace file ContentLocator.');
+    }
+    const shell = await this.options.shell.getProjection(input.windowId);
+    if (shell.rendererSessionId !== input.rendererSessionId) {
+      throw new Error('Desktop Text Editor request has a stale renderer session.');
+    }
+    const projects = shell.catalog.projects.filter(
+      (candidate) => candidate.workspaceId === input.workspaceId,
+    );
+    if (projects.length !== 1) {
+      throw new Error(`Workspace '${input.workspaceId}' has no exact Desktop project owner.`);
+    }
+    const project = projects[0];
+    if (project === undefined) {
+      throw new Error(`Workspace '${input.workspaceId}' has no Desktop project owner.`);
+    }
+    const tab = shell.window.tabs.find((candidate) => candidate.projectId === project.projectId);
+    if (tab === undefined) {
+      throw new Error(`Workspace '${input.workspaceId}' has no open Desktop project tab.`);
+    }
+    return this.open({
+      identity: {
+        projectId: project.projectId,
+        workspaceId: input.workspaceId,
+        windowId: input.windowId,
+        viewId: 'agent-terminal-artifact',
+        viewInstanceId: tab.viewInstanceId,
+        rendererSessionId: input.rendererSessionId,
+      },
+      item: {
+        resourceId: `agent-terminal-artifact:${input.contentLocator.file.path}`,
+        source: 'files',
+        kind: 'document',
+        label: input.displayLabel,
+        capabilities: ['edit-text'],
+        role: 'content',
+        depth: 0,
+        locator: input.contentLocator,
+      },
+    });
   }
 
   async open(input: {

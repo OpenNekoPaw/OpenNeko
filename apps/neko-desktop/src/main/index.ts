@@ -1986,8 +1986,8 @@ async function startDesktop(): Promise<void> {
       dshSessionId: string,
       conversationId: string,
       trigger:
-        | { readonly kind: 'completed-content-tool'; readonly toolCallId: string }
-        | { readonly kind: 'completed-turn' },
+        | { readonly kind: 'completed-tool'; readonly toolCallId: string }
+        | { readonly kind: 'completed-turn'; readonly turn: number },
     ) => Promise<void>;
   } = {};
   const dshProduct = await startDesktopDshProductRuntime({
@@ -2062,7 +2062,7 @@ async function startDesktop(): Promise<void> {
               notification.sessionId,
               binding.conversationId,
               {
-                kind: 'completed-content-tool',
+                kind: 'completed-tool',
                 toolCallId: notification.update.toolCallId,
               },
             );
@@ -2079,14 +2079,33 @@ async function startDesktop(): Promise<void> {
             resolveBinding: () => bindings.getByDshSessionId(notification.sessionId),
           });
           if (notification.type === 'turn/end') {
+            const terminals = dshProduct.runtime.client.projection
+              .snapshot(notification.sessionId)
+              .events.filter(
+                (event) =>
+                  event.kind === 'turn' &&
+                  event.phase === 'end' &&
+                  event.completedAt === notification.time,
+              );
+            if (terminals.length !== 1) {
+              throw new Error('DSH turn/end has no projected turn identity.');
+            }
+            const terminal = terminals[0];
+            if (terminal?.kind !== 'turn' || terminal.phase !== 'end') {
+              throw new Error('DSH turn/end projected an invalid turn identity.');
+            }
             if (dshWorkspaceBoardDeliveryTrigger.current === undefined) {
               throw new Error('DSH Workspace Board artifact delivery is not initialized.');
             }
-            await dshWorkspaceBoardDeliveryTrigger.current(
-              notification.sessionId,
-              binding.conversationId,
-              { kind: 'completed-turn' },
-            );
+            try {
+              await dshWorkspaceBoardDeliveryTrigger.current(
+                notification.sessionId,
+                binding.conversationId,
+                { kind: 'completed-turn', turn: terminal.turn },
+              );
+            } finally {
+              dshTurnCanvasTargets.releaseTurn(notification.sessionId, terminal.turn);
+            }
           }
           publishDshChanged(DSH_SESSION_CHANGED_CHANNEL, {
             conversationId: binding.conversationId,
@@ -2112,38 +2131,31 @@ async function startDesktop(): Promise<void> {
     },
   });
   dshWorkspaceBoardDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
-    let terminalTurn: number | undefined;
     try {
       const snapshot = dshProduct.runtime.client.projection.snapshot(dshSessionId);
-      if (trigger.kind === 'completed-content-tool') {
-        const tool = [...snapshot.events]
-          .reverse()
-          .find((event) => event.kind === 'tool' && event.toolCallId === trigger.toolCallId);
-        if (tool?.kind !== 'tool') {
-          throw new Error(`DSH Tool '${trigger.toolCallId}' has no projected turn identity.`);
-        }
-        await dshWorkspaceBoardArtifactDelivery.deliverCompletedTool({
-          conversationId,
-          dshSessionId,
-          toolCallId: trigger.toolCallId,
-          events: snapshot.events,
-          canvasTurnTarget: dshTurnCanvasTargets.read(dshSessionId, tool.turn),
-        });
-      } else {
-        const terminal = [...snapshot.events]
-          .reverse()
-          .find((event) => event.kind === 'turn' && event.phase === 'end');
-        if (terminal?.kind !== 'turn' || terminal.phase !== 'end') {
-          throw new Error('DSH terminal delivery has no projected turn identity.');
-        }
-        terminalTurn = terminal.turn;
+      if (trigger.kind === 'completed-turn') {
         await dshWorkspaceBoardArtifactDelivery.deliverTerminal({
           conversationId,
           dshSessionId,
+          turn: trigger.turn,
           events: snapshot.events,
-          canvasTurnTarget: dshTurnCanvasTargets.read(dshSessionId, terminal.turn),
+          canvasTurnTarget: dshTurnCanvasTargets.read(dshSessionId, trigger.turn),
         });
+        return;
       }
+      const tool = [...snapshot.events]
+        .reverse()
+        .find((event) => event.kind === 'tool' && event.toolCallId === trigger.toolCallId);
+      if (tool?.kind !== 'tool') {
+        throw new Error(`DSH Tool '${trigger.toolCallId}' has no projected turn identity.`);
+      }
+      await dshWorkspaceBoardArtifactDelivery.deliverCompletedTool({
+        conversationId,
+        dshSessionId,
+        toolCallId: trigger.toolCallId,
+        events: snapshot.events,
+        canvasTurnTarget: dshTurnCanvasTargets.read(dshSessionId, tool.turn),
+      });
     } catch (error) {
       host.diagnostics?.report({
         code: 'dsh-workspace-board-artifact-delivery-failed',
@@ -2151,10 +2163,6 @@ async function startDesktop(): Promise<void> {
         message: error instanceof Error ? error.message : String(error),
         metadata: { dshSessionId, conversationId },
       });
-    } finally {
-      if (terminalTurn !== undefined) {
-        dshTurnCanvasTargets.releaseTurn(dshSessionId, terminalTurn);
-      }
     }
   };
   if (!dshHandlers) throw new Error('DSH runtime did not compose its product handlers.');
@@ -2328,6 +2336,22 @@ async function startDesktop(): Promise<void> {
     turnCanvasTargets: dshTurnCanvasTargets,
     promptContext: dshPromptContext,
     promptImages: dshPromptImages,
+    terminalArtifacts: dshWorkspaceBoardArtifactDelivery,
+    openTerminalArtifact: async ({ windowId, rendererSessionId, conversationId, reference }) => {
+      const context = await agentConversationContexts.readContext(conversationId);
+      if (context?.kind !== 'workspace') {
+        throw new Error(
+          `Agent Conversation '${conversationId}' has no Workspace document authority.`,
+        );
+      }
+      await textEditorRuntime.openWorkspaceFile({
+        windowId,
+        rendererSessionId,
+        workspaceId: context.workspaceId,
+        contentLocator: reference.contentLocator,
+        displayLabel: reference.title,
+      });
+    },
     imagePreviews: {
       project: ({ windowId, rendererSessionId, conversationId, attachment, read }) => {
         const lease = resourceRegistry.registerResourceTree(

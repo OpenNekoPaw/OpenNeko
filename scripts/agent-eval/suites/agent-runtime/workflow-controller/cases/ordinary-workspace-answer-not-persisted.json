@@ -1,0 +1,86 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "ordinary-workspace-answer-not-persisted",
+  "suiteId": "agent-runtime.workflow-controller",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Ask an ordinary informational question in a Workspace conversation without requesting a durable creative document.",
+    "canonicalPath": [
+      "Workspace-bound Desktop Agent turn",
+      "ordinary Markdown final answer",
+      "no terminal artifact admission",
+      "no generated Markdown publication"
+    ],
+    "observables": [
+      {
+        "ref": "ordinary-turn-facts",
+        "kind": "runtime-fact",
+        "description": "Ordinary final answer and terminal idle facts with no artifact wire syntax exposed.",
+        "required": true
+      },
+      {
+        "ref": "generated-file-absence",
+        "kind": "post-check",
+        "description": "The canonical generated Markdown directory remains absent in the isolated empty Workspace.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent answers normally, the conversation retains the whole ordinary answer, and no Markdown artifact directory is created.",
+    "expectedFailure": "Artifact wire syntax, automatic file persistence, an empty answer, or a non-idle turn fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "Briefly explain the difference between a risk and an issue. This is an ordinary informational answer, not a request to create or save a durable document. Include the exact token ORDINARY_ONLY."
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "ordinary-turn-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["ORDINARY_ONLY"],
+      "evidenceRef": "ordinary-turn-facts"
+    },
+    {
+      "id": "no-wire",
+      "kind": "final-answer",
+      "mode": "not-contains",
+      "text": ["<!-- neko:artifact -->"],
+      "evidenceRef": "ordinary-turn-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "ordinary-turn-facts"
+    }
+  ],
+  "artifactChecks": [
+    {
+      "id": "no-generated-markdown",
+      "kind": "file-absent",
+      "evidenceRef": "generated-file-absence",
+      "path": "neko/generated/file"
+    }
+  ],
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
+}

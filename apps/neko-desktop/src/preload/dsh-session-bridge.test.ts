@@ -124,6 +124,27 @@ describe('DSH Session preload bridge', () => {
     });
   });
 
+  it('opens a terminal artifact by exact message identity without exposing its path', async () => {
+    state.invoke.mockImplementation(async (channel: string, request: Record<string, unknown>) => {
+      if (channel.endsWith('bootstrap:get')) return bootstrap(request.requestId as string);
+      expect(channel).toBe(DSH_SESSION_HOST_CHANNEL);
+      return { requestId: request.requestId, opened: true };
+    });
+    const bridge = requireBridge();
+    await bridge.bootstrap.get();
+
+    await bridge.dshSessions.openTerminalArtifact('conversation-1', 'assistant-final');
+
+    expect(state.invoke).toHaveBeenLastCalledWith(DSH_SESSION_HOST_CHANNEL, {
+      requestId: expect.any(String),
+      operation: 'terminal-artifact-open',
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      conversationId: 'conversation-1',
+      messageId: 'assistant-final',
+    });
+  });
+
   it('routes composer model, media model, and mode through strict sender-bound operations', async () => {
     const configuration = {
       models: [

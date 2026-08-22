@@ -54,6 +54,12 @@ export interface DshSessionImageAttachmentIdentity {
   readonly height: number;
 }
 
+export interface DshSessionTerminalArtifactReference {
+  readonly kind: 'reviewable-markdown';
+  readonly title: string;
+  readonly contentLocator: WorkspaceFileContentLocator;
+}
+
 export type DshSessionHostEvent =
   | {
       readonly kind: 'message';
@@ -69,6 +75,7 @@ export type DshSessionHostEvent =
       readonly text: string;
       readonly messageId: string;
       readonly state: 'streaming' | 'final';
+      readonly artifact?: DshSessionTerminalArtifactReference;
     }
   | {
       readonly kind: 'thought';
@@ -254,6 +261,10 @@ export type DshSessionHostRequest =
     })
   | (DshSessionHostConversationRequest & { readonly operation: 'image-previews-release' })
   | (DshSessionHostConversationRequest & {
+      readonly operation: 'terminal-artifact-open';
+      readonly messageId: string;
+    })
+  | (DshSessionHostConversationRequest & {
       readonly operation: 'inbox-remove';
       readonly messageId: string;
     })
@@ -316,6 +327,11 @@ export interface DshImageAttachmentPreviewsReleaseHostResult {
   readonly released: true;
 }
 
+export interface DshTerminalArtifactOpenHostResult {
+  readonly requestId: string;
+  readonly opened: true;
+}
+
 export interface DshComposerConfigurationHostResult {
   readonly requestId: string;
   readonly configuration: DshComposerConfigurationProjection;
@@ -356,6 +372,7 @@ export interface OpenNekoDshSessionBridge {
       attachmentId: string,
     ): Promise<DshImageAttachmentPreviewHostResult['preview']>;
     releaseImageAttachmentPreviews(conversationId: string): Promise<void>;
+    openTerminalArtifact(conversationId: string, messageId: string): Promise<void>;
     getComposerConfiguration(
       workbenchInstanceId: string,
       agentSurfaceId: string,
@@ -527,6 +544,22 @@ export function parseDshSessionHostRequest(value: unknown): DshSessionHostReques
     return {
       ...base,
       operation: 'inbox-remove',
+      conversationId,
+      messageId: requireIdentity(record.messageId, 'messageId'),
+    };
+  }
+  if (record.operation === 'terminal-artifact-open') {
+    requireExactKeys(record, [
+      'requestId',
+      'operation',
+      'windowId',
+      'rendererSessionId',
+      'conversationId',
+      'messageId',
+    ]);
+    return {
+      ...base,
+      operation: 'terminal-artifact-open',
       conversationId,
       messageId: requireIdentity(record.messageId, 'messageId'),
     };
@@ -1153,6 +1186,19 @@ export function parseDshImageAttachmentPreviewsReleaseHostResult(
   return { requestId, released: true };
 }
 
+export function parseDshTerminalArtifactOpenHostResult(
+  value: unknown,
+  expectedRequestId: string,
+): DshTerminalArtifactOpenHostResult {
+  const record = requireRecord(value, 'DSH terminal artifact open result');
+  requireExactKeys(record, ['requestId', 'opened']);
+  const requestId = requireIdentity(record.requestId, 'requestId');
+  if (requestId !== expectedRequestId || record.opened !== true) {
+    throw new Error('DSH terminal artifact open result is invalid.');
+  }
+  return { requestId, opened: true };
+}
+
 export function parseDshSessionChangedEvent(value: unknown): DshSessionChangedEvent {
   const record = requireRecord(value, 'DSH Session changed event');
   requireExactKeys(record, ['conversationId']);
@@ -1209,7 +1255,11 @@ function parseEvent(value: unknown): DshSessionHostEvent {
       };
     }
     if (record.role !== 'assistant') throw new Error('DSH Session message role is unsupported.');
-    requireExactKeys(record, ['kind', 'role', 'turn', 'step', 'text', 'messageId', 'state']);
+    requireAllowedKeys(
+      record,
+      ['kind', 'role', 'turn', 'step', 'text', 'messageId', 'state', 'artifact'],
+      ['kind', 'role', 'turn', 'step', 'text', 'messageId', 'state'],
+    );
     return {
       kind: 'message',
       role: 'assistant',
@@ -1218,6 +1268,9 @@ function parseEvent(value: unknown): DshSessionHostEvent {
       text: requireIdentity(record.text, 'event.text'),
       messageId: requireIdentity(record.messageId, 'event.messageId'),
       state: parseAssistantOutputState(record.state),
+      ...(record.artifact === undefined
+        ? {}
+        : { artifact: parseTerminalArtifactReference(record.artifact) }),
     };
   }
   if (record.kind === 'thought') {
@@ -1341,6 +1394,27 @@ function parseEvent(value: unknown): DshSessionHostEvent {
     };
   }
   throw new Error(`DSH Session event kind '${String(record.kind)}' is unsupported.`);
+}
+
+function parseTerminalArtifactReference(value: unknown): DshSessionTerminalArtifactReference {
+  const record = requireRecord(value, 'DSH Session terminal artifact reference');
+  requireExactKeys(record, ['kind', 'title', 'contentLocator']);
+  if (record.kind !== 'reviewable-markdown') {
+    throw new Error('DSH Session terminal artifact kind is unsupported.');
+  }
+  const locator = validateContentLocator(record.contentLocator);
+  if (
+    !locator.ok ||
+    !isWorkspaceFileContentLocator(locator.locator) ||
+    locator.locator.selector !== undefined
+  ) {
+    throw new Error('DSH Session terminal artifact requires a Workspace file ContentLocator.');
+  }
+  return {
+    kind: 'reviewable-markdown',
+    title: requireIdentity(record.title, 'terminal artifact title'),
+    contentLocator: locator.locator,
+  };
 }
 
 function parseUserMessageContent(value: unknown): readonly DshSessionUserMessageBlock[] {

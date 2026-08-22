@@ -17,6 +17,7 @@ import {
   parseDshImageAttachmentPreviewsReleaseHostResult,
   parseDshSessionChangedEvent,
   parseDshSessionHostResult,
+  parseDshTerminalArtifactOpenHostResult,
   type DshSessionHostResult,
   type OpenNekoDshSessionBridge,
 } from '@neko/agent-contracts/dsh-session-host';
@@ -509,6 +510,19 @@ const bridge: OpenNekoDesktopBridge &
       };
       const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
       parseDshImageAttachmentPreviewsReleaseHostResult(response, request.requestId);
+    },
+    async openTerminalArtifact(conversationId, messageId) {
+      const context = requireDesktopWindowContext();
+      const request = {
+        requestId: nextRequestId('dsh-session-terminal-artifact-open'),
+        operation: 'terminal-artifact-open' as const,
+        windowId: context.windowId,
+        rendererSessionId: context.rendererSessionId,
+        conversationId,
+        messageId,
+      };
+      const response: unknown = await ipcRenderer.invoke(DSH_SESSION_HOST_CHANNEL, request);
+      parseDshTerminalArtifactOpenHostResult(response, request.requestId);
     },
     async getComposerConfiguration(workbenchInstanceId, agentSurfaceId) {
       const context = requireDesktopWindowContext();

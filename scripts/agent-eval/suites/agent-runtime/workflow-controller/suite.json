@@ -87,6 +87,18 @@
       "visibility": "public"
     },
     {
+      "id": "explicit-markdown-artifact-delivery",
+      "file": "cases/explicit-markdown-artifact-delivery.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "ordinary-workspace-answer-not-persisted",
+      "file": "cases/ordinary-workspace-answer-not-persisted.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
       "id": "cut-context-handoff",
       "file": "cases/cut-context-handoff.json",
       "group": "regression",

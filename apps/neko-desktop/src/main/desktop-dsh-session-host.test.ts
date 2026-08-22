@@ -856,6 +856,132 @@ describe('Desktop DSH Session Host', () => {
     ]);
   });
 
+  it('projects only the conversational summary from an admitted final Markdown artifact', async () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 0,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 0 },
+    });
+    projection.acceptSessionEvent({
+      sessionId: identity.dshSessionId,
+      sequence: 1,
+      time: 1_001,
+      type: 'step/start',
+      data: { turn: 0, step: 0 },
+    });
+    projection.acceptSessionUpdate({
+      sessionId: identity.dshSessionId,
+      _meta: {
+        opennekoSequence: 2,
+        opennekoTurn: 0,
+        opennekoStep: 0,
+        opennekoFrameIndex: 0,
+        opennekoFrameCount: 1,
+        opennekoMessagePhase: 'final',
+      },
+      update: {
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'assistant-artifact',
+        content: {
+          type: 'text',
+          text: 'Saved the plan.\n\n<!-- neko:artifact -->\n\n# Durable Plan\n\nFull body.',
+        },
+      },
+    });
+
+    const resolveTerminalArtifact = vi.fn(async () => ({
+      messageId: 'assistant-artifact',
+      title: 'Durable Plan',
+      contentLocator: {
+        file: { authority: 'workspace' as const, path: 'neko/generated/file/durable-plan.md' },
+      },
+    }));
+    const result = requireSessionResult(
+      await createHost({
+        projection,
+        resolveTerminalArtifact,
+        catalogContext: {
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'grant-1',
+        },
+      }).execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-artifact-summary',
+          operation: 'snapshot',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          conversationId: identity.conversationId,
+        },
+      ),
+    );
+
+    expect(result.projection.events).toContainEqual(
+      expect.objectContaining({
+        kind: 'message',
+        role: 'assistant',
+        text: 'Saved the plan.',
+        state: 'final',
+        artifact: {
+          kind: 'reviewable-markdown',
+          title: 'Durable Plan',
+          contentLocator: {
+            file: { authority: 'workspace', path: 'neko/generated/file/durable-plan.md' },
+          },
+        },
+      }),
+    );
+    expect(resolveTerminalArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: identity.conversationId,
+        dshSessionId: identity.dshSessionId,
+        messageId: 'assistant-artifact',
+      }),
+    );
+    expect(JSON.stringify(result.projection.events)).not.toContain('Full body.');
+  });
+
+  it('opens only the exact persisted terminal artifact selected by message identity', async () => {
+    const openTerminalArtifact = vi.fn(async () => undefined);
+    const resolveTerminalArtifact = vi.fn(async () => ({
+      messageId: 'assistant-artifact',
+      title: 'Durable Plan',
+      contentLocator: {
+        file: { authority: 'workspace' as const, path: 'neko/generated/file/durable-plan.md' },
+      },
+    }));
+    const result = await createHost({ resolveTerminalArtifact, openTerminalArtifact }).execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      {
+        requestId: 'request-open-artifact',
+        operation: 'terminal-artifact-open',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        conversationId: identity.conversationId,
+        messageId: 'assistant-artifact',
+      },
+    );
+
+    expect(result).toEqual({ requestId: 'request-open-artifact', opened: true });
+    expect(openTerminalArtifact).toHaveBeenCalledWith({
+      windowId: 'window-1',
+      rendererSessionId: 'renderer-1',
+      conversationId: identity.conversationId,
+      messageId: 'assistant-artifact',
+      reference: {
+        kind: 'reviewable-markdown',
+        title: 'Durable Plan',
+        contentLocator: {
+          file: { authority: 'workspace', path: 'neko/generated/file/durable-plan.md' },
+        },
+      },
+    });
+  });
+
   it('delegates the exact DSH context-pressure read model without recalculation', async () => {
     const projection = new DshAcpProjection();
     projection.acceptContextPressure({
@@ -1179,6 +1305,13 @@ function createHost(overrides: {
     import('@neko/agent-contracts/dsh-session-host').DshComposerMaterializedAssetProjection
   >;
   readonly turnCanvasTargets?: ReturnType<typeof createDshTurnCanvasTargetOwner>;
+  readonly catalogContext?: import('@neko/agent-contracts').AgentConversationContext;
+  readonly resolveTerminalArtifact?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['terminalArtifacts']['resolveTerminalArtifact'];
+  readonly openTerminalArtifact?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['openTerminalArtifact'];
 }) {
   return new DesktopDshSessionHost({
     bindings: {
@@ -1190,7 +1323,7 @@ function createHost(overrides: {
         title: 'Create in project',
         createdAt: '2026-08-21T00:00:00.000Z',
         updatedAt: '2026-08-21T00:00:00.000Z',
-        context: {
+        context: overrides.catalogContext ?? {
           kind: 'assistant' as const,
           assistantSpaceId: 'assistant-space:test',
           baseGrantIds: [],
@@ -1247,6 +1380,10 @@ function createHost(overrides: {
     promptImages: {
       admit: overrides.admitPromptImages ?? vi.fn(async () => []),
     },
+    terminalArtifacts: {
+      resolveTerminalArtifact: overrides.resolveTerminalArtifact ?? vi.fn(async () => undefined),
+    },
+    openTerminalArtifact: overrides.openTerminalArtifact ?? vi.fn(async () => undefined),
     imagePreviews: {
       project:
         overrides.projectImagePreview ??

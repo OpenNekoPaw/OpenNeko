@@ -407,6 +407,24 @@ export function DesktopAgentSurface({
     },
     [effectiveConversationId],
   );
+  const openTerminalArtifact = useCallback(
+    async (messageId: string) => {
+      if (effectiveConversationId === undefined) {
+        setOperationError('Opening a persisted document requires an exact Conversation.');
+        return;
+      }
+      setOperationError(undefined);
+      try {
+        await window.openNekoDesktop.dshSessions.openTerminalArtifact(
+          effectiveConversationId,
+          messageId,
+        );
+      } catch (error) {
+        setOperationError(describeError(error));
+      }
+    },
+    [effectiveConversationId],
+  );
 
   useEffect(
     () => () => {
@@ -461,6 +479,7 @@ export function DesktopAgentSurface({
       onRestartRuntime={() => void restartRuntime()}
       onRequestMentions={(filter) => void requestMentions(filter)}
       onMaterializeAsset={materializeAsset}
+      onOpenTerminalArtifact={(messageId) => void openTerminalArtifact(messageId)}
       onResolveImageAttachmentPreview={resolveImageAttachmentPreview}
       onSubmit={submit}
     />

@@ -97,11 +97,33 @@ describe('DSH Conversation turn context', () => {
       canvas: { resolveTurnContext },
     });
 
-    await expect(resolver.resolve('conversation-1')).resolves.toContain('Workspace Board');
+    const prompt = await resolver.resolve('conversation-1');
+    expect(prompt).toContain('Workspace Board');
+    expect(prompt).toContain('Workspace reviewable Markdown admission');
+    expect(prompt).toContain('reviewable-markdown');
+    expect(prompt).toContain('active Skill may require a stricter creative structure');
     expect(resolveTurnContext).toHaveBeenCalledWith(
       'workspace-1',
       createCanvasWorkspaceBoardTarget('workspace-1'),
     );
+  });
+
+  it('does not admit durable Markdown artifacts outside Workspace context', async () => {
+    const resolver = createDshConversationTurnContextResolver({
+      contexts: {
+        readContext: async () => ({
+          kind: 'assistant' as const,
+          assistantSpaceId: 'assistant-1',
+          baseGrantIds: [],
+        }),
+      },
+      workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
+      canvas: { resolveTurnContext: vi.fn() },
+    });
+
+    const prompt = await resolver.resolve('conversation-assistant');
+    expect(prompt).not.toContain('Workspace reviewable Markdown admission');
+    expect(prompt).not.toContain('reviewable-markdown');
   });
 
   it('resolves the selected exact Canvas and rejects a cross-Workspace target', async () => {

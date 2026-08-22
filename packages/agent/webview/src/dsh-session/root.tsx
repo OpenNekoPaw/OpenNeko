@@ -102,6 +102,7 @@ export interface DshAgentViewProps {
   readonly onResolveImageAttachmentPreview?: (
     attachmentId: string,
   ) => Promise<DshImageAttachmentPreviewHostResult['preview']>;
+  readonly onOpenTerminalArtifact?: (messageId: string) => void;
   readonly onSubmit: (
     target: DshConversationCreationTarget,
     input: DshComposerSubmitInput,
@@ -447,6 +448,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
                 copy={copy}
                 event={event}
                 key={eventKey(event, index)}
+                onOpenTerminalArtifact={props.onOpenTerminalArtifact}
                 onResolveImageAttachmentPreview={props.onResolveImageAttachmentPreview}
               />
             ))}
@@ -1179,10 +1181,12 @@ function assertImagePreviewMatches(
 function DshSessionEvent({
   copy,
   event,
+  onOpenTerminalArtifact,
   onResolveImageAttachmentPreview,
 }: {
   readonly copy: DshAgentCopy;
   readonly event: DshSessionHostEvent;
+  readonly onOpenTerminalArtifact?: DshAgentViewProps['onOpenTerminalArtifact'];
   readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
 }): JSX.Element | null {
   if (event.kind === 'thought') {
@@ -1244,6 +1248,13 @@ function DshSessionEvent({
                       data-agent-message-state={event.state}
                     >
                       <MarkdownDocumentView className="markdown-content" value={event.text} />
+                      {event.artifact === undefined ? null : (
+                        <TerminalArtifactReference
+                          artifact={event.artifact}
+                          messageId={event.messageId}
+                          onOpen={onOpenTerminalArtifact}
+                        />
+                      )}
                     </div>
                   </div>
                 )}
@@ -1284,6 +1295,39 @@ function DshSessionEvent({
           </span>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TerminalArtifactReference({
+  artifact,
+  messageId,
+  onOpen,
+}: {
+  readonly artifact: NonNullable<
+    Extract<
+      DshSessionHostEvent,
+      { readonly kind: 'message'; readonly role: 'assistant' }
+    >['artifact']
+  >;
+  readonly messageId: string;
+  readonly onOpen?: DshAgentViewProps['onOpenTerminalArtifact'];
+}): JSX.Element {
+  const projection = projectPathReferenceToken({
+    path: projectContentLocatorPath(artifact.contentLocator),
+    label: artifact.title,
+  });
+  return (
+    <div className="mt-2" data-agent-terminal-artifact="reviewable-markdown">
+      <ReferenceToken
+        kind={projection.kind}
+        label={projection.label}
+        title={projection.title}
+        meta={projection.meta}
+        thumbnailSrc={projection.thumbnailSrc}
+        variant="inline"
+        onClick={onOpen === undefined ? undefined : () => onOpen(messageId)}
+      />
     </div>
   );
 }

@@ -71,6 +71,13 @@ Each executable Conversation SHALL reference one exact DSH Session identity. DSH
 - **AND** the bridge applies it only when that exact message is claimed
 - **AND** later Canvas catalog or Renderer selection changes do not retarget the queued message
 
+#### Scenario: Project content located inside a document
+
+- **WHEN** a completed Content Tool returns a chapter, page, text range or image whose canonical `ContentLocator` contains a selector
+- **THEN** the exact turn Canvas target receives one stable parent document source identified by the same file locator without a selector
+- **AND** each selected source keeps its exact selector and declares the parent document artifact as its source relation
+- **AND** repeated Tool calls reuse the same parent and selected-content nodes instead of creating duplicate document roots or retaining image-only wrapper entries
+
 #### Scenario: Selected Canvas becomes unavailable
 
 - **WHEN** the selected exact Canvas is missing, disabled, belongs to another Workspace or cannot be summarized

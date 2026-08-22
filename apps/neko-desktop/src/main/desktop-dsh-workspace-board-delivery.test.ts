@@ -5,266 +5,96 @@ import { join } from 'node:path';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createEmptyCanvasData, planCanvasWorkspaceBoardProjection } from '@neko/canvas-domain';
 import { NodeAuthorizedWorkspaceWriter } from '@neko/content/node';
+import type { DshWorkspaceBoardArtifactDeliveryInput } from '@neko/agent-runtime/application';
 import {
   createDshWorkspaceBoardContentRead,
   createDshWorkspaceBoardProjectionRequest,
   publishDshDurableMarkdownArtifact,
-  resolveDshWorkspaceBoardSourceFingerprints,
+  resolveDshDurableMarkdownArtifact,
+  resolveDshWorkspaceBoardResourceFingerprints,
 } from './desktop-dsh-workspace-board-delivery';
 
 describe('Desktop DSH Workspace Board projection request', () => {
-  it('derives a stable delivery identity without adding fingerprint data to ContentLocator', () => {
-    const workspace: AssetWorkspaceResolution = {
-      workspaceId: 'workspace-1',
-      workspacePath: '/tmp/openneko-workspace',
-      displayName: 'Workspace',
-      locator: { kind: 'relative', value: 'openneko-workspace' },
-    };
-    const input = {
-      workspaceId: 'workspace-1',
-      conversationId: 'conversation-1',
-      dshSessionId: 'dsh-1',
-      turn: 3,
-      createdAt: 2_000,
-      canvasTurnTarget: workspaceBoardTarget(),
-      delivery: { kind: 'completed-turn' as const },
-      artifacts: [
-        {
-          kind: 'file-reference' as const,
-          artifactId: 'content:source',
-          contentFingerprint: 'locator:source',
-          role: 'source' as const,
-          title: 'book.epub',
-          sourceId: 'content:source',
-          contentLocator: { file: { authority: 'workspace' as const, path: 'books/book.epub' } },
-        },
-        analysisArtifact(['content:source']),
-      ],
-    };
+  it('uses a stable completed-Tool identity and reuses the durable file node by ContentLocator', () => {
+    const input = deliveryInput('tool-1');
+    const first = createDshWorkspaceBoardProjectionRequest(input, workspace());
+    const replay = createDshWorkspaceBoardProjectionRequest(input, workspace());
 
-    const first = createDshWorkspaceBoardProjectionRequest(input, workspace);
-    const replay = createDshWorkspaceBoardProjectionRequest(input, workspace);
     expect(first).toEqual(replay);
-    expect(first.process.deliveryId).toMatch(/^dsh-turn:/u);
-    expect(first.target.documentUri).toBeUndefined();
+    expect(first.process.deliveryId).toMatch(/^dsh-tool:/u);
     expect(first.artifacts[0]).toMatchObject({
-      contentLocator: { file: { authority: 'workspace', path: 'books/book.epub' } },
+      kind: 'file-reference',
+      contentLocator: { file: { authority: 'workspace', path: 'notes/analysis.md' } },
+      provenance: { role: 'analysis' },
     });
-    expect(first.artifacts[0]).not.toHaveProperty('contentLocator.fingerprint');
 
     const projected = planCanvasWorkspaceBoardProjection(createEmptyCanvasData('Workspace'), first);
-    expect(projected).toMatchObject({ status: 'projected' });
-    expect(projected.canvasData.nodes).toHaveLength(2);
-    expect(projected.canvasData.connections).toHaveLength(1);
-    expect(projected.canvasData.nodes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: 'file',
-          data: expect.objectContaining({
-            contentLocator: analysisArtifact(['content:source']).contentLocator,
-            mediaType: 'text/markdown',
-          }),
-        }),
-      ]),
-    );
     const replayed = planCanvasWorkspaceBoardProjection(projected.canvasData, replay);
+    expect(projected.status).toBe('projected');
+    expect(projected.canvasData.nodes).toEqual([
+      expect.objectContaining({
+        type: 'file',
+        data: expect.objectContaining({
+          contentLocator: { file: { authority: 'workspace', path: 'notes/analysis.md' } },
+        }),
+      }),
+    ]);
     expect(replayed.status).toBe('noop');
-    expect(replayed.canvasData.nodes).toHaveLength(2);
-    expect(replayed.canvasData.connections).toHaveLength(1);
+    expect(replayed.canvasData.nodes).toHaveLength(1);
   });
 
-  it('changes delivery identity for another DSH turn', () => {
-    const workspace: AssetWorkspaceResolution = {
-      workspaceId: 'workspace-1',
-      workspacePath: '/tmp/openneko-workspace',
-      displayName: 'Workspace',
-      locator: { kind: 'relative', value: 'openneko-workspace' },
-    };
-    const base = {
-      workspaceId: 'workspace-1',
-      conversationId: 'conversation-1',
-      dshSessionId: 'dsh-1',
-      createdAt: 2_000,
-      canvasTurnTarget: workspaceBoardTarget(),
+  it('uses distinct delivery identities for distinct Tool calls', () => {
+    const first = createDshWorkspaceBoardProjectionRequest(deliveryInput('tool-1'), workspace());
+    const second = createDshWorkspaceBoardProjectionRequest(deliveryInput('tool-2'), workspace());
+
+    expect(first.process.deliveryId).not.toBe(second.process.deliveryId);
+  });
+
+  it('uses a stable terminal identity distinct from completed Tools and preserves Markdown type', () => {
+    const base = deliveryInput('unused');
+    const terminalInput = {
+      ...base,
       delivery: { kind: 'completed-turn' as const },
-      artifacts: [analysisArtifact(['source'])],
-    };
-    expect(
-      createDshWorkspaceBoardProjectionRequest({ ...base, turn: 1 }, workspace).process.deliveryId,
-    ).not.toBe(
-      createDshWorkspaceBoardProjectionRequest({ ...base, turn: 2 }, workspace).process.deliveryId,
-    );
+      artifacts: base.artifacts.map((artifact) => ({
+        ...artifact,
+        mimeType: 'text/markdown' as const,
+      })),
+    } satisfies DshWorkspaceBoardArtifactDeliveryInput;
+    const terminal = createDshWorkspaceBoardProjectionRequest(terminalInput, workspace());
+    const tool = createDshWorkspaceBoardProjectionRequest(deliveryInput('tool-1'), workspace());
+
+    expect(terminal.process.deliveryId).toMatch(/^dsh-turn:/u);
+    expect(terminal.process.deliveryId).not.toBe(tool.process.deliveryId);
+    expect(terminal.artifacts[0]).toMatchObject({ mimeType: 'text/markdown' });
   });
 
-  it('resolves source freshness without changing locator identity', async () => {
-    const input = {
-      workspaceId: 'workspace-1',
-      conversationId: 'conversation-1',
-      dshSessionId: 'dsh-1',
-      turn: 1,
-      createdAt: 2_000,
-      canvasTurnTarget: workspaceBoardTarget(),
-      delivery: { kind: 'completed-content-tool' as const, toolCallId: 'tool-1' },
-      artifacts: [
-        {
-          kind: 'file-reference' as const,
-          artifactId: 'content:source',
-          contentFingerprint: 'locator:source',
-          role: 'source' as const,
-          title: 'book.epub',
-          sourceId: 'content:source',
-          contentLocator: {
-            file: { authority: 'workspace' as const, path: 'books/book.epub' },
-          },
-        },
-      ],
-    };
-
-    const resolved = await resolveDshWorkspaceBoardSourceFingerprints(input, {
+  it('resolves freshness for both source and explicitly authored artifacts', async () => {
+    const resolved = await resolveDshWorkspaceBoardResourceFingerprints(deliveryInput('tool-1'), {
       stat: async (locator) => ({
         status: 'ready',
         locator,
         byteLength: 42,
-        fingerprint: { strategy: 'sha256', value: 'book-content' },
+        fingerprint: { strategy: 'sha256', value: 'document-content' },
       }),
     });
 
     expect(resolved.artifacts[0]).toMatchObject({
-      contentFingerprint: 'content:sha256:book-content',
-      contentLocator: { file: { authority: 'workspace', path: 'books/book.epub' } },
+      contentFingerprint: 'content:sha256:document-content',
+      contentLocator: { file: { authority: 'workspace', path: 'notes/analysis.md' } },
     });
   });
 
-  it('gives completed Tools stable identities distinct from each other and the terminal turn', () => {
-    const workspace: AssetWorkspaceResolution = {
-      workspaceId: 'workspace-1',
-      workspacePath: '/tmp/openneko-workspace',
-      displayName: 'Workspace',
-      locator: { kind: 'relative', value: 'openneko-workspace' },
-    };
-    const base = {
-      workspaceId: 'workspace-1',
-      conversationId: 'conversation-1',
-      dshSessionId: 'dsh-1',
-      turn: 1,
-      createdAt: 1_000,
-      canvasTurnTarget: workspaceBoardTarget(),
-      artifacts: [
-        {
-          kind: 'file-reference' as const,
-          artifactId: 'content:source',
-          contentFingerprint: 'locator:source',
-          role: 'source' as const,
-          title: 'book.epub',
-          sourceId: 'content:source',
-          contentLocator: { file: { authority: 'workspace' as const, path: 'books/book.epub' } },
-        },
-      ],
-    };
-    const firstTool = createDshWorkspaceBoardProjectionRequest(
-      { ...base, delivery: { kind: 'completed-content-tool', toolCallId: 'tool-1' } },
-      workspace,
-    );
-    const firstToolReplay = createDshWorkspaceBoardProjectionRequest(
-      { ...base, delivery: { kind: 'completed-content-tool', toolCallId: 'tool-1' } },
-      workspace,
-    );
-    const secondTool = createDshWorkspaceBoardProjectionRequest(
-      { ...base, delivery: { kind: 'completed-content-tool', toolCallId: 'tool-2' } },
-      workspace,
-    );
-    const terminal = createDshWorkspaceBoardProjectionRequest(
-      { ...base, delivery: { kind: 'completed-turn' } },
-      workspace,
-    );
-
-    expect(firstTool).toEqual(firstToolReplay);
-    expect(firstTool.process.deliveryId).toMatch(/^dsh-tool:/u);
-    expect(secondTool.process.deliveryId).not.toBe(firstTool.process.deliveryId);
-    expect(terminal.process.deliveryId).toMatch(/^dsh-turn:/u);
-    expect(terminal.process.deliveryId).not.toBe(firstTool.process.deliveryId);
-  });
-
-  it('reuses an incrementally delivered source when terminal analysis arrives', () => {
-    const workspace: AssetWorkspaceResolution = {
-      workspaceId: 'workspace-1',
-      workspacePath: '/tmp/openneko-workspace',
-      displayName: 'Workspace',
-      locator: { kind: 'relative', value: 'openneko-workspace' },
-    };
-    const source = {
-      kind: 'image' as const,
-      artifactId: 'content:image',
-      contentFingerprint: 'content:sha256:image',
-      role: 'source' as const,
-      title: 'page.jpg',
-      sourceId: 'content:image',
-      contentLocator: {
-        file: { authority: 'workspace' as const, path: 'books/book.epub' },
-        selector: { kind: 'entry' as const, path: 'images/page.jpg' },
-      },
-    };
-    const base = {
-      workspaceId: 'workspace-1',
-      conversationId: 'conversation-1',
-      dshSessionId: 'dsh-1',
-      turn: 1,
-      canvasTurnTarget: workspaceBoardTarget(),
-    };
-    const incremental = createDshWorkspaceBoardProjectionRequest(
-      {
-        ...base,
-        createdAt: 1_000,
-        delivery: { kind: 'completed-content-tool', toolCallId: 'document-1' },
-        artifacts: [source],
-      },
-      workspace,
-    );
-    const terminal = createDshWorkspaceBoardProjectionRequest(
-      {
-        ...base,
-        createdAt: 2_000,
-        delivery: { kind: 'completed-turn' },
-        artifacts: [source, analysisArtifact([source.artifactId])],
-      },
-      workspace,
-    );
-
-    const afterIncremental = planCanvasWorkspaceBoardProjection(
-      createEmptyCanvasData('Workspace'),
-      incremental,
-    );
-    const afterTerminal = planCanvasWorkspaceBoardProjection(afterIncremental.canvasData, terminal);
-
-    expect(afterIncremental.canvasData.nodes).toHaveLength(1);
-    expect(afterTerminal.canvasData.nodes).toHaveLength(2);
-    expect(afterTerminal.canvasData.connections).toHaveLength(1);
-    expect(afterTerminal.canvasData.nodes.filter((node) => node.type === 'media')).toHaveLength(1);
-  });
-
-  it('projects to the exact Canvas selected at turn admission', () => {
-    const workspace: AssetWorkspaceResolution = {
-      workspaceId: 'workspace-1',
-      workspacePath: '/tmp/openneko-workspace',
-      displayName: 'Workspace',
-      locator: { kind: 'relative', value: 'openneko-workspace' },
-    };
+  it('projects to the exact Canvas admitted for the Turn', () => {
     const request = createDshWorkspaceBoardProjectionRequest(
       {
-        workspaceId: 'workspace-1',
-        conversationId: 'conversation-1',
-        dshSessionId: 'dsh-1',
-        turn: 1,
-        createdAt: 1_000,
+        ...deliveryInput('tool-1'),
         canvasTurnTarget: {
           kind: 'exact-canvas',
           workspaceId: 'workspace-1',
           canvasId: 'neko/boards/story.nkc',
         },
-        delivery: { kind: 'completed-turn' },
-        artifacts: [analysisArtifact(['source'])],
       },
-      workspace,
+      workspace(),
     );
 
     expect(request.target.documentUri).toBe('file:///tmp/openneko-workspace/neko/boards/story.nkc');
@@ -310,7 +140,12 @@ describe('Desktop DSH Workspace Board projection request', () => {
     const writer = new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspacePath });
     const input = {
       workspaceId: 'workspace-1',
-      contentLocator: analysisArtifact(['source']).contentLocator,
+      contentLocator: {
+        file: {
+          authority: 'workspace' as const,
+          path: 'neko/generated/file/durable-analysis.md',
+        },
+      },
       markdown: '# Durable analysis\n\nResult.',
       contentFingerprint: 'markdown:durable',
     };
@@ -330,27 +165,73 @@ describe('Desktop DSH Workspace Board projection request', () => {
       readFile(join(workspacePath, input.contentLocator.file.path), 'utf8'),
     ).resolves.toBe(input.markdown);
   });
+
+  it('resolves a durable Markdown reference from exact persisted bytes', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'openneko-dsh-markdown-resolve-'));
+    const read = createDshWorkspaceBoardContentRead({
+      workspacePath,
+      documentEntryReader: {
+        readEntry: async () => {
+          throw new Error('Unexpected document entry read.');
+        },
+      },
+    });
+    const writer = new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspacePath });
+    const input = {
+      workspaceId: 'workspace-1',
+      contentLocator: {
+        file: {
+          authority: 'workspace' as const,
+          path: 'neko/generated/file/durable-analysis.md',
+        },
+      },
+      markdown: '# Durable analysis\n\nResult.',
+      contentFingerprint: 'sha256:durable',
+    };
+
+    await expect(resolveDshDurableMarkdownArtifact(input, { read })).resolves.toBeUndefined();
+    await publishDshDurableMarkdownArtifact(input, { writer, read });
+    await expect(resolveDshDurableMarkdownArtifact(input, { read })).resolves.toEqual({
+      contentLocator: input.contentLocator,
+      contentFingerprint: input.contentFingerprint,
+    });
+    await writeFile(join(workspacePath, input.contentLocator.file.path), '# Different content\n');
+    await expect(resolveDshDurableMarkdownArtifact(input, { read })).rejects.toThrow(
+      'conflicts with existing Workspace content',
+    );
+  });
 });
 
-function workspaceBoardTarget() {
-  return { kind: 'workspace-board' as const, workspaceId: 'workspace-1' };
+function workspace(): AssetWorkspaceResolution {
+  return {
+    workspaceId: 'workspace-1',
+    workspacePath: '/tmp/openneko-workspace',
+    displayName: 'Workspace',
+    locator: { kind: 'relative', value: 'openneko-workspace' },
+  };
 }
 
-function analysisArtifact(sourceArtifactIds: readonly string[]) {
+function deliveryInput(toolCallId: string): DshWorkspaceBoardArtifactDeliveryInput {
   return {
-    kind: 'file-reference' as const,
-    artifactId: 'content-analysis:analysis',
-    contentFingerprint: 'markdown:analysis',
-    role: 'analysis' as const,
-    title: 'Analysis',
-    sourceId: 'artifact:analysis',
-    sourceArtifactIds,
-    mimeType: 'text/markdown' as const,
-    contentLocator: {
-      file: {
-        authority: 'workspace' as const,
-        path: 'neko/generated/file/analysis.md',
+    workspaceId: 'workspace-1',
+    conversationId: 'conversation-1',
+    dshSessionId: 'dsh-1',
+    turn: 1,
+    createdAt: 1_000,
+    canvasTurnTarget: { kind: 'workspace-board' as const, workspaceId: 'workspace-1' },
+    delivery: { kind: 'completed-tool' as const, toolCallId },
+    artifacts: [
+      {
+        kind: 'file-reference' as const,
+        artifactId: 'content:analysis',
+        contentFingerprint: 'locator:analysis',
+        role: 'analysis' as const,
+        title: 'analysis.md',
+        sourceId: 'content:analysis',
+        contentLocator: {
+          file: { authority: 'workspace' as const, path: 'notes/analysis.md' },
+        },
       },
-    },
+    ],
   };
 }

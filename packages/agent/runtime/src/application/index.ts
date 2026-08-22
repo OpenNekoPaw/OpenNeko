@@ -1,5 +1,6 @@
 export * from './agent-domain-binding-service';
 export * from './agent-prompt-image-admission';
+export * from './agent-terminal-markdown';
 export * from './dsh-domain-conversation-service';
 export * from './conversation-dsh-session-binding';
 export * from './conversation-dsh-session-binding-repository';

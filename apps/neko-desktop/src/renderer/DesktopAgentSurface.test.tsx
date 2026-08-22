@@ -174,6 +174,7 @@ const dshSessions = {
   })),
   cancel: vi.fn(async () => projection),
   removeInboxMessage: vi.fn(async () => projection),
+  openTerminalArtifact: vi.fn(async () => undefined),
   getImageAttachmentPreview: vi.fn(async () => ({
     url: 'openneko://resource/lease-1/image',
     mediaType: 'image/png' as const,
@@ -235,6 +236,7 @@ beforeEach(() => {
   });
   dshSessions.cancel.mockResolvedValue(projection);
   dshSessions.removeInboxMessage.mockResolvedValue(projection);
+  dshSessions.openTerminalArtifact.mockResolvedValue(undefined);
   dshSessions.releaseImageAttachmentPreviews.mockResolvedValue(undefined);
   dshSessions.getComposerConfiguration.mockResolvedValue(composerConfiguration);
   dshSessions.selectComposerModel.mockResolvedValue({
