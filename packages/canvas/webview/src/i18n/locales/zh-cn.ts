@@ -295,6 +295,7 @@ export const zhCN = {
   'port.tooltip': '{direction}：{dataType}',
   loading: '加载画布中...',
   'loadError.title': '无法打开 Canvas 项目',
+  'saveError.title': '画布更改尚未保存',
   'canvas.dropHint': '拖放文件到画布中添加',
   'canvasEmbed.defaultTitle': '画布',
   'canvasEmbed.open': '打开',

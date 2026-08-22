@@ -179,11 +179,12 @@ function isFieldValueType(value: unknown): value is FieldBinding['valueType'] {
 
 export interface UseCanvasHostMessagesReturn {
   isReady: boolean;
-  loadDiagnostic: CanvasLoadDiagnostic | null;
+  loadDiagnostic: CanvasHostDiagnostic | null;
+  saveDiagnostic: CanvasHostDiagnostic | null;
   keyboardActionRef: React.MutableRefObject<(action: string) => void>;
 }
 
-export interface CanvasLoadDiagnostic {
+export interface CanvasHostDiagnostic {
   readonly code: string;
   readonly message: string;
 }
@@ -226,7 +227,8 @@ export function useCanvasHostMessages(
   } = options;
 
   const [isReady, setIsReady] = useState(false);
-  const [loadDiagnostic, setLoadDiagnostic] = useState<CanvasLoadDiagnostic | null>(null);
+  const [loadDiagnostic, setLoadDiagnostic] = useState<CanvasHostDiagnostic | null>(null);
+  const [saveDiagnostic, setSaveDiagnostic] = useState<CanvasHostDiagnostic | null>(null);
   const keyboardActionRef = useRef<(action: string) => void>(() => {});
 
   // Stable refs for callbacks to avoid re-registering listener
@@ -337,6 +339,23 @@ export function useCanvasHostMessages(
             }
             setLoadDiagnostic({ code: diagnostic.code, message: diagnostic.message });
             setIsReady(false);
+            break;
+          }
+          case 'canvas.saveFailed': {
+            const diagnostic = message.diagnostic;
+            if (
+              !isRecord(diagnostic) ||
+              typeof diagnostic.code !== 'string' ||
+              typeof diagnostic.message !== 'string'
+            ) {
+              throw new Error('Invalid canvas.saveFailed diagnostic payload.');
+            }
+            setSaveDiagnostic({ code: diagnostic.code, message: diagnostic.message });
+            break;
+          }
+          case 'canvas.saveSucceeded': {
+            setSaveDiagnostic(null);
+            onSavedRef.current?.();
             break;
           }
           case 'canvas.hostAppliedDocument': {
@@ -690,7 +709,7 @@ export function useCanvasHostMessages(
     }
   }, [canvasStore, defaultCanvasData, historyStore, operationStore, setCanvasData, hostPort]);
 
-  return { isReady, loadDiagnostic, keyboardActionRef };
+  return { isReady, loadDiagnostic, saveDiagnostic, keyboardActionRef };
 }
 
 function isCanvasDocumentPayload(value: unknown): value is CanvasData {

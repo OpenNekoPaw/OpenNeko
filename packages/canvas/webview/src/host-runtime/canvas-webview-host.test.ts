@@ -1,4 +1,5 @@
 import {
+  CanvasHostVisibleEffectError,
   CanvasHostRuntimeSession,
   createCanvasHostPresentationSnapshotStore,
   createCanvasHostIntentRequest,
@@ -977,6 +978,11 @@ describe('createCanvasWebviewHost', () => {
     });
 
     host.postMessage({
+      type: 'canvasContentNodeDeltaApplied',
+      removedNodeIds: ['removed-node-1'],
+      restoredNodeIds: [],
+    });
+    host.postMessage({
       type: 'canvasStatus',
       data: {
         ...DEFAULT_CANVAS_DATA,
@@ -986,11 +992,6 @@ describe('createCanvasWebviewHost', () => {
     });
     await vi.waitFor(async () => {
       expect((await runtime.getSnapshot()).canvas.name).toBe('Edited Canvas');
-    });
-    host.postMessage({
-      type: 'canvasContentNodeDeltaApplied',
-      removedNodeIds: ['removed-node-1'],
-      restoredNodeIds: [],
     });
     host.postMessage({ type: 'requestSave' });
     await vi.waitFor(() => {
@@ -1002,10 +1003,62 @@ describe('createCanvasWebviewHost', () => {
         }),
       );
     });
+    expect(messages.filter(isCanvasSaveSucceededMessage)).toHaveLength(1);
 
     expect(() => host.postMessage({ type: 'openDocument' })).toThrow(
       "does not implement message 'openDocument'",
     );
+    host.dispose();
+    runtime.dispose();
+  });
+
+  it('projects autosave failures without replacing the loaded Canvas', async () => {
+    const runtime = new CanvasHostRuntimeSession({
+      identity: {
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        viewInstanceId: 'view-instance-1',
+        documentId: 'neko/boards/workspace.nkc',
+        sessionId: 'session-1',
+        rendererSessionId: 'endpoint-1',
+      },
+      initialCanvas: DEFAULT_CANVAS_DATA,
+      autosaveDelayMs: 0,
+      effects: {
+        saveDocument: async () => {
+          throw new CanvasHostVisibleEffectError('Canvas file is read-only.');
+        },
+      },
+    });
+    const host = createCanvasWebviewHost(runtime);
+    const messages: unknown[] = [];
+    host.subscribe((message) => messages.push(message));
+    host.postMessage({ type: 'ready' });
+    host.postMessage({
+      type: 'canvasStatus',
+      data: {
+        ...DEFAULT_CANVAS_DATA,
+        name: 'Unsaved Canvas',
+        _selection: { nodeIds: [] },
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(messages).toContainEqual({
+        type: 'canvas.saveFailed',
+        diagnostic: {
+          code: 'canvas-autosave-failed',
+          message: 'Canvas file is read-only.',
+        },
+      });
+    });
+    expect(messages).not.toContainEqual(expect.objectContaining({ type: 'canvas.loadFailed' }));
+    expect(await runtime.getSnapshot()).toMatchObject({
+      dirty: true,
+      canvas: { name: 'Unsaved Canvas' },
+    });
     host.dispose();
     runtime.dispose();
   });
@@ -1192,6 +1245,7 @@ describe('createCanvasWebviewHost', () => {
             ...DEFAULT_CANVAS_DATA,
             name: 'Terminal delivery',
           },
+          removedNodeIds: [],
         },
       }),
     );
@@ -1394,5 +1448,16 @@ function isCanvasUpdateMessage(
     'type' in value &&
     value.type === 'update' &&
     'data' in value
+  );
+}
+
+function isCanvasSaveSucceededMessage(
+  value: unknown,
+): value is { readonly type: 'canvas.saveSucceeded' } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
+    value.type === 'canvas.saveSucceeded'
   );
 }

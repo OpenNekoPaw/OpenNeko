@@ -224,6 +224,31 @@ describe('useCanvasHostMessages keyboard action guards', () => {
     expect(hostPort.postMessage).not.toHaveBeenCalledWith({ type: 'canvasDataReady' });
   });
 
+  it('keeps an autosave failure local and clears it after a successful retry', () => {
+    act(() => {
+      root.render(<HostMessageHarness action={action} isComposingRef={isComposingRef} />);
+    });
+
+    act(() => {
+      postHostMessage({
+        type: 'canvas.saveFailed',
+        diagnostic: {
+          code: 'canvas-autosave-failed',
+          message: 'Canvas file is read-only.',
+        },
+      });
+    });
+    expect(document.querySelector('[data-testid="save-diagnostic"]')?.textContent).toBe(
+      'canvas-autosave-failed:Canvas file is read-only.',
+    );
+    expect(document.querySelector('[data-testid="load-diagnostic"]')).toBeNull();
+
+    act(() => {
+      postHostMessage({ type: 'canvas.saveSucceeded' });
+    });
+    expect(document.querySelector('[data-testid="save-diagnostic"]')).toBeNull();
+  });
+
   it('applies host-authored Canvas document updates from headless authoring', () => {
     const hostPort = createHostPort();
     const setCanvasData = vi.fn();
@@ -360,13 +385,17 @@ function HostMessageHarness({
   readonly isKeyboardFocusedRef?: React.MutableRefObject<boolean>;
   readonly options?: Partial<UseCanvasHostMessagesOptions>;
 }): React.ReactElement | null {
-  const { keyboardActionRef, loadDiagnostic } = useCanvasHostMessages(
+  const { keyboardActionRef, loadDiagnostic, saveDiagnostic } = useCanvasHostMessages(
     createOptions(isComposingRef, isKeyboardFocusedRef, options),
   );
   keyboardActionRef.current = action;
   return loadDiagnostic ? (
     <output data-testid="load-diagnostic">
       {loadDiagnostic.code}:{loadDiagnostic.message}
+    </output>
+  ) : saveDiagnostic ? (
+    <output data-testid="save-diagnostic">
+      {saveDiagnostic.code}:{saveDiagnostic.message}
     </output>
   ) : null;
 }

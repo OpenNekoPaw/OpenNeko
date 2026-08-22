@@ -139,6 +139,7 @@ export interface CanvasHostRuntimeSessionOptions {
   readonly effects: CanvasHostRuntimeSessionEffects;
   readonly commandHistoryLimit?: number;
   readonly documentHistoryLimit?: number;
+  readonly autosaveDelayMs?: number;
 }
 
 /**
@@ -156,6 +157,7 @@ const DEFAULT_PRESENTATION: CanvasHostPresentationState = {
   viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
   selectedNodeIds: [],
 };
+const DEFAULT_AUTOSAVE_DELAY_MS = 800;
 
 export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   readonly identity: CanvasHostRuntimeIdentity;
@@ -172,9 +174,12 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   private readonly commandOrder: string[] = [];
   private readonly generationNodes = new Map<string, CanvasGenerationRuntimeProjection>();
   private readonly observedGenerationSubmissions = new Set<string>();
+  private readonly pendingRemovedNodeIds = new Set<string>();
   private operationTail: Promise<void> = Promise.resolve();
+  private autosaveTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
   private readonly commandHistoryLimit: number;
   private readonly documentHistoryLimit: number;
+  private readonly autosaveDelayMs: number;
 
   constructor(private readonly options: CanvasHostRuntimeSessionOptions) {
     this.identity = { ...options.identity };
@@ -185,12 +190,17 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     );
     this.commandHistoryLimit = options.commandHistoryLimit ?? 200;
     this.documentHistoryLimit = options.documentHistoryLimit ?? 50;
+    this.autosaveDelayMs = options.autosaveDelayMs ?? DEFAULT_AUTOSAVE_DELAY_MS;
     if (!Number.isSafeInteger(this.commandHistoryLimit) || this.commandHistoryLimit < 1) {
       throw new Error('Canvas Host command history limit must be a positive safe integer.');
     }
     if (!Number.isSafeInteger(this.documentHistoryLimit) || this.documentHistoryLimit < 1) {
       throw new Error('Canvas Host document history limit must be a positive safe integer.');
     }
+    if (!Number.isSafeInteger(this.autosaveDelayMs) || this.autosaveDelayMs < 0) {
+      throw new Error('Canvas Host autosave delay must be a non-negative safe integer.');
+    }
+    if (this.dirty) this.scheduleAutosave();
   }
 
   async getSnapshot(): Promise<CanvasHostSnapshot> {
@@ -415,6 +425,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.cancelAutosave();
     this.listeners.clear();
     this.undoStack.length = 0;
     this.redoStack.length = 0;
@@ -422,11 +433,13 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     this.commandOrder.length = 0;
     this.generationNodes.clear();
     this.observedGenerationSubmissions.clear();
+    this.pendingRemovedNodeIds.clear();
   }
 
   private async applyIntent(request: CanvasHostIntentRequest): Promise<CanvasHostIntentResult> {
     const { intent } = request;
     if (intent.type === 'replace-document') {
+      this.replacePendingRemovedNodeIds(intent.removedNodeIds);
       this.commitCanvas(intent.canvas, request.commandId);
       return this.accepted(request);
     }
@@ -436,6 +449,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
         this.redoStack.push(cloneCanvas(this.canvas));
         this.canvas = previous;
         this.commitStateChange(true, request.commandId);
+        this.scheduleAutosave();
       }
       return this.accepted(request);
     }
@@ -445,17 +459,16 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
         this.pushHistory(this.undoStack, this.canvas);
         this.canvas = next;
         this.commitStateChange(true, request.commandId);
+        this.scheduleAutosave();
       }
       return this.accepted(request);
     }
     if (intent.type === 'save') {
       const saveDocument = this.options.effects.saveDocument;
       if (!saveDocument) return unsupported(request, intent.type);
-      await saveDocument({
-        canvas: cloneCanvas(this.canvas),
-        identity: { ...this.identity },
-        removedNodeIds: [...(intent.removedNodeIds ?? [])],
-      });
+      this.cancelAutosave();
+      if (!this.dirty) return this.accepted(request);
+      await this.persistCanvas(this.canvas);
       this.commitStateChange(false, request.commandId);
       return this.accepted(request);
     }
@@ -690,6 +703,8 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     this.redoStack.length = 0;
     this.canvas = cloneCanvas(nextCanvas);
     this.commitStateChange(dirty, originCommandId);
+    if (dirty) this.scheduleAutosave();
+    else this.cancelAutosave();
   }
 
   private async authorGenerationReference(
@@ -769,8 +784,49 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     await saveDocument({
       canvas: cloneCanvas(canvas),
       identity: { ...this.identity },
-      removedNodeIds: [],
+      removedNodeIds: [...this.pendingRemovedNodeIds],
     });
+    this.pendingRemovedNodeIds.clear();
+  }
+
+  private replacePendingRemovedNodeIds(nodeIds: readonly string[]): void {
+    this.pendingRemovedNodeIds.clear();
+    for (const nodeId of nodeIds) this.pendingRemovedNodeIds.add(nodeId);
+  }
+
+  private scheduleAutosave(): void {
+    if (!this.options.effects.saveDocument || this.disposed) return;
+    this.cancelAutosave();
+    this.autosaveTimer = globalThis.setTimeout(() => {
+      this.autosaveTimer = undefined;
+      void this.enqueueOperation(async () => {
+        if (this.disposed || !this.dirty) return;
+        await this.persistCanvas(this.canvas);
+        this.dirty = false;
+        this.commitProjectionChange();
+      }).catch((error: unknown) => this.publishAutosaveFailure(error));
+    }, this.autosaveDelayMs);
+  }
+
+  private cancelAutosave(): void {
+    if (this.autosaveTimer === undefined) return;
+    globalThis.clearTimeout(this.autosaveTimer);
+    this.autosaveTimer = undefined;
+  }
+
+  private publishAutosaveFailure(error: unknown): void {
+    if (this.disposed) return;
+    this.sequence += 1;
+    const event: CanvasHostProjectionEvent = {
+      sequence: this.sequence,
+      diagnostic: {
+        code: 'canvas-autosave-failed',
+        message:
+          error instanceof CanvasHostVisibleEffectError ? error.message : 'Canvas autosave failed.',
+      },
+      snapshot: this.createSnapshot(),
+    };
+    for (const listener of this.listeners) listener(cloneEvent(event));
   }
 
   private startGenerationObservation(nodeId: string): void {
@@ -1017,6 +1073,7 @@ function clonePresentation(presentation: CanvasHostPresentationState): CanvasHos
 function cloneEvent(event: CanvasHostProjectionEvent): CanvasHostProjectionEvent {
   return {
     ...event,
+    ...(event.diagnostic ? { diagnostic: { ...event.diagnostic } } : {}),
     snapshot: cloneSnapshot(event.snapshot),
   };
 }

@@ -1991,7 +1991,7 @@ describe('DesktopCanvasRuntime', () => {
         requestId: 'request-edit',
         commandId: 'command-edit',
         identity,
-        intent: { type: 'replace-document', canvas: editedCanvas },
+        intent: { type: 'replace-document', canvas: editedCanvas, removedNodeIds: [] },
       }),
     );
     expect(edit.status).toBe('accepted');
@@ -2427,6 +2427,7 @@ describe('DesktopCanvasRuntime', () => {
         intent: {
           type: 'replace-document',
           canvas: { ...firstSnapshot.canvas, name: 'First edited' },
+          removedNodeIds: [],
         },
       }),
     );
@@ -2478,6 +2479,7 @@ describe('DesktopCanvasRuntime', () => {
         intent: {
           type: 'replace-document',
           canvas: { ...initial.canvas, name: 'Saved user edit' },
+          removedNodeIds: [],
         },
       }),
     );
@@ -2559,6 +2561,7 @@ describe('DesktopCanvasRuntime', () => {
         intent: {
           type: 'replace-document',
           canvas: { ...snapshot.canvas, name: 'Unsaved user edit' },
+          removedNodeIds: [],
         },
       }),
     );
@@ -2589,7 +2592,20 @@ describe('DesktopCanvasRuntime', () => {
       }),
     );
     const runtime = createRuntime(workspacePath, identity);
-    await runtime.getSnapshot('window-1', identity);
+    const opened = await runtime.getSnapshot('window-1', identity);
+    await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'local-edit-before-delivery',
+        commandId: 'local-edit-before-delivery',
+        identity,
+        intent: {
+          type: 'replace-document',
+          canvas: { ...opened.canvas, name: 'Local edit' },
+          removedNodeIds: [],
+        },
+      }),
+    );
     const delivered = {
       name: 'Agent delivery',
       viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
@@ -2626,13 +2642,27 @@ describe('DesktopCanvasRuntime', () => {
     });
     expect(JSON.parse(await readFile(documentPath, 'utf8')).nodes).toEqual(delivered.nodes);
 
+    const current = await runtime.getSnapshot('window-1', identity);
+    await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'explicit-board-removal-evidence',
+        commandId: 'explicit-board-removal-evidence',
+        identity,
+        intent: {
+          type: 'replace-document',
+          canvas: current.canvas,
+          removedNodeIds: ['agent-output'],
+        },
+      }),
+    );
     const explicitRemoval = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
         requestId: 'explicit-board-removal',
         commandId: 'explicit-board-removal',
         identity,
-        intent: { type: 'save', removedNodeIds: ['agent-output'] },
+        intent: { type: 'save' },
       }),
     );
     expect(explicitRemoval.status).toBe('accepted');
@@ -2730,6 +2760,7 @@ describe('DesktopCanvasRuntime', () => {
         intent: {
           type: 'replace-document',
           canvas: { ...dirtySnapshot.canvas, name: 'Unsaved dirty Canvas' },
+          removedNodeIds: [],
         },
       }),
     );

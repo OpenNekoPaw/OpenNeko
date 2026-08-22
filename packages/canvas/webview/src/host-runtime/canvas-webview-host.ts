@@ -145,7 +145,7 @@ export function createCanvasWebviewHost(
   };
 
   const publishSnapshot = (next: CanvasHostSnapshot): void => {
-    pendingRemovedNodeIds.clear();
+    if (!next.dirty) pendingRemovedNodeIds.clear();
     snapshot = next;
     const presentationChanged = !areJsonValuesEqual(acceptedPresentation, next.presentation);
     acceptedPresentation = next.presentation;
@@ -189,8 +189,14 @@ export function createCanvasWebviewHost(
           throw new Error('Canvas Host projection belongs to another document session.');
         }
         if (event.sequence <= projectionSequence) return;
+        const wasDirty = snapshot?.dirty ?? false;
         projectionSequence = event.sequence;
         runtimeEventObserved = true;
+        if (event.diagnostic) {
+          emit({ type: 'canvas.saveFailed', diagnostic: event.diagnostic });
+        } else if (wasDirty && !event.snapshot.dirty) {
+          emit({ type: 'canvas.saveSucceeded' });
+        }
         if (event.originCommandId && localCommandIds.has(event.originCommandId)) {
           adoptLocalSnapshot(event.snapshot);
           return;
@@ -222,11 +228,10 @@ export function createCanvasWebviewHost(
   };
 
   const executeSave = async (): Promise<void> => {
-    await executeIntent({
-      type: 'save',
-      removedNodeIds: [...pendingRemovedNodeIds],
-    });
+    const observedDirtySnapshot = snapshot?.dirty === true;
+    await executeIntent({ type: 'save' });
     pendingRemovedNodeIds.clear();
+    if (!observedDirtySnapshot) emit({ type: 'canvas.saveSucceeded' });
   };
 
   const executeCanvasStatus = async (value: unknown): Promise<void> => {
@@ -236,6 +241,7 @@ export function createCanvasWebviewHost(
       current = await executeIntent({
         type: 'replace-document',
         canvas,
+        removedNodeIds: [...pendingRemovedNodeIds],
       });
     }
     const presentation = parseCanvasPresentation(value);
@@ -314,7 +320,15 @@ export function createCanvasWebviewHost(
       }
       case 'save':
       case 'requestSave': {
-        enqueue(executeSave);
+        void queueOperation(executeSave).catch((error: unknown) => {
+          emit({
+            type: 'canvas.saveFailed',
+            diagnostic: {
+              code: 'canvas-save-failed',
+              message: error instanceof Error ? error.message : 'Canvas save failed.',
+            },
+          });
+        });
         return;
       }
       case 'canvasDataReady':

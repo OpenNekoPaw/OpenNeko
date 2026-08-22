@@ -7,6 +7,7 @@ import {
 } from '@neko/canvas-domain';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  CanvasHostVisibleEffectError,
   CanvasHostRuntimeSession,
   createCanvasHostPresentationSnapshotStore,
   createCanvasHostIntentRequest,
@@ -40,6 +41,7 @@ describe('CanvasHostRuntimeSession', () => {
       request('replace-1', {
         type: 'replace-document',
         canvas: createEmptyCanvasData('Changed'),
+        removedNodeIds: ['removed-node-1'],
       }),
     );
     expect(replaced.status).toBe('accepted');
@@ -59,9 +61,7 @@ describe('CanvasHostRuntimeSession', () => {
     if (redone.status !== 'accepted') throw new Error('Expected redo to succeed.');
     expect(redone.snapshot.canvas.name).toBe('Changed');
 
-    const saved = await runtime.executeIntent(
-      request('save-1', { type: 'save', removedNodeIds: ['removed-node-1'] }),
-    );
+    const saved = await runtime.executeIntent(request('save-1', { type: 'save' }));
     expect(saved.status).toBe('accepted');
     if (saved.status !== 'accepted') throw new Error('Expected save to succeed.');
     expect(saved.snapshot).toMatchObject({ dirty: false });
@@ -71,6 +71,174 @@ describe('CanvasHostRuntimeSession', () => {
       removedNodeIds: ['removed-node-1'],
     });
     expect(events).toEqual([1, 2, 3, 4]);
+  });
+
+  it('coalesces continuous document replacements into one trailing autosave', async () => {
+    vi.useFakeTimers();
+    try {
+      const saveDocument = vi.fn(async () => undefined);
+      const runtime = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { saveDocument },
+      });
+
+      await runtime.executeIntent(
+        request('autosave-first', {
+          type: 'replace-document',
+          canvas: createEmptyCanvasData('First'),
+          removedNodeIds: ['removed-1'],
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(400);
+      await runtime.executeIntent(
+        request('autosave-latest', {
+          type: 'replace-document',
+          canvas: createEmptyCanvasData('Latest'),
+          removedNodeIds: ['removed-1', 'removed-2'],
+        }),
+      );
+
+      await vi.advanceTimersByTimeAsync(799);
+      expect(saveDocument).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await runtime.getSnapshot()).toMatchObject({
+        dirty: false,
+        canvas: { name: 'Latest' },
+      });
+      expect(saveDocument).toHaveBeenCalledTimes(1);
+      expect(saveDocument).toHaveBeenCalledWith({
+        canvas: expect.objectContaining({ name: 'Latest' }),
+        identity,
+        removedNodeIds: ['removed-1', 'removed-2'],
+      });
+      runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('flushes immediately on explicit save and does not rewrite a clean Canvas', async () => {
+    vi.useFakeTimers();
+    try {
+      const saveDocument = vi.fn(async () => undefined);
+      const runtime = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { saveDocument },
+      });
+      await runtime.executeIntent(
+        request('manual-flush-edit', {
+          type: 'replace-document',
+          canvas: createEmptyCanvasData('Changed'),
+          removedNodeIds: [],
+        }),
+      );
+
+      expect((await runtime.executeIntent(request('manual-flush', { type: 'save' }))).status).toBe(
+        'accepted',
+      );
+      expect(saveDocument).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(800);
+      await runtime.getSnapshot();
+      expect(saveDocument).toHaveBeenCalledTimes(1);
+
+      expect((await runtime.executeIntent(request('clean-flush', { type: 'save' }))).status).toBe(
+        'accepted',
+      );
+      expect(saveDocument).toHaveBeenCalledTimes(1);
+      runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps dirty state and removal evidence after autosave failure for an explicit retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const saveDocument = vi
+        .fn<NonNullable<CanvasHostRuntimeSessionEffects['saveDocument']>>()
+        .mockRejectedValueOnce(new CanvasHostVisibleEffectError('Canvas file is read-only.'))
+        .mockResolvedValue(undefined);
+      const runtime = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { saveDocument },
+      });
+      const events: import('../index').CanvasHostProjectionEvent[] = [];
+      runtime.subscribe((event) => events.push(event));
+      await runtime.executeIntent(
+        request('failed-autosave-edit', {
+          type: 'replace-document',
+          canvas: createEmptyCanvasData('Changed'),
+          removedNodeIds: ['removed-1'],
+        }),
+      );
+
+      await vi.advanceTimersByTimeAsync(800);
+      expect(await runtime.getSnapshot()).toMatchObject({ dirty: true });
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          diagnostic: {
+            code: 'canvas-autosave-failed',
+            message: 'Canvas file is read-only.',
+          },
+        }),
+      );
+
+      const retry = await runtime.executeIntent(request('failed-autosave-retry', { type: 'save' }));
+      expect(retry).toMatchObject({ status: 'accepted', snapshot: { dirty: false } });
+      expect(saveDocument).toHaveBeenLastCalledWith({
+        canvas: expect.objectContaining({ name: 'Changed' }),
+        identity,
+        removedNodeIds: ['removed-1'],
+      });
+      runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not autosave presentation-only changes and cancels a pending save on dispose', async () => {
+    vi.useFakeTimers();
+    try {
+      const saveDocument = vi.fn(async () => undefined);
+      const presentationOnly = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { saveDocument },
+      });
+      await presentationOnly.executeIntent(
+        request('autosave-presentation-only', {
+          type: 'update-presentation',
+          presentation: {
+            viewport: { pan: { x: 20, y: 30 }, zoom: 1.2 },
+            selectedNodeIds: [],
+          },
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(800);
+      expect(saveDocument).not.toHaveBeenCalled();
+      presentationOnly.dispose();
+
+      const disposedDirty = new CanvasHostRuntimeSession({
+        identity,
+        initialCanvas: createEmptyCanvasData('Initial'),
+        effects: { saveDocument },
+      });
+      await disposedDirty.executeIntent(
+        request('autosave-disposed-edit', {
+          type: 'replace-document',
+          canvas: createEmptyCanvasData('Changed'),
+          removedNodeIds: [],
+        }),
+      );
+      disposedDirty.dispose();
+      await vi.advanceTimersByTimeAsync(800);
+      expect(saveDocument).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('rejects another session identity without mutating state', async () => {
@@ -84,6 +252,7 @@ describe('CanvasHostRuntimeSession', () => {
       ...request('replace-stale-identity', {
         type: 'replace-document',
         canvas: createEmptyCanvasData('Wrong'),
+        removedNodeIds: [],
       }),
       identity: { ...identity, sessionId: 'session-other' },
     });
@@ -338,6 +507,7 @@ describe('CanvasHostRuntimeSession', () => {
     const command = request('identity-fenced-command', {
       type: 'replace-document',
       canvas: createEmptyCanvasData('Changed'),
+      removedNodeIds: [],
     });
     expect((await runtime.executeIntent(command)).status).toBe('accepted');
 

@@ -37,7 +37,7 @@ describe('project file I/O guardrails', () => {
     expect(source).not.toMatch(/from ['"]vscode['"]/);
   });
 
-  it('keeps open/load paths read-only until an explicit Canvas save intent', () => {
+  it('keeps open/load paths read-only while Host session policy owns every save', () => {
     const source = readSource(desktopCanvasRuntimePath);
     const loadBody = extractMethodBody(source, 'private async loadDocument(');
 

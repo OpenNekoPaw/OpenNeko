@@ -434,7 +434,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   // Host messages
   // =========================================================================
 
-  const { isReady, loadDiagnostic, keyboardActionRef } = useCanvasHostMessages({
+  const { isReady, loadDiagnostic, saveDiagnostic, keyboardActionRef } = useCanvasHostMessages({
     hostPort,
     defaultCanvasData: DEFAULT_CANVAS_DATA,
     setCanvasData,
@@ -1054,6 +1054,24 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
                   isSpacePanActive={isSpacePanActive}
                   isGridVisible={isGridVisible}
                 />
+
+                {saveDiagnostic ? (
+                  <div
+                    className="absolute bottom-20 right-4 z-50 max-w-sm rounded-lg border px-3 py-2 text-sm shadow-lg"
+                    data-canvas-save-diagnostic={saveDiagnostic.code}
+                    role="alert"
+                    style={{
+                      backgroundColor: 'var(--toolbar-bg)',
+                      borderColor: 'var(--error-fg, #f14c4c)',
+                      color: 'var(--toolbar-fg)',
+                    }}
+                  >
+                    <div className="font-medium">{t('saveError.title')}</div>
+                    <div className="mt-1 text-xs" style={{ color: 'var(--toolbar-fg-secondary)' }}>
+                      {saveDiagnostic.message}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="canvas-floating-toolbar-host" data-canvas-toolbar-host="bottom">
                   <CanvasToolbar

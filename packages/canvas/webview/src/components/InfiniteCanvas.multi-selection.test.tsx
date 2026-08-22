@@ -68,6 +68,7 @@ describe('InfiniteCanvas multi-selection', () => {
     expect(first.style.top).toBe('60px');
     expect(second.style.left).toBe('400px');
     expect(second.style.top).toBe('120px');
+    expect(onNodesMove).not.toHaveBeenCalled();
 
     await act(async () => {
       window.dispatchEvent(

@@ -298,6 +298,7 @@ export const en = {
   'port.tooltip': '{direction}: {dataType}',
   loading: 'Loading canvas...',
   'loadError.title': 'Unable to open Canvas project',
+  'saveError.title': 'Canvas changes are not saved',
   'canvas.dropHint': 'Drop files here to add to canvas',
   'canvasEmbed.defaultTitle': 'Canvas',
   'canvasEmbed.open': 'Open',
