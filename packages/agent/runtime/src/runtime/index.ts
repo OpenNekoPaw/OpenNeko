@@ -3,7 +3,7 @@
  *
  * Canonical implementation owners live in the narrow runtime subdirectories
  * documented in README.md:
- * - turn/: content, context, and multimodal pure adapters still used directly
+ * - turn/: content and context adapters still used directly
  *   by product surfaces; these never execute a model turn.
  * - capability/: Host content-access boundary adapters; these never register
  *   Agent Tools or own DSH capabilities.
@@ -74,25 +74,6 @@ export {
 } from './agent-entry-intent-runtime';
 
 export {
-  isLocalMediaFilePath,
-  messageResourceProjectionKey,
-  projectMessageForResourceDisplay,
-  projectMessagesForResourceDisplay,
-  projectResourceValue,
-  type MessageResourceProjectionOptions,
-} from '../input/message-resource-projector';
-
-export {
-  buildActiveConversationMessage,
-  buildConversationListMessage,
-  type ActiveConversationMessage,
-  type ActiveConversationView,
-  type ConversationListItemView,
-  type ConversationListMessage,
-  type ConversationViewSource,
-} from '../session/conversation-host-message';
-
-export {
   buildCompressionErrorMessage,
   buildCompressionResultMessage,
   buildContextTokenCountMessage,
@@ -129,27 +110,6 @@ export {
   type AgentProcessedAttachments,
   type AgentRuntimePromptLocale,
 } from '../input/attachment-projection';
-
-export {
-  buildTurnMultimodalContextPacket,
-  combineMultimodalContextPackets,
-  applyEvidenceFeedbackPolicy,
-  createCanvasSelectionContextPacket,
-  createMediaAttachmentContextPacket,
-  createTextContextPacket,
-  createToolProducedMultimodalEvidenceFeedback,
-  filterToolsByModalityAvailability,
-  loadPacketMediaPayloads,
-  projectGeneratedArtifactReference,
-  summarizeEvidenceFeedback,
-  type BuildTurnMultimodalContextPacketInput,
-  type CanvasSelectionContextNode,
-  type CanvasSelectionContextOptions,
-  type CombineMultimodalContextPacketsOptions,
-  type MediaAttachmentContextInput,
-  type TextContextInput,
-  type ToolProducedMultimodalEvidenceInput,
-} from './turn/multimodal-context-packet';
 
 export {
   CanvasAmbientContextRuntime,

@@ -1,3 +1,9 @@
+> Superseded before implementation on 2026-08-22 by
+> `finish-dsh-agent-contract-cleanup`. The post-DSH reachability audit found no production consumers for
+> the proposed shot/comic/review behavior, so that change deletes the dead graphs instead of creating
+> `@neko/agent-domain`. Do not implement this proposal unless a new OpenSpec first establishes live
+> producers and consumers for an Agent-owned host-neutral behavior boundary.
+
 ## Why
 
 `@neko/agent-contracts` is declared as a pure L0 contract package, but it also owns domain projections,

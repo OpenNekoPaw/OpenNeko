@@ -1,3 +1,6 @@
+> Superseded before implementation by `finish-dsh-agent-contract-cleanup`. This proposed capability is
+> not part of the current target architecture because no live consumer justifies `@neko/agent-domain`.
+
 ## ADDED Requirements
 
 ### Requirement: Agent Contracts owns schemas and codecs only

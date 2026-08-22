@@ -1,3 +1,6 @@
+> Superseded before implementation by `finish-dsh-agent-contract-cleanup`. None of the tasks below
+> should be executed against the post-DSH tree.
+
 ## 1. Export And Dependency Inventory
 
 - [ ] 1.1 Classify every `@neko/agent-contracts` export as schema/codec or prohibited behavior and record

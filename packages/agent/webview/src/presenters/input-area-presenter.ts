@@ -1,9 +1,11 @@
 import type {
+  AmbientCanvasNode,
   AgentConfigurationPolicyProjection,
   ConversationKind,
   SessionMode,
 } from '@neko/agent-contracts';
-import type { AmbientCanvasNodeProjection } from './plugin-transfer-presenter';
+
+export type AmbientCanvasNodeProjection = AmbientCanvasNode;
 
 export interface InputAreaUiProjectionInput {
   presentation?: 'entry' | 'workspace' | 'conversation';

@@ -19,11 +19,7 @@
   "dependencies": {
     "@neko/ai-contracts": "workspace:*",
     "@neko/canvas-domain": "workspace:*",
-    "@neko/chara": "workspace:*",
-    "@neko/content": "workspace:*",
-    "@neko/entity-domain": "workspace:*",
-    "@neko/media": "workspace:*",
-    "@neko/search-domain": "workspace:*"
+    "@neko/content": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

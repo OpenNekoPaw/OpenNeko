@@ -1,3 +1,6 @@
+> Superseded before implementation by `finish-dsh-agent-contract-cleanup`; this design records the
+> rejected extraction alternative and is not an implementation constraint for the current tree.
+
 ## Context
 
 `@neko/agent-contracts` is the Agent L0 package consumed across Main, preload, renderer, runtime, and

@@ -1,9 +1,10 @@
 import type { AgentContextPayload } from './agent-context';
-import type { AgentFileReference } from './message';
+import type { AgentFileReference } from './agent-file-reference';
 import type { MessageAttachment } from './message-attachment';
 
 export type SessionMode = 'agent';
 export type ConversationKind = 'chat' | 'character-dialogue' | 'embody-character';
+export type ShellExecutionMode = 'plan' | 'ask' | 'auto';
 export type MediaUnderstandingModels = Record<string, { readonly label?: string }>;
 export type AgentModelSlots = Partial<
   Record<
@@ -28,4 +29,3 @@ export interface AmbientCanvasNode {
   readonly type: string;
   readonly summary: string;
 }
-export type PluginsAvailable = Record<string, boolean>;

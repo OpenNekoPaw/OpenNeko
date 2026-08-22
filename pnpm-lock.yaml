@@ -318,21 +318,9 @@ importers:
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../../canvas/domain
-      '@neko/chara':
-        specifier: workspace:*
-        version: link:../../chara
       '@neko/content':
         specifier: workspace:*
         version: link:../../content
-      '@neko/entity-domain':
-        specifier: workspace:*
-        version: link:../../entity/domain
-      '@neko/media':
-        specifier: workspace:*
-        version: link:../../media
-      '@neko/search-domain':
-        specifier: workspace:*
-        version: link:../../search/domain
     devDependencies:
       typescript:
         specifier: ^5.8.3
@@ -376,9 +364,6 @@ importers:
       '@neko/media':
         specifier: workspace:*
         version: link:../../media
-      '@neko/preview-domain':
-        specifier: workspace:*
-        version: link:../../preview/domain
       '@neko/shared':
         specifier: workspace:*
         version: link:../../shared

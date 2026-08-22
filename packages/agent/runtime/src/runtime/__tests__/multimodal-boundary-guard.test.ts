@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '../../../../../..');
 
-describe('multimodal perception architecture boundary guard', () => {
-  it('keeps shared multimodal contracts free of VSCode and React dependencies', () => {
+describe('retired multimodal perception architecture boundary guard', () => {
+  it('keeps the retired shared multimodal contract graph deleted', () => {
     const files = [
       join(REPO_ROOT, 'packages/agent/contracts/src/perception-card.ts'),
       join(REPO_ROOT, 'packages/agent/contracts/src/tool.ts'),
@@ -14,34 +14,16 @@ describe('multimodal perception architecture boundary guard', () => {
     ];
 
     for (const file of files) {
-      expect(readFileSync(file, 'utf-8'), relative(REPO_ROOT, file)).not.toMatch(
-        /from\s+['"](?:vscode|react|react-dom|@neko\/shared\/vscode|@\/components)/,
-      );
+      expect(existsSync(file), relative(REPO_ROOT, file)).toBe(false);
     }
   });
 
-  it('keeps runtime perception services independent from Webview and host UI APIs', () => {
-    // The legacy top-level perception pipeline was removed; the live perception tools live under
-    // tools/perception and are covered by the shared-contract guard above.
-    expect(listSourceFiles(join(REPO_ROOT, 'packages/agent/runtime/src/perception'))).toEqual([]);
+  it('keeps the retired runtime multimodal projection graph deleted', () => {
+    for (const file of [
+      'packages/agent/runtime/src/provider/multimodal-message-projection.ts',
+      'packages/agent/runtime/src/runtime/turn/multimodal-context-packet.ts',
+    ]) {
+      expect(existsSync(join(REPO_ROOT, file)), file).toBe(false);
+    }
   });
 });
-
-function listSourceFiles(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-  const files: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const path = join(dir, entry);
-    const stat = statSync(path);
-    if (stat.isDirectory()) {
-      if (entry !== '__tests__') {
-        files.push(...listSourceFiles(path));
-      }
-      continue;
-    }
-    if (path.endsWith('.ts')) {
-      files.push(path);
-    }
-  }
-  return files;
-}

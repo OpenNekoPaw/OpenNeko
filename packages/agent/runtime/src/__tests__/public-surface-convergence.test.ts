@@ -67,7 +67,8 @@ describe('agent-runtime public surface convergence', () => {
     expect(runtime).not.toHaveProperty('createToolRegistry');
     expect(runtime).not.toHaveProperty('createCoreTools');
     expect(runtime).toHaveProperty('composeProviderImageBatches');
-    expect(runtime).toHaveProperty('projectMultimodalPacketToChatMessage');
+    expect(runtime).not.toHaveProperty('projectMultimodalPacketToChatMessage');
+    expect(runtime).not.toHaveProperty('projectPerceptionCardToContentParts');
     expect(runtime).toHaveProperty('createConversationId');
     expect(runtime).toHaveProperty('createInputProcessor');
   });
@@ -88,6 +89,9 @@ describe('agent-runtime public surface convergence', () => {
     expect(runtimeSubpath).not.toHaveProperty('createConversationRunRegistry');
     expect(runtimeSubpath).not.toHaveProperty('createExecutionOwnershipRegistry');
     expect(runtimeSubpath).not.toHaveProperty('deliverCreatorVisibleArtifactsFromTurnProjection');
+    expect(runtimeSubpath).not.toHaveProperty('buildTurnMultimodalContextPacket');
+    expect(runtimeSubpath).not.toHaveProperty('projectMessageForResourceDisplay');
+    expect(runtimeSubpath).not.toHaveProperty('buildActiveConversationMessage');
   });
 
   it('exposes the package-owned ACP application client through one subpath', () => {
@@ -118,6 +122,10 @@ describe('agent-runtime public surface convergence', () => {
       'src/runtime/session/conversation-run-registry.ts',
       'src/runtime/session/execution-ownership.ts',
       'src/runtime/turn/creator-visible-artifact-collector.ts',
+      'src/provider/multimodal-message-projection.ts',
+      'src/runtime/turn/multimodal-context-packet.ts',
+      'src/input/message-resource-projector.ts',
+      'src/session/conversation-host-message.ts',
     ]) {
       expect(existsSync(join(PACKAGE_ROOT, deleted)), `${deleted} should not exist`).toBe(false);
     }

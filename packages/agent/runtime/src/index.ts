@@ -12,21 +12,6 @@ export {
   type ProviderImageBatchResult,
   type ProviderImageBatchSource,
 } from './provider/image-batch-transport';
-export {
-  projectMultimodalPacketToChatMessageAsync,
-  projectMultimodalPacketToChatMessage,
-  projectPerceptionCardToContentParts,
-  resolveProviderInputModalities,
-  type AsyncMultimodalMessageProjectionOptions,
-  type AsyncMultimodalMessageProjectionResult,
-  type PerceptionAssetLoader,
-  type ProjectionDiagnostic,
-  type ProviderInputModalities,
-  type ProviderInputModalityResolverInput,
-  type MultimodalMessageProjectionOptions,
-  type ProviderReadyAssetPayload,
-  type VisionPreprocessPolicy,
-} from './provider/multimodal-message-projection';
 // Export logger
 export { setRootLogger, getLogger as getAgentLogger } from './utils/logger';
 

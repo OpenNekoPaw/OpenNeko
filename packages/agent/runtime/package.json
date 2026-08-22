@@ -30,7 +30,6 @@
     "@neko/host": "workspace:*",
     "@neko/local-metadata": "workspace:*",
     "@neko/media": "workspace:*",
-    "@neko/preview-domain": "workspace:*",
     "@neko/shared": "workspace:*",
     "sharp": "^0.35.3"
   },
