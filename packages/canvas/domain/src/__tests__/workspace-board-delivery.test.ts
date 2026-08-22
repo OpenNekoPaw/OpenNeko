@@ -84,7 +84,7 @@ describe('Workspace Board delivery coordinator', () => {
 
     const group = mutation.canvasData.nodes.find((node) => node.type === 'group');
     expect(group).toMatchObject({
-      container: { layout: { mode: 'grid', columns: 3 } },
+      container: { layout: { mode: 'grid', columns: 5, spacing: 12 } },
       data: {
         provenance: {
           kind: 'generated-batch',

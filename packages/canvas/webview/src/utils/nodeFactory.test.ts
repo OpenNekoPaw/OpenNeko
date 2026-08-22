@@ -27,6 +27,7 @@ describe('buildCanvasNode', () => {
 
     expect(markdown).toMatchObject({
       type: 'markdown',
+      size: { width: 240, height: 160 },
       data: { content: '# Draft' },
     });
     expect(media).toMatchObject({
@@ -55,12 +56,23 @@ describe('buildCanvasNode', () => {
     });
     expect(file).toMatchObject({
       type: 'file',
+      size: { width: 240, height: 160 },
       data: { path: 'docs/script.fountain', title: 'script.fountain' },
     });
     expect(subcanvas).toMatchObject({
       type: 'canvas-embed',
       data: { canvasPath: 'boards/chapter.nkc', canvasTitle: 'Chapter' },
     });
+  });
+
+  it('keeps unsupported binary files compact', () => {
+    const file = createNode('file', {
+      path: 'books/volume.epub',
+      mediaType: 'application/epub+zip',
+      contentLocator: { file: { authority: 'workspace', path: 'books/volume.epub' } },
+    });
+
+    expect(file.size).toEqual({ width: 110, height: 75 });
   });
 
   it('normalizes canonical node inputs without retaining unknown fields', () => {

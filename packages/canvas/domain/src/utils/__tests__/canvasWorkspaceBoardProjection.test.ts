@@ -45,7 +45,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     );
   });
 
-  it('groups one batch of generated outputs in a deterministic near-square grid', () => {
+  it('groups one batch of five generated outputs in one compact row', () => {
     const artifacts = Array.from({ length: 5 }, (_, index) =>
       generatedOutputArtifact('delivery:generated-batch', index + 1),
     );
@@ -64,7 +64,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       type: 'group',
       container: {
         policy: 'group',
-        layout: { mode: 'grid', columns: 3 },
+        layout: { mode: 'grid', columns: 5, spacing: 12 },
       },
       data: {
         provenance: {
@@ -76,8 +76,8 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     const children = first.canvasData.nodes.filter((node) => node.parentId === group?.id);
     expect(children).toHaveLength(5);
     expect(group?.container?.childIds).toEqual(children.map((node) => node.id));
-    expect(new Set(children.map((node) => node.position.x)).size).toBe(3);
-    expect(new Set(children.map((node) => node.position.y)).size).toBe(2);
+    expect(new Set(children.map((node) => node.position.x)).size).toBe(5);
+    expect(new Set(children.map((node) => node.position.y)).size).toBe(1);
     expect(
       children.every(
         (child) =>
@@ -91,7 +91,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(second.canvasData.nodes).toEqual(first.canvasData.nodes);
   });
 
-  it('places repeated one-item deliveries across bounded top-level columns', () => {
+  it('places five repeated one-item deliveries across one compact top-level row', () => {
     let canvasData = createEmptyCanvasData('Workspace');
     for (let index = 1; index <= 5; index += 1) {
       const deliveryId = `delivery:single-${index}`;
@@ -105,13 +105,68 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     }
 
     expect(canvasData.nodes.every((node) => node.type !== 'group')).toBe(true);
-    expect(new Set(canvasData.nodes.map((node) => node.position.x)).size).toBe(3);
-    expect(new Set(canvasData.nodes.map((node) => node.position.y)).size).toBe(2);
+    expect(new Set(canvasData.nodes.map((node) => node.position.x)).size).toBe(5);
+    expect(new Set(canvasData.nodes.map((node) => node.position.y)).size).toBe(1);
+    const positions = canvasData.nodes.map((node) => node.position.x).sort((a, b) => a - b);
+    expect(positions.slice(1).map((position, index) => position - positions[index]!)).toEqual([
+      136, 136, 136, 136,
+    ]);
     for (const [index, node] of canvasData.nodes.entries()) {
       expect(
         canvasData.nodes.slice(index + 1).every((candidate) => !rectanglesOverlap(node, candidate)),
       ).toBe(true);
     }
+  });
+
+  it('starts a second generated row after five columns', () => {
+    const artifacts = Array.from({ length: 6 }, (_, index) =>
+      generatedOutputArtifact('delivery:six-generated', index + 1),
+    );
+    const plan = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      request({ deliveryId: 'delivery:six-generated', artifacts }),
+    );
+    const group = plan.canvasData.nodes.find((node) => node.type === 'group');
+    const children = plan.canvasData.nodes.filter((node) => node.parentId === group?.id);
+
+    expect(group?.container?.layout).toEqual({ mode: 'grid', columns: 5, spacing: 12 });
+    expect(new Set(children.map((node) => node.position.x)).size).toBe(5);
+    expect(new Set(children.map((node) => node.position.y)).size).toBe(2);
+    expect(
+      children.every(
+        (child) =>
+          child.position.x + child.size.width <= group!.position.x + group!.size.width &&
+          child.position.y + child.size.height <= group!.position.y + group!.size.height,
+      ),
+    ).toBe(true);
+  });
+
+  it('projects Markdown and text-file references with the shared reading size', () => {
+    const deliveryId = 'delivery:readable-text';
+    const textReference = {
+      kind: 'file-reference',
+      title: 'notes/readme.md',
+      mimeType: 'text/markdown',
+      contentLocator: {
+        file: { authority: 'workspace', path: 'notes/readme.md' },
+      },
+      provenance: provenance(
+        deliveryId,
+        'text-reference',
+        'sha256:text-reference',
+        'file-reference',
+        'source',
+      ),
+    } satisfies CanvasWorkspaceProjectionArtifact;
+    const plan = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      request({ deliveryId, artifacts: [textReference, markdownArtifact(deliveryId)] }),
+    );
+
+    expect(plan.canvasData.nodes.map((node) => node.size)).toEqual([
+      { width: 240, height: 160 },
+      { width: 240, height: 160 },
+    ]);
   });
 
   it('does not restore generated batch grouping after creator-owned ungrouping', () => {
@@ -270,7 +325,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       data: { title: 'Creator title' },
     });
     const projectedOutput = second.canvasData.nodes.find((node) => node.type === 'media')!;
-    expect(projectedOutput.position.x).toBeGreaterThanOrEqual(1248);
+    expect(projectedOutput.position.x).toBeGreaterThanOrEqual(1232);
     expect(rectanglesOverlap(source, projectedOutput)).toBe(false);
     expect(second.canvasData.connections).toEqual([
       expect.objectContaining({ sourceId: source.id, targetId: projectedOutput.id }),

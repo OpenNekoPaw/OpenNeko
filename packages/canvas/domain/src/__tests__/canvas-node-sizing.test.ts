@@ -3,6 +3,8 @@ import {
   CANVAS_AUDIO_NODE_DEFAULT_SIZE,
   CANVAS_NODE_DEFAULT_SIZES,
   CANVAS_NODE_MIN_SIZES,
+  CANVAS_TEXT_REFERENCE_NODE_DEFAULT_SIZE,
+  resolveCanvasFileNodeDefaultSize,
   resolveCanvasImageNodeMinSize,
   resolveCanvasImageNodeSize,
   readCanvasImageDimensions,
@@ -11,9 +13,9 @@ import {
 } from '../canvas-node-sizing';
 
 describe('Canvas node sizing', () => {
-  it('uses one compact default catalog for canonical authoring paths', () => {
+  it('uses one canonical default catalog with readable text surfaces', () => {
     expect(CANVAS_NODE_DEFAULT_SIZES).toEqual({
-      markdown: { width: 120, height: 80 },
+      markdown: { width: 240, height: 160 },
       media: { width: 120, height: 90 },
       group: { width: 160, height: 110 },
       job: { width: 120, height: 75 },
@@ -22,6 +24,18 @@ describe('Canvas node sizing', () => {
       generation: { width: 120, height: 90 },
     });
     expect(CANVAS_AUDIO_NODE_DEFAULT_SIZE).toEqual({ width: 120, height: 60 });
+    expect(CANVAS_TEXT_REFERENCE_NODE_DEFAULT_SIZE).toEqual({ width: 240, height: 160 });
+    expect(resolveCanvasFileNodeDefaultSize({ path: 'notes/readme.md' })).toEqual({
+      width: 240,
+      height: 160,
+    });
+    expect(
+      resolveCanvasFileNodeDefaultSize({ path: 'data/result.bin', mediaType: 'application/json' }),
+    ).toEqual({ width: 240, height: 160 });
+    expect(resolveCanvasFileNodeDefaultSize({ path: 'books/volume.epub' })).toEqual({
+      width: 110,
+      height: 75,
+    });
   });
 
   it('resolves kind-specific Generation defaults without exposing mutable catalog state', () => {
@@ -33,7 +47,7 @@ describe('Canvas node sizing', () => {
 
     (prompt as { width: number }).width = 999;
     expect(resolveCanvasGenerationNodeDefaultSize('prompt')).toEqual({ width: 120, height: 80 });
-    expect(resolveCanvasNodeDefaultSize('markdown')).toEqual({ width: 120, height: 80 });
+    expect(resolveCanvasNodeDefaultSize('markdown')).toEqual({ width: 240, height: 160 });
   });
 
   it('keeps resize minimums below authoring defaults', () => {

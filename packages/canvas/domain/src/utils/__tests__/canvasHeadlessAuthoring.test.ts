@@ -120,7 +120,7 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
       'canvas-embed',
     ]);
     expect(canvas.nodes.map((node) => node.size)).toEqual([
-      { width: 120, height: 80 },
+      { width: 240, height: 160 },
       { width: 120, height: 90 },
       { width: 160, height: 110 },
       { width: 120, height: 75 },
@@ -139,6 +139,34 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
       inputRefs: [],
       outputRefs: [],
     });
+  });
+
+  it('uses the text-reference default unless the creator supplies a size', () => {
+    const textFile = planCanvasNodeCreation(
+      { canvasData: emptyCanvas(), generateId: () => 'text-file' },
+      {
+        type: 'file',
+        data: {
+          path: 'docs/brief.md',
+          mediaType: 'text/markdown',
+          contentLocator: { file: { authority: 'workspace', path: 'docs/brief.md' } },
+        },
+      },
+    );
+    const explicitlySized = planCanvasNodeCreation(
+      { canvasData: textFile.canvasData, generateId: () => 'sized-text-file' },
+      {
+        type: 'file',
+        size: { width: 320, height: 180 },
+        data: {
+          path: 'docs/notes.txt',
+          contentLocator: { file: { authority: 'workspace', path: 'docs/notes.txt' } },
+        },
+      },
+    );
+
+    expect(textFile.result.node.size).toEqual({ width: 240, height: 160 });
+    expect(explicitlySized.result.node.size).toEqual({ width: 320, height: 180 });
   });
 
   it('rejects unsupported domain node types', () => {

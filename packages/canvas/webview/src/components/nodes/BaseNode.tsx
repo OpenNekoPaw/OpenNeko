@@ -339,11 +339,29 @@ export function BaseNode({
       })}
     >
       {nodeLabel ? (
-        <div className="canvas-node-external-label" data-canvas-node-label title={nodeLabel.text}>
+        <div
+          className="canvas-node-external-label"
+          data-canvas-node-label
+          data-node-drag-allow="true"
+          title={nodeLabel.text}
+        >
           {nodeLabel.icon}
           <span>{nodeLabel.text}</span>
         </div>
       ) : null}
+
+      <div
+        aria-hidden="true"
+        className="canvas-node-drag-rail canvas-node-drag-rail--top"
+        data-node-drag-allow="true"
+        data-node-drag-rail="top"
+      />
+      <div
+        aria-hidden="true"
+        className="canvas-node-drag-rail canvas-node-drag-rail--bottom"
+        data-node-drag-allow="true"
+        data-node-drag-rail="bottom"
+      />
 
       {/* Node content */}
       <div

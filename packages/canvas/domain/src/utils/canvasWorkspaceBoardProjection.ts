@@ -20,6 +20,7 @@ import {
 } from './canvasHeadlessAuthoring';
 import {
   CANVAS_AUDIO_NODE_DEFAULT_SIZE,
+  resolveCanvasFileNodeDefaultSize,
   resolveCanvasImageNodeSize,
   resolveCanvasNodeDefaultSize,
 } from '../canvas-node-sizing';
@@ -28,13 +29,14 @@ import {
 export const CANVAS_WORKSPACE_INBOX_NODE_ID = 'workspace-inbox' as const;
 
 const CONTENT_ORIGIN = { x: 40, y: 40 } as const;
-const CONTENT_HORIZONTAL_GAP = 48;
-const CONTENT_VERTICAL_GAP = 24;
+const CONTENT_HORIZONTAL_GAP = 32;
+const CONTENT_VERTICAL_GAP = 16;
+const CONTENT_COLUMN_GAP = 16;
 const CONTENT_LANE_WIDTH = 288;
-const CONTENT_GRID_COLUMNS = 3;
-const GROUP_PADDING = 24;
-const GROUP_HEADER = 56;
-const GROUP_GAP = 20;
+const CONTENT_GRID_COLUMNS = 5;
+const GROUP_PADDING = 16;
+const GROUP_HEADER = 40;
+const GROUP_GAP = 12;
 
 export interface CanvasWorkspaceBoardProjectionPlan {
   readonly status: 'projected' | 'noop';
@@ -357,7 +359,7 @@ function planGeneratedBatchGroup(
   }
   if (groupedArtifacts.length < 2) return undefined;
 
-  const columns = Math.ceil(Math.sqrt(groupedArtifacts.length));
+  const columns = Math.min(CONTENT_GRID_COLUMNS, groupedArtifacts.length);
   const rows = Math.ceil(groupedArtifacts.length / columns);
   const columnWidths = Array.from({ length: columns }, () => 0);
   const rowHeights = Array.from({ length: rows }, () => 0);
@@ -489,7 +491,7 @@ function findAvailableContentPosition(
     let nextY = y;
     for (let column = 0; column < CONTENT_GRID_COLUMNS; column += 1) {
       const position = {
-        x: preferred.x + column * CONTENT_LANE_WIDTH,
+        x: preferred.x + column * (size.width + CONTENT_COLUMN_GAP),
         y,
       };
       const intersecting = existingNodes.filter((node) =>
@@ -582,7 +584,10 @@ function artifactNodeSize(artifact: CanvasWorkspaceProjectionArtifact): CanvasNo
     case 'file-reference':
     case 'file':
     case 'storyboard':
-      return resolveCanvasNodeDefaultSize('file');
+      return resolveCanvasFileNodeDefaultSize({
+        path: artifact.title,
+        ...(artifact.mimeType ? { mediaType: artifact.mimeType } : {}),
+      });
     case 'audio':
       return { ...CANVAS_AUDIO_NODE_DEFAULT_SIZE };
     case 'image':

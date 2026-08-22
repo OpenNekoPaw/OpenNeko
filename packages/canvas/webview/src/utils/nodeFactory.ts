@@ -14,6 +14,7 @@ import {
   isCanvasMaterialMediaKind,
   isCanvasNodeType,
   parseDocumentResourceStatus,
+  resolveCanvasFileNodeDefaultSize,
   resolveCanvasGenerationNodeDefaultSize,
   resolveCanvasImageNodeSize,
 } from '@neko/canvas-domain';
@@ -44,6 +45,12 @@ export function resolveAuthoredNodeDefaultSize(node: CanvasNode): NodeDefaultSiz
   }
   if (node.type === 'media' && node.data.mediaType === 'audio') {
     return { ...CANVAS_AUDIO_NODE_DEFAULT_SIZE };
+  }
+  if (node.type === 'file') {
+    return resolveCanvasFileNodeDefaultSize({
+      path: node.data.path || node.data.title,
+      ...(node.data.mediaType ? { mediaType: node.data.mediaType } : {}),
+    });
   }
   return getNodeDefaultSize(node.type);
 }
@@ -142,6 +149,7 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       };
     case 'file': {
       const path = asString(data.path);
+      const mediaType = optionalString(data.mediaType);
       const contentLocator = isContentLocator(data.contentLocator)
         ? data.contentLocator
         : undefined;
@@ -151,11 +159,15 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       return {
         ...base,
         type,
+        size: resolveCanvasFileNodeDefaultSize({
+          path: path || optionalString(data.title) || '',
+          ...(mediaType ? { mediaType } : {}),
+        }),
         data: {
           path,
           title: optionalString(data.title) ?? path.split('/').pop() ?? 'File',
           mediaKind: isCanvasMaterialMediaKind(data.mediaKind) ? data.mediaKind : undefined,
-          mediaType: optionalString(data.mediaType),
+          mediaType,
           contentLocator,
           documentResourceStatus: parseDocumentResourceStatus(data.documentResourceStatus),
           runtimePath: optionalString(data.runtimePath),

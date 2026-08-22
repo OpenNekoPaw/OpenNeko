@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, useRef } from 'react';
+import { act, useRef, type MouseEvent as ReactMouseEvent } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CanvasViewport } from '@neko/canvas-domain';
@@ -10,6 +10,7 @@ interface ViewportHarnessProps {
   readonly viewport: CanvasViewport;
   readonly onViewportChange: (viewport: Partial<CanvasViewport>) => void;
   readonly onParentContextMenu: () => void;
+  readonly onContextMenuRequest: (event: ReactMouseEvent) => void;
   readonly disabled?: boolean;
 }
 
@@ -17,6 +18,7 @@ function ViewportHarness({
   viewport,
   onViewportChange,
   onParentContextMenu,
+  onContextMenuRequest,
   disabled = false,
 }: ViewportHarnessProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -35,7 +37,11 @@ function ViewportHarness({
         data-panning={state.isPanning ? 'true' : 'false'}
         onMouseDown={handlers.onMouseDown}
         onMouseMove={handlers.onMouseMove}
-        onMouseUp={handlers.onMouseUp}
+        onMouseUp={(event) => {
+          if (handlers.onMouseUp(event) === 'open-context-menu') {
+            onContextMenuRequest(event);
+          }
+        }}
         onMouseLeave={handlers.onMouseLeave}
         onContextMenu={handlers.onContextMenu}
       >
@@ -67,6 +73,7 @@ describe('useViewportTransform', () => {
     onParentContextMenu = vi.fn(),
     viewport: CanvasViewport = { pan: { x: 20, y: 30 }, zoom: 2 },
     disabled = false,
+    onContextMenuRequest = vi.fn(),
   ) {
     act(() => {
       root.render(
@@ -74,6 +81,7 @@ describe('useViewportTransform', () => {
           viewport={viewport}
           onViewportChange={onViewportChange}
           onParentContextMenu={onParentContextMenu}
+          onContextMenuRequest={onContextMenuRequest}
           disabled={disabled}
         />,
       );
@@ -216,6 +224,13 @@ describe('useViewportTransform', () => {
           clientY: 20,
         }),
       );
+      const earlyContextMenu = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+      });
+      element.dispatchEvent(earlyContextMenu);
+      expect(earlyContextMenu.defaultPrevented).toBe(true);
     });
     act(() => {
       element.dispatchEvent(
@@ -231,7 +246,11 @@ describe('useViewportTransform', () => {
     act(() => {
       element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 2 }));
     });
-    const contextMenu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    const contextMenu = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+    });
     act(() => element.dispatchEvent(contextMenu));
 
     expect(onViewportChange).toHaveBeenLastCalledWith({ pan: { x: 50, y: 55 } });
@@ -239,9 +258,21 @@ describe('useViewportTransform', () => {
     expect(onParentContextMenu).not.toHaveBeenCalled();
   });
 
-  it('allows a stationary right click to reach the existing context-menu owner', () => {
+  it('opens the existing menu owner only after a stationary right-button release', () => {
     const onParentContextMenu = vi.fn();
-    const element = renderHarness(vi.fn(), onParentContextMenu);
+    const onContextMenuRequest = vi.fn();
+    const element = renderHarness(
+      vi.fn(),
+      onParentContextMenu,
+      { pan: { x: 20, y: 30 }, zoom: 2 },
+      false,
+      onContextMenuRequest,
+    );
+    const earlyContextMenu = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+    });
 
     act(() => {
       element.dispatchEvent(
@@ -253,12 +284,84 @@ describe('useViewportTransform', () => {
           clientY: 20,
         }),
       );
-      element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 2 }));
+      element.dispatchEvent(earlyContextMenu);
+      element.dispatchEvent(
+        new MouseEvent('mouseup', {
+          bubbles: true,
+          button: 2,
+          clientX: 10,
+          clientY: 20,
+        }),
+      );
     });
-    const contextMenu = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    const lateContextMenu = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+    });
+    act(() => element.dispatchEvent(lateContextMenu));
+
+    expect(earlyContextMenu.defaultPrevented).toBe(true);
+    expect(lateContextMenu.defaultPrevented).toBe(true);
+    expect(onParentContextMenu).not.toHaveBeenCalled();
+    expect(onContextMenuRequest).toHaveBeenCalledTimes(1);
+    expect(onContextMenuRequest.mock.calls[0]?.[0]).toMatchObject({ clientX: 10, clientY: 20 });
+  });
+
+  it('treats sub-threshold right-pointer jitter as a click without moving the viewport', () => {
+    const onViewportChange = vi.fn();
+    const onContextMenuRequest = vi.fn();
+    const element = renderHarness(
+      onViewportChange,
+      vi.fn(),
+      { pan: { x: 20, y: 30 }, zoom: 2 },
+      false,
+      onContextMenuRequest,
+    );
+
+    act(() => {
+      element.dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true, button: 2, clientX: 10, clientY: 20 }),
+      );
+    });
+    act(() => {
+      element.dispatchEvent(
+        new MouseEvent('mousemove', {
+          bubbles: true,
+          buttons: 2,
+          clientX: 12,
+          clientY: 22,
+        }),
+      );
+      element.dispatchEvent(
+        new MouseEvent('mouseup', { bubbles: true, button: 2, clientX: 12, clientY: 22 }),
+      );
+    });
+
+    expect(onViewportChange).not.toHaveBeenCalled();
+    expect(onContextMenuRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows keyboard-originated context-menu events to reach the existing owner', () => {
+    const onParentContextMenu = vi.fn();
+    const onContextMenuRequest = vi.fn();
+    const element = renderHarness(
+      vi.fn(),
+      onParentContextMenu,
+      { pan: { x: 20, y: 30 }, zoom: 2 },
+      false,
+      onContextMenuRequest,
+    );
+    const contextMenu = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    });
+
     act(() => element.dispatchEvent(contextMenu));
 
     expect(contextMenu.defaultPrevented).toBe(false);
     expect(onParentContextMenu).toHaveBeenCalledTimes(1);
+    expect(onContextMenuRequest).not.toHaveBeenCalled();
   });
 });

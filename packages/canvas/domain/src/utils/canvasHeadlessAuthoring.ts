@@ -41,6 +41,7 @@ import { isJsonPointerPath, writeJsonPointer } from './fieldBinding';
 import { assertNoRuntimeResourceIdentity } from './canvasDurableResourceIdentity';
 import {
   CANVAS_AUDIO_NODE_DEFAULT_SIZE,
+  resolveCanvasFileNodeDefaultSize,
   resolveCanvasGenerationNodeDefaultSize,
   resolveCanvasNodeDefaultSize,
 } from '../canvas-node-sizing';
@@ -595,6 +596,13 @@ function createNodeFromSpec(
       return {
         ...base,
         type,
+        size:
+          spec.size === undefined
+            ? resolveCanvasFileNodeDefaultSize({
+                path: path || readString(input, 'title'),
+                ...readOptionalStringField(input, 'mediaType'),
+              })
+            : base.size,
         data: {
           path,
           title: readString(input, 'title') || path.split('/').pop() || 'File',

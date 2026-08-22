@@ -1035,6 +1035,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
                   selectedNodeIds={selectedNodeIds}
                   selectedConnectionIds={selectedConnectionIds}
                   onViewportChange={handleViewportChange}
+                  onContextMenuRequest={handleContextMenu}
                   onNodeSelect={handleNodeSelect}
                   onNodesMove={handleNodesMove}
                   onNodeResizeEnd={handleNodeResizeEnd}

@@ -1,5 +1,6 @@
 import type { CanonicalCanvasNodeType } from './types/canvas';
 import type { CanvasGenerationKind } from './types/canvas-generation-node';
+import { resolveCanvasTextFilePreviewKind } from './canvas-text-file-preview';
 
 export interface CanvasNodeSize {
   readonly width: number;
@@ -13,7 +14,7 @@ export interface CanvasImageDimensions {
 
 /** Canonical authoring sizes for newly created Canvas nodes. Persisted creator sizes stay authoritative. */
 export const CANVAS_NODE_DEFAULT_SIZES = {
-  markdown: { width: 120, height: 80 },
+  markdown: { width: 240, height: 160 },
   media: { width: 120, height: 90 },
   group: { width: 160, height: 110 },
   job: { width: 120, height: 75 },
@@ -21,6 +22,8 @@ export const CANVAS_NODE_DEFAULT_SIZES = {
   'canvas-embed': { width: 120, height: 80 },
   generation: { width: 120, height: 90 },
 } as const satisfies Readonly<Record<CanonicalCanvasNodeType, CanvasNodeSize>>;
+
+export const CANVAS_TEXT_REFERENCE_NODE_DEFAULT_SIZE = CANVAS_NODE_DEFAULT_SIZES.markdown;
 
 export const CANVAS_AUDIO_NODE_DEFAULT_SIZE = {
   width: CANVAS_NODE_DEFAULT_SIZES.media.width,
@@ -61,6 +64,15 @@ export const CANVAS_NODE_MIN_SIZES = {
 
 export function resolveCanvasNodeDefaultSize(type: CanonicalCanvasNodeType): CanvasNodeSize {
   return { ...CANVAS_NODE_DEFAULT_SIZES[type] };
+}
+
+export function resolveCanvasFileNodeDefaultSize(input: {
+  readonly path: string;
+  readonly mediaType?: string;
+}): CanvasNodeSize {
+  return resolveCanvasTextFilePreviewKind(input)
+    ? { ...CANVAS_TEXT_REFERENCE_NODE_DEFAULT_SIZE }
+    : resolveCanvasNodeDefaultSize('file');
 }
 
 export function resolveCanvasGenerationNodeDefaultSize(kind: CanvasGenerationKind): CanvasNodeSize {

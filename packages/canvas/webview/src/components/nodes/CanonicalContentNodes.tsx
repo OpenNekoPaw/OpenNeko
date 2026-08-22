@@ -308,6 +308,7 @@ export function FileNode({
       {...baseProps}
       presentation="foundational"
       opaqueSurface
+      className={eligibleKind ? 'canvas-text-reference-node' : undefined}
       onActivate={
         contentLocator && isFullscreenPreviewFile(node.data) && onFullscreenPreview
           ? () => onFullscreenPreview(node.id)

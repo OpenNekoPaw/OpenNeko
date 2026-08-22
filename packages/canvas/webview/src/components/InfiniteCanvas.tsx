@@ -84,6 +84,8 @@ export interface InfiniteCanvasProps {
   onConnectionCancel?: () => void;
   onConnectionStateChange?: (isConnecting: boolean) => void;
   onCanvasClick?: () => void;
+  /** Requests the existing Canvas/node menu after a stationary right-pointer release. */
+  onContextMenuRequest?: (event: React.MouseEvent) => void;
   /** Called when marquee selection completes */
   onMarqueeSelect?: (nodeIds: string[], additive: boolean) => void;
   /** 是否启用视口裁剪（默认启用） */
@@ -135,6 +137,7 @@ export function InfiniteCanvas({
   onConnectionCancel,
   onConnectionStateChange,
   onCanvasClick,
+  onContextMenuRequest,
   onMarqueeSelect,
   enableCulling = true,
   isPanMode = false,
@@ -503,8 +506,11 @@ export function InfiniteCanvas({
       }}
       onMouseUp={(e) => {
         if (fullscreenSurface) return;
-        viewportHandlers.onMouseUp();
+        const releaseDisposition = viewportHandlers.onMouseUp(e);
         marqueeHandlers.onMouseUp(e);
+        if (releaseDisposition === 'open-context-menu') {
+          onContextMenuRequest?.(e);
+        }
       }}
       onMouseLeave={() => {
         if (!fullscreenSurface) viewportHandlers.onMouseLeave();

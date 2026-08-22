@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import type { MarkdownCanvasNode } from '@neko/canvas-domain';
-import { act } from 'react';
+import type { CanvasViewport, MarkdownCanvasNode } from '@neko/canvas-domain';
+import { act, type MouseEvent as ReactMouseEvent } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { enableDefaultCanvasTestStoreScope } from '../stores/canvasStoreScope';
@@ -116,6 +116,92 @@ describe('InfiniteCanvas multi-selection', () => {
     await renderCanvas(nodes, ['first'], { onCanvasClick });
     expect(container?.querySelectorAll('[data-node-transform-handle]').length).toBeGreaterThan(0);
   });
+
+  it('requests the existing node menu from a stationary right-button release target', async () => {
+    const nodes = [markdownNode('first', 20, 30)];
+    const menuTargets: string[] = [];
+    ({ root, container } = createTestRoot());
+    await renderCanvas(nodes, [], {
+      onContextMenuRequest: (event) => {
+        menuTargets.push(
+          (event.target as HTMLElement).closest('[data-node-id]')?.getAttribute('data-node-id') ??
+            'canvas',
+        );
+      },
+    });
+    const first = nodeElement('first');
+    const nativeContextMenu = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+    });
+
+    await act(async () => {
+      first.dispatchEvent(
+        new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          button: 2,
+          clientX: 80,
+          clientY: 90,
+        }),
+      );
+      first.dispatchEvent(nativeContextMenu);
+      first.dispatchEvent(
+        new MouseEvent('mouseup', {
+          bubbles: true,
+          button: 2,
+          clientX: 80,
+          clientY: 90,
+        }),
+      );
+    });
+
+    expect(nativeContextMenu.defaultPrevented).toBe(true);
+    expect(menuTargets).toEqual(['first']);
+  });
+
+  it('pans on a right-button drag without requesting the menu', async () => {
+    const onViewportChange = vi.fn();
+    const onContextMenuRequest = vi.fn();
+    ({ root, container } = createTestRoot());
+    await renderCanvas([], [], { onViewportChange, onContextMenuRequest });
+    const viewport = container?.querySelector<HTMLElement>('[data-canvas-viewport-root="true"]');
+    if (!viewport) throw new Error('Canvas viewport did not render');
+
+    await act(async () => {
+      viewport.dispatchEvent(
+        new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          button: 2,
+          clientX: 10,
+          clientY: 20,
+        }),
+      );
+    });
+    await act(async () => {
+      viewport.dispatchEvent(
+        new MouseEvent('mousemove', {
+          bubbles: true,
+          buttons: 2,
+          clientX: 40,
+          clientY: 45,
+        }),
+      );
+      viewport.dispatchEvent(
+        new MouseEvent('mouseup', {
+          bubbles: true,
+          button: 2,
+          clientX: 40,
+          clientY: 45,
+        }),
+      );
+    });
+
+    expect(onViewportChange).toHaveBeenLastCalledWith({ pan: { x: 30, y: 25 } });
+    expect(onContextMenuRequest).not.toHaveBeenCalled();
+  });
 });
 
 async function renderCanvas(
@@ -128,6 +214,8 @@ async function renderCanvas(
     ) => void;
     readonly onNodeSelect?: (nodeId: string, multi: boolean) => void;
     readonly onCanvasClick?: () => void;
+    readonly onViewportChange?: (viewport: Partial<CanvasViewport>) => void;
+    readonly onContextMenuRequest?: (event: ReactMouseEvent) => void;
   },
 ): Promise<void> {
   await act(async () => {
@@ -137,10 +225,11 @@ async function renderCanvas(
         connections={[]}
         viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
         selectedNodeIds={selectedNodeIds}
-        onViewportChange={vi.fn()}
+        onViewportChange={callbacks.onViewportChange ?? vi.fn()}
         onNodesMove={callbacks.onNodesMove}
         onNodeSelect={callbacks.onNodeSelect}
         onCanvasClick={callbacks.onCanvasClick}
+        onContextMenuRequest={callbacks.onContextMenuRequest}
         enableCulling={false}
         isGridVisible={false}
       />,

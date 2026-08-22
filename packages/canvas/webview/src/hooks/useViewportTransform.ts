@@ -32,6 +32,8 @@ export interface ViewportTransformState {
   startViewport: CanvasViewport;
 }
 
+export type ViewportPointerReleaseDisposition = 'none' | 'pan-ended' | 'open-context-menu';
+
 export interface UseViewportTransformOptions {
   viewport: CanvasViewport;
   onViewportChange: (viewport: Partial<CanvasViewport>) => void;
@@ -51,7 +53,7 @@ export interface UseViewportTransformReturn {
   handlers: {
     onMouseDown: (e: React.MouseEvent) => void;
     onMouseMove: (e: React.MouseEvent) => void;
-    onMouseUp: () => void;
+    onMouseUp: (e: React.MouseEvent) => ViewportPointerReleaseDisposition;
     onMouseLeave: () => void;
     onContextMenu: (e: React.MouseEvent) => void;
   };
@@ -89,7 +91,7 @@ export function useViewportTransform(
     startViewport: { pan: { x: 0, y: 0 }, zoom: 1 },
   });
   const rightPanStartRef = useRef<{ x: number; y: number } | null>(null);
-  const suppressContextMenuRef = useRef(false);
+  const rightPanActivatedRef = useRef(false);
 
   // Mouse down - start panning
   const onMouseDown = useCallback(
@@ -107,9 +109,10 @@ export function useViewportTransform(
 
       if (e.button === RIGHT_BUTTON) {
         rightPanStartRef.current = { x: e.clientX, y: e.clientY };
-        suppressContextMenuRef.current = false;
+        rightPanActivatedRef.current = false;
       } else {
         rightPanStartRef.current = null;
+        rightPanActivatedRef.current = false;
       }
 
       setState({
@@ -131,12 +134,14 @@ export function useViewportTransform(
       const deltaY = e.clientY - state.startPan.y;
 
       const rightPanStart = rightPanStartRef.current;
-      if (
-        rightPanStart &&
-        Math.hypot(e.clientX - rightPanStart.x, e.clientY - rightPanStart.y) >=
+      if (rightPanStart && !rightPanActivatedRef.current) {
+        if (
+          Math.hypot(e.clientX - rightPanStart.x, e.clientY - rightPanStart.y) <
           RIGHT_DRAG_THRESHOLD_PX
-      ) {
-        suppressContextMenuRef.current = true;
+        ) {
+          return;
+        }
+        rightPanActivatedRef.current = true;
       }
 
       onViewportChange({
@@ -150,14 +155,28 @@ export function useViewportTransform(
   );
 
   // Mouse up - end panning
-  const onMouseUp = useCallback(() => {
-    if (state.isPanning) {
-      setState((prev) => ({ ...prev, isPanning: false }));
-    }
-  }, [state.isPanning]);
+  const onMouseUp = useCallback(
+    (e: React.MouseEvent): ViewportPointerReleaseDisposition => {
+      const wasRightPointerGesture = rightPanStartRef.current !== null;
+      const wasRightPan = rightPanActivatedRef.current;
+      rightPanStartRef.current = null;
+      rightPanActivatedRef.current = false;
+
+      if (state.isPanning) {
+        setState((prev) => ({ ...prev, isPanning: false }));
+      }
+      if (wasRightPointerGesture && e.button === RIGHT_BUTTON) {
+        return wasRightPan ? 'pan-ended' : 'open-context-menu';
+      }
+      return state.isPanning ? 'pan-ended' : 'none';
+    },
+    [state.isPanning],
+  );
 
   // Mouse leave - end panning
   const onMouseLeave = useCallback(() => {
+    rightPanStartRef.current = null;
+    rightPanActivatedRef.current = false;
     if (state.isPanning) {
       setState((prev) => ({ ...prev, isPanning: false }));
     }
@@ -166,20 +185,21 @@ export function useViewportTransform(
   const onContextMenu = useCallback(
     (e: React.MouseEvent) => {
       if (disabled) return;
-      if (!suppressContextMenuRef.current) return;
+      if (e.button !== RIGHT_BUTTON) return;
 
       e.preventDefault();
       e.stopPropagation();
-      suppressContextMenuRef.current = false;
     },
     [disabled],
   );
 
   useEffect(() => {
-    if (!disabled || !state.isPanning) return;
+    if (!disabled) return;
     rightPanStartRef.current = null;
-    suppressContextMenuRef.current = false;
-    setState((current) => ({ ...current, isPanning: false }));
+    rightPanActivatedRef.current = false;
+    if (state.isPanning) {
+      setState((current) => ({ ...current, isPanning: false }));
+    }
   }, [disabled, state.isPanning]);
 
   // Wheel - pan by default, zoom only for explicit modifier/pinch gestures.

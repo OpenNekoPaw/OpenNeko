@@ -1446,7 +1446,31 @@ html.canvas-webview-document #root,
   color: var(--node-fg-secondary);
   font-size: 12px;
   line-height: 18px;
-  pointer-events: none;
+  cursor: inherit;
+  pointer-events: auto;
+}
+
+.canvas-node-drag-rail {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  height: 8px;
+  cursor: inherit;
+}
+
+.canvas-node-drag-rail--top {
+  top: -8px;
+}
+
+.canvas-node-drag-rail--bottom {
+  bottom: -8px;
+}
+
+.canvas-text-reference-node > .canvas-node-external-label {
+  top: -20px;
+  font-size: 10px;
+  line-height: 15px;
 }
 
 .canvas-node-external-label > span:last-child {
@@ -1608,9 +1632,9 @@ html.canvas-webview-document #root,
   flex: none;
   overflow: hidden;
   color: var(--node-fg);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  line-height: 16px;
+  line-height: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
