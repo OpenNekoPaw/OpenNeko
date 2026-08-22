@@ -113,18 +113,6 @@ import {
   type DesktopApplicationSettingsResponse,
 } from '@neko/host/application-settings';
 import type { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
-import {
-  parseAutomationLocalRuntimeManagementHostRequest,
-  type AutomationLocalRuntimeManagementHostResult,
-} from '@neko/automation-contracts/local-runtime-management';
-import {
-  parseAutomationPermissionManagementHostRequest,
-  type AutomationPermissionManagementHostResult,
-} from '@neko/automation-contracts/permission-management';
-import type {
-  AutomationLocalRuntimeManagementService,
-  AutomationPermissionManagementService,
-} from '@neko/automation-node';
 import type { ProjectPortabilityRuntime } from '@neko/assets-node';
 import type {
   DesktopProjectPortabilityCancelResult,
@@ -330,8 +318,6 @@ export interface DesktopAppHostOptions {
   readonly canvasWorkspaceIndexService?: CanvasWorkspaceIndexService;
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
-  readonly automationLocalRuntimes: AutomationLocalRuntimeManagementService;
-  readonly automationPermissions: AutomationPermissionManagementService;
   readonly openAgentAdvancedSettings: () => Promise<void>;
   readonly instanceId?: string;
 }
@@ -1335,94 +1321,6 @@ export class DesktopAppHost {
       requestId: request.requestId,
       route: request.route,
       projection,
-    };
-  }
-
-  async executeAutomationLocalRuntimeManagement(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<AutomationLocalRuntimeManagementHostResult> {
-    this.requireActive();
-    const request = parseAutomationLocalRuntimeManagementHostRequest(payload);
-    const window = this.windows.resolveSender(sender);
-    if (request.identity.windowId !== window.windowId) {
-      throw new Error('Automation local runtime management request belongs to another Window.');
-    }
-    const shell = await this.shell.getProjection(window.windowId);
-    const activeScene = resolveActiveDesktopWindowWorkbench(shell.window).scene;
-    if (activeScene.context.kind !== 'extensions') {
-      throw new Error(
-        'Automation local runtime management request does not match the active Scene.',
-      );
-    }
-    let runtimes;
-    switch (request.route) {
-      case 'snapshot.get':
-        runtimes = await this.options.automationLocalRuntimes.list();
-        break;
-      case 'guide.open':
-        runtimes = await this.options.automationLocalRuntimes.openInstallationGuide(
-          request.sourceId,
-        );
-        break;
-      case 'command.copy':
-        runtimes = await this.options.automationLocalRuntimes.copyInstallationCommand(
-          request.sourceId,
-        );
-        break;
-      case 'asset.authorize':
-        runtimes = await this.options.automationLocalRuntimes.authorizeAsset(
-          request.sourceId,
-          request.assetKey,
-          window.windowId,
-        );
-        break;
-      case 'runtime.recheck':
-        runtimes = await this.options.automationLocalRuntimes.recheck(
-          request.sourceId,
-          request.runtimeId,
-        );
-        break;
-      case 'runtime.disconnect':
-        runtimes = await this.options.automationLocalRuntimes.disconnect(
-          request.sourceId,
-          request.runtimeId,
-        );
-        break;
-    }
-    return {
-      requestId: request.requestId,
-      route: request.route,
-      projection: {
-        identity: request.identity,
-        runtimes,
-      },
-    };
-  }
-
-  async executeAutomationPermissionManagement(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<AutomationPermissionManagementHostResult> {
-    this.requireActive();
-    const request = parseAutomationPermissionManagementHostRequest(payload);
-    const window = this.windows.resolveSender(sender);
-    if (request.identity.windowId !== window.windowId) {
-      throw new Error('Automation permission management request belongs to another Window.');
-    }
-    const shell = await this.shell.getProjection(window.windowId);
-    const activeScene = resolveActiveDesktopWindowWorkbench(shell.window).scene;
-    if (activeScene.context.kind !== 'extensions') {
-      throw new Error('Automation permission management request does not match the active Scene.');
-    }
-    const permissions =
-      request.route === 'snapshot.get'
-        ? await this.options.automationPermissions.list()
-        : await this.options.automationPermissions.request(request.permission);
-    return {
-      requestId: request.requestId,
-      route: request.route,
-      projection: { identity: request.identity, permissions },
     };
   }
 

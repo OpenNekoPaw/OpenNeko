@@ -19,6 +19,8 @@ test('accepts the canonical minimal extension surface', () => {
   assert.deepEqual(validateSurfaceStructure(surface), []);
   assert.equal('pluginState' in surface, false);
   assert.equal('skillAuthoringMetadata' in surface, false);
+  assert.deepEqual(surface.extensionManagement.visibleTypes, ['skill', 'mcp']);
+  assert.equal(surface.extensionManagement.pluginVisible, false);
 });
 
 test('rejects coupling portable Skills to Host packaging or MCP', () => {
@@ -46,17 +48,24 @@ test('rejects retired Agent Skill Tool instructions in stable architecture', () 
   }
 });
 
-test('requires Extension Management to project DSH without a Host registry', () => {
+test('requires Extension Management to project only DSH Skill and MCP catalogs', () => {
   assert.deepEqual(
     validateDshExtensionManagementHostSource(
-      'const snapshot = await this.options.runtime.client.readExtensions();',
+      'const snapshot = await this.options.runtime.client.readExtensions(); return { skills: snapshot.skills, mcp: snapshot.mcp };',
     ),
     [],
   );
   assert.deepEqual(validateDshExtensionManagementHostSource('const snapshot = plugin_states;'), [
     'Extension Management host must project the canonical DSH extension snapshot',
+    'Extension Management host must project both Skill and MCP catalogs',
     'Extension Management host retains retired authority plugin_states',
   ]);
+  assert.deepEqual(
+    validateDshExtensionManagementHostSource(
+      'const snapshot = await this.options.runtime.client.readExtensions(); return { skills: snapshot.skills, mcp: snapshot.mcp, plugins: snapshot.plugins };',
+    ),
+    ['Extension Management host retains retired authority plugins:'],
+  );
 });
 
 test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrations', () => {

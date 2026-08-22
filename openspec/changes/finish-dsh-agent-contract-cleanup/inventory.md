@@ -11,9 +11,8 @@
 | Current input attachments        | `message-attachment`, `agent-file-reference`, `agent-context`                           | Agent runtime input and Agent Webview composer                |
 | Skill/MCP management             | `extension-management`, `extension-management-host`                                     | Desktop scene/IPC and Agent Webview management Root           |
 
-`extension-management` is retained because the Skill/MCP scene is live. Its stale product naming is
-not evidence that the old OpenNeko Extension runtime remains; rename/removal requires a separate
-atomic scene + IPC + Root change.
+`extension-management` is retained because the Skill/MCP scene is live. Its product name denotes the
+user-facing container, not an OpenNeko Plugin runtime or a third user-visible extension kind.
 
 ## Deleted closed graphs
 

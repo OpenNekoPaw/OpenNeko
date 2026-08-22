@@ -273,12 +273,12 @@ Agent 能力按 owning package 职责分层：
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `@neko/agent-contracts`      | Agent/Main/preload/renderer contract、effective configuration、facts 和状态投影                                            |
 | `@neko/agent-runtime`        | DSH Session application、Conversation binding、ACP event projection 与 host-neutral ports                                |
-| `@neko/automation-contracts` | Browser/Computer provider、profile、exact target/session grant、action、evidence 与 diagnostic 的 L0 contract              |
-| `@neko/automation-node`      | 自动化 session/target/mode/budget/approval policy、reviewed MCP provider wrapper 与 transient observation 编排             |
+| `@neko/automation-contracts` | retained kernel：Browser/Computer provider、profile、exact target/session grant、action、evidence 与 diagnostic 的 L0 contract |
+| `@neko/automation-node`      | retained kernel：自动化 session/target/mode/budget/approval policy、reviewed provider wrapper 与 transient observation 编排 |
 | `@neko/ai-contracts`         | provider/model configuration contracts                                                                                     |
 | `@neko/ai-sdk`               | provider/AI SDK adapter                                                                                                    |
 | `@neko/host`                 | Host settings、配置解析、credential/file port contract 与应用设置状态机                                                    |
-| `@neko/agent-webview`        | DSH Agent 与 Skill/MCP management 的 browser-only presentation；不拥有 Agent、Skill、MCP 或 Plugin runtime              |
+| `@neko/agent-webview`        | DSH Session 与 Skill/MCP management 的 browser-only presentation；不拥有 Agent、Skill、MCP 或 Plugin runtime              |
 | `@neko/chara-webview`        | Character、Dialogue 与 Chatroom 的 browser-only 产品视图和可丢弃展示状态                                                   |
 | `@neko/world-webview`        | World 管理、目录创作、确定性 Runtime Workbench 与可丢弃展示状态；不实现完整 World Experience                               |
 
@@ -325,7 +325,7 @@ owner，不进入 runtime、协议或 UI；未来若出现真实独立需求，�
 
 Quality 的边界由 [`adr-agent-runtime-single-authority-and-simplification-boundary.md`](adr-agent-runtime-single-authority-and-simplification-boundary.md) 定义：`@neko/quality` 已建立为中立 runtime，拥有 canonical contract validation、evidence freshness、Gate aggregation、evaluator port、provider-neutral model adapter 和通用 ProjectQuality facade orchestration；owning package 继续拥有领域 rubric、目标 materialization、确定性检查、Gate policy、repair 和 apply。跨包 contract 暂留 `@neko/shared`；Desktop Agent composition 只保留 Tool/Capability、purpose-model 和授权资源 materializer 适配。
 
-用户可见扩展 seam 只有 DSH Skill 与 MCP；DSH Plugin 只用于官方内部 composition。Generation、Canvas、Cut、Assets、Character、World 等领域能力以精确 first-party DSH Tool contribution 接入，DSH 拥有 Tool call lifecycle，owning package 拥有 schema、validation、authorization、事务、事实与 Job。不得恢复 OpenNeko Capability Host、generic Tool registry、MCP wrapper 或 External Processor 作为平行成功路径。
+用户可见 Extension 管理 seam 只有 DSH Skill 与 MCP 的只读投影；DSH Plugin 只用于官方内部 composition，不进入产品 catalog。Generation、Canvas、Cut、Assets、Character、World 等领域能力以精确 first-party DSH Tool contribution 接入，DSH 拥有 Tool call lifecycle，owning package 拥有 schema、validation、authorization、事务、事实与 Job。不得恢复 OpenNeko Capability Host、generic Tool registry、MCP wrapper 或 External Processor 作为平行成功路径。
 
 ## 保留领域包
 

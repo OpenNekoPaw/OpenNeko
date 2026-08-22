@@ -9,8 +9,6 @@ import { DESKTOP_CUT_CHANNELS } from '../shared/cut-bridge-contract';
 import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '@neko/host/application-settings';
 import { DESKTOP_PROJECT_PORTABILITY_CHANNELS } from '@neko/assets-domain/contracts';
 import { ASSET_CENTER_HOST_CHANNEL } from '@neko/assets-domain/asset-center/host-contract';
-import { AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL } from '@neko/automation-contracts/local-runtime-management';
-import { AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL } from '@neko/automation-contracts/permission-management';
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
 import { DSH_PERMISSION_HOST_CHANNEL } from '@neko/agent-contracts/dsh-permission-host';
 import {
@@ -393,16 +391,6 @@ export function registerDesktopIpc(
     appHost.executeAssetCenter(requireSender(event), payload),
   );
   ipcMain.handle(
-    AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeAutomationLocalRuntimeManagement(requireSender(event), payload),
-  );
-  ipcMain.handle(
-    AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeAutomationPermissionManagement(requireSender(event), payload),
-  );
-  ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectOpenContent,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.openContentProject(requireSender(event), payload, () =>
@@ -511,8 +499,6 @@ export function registerDesktopIpc(
       DESKTOP_BRIDGE_CHANNELS.bootstrapGet,
       DESKTOP_SHELL_CHANNELS.snapshotGet,
       ASSET_CENTER_HOST_CHANNEL,
-      AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
-      AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
       DESKTOP_SHELL_CHANNELS.projectOpenContent,
       DESKTOP_SHELL_CHANNELS.projectOpenCatalog,
       DESKTOP_SHELL_CHANNELS.projectRemove,

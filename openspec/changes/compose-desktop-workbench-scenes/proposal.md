@@ -81,7 +81,7 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - `@neko/ui` 继续拥有无领域状态的 `ControlledWorkbenchShell`、slots、resize 与可访问交互 primitive；不新增产品 scene registry 或领域判断。
 - `@neko/agent-contracts`、`@neko/agent-runtime` 与 `@neko/agent-webview` 拥有唯一 Agent Root、draft/session presentation、`assistant | workspace` scope、launch-safe capability catalog、conversation context、Assistant user-space/scratch lifecycle 和幂等 initial turn。
 - `@neko/assets-domain` 与 `@neko/assets-webview` 拥有 `AssetCenterSession`、management selection 和资源 Root；`@neko/preview-*` 消费 Host 授权的 exact resource descriptor，不接收本地路径。
-- Extensions Scene 复用 Assets 的管理/详情 sibling panel composition：`@neko/agent-webview` 拥有 Skill/扩展分类、查询、网格/列表和当前选择等可丢弃 presentation state。没有选择时管理 Main 独占可用区域；选择后 Secondary Main 贴边显示当前配置，不保留空白 margin/gap。Automation endpoint 与 Host permission Roots 仅在已选择的扩展配置中挂载，不得出现在 Skill 页面或未选择状态。
+- Extensions Scene 使用单一全宽 Main：`@neko/agent-webview` 只拥有 Skill/MCP 分类、查询和网格/列表等可丢弃 presentation state；不提供 Plugin 分类、选择详情、安装/启停/config、Automation slot、Secondary Main 或 resize gutter。
 - `@neko/canvas-*`、`@neko/cut-*`、`@neko/preview-*` 继续拥有 workspace creative Roots；scene composition 不复制其状态、业务逻辑或媒体 runtime。
 - Agent extension management UI 必须通过 Agent package public Root/port 暴露；项目目录与 Settings 只保留 app-level placement，领域状态与操作继续委托 owning Host/package contract。
 - `apps/neko-desktop` 只保留 Electron Window/View 生命周期、typed IPC/preload、目录/文件/麦克风授权 adapter 和将公开 Roots 放入已验证 slots 的 presentation composition。

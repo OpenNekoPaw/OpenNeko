@@ -2,7 +2,7 @@
 
 OpenNeko 当前由 `@neko/agent-runtime` 直接组合 Pi Agent/Session，并自研 Tool registry、消息队列、Timeline/history projector、Skill Host、MCP client/bootstrap、Plugin contribution runtime。`apps/neko-desktop` 通过 package public entries 完成 Electron Main/preload/renderer wiring。本变更用独立 DSH 子进程 + ACP JSON-RPC stdio 替换内嵌 runtime，同时保持 OpenNeko 产品 authority 和 Electron 原生 UI。
 
-DSH 官方 rc.8 profile 仍未完整覆盖 OpenNeko 所需的 session list/load/resume/history replay、tool/progress events、per-session close、inbox 管理、extension 管理面与 Host reverse tool 请求。因此保留一个 OpenNeko-owned、随产品发布的 DSH ACP bridge plugin/profile，在 DSH 内只复用公开 Agent/Session/Settings/Skill/MCP API 补齐这些语义；bridge 不得成为第二套 runtime。
+DSH 官方 rc.8 profile 仍未完整覆盖 OpenNeko 所需的 session list/load/resume/history replay、tool/progress events、per-session close、inbox 管理、Skill/MCP 管理投影与 Host reverse tool 请求。因此保留一个 OpenNeko-owned、随产品发布的 DSH ACP bridge plugin/profile，在 DSH 内只复用公开 Agent/Session/Skill/MCP API 补齐这些语义；bridge 不得成为第二套 runtime。
 
 用户要求整体迁移并一次性原子发布，同时要求先删除旧执行栈，让真实缺口直接暴露。迁移集成分支因此允许在 D0 删除后暂时无法编译或运行；这种不可运行状态不得进入普通主线或发布流程。并行开发只用于缩短实现时间，不产生可单独发布的中间产品状态。一个总 OpenSpec 拥有交付边界；隔离分支/worktree 中的工作流必须在同一集成分支汇合，并通过统一门禁后一次切换。
 
@@ -243,7 +243,7 @@ Provider credential 的 host-neutral owner 是 `@neko/host/settings` public entr
 
 ### 7. Q0 是子进程资格 fixture，不重复安装验证
 
-已知 dsh CLI 可正常使用，因此不重复安装验证。`scripts/dsh-q0` 非发布 fixture 必须验证：subprocess lifecycle、stdout purity、handshake/capability、session recovery/history、progress、permission、cancel、inbox、Host tool reverse requests、extension management、crash/restart/fail-local。真实 Provider 基线已通过可见 Desktop UI、产品 Composer、DSH/ACP 和真实 API 验证，并保留 exact provider/model、turn terminal 与 no-fallback 证据；Q0 结果仍不得冒充该证据，也不得被提升为 Desktop 发布产物。完整发布矩阵仍 fail-closed。
+已知 dsh CLI 可正常使用，因此不重复安装验证。`scripts/dsh-q0` 非发布 fixture 必须验证：subprocess lifecycle、stdout purity、handshake/capability、session recovery/history、progress、permission、cancel、inbox、Host tool reverse requests、Skill/MCP 管理投影、crash/restart/fail-local。真实 Provider 基线已通过可见 Desktop UI、产品 Composer、DSH/ACP 和真实 API 验证，并保留 exact provider/model、turn terminal 与 no-fallback 证据；Q0 结果仍不得冒充该证据，也不得被提升为 Desktop 发布产物。完整发布矩阵仍 fail-closed。
 
 Agent Evaluation 必须使用完整 Desktop Session owner 与公开 Composer input path，facts 以 `conversationId`、`dshSessionId`、DSH turn/step/toolCall、permission preset、model receipt、Skill/Command invocation、MCP/Tool provenance、attachment/perception evidence 和 domain Job/artifact identity 为准。Pi `runId/branchId/queue` assertions 与 direct runtime driver 必须原子删除；visible UI + real provider 负责产品验收，hidden full Desktop + real provider 负责批量回归。缺少 canonical driver 或 API 授权时返回 `infrastructure-blocked`，不能用 Q0、mock 或最终文本 fixture 冒充行为证据。
 
@@ -271,7 +271,7 @@ D0 只删除仓库代码和依赖，不得读取、修改或删除旧 Pi Session
 - **[旧 Pi Conversation 无法在新版本打开]** → 原字节保留、catalog 可见、局部 diagnostic 与显式删除入口；不伪造迁移成功。
 - **[DSH Tool validation 比现有 contract 弱]** → owning domain adapter 在调用 owner 前复用 canonical semantic validator，并用负例测试证明无 bypass。
 - **[官方 profile/plugin 闭包漂移]** → 精确锁定并作为独立升级变更重新验收。
-- **[DSH extension/settings 公开 API 不足]** → 只交付可由公开 API 证明的 Skill/MCP read model；其余保持 fail-visible blocker，不恢复旧 catalog/runtime 或读取私有模块。
+- **[DSH extension/settings 公开 API 不足]** → 只交付公开 API 可证明的 Skill/MCP read model；其余保持 visible unavailable，不恢复旧 Plugin catalog/runtime 或读取私有模块。
 - **[DSH 非图片附件尚未实现]** → 图片先走 DSH 原生 attachment；音视频/文档只提交授权后的有界 evidence，并在上游公开 block 可用后再扩展 canonical contract。
 - **[发布后回滚到 Pi 会无法读取新 DSH Session]** → 不提供 in-product Pi rollback；发布前可整体撤销集成分支，发布后只能提供 DSH-compatible 修复版本并保留所有 Session 数据。
 

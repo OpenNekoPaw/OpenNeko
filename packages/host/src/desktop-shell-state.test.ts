@@ -58,6 +58,34 @@ describe('Desktop Shell state codec', () => {
     });
   });
 
+  it('restores a persisted Skill/MCP Extensions scene', () => {
+    const initial = withPrimaryWindow(createEmptyDesktopShellState(), 'window:extensions');
+    const state = {
+      ...initial,
+      windows: initial.windows.map((window) => ({
+        ...window,
+        workbench: {
+          ...window.workbench,
+          scene: {
+            sceneId: 'scene:window:extensions',
+            windowId: window.windowId,
+            context: { kind: 'extensions' },
+            slots: {
+              main: { kind: 'extension-management' },
+              status: { kind: 'scene-status', sceneId: 'scene:window:extensions' },
+            },
+          },
+        },
+      })),
+    };
+
+    const parsed = parseDesktopShellStoredState(state);
+
+    expect(parsed.windows).toEqual(state.windows);
+    expect(readDesktopShellStateDiagnostics(parsed)).toEqual([]);
+    expect(serializeDesktopShellStoredState(parsed)).toEqual(state);
+  });
+
   it('restores valid root collections while retaining unknown metadata unchanged', () => {
     const state = {
       primaryWindowId: null,

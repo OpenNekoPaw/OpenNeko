@@ -40,7 +40,7 @@ Quality、Canvas、Cut 或 Generation 的可变状态。领域之间通过 typed
 Host settings、Generation、Content 等真实 owner 暴露窄入口；不得重新建立万能 manager 或兼容
 facade。单一稳定调用链不额外叠加 factory、registry、provider 和 facade。
 
-Generation、Canvas、Cut、Assets、Character 与 World 是 first-party DSH Tools；Browser Use 与 Computer Use 是官方 DSH MCP contributions。用户可见扩展只有 Skill/MCP，Plugin 不构成第三方产品平台。外部能力只有存在真实配置、审批策略和端到端 consumer 时才注册，不形成平行 Capability 系统。
+Generation、Canvas、Cut、Assets、Character 与 World 是 first-party DSH Tools；Browser Use 与 Computer Use 是官方 DSH MCP contributions。用户可见扩展管理只有 Skill/MCP，Plugin 不构成第三方产品平台。外部能力只有存在真实配置、审批策略和端到端 consumer 时才注册，不形成平行 Capability 系统。
 
 ## 验证
 

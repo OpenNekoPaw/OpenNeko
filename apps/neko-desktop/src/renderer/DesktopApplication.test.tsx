@@ -81,12 +81,10 @@ vi.mock('./DesktopExtensionManagementSurface', () => ({
   }) => {
     rendererInstrumentation.extensionRootRender(runtime.identity.windowId);
     return (
-      <>
-        <div
-          data-extension-management-root="agent"
-          data-extension-management-window={runtime.identity.windowId}
-        />
-      </>
+      <div
+        data-extension-management-root="agent"
+        data-extension-management-window={runtime.identity.windowId}
+      />
     );
   },
 }));
@@ -1494,9 +1492,8 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('disposes the exact Extensions runtime when Settings replaces its Scene slots', async () => {
-    const assistant = createProjection();
-    const projection = withActiveScene(assistant, extensionsScene());
+  it('disposes the exact Skill/MCP catalog runtime when Settings replaces its Scene', async () => {
+    const projection = withActiveScene(createProjection(), extensionsScene());
     let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
     const dispose = vi.spyOn(DesktopExtensionManagementRuntime.prototype, 'dispose');
     installBridge({
@@ -1509,15 +1506,7 @@ describe('DesktopApplication scene lifecycle', () => {
     const { container, root } = await renderApplication();
     expect(container.querySelector('[data-extension-management-window="window-1"]')).not.toBeNull();
 
-    const settings = withActiveScene(
-      {
-        ...projection,
-        window: {
-          ...projection.window,
-        },
-      },
-      settingsScene(),
-    );
+    const settings = withActiveScene(projection, settingsScene());
     await act(async () => {
       listener?.({
         applicationInstanceId: projection.applicationInstanceId,
@@ -1546,7 +1535,7 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('keeps the DSH extension catalog as a single read-only surface', async () => {
+  it('keeps the DSH Skill/MCP catalog as a single read-only surface', async () => {
     const projection = withActiveScene(createProjection(), extensionsScene());
     installBridge({ projection });
     const { container, root } = await renderApplication();
@@ -3678,7 +3667,6 @@ function extensionsScene() {
     context: { kind: 'extensions' },
     slots: {
       main: { kind: 'extension-management' },
-      secondaryMain: { kind: 'extension-detail' },
       status: { kind: 'scene-status', sceneId },
     },
   });

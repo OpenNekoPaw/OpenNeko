@@ -18,7 +18,7 @@ The migration integration branch SHALL begin with a destructive D0 code cut: rem
 
 ### Requirement: Deterministic Q0 qualification gates production implementation
 
-Before production consumer switching, Q0 SHALL establish or rebuild a non-release `scripts/dsh-q0` fixture and verify the DSH subprocess lifecycle, ACP stdout purity, handshake/capability negotiation, Session list/load/resume/history, Tool/progress updates, permission, cancellation, inbox operations, typed Host Tool reverse requests, official extension management and crash/restart isolation. Existing global DSH CLI usability is accepted and SHALL NOT trigger another installation task. A missing required deterministic result SHALL stop production implementation rather than introduce a fallback.
+Before production consumer switching, Q0 SHALL establish or rebuild a non-release `scripts/dsh-q0` fixture and verify the DSH subprocess lifecycle, ACP stdout purity, handshake/capability negotiation, Session list/load/resume/history, Tool/progress updates, permission, cancellation, inbox operations, typed Host Tool reverse requests, Skill/MCP management projection and crash/restart isolation. Existing global DSH CLI usability is accepted and SHALL NOT trigger another installation task. A missing required deterministic result SHALL stop production implementation rather than introduce a fallback.
 
 #### Scenario: Deterministic Q0 passes
 
@@ -66,7 +66,7 @@ Real provider/API validation MAY be temporarily skipped by explicit user directi
 
 ### Requirement: Parallel workstreams share one integration authority
 
-After the integration owner completes D0 and freezes shared contracts, subprocess/bridge, first domain Tool slice, extension management, product consumer, catalog/data, subsequent Tool migration, Evaluation and deletion-proof work MAY proceed in isolated worktrees. They SHALL share one total change, one integration owner and one integration branch. A file-owner manifest SHALL assign contract, bridge, projection, catalog, Evaluation and deletion-proof surfaces without overlap. No workstream SHALL independently add compatibility fields, restore retired paths or define release truth.
+After the integration owner completes D0 and freezes shared contracts, subprocess/bridge, first domain Tool slice, DSH Skill/MCP runtime composition, product consumer, catalog/data, subsequent Tool migration, Evaluation and deletion-proof work MAY proceed in isolated worktrees. They SHALL share one total change, one integration owner and one integration branch. A file-owner manifest SHALL assign contract, bridge, projection, catalog, Evaluation and deletion-proof surfaces without overlap. No workstream SHALL independently add compatibility fields, restore retired paths or define release truth.
 
 #### Scenario: A workstream discovers a contract gap
 
@@ -82,7 +82,7 @@ After the integration owner completes D0 and freezes shared contracts, subproces
 
 ### Requirement: Integration order establishes one future runtime
 
-D0 SHALL delete retired execution paths before replacement implementation. Q0 and contract freeze SHALL establish the only new boundary. W1 SHALL establish the DSH subprocess and ACP bridge spine. W2 SHALL prove Generation and Canvas end-to-end as the first Tool slice. W3 SHALL establish DSH-owned official extension management. W4 SHALL switch contracts and Desktop consumers. W5 SHALL protect catalog and retired Pi data. W6 SHALL migrate remaining domain Tools. W7 SHALL collect Evaluation evidence. W8 SHALL prove that deletion is complete and close every replacement inventory item. No intermediate state SHALL be released.
+D0 SHALL delete retired execution paths before replacement implementation. Q0 and contract freeze SHALL establish the only new boundary. W1 SHALL establish the DSH subprocess and ACP bridge spine. W2 SHALL prove Generation and Canvas end-to-end as the first Tool slice. W3 SHALL establish DSH-owned Skill/MCP runtime composition and the snapshot-only product management projection. W4 SHALL switch contracts and Desktop consumers. W5 SHALL protect catalog and retired Pi data. W6 SHALL migrate remaining domain Tools. W7 SHALL collect Evaluation evidence. W8 SHALL prove that deletion is complete and close every replacement inventory item. No intermediate state SHALL be released.
 
 #### Scenario: Retired producer still has a consumer
 

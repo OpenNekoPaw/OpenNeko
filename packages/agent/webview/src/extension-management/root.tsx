@@ -12,21 +12,11 @@ import type {
 export type AgentExtensionManagementTab = 'skills' | 'mcp';
 export type AgentExtensionManagementView = 'grid' | 'list';
 
-export interface AgentExtensionManagementDetailRenderInput {
-  readonly content: JSX.Element;
-  readonly selectedItemId: string | undefined;
-  readonly tab: AgentExtensionManagementTab;
-}
-
 export function AgentExtensionManagementRoot({
   interactive,
-  onDetailVisibilityChange,
   runtime,
 }: {
-  readonly confirmAction: (message: string) => boolean | Promise<boolean>;
   readonly interactive: boolean;
-  readonly onDetailVisibilityChange?: (visible: boolean) => void;
-  readonly renderDetail?: (input: AgentExtensionManagementDetailRenderInput) => JSX.Element;
   readonly runtime: AgentExtensionManagementRuntime;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -36,11 +26,6 @@ export function AgentExtensionManagementRoot({
   const [projection, setProjection] = useState<AgentExtensionManagementProjection>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    onDetailVisibilityChange?.(false);
-    return () => onDetailVisibilityChange?.(false);
-  }, [onDetailVisibilityChange]);
 
   useEffect(() => {
     if (!interactive) return;
@@ -171,7 +156,7 @@ export function AgentExtensionManagementRoot({
           <EmptyState
             fill
             icon={<PackageIcon size={24} />}
-            title={loading ? 'Loading' : 'No entries'}
+            title={loading ? t('home.capabilities.loading') : t('home.capabilities.noEntries')}
           />
         ) : null}
         {entries.map(({ kind, item }) => (

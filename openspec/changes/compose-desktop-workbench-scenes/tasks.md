@@ -39,7 +39,7 @@
 
 - [x] 5.1 Move Extensions/Skills presentation from `DesktopShell` to an Agent package public management Root in Workbench Main using the existing extension application contract; retain Desktop only as typed adapter/placement.
 - [x] 5.2 Compose project catalog/selection and available detail inside manager/main slots; keep selection separate from explicit directory/Workspace opening.
-- [x] 5.3 Add owner/public-entry, empty/unavailable detail, scope mismatch, scene switching and Root disposal tests for Extensions, project management and Settings.
+- [x] 5.3 Add owner/public-entry, empty/unavailable catalog, scope mismatch, scene switching and Root disposal tests for Extensions, project management and Settings.
 - [x] 5.4 Delete superseded Home management containers, CSS, route branches and app-owned extension UI helpers; run legacy/unused checks for removed paths.
 
 ## 6. Canonical Agent Draft And Scope Contracts
@@ -81,7 +81,7 @@
 - [x] 9.9 Repair qualification regressions: attach Workspace sessions from Scene identity, make current-Project navigation idempotent, restore the dedicated PrimarySidebar toggle and bounded management presentation, reuse the canonical Preview presentation in Asset Center, and align Agent-only EmptyState with the composer; add focused producer/consumer and Electron path evidence.
 - [x] 9.10 Make Project/Workspace and conversation restore atomically activate `activeTarget`, Workbench, Scene and Agent phase; allow a live Workspace Scene with an empty Main after closing the last View and add Host/AppHost/renderer path regressions.
 - [x] 9.11 Preserve Pi `errorMessage` in the canonical transcript projection, prove failed turns remain diagnostic and successful turns remain conversational, and update/reuse the focused Agent workflow/stream-delivery evaluation evidence.
-- [x] 9.12 Reuse Workspace panel chrome and resize composition for Assets, Extensions and Projects management + optional Preview/Detail, retain `@neko/preview-webview` as the sole viewer implementation, and qualify large/small Electron layouts.
+- [x] 9.12 Reuse Workspace panel chrome for Assets, Extensions and Projects management; use resize composition only for owner-qualified Assets/Projects Preview/Detail, retain `@neko/preview-webview` as the sole viewer implementation, and qualify large/small Electron layouts.
 
 ## 10. Entry Draft Identity And Renderer Startup Recovery
 
@@ -97,7 +97,7 @@
 - [x] 10.10 Render Workspace Preview through canonical content-only Preview chrome, compose management/detail as independent tabless shells, and hide only the Workspace Resource Browser global refresh control; add package/Desktop regressions.
 - [x] 10.11 Qualify the corrected Agent activation and shell chrome in isolated development and packaged Electron at large/small sizes, then update `verification.md` and architecture documentation.
 - [x] 10.12 Replace blocking Entry Draft owner selection with deterministic direct-submit Assistant binding while preserving explicit Workspace directory and future Role owner selection; add Agent Webview, Host and Desktop path regressions plus focused Evaluation evidence.
-- [x] 10.13 Compose Assets, Extensions and Projects management plus Preview/Detail as two visually and structurally independent sibling shells with their own chrome/overflow boundaries and a resize gutter; add structure and real Electron layout evidence.
+- [x] 10.13 Compose Assets and Projects management plus Preview/Detail as two visually and structurally independent sibling shells with their own chrome/overflow boundaries and a resize gutter; keep Extensions as one full-width Main.
 - [x] 10.14 Re-run focused/full quality gates, update verification/architecture evidence and apply `neko-quality-review` for the corrected entry and management shell behavior.
 - [x] 10.15 Bind exact Entry Draft resource grants to deterministic Assistant scope before first-submit validation; reject partial/cross-draft binding and qualify an attached-file direct submit in development and packaged Electron.
 - [x] 10.16 Render authorized Preview through canonical content-only chrome with inherited shell theme, omit low-information Project Detail while preserving an explicit catalog open action, and qualify focused plus development/packaged Electron paths.
@@ -123,7 +123,7 @@ preserve or a legacy path to keep after the replacement is complete.
 - [x] 11.9 Add explicit `hot-retained | suspendable | ephemeral` lifecycle contracts and tests: retain core navigation/forms, suspend high-memory Canvas/media/3D resources with recoverable UI snapshots, reset Modal/Dialog invocations, recursively clear Window/user context, and reject one invalid child snapshot without dropping valid siblings.
 - [ ] 11.10 Complete `bound-desktop-ui-residency`, then run focused Host/Desktop/Agent/Assets/Canvas tests, strict OpenSpec/quality gates and visible real-provider Electron acceptance proving two Workspace/conversation histories remain recoverable while only current/explicit-split Roots mount and background execution remains independent.
 - [x] 11.11 Reconcile persisted session Agent Surfaces against the canonical owner-qualified Conversation catalog before renderer bootstrap; locally reject an invalid exact Surface, preserve Conversation authority bytes and valid siblings, activate a same-owner draft, project the diagnostic, and add Host/Desktop regressions plus deterministic Evaluation disposition.
-- [x] 11.12 Make Assets, Extensions and Projects management/detail compositions default to an equal split and constrain the management Main to at least 50%; add renderer resize-boundary tests and visible large/compact Electron evidence.
+- [x] 11.12 Make Assets and Projects management/detail compositions default to an equal split and constrain the management Main to at least 50%; keep Extensions full-width and add renderer resize-boundary tests plus visible large/compact Electron evidence.
 
 ## 12. Commit Entry Target Only On First Submit
 
@@ -169,11 +169,9 @@ preserve or a legacy path to keep after the replacement is complete.
 - [x] 15.2 Add persistence regressions for empty non-canonical table reset and populated non-canonical table preservation; implement package-owned canonical schema validation/reset without migration, compatibility writer or fallback store, and project an actionable Generation persistence diagnostic.
 - [ ] 15.3 Run focused Generation/Canvas/Desktop tests, typecheck, application boundaries, diff checks and strict OpenSpec validation; then trigger one real Canvas image submission far enough to prove durable Job creation and provider invocation, without automatically retrying or duplicating a charged request.
 
-## 16. Extensions Management And Configuration Panels
+## 16. Skill/MCP Extensions Management
 
-- [x] 16.1 Add Agent Webview regressions for package-owned Skill/extension selection, isolated configuration content, grid/list switching, empty results and presentation reconstruction after unmount.
-- [x] 16.2 Compose Extensions management and configuration as independent Workbench Main/Secondary Main shells with the shared equal split and bounded resize behavior; keep Desktop limited to Root placement, typed adapters and extension-only Automation configuration slots.
-- [x] 16.3 Refine the catalog and configuration presentation for list/grid, selected, operation, unavailable and compact states; add Chinese and English UI copy without exposing extension-only configuration on Skill pages.
-- [x] 16.4 Run focused Agent Webview/Host/Desktop tests, typechecks, application-boundary and strict OpenSpec checks; validate Skill/extension, list/grid, selection, resize and compact states in the authoritative visible Electron runtime and apply UI/quality review.
-- [x] 16.5 Remove implicit Skill/extension selection, keep Extensions management full-width while no valid item is selected, and mount/unmount Secondary Main from the package-owned exact selection without persisting selection in Host or Desktop.
-- [x] 16.6 Make selected Extensions management/configuration panels edge-to-edge with an overlaid resize handle and no blank margin/gap; add focused Webview/Desktop regressions and visible Electron evidence for the unselected-to-selected cycle.
+- [x] 16.1 Keep the package-owned Agent Webview catalog limited to exact Skill/MCP tabs, query, grid/list, empty/error states and presentation reconstruction after unmount.
+- [x] 16.2 Compose Extensions as one full-width Workbench Main and keep Desktop limited to Root placement plus the sender-bound typed adapter.
+- [x] 16.3 Remove Plugin selection/detail/install/enable/configuration and Automation configuration slots from the Extensions scene.
+- [ ] 16.4 Run focused Agent Webview/Host/Desktop tests, typechecks, application-boundary and strict OpenSpec checks; validate Skill/MCP grid/list and compact states in the authoritative visible Electron runtime and apply UI/quality review.

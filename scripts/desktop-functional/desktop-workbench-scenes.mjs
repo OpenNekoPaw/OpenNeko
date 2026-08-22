@@ -246,7 +246,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       const assetPreviewScreenshot = await screenshot('asset-management-with-preview-large');
       checkpoint('asset-management-with-preview-large', { ...assetPreview, assetPreviewResize });
 
-      await clickApplicationNavigation(evaluate, click, 2);
+      await clickApplicationNavigation(evaluate, click, 4);
       await waitForSelector('.agent-extension-management-root');
       const extensionsGrid = await inspectExtensionsManagement(evaluate);
       assertExtensionsCatalogOnly(extensionsGrid, 'grid', 'skills');
@@ -273,7 +273,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       };
       checkpoint('extension-management-mcp-list-large', extensions);
 
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 5);
       await waitForSelector('.project-management-catalog');
       const projects = await inspectWorkbench(evaluate, 'management', 'project-management');
       assertManagementMain(projects, 'project-management');
@@ -407,7 +407,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       });
 
       await waitForNavigationButton(evaluate, 3);
-      await clickApplicationNavigation(evaluate, click, 3);
+      await clickApplicationNavigation(evaluate, click, 5);
       await waitForSelector(
         `${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .project-management-catalog .management-surface-row`,
       );
@@ -434,7 +434,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       checkpoint('project-management-direct-open-exact-restore', catalogDirectRestore);
 
       await waitForNavigationButton(evaluate, 1);
-      await clickApplicationNavigation(evaluate, click, 1);
+      await clickApplicationNavigation(evaluate, click, 3);
       await waitForSelector('[data-owner-root="asset-management"]');
       await openProjectWorkspace(evaluate, workspaceActivation.projectId);
       await waitForSelector('.desktop-scene-workbench--workspace');
@@ -484,7 +484,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       });
 
       await waitForNavigationButton(evaluate, 1);
-      await clickApplicationNavigation(evaluate, click, 1);
+      await clickApplicationNavigation(evaluate, click, 3);
       await waitForSelector('[data-owner-root="asset-management"]');
       const retainedMediaLibrary = await openPersistedFixtureAssetPreview(evaluate);
       checkpoint('asset-management-media-library-restart-restore', retainedMediaLibrary);
@@ -572,7 +572,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           `Assistant endpoint replacement emitted identity errors: ${JSON.stringify(projectionEndpointErrors)}`,
         );
       }
-      await clickApplicationNavigation(evaluate, click, 1);
+      await clickApplicationNavigation(evaluate, click, 3);
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('.home-conversation-link');
       await openAssistantConversation(evaluate, assistantActivation.conversationId);
@@ -1990,7 +1990,7 @@ export const desktopConversationNavigationScenario = Object.freeze({
       );
       checkpoint('assistant-conversation-group-lifecycle', groupLifecycle);
 
-      await clickApplicationNavigation(evaluate, click, 1);
+      await clickApplicationNavigation(evaluate, click, 3);
       await waitForSelector('[data-owner-root="asset-management"]');
       await waitForSelector('.home-conversation-link');
       await openAssistantConversation(evaluate, initialSession.conversationId);
@@ -2785,7 +2785,7 @@ async function exerciseProjectConversationGroups({
         document.querySelector(${JSON.stringify(cleanupGroupSelector)}) !== null,
     };
   })()`);
-  await clickApplicationNavigation(evaluate, click, 3);
+  await clickApplicationNavigation(evaluate, click, 5);
   await waitForCondition(
     evaluate,
     `(() => {
@@ -6103,7 +6103,7 @@ async function inspectExtensionsManagement(evaluate) {
       activeTab: root
         ?.querySelector('[data-extension-catalog-tab][aria-pressed="true"]')
         ?.getAttribute('data-extension-catalog-tab'),
-      selectedCount: root?.querySelectorAll('.agent-extension-catalog-row[data-selected="true"]').length ?? 0,
+      pluginTabCount: root?.querySelectorAll('[data-extension-catalog-tab="plugin"]').length ?? 0,
     };
   })()`);
   return { ...workbench, ...catalog };
@@ -6239,10 +6239,8 @@ function assertExtensionsCatalogOnly(detail, view, tab) {
   assertSingleWorkbench(detail);
   assertManagementMain(detail, 'extension-management');
   assertSharedManagementPanel(detail, 'extension-management');
-  if (detail.view !== view || detail.activeTab !== tab || detail.selectedCount !== 0) {
-    throw new Error(
-      `Extensions management reserved configuration without a selection: ${JSON.stringify(detail)}`,
-    );
+  if (detail.view !== view || detail.activeTab !== tab || detail.pluginTabCount !== 0) {
+    throw new Error(`Extensions management is not Skill/MCP-only: ${JSON.stringify(detail)}`);
   }
 }
 

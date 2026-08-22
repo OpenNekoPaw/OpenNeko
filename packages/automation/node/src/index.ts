@@ -39,8 +39,6 @@ import {
 export * from './browser-use';
 export * from './browser-use-targets';
 export * from './computer-use';
-export * from './local-runtime-management';
-export * from './permission-management';
 export * from './provider-support';
 export * from './session-authorization';
 export * from './target-selection-coordinator';

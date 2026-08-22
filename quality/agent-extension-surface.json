@@ -25,7 +25,9 @@
     ]
   },
   "extensionManagement": {
-    "classification": "dsh-projection-only",
+    "classification": "dsh-skill-mcp-projection-only",
+    "visibleTypes": ["skill", "mcp"],
+    "pluginVisible": false,
     "runtimeContributionAuthority": false,
     "evidence": [
       "packages/agent/contracts/src/extension-management.ts",

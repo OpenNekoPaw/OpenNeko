@@ -24,7 +24,7 @@ OpenNeko SHALL own durable Conversation identity, user-visible metadata, Workspa
 
 ### Requirement: Agent projections are rebuildable and never fallback authorities
 
-Transcript, Timeline, inbox, Tool progress and extension management projections SHALL be rebuilt from ACP replay/events plus current owning-domain facts. Projection loss MAY trigger recomputation from those authorities. A stale or invalid projection MUST NOT replace facts, fabricate empty success, mutate DSH state or switch to Pi, raw Session bytes, cached transcript or Renderer state. A single invalid projection SHALL remain local to its record or surface.
+Transcript, Timeline, inbox, Tool progress and Skill/MCP management projections SHALL be rebuilt from ACP replay/events plus current owning-domain facts. Projection loss MAY trigger recomputation from those authorities. A stale or invalid projection MUST NOT replace facts, fabricate empty success, mutate DSH state or switch to Pi, raw Session bytes, cached transcript or Renderer state. A single invalid projection SHALL remain local to its record or surface.
 
 #### Scenario: One Conversation projection is invalid
 

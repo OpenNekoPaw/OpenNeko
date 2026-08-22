@@ -2,12 +2,17 @@
 
 日期：2026-08-10
 > **状态说明（2026-08-20）：** 本文记录旧 OpenNeko Plugin/MCP/Pi 组合的审计快照，不再定义目标执行路径。`replace-pi-with-dsh-runtime-atomically` 接管 DSH MCP contribution、删除旧 runtime 与新 Evaluation；本文的 upstream compatibility、exact target、OS permission、approval 与 evidence 结论仍可作为输入。
+>
+> **后续处置（2026-08-22）：** `remove-unreachable-automation-management` 已删除本文记录的
+> Plugin/Automation 专用管理 UI、IPC、preload bridge、Desktop adapter 与 Automation Webview。
+> 通用 Extensions 入口只投影 DSH-owned Skill/MCP，不承载 Plugin 或 Automation 专用配置；
+> contracts/node 安全规则仅作为 retained kernel 保留，当前没有 Desktop 产品消费者。
 
 事实来源：2026-08-10 当前代码、`integrate-open-source-browser-and-computer-use` OpenSpec、固定 upstream release 与本地 deterministic tests。
 
 ## 结论
 
-仓库内的安全与能力边界已经形成一条 canonical path，但发布级产品闭环尚未完成，因此 Extensions 只展示 Browser Use / Computer Use 为 `unsupported`、`artifact-unavailable`，不允许安装或启用。当前状态不能表述为“Browser Use 或 Computer Use 已可用”。
+以下结论描述 2026-08-10 的旧页面快照，不是当前 Extensions 行为。当前 Skill/MCP catalog 不伪造 Browser Use / Computer Use 条目；只有 DSH profile 中真实存在且可证明 readiness 的 MCP contribution 才能进入投影。当前状态仍不能表述为“Browser Use 或 Computer Use 已可用”。
 
 ```text
 已完成：contracts -> policy service -> reviewed MCP provider -> Agent Capability adapter

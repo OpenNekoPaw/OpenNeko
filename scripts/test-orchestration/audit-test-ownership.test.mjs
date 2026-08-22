@@ -6,7 +6,7 @@ describe('workspace test ownership audit', () => {
   it('accepts the repository ownership inventory', async () => {
     const result = await auditTestOwnership();
     assert.equal(result.ok, true);
-    assert.equal(result.sourceBearingWorkspaces, 54);
+    assert.equal(result.sourceBearingWorkspaces, 53);
   });
 
   it('rejects duplicate workspace ownership entries before scanning', async () => {

@@ -28,7 +28,7 @@ DSH domain Tool adapters 位于相邻 `acp/` 与 `application/` owner，不通�
 | ACP replay/event 的 bounded projection                      | `@neko/agent-runtime` ACP/application           |
 | Workspace trust、credential、process、sender authorization  | Desktop Main / Host                             |
 | Generation、Canvas 等 schema、validation、facts、Job        | owning domain package                           |
-| Extension management presentation                           | `@neko/agent-webview/extension-management/root` |
+| Skill/MCP management presentation                           | `@neko/agent-webview/extension-management/root` |
 
 ## 禁止路径
 

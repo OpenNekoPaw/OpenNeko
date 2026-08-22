@@ -3421,7 +3421,6 @@ function createTransitionedScene(
       context: { kind: 'extensions' },
       slots: {
         main: { kind: 'extension-management' },
-        secondaryMain: { kind: 'extension-detail' },
         status: { kind: 'scene-status', sceneId },
       },
     });

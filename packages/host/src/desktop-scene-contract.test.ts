@@ -252,19 +252,14 @@ describe('Desktop Scene contract', () => {
     ).toThrow('Asset Preview Surface does not match Asset Center Session');
   });
 
-  it('keeps management Roots in Main instead of manager docks', () => {
+  it('keeps Skill/MCP management Roots in Main instead of manager docks', () => {
     const sceneId = 'scene:window-1:extensions';
     const projection = {
       sceneId,
       windowId: 'window-1',
-      context: {
-        kind: 'extensions' as const,
-      },
+      context: { kind: 'extensions' as const },
       slots: {
-        main: {
-          kind: 'extension-management' as const,
-        },
-        secondaryMain: { kind: 'extension-detail' as const },
+        main: { kind: 'extension-management' as const },
         status: { kind: 'scene-status' as const, sceneId },
       },
     };
@@ -273,9 +268,7 @@ describe('Desktop Scene contract', () => {
       parseDesktopWorkbenchSceneProjection({
         ...projection,
         slots: {
-          leftManager: {
-            kind: 'extension-catalog',
-          },
+          leftManager: { kind: 'extension-catalog' },
           status: projection.slots.status,
         },
       }),

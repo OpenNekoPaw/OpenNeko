@@ -17,7 +17,6 @@ export function DesktopExtensionManagementSurface({
     <Suspense fallback={null}>
       <div className="desktop-extension-management-composition">
         <AgentExtensionManagementRoot
-          confirmAction={(message) => window.confirm(message)}
           interactive={interactive}
           runtime={runtime}
         />

@@ -151,16 +151,6 @@
       "token": "-v8"
     },
     {
-      "category": "internal-version-field",
-      "externalOwner": "OpenNeko extension package manifest",
-      "fieldScope": "Extension management projection of the installed third-party package release",
-      "id": "03bbeb9622d5f0a551f6",
-      "isolationRule": "The value preserves the extension package release shown to the user and used for exact artifact qualification; it cannot select an internal contract shape, schema migration, component state, or fallback implementation.",
-      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
-      "path": "packages/agent/contracts/src/extension-management.ts",
-      "token": "version"
-    },
-    {
       "category": "product-migration-or-compatibility",
       "externalOwner": "Agent Skills specification",
       "fieldScope": "Portable SKILL.md frontmatter definition only",

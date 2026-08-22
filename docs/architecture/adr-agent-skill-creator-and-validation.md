@@ -1,10 +1,10 @@
 # ADR: Agent Skill 创建、扩展组合与校验边界
 
-状态：Accepted
+状态：Partially Superseded
 
-更新日期：2026-08-14
+更新日期：2026-08-22
 
-范围：开放 Skill 格式、Desktop 创建、本地 Plugin、MCP adapter、校验、catalog、trust 与原子写入。
+范围：开放 Skill 格式、校验与 trust。原本地 Plugin 安装、启停、详情和第三方执行设计已废弃；Desktop Extensions 仅保留 DSH-owned Skill/MCP 管理投影。
 
 ## 决策
 
@@ -26,7 +26,7 @@ Host policy 只在运行时按来源、精确 identity、trust 与 enablement �
 content，也不把 metadata/tool hints 解释为权限授予。领域 Tool、operation schema、validation、
 资源绑定和 authoring lifecycle 继续由 package-owned Capability Provider 或对应 adapter 拥有。
 
-## 三个独立层级
+## 历史 Plugin 组合层级（已废弃）
 
 | 层级           | 必要文件             | 职责                                        | 不负责                                               |
 | -------------- | -------------------- | ------------------------------------------- | ---------------------------------------------------- |
@@ -45,7 +45,7 @@ Plugin 使用通用根 manifest 结构的稳定 portable subset：`name`、publi
 `marketplace.json` 不参与发现。未来官方仓库必须通过独立 OpenSpec 增加 distribution adapter，
 下载后的 package 仍进入同一本地安装路径，禁止 runtime 双读。
 
-## 管理详情边界
+## 历史 Plugin 管理详情边界（已废弃）
 
 Skill 与 Plugin 详情采用扩展管理概览，而不是包内容浏览器：Skill 展示名称、描述、来源和所属
 Plugin；Plugin 展示发布 metadata、安装来源、贡献摘要与实际 readiness。Renderer 不接收 Skill
@@ -63,7 +63,7 @@ MCP 只用于需要外部进程或远程服务提供 Tool 的可选 adapter。�
 直接组合，不为了“统一扩展”再包装成 MCP。
 
 - Skill 发现、创建、校验和加载不得依赖 MCP。
-- Extension Management 与本地 Plugin 管理不得依赖 MCP 连接成功。
+- Skill/MCP management 只消费 DSH authority；已废弃的本地 Plugin 管理不得恢复为 MCP 的平行 consumer。
 - Skill 与 MCP 是 sibling contribution；未声明 MCP 是完整支持状态，不是降级状态。
 - 单个 MCP server 连接失败只产生该 contribution 的 diagnostic；有效 Skill和无关 capability
   继续可用。

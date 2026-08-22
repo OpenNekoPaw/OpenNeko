@@ -38,8 +38,8 @@ The cleanup does not change DSH request routing, session identity, permission ow
 Conversation context/binding, current composer configuration or domain Tool schemas. Canvas, Cut,
 Generation, Character, World, Content and AI facts remain owned by their packages.
 
-Skill/MCP management is retained even though its current `extension-management` name is stale; an
-independent change must either rename that complete producer/IPC/UI chain or remove the product scene.
+Skill/MCP management is retained even though its current `extension-management` name is broad; the
+canonical contract and UI expose only Skill/MCP while Plugin remains internal DSH composition.
 
 ### 4. Keep Desktop thin
 

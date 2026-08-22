@@ -132,8 +132,9 @@ provider turn、媒体/GPU、subscription、后台 Job 和其他真实昂贵 run
 
 Workbench 是可变形态，不是固定的 Workspace 页面：默认 Agent draft 只有 Interaction；Assistant
 激活后是 Agent + Preview Main；Project Workspace 是 Agent + creative Main + 右侧 Project Browser；
-资源中心与扩展中心分别把 Asset Management 和 Extension Management 放入 Main，信息充分且由 owner
-提供的 Preview/Detail 只能进入可选 Secondary Main。Settings 和项目管理同样使用该 Shell；低信息量的
+资源中心把 Asset Management 放入 Main，信息充分且由 owner 提供的 Preview/Detail 只能进入可选
+Secondary Main。扩展中心把只读 Skill/MCP Management 放入全宽 Main，不预留 Plugin Detail；Settings
+和项目管理同样使用该 Shell。低信息量的
 Project selection 保留在 catalog，并以独立行操作显式打开 Workspace，不创建空洞的 Detail shell。
 Character Management 使用 package-owned catalog Main 与 exact detail Secondary Main；Character/Room
 Conversation 使用独立 `character-interaction` composition，组合 Agent Interaction、一个 exact owner-qualified

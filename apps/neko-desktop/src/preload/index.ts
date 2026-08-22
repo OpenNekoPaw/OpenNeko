@@ -217,18 +217,6 @@ import {
   type OpenNekoAgentExtensionManagementBridge,
 } from '@neko/agent-contracts/extension-management-host';
 import {
-  AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
-  parseAutomationLocalRuntimeManagementHostRequest,
-  parseAutomationLocalRuntimeManagementHostResult,
-  type OpenNekoAutomationLocalRuntimeManagementBridge,
-} from '@neko/automation-contracts/local-runtime-management';
-import {
-  AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
-  parseAutomationPermissionManagementHostRequest,
-  parseAutomationPermissionManagementHostResult,
-  type OpenNekoAutomationPermissionManagementBridge,
-} from '@neko/automation-contracts/permission-management';
-import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
   CHARACTER_AUTHORING_HOST_CHANNEL,
   CHARACTER_AVATAR_HOST_CHANNEL,
@@ -351,8 +339,6 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoAssetCenterBridge &
   OpenNekoDesktopWorkspaceGrantBridge &
   OpenNekoAgentExtensionManagementBridge &
-  OpenNekoAutomationLocalRuntimeManagementBridge &
-  OpenNekoAutomationPermissionManagementBridge &
   OpenNekoDesktopApplicationSettingsBridge &
   OpenNekoDesktopProjectPortabilityBridge &
   OpenNekoDesktopProjectAuthoringBridge &
@@ -1166,26 +1152,6 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       return parseAgentExtensionManagementHostResult(response, request);
-    },
-  },
-  automationLocalRuntimes: {
-    async execute(input) {
-      const request = parseAutomationLocalRuntimeManagementHostRequest(input);
-      const response: unknown = await ipcRenderer.invoke(
-        AUTOMATION_LOCAL_RUNTIME_MANAGEMENT_HOST_CHANNEL,
-        request,
-      );
-      return parseAutomationLocalRuntimeManagementHostResult(response, request);
-    },
-  },
-  automationPermissions: {
-    async execute(input) {
-      const request = parseAutomationPermissionManagementHostRequest(input);
-      const response: unknown = await ipcRenderer.invoke(
-        AUTOMATION_PERMISSION_MANAGEMENT_HOST_CHANNEL,
-        request,
-      );
-      return parseAutomationPermissionManagementHostResult(response, request);
     },
   },
   resources: {

@@ -10,8 +10,7 @@ Browser/Computer Automation 将用户授权的外部 runtime 接入 DSH Agent。
 | DSH profile | 官方 contribution 的装配、生命周期、readiness 与 failure isolation |
 | `@neko/automation-contracts` | provider、target、mode、budget、action、evidence 与 diagnostic 的 L0 canonical shape |
 | `@neko/automation-node` | exact target/session grant、effect policy、approval requirement 与 bounded observation orchestration |
-| Desktop Main | 用户选择、OS permission、realpath/process/window authority、clipboard 与 Cua signature/TCC 检查 |
-| Renderer/Webview | 通过 typed port 显示 opaque identity、授权、动作、状态和安全 diagnostic |
+| Future Desktop adapter | 仅在产品重新引入可达 Automation 工作流后，负责用户选择、OS permission、realpath/process/window authority 与 Cua signature/TCC 检查 |
 
 Canonical Agent path：
 
@@ -25,12 +24,12 @@ official DSH profile
 
 OpenNeko 不维护 MCP Manager、generic Tool Registry、Pi Tool bridge 或 Plugin contribution runtime。DSH 不拥有 OS 权限、Window sender、用户目标选择和领域 grant；两个边界通过精确 identity 协作。
 
-## Product Extension Surface
+## Runtime Contribution Boundary
 
-- 产品扩展管理只展示 Skill 与 MCP，不展示 Plugin 安装、启停或任意 JavaScript 配置。
+- 产品 Extensions 管理只展示 DSH-owned Skill 与 MCP，不展示 Plugin 或 Automation 专用管理面。
 - Browser Use 与 Computer Use 是官方维护、随产品精确锁定的 DSH MCP integrations，不是普通第三方 Plugin。
-- 用户只配置产品真正需要的 runtime、目标和权限。MCP transport 细节、Tool schema 和 Cordis rows 不进入普通创作者 UI。
-- 当前 DSH release 没有满足产品管理 contract 的公开 MCP catalog/config API 时，对应操作保持 unavailable diagnostic；不得读取私有 DSH 模块或恢复旧 Host MCP 配置路径。
+- 当前产品不提供 Automation runtime、权限、目标或会话控制管理 UI。未来可达 Automation 工作流必须通过独立 OpenSpec 建立 typed trust boundary，不得把这些能力塞入通用 Extensions catalog。
+- MCP transport、Tool schema 和 Cordis rows 不进入普通创作者 UI，也不得通过私有 DSH 模块投影产品目录。
 
 ## User-Managed Runtimes
 
@@ -61,4 +60,4 @@ Browser Use 需要独立选择 Chrome/Chromium-compatible executable，不能控
 
 ## Current Status
 
-旧 OpenNeko Plugin/MCP 路径仍存在残留资源与配置 UI，但不再是目标架构。DSH official MCP contribution、secret-safe management projection、完整 packaged Desktop 和真实 provider Evaluation 尚未完成，状态由 `openspec/changes/replace-pi-with-dsh-runtime-atomically/` 跟踪。在这些任务完成前不得宣称 Browser/Computer Automation 已通过 DSH Agent 路径交付。
+`@neko/automation-contracts` 与 `@neko/automation-node` 当前是 retained kernel：保留 target、session grant、approval、bounded execution 与 evidence 的领域安全规则和单元测试，但没有 Desktop 产品消费者。旧 Plugin/Automation 专用管理 UI、IPC、preload bridge、Desktop adapter 与 Webview 已删除；通用 Extensions Skill/MCP catalog 不构成 Automation 产品入口。DSH official MCP contribution、重新建立产品入口以及真实 provider Evaluation 均需独立 OpenSpec；在此之前不得宣称 Browser/Computer Automation 已通过 Desktop 产品路径交付。

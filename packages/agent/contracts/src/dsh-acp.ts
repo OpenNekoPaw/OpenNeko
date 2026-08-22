@@ -15,7 +15,6 @@ export const DSH_ACP_EXTENSION_METHODS = {
   executeCommand: 'openneko/session/command/execute',
   invokeSkill: 'openneko/session/skill/invoke',
   readExtensions: 'openneko/extensions/read',
-  executeExtensionCommand: 'openneko/extensions/execute',
   executeDomainTool: 'openneko/domain-tool/execute',
   cancelDomainTool: 'openneko/domain-tool/cancel',
 } as const;

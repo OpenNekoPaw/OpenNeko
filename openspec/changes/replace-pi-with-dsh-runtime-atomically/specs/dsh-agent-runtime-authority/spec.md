@@ -94,7 +94,7 @@ Each executable Conversation SHALL reference one exact DSH Session identity. DSH
 
 ### Requirement: The ACP bridge supplements DSH without becoming another runtime
 
-Because the official `dsh-acp` rc.8 bridge is automation-only, OpenNeko SHALL ship one thin official DSH ACP bridge plugin/profile. It SHALL reuse public DSH Agent/Session APIs to provide the standard ACP session list/load/resume/history replay, Tool/progress updates and per-session close required by the product. Only capabilities not expressible in standard ACP MAY use one canonical extension surface: DSH live inbox enqueue/snapshot/edit/remove, official extension inventory/readiness/configuration/diagnostics, and typed DSH-to-Host domain Tool requests and responses. The bridge MUST NOT implement an Agent loop, Session store, queue, Tool registry, Skill runtime, MCP runtime or Plugin runtime.
+Because the official `dsh-acp` rc.8 bridge is automation-only, OpenNeko SHALL ship one thin official DSH ACP bridge plugin/profile. It SHALL reuse public DSH Agent/Session APIs to provide the standard ACP session list/load/resume/history replay, Tool/progress updates and per-session close required by the product. Only capabilities not expressible in standard ACP MAY use one canonical extension surface: DSH live inbox enqueue/snapshot/edit/remove, exact Skill/MCP management projection, and typed DSH-to-Host domain Tool requests and responses. The bridge MUST NOT implement an Agent loop, Session store, queue, Tool registry, Skill runtime, MCP runtime, Plugin runtime or Plugin product inventory.
 
 #### Scenario: Resume a known Session
 

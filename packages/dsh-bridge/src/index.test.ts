@@ -67,7 +67,7 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     expect(patch).not.toContain('session/delete');
   });
 
-  it('projects the real Skill catalog without fabricating unavailable MCP contributions', () => {
+  it('projects only the real Skill catalog without exposing Plugin inventory', () => {
     expect(
       projectDshExtensionCatalog({
         complete: true,
@@ -100,6 +100,9 @@ describe('OpenNeko DSH ACP bridge projections', () => {
       mcp: [],
       diagnostics: [{ code: 'skill_catalog_incomplete', count: 1 }],
     });
+    expect(projectDshExtensionCatalog({ complete: true, skills: [] })).not.toHaveProperty(
+      'plugins',
+    );
   });
 
   it('lists only exact profile sessions without fabricating cwd', () => {

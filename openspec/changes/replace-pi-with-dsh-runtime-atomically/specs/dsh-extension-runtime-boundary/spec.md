@@ -38,33 +38,24 @@ The first release SHALL load only DSH profiles and plugins maintained by OpenNek
 - **THEN** the request is rejected with an unsupported diagnostic
 - **AND** its code is not imported by Electron Main, Renderer or DSH
 
-### Requirement: OpenNeko extension management is a read model and command boundary
+### Requirement: OpenNeko extension management is a Skill/MCP read model
 
-OpenNeko MAY present official Skill and MCP inventory, readiness, supported configuration and diagnostics received through the ACP bridge. That presentation SHALL be a rebuildable projection. Management commands SHALL target an exact advertised DSH contribution and capability; OpenNeko MUST NOT expose generic Plugin management, mirror the DSH registry, invent readiness, mutate DSH storage directly or infer success from a stale projection.
+OpenNeko SHALL present the DSH-owned Skill and MCP inventory through a rebuildable, snapshot-only
+projection. The surface MUST NOT expose generic Plugin inventory, install, enablement, configuration,
+Marketplace state, executable paths or third-party Webview code, and MUST NOT mutate DSH storage or
+invent readiness locally.
 
 #### Scenario: Management UI is reopened
 
-- **WHEN** the Extension management scene mounts after being absent
-- **THEN** it rebuilds from a fresh DSH inventory/readiness response
-- **AND** no retained React root or OpenNeko runtime registry is required
+- **WHEN** the Extensions scene mounts after being absent
+- **THEN** it rebuilds from the exact running DSH Skill/MCP snapshot
+- **AND** no retained React Root or OpenNeko extension registry is required
 
-#### Scenario: Configuration changed after projection
+#### Scenario: The official profile contains internal Plugins
 
-- **WHEN** a command targets stale contribution state
-- **THEN** DSH rejects the exact command or returns current readiness
-- **AND** OpenNeko refreshes the projection without applying a local optimistic authority
-
-#### Scenario: User opens extension management
-
-- **WHEN** the DSH profile contains official bridge or domain Tool plugins
-- **THEN** the product lists only the Skill and MCP contributions intended for user management
-- **AND** internal Plugin entries do not become install, enable or configuration controls
-
-#### Scenario: No official MCP contribution is composed
-
-- **WHEN** the current DSH profile has no qualified MCP contribution
-- **THEN** the MCP inventory is empty and the Skill inventory remains usable
-- **AND** the bridge does not fabricate Browser Use, Computer Use or an unsupported catalog diagnostic
+- **WHEN** first-party DSH Plugins compose domain Tools or MCP contributions
+- **THEN** the product exposes only qualified Skill or MCP facts
+- **AND** no Plugin record or action appears in the Extensions surface
 
 ### Requirement: Extension failures remain local and visible
 

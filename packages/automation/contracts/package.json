@@ -5,8 +5,6 @@
   "description": "Host-neutral Browser and Computer automation contracts",
   "exports": {
     ".": "./src/index.ts",
-    "./local-runtime-management": "./src/local-runtime-management.ts",
-    "./permission-management": "./src/permission-management.ts",
     "./session-control": "./src/session-control.ts",
     "./target-selection": "./src/target-selection.ts"
   },

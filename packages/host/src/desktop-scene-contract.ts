@@ -140,7 +140,6 @@ export type DesktopWorkbenchMainSurfaceRef =
   | { readonly kind: 'world-detail'; readonly selection: DesktopWorldDetailSelection }
   | DesktopCharacterPresentationSurfaceRef
   | { readonly kind: 'extension-management' }
-  | { readonly kind: 'extension-detail' }
   | { readonly kind: 'project-detail' }
   | { readonly kind: 'settings-main'; readonly settingsSectionId: string };
 
@@ -912,10 +911,6 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
     requireExactKeys(record, ['kind'], 'Extension Management Surface ref');
     return { kind };
   }
-  if (kind === 'extension-detail') {
-    requireExactKeys(record, ['kind'], 'Extension Detail Surface ref');
-    return { kind };
-  }
   if (kind === 'project-detail') {
     requireExactKeys(record, ['kind'], 'Project Detail Surface ref');
     return { kind };
@@ -1358,12 +1353,9 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
   }
   if (context.kind === 'extensions') {
     assertManagerKinds(slots, []);
-    assertMainKinds(slots, ['extension-management', 'extension-detail']);
+    assertMainKinds(slots, ['extension-management']);
     if (slots.main?.kind !== 'extension-management') {
       throw mismatch('Extensions Scene requires its Extension Management Main Surface.');
-    }
-    if (slots.secondaryMain?.kind !== 'extension-detail') {
-      throw mismatch('Extensions Scene requires its Extension Detail Secondary Main Surface.');
     }
     return;
   }

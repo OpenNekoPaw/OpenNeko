@@ -42,7 +42,7 @@
       "family": "automation",
       "roles": ["contracts"],
       "runtimes": ["host-neutral"],
-      "productStatus": "active-product",
+      "productStatus": "retained-kernel",
       "architectureState": "converged"
     },
     {
@@ -51,16 +51,7 @@
       "family": "automation",
       "roles": ["application", "node"],
       "runtimes": ["host-neutral", "node"],
-      "productStatus": "active-product",
-      "architectureState": "converged"
-    },
-    {
-      "path": "packages/automation/webview",
-      "name": "@neko/automation-webview",
-      "family": "automation",
-      "roles": ["content-only"],
-      "runtimes": ["content"],
-      "productStatus": "content-only",
+      "productStatus": "retained-kernel",
       "architectureState": "converged"
     },
     {

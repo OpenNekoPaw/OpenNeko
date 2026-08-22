@@ -8,6 +8,7 @@ import {
   decodeDshAcpDomainToolCancelRequest,
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
+  decodeDshAcpExtensionProjection,
   decodeDshAcpInboxSnapshot,
   decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpImageAttachmentReadProjection,
@@ -21,6 +22,18 @@ import {
 } from './dsh-acp';
 
 describe('DSH ACP extension contract', () => {
+  it('accepts only Skill/MCP extension projection fields', () => {
+    const projection = {
+      skills: [],
+      mcp: [],
+      diagnostics: [],
+    };
+    expect(decodeDshAcpExtensionProjection(projection)).toEqual(projection);
+    expect(() => decodeDshAcpExtensionProjection({ ...projection, plugins: [] })).toThrow(
+      /must contain exactly/u,
+    );
+  });
+
   it('decodes an exact native image read without applying the generic JSON limit to bytes', () => {
     expect(
       decodeDshAcpImageAttachmentReadRequest({

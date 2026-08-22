@@ -5,14 +5,12 @@ import * as path from 'node:path';
 import {
   app,
   BrowserWindow,
-  clipboard,
   dialog,
   nativeImage,
   nativeTheme,
   safeStorage,
   session,
   shell,
-  systemPreferences,
 } from 'electron';
 import { ConsoleLogger, ConsoleTransport, LogLevel, type ILogger } from '@neko/shared/logger';
 import { ManagedFileLogTransport } from '@neko/shared/logger/node';
@@ -35,8 +33,6 @@ import {
 } from './desktop-openneko-protocol';
 import { createDesktopWorkspaceRegistry } from './desktop-workspace-registry';
 import { createElectronNekoHostPorts } from './electron-host-ports';
-import { createDesktopAutomationLocalRuntimeHost } from './desktop-automation-local-runtime-host';
-import { createDesktopAutomationHostPermission } from './desktop-automation-host-permission';
 import { registerDesktopIpc } from './ipc';
 import { DesktopRendererRecovery } from './renderer-recovery';
 import {
@@ -440,12 +436,6 @@ async function startDesktop(): Promise<void> {
       decrypt: (value) => safeStorage.decryptString(Buffer.from(value)),
     },
   });
-  const automationHostPermission = createDesktopAutomationHostPermission({
-    platform: process.platform,
-    getScreenRecordingStatus: () => systemPreferences.getMediaAccessStatus('screen'),
-    isAccessibilityTrusted: (prompt) => systemPreferences.isTrustedAccessibilityClient(prompt),
-    openExternal: async (uri) => shell.openExternal(uri),
-  });
   const host = createElectronNekoHostPorts({
     homedir,
     nekoHome: globalStorage.root,
@@ -661,26 +651,6 @@ async function startDesktop(): Promise<void> {
     }
     return owner;
   };
-  const automationLocalRuntimeHost = createDesktopAutomationLocalRuntimeHost({
-    selectAsset: async ({ ownerId, sourceId, assetKey }) => {
-      const result = await dialog.showOpenDialog(requireOwnerWindow(ownerId), {
-        title:
-          sourceId === 'computer-use.observe.local'
-            ? 'Authorize Cua Driver Application'
-            : assetKey === 'browser-executable'
-              ? 'Authorize Browser Executable'
-              : 'Authorize Browser Use Runtime',
-        buttonLabel: 'Authorize',
-        properties: ['openFile'],
-      });
-      return result.canceled ? undefined : result.filePaths[0];
-    },
-    openExternal: async (url) => shell.openExternal(url),
-    writeClipboardText: (text) => clipboard.writeText(text),
-    assertDisconnectAllowed: async () => {
-      throw new Error('Automation runtime disconnect requires DSH extension authority.');
-    },
-  });
   const openHostPath = async (targetPath: string): Promise<void> => {
     const error = await shell.openPath(targetPath);
     if (error) throw new Error(error);
@@ -1975,8 +1945,6 @@ async function startDesktop(): Promise<void> {
     canvasWorkspaceIndexService,
     cut: cutRuntime,
     settings: applicationSettings,
-    automationLocalRuntimes: automationLocalRuntimeHost.management,
-    automationPermissions: automationHostPermission.management,
     openAgentAdvancedSettings: () => openHostPath(buildConfigFilePath(homedir)),
     instanceId: applicationInstanceId,
   });
@@ -2814,7 +2782,6 @@ async function startDesktop(): Promise<void> {
     disposeIpc();
     await dshProduct.runtime.dispose();
     await appHost.dispose();
-    automationLocalRuntimeHost.dispose();
     await localMetadataStore.dispose();
     resourceRegistry.dispose();
     disposeResourceAuthorization();

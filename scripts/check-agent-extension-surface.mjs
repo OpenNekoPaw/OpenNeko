@@ -53,10 +53,19 @@ export function validateSurfaceStructure(surface) {
 
   expectEqual(
     management?.classification,
-    'dsh-projection-only',
+    'dsh-skill-mcp-projection-only',
     'management classification',
     findings,
   );
+  if (
+    !Array.isArray(management?.visibleTypes) ||
+    management.visibleTypes.length !== 2 ||
+    management.visibleTypes[0] !== 'skill' ||
+    management.visibleTypes[1] !== 'mcp'
+  ) {
+    findings.push('extensionManagement.visibleTypes must be exactly ["skill", "mcp"]');
+  }
+  expectFalse(management?.pluginVisible, 'extensionManagement.pluginVisible', findings);
   expectFalse(
     management?.runtimeContributionAuthority,
     'extensionManagement.runtimeContributionAuthority',
@@ -125,11 +134,15 @@ export function validateDshExtensionManagementHostSource(source) {
   if (!source.includes('runtime.client.readExtensions()')) {
     findings.push('Extension Management host must project the canonical DSH extension snapshot');
   }
+  if (!source.includes('skills:') || !source.includes('mcp:')) {
+    findings.push('Extension Management host must project both Skill and MCP catalogs');
+  }
   for (const retiredAuthority of [
     'plugin_states',
     'pluginStates',
     'mcp_servers',
     'external_research',
+    'plugins:',
   ]) {
     if (source.includes(retiredAuthority)) {
       findings.push(`Extension Management host retains retired authority ${retiredAuthority}`);
@@ -267,6 +280,18 @@ async function checkCanonicalSourceEvidence(root, findings) {
     'packages/assets/domain/src/dsh-tool.ts',
     'packages/assets/node/src/agent-dsh-search.ts',
     'packages/assets/dsh-plugin/src/index.ts',
+    'packages/automation/contracts/src/local-runtime-management.ts',
+    'packages/automation/contracts/src/permission-management.ts',
+    'packages/automation/node/src/local-runtime-management.ts',
+    'packages/automation/node/src/permission-management.ts',
+    'packages/automation/webview/package.json',
+    'apps/neko-desktop/src/main/desktop-automation-host-permission.ts',
+    'apps/neko-desktop/src/main/desktop-automation-local-runtime-host.ts',
+    'apps/neko-desktop/src/renderer/desktop-automation-local-runtime-management-runtime.ts',
+    'apps/neko-desktop/src/renderer/desktop-automation-permission-management-runtime.ts',
+    'scripts/prepare-automation-runtime-artifact.mjs',
+    'scripts/prepare-automation-runtime-cua-node.mjs',
+    'scripts/prepare-automation-runtime-cua-spdx.mjs',
   ];
   for (const path of retiredAuthorities) {
     try {

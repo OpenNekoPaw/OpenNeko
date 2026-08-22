@@ -26,7 +26,7 @@ function projection() {
 }
 
 describe('DSH extension management contract', () => {
-  it('accepts only snapshot and rescan commands', () => {
+  it('accepts only the read-only snapshot command', () => {
     expect(
       createAgentExtensionManagementHostRequest({
         requestId: 'request-1',
@@ -65,5 +65,23 @@ describe('DSH extension management contract', () => {
         request,
       ),
     ).toThrow('owner identity is stale');
+  });
+
+  it('rejects Plugin inventory from the Skill/MCP-only projection', () => {
+    const request = createAgentExtensionManagementHostRequest({
+      requestId: 'request-4',
+      identity,
+      route: 'snapshot.get',
+    });
+    expect(() =>
+      parseAgentExtensionManagementHostResult(
+        {
+          requestId: request.requestId,
+          route: request.route,
+          projection: { ...projection(), plugins: [] },
+        },
+        request,
+      ),
+    ).toThrow('DSH extension management projection is invalid.');
   });
 });
