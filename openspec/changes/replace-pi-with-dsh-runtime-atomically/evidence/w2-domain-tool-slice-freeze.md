@@ -10,10 +10,10 @@ Tool name: `openneko.generation`
 
 | Operation | Input | Output |
 | --- | --- | --- |
-| `submit` | `{ purpose, generationType, lifecycleMode, request }` | bounded durable Job facts: `jobId`, `kind`, `phase`, `stage`, `lifecycleMode`, `generationType`, `createdAt`, `updatedAt`, optional `failure` |
-| `describe` | `{ jobId }` | same bounded durable Job facts |
+| `submit` | `{ purpose, generationType, lifecycleMode, request }` | waits on the exact durable Job; terminal success facts include canonical `resultLocators`; terminal non-success is an explicit Tool failure |
+| `describe` | `{ jobId }` | one-shot bounded durable Job facts, including canonical `resultLocators` when present |
 
-Generation owns contract/schema/semantic validation/routing/durable Job. The Host adapter uses `PurposeGenerationJobPort.submitGeneration` and `describeGeneration` only. It never waits synchronously for a provider result and never returns provider payloads, request text, result locators, or provider task identity in the DSH result.
+Generation owns contract/schema/semantic validation/routing/durable Job. The Host adapter uses `PurposeGenerationJobPort.submitGeneration`, `observeGeneration` and `describeGeneration`. Agent `submit` keeps the same asynchronous reverse Tool request open and observes only the returned exact Job identity until a terminal snapshot; it does not block the process thread, poll through model Tool calls, or transfer Job ownership to DSH. It omits provider payloads, request text and provider task identity, but returns canonical Workspace `resultLocators` on success so the Tool result identifies the actual product artifact. Direct UI submission remains non-blocking.
 
 ## Exact Canvas Operations
 
@@ -39,7 +39,8 @@ Canvas owns contract/schema/exact document and node identity/freshness/mutation.
 ## Correlation And Failure
 
 - The reverse ACP request preserves `sessionId`, `turn`, `toolCallId`, exact `tool`, `operation`, and lossless JSON `input`.
-- A successful long-running Generation response returns the owning-domain `jobId`; DSH call identity references but does not replace that Job identity.
+- A successful long-running Generation response returns the owning-domain `jobId`, terminal `succeeded` facts and canonical result locators; DSH call identity references but does not replace that Job identity.
+- A terminal `failed`, `cancelled` or `outcome-unknown` snapshot fails the exact Tool call with the owning Job identity and diagnostic. Cancelling the reverse Tool request releases its observer without cancelling the published durable Job.
 - A Canvas mutation response returns the exact `fingerprint` and node identity for the written document.
 - Semantic negatives, stale fingerprints, invalid paths, and unknown tool names fail locally as typed failure diagnostics; they do not switch to MCP, another provider, another Tool handler, or Desktop logic.
 

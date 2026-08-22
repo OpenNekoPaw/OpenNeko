@@ -132,8 +132,15 @@ The canonical product contract SHALL preserve the qualified DSH Session, turn, c
 #### Scenario: Tool starts a durable Generation Job
 
 - **WHEN** a DSH Tool call submits an authorized long-running Generation operation
-- **THEN** the response correlates the exact DSH call identity with the returned Generation Job identity
+- **THEN** the same Tool call observes the exact returned Generation Job identity until Generation publishes a terminal snapshot
+- **AND** `succeeded` returns bounded terminal facts and canonical result locators, while `failed`, `cancelled`, `outcome-unknown` or premature observation completion fails the exact Tool call visibly
 - **AND** Job cancellation, recovery, progress and result remain owned by Generation
+
+#### Scenario: A Generation Tool observer is cancelled
+
+- **WHEN** DSH cancels a Generation Tool request after the Host has published its durable Job
+- **THEN** the Host releases only that exact observer and settles the Tool request with a local cancellation diagnostic
+- **AND** the durable Generation Job continues under its declared lifecycle mode and is not implicitly cancelled
 
 #### Scenario: Stale identity targets another execution
 
@@ -222,6 +229,12 @@ Generation and Canvas SHALL be the first vertical official domain Tool slice reg
 - **WHEN** the user invokes a Generation action from a native product control
 - **THEN** the UI delegates directly to the Generation application service through its typed Desktop port
 - **AND** no Conversation, Agent turn or MCP wrapper is created
+
+#### Scenario: Agent submits Generation through the official Tool
+
+- **WHEN** the Agent calls `openneko.generation` with operation `submit`
+- **THEN** the Host adapter uses the owning Generation observation port rather than model-authored polling or a generic Task
+- **AND** the Agent turn cannot report the Generation as complete while the exact Tool call is still observing a non-terminal Job
 
 ### Requirement: Attachments and perception use one capability-negotiated input path
 
