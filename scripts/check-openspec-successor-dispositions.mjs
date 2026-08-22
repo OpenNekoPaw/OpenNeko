@@ -133,7 +133,7 @@ export function auditSuccessorDispositions(input) {
   }
 
   for (const document of input.documents) {
-    if (!input.governedChanges.includes(document.change)) continue;
+    if (document.archived || !input.governedChanges.includes(document.change)) continue;
     for (const block of collectActivePromiseBlocks(document)) {
       for (const { id, pattern } of input.forbiddenActivePromisePatterns) {
         if (!pattern.test(block.content)) continue;
@@ -172,7 +172,7 @@ export function auditSuccessorDispositions(input) {
 
 function runRepositoryAudit(repoRoot) {
   const changesRoot = resolve(repoRoot, 'openspec/changes');
-  const documents = collectMarkdownDocuments(changesRoot);
+  const documents = collectMarkdownDocuments(changesRoot).map(normalizeArchivedDocument);
   return auditSuccessorDispositions({
     documents,
     governedChanges,
@@ -188,6 +188,20 @@ function runRepositoryAudit(repoRoot) {
       `${successorChange}/replacement-inventory.md`,
     ],
   });
+}
+
+export function normalizeArchivedDocument(document) {
+  const match = document.path.match(
+    /^archive\/\d{4}-\d{2}-\d{2}-(?<change>[^/]+)\/(?<artifact>.+)$/u,
+  );
+  if (!match?.groups) return document;
+  return {
+    ...document,
+    archived: true,
+    change: match.groups.change,
+    path: `${match.groups.change}/${match.groups.artifact}`,
+    normative: false,
+  };
 }
 
 function collectActivePromiseBlocks(document) {

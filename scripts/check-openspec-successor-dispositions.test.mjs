@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { auditSuccessorDispositions } from './check-openspec-successor-dispositions.mjs';
+import {
+  auditSuccessorDispositions,
+  normalizeArchivedDocument,
+} from './check-openspec-successor-dispositions.mjs';
 
 const baseInput = {
   forbiddenActivePromisePatterns: [
@@ -33,6 +36,33 @@ test('accepts an explicitly classified predecessor and complete successor scope'
           content: 'This successor reconciles old-change.',
         },
       ],
+    }),
+    [],
+  );
+});
+
+test('resolves archived predecessor and successor artifacts without treating them as active promises', () => {
+  const predecessor = normalizeArchivedDocument({
+    change: 'archive',
+    path: 'archive/2026-08-21-old-change/specs/capability/spec.md',
+    normative: false,
+    content: [
+      '### Requirement: Historical promise',
+      'Standalone Character authoring SHALL create mutable records.',
+      '<!-- SUCCESSOR: new-change -->',
+    ].join('\n'),
+  });
+  const successor = normalizeArchivedDocument({
+    change: 'archive',
+    path: 'archive/2026-08-21-new-change/proposal.md',
+    normative: false,
+    content: 'This successor reconciles old-change.',
+  });
+
+  assert.deepEqual(
+    auditSuccessorDispositions({
+      ...baseInput,
+      documents: [predecessor, successor],
     }),
     [],
   );
