@@ -31,7 +31,7 @@ DSH 官方 rc.8 profile 仍未完整覆盖 OpenNeko 所需的 session list/load/
 - 不实现 OpenNeko 自研第三方插件 runtime，不允许第三方 Webview JS 或任意第三方 JS 注入 Electron Main/DSH。
 - 不保留 OpenNeko Skill Host、MCP Manager、Plugin runtime；Skill/MCP/Plugin 的实际发现/加载/启停/执行归 DSH profile。
 - 不把 Generation、Canvas、Cut、Character、World 或感知能力包装成 MCP，也不把 Generation 参数并入通用 Agent/DSH settings；Assets 资源操作不进入 MCP 或 DSH Tool registry。
-- 不把旧 Pi transcript 转换为 DSH Session，也不提供旧 transcript reader/repair/migration；已知退休存储在 DSH 初始化前直接删除。
+- 不把旧 Pi transcript 转换为 DSH Session，也不提供旧 transcript reader/repair/migration；已知退休存储原字节保留，正常启动不得读取、删除、改写、分类或投影这些数据。
 - 不把 Evaluation 变成产品 Skill、第二个 Agent controller 或 direct runtime runner。
 - 不把领域能力用 MCP 包装；领域 Tools 是注册到 DSH 的官方 typed domain tools，UI 直接操作不绕 Agent。
 

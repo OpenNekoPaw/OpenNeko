@@ -8,9 +8,9 @@ DSH owns Session transcript JSONL under Electron `userData/dsh/sessions`. OpenNe
 
 The old `@neko/local-metadata` generic `conversations` table and `ConversationCatalogRepository` encoded the retired Pi-era `journal_id` projection path. Production initialization, repository contracts, transaction wiring, cache maintenance, and decode logic have been deleted. The current OpenNeko DSH Conversation catalog/binding tables and repositories remain unchanged.
 
-Fresh database initialization no longer creates `conversations`. If an existing database already contains that retired table or unknown rows, startup leaves the bytes untouched: there is no `DROP`, migration, import, repair, rewrite, or compatibility reader. The repository legacy-data fixtures remain the byte-preservation authority.
+Fresh database initialization no longer creates `conversations`. The accepted boundary requires an existing retired table or unknown row to remain byte-preserved with no `DROP`, migration, import, repair, rewrite or compatibility reader. Current code has drifted from this evidence: Desktop startup invokes `removeRetiredPiStorage` and deletes four tables plus two directories. That path is a release blocker, not canonical behavior.
 
-The unused `.neko/journals` and `.neko/conversations` layout fields plus the Pi-era `conversation-journals` classification were also deleted. The generic admission policy still classifies journals as file-owned and prohibits SQLite. Existing user directories are not scanned, opened, renamed, or removed.
+The unused `.neko/journals` and `.neko/conversations` layout fields plus the Pi-era `conversation-journals` classification were also deleted. The generic admission policy still classifies journals as file-owned and prohibits SQLite. Existing user directories must not be scanned, opened, renamed or removed; the current cleanup file port must be deleted before release.
 
 The same producer/consumer audit found no production consumer for the old generic runtime scope/config/work-item graph or its Tool ownership helpers. Those files, self-tests, the unused transcript queue projectors, and their now-unreachable context-reference presenter were deleted. The Webview keeps only `isOptimisticQueuedMessageItem`, which is consumed by the current DSH inbox presentation; no component, layout, style, or interaction was changed.
 
@@ -53,5 +53,6 @@ pnpm test:agent:eval                                        # 45 files / 314 tes
 ## Residual risk
 
 - Existing ignored Desktop build/package outputs still contain retired markers. Task 12.6 prohibits rebuilding or packaging until the release guard passes, so `check:agent-retired-output` remains an expected release blocker rather than being hidden by deleting generated output.
-- The upstream DSH rc.7 public Session delete and inbox-preserving dispose seams remain open under tasks 1.6, 2.5, 4.6, and 8.1-8.2.
+- The upstream DSH rc.8 public Session delete seam remains absent; task 8.2 now records the accepted fail-visible retention policy rather than waiting on a private cleanup path.
+- Current startup destructive cleanup conflicts with the byte-preservation contract and keeps tasks 0.7, 8.4–8.6 and 11.14 open.
 - This slice does not claim the full Provider/Model, approval, domain Tool, visible/hidden Desktop, reopen, or release matrices complete.

@@ -53,13 +53,14 @@ Commands and results:
 
 - Added a visible isolated Electron step to `desktop-agent-linked-media-mention`: it pastes a real PNG `File` into the active Composer, checks the preview token, submits through the UI, requires exactly one native provider image part, and checks the completed transcript image token.
 - The first development run was `infrastructure-blocked` before CDP became available. A cached rerun reached the Renderer but failed an existing precondition before the new paste step: `Entry Agent Root identity could not be captured for Draft verification.` This is an adjacent baseline/startup blocker, not passing evidence for the image behavior.
-- Therefore provider-backed visual perception, settled screenshots and a full application-restart replay remain unverified. Component, Host or key-free evidence is not promoted to visual/model-quality evidence.
+- Those script-driven runs therefore did not prove provider-backed visual perception, settled screenshots or a full application-restart replay. Component, Host or key-free evidence is not promoted to visual/model-quality evidence.
+- Subsequent manual acceptance on 2026-08-22: the user confirmed image input, processing and conversation replay after restart through the real product UI. This supplies the positive human product-path evidence needed by task 7.14, while the missing exact provider/model receipts, screenshots and machine-readable report remain explicit W7 Evaluation gaps. See `w7-manual-foundational-acceptance.md`.
 
 ### Residual risk
 
-- A visible full Desktop run with an explicitly authorized real vision provider is still required to prove pixel understanding rather than transport alone.
+- A script-driven visible full Desktop run with an explicitly recorded real vision provider remains required for machine-verifiable pixel-understanding evidence rather than transport alone.
 - The Desktop scenario must pass its existing Entry Agent Root precondition before the paste assertions and screenshots can produce authoritative UI evidence.
-- Task 7.14 remains unchecked until that visible provider lane and a real Session restart replay pass.
+- Task 7.14 is complete from deterministic plus user-confirmed manual product acceptance; tasks 10.4 and 10.7 remain open until the visible provider lane emits exact receipts and a report.
 
 ## Authorized replay thumbnail slice
 

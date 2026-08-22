@@ -54,17 +54,18 @@ Conversation catalog enumeration SHALL not depend on the currently mounted Agent
 - **THEN** Agent Home still lists the Conversation with an unavailable Workspace projection where necessary
 - **AND** the Conversation is not rebound to the active Workspace
 
-### Requirement: Retired Agent storage is removed through one exact cleanup
+### Requirement: Retired Agent storage remains byte-preserved and unreachable
 
-Before current DSH authority initialization, Desktop SHALL delete only the explicitly retired Agent SQLite tables `conversations`, `pi_conversations`, `pi_messages`, `agent_conversation_records` and the explicitly retired directories `~/.neko/journals/`, `~/.neko/conversations/`. The cleanup MUST NOT decode or migrate old content, glob unknown `pi_*` tables, delete unknown files, touch current DSH Session storage or modify unrelated SQLite records. Listing, open, clear, compact and failure recovery SHALL have no retired-data reader or compatibility projection.
+Before current DSH authority initialization, Desktop SHALL leave the retired Agent SQLite tables `conversations`, `pi_conversations`, `pi_messages`, `agent_conversation_records` and the retired directories `~/.neko/journals/`, `~/.neko/conversations/` byte-for-byte unchanged. Normal startup MUST NOT decode, classify, import, migrate, repair, rewrite or delete old content; glob unknown `pi_*` tables; inspect unknown files; touch current DSH Session storage; or modify unrelated SQLite records. Listing, open, clear, compact and failure recovery SHALL have no retired-data reader or compatibility projection.
 
 #### Scenario: Retired Pi data exists at startup
 
 - **WHEN** the canonical DSH runtime initializes
-- **THEN** every explicitly retired table and directory is absent before current DSH catalog initialization
-- **AND** unrelated tables, unknown files and DSH Session storage remain unchanged
+- **THEN** every retired table and directory remains byte-for-byte unchanged before and after current DSH catalog initialization
+- **AND** unrelated tables, unknown files and DSH Session storage also remain unchanged
 
-#### Scenario: Retired Pi storage is absent
+#### Scenario: Application starts repeatedly with retired Pi storage present
 
-- **WHEN** cleanup runs again
-- **THEN** the operation succeeds without creating a marker, fallback catalog or replacement legacy path
+- **WHEN** the application starts again
+- **THEN** the same retired bytes remain unchanged
+- **AND** no cleanup marker, migration marker, fallback catalog or replacement legacy path is created

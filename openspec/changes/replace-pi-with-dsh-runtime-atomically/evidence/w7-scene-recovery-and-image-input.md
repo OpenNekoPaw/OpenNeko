@@ -21,8 +21,10 @@ Date: 2026-08-20
 
 Deterministic Host verification passed: `desktop-shell-service.test.ts`, 1 file / 60 tests. The new
 application-reopen case proves exact unavailable-record rejection, same-owner Draft reset and sibling/catalog
-preservation. The package TypeScript check passed. A real Electron process-restart lane is still required
-before task 7.10 can be closed.
+preservation. The package TypeScript check passed. On 2026-08-22 the user additionally confirmed application
+restart restoration and multi-Conversation switching/isolation through the real product UI. That supplemental
+manual acceptance closes task 7.10; the script-driven foundational matrix remains separately open. See
+`w7-manual-foundational-acceptance.md`.
 
 ## Native Image Prompt Slice
 
@@ -54,13 +56,16 @@ Focused deterministic verification passed:
   `git diff --check`.
 
 The retained attachment button remains unchanged under the explicit Webview UI boundary. Selection through
-the existing authorized `@` resource path is implemented, but attachment-control wiring, a real DSH process
-restart proving attachment replay, and a provider-backed visible Electron image turn remain outstanding.
-Therefore task 7.14 remains open.
+the existing authorized `@` resource path is implemented. On 2026-08-22 the user confirmed image input,
+processing and restart replay through the real product UI. Together with the deterministic admission,
+attachment-identity, replay and fail-local coverage, this closes task 7.14 at the product manual-acceptance
+level. Exact provider/model receipts and a machine-readable visible run remain open under W7 Evaluation, as
+recorded in `w7-manual-foundational-acceptance.md`.
 
 ## Pi-only Data Boundary
 
 The audit reconfirmed that normal product code has no authorized source for discovering Pi-only metadata
 without opening retired storage. This slice does not add a retired reader, migration, compatibility route or
-fallback. Task 8.4 remains blocked on a canonical non-retired metadata authority; the existing byte-preserving
-legacy-data evidence and release guard remain authoritative.
+fallback. Task 8.4 remains open because the independently discovered startup destructive cleanup must be
+removed; no replacement metadata authority or unavailable-catalog reader is required. The byte-preservation
+contract and release guard remain authoritative.

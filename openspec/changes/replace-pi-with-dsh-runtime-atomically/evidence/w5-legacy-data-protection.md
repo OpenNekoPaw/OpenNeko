@@ -21,15 +21,17 @@ change fails. The runner is ready for product operation adapters but does not in
 ## Retired entry poison
 
 `retired-pi-data-access-poison.test.ts` scans production Main, Agent runtime and contract sources for
-retired catalog readers and mutation/import/repair/cleanup entry points. Existing Desktop composition
-poison remains in force. No retired data reader is part of the canonical DSH path. The producer/consumer
-portion remains open until a canonical Pi-only metadata source can be proven without decoding retired data.
+retired catalog readers and mutation/import/repair entry points. Existing Desktop composition poison
+remains in force. No retired data reader is part of the canonical DSH path. However, the current composition
+still invokes `removeRetiredPiStorage`; that destructive service must be removed rather than allowlisted as a
+special migration path.
 
 ## Remaining limitation
 
-The repository has no historical deletion-before manifest and no production producer that can discover
-Pi-only catalog metadata without decoding retired content. Therefore task 8.4 remains open and the
-release guard must continue to require the future canonical Pi-only unavailable catalog projection.
+The protected fixture manifest exists, but current startup behavior deletes retired bytes instead of preserving
+them. Tasks 0.7, 8.4–8.6 and 11.14 remain open until the destructive service is removed and the read-only
+startup/list/open/clear/compact/failure matrix proves byte preservation. No Pi-only unavailable catalog or
+legacy reader is required to satisfy that boundary.
 
 ## Evaluation disposition
 

@@ -20,9 +20,9 @@ OpenNeko 曾在 `@neko/agent-runtime` 内直接维护 Pi conversation runtime，
 - Generation 与 Canvas 作为首批纵向官方领域 Tool slice 注册到 DSH；Cut、Character、World 等随后迁移。Assets 不注册 Agent Tool：Files、Media、Assets 统一经 `@` 发现，Asset 被选择时由 Assets owner 复制到精确 Workspace，再以普通 `ContentLocator` 进入 DSH。DSH 拥有领域 Tool 调用 lifecycle，owning packages 拥有 schema、semantic validation、authorization、exact resource identity、业务事务、事实与长任务 Job；UI 直接操作不绕 Agent；领域能力不用 MCP 包装。
 - 保留内容创作所需的附件、多模态与感知能力：图片优先使用 DSH 原生 attachment/content block；当前模型不支持输入模态时，由显式配置的感知模型生成结构化 evidence，再进入同一 DSH turn。音频、视频和通用文件在 DSH 原生附件公开 API 补齐前保持明确受限，不恢复旧 Agent 多模态 runtime。
 - 旧 Agent 公共 Prompt/Input/Capability 代码只有在其功能已由 DSH system prompt/Skill、OpenNeko exact context injection、DSH attachment 或 first-party domain Tool 接管后才可删除；不得以删除旧代码为由删除产品功能，也不得保留无生产 consumer 的旧公共 API。
-- **BREAKING**：旧 Pi 数据不再保留或迁移。Desktop 启动时只清理已确认由退休 Agent runtime 拥有的 SQLite 表 `conversations`、`pi_conversations`、`pi_messages`、`agent_conversation_records`，以及 `~/.neko/journals/`、`~/.neko/conversations/`；未知表、未知文件和当前 DSH Session 不在清理范围内。
-- 保留原子切换、无内部 contract 版本、无双路径；退休 Pi 数据使用单一精确删除路径，不保留旧 reader、迁移器、兼容投影或 unavailable catalog。
-- D0 删除仓库中的旧执行代码、注册、导出和依赖；W5 在当前 DSH authority 初始化前完成精确退休数据清理，并以删除目标之外的数据保持不变作为存储边界验收。
+- **BREAKING**：旧 Pi 数据不再迁移、读取或投影，但原字节必须保留。Desktop 正常启动不得清理退休 Agent runtime 曾拥有的 SQLite 表 `conversations`、`pi_conversations`、`pi_messages`、`agent_conversation_records`，也不得清理 `~/.neko/journals/`、`~/.neko/conversations/`；未知表、未知文件和当前 DSH Session 同样保持不变。
+- 保留原子切换、无内部 contract 版本、无双路径；退休 Pi 用户数据原字节保留且不得成为成功路径，不保留旧 reader、迁移器、repair、兼容投影或自动导入。
+- D0 只删除仓库中的旧执行代码、注册、导出和依赖；W5 在当前 DSH authority 初始化前移除 destructive cleanup，并以退休表、目录、未知 sibling 与当前 DSH Session storage 全部逐字节不变作为存储边界验收。
 
 ## Capabilities
 
