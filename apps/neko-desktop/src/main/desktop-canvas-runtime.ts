@@ -351,6 +351,15 @@ export class DesktopCanvasRuntime {
         )
         .sort((left, right) => sessionKey(left.identity).localeCompare(sessionKey(right.identity)));
       if (entries.length === 0) return operation();
+      const snapshots = await Promise.all(entries.map((entry) => entry.session.getSnapshot()));
+      const dirtyDocuments = snapshots
+        .filter((snapshot) => snapshot.dirty)
+        .map((snapshot) => JSON.stringify(snapshot.canvas));
+      if (new Set(dirtyDocuments).size > 1) {
+        throw new CanvasHostVisibleEffectError(
+          'workspace-board-open-session-conflict: Open Workspace Board views contain divergent unsaved changes.',
+        );
+      }
 
       const coordinate = async (
         index: number,
@@ -368,7 +377,9 @@ export class DesktopCanvasRuntime {
         return entry.session.coordinateAuthoritativeDocumentChange(() => coordinate(index + 1));
       };
 
-      return (await coordinate(0)).value;
+      const result = await coordinate(0);
+      await Promise.all(entries.map((entry) => entry.session.reattachGenerationNodes()));
+      return result.value;
     });
   }
 

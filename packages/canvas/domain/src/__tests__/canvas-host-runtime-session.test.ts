@@ -858,6 +858,66 @@ describe('CanvasHostRuntimeSession', () => {
     ]);
   });
 
+  it('keeps an Agent-created Generation Job running when the durable run has no submission identity', async () => {
+    const configured = updateCanvasGenerationNodeRecipe({
+      canvas: createCanvasGenerationNode({
+        canvas: createEmptyCanvasData('Agent Generation'),
+        nodeId: 'generation-agent',
+        kind: 'image',
+        position: { x: 0, y: 0 },
+      }),
+      nodeId: 'generation-agent',
+      recipe: {
+        kind: 'image',
+        prompt: 'Agent prompt',
+        model: {
+          purpose: 'image.generate',
+          providerId: 'provider-1',
+          modelId: 'model-1',
+        },
+      },
+    });
+    const node = configured.nodes[0];
+    if (!node || node.type !== 'generation') throw new Error('Generation fixture is invalid.');
+    const run = {
+      recipeInputFingerprint: 'sha256:agent',
+      jobRef: { kind: 'generation' as const, jobId: 'job-agent' },
+    };
+    const initialCanvas = {
+      ...configured,
+      nodes: [{ ...node, data: { ...node.data, latestRun: run } }],
+    };
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas,
+      effects: {
+        generation: {
+          ...unusedGenerationEffects(),
+          resumeNode: async ({ canvas }) => ({
+            canvas,
+            projection: {
+              nodeId: 'generation-agent',
+              recipeInputFingerprint: run.recipeInputFingerprint,
+              jobRef: run.jobRef,
+              phase: 'running',
+            },
+          }),
+          observeNode: async function* () {},
+        },
+      },
+    });
+
+    await runtime.reattachGenerationNodes();
+
+    expect((await runtime.getSnapshot()).generationNodes).toEqual([
+      expect.objectContaining({
+        nodeId: 'generation-agent',
+        jobRef: run.jobRef,
+        phase: 'running',
+      }),
+    ]);
+  });
+
   it('projects only executable add-surface capabilities into the runtime snapshot', async () => {
     const unavailable = new CanvasHostRuntimeSession({
       identity,

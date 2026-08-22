@@ -126,9 +126,12 @@ export {
   type CanvasProjectSnapshot,
 } from './canvas-project-authoring-service';
 export {
+  isCanvasGenerationProjectionSnapshot,
   projectGenerationSnapshotToCanvas,
+  projectGenerationSnapshotToWorkspaceBoard,
   type CanvasGenerationProjectionInput,
   type CanvasGenerationProjectionSnapshot,
+  type CanvasWorkspaceGenerationProjectionInput,
 } from './canvas-generation-projection';
 export {
   projectCanvasMaterialActionCatalog,

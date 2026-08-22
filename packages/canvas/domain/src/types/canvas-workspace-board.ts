@@ -1,6 +1,12 @@
 import { validateContentLocator, type ContentLocator } from '@neko/content';
 import { isHostProjectedRuntimeValue } from '@neko/content';
-import type { GeneratedAsset, GeneratedAssetMediaKind } from '@neko/generation';
+import type {
+  GeneratedAsset,
+  GeneratedAssetMediaKind,
+  GenerationRecipe,
+  GenerationRecipePurpose,
+} from '@neko/generation';
+import type { GenerationJobSnapshot } from '@neko/generation/job';
 import { isCanvasMaterialGenerationContext, type CanvasMaterialGenerationContext } from './canvas';
 import {
   isCanvasGenerationEvidence,
@@ -8,10 +14,15 @@ import {
   type CanvasGenerationJobRef,
 } from './canvas-material-contracts';
 import { hashStableValue } from '@neko/shared';
+import {
+  isCanvasGenerationProjectionSnapshot,
+  type CanvasGenerationProjectionSnapshot,
+} from '../canvas-generation-projection';
 
 export const CANVAS_WORKSPACE_BOARD_PATH = 'neko/boards/workspace.nkc' as const;
 
-export type CanvasWorkspaceProjectionKind = 'markdown' | 'file-reference' | GeneratedAssetMediaKind;
+export type CanvasWorkspaceProjectionKind =
+  'markdown' | 'file-reference' | 'generation-job' | GeneratedAssetMediaKind;
 export type CanvasWorkspaceArtifactRole = 'source' | 'analysis' | 'output';
 export type CanvasWorkspaceDeliveryHost = 'desktop' | 'headless';
 export type CanvasWorkspaceDeliveryState =
@@ -64,7 +75,7 @@ export type CanvasWorkspaceMarkdownProjectionArtifact = CanvasWorkspaceProjectio
 };
 
 export type CanvasWorkspaceResourceProjectionArtifact = CanvasWorkspaceProjectionArtifactBase & {
-  readonly kind: Exclude<CanvasWorkspaceProjectionKind, 'markdown'>;
+  readonly kind: Exclude<CanvasWorkspaceProjectionKind, 'markdown' | 'generation-job'>;
   readonly title: string;
   readonly mimeType?: string;
   readonly contentLocator: ContentLocator;
@@ -73,8 +84,17 @@ export type CanvasWorkspaceResourceProjectionArtifact = CanvasWorkspaceProjectio
   readonly intrinsicDimensions?: CanvasWorkspaceArtifactDimensions;
 };
 
+export type CanvasWorkspaceGenerationJobProjectionArtifact =
+  CanvasWorkspaceProjectionArtifactBase & {
+    readonly kind: 'generation-job';
+    readonly title: string;
+    readonly snapshot: CanvasGenerationProjectionSnapshot;
+  };
+
 export type CanvasWorkspaceProjectionArtifact =
-  CanvasWorkspaceMarkdownProjectionArtifact | CanvasWorkspaceResourceProjectionArtifact;
+  | CanvasWorkspaceMarkdownProjectionArtifact
+  | CanvasWorkspaceResourceProjectionArtifact
+  | CanvasWorkspaceGenerationJobProjectionArtifact;
 
 export interface CanvasWorkspaceProjectionRequest {
   readonly target: CanvasWorkspaceProjectionTarget;
@@ -184,6 +204,67 @@ export interface CreateGeneratedAssetWorkspaceDeliveryTarget {
   readonly jobRef: CanvasGenerationJobRef;
 }
 
+export interface CreateGenerationJobWorkspaceDeliveryTarget {
+  readonly workspaceId: string;
+  readonly workspaceUri: string;
+  readonly documentUri?: string;
+  readonly sourceHost: CanvasWorkspaceDeliveryHost;
+  /** Exact owning Tool operation identity; never inferred from an active Canvas. */
+  readonly operationId: string;
+}
+
+export function createGenerationJobWorkspaceDeliveryRequest(
+  snapshot: GenerationJobSnapshot,
+  target: CreateGenerationJobWorkspaceDeliveryTarget,
+): CanvasWorkspaceProjectionRequest {
+  const projection = projectGenerationJobSnapshot(snapshot);
+  const contentFingerprint = hashStableValue({
+    ref: projection.ref,
+    phase: projection.phase,
+    recipe: projection.recipe,
+    submissionId: projection.submissionId,
+    recipeInputFingerprint: projection.recipeInputFingerprint,
+    summary: projection.summary,
+    resultLocators: projection.resultLocators,
+    failure: projection.failure,
+  });
+  const deliveryId = `generation-job:${hashStableValue({
+    operationId: target.operationId,
+    contentFingerprint,
+  })}`;
+  const createdAt = new Date(snapshot.updatedAt).toISOString();
+  return {
+    target: {
+      workspaceId: target.workspaceId,
+      workspaceUri: target.workspaceUri,
+      ...(target.documentUri ? { documentUri: target.documentUri } : {}),
+    },
+    process: {
+      deliveryId,
+      sourceHost: target.sourceHost,
+      operationId: target.operationId,
+      createdAt,
+    },
+    artifacts: [
+      {
+        kind: 'generation-job',
+        title: projection.title,
+        snapshot: projection,
+        provenance: {
+          deliveryId,
+          artifactId: `generation-job:${snapshot.ref.jobId}`,
+          contentFingerprint,
+          kind: 'generation-job',
+          role: 'output',
+          sourceId: snapshot.ref.jobId,
+          operationId: target.operationId,
+          createdAt,
+        },
+      },
+    ],
+  };
+}
+
 export function createGeneratedAssetWorkspaceDeliveryRequest(
   asset: GeneratedAsset,
   target: CreateGeneratedAssetWorkspaceDeliveryTarget,
@@ -211,8 +292,8 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
   sourceHost: CanvasWorkspaceDeliveryHost,
   jobRef: CanvasGenerationJobRef,
 ): CanvasWorkspaceDeliveryBatch {
-  if (assets.length === 0)
-    throw new Error('Generated output delivery requires at least one asset.');
+  const [firstAsset] = assets;
+  if (!firstAsset) throw new Error('Generated output delivery requires at least one asset.');
   for (const asset of assets) {
     if (!asset.lifecycle) {
       throw new Error(`Generated output ${asset.id} has no durable lifecycle reference.`);
@@ -236,7 +317,7 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
   );
   const createdAt = assets.reduce(
     (latest, asset) => (asset.generatedAt > latest ? asset.generatedAt : latest),
-    assets[0]!.generatedAt,
+    firstAsset.generatedAt,
   );
   return {
     process: {
@@ -336,9 +417,217 @@ function createCanvasMaterialGenerationContext(
   return isCanvasMaterialGenerationContext(context) ? context : undefined;
 }
 
+function projectGenerationJobSnapshot(
+  snapshot: GenerationJobSnapshot,
+): CanvasGenerationProjectionSnapshot {
+  const request = snapshot.request.request;
+  const recipe = generationRecipe(snapshot.request);
+  const parameters: CanvasMaterialGenerationContext = (() => {
+    switch (snapshot.request.generationType) {
+      case 'prompt':
+        return {};
+      case 'text-to-image':
+      case 'image-to-image':
+      case 'image-edit':
+        return {
+          ...(snapshot.request.request.aspectRatio
+            ? { aspectRatio: snapshot.request.request.aspectRatio }
+            : {}),
+          ...(snapshot.request.request.width ? { width: snapshot.request.request.width } : {}),
+          ...(snapshot.request.request.height ? { height: snapshot.request.request.height } : {}),
+        };
+      case 'text-to-video':
+      case 'image-to-video':
+      case 'video-to-video':
+      case 'video-edit':
+        return {
+          ...(snapshot.request.request.aspectRatio
+            ? { aspectRatio: snapshot.request.request.aspectRatio }
+            : {}),
+          ...(snapshot.request.request.duration
+            ? { duration: snapshot.request.request.duration }
+            : {}),
+        };
+      case 'text-to-audio':
+      case 'text-to-music':
+        return snapshot.request.request.duration
+          ? { duration: snapshot.request.request.duration }
+          : {};
+    }
+  })();
+  const summary: CanvasMaterialGenerationContext = {
+    prompt: request.prompt,
+    model: `${snapshot.request.providerId}/${snapshot.request.modelId}`,
+    generatedAt: new Date(snapshot.createdAt).toISOString(),
+    ...parameters,
+  };
+  return {
+    ref: snapshot.ref,
+    ...(snapshot.retryOf ? { retryOf: snapshot.retryOf } : {}),
+    ...(snapshot.regenerateOf ? { regenerateOf: snapshot.regenerateOf } : {}),
+    phase: snapshot.phase,
+    title: generationJobTitle(snapshot),
+    inputNodeIds: [],
+    mediaKind: generationMediaKind(snapshot.request.generationType),
+    summary,
+    recipe,
+    ...(snapshot.submissionId ? { submissionId: snapshot.submissionId } : {}),
+    recipeInputFingerprint: hashStableValue({ recipe, request: snapshot.request }),
+    ...(snapshot.resultLocators ? { resultLocators: snapshot.resultLocators } : {}),
+    ...(snapshot.failure ? { failure: snapshot.failure } : {}),
+  };
+}
+
+function generationRecipe(request: GenerationJobSnapshot['request']): GenerationRecipe {
+  const model = {
+    purpose: generationRecipePurpose(request.generationType),
+    providerId: request.providerId,
+    modelId: request.modelId,
+  } as const;
+  switch (request.generationType) {
+    case 'prompt':
+      return {
+        kind: 'prompt',
+        prompt: request.request.prompt,
+        model,
+        ...(request.request.temperature !== undefined
+          ? { temperature: request.request.temperature }
+          : {}),
+        ...(request.request.maxOutputTokens !== undefined
+          ? { maxOutputTokens: request.request.maxOutputTokens }
+          : {}),
+      };
+    case 'text-to-image':
+    case 'image-to-image':
+    case 'image-edit':
+      return {
+        kind: 'image',
+        prompt: request.request.prompt,
+        model,
+        ...(request.request.negativePrompt !== undefined
+          ? { negativePrompt: request.request.negativePrompt }
+          : {}),
+        ...(request.request.width !== undefined ? { width: request.request.width } : {}),
+        ...(request.request.height !== undefined ? { height: request.request.height } : {}),
+        ...(request.request.aspectRatio !== undefined
+          ? { aspectRatio: request.request.aspectRatio }
+          : {}),
+        ...(request.request.count !== undefined ? { count: request.request.count } : {}),
+        ...(request.request.quality !== undefined ? { quality: request.request.quality } : {}),
+        ...(request.request.style !== undefined ? { style: request.request.style } : {}),
+      };
+    case 'text-to-video':
+    case 'image-to-video':
+    case 'video-to-video':
+    case 'video-edit':
+      return {
+        kind: 'video',
+        prompt: request.request.prompt,
+        model,
+        ...(request.request.negativePrompt !== undefined
+          ? { negativePrompt: request.request.negativePrompt }
+          : {}),
+        ...(request.request.duration !== undefined ? { duration: request.request.duration } : {}),
+        ...(request.request.resolution !== undefined
+          ? { resolution: request.request.resolution }
+          : {}),
+        ...(request.request.fps !== undefined ? { fps: request.request.fps } : {}),
+        ...(request.request.aspectRatio !== undefined
+          ? { aspectRatio: request.request.aspectRatio }
+          : {}),
+        ...(request.request.motionStrength !== undefined
+          ? { motionStrength: request.request.motionStrength }
+          : {}),
+        ...(request.request.cameraMovement !== undefined
+          ? { cameraMovement: request.request.cameraMovement }
+          : {}),
+      };
+    case 'text-to-audio':
+    case 'text-to-music':
+      return {
+        kind: 'audio',
+        prompt: request.request.prompt,
+        model,
+        ...(request.request.negativePrompt !== undefined
+          ? { negativePrompt: request.request.negativePrompt }
+          : {}),
+        ...(request.request.duration !== undefined ? { duration: request.request.duration } : {}),
+        isMusic: request.generationType === 'text-to-music',
+        ...(request.request.genre !== undefined ? { genre: request.request.genre } : {}),
+        ...(request.request.format !== undefined ? { format: request.request.format } : {}),
+      };
+  }
+}
+
+function generationRecipePurpose(
+  generationType: GenerationJobSnapshot['request']['generationType'],
+): GenerationRecipePurpose {
+  if (generationType === 'prompt') return 'canvas.prompt';
+  if (
+    generationType === 'text-to-image' ||
+    generationType === 'image-to-image' ||
+    generationType === 'image-edit'
+  ) {
+    return 'image.generate';
+  }
+  if (
+    generationType === 'text-to-video' ||
+    generationType === 'image-to-video' ||
+    generationType === 'video-to-video' ||
+    generationType === 'video-edit'
+  ) {
+    return 'video.generate';
+  }
+  return generationType === 'text-to-music' ? 'audio.music.generate' : 'audio.generate';
+}
+
+function generationJobTitle(snapshot: GenerationJobSnapshot): string {
+  const model = `${snapshot.request.providerId}/${snapshot.request.modelId}`;
+  switch (snapshot.request.generationType) {
+    case 'prompt':
+      return `Generate document · ${model}`;
+    case 'text-to-image':
+    case 'image-to-image':
+    case 'image-edit':
+      return `Generate image · ${model}`;
+    case 'text-to-video':
+    case 'image-to-video':
+    case 'video-to-video':
+    case 'video-edit':
+      return `Generate video · ${model}`;
+    case 'text-to-audio':
+      return `Generate audio · ${model}`;
+    case 'text-to-music':
+      return `Generate music · ${model}`;
+  }
+}
+
+function generationMediaKind(
+  generationType: GenerationJobSnapshot['request']['generationType'],
+): CanvasGenerationProjectionSnapshot['mediaKind'] {
+  if (generationType === 'prompt') return 'document';
+  if (
+    generationType === 'text-to-image' ||
+    generationType === 'image-to-image' ||
+    generationType === 'image-edit'
+  ) {
+    return 'image';
+  }
+  if (
+    generationType === 'text-to-video' ||
+    generationType === 'image-to-video' ||
+    generationType === 'video-to-video' ||
+    generationType === 'video-edit'
+  ) {
+    return 'video';
+  }
+  return 'audio';
+}
+
 const PROJECTION_KINDS = new Set<string>([
   'markdown',
   'file-reference',
+  'generation-job',
   'image',
   'audio',
   'video',
@@ -407,7 +696,7 @@ export function isCanvasWorkspaceProjectionRequest(
     if (!isRecord(artifact) || !isRecord(artifact['provenance'])) return false;
     const provenance = artifact['provenance'];
     const contentLocator =
-      artifact['kind'] === 'markdown'
+      artifact['kind'] === 'markdown' || artifact['kind'] === 'generation-job'
         ? undefined
         : validateContentLocator(artifact['contentLocator']);
     return (
@@ -415,12 +704,15 @@ export function isCanvasWorkspaceProjectionRequest(
       typeof artifact['title'] === 'string' &&
       (artifact['kind'] === 'markdown'
         ? typeof artifact['markdown'] === 'string'
-        : contentLocator?.ok === true &&
-          (artifact['generation'] === undefined ||
-            isCanvasGenerationEvidence(artifact['generation'])) &&
-          artifact['resourceRef'] === undefined &&
-          artifact['documentResourceRef'] === undefined &&
-          artifact['localPath'] === undefined) &&
+        : artifact['kind'] === 'generation-job'
+          ? isCanvasGenerationProjectionSnapshot(artifact['snapshot']) &&
+            artifact['contentLocator'] === undefined
+          : contentLocator?.ok === true &&
+            (artifact['generation'] === undefined ||
+              isCanvasGenerationEvidence(artifact['generation'])) &&
+            artifact['resourceRef'] === undefined &&
+            artifact['documentResourceRef'] === undefined &&
+            artifact['localPath'] === undefined) &&
       typeof provenance['deliveryId'] === 'string' &&
       typeof provenance['artifactId'] === 'string' &&
       typeof provenance['contentFingerprint'] === 'string' &&
@@ -547,6 +839,18 @@ export function validateCanvasWorkspaceProjectionRequest(
     }
     validateArtifact(request, artifact, index, identities, diagnostics);
   });
+  if (
+    request.artifacts.some((artifact) => artifact.kind === 'generation-job') &&
+    request.artifacts.length !== 1
+  ) {
+    diagnostics.push(
+      diagnostic(
+        'invalid-artifact-relation',
+        'Generation Job snapshots require an isolated Workspace Board delivery batch.',
+        ['artifacts'],
+      ),
+    );
+  }
   validateArtifactRelations(request.artifacts, diagnostics);
 
   visitForbiddenValues(request, [], diagnostics);
@@ -737,7 +1041,7 @@ function validateArtifact(
     identities.add(identity);
   }
 
-  if (artifact['kind'] !== 'markdown') {
+  if (artifact['kind'] !== 'markdown' && artifact['kind'] !== 'generation-job') {
     const locator = validateContentLocator(artifact['contentLocator']);
     if (
       locator.ok &&
@@ -755,6 +1059,7 @@ function validateArtifact(
   }
   if (
     artifact['kind'] !== 'markdown' &&
+    artifact['kind'] !== 'generation-job' &&
     artifact['intrinsicDimensions'] !== undefined &&
     !isCanvasWorkspaceArtifactDimensions(artifact['intrinsicDimensions'])
   ) {
@@ -773,6 +1078,28 @@ function validateArtifact(
           'missing-projection-identity',
           'Markdown projection requires a title and non-empty content.',
           path,
+        ),
+      );
+    }
+  } else if (artifact.kind === 'generation-job') {
+    if (
+      !isNonEmptyString(artifact['title']) ||
+      !isCanvasGenerationProjectionSnapshot(artifact['snapshot'])
+    ) {
+      diagnostics.push(
+        diagnostic(
+          'missing-projection-identity',
+          'Generation Job projection requires a title and canonical snapshot.',
+          path,
+        ),
+      );
+    }
+    if (artifact['contentLocator'] !== undefined) {
+      diagnostics.push(
+        diagnostic(
+          'invalid-content-locator',
+          'Generation Job projection must not expose a result ContentLocator before settlement.',
+          [...path, 'contentLocator'],
         ),
       );
     }

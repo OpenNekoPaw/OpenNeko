@@ -20,7 +20,10 @@ import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-work
 import type { WorkspaceConfigManagerAuthority } from '@neko/host/settings';
 
 import type { DesktopDshAgentHandlerAssembly } from './desktop-dsh-agent-runtime';
-import { createDesktopDshDomainToolHandlers } from './desktop-dsh-domain-tool-handlers';
+import {
+  createDesktopDshDomainToolHandlers,
+  type DesktopDshGenerationProjectionPort,
+} from './desktop-dsh-domain-tool-handlers';
 
 export interface DesktopDshProductHandlerAssembly extends DesktopDshAgentHandlerAssembly {
   readonly permissions: DshPermissionOwner;
@@ -31,6 +34,7 @@ export function createDesktopDshProductHandlers(options: {
   readonly contexts: Pick<AgentConversationContextAuthorityPort, 'readContext'>;
   readonly workspaceGrants: Pick<DesktopWorkspaceGrantAuthorityPort, 'resolveAuthorizedWorkspace'>;
   readonly generationRuntime: Pick<GenerationApplicationRuntime, 'getJobs'>;
+  readonly generationProjection: DesktopDshGenerationProjectionPort;
   readonly configuration: Pick<
     WorkspaceConfigManagerAuthority,
     'getApplicationConfig' | 'getWorkspaceConfig'

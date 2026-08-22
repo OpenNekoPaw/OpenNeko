@@ -15,6 +15,9 @@ describe('Desktop DSH product handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection: {
+        projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
+      },
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
       assistant: { assistantSpaceId: 'assistant:one', root: '/tmp/assistant' },
       cutRuntime: cutRuntime(),
@@ -53,6 +56,9 @@ describe('Desktop DSH product handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection: {
+        projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
+      },
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
       assistant: { assistantSpaceId: 'assistant:one', root: '/tmp/assistant' },
       cutRuntime: cutRuntime(),
@@ -82,6 +88,9 @@ describe('Desktop DSH product handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection: {
+        projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
+      },
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
       assistant: { assistantSpaceId: 'assistant:one', root: '/tmp/assistant' },
       cutRuntime: cutRuntime(),

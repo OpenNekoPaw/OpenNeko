@@ -13,26 +13,24 @@
       "GenerationJobCoordinator",
       "durable Generation Job store",
       "exact Generation Job observer",
+      "exact turn Canvas admission",
+      "incremental Workspace Board Job projection",
       "terminal result locator projection"
     ],
     "observables": [
       {
         "ref": "detached-generation-facts",
         "kind": "runtime-fact",
-        "description": "One official Generation Tool call; exact Generation Job identity; owning coordinator and observer; terminal result locator or explicit failure; and forbidden polling/fallback facts.",
+        "description": "One official Generation Tool call; exact Generation Job identity; owning coordinator and observer; exact-turn Workspace Board Job/result projection; terminal result locator or explicit failure; and forbidden polling/fallback facts.",
         "required": true
       }
     ],
-    "expectedResult": "The single openneko.generation submit Tool call completes only after the exact Job reaches succeeded and returns its canonical Workspace result locator.",
-    "expectedFailure": "A pending Tool success, missing Job identity/result locator, model-authored polling, direct provider or generic Task participation, fallback, or hidden terminal Job failure fails."
+    "expectedResult": "The single openneko.generation submit Tool call projects one canonical Generation node into the turn-selected Workspace Board, keeps the exact JobRef visible while running, and binds the canonical Workspace result locator into that same node after success without duplicates.",
+    "expectedFailure": "A pending Tool success, missing Job identity/result locator, missing or blocked Workspace Board projection, duplicate projection, model-authored polling, direct provider or generic Task participation, Canvas fallback, or hidden terminal Job failure fails."
   },
-  "fixtureRefs": [
-    "empty-workspace"
-  ],
+  "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": [
-    "configured-default"
-  ],
+  "modelProfileIds": ["configured-default"],
   "steps": [
     {
       "id": "manage-detached-generation",
@@ -77,6 +75,16 @@
       "evidenceRef": "detached-generation-facts"
     },
     {
+      "id": "generation-job-workspace-board",
+      "kind": "workspace-board-projection",
+      "status": "projected",
+      "targetKind": "workspace",
+      "minNodeIds": 1,
+      "sourceFingerprintRequired": true,
+      "diagnosticsEmpty": true,
+      "evidenceRef": "detached-generation-facts"
+    },
+    {
       "id": "order",
       "kind": "process-order",
       "events": [
@@ -96,10 +104,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "detached-generation-facts"
     },
     {

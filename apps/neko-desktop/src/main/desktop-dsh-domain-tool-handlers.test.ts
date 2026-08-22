@@ -10,6 +10,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDesktopDshDomainToolHandlers } from './desktop-dsh-domain-tool-handlers';
 
 const roots: string[] = [];
+const generationProjection = {
+  projectSnapshot: vi.fn(async () => ({ status: 'accepted' as const })),
+};
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -33,6 +36,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
       assistant: { assistantSpaceId: 'assistant:one', root },
       cutRuntime: undefined,
@@ -69,6 +73,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
       assistant: { assistantSpaceId: 'assistant:one', root },
       cutRuntime: undefined,
@@ -111,6 +116,7 @@ describe('Desktop DSH domain Tool handlers', () => {
         resolveAuthorizedWorkspace: vi.fn(async () => workspaceResolution(root)),
       },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
       assistant: { assistantSpaceId: 'assistant:one', root },
       cutRuntime: undefined,
@@ -147,6 +153,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       generationSnapshot(),
     );
     const getJobs = vi.fn(async () => generationJobs(submitGeneration));
+    const projectSnapshot = vi.fn(async () => ({ status: 'accepted' as const }));
     const resolveModelRefForPurpose = vi.fn(() => ({
       providerId: 'provider:one',
       modelId: 'model:one',
@@ -164,6 +171,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
       generationRuntime: { getJobs },
+      generationProjection: { projectSnapshot },
       configuration: {
         getApplicationConfig: vi.fn(),
         getWorkspaceConfig: vi.fn(() => ({ resolveModelRefForPurpose }) as never),
@@ -183,6 +191,12 @@ describe('Desktop DSH domain Tool handlers', () => {
     expect(submitGeneration).toHaveBeenCalledWith(
       expect.objectContaining({ providerId: 'provider:one', modelId: 'model:one' }),
     );
+    expect(projectSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: generationRequest(),
+        snapshot: expect.objectContaining({ ref: { kind: 'generation', jobId: 'job:one' } }),
+      }),
+    );
   });
 
   it('resolves Canvas only after exact Workspace authorization', async () => {
@@ -201,6 +215,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
       configuration: {
         getApplicationConfig: vi.fn(),
         getWorkspaceConfig: vi.fn(),
@@ -247,6 +262,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
       configuration: { getApplicationConfig: vi.fn(), getWorkspaceConfig: vi.fn() },
       assistant: { assistantSpaceId: 'assistant:one', root },
       character: { resolveService },
@@ -297,6 +313,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
       configuration: {
         getApplicationConfig: vi.fn(),
         getWorkspaceConfig: vi.fn(),
@@ -339,6 +356,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
       configuration: {
         getApplicationConfig: vi.fn(),
         getWorkspaceConfig: vi.fn(),
@@ -390,6 +408,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
       configuration: {
         getApplicationConfig: vi.fn(),
         getWorkspaceConfig: vi.fn(),
@@ -461,6 +480,7 @@ describe('Desktop DSH domain Tool handlers', () => {
       },
       workspaceGrants: { resolveAuthorizedWorkspace: vi.fn() },
       generationRuntime: { getJobs: vi.fn() },
+      generationProjection,
       configuration: { getApplicationConfig, getWorkspaceConfig: vi.fn() },
       assistant: { assistantSpaceId: 'assistant:one', root },
     });
@@ -590,7 +610,7 @@ function generationJobs(
     submitGeneration,
     describeGeneration: async () => generationSnapshot(),
     async *observeGeneration() {
-      yield generationSnapshot();
+      yield succeededGenerationSnapshot();
     },
     cancelGeneration: async () => generationSnapshot(),
     retryGeneration: async () => generationSnapshot(),
@@ -613,6 +633,18 @@ function generationSnapshot(): GenerationJobSnapshot {
     progress: { stage: 'queued' as const, percent: 0 },
     createdAt: 1,
     updatedAt: 1,
+  };
+}
+
+function succeededGenerationSnapshot(): GenerationJobSnapshot {
+  return {
+    ...generationSnapshot(),
+    phase: 'succeeded',
+    progress: { stage: 'completed', percent: 100 },
+    resultLocators: [
+      { file: { authority: 'workspace', path: 'neko/generated/job-one/image.png' } },
+    ],
+    updatedAt: 2,
   };
 }
 

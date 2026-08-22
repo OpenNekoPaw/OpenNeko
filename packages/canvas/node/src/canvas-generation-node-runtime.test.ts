@@ -228,6 +228,59 @@ describe('CanvasGenerationNodeRuntime', () => {
     expect(submitGeneration).not.toHaveBeenCalled();
   });
 
+  it('reattaches an Agent-created Job by JobRef when no submission identity exists', async () => {
+    const run = {
+      recipeInputFingerprint: 'sha256:recipe-input',
+      jobRef: { kind: 'generation' as const, jobId: 'job-1' },
+    };
+    const describeGeneration = vi.fn(async () => snapshot({ phase: 'running' }));
+    const runtime = createRuntime(createJobs({ describeGeneration }));
+    const canvas = withRun(configuredCanvas(), run);
+
+    await expect(
+      runtime.resumeNode({
+        identity,
+        workspace,
+        canvas,
+        nodeId: 'generation-1',
+        run,
+        persistCanvas: async () => undefined,
+      }),
+    ).resolves.toMatchObject({
+      canvas,
+      projection: {
+        jobRef: run.jobRef,
+        phase: 'running',
+      },
+    });
+    expect(describeGeneration).toHaveBeenCalledWith(run.jobRef);
+  });
+
+  it('reattaches a bound Job by JobRef when its runtime snapshot omits submission metadata', async () => {
+    const run = boundRun();
+    const describeGeneration = vi.fn(async () => snapshot({ phase: 'running' }));
+    const runtime = createRuntime(createJobs({ describeGeneration }));
+    const canvas = withRun(configuredCanvas(), run);
+
+    await expect(
+      runtime.resumeNode({
+        identity,
+        workspace,
+        canvas,
+        nodeId: 'generation-1',
+        run,
+        persistCanvas: async () => undefined,
+      }),
+    ).resolves.toMatchObject({
+      canvas,
+      projection: {
+        jobRef: run.jobRef,
+        phase: 'running',
+      },
+    });
+    expect(describeGeneration).toHaveBeenCalledWith(run.jobRef);
+  });
+
   it('observes the authoritative snapshot first and drops older updates', async () => {
     const run = boundRun();
     const describeGeneration = vi.fn(async () =>

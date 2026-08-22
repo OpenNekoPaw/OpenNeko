@@ -24,7 +24,10 @@ import {
   type CanvasTextFilePreviewRequest,
   type CanvasTextFilePreviewResult,
 } from './canvas-text-file-preview';
-import { purposeForCanvasGenerationKind } from './types/canvas-generation-node';
+import {
+  purposeForCanvasGenerationKind,
+  type CanvasGenerationRunBinding,
+} from './types/canvas-generation-node';
 import {
   projectCanvasMaterialActionCatalog,
   resolveCanvasMaterialActionTargets,
@@ -41,6 +44,7 @@ import {
 } from './canvas-generation-authoring';
 import type {
   CanvasGenerationApplicationPort,
+  CanvasGenerationRuntimeIdentity,
   CanvasGenerationRuntimeProjection,
 } from './canvas-generation-application-port';
 import type { CanvasHostPresentationSnapshotStore } from './canvas-host-presentation-snapshot';
@@ -173,7 +177,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   private readonly completedCommands = new Map<string, CanvasHostIntentResult>();
   private readonly commandOrder: string[] = [];
   private readonly generationNodes = new Map<string, CanvasGenerationRuntimeProjection>();
-  private readonly observedGenerationSubmissions = new Set<string>();
+  private readonly observedGenerationRuns = new Set<string>();
   private readonly pendingRemovedNodeIds = new Set<string>();
   private operationTail: Promise<void> = Promise.resolve();
   private autosaveTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
@@ -216,13 +220,19 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     return this.enqueueOperation(async () => {
       this.assertActive();
       if (this.dirty) {
-        throw new CanvasHostVisibleEffectError(
-          'workspace-board-open-session-dirty: Save or discard the open Workspace Board changes before delivering Agent artifacts.',
-        );
+        this.cancelAutosave();
+        await this.persistCanvas(this.canvas);
       }
       const result = await operation();
       this.canvas = cloneCanvas(result.canvas);
+      const projectedNodeIds = new Set(
+        result.canvas.nodes.filter((node) => node.type === 'generation').map((node) => node.id),
+      );
+      for (const nodeId of this.generationNodes.keys()) {
+        if (!projectedNodeIds.has(nodeId)) this.generationNodes.delete(nodeId);
+      }
       this.dirty = false;
+      this.cancelAutosave();
       this.undoStack.length = 0;
       this.redoStack.length = 0;
       this.commitProjectionChange();
@@ -370,9 +380,8 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
           if (this.disposed) return;
           this.generationNodes.set(node.id, {
             nodeId: node.id,
-            submissionId: node.data.latestRun.submissionId,
             recipeInputFingerprint: node.data.latestRun.recipeInputFingerprint,
-            ...(node.data.latestRun.jobRef ? { jobRef: node.data.latestRun.jobRef } : {}),
+            ...generationRuntimeIdentity(node.data.latestRun),
             phase: 'outcome-unknown',
             diagnostic: {
               code: 'canvas-generation-reattach-failed',
@@ -432,7 +441,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     this.completedCommands.clear();
     this.commandOrder.length = 0;
     this.generationNodes.clear();
-    this.observedGenerationSubmissions.clear();
+    this.observedGenerationRuns.clear();
     this.pendingRemovedNodeIds.clear();
   }
 
@@ -834,8 +843,10 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     if (!generation || this.disposed) return;
     const node = requireCanvasGenerationNode(this.canvas, nodeId);
     const run = node.data.latestRun;
-    if (!run?.jobRef || this.observedGenerationSubmissions.has(run.submissionId)) return;
-    this.observedGenerationSubmissions.add(run.submissionId);
+    if (!run?.jobRef) return;
+    const runKey = generationRunKey(run);
+    if (this.observedGenerationRuns.has(runKey)) return;
+    this.observedGenerationRuns.add(runKey);
     void this.consumeGenerationObservation(nodeId, { ...run, jobRef: run.jobRef });
   }
 
@@ -874,7 +885,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
             const next = applyCanvasGenerationNodeOutputs({
               canvas: this.canvas,
               nodeId,
-              submissionId: run.submissionId,
               recipeInputFingerprint: run.recipeInputFingerprint,
               jobRef: run.jobRef,
               outputs,
@@ -891,9 +901,8 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
         if (this.disposed) return;
         this.generationNodes.set(nodeId, {
           nodeId,
-          submissionId: run.submissionId,
           recipeInputFingerprint: run.recipeInputFingerprint,
-          jobRef: run.jobRef,
+          ...generationRuntimeIdentity(run),
           phase: 'outcome-unknown',
           diagnostic: {
             code: 'canvas-generation-observation-failed',
@@ -904,7 +913,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
         this.commitProjectionChange();
       });
     } finally {
-      this.observedGenerationSubmissions.delete(run.submissionId);
+      this.observedGenerationRuns.delete(generationRunKey(run));
     }
   }
 
@@ -924,9 +933,8 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     const current = this.generationNodes.get(nodeId);
     this.generationNodes.set(nodeId, {
       nodeId,
-      submissionId: run.submissionId,
       recipeInputFingerprint: run.recipeInputFingerprint,
-      ...(run.jobRef ? { jobRef: run.jobRef } : {}),
+      ...generationRuntimeIdentity(run),
       phase: current?.phase ?? (run.jobRef ? 'binding' : 'outcome-unknown'),
       ...(current?.progress ? { progress: current.progress } : {}),
       ...(current?.resultLocators ? { resultLocators: current.resultLocators } : {}),
@@ -1105,6 +1113,21 @@ function nextGenerationNodeId(canvas: CanvasData): string {
   let sequence = 1;
   while (existing.has(`generation-${sequence}`)) sequence += 1;
   return `generation-${sequence}`;
+}
+
+function generationRunKey(run: CanvasGenerationRunBinding): string {
+  return run.jobRef ? `job:${run.jobRef.jobId}` : `submission:${run.submissionId}`;
+}
+
+function generationRuntimeIdentity(
+  run: CanvasGenerationRunBinding,
+): CanvasGenerationRuntimeIdentity {
+  return run.jobRef
+    ? {
+        jobRef: run.jobRef,
+        ...(run.submissionId ? { submissionId: run.submissionId } : {}),
+      }
+    : { submissionId: run.submissionId };
 }
 
 function assertMaterialIdentity(

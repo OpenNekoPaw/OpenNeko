@@ -8,6 +8,7 @@ import type {
   DshWorkspaceBoardArtifactDeliveryPort,
   DshDurableMarkdownArtifactPublicationPort,
 } from '@neko/agent-runtime/application';
+import type { CanvasWorkspaceTurnTarget } from '@neko/canvas-domain';
 import {
   isWorkspaceFileContentLocator,
   type AuthorizedWorkspaceWriter,
@@ -17,10 +18,12 @@ import { createNodeHostContentReadService, type NodeDocumentEntryReader } from '
 import {
   WorkspaceBoardDeliveryCoordinator,
   WorkspaceBoardDeliveryLedger,
+  createGenerationJobWorkspaceDeliveryRequest,
   type CanvasWorkspaceProjectionArtifact,
   type CanvasWorkspaceProjectionRequest,
   type CanvasWorkspaceProjectionResult,
 } from '@neko/canvas-domain';
+import type { GenerationJobSnapshot } from '@neko/generation/job';
 import { WorkspaceBoardNodeMutation } from '@neko/canvas-node';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type { LocalMetadataStore } from '@neko/local-metadata';
@@ -45,6 +48,15 @@ interface WorkspaceBoardBinding {
   readonly workspacePath: string;
   readonly ledger: WorkspaceBoardDeliveryLedger;
   readonly coordinator: WorkspaceBoardDeliveryCoordinator;
+}
+
+export interface DesktopDshGenerationWorkspaceBoardProjectionInput {
+  readonly workspaceId: string;
+  readonly dshSessionId: string;
+  readonly turn: number;
+  readonly toolCallId: string;
+  readonly canvasTurnTarget: CanvasWorkspaceTurnTarget;
+  readonly snapshot: GenerationJobSnapshot;
 }
 
 export function createDshWorkspaceBoardContentRead(input: {
@@ -91,6 +103,39 @@ export class DesktopDshWorkspaceBoardDelivery
       const code = message.startsWith('workspace-board-open-session-dirty:')
         ? 'workspace-board-open-session-dirty'
         : 'desktop-dsh-workspace-board-delivery-failed';
+      this.reportBlocked(input.workspaceId, code, message);
+      return { status: 'blocked', diagnostic: { code, message } };
+    }
+  }
+
+  async projectGenerationJob(
+    input: DesktopDshGenerationWorkspaceBoardProjectionInput,
+  ): Promise<DshWorkspaceBoardArtifactDeliveryOutcome> {
+    try {
+      const workspace = await this.restoreExactWorkspace(input.workspaceId);
+      const projectionTarget = resolveProjectionTarget(input, workspace);
+      const operationId = `${input.dshSessionId}:turn:${input.turn}:tool:${input.toolCallId}`;
+      const request = createGenerationJobWorkspaceDeliveryRequest(input.snapshot, {
+        ...projectionTarget,
+        sourceHost: 'desktop',
+        operationId,
+      });
+      const results = await this.enqueueProjection(
+        workspace,
+        request.process.deliveryId,
+        async () => request,
+      );
+      const blocked = results.find(
+        (result) =>
+          result.deliveryId === request.process.deliveryId &&
+          (result.status === 'blocked' || result.status === 'conflict'),
+      );
+      return blocked ? this.blockedOutcome(workspace.workspaceId, blocked) : { status: 'accepted' };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const code = message.startsWith('workspace-board-open-session-dirty:')
+        ? 'workspace-board-open-session-dirty'
+        : 'desktop-dsh-generation-workspace-board-projection-failed';
       this.reportBlocked(input.workspaceId, code, message);
       return { status: 'blocked', diagnostic: { code, message } };
     }
@@ -347,7 +392,10 @@ export function createDshWorkspaceBoardProjectionRequest(
 }
 
 function resolveProjectionTarget(
-  input: DshWorkspaceBoardArtifactDeliveryInput,
+  input: {
+    readonly workspaceId: string;
+    readonly canvasTurnTarget: CanvasWorkspaceTurnTarget;
+  },
   workspace: AssetWorkspaceResolution,
 ): CanvasWorkspaceProjectionRequest['target'] {
   if (

@@ -3,9 +3,17 @@ import type {
   ConversationDshSessionBindingStore,
 } from '@neko/agent-runtime/application';
 import type { AgentConversationContext } from '@neko/agent-contracts';
+import type { DshAcpDomainToolRequest } from '@neko/agent-contracts/dsh-acp';
 import { createHostAgentContentAccessRuntime } from '@neko/agent-runtime/runtime';
-import { createDshDomainToolContextResolver } from '@neko/agent-runtime/application';
-import { createDshDomainToolHandlers, type DshDomainToolHandlers } from '@neko/agent-runtime/acp';
+import {
+  createDshDomainToolContextResolver,
+  type DshDomainToolContext,
+} from '@neko/agent-runtime/application';
+import {
+  createDshDomainToolHandlers,
+  type DshDomainToolHandlers,
+  type GenerationDshLifecycleProjectionOutcome,
+} from '@neko/agent-runtime/acp';
 import { CanvasProjectAuthoringService } from '@neko/canvas-domain';
 import {
   createNodeHostContentReadService,
@@ -19,17 +27,27 @@ import type { CutExportApplicationService } from '@neko/cut-node';
 import {
   createPurposeGenerationJobPort,
   type GenerationApplicationRuntime,
+  type GenerationJobSnapshot,
 } from '@neko/generation/job';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
 import type { ConfigManager, WorkspaceConfigManagerAuthority } from '@neko/host/settings';
 import type { CharacterDshAuthoringService } from '@neko/chara/application';
 import type { WorldDshAuthoringService } from '@neko/world/application';
 
+export interface DesktopDshGenerationProjectionPort {
+  projectSnapshot(input: {
+    readonly context: DshDomainToolContext;
+    readonly request: DshAcpDomainToolRequest;
+    readonly snapshot: GenerationJobSnapshot;
+  }): Promise<GenerationDshLifecycleProjectionOutcome>;
+}
+
 export function createDesktopDshDomainToolHandlers(options: {
   readonly bindings: Pick<ConversationDshSessionBindingStore, 'getByDshSessionId'>;
   readonly contexts: Pick<AgentConversationContextAuthorityPort, 'readContext'>;
   readonly workspaceGrants: Pick<DesktopWorkspaceGrantAuthorityPort, 'resolveAuthorizedWorkspace'>;
   readonly generationRuntime: Pick<GenerationApplicationRuntime, 'getJobs'>;
+  readonly generationProjection: DesktopDshGenerationProjectionPort;
   readonly configuration: Pick<
     WorkspaceConfigManagerAuthority,
     'getApplicationConfig' | 'getWorkspaceConfig'
@@ -69,6 +87,7 @@ export function createDesktopDshDomainToolHandlers(options: {
   return createDshDomainToolHandlers({
     contexts,
     generation: {
+      projectSnapshot: (input) => options.generationProjection.projectSnapshot(input),
       resolveJobs: async (context) => {
         if (context.binding.kind === 'assistant') {
           if (context.binding.assistantSpaceId !== options.assistant.assistantSpaceId) {
@@ -235,18 +254,30 @@ export function createDesktopDshDomainToolHandlers(options: {
     },
     world: {
       resolveService: async (context) => {
-        if (context.binding.kind !== 'authoring' || context.binding.target?.kind !== 'world-project') {
-          throw diagnosticError('WORLD_DSH_CONTEXT_UNSUPPORTED', 'World authoring requires an exact WorldProject Conversation target.');
+        if (
+          context.binding.kind !== 'authoring' ||
+          context.binding.target?.kind !== 'world-project'
+        ) {
+          throw diagnosticError(
+            'WORLD_DSH_CONTEXT_UNSUPPORTED',
+            'World authoring requires an exact WorldProject Conversation target.',
+          );
         }
         const resolution = await options.workspaceGrants.resolveAuthorizedWorkspace(
           context.binding.workspaceGrantId,
           context.binding.workspaceId,
         );
         if (resolution.workspace.workspaceId !== context.binding.workspaceId) {
-          throw diagnosticError('WORLD_DSH_WORKSPACE_MISMATCH', 'World authoring Workspace authority does not match the Conversation binding.');
+          throw diagnosticError(
+            'WORLD_DSH_WORKSPACE_MISMATCH',
+            'World authoring Workspace authority does not match the Conversation binding.',
+          );
         }
         if (options.world === undefined) {
-          throw diagnosticError('WORLD_DSH_SERVICE_UNAVAILABLE', 'World DSH authoring service is not composed by Desktop.');
+          throw diagnosticError(
+            'WORLD_DSH_SERVICE_UNAVAILABLE',
+            'World DSH authoring service is not composed by Desktop.',
+          );
         }
         return options.world.resolveService({
           workspaceId: resolution.workspace.workspaceId,

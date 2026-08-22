@@ -66,7 +66,6 @@ export function bindCanvasGenerationNodeJob(input: {
 export function applyCanvasGenerationNodeOutputs(input: {
   readonly canvas: CanvasData;
   readonly nodeId: string;
-  readonly submissionId: string;
   readonly recipeInputFingerprint: string;
   readonly jobRef: CanvasGenerationOutputBinding['jobRef'];
   readonly outputs: readonly CanvasGenerationOutputBinding[];

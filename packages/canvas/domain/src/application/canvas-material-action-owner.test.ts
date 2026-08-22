@@ -449,5 +449,12 @@ function generationProjection(jobId: string): CanvasGenerationProjectionSnapshot
       prompt: 'Cold industrial corridor',
       model: 'image-model',
     },
+    recipe: {
+      kind: 'image',
+      prompt: 'Cold industrial corridor',
+      model: { purpose: 'image.generate', providerId: 'fixture', modelId: 'image-model' },
+    },
+    submissionId: `submission-${jobId}`,
+    recipeInputFingerprint: `fingerprint-${jobId}`,
   };
 }

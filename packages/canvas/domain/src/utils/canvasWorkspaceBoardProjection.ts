@@ -24,6 +24,7 @@ import {
   resolveCanvasImageNodeSize,
   resolveCanvasNodeDefaultSize,
 } from '../canvas-node-sizing';
+import { projectGenerationSnapshotToWorkspaceBoard } from '../canvas-generation-projection';
 
 /** Existing Board inbox identity retained for rendering; new projections never create it. */
 export const CANVAS_WORKSPACE_INBOX_NODE_ID = 'workspace-inbox' as const;
@@ -65,6 +66,40 @@ export function planCanvasWorkspaceBoardProjection(
   const diagnostics = validateCanvasWorkspaceProjectionRequest(request);
   if (diagnostics.length > 0) {
     throw new Error(diagnostics.map((entry) => `${entry.code}: ${entry.message}`).join('; '));
+  }
+
+  const generationJob = request.artifacts.find((artifact) => artifact.kind === 'generation-job');
+  if (generationJob) {
+    if (request.artifacts.length !== 1) {
+      throw new Error(
+        'invalid-artifact-relation: Generation Job snapshots require an isolated delivery batch.',
+      );
+    }
+    const nextCanvasData = projectGenerationSnapshotToWorkspaceBoard({
+      canvas: canvasData,
+      snapshot: generationJob.snapshot,
+    });
+    const nodeIds = nextCanvasData.nodes
+      .filter(
+        (node) =>
+          node.type === 'generation' &&
+          node.data.latestRun?.jobRef?.jobId === generationJob.snapshot.ref.jobId,
+      )
+      .map((node) => node.id);
+    const projectedNodeIds = new Set(nodeIds);
+    const connectionIds = nextCanvasData.connections
+      .filter(
+        (connection) =>
+          projectedNodeIds.has(connection.sourceId) && projectedNodeIds.has(connection.targetId),
+      )
+      .map((connection) => connection.id);
+    return {
+      status:
+        hashStableValue(canvasData) === hashStableValue(nextCanvasData) ? 'noop' : 'projected',
+      canvasData: nextCanvasData,
+      nodeIds,
+      connectionIds,
+    };
   }
 
   const artifacts = sortArtifactsByDependencies(request.artifacts);
@@ -207,7 +242,15 @@ export function planCanvasWorkspaceBoardProjection(
   );
 
   const nodeIds = uniqueStrings(
-    artifacts.map((artifact) => resolvedByArtifactId.get(artifact.provenance.artifactId)!.node.id),
+    artifacts.map((artifact) => {
+      const resolved = resolvedByArtifactId.get(artifact.provenance.artifactId);
+      if (!resolved) {
+        throw new Error(
+          `projection-conflict: Canvas artifact ${artifact.provenance.artifactId} was not resolved.`,
+        );
+      }
+      return resolved.node.id;
+    }),
   );
   if (operations.length === 0) {
     return {
@@ -232,7 +275,13 @@ function refreshExistingResourceProvenance(
   node: CanvasNode,
   artifact: CanvasWorkspaceProjectionArtifact,
 ): CanvasNode {
-  if (artifact.kind === 'markdown' || (node.type !== 'media' && node.type !== 'file')) return node;
+  if (
+    artifact.kind === 'markdown' ||
+    artifact.kind === 'generation-job' ||
+    (node.type !== 'media' && node.type !== 'file')
+  ) {
+    return node;
+  }
   const existing = node.data.provenance;
   if (existing?.['contentFingerprint'] === artifact.provenance.contentFingerprint) return node;
   return {
@@ -263,8 +312,11 @@ function sortArtifactsByDependencies(
       throw new Error('invalid-artifact-relation: Creative-content relations contain a cycle.');
     }
     const [next] = pending.splice(nextIndex, 1);
-    sorted.push(next!.artifact);
-    emitted.add(next!.artifact.provenance.artifactId);
+    if (!next) {
+      throw new Error('invalid-artifact-relation: Creative-content ordering lost an artifact.');
+    }
+    sorted.push(next.artifact);
+    emitted.add(next.artifact.provenance.artifactId);
   }
   return sorted;
 }
@@ -303,6 +355,9 @@ function indexExistingContentNodes(
 }
 
 function createArtifactContentIdentity(artifact: CanvasWorkspaceProjectionArtifact): string {
+  if (artifact.kind === 'generation-job') {
+    return hashStableValue({ kind: 'generation-job', ref: artifact.snapshot.ref });
+  }
   return artifact.kind === 'markdown'
     ? createPortableArtifactContentIdentity(
         artifact.provenance.artifactId,
@@ -382,13 +437,14 @@ function planGeneratedBatchGroup(
     contentIdentities,
     childIds: nodes.map((node) => node.id),
     childOffsets: new Map(
-      nodes.map((node) => [
-        node.id,
-        {
-          x: columnOffsets[node.column]!,
-          y: rowOffsets[node.row]!,
-        },
-      ]),
+      nodes.map((node) => {
+        const x = columnOffsets[node.column];
+        const y = rowOffsets[node.row];
+        if (x === undefined || y === undefined) {
+          throw new Error('projection-conflict: Generated batch layout offset is missing.');
+        }
+        return [node.id, { x, y }] as const;
+      }),
     ),
     size: {
       width:
@@ -408,6 +464,7 @@ function planGeneratedBatchGroup(
 function isGeneratedOutputMediaArtifact(artifact: CanvasWorkspaceProjectionArtifact): boolean {
   return (
     artifact.kind !== 'markdown' &&
+    artifact.kind !== 'generation-job' &&
     artifact.provenance.role === 'output' &&
     (artifact.kind === 'image' || artifact.kind === 'audio' || artifact.kind === 'video') &&
     artifact.generation !== undefined
@@ -542,6 +599,10 @@ function createArtifactNode(
     };
   }
 
+  if (artifact.kind === 'generation-job') {
+    throw new Error('Generation Job projection must use the canonical lifecycle planner.');
+  }
+
   if (artifact.kind === 'image' || artifact.kind === 'audio' || artifact.kind === 'video') {
     return {
       ...base,
@@ -573,6 +634,9 @@ function createArtifactNode(
 }
 
 function artifactNodeSize(artifact: CanvasWorkspaceProjectionArtifact): CanvasNode['size'] {
+  if (artifact.kind === 'generation-job') {
+    return resolveCanvasNodeDefaultSize('job');
+  }
   const imageDimensions = artifactImageDimensions(artifact);
   const imageSize = resolveCanvasImageNodeSize(imageDimensions);
   if (imageSize) {

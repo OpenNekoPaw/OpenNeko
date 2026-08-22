@@ -838,6 +838,7 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
     throw invalidPayload('Canvas Generation runtime phase is invalid.');
   }
   const jobRef = record['jobRef'];
+  const submissionId = record['submissionId'];
   const createdAt = record['createdAt'];
   const updatedAt = record['updatedAt'];
   const progress = record['progress'];
@@ -845,6 +846,9 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
   const diagnostic = record['diagnostic'];
   const text = record['text'];
   const recipeStale = record['recipeStale'];
+  if (submissionId === undefined && jobRef === undefined) {
+    throw invalidPayload('Canvas Generation runtime identity is missing.');
+  }
   if ((createdAt === undefined) !== (updatedAt === undefined)) {
     throw invalidPayload('Canvas Generation runtime timestamps must be projected together.');
   }
@@ -863,17 +867,32 @@ function parseCanvasGenerationRuntimeProjection(value: unknown): CanvasGeneratio
   ) {
     throw invalidPayload('Canvas Generation runtime timestamp order is invalid.');
   }
+  const identity =
+    jobRef === undefined
+      ? {
+          submissionId: requireOpaqueIdentity(
+            submissionId,
+            'Canvas Generation submission identity is invalid.',
+          ),
+        }
+      : {
+          jobRef: parseGenerationJobRef(jobRef),
+          ...(submissionId === undefined
+            ? {}
+            : {
+                submissionId: requireOpaqueIdentity(
+                  submissionId,
+                  'Canvas Generation submission identity is invalid.',
+                ),
+              }),
+        };
   return {
     nodeId: requireOpaqueIdentity(record['nodeId'], 'Canvas Generation node identity is invalid.'),
-    submissionId: requireOpaqueIdentity(
-      record['submissionId'],
-      'Canvas Generation submission identity is invalid.',
-    ),
     recipeInputFingerprint: requireNonEmptyString(
       record['recipeInputFingerprint'],
       'Canvas Generation fingerprint is invalid.',
     ),
-    ...(jobRef === undefined ? {} : { jobRef: parseGenerationJobRef(jobRef) }),
+    ...identity,
     phase,
     ...(parsedCreatedAt === undefined ? {} : { createdAt: parsedCreatedAt }),
     ...(parsedUpdatedAt === undefined ? {} : { updatedAt: parsedUpdatedAt }),

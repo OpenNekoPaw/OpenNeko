@@ -2009,6 +2009,45 @@ async function startDesktop(): Promise<void> {
         contexts: agentConversationContexts,
         workspaceGrants: workspaceGrantAuthority,
         generationRuntime,
+        generationProjection: {
+          projectSnapshot: async ({ context, request, snapshot }) => {
+            if (context.binding.kind === 'assistant') return { status: 'accepted' };
+            if (context.binding.kind !== 'workspace') {
+              return {
+                status: 'blocked',
+                diagnostic: {
+                  code: 'dsh-generation-canvas-context-unsupported',
+                  message: `Generation Canvas projection is unavailable for ${context.binding.kind} Conversation context.`,
+                },
+              };
+            }
+            const canvasTurnTarget = dshTurnCanvasTargets.read(request.sessionId, request.turn);
+            if (!canvasTurnTarget) {
+              const diagnostic = {
+                code: 'dsh-generation-canvas-target-missing',
+                message: `DSH turn ${request.turn} has no bound Canvas target admission.`,
+              } as const;
+              host.diagnostics?.report({
+                ...diagnostic,
+                severity: 'error',
+                metadata: {
+                  dshSessionId: request.sessionId,
+                  conversationId: context.conversationId,
+                  toolCallId: request.toolCallId,
+                },
+              });
+              return { status: 'blocked', diagnostic };
+            }
+            return dshWorkspaceBoardDelivery.projectGenerationJob({
+              workspaceId: context.binding.workspaceId,
+              dshSessionId: request.sessionId,
+              turn: request.turn,
+              toolCallId: request.toolCallId,
+              canvasTurnTarget,
+              snapshot,
+            });
+          },
+        },
         configuration: workspaceConfigAuthority,
         assistant: { assistantSpaceId, root: assistantSpaceRoot },
         cutRuntime,
@@ -2320,9 +2359,7 @@ async function startDesktop(): Promise<void> {
     createContentRead: (workspacePath) =>
       createNodeHostContentReadService({ workspaceRoot: workspacePath }),
   });
-  const dshPromptImages: ConstructorParameters<
-    typeof DesktopDshSessionHost
-  >[0]['promptImages'] = {
+  const dshPromptImages: ConstructorParameters<typeof DesktopDshSessionHost>[0]['promptImages'] = {
     admit: async ({ conversationId, windowId, ...input }) =>
       dshPromptImageAdmission.admit({
         ...input,

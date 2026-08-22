@@ -12,11 +12,9 @@ export interface CanvasGenerationWorkspace {
   readonly workspacePath: string;
 }
 
-export interface CanvasGenerationRuntimeProjection {
+interface CanvasGenerationRuntimeProjectionBase {
   readonly nodeId: string;
-  readonly submissionId: string;
   readonly recipeInputFingerprint: string;
-  readonly jobRef?: GenerationJobRef;
   readonly phase: GenerationJobSnapshot['phase'] | 'binding';
   readonly createdAt?: number;
   readonly updatedAt?: number;
@@ -26,6 +24,13 @@ export interface CanvasGenerationRuntimeProjection {
   readonly recipeStale?: boolean;
   readonly diagnostic?: CanvasGenerationDiagnostic;
 }
+
+export type CanvasGenerationRuntimeIdentity =
+  | { readonly submissionId: string; readonly jobRef?: undefined }
+  | { readonly jobRef: GenerationJobRef; readonly submissionId?: string };
+
+export type CanvasGenerationRuntimeProjection = CanvasGenerationRuntimeProjectionBase &
+  CanvasGenerationRuntimeIdentity;
 
 export interface CanvasGenerationStartResult {
   /** The latest durably persisted Canvas state, including the run and optional Job binding. */

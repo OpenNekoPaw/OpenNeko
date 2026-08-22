@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type WorkspaceFileContentLocator } from '@neko/content';
+import { contentLocatorKey, type WorkspaceFileContentLocator } from '@neko/content';
 import { createEmptyCanvasData, type CanvasData } from '@neko/canvas-domain';
 import { projectResolvedCanvasMaterialToCanvas } from '../canvas-content-authoring';
 import {
@@ -14,35 +14,47 @@ const IDENTITY = {
 } as const;
 
 describe('Canvas Generation Job projection', () => {
-  it('projects owner state into one read-only Job node', () => {
+  it('projects owner state into one canonical Generation node', () => {
     const pending = project(
       emptyWithSource(),
       snapshot({ phase: 'pending', position: { x: 240, y: 180 } }),
     );
     const running = project(pending, snapshot({ phase: 'running' }));
 
-    expect(running.nodes.filter((node) => node.type === 'job')).toEqual([
+    expect(running.nodes.filter((node) => node.type === 'generation')).toEqual([
       expect.objectContaining({
-        id: 'generation-job:generation-1',
+        id: 'generation:generation-1',
         position: { x: 240, y: 180 },
         data: expect.objectContaining({
-          jobRef: { kind: 'generation', jobId: 'generation-1' },
-          status: 'running',
-          inputRefs: [{ kind: 'canvas-node', nodeId: 'source-node' }],
-          outputRefs: [],
+          recipe: expect.objectContaining({ kind: 'image', prompt: 'Create a concept frame' }),
+          latestRun: expect.objectContaining({
+            jobRef: { kind: 'generation', jobId: 'generation-1' },
+          }),
+          outputs: [],
         }),
       }),
     ]);
     expect(running.connections).toEqual([
       expect.objectContaining({
         sourceId: 'source-node',
-        targetId: 'generation-job:generation-1',
+        targetId: 'generation:generation-1',
         type: 'derived-from',
       }),
     ]);
   });
 
-  it('commits exact Workspace locators, immutable generation evidence and Job lineage once', () => {
+  it('uses the Generation JobRef as the durable run identity when Agent submission metadata is absent', () => {
+    const { submissionId: _submissionId, ...agentSnapshot } = snapshot({ phase: 'running' });
+    const canvas = project(emptyWithSource(), agentSnapshot);
+    const generation = canvas.nodes.find((node) => node.type === 'generation');
+
+    expect(generation?.data.latestRun).toEqual({
+      jobRef: { kind: 'generation', jobId: 'generation-1' },
+      recipeInputFingerprint: 'recipe-input-1',
+    });
+  });
+
+  it('binds exact Workspace output locators inside the Generation node without sibling refs', () => {
     const succeeded = project(
       emptyWithSource(),
       snapshot({
@@ -58,33 +70,14 @@ describe('Canvas Generation Job projection', () => {
       }),
     );
 
-    const generated = replayed.nodes.filter(
-      (node) => node.type === 'media' && node.data.generation !== undefined,
-    );
-    expect(generated).toHaveLength(2);
-    expect(generated[0]?.data).toMatchObject({
-      contentLocator: resultLocator('output-1'),
-      generation: {
-        jobRef: { kind: 'generation', jobId: 'generation-1' },
-        summary: { prompt: 'Create a concept frame', model: 'fixture-model' },
-      },
-    });
-    const job = replayed.nodes.find((node) => node.type === 'job');
-    expect(job?.data).toMatchObject({
-      status: 'completed',
-      outputRefs: generated.map((node) => ({ kind: 'canvas-node', nodeId: node.id })),
-    });
-    expect(replayed.connections).toHaveLength(3);
-    expect(
-      generated.every((node) =>
-        replayed.connections.some(
-          (connection) =>
-            connection.sourceId === job?.id &&
-            connection.targetId === node.id &&
-            connection.type === 'derived-from',
-        ),
-      ),
-    ).toBe(true);
+    expect(replayed.nodes).toHaveLength(2);
+    const generation = replayed.nodes.find((node) => node.type === 'generation');
+    expect(generation?.data.outputs).toEqual([
+      expect.objectContaining({ locator: resultLocator('output-1'), kind: 'image' }),
+      expect.objectContaining({ locator: resultLocator('output-2'), kind: 'image' }),
+    ]);
+    expect(generation?.data.selectedOutputId).toBe(contentLocatorKey(resultLocator('output-2')));
+    expect(replayed.connections).toHaveLength(1);
   });
 
   it.each([
@@ -100,14 +93,13 @@ describe('Canvas Generation Job projection', () => {
       phase: 'cancelled' as const,
       failure: { code: 'cancelled', message: 'Cancelled by creator' },
     },
-  ])('keeps $phase Jobs visible without source-less results', ({ phase, failure }) => {
+  ])('keeps $phase Generation nodes visible without source-less results', ({ phase, failure }) => {
     const canvas = project(emptyWithSource(), snapshot({ phase, failure }));
 
     expect(canvas.nodes).toHaveLength(2);
-    expect(canvas.nodes.find((node) => node.type === 'job')?.data).toMatchObject({
-      status: phase,
-      diagnostic: `${failure.code}: ${failure.message}`,
-      outputRefs: [],
+    expect(canvas.nodes.find((node) => node.type === 'generation')?.data).toMatchObject({
+      outputs: [],
+      latestRun: { jobRef: { kind: 'generation', jobId: 'generation-1' } },
     });
   });
 
@@ -128,11 +120,11 @@ describe('Canvas Generation Job projection', () => {
       }),
     );
 
-    expect(retried.nodes.filter((node) => node.type === 'job')).toHaveLength(2);
+    expect(retried.nodes.filter((node) => node.type === 'generation')).toHaveLength(2);
     expect(retried.connections).toContainEqual(
       expect.objectContaining({
-        sourceId: 'generation-job:generation-1',
-        targetId: 'generation-job:generation-2',
+        sourceId: 'generation:generation-1',
+        targetId: 'generation:generation-2',
         type: 'derived-from',
       }),
     );
@@ -157,8 +149,8 @@ describe('Canvas Generation Job projection', () => {
 
     expect(regenerated.connections).toContainEqual(
       expect.objectContaining({
-        sourceId: 'generation-job:generation-1',
-        targetId: 'generation-job:generation-2',
+        sourceId: 'generation:generation-1',
+        targetId: 'generation:generation-2',
         type: 'derived-from',
       }),
     );
@@ -170,7 +162,7 @@ describe('Canvas Generation Job projection', () => {
       snapshot({ phase: 'succeeded', resultLocators: [resultLocator('output-1')] }),
     );
     expect(() => project(completed, snapshot({ phase: 'running' }))).toThrow(
-      'cannot move from completed to running',
+      'must not project result artifacts',
     );
     expect(() =>
       projectGenerationSnapshotToCanvas({
@@ -205,6 +197,13 @@ function snapshot(
     inputNodeIds: ['source-node'],
     mediaKind: 'image',
     summary: { prompt: 'Create a concept frame', model: 'fixture-model' },
+    recipe: {
+      kind: 'image',
+      prompt: 'Create a concept frame',
+      model: { purpose: 'image.generate', providerId: 'fixture', modelId: 'fixture-model' },
+    },
+    submissionId: 'submission-1',
+    recipeInputFingerprint: 'recipe-input-1',
     ...overrides,
   };
 }

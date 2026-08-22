@@ -8,7 +8,7 @@ import type {
   CutExportTaskSnapshot,
   CutProjectAuthoringService,
 } from '@neko/cut-domain';
-import type { PurposeGenerationJobPort } from '@neko/generation/job';
+import type { GenerationJobSnapshot, PurposeGenerationJobPort } from '@neko/generation/job';
 import type { CharacterDshAuthoringService } from '@neko/chara/application';
 import type { WorldDshAuthoringService } from '@neko/world/application';
 import type { AgentContentAccessRuntime } from '../runtime/capability/agent-content-access-runtime';
@@ -19,7 +19,10 @@ import type {
 } from '../application/dsh-domain-tool-context-resolver';
 import { CanvasDshHostAdapter } from './canvas-host-adapter';
 import { CutDshHostAdapter } from './cut-host-adapter';
-import { GenerationDshHostAdapter } from './generation-host-adapter';
+import {
+  GenerationDshHostAdapter,
+  type GenerationDshLifecycleProjectionOutcome,
+} from './generation-host-adapter';
 import { DocumentDshHostAdapter } from './document-host-adapter';
 import { ContentImageDshHostAdapter } from './content-image-host-adapter';
 import { CharacterDshHostAdapter } from './character-host-adapter';
@@ -60,6 +63,11 @@ export function createDshDomainToolHandlers(options: {
   readonly contexts: DshDomainToolContextResolver;
   readonly generation: {
     resolveJobs(context: DshDomainToolContext): Promise<PurposeGenerationJobPort>;
+    projectSnapshot(input: {
+      readonly context: DshDomainToolContext;
+      readonly request: DshAcpDomainToolRequest;
+      readonly snapshot: GenerationJobSnapshot;
+    }): Promise<GenerationDshLifecycleProjectionOutcome>;
   };
   readonly canvas: {
     resolveService(
@@ -113,16 +121,32 @@ export function createDshDomainToolHandlers(options: {
 }): DshDomainToolHandlers {
   return Object.freeze({
     async executeGenerationTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
-      return new GenerationDshHostAdapter(async () => {
-        const context = await options.contexts.resolve(request.sessionId);
-        if (context.binding.kind !== 'workspace' && context.binding.kind !== 'assistant') {
-          throw diagnosticError(
-            'GENERATION_DSH_CONTEXT_UNSUPPORTED',
-            `Generation is unavailable for ${context.binding.kind} Conversation context.`,
-          );
-        }
-        return options.generation.resolveJobs(context);
-      }).execute(request, signal);
+      const context = options.contexts.resolve(request.sessionId);
+      return new GenerationDshHostAdapter(
+        async () => {
+          const resolved = await context;
+          if (
+            resolved.binding.kind !== 'workspace' &&
+            resolved.binding.kind !== 'assistant' &&
+            resolved.binding.kind !== 'authoring'
+          ) {
+            throw diagnosticError(
+              'GENERATION_DSH_CONTEXT_UNSUPPORTED',
+              `Generation is unavailable for ${resolved.binding.kind} Conversation context.`,
+            );
+          }
+          return options.generation.resolveJobs(resolved);
+        },
+        undefined,
+        {
+          project: async ({ request: projectionRequest, snapshot }) =>
+            options.generation.projectSnapshot({
+              context: await context,
+              request: projectionRequest,
+              snapshot,
+            }),
+        },
+      ).execute(request, signal);
     },
 
     async executeCanvasTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {

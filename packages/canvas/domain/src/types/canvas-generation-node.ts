@@ -33,11 +33,17 @@ export type CanvasAudioGenerationRecipe = AudioGenerationRecipe;
 export type CanvasVideoGenerationRecipe = VideoGenerationRecipe;
 export type CanvasGenerationRecipe = GenerationRecipe;
 
-export interface CanvasGenerationRunBinding {
-  readonly submissionId: string;
-  readonly recipeInputFingerprint: string;
-  readonly jobRef?: JobRef<'generation'>;
-}
+export type CanvasGenerationRunBinding =
+  | {
+      readonly submissionId: string;
+      readonly recipeInputFingerprint: string;
+      readonly jobRef?: undefined;
+    }
+  | {
+      readonly jobRef: JobRef<'generation'>;
+      readonly recipeInputFingerprint: string;
+      readonly submissionId?: string;
+    };
 
 export interface CanvasGenerationOutputBinding {
   readonly outputId: string;
@@ -196,7 +202,6 @@ export function bindCanvasGenerationJob(
 export function applyCanvasGenerationOutputs(
   current: CanvasGenerationNodeData,
   input: {
-    readonly submissionId: string;
     readonly jobRef: JobRef<'generation'>;
     readonly recipeInputFingerprint: string;
     readonly outputs: readonly CanvasGenerationOutputBinding[];
@@ -208,7 +213,6 @@ export function applyCanvasGenerationOutputs(
   const run = current.latestRun;
   if (
     !run ||
-    run.submissionId !== input.submissionId ||
     run.recipeInputFingerprint !== input.recipeInputFingerprint ||
     run.jobRef?.jobId !== input.jobRef.jobId
   ) {
@@ -290,12 +294,14 @@ export function selectedCanvasGenerationOutput(
 }
 
 function isCanvasGenerationRunBinding(value: unknown): value is CanvasGenerationRunBinding {
+  if (!isRecord(value) || !hasOnlyKeys(value, RUN_BINDING_KEYS)) return false;
+  const submissionId = value['submissionId'];
+  const jobRef = value['jobRef'];
   return (
-    isRecord(value) &&
-    hasOnlyKeys(value, RUN_BINDING_KEYS) &&
-    isNonEmptyString(value['submissionId']) &&
     isNonEmptyString(value['recipeInputFingerprint']) &&
-    (value['jobRef'] === undefined || isGenerationJobRef(value['jobRef']))
+    (submissionId === undefined || isNonEmptyString(submissionId)) &&
+    (jobRef === undefined || isGenerationJobRef(jobRef)) &&
+    (submissionId !== undefined || jobRef !== undefined)
   );
 }
 

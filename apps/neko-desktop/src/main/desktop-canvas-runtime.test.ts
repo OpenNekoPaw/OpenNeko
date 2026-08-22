@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import type { ContentLocator } from '@neko/content';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -2566,13 +2565,14 @@ describe('DesktopCanvasRuntime', () => {
       }),
     );
     const mutation = vi.fn(async () => undefined);
-    await expect(runtime.coordinateWorkspaceBoardMutation('workspace-1', mutation)).rejects.toThrow(
-      'workspace-board-open-session-dirty',
-    );
-    expect(mutation).not.toHaveBeenCalled();
+    await expect(
+      runtime.coordinateWorkspaceBoardMutation('workspace-1', mutation),
+    ).resolves.toBeUndefined();
+    expect(mutation).toHaveBeenCalledOnce();
     expect(JSON.parse(await readFile(documentPath, 'utf8'))).toMatchObject({
-      name: 'Agent delivery',
+      name: 'Unsaved user edit',
     });
+    expect((await runtime.getSnapshot('window-1', identity)).canvas.name).toBe('Unsaved user edit');
     await runtime.dispose();
   });
 

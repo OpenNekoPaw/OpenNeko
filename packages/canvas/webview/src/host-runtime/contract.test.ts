@@ -150,6 +150,20 @@ describe('Canvas Host runtime contract', () => {
     });
 
     expect(snapshot.generationNodes).toEqual([projection]);
+    const agentProjection = {
+      nodeId: 'generation-agent',
+      jobRef: { kind: 'generation', jobId: 'job-agent' },
+      recipeInputFingerprint: 'sha256:agent-recipe',
+      phase: 'running',
+      createdAt: 300,
+      updatedAt: 350,
+    };
+    expect(
+      parseCanvasHostSnapshot({
+        ...validSnapshot(),
+        generationNodes: [agentProjection],
+      }).generationNodes,
+    ).toEqual([agentProjection]);
     expect(() =>
       parseCanvasHostSnapshot({
         ...validSnapshot(),

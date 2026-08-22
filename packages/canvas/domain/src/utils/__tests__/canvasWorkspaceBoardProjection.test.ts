@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createGenerationJobWorkspaceDeliveryRequest,
   type CanvasWorkspaceProjectionArtifact,
   type CanvasWorkspaceMarkdownProjectionArtifact,
   type CanvasWorkspaceResourceProjectionArtifact,
   type CanvasWorkspaceProjectionRequest,
 } from '../../types/canvas-workspace-board';
+import type { GenerationJobSnapshot } from '@neko/generation/job';
 import type { CanvasNode } from '../../types/canvas';
-import type { ContentLocator } from '@neko/content';
+import type { ContentLocator, WorkspaceFileContentLocator } from '@neko/content';
 import { createEmptyCanvasData } from '../canvasHeadlessAuthoring';
 import { planCanvasWorkspaceBoardProjection } from '../canvasWorkspaceBoardProjection';
 
@@ -16,6 +18,79 @@ const sourceLocator: ContentLocator = {
 const generatedLocator = generatedOutputLocator('shot-1');
 
 describe('planCanvasWorkspaceBoardProjection', () => {
+  it('updates one Generation node and binds committed result locators only after success', () => {
+    const pending = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      generationRequest(generationSnapshot({ phase: 'pending' })),
+    );
+    const running = planCanvasWorkspaceBoardProjection(
+      pending.canvasData,
+      generationRequest(
+        generationSnapshot({
+          phase: 'running',
+          updatedAt: 2,
+          progress: { stage: 'waiting-provider', percent: 50 },
+        }),
+      ),
+    );
+    const succeededRequest = generationRequest(
+      generationSnapshot({
+        phase: 'succeeded',
+        updatedAt: 3,
+        progress: { stage: 'completed', percent: 100 },
+        resultLocators: [generationResultLocator('generation-result')],
+      }),
+    );
+    const succeeded = planCanvasWorkspaceBoardProjection(running.canvasData, succeededRequest);
+    const replay = planCanvasWorkspaceBoardProjection(succeeded.canvasData, succeededRequest);
+
+    expect(pending.canvasData.nodes).toHaveLength(1);
+    expect(running.canvasData.nodes).toHaveLength(1);
+    expect(succeeded.canvasData.nodes).toHaveLength(1);
+    expect(pending.nodeIds).toEqual(['generation:generation%3Aone']);
+    expect(running.nodeIds).toEqual(pending.nodeIds);
+    expect(succeeded.nodeIds).toEqual(pending.nodeIds);
+    expect(
+      succeeded.canvasData.nodes.find((node) => node.type === 'generation')?.data,
+    ).toMatchObject({
+      recipe: { kind: 'image', prompt: 'Create a concept frame' },
+      latestRun: {
+        jobRef: { kind: 'generation', jobId: 'generation:one' },
+      },
+      outputs: [
+        expect.objectContaining({
+          kind: 'image',
+          locator: generationResultLocator('generation-result'),
+        }),
+      ],
+    });
+    expect(succeeded.canvasData.connections).toHaveLength(0);
+    expect(replay.status).toBe('noop');
+    expect(replay.canvasData.nodes).toHaveLength(1);
+  });
+
+  it('deduplicates progress-only Generation snapshots that do not change Canvas state', () => {
+    const first = generationRequest(
+      generationSnapshot({
+        phase: 'running',
+        updatedAt: 2,
+        progress: { stage: 'waiting-provider', percent: 10 },
+      }),
+    );
+    const progressOnly = generationRequest(
+      generationSnapshot({
+        phase: 'running',
+        updatedAt: 3,
+        progress: { stage: 'waiting-provider', percent: 80 },
+      }),
+    );
+
+    expect(progressOnly.process.deliveryId).toBe(first.process.deliveryId);
+    expect(progressOnly.artifacts[0]?.provenance.contentFingerprint).toBe(
+      first.artifacts[0]?.provenance.contentFingerprint,
+    );
+  });
+
   it('projects a flat creative-content graph with explicit source relations', () => {
     const plan = planCanvasWorkspaceBoardProjection(createEmptyCanvasData('Workspace'), request());
 
@@ -583,6 +658,39 @@ function request(
       markdownArtifact(deliveryId, ['source-1']),
       outputArtifact(deliveryId, ['analysis-1']),
     ],
+  };
+}
+
+function generationRequest(snapshot: GenerationJobSnapshot): CanvasWorkspaceProjectionRequest {
+  return createGenerationJobWorkspaceDeliveryRequest(snapshot, {
+    workspaceId: 'workspace-1',
+    workspaceUri: 'file:///workspace/project/',
+    sourceHost: 'headless',
+    operationId: 'dsh-session:one:turn:1:tool:generation',
+  });
+}
+
+function generationResultLocator(id: string): WorkspaceFileContentLocator {
+  return {
+    file: { authority: 'workspace', path: `neko/generated/image/${id}.png` },
+  };
+}
+
+function generationSnapshot(overrides: Partial<GenerationJobSnapshot>): GenerationJobSnapshot {
+  return {
+    ref: { kind: 'generation', jobId: 'generation:one' },
+    phase: 'pending',
+    createdAt: 1,
+    updatedAt: 1,
+    lifecycleMode: 'detached',
+    request: {
+      providerId: 'provider:one',
+      modelId: 'model:one',
+      generationType: 'text-to-image',
+      request: { prompt: 'Create a concept frame', width: 1024, height: 1024 },
+    },
+    progress: { stage: 'queued', percent: 0 },
+    ...overrides,
   };
 }
 
