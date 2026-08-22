@@ -37,5 +37,5 @@ export interface JobStore<S extends JobSnapshotBase> {
   create(initial: S): Promise<S>;
   get(ref: S['ref']): Promise<S>;
   save(snapshot: S): Promise<S>;
-  observe(ref: S['ref']): AsyncIterable<S>;
+  observe(ref: S['ref'], signal?: AbortSignal): AsyncIterable<S>;
 }

@@ -11,12 +11,14 @@ import {
 } from '@neko/canvas-domain';
 
 describe('DSH Host adapters for the W2 domain Tool slice', () => {
-  it('submits a Generation Job and returns bounded durable facts without waiting for provider', async () => {
+  it('keeps Generation submit active until the exact Job succeeds with result locators', async () => {
     const jobs = createGenerationJobs();
     const adapter = new GenerationDshHostAdapter(jobs);
-    const snapshot = createGenerationSnapshot();
+    const submitted = createGenerationSnapshot();
+    const succeeded = createSucceededGenerationSnapshot();
 
-    jobs.submitGeneration.mockResolvedValue(snapshot);
+    jobs.submitGeneration.mockResolvedValue(submitted);
+    jobs.observeGeneration.mockReturnValue(snapshots(submitted, succeeded));
 
     const response = await adapter.execute(
       request('openneko.generation', 'submit', {
@@ -34,21 +36,235 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
         lifecycleMode: 'detached',
       }),
     );
-    expect(jobs.observeGeneration).not.toHaveBeenCalled();
+    expect(jobs.observeGeneration).toHaveBeenCalledWith(
+      { kind: 'generation', jobId: 'job-1' },
+      undefined,
+    );
     expect(response).toEqual({
       outcome: 'success',
       jobId: 'job-1',
       result: {
         jobId: 'job-1',
         kind: 'generation',
-        phase: 'pending',
-        stage: 'queued',
+        phase: 'succeeded',
+        stage: 'completed',
         lifecycleMode: 'detached',
         generationType: 'text-to-image',
         createdAt: 1,
-        updatedAt: 2,
+        updatedAt: 3,
+        resultLocators: [
+          { file: { authority: 'workspace', path: 'neko/generated/job-1/image.png' } },
+        ],
       },
     });
+  });
+
+  it('projects each distinct Generation lifecycle snapshot through the exact Tool request', async () => {
+    const jobs = createGenerationJobs();
+    const submitted = createGenerationSnapshot();
+    const running: GenerationJobSnapshot = {
+      ...submitted,
+      phase: 'running',
+      updatedAt: 3,
+      progress: { stage: 'waiting-provider', percent: 40 },
+    };
+    const succeeded = { ...createSucceededGenerationSnapshot(), updatedAt: 4 };
+    const project = vi.fn(async () => ({ status: 'accepted' as const }));
+    const adapter = new GenerationDshHostAdapter(jobs, undefined, { project });
+    jobs.submitGeneration.mockResolvedValue(submitted);
+    jobs.observeGeneration.mockReturnValue(snapshots(submitted, running, succeeded));
+    const toolRequest = request('openneko.generation', 'submit', {
+      purpose: 'image.generate',
+      generationType: 'text-to-image',
+      lifecycleMode: 'detached',
+      request: { prompt: 'A quiet harbor' },
+    });
+
+    await expect(adapter.execute(toolRequest)).resolves.toMatchObject({ outcome: 'success' });
+
+    expect(project).toHaveBeenCalledTimes(3);
+    expect(project.mock.calls.map(([input]) => input.snapshot.phase)).toEqual([
+      'pending',
+      'running',
+      'succeeded',
+    ]);
+    expect(project.mock.calls.every(([input]) => input.request === toolRequest)).toBe(true);
+  });
+
+  it('fails the Generation Tool visibly when the exact Job reaches a failed terminal state', async () => {
+    const jobs = createGenerationJobs();
+    const adapter = new GenerationDshHostAdapter(jobs);
+    const submitted = createGenerationSnapshot();
+    const failed: GenerationJobSnapshot = {
+      ...submitted,
+      phase: 'failed',
+      updatedAt: 3,
+      progress: { stage: 'waiting-provider', percent: 40 },
+      failure: {
+        code: 'provider-request-failed',
+        message: 'Provider rejected the image request.',
+        retryable: false,
+      },
+    };
+    jobs.submitGeneration.mockResolvedValue(submitted);
+    jobs.observeGeneration.mockReturnValue(snapshots(submitted, failed));
+
+    await expect(
+      adapter.execute(
+        request('openneko.generation', 'submit', {
+          purpose: 'image.generate',
+          generationType: 'text-to-image',
+          lifecycleMode: 'detached',
+          request: { prompt: 'A quiet harbor' },
+        }),
+      ),
+    ).resolves.toEqual({
+      outcome: 'failure',
+      diagnostic: {
+        code: 'provider-request-failed',
+        message:
+          "Generation Job 'job-1' reached settlement phase 'failed': Provider rejected the image request.",
+      },
+    });
+  });
+
+  it.each(['cancelled', 'outcome-unknown'] as const)(
+    'fails the Generation Tool visibly when the exact Job reaches %s',
+    async (phase) => {
+      const jobs = createGenerationJobs();
+      const adapter = new GenerationDshHostAdapter(jobs);
+      const submitted = createGenerationSnapshot();
+      jobs.submitGeneration.mockResolvedValue(submitted);
+      jobs.observeGeneration.mockReturnValue(
+        snapshots(submitted, {
+          ...submitted,
+          phase,
+          updatedAt: 3,
+          failure: {
+            code: `generation-${phase}`,
+            message: `Generation became ${phase}.`,
+          },
+        }),
+      );
+
+      await expect(
+        adapter.execute(
+          request('openneko.generation', 'submit', {
+            purpose: 'image.generate',
+            generationType: 'text-to-image',
+            lifecycleMode: 'detached',
+            request: { prompt: 'A quiet harbor' },
+          }),
+        ),
+      ).resolves.toMatchObject({
+        outcome: 'failure',
+        diagnostic: {
+          code: `generation-${phase}`,
+          message: expect.stringContaining("Generation Job 'job-1'"),
+        },
+      });
+    },
+  );
+
+  it('fails visibly if observation ends before the Generation Job reaches a settlement state', async () => {
+    const jobs = createGenerationJobs();
+    const adapter = new GenerationDshHostAdapter(jobs);
+    const submitted = createGenerationSnapshot();
+    jobs.submitGeneration.mockResolvedValue(submitted);
+    jobs.observeGeneration.mockReturnValue(snapshots(submitted));
+
+    await expect(
+      adapter.execute(
+        request('openneko.generation', 'submit', {
+          purpose: 'image.generate',
+          generationType: 'text-to-image',
+          lifecycleMode: 'detached',
+          request: { prompt: 'A quiet harbor' },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: {
+        code: 'GENERATION_DSH_OBSERVATION_ENDED',
+        message: expect.stringContaining("Job 'job-1'"),
+      },
+    });
+  });
+
+  it('fails visibly if a succeeded Generation Job has no canonical result locator', async () => {
+    const jobs = createGenerationJobs();
+    const adapter = new GenerationDshHostAdapter(jobs);
+    const submitted = createGenerationSnapshot();
+    jobs.submitGeneration.mockResolvedValue(submitted);
+    jobs.observeGeneration.mockReturnValue(
+      snapshots(submitted, {
+        ...submitted,
+        phase: 'succeeded',
+        updatedAt: 3,
+        progress: { stage: 'completed', percent: 100 },
+      }),
+    );
+
+    await expect(
+      adapter.execute(
+        request('openneko.generation', 'submit', {
+          purpose: 'image.generate',
+          generationType: 'text-to-image',
+          lifecycleMode: 'detached',
+          request: { prompt: 'A quiet harbor' },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: {
+        code: 'GENERATION_DSH_JOB_RESULT_MISSING',
+        message: expect.stringContaining("Job 'job-1'"),
+      },
+    });
+  });
+
+  it('releases a cancelled Tool observer without cancelling the published Generation Job', async () => {
+    const jobs = createGenerationJobs();
+    const adapter = new GenerationDshHostAdapter(jobs);
+    const submitted = createGenerationSnapshot();
+    const controller = new AbortController();
+    const pendingNext = new Promise<IteratorResult<GenerationJobSnapshot>>(() => undefined);
+    const next = vi
+      .fn<() => Promise<IteratorResult<GenerationJobSnapshot>>>()
+      .mockResolvedValueOnce({ done: false, value: submitted })
+      .mockReturnValueOnce(pendingNext);
+    const close = vi.fn(async () => ({ done: true, value: undefined }));
+    jobs.submitGeneration.mockResolvedValue(submitted);
+    jobs.observeGeneration.mockReturnValue({
+      [Symbol.asyncIterator]() {
+        return { next, return: close };
+      },
+    });
+
+    const response = adapter.execute(
+      request('openneko.generation', 'submit', {
+        purpose: 'image.generate',
+        generationType: 'text-to-image',
+        lifecycleMode: 'detached',
+        request: { prompt: 'A quiet harbor' },
+      }),
+      controller.signal,
+    );
+    await vi.waitFor(() => expect(next).toHaveBeenCalledTimes(2));
+    controller.abort();
+
+    await expect(response).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: {
+        code: 'GENERATION_DSH_TOOL_ABORTED',
+        message: expect.stringContaining("Job 'job-1'"),
+      },
+    });
+    expect(jobs.observeGeneration).toHaveBeenCalledWith(
+      { kind: 'generation', jobId: 'job-1' },
+      controller.signal,
+    );
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it('describes a Generation Job by exact durable job identity', async () => {
@@ -240,6 +456,22 @@ function createGenerationSnapshot(): GenerationJobSnapshot {
     },
     progress: { stage: 'queued', percent: 0 },
   };
+}
+
+function createSucceededGenerationSnapshot(): GenerationJobSnapshot {
+  return {
+    ...createGenerationSnapshot(),
+    phase: 'succeeded',
+    updatedAt: 3,
+    progress: { stage: 'completed', percent: 100 },
+    resultLocators: [{ file: { authority: 'workspace', path: 'neko/generated/job-1/image.png' } }],
+  };
+}
+
+async function* snapshots(
+  ...values: readonly GenerationJobSnapshot[]
+): AsyncIterable<GenerationJobSnapshot> {
+  yield* values;
 }
 
 function createCanvasService(): Pick<CanvasProjectAuthoringService, 'query' | 'createNode'> {

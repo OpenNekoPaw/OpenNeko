@@ -56,6 +56,19 @@ describe('Domain Job lifecycle kernel', () => {
     await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined });
   });
 
+  it('releases a pending observer when its caller is cancelled', async () => {
+    const store = createInMemoryJobStore<GenerationJobSnapshot>();
+    await store.create(snapshot());
+    const controller = new AbortController();
+    const iterator = store.observe(snapshot().ref, controller.signal)[Symbol.asyncIterator]();
+
+    await expect(iterator.next()).resolves.toEqual({ done: false, value: snapshot() });
+    const pending = iterator.next();
+    controller.abort();
+
+    await expect(pending).resolves.toEqual({ done: true, value: undefined });
+  });
+
   it('rejects invalid timestamps and identity fallback before mutation', async () => {
     const store = createInMemoryJobStore<GenerationJobSnapshot>();
     await store.create(snapshot());

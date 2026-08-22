@@ -93,10 +93,10 @@ describe('Generation DSH tool contract', () => {
     ).toThrow(/generation type contract/);
   });
 
-  it('projects bounded durable Job facts without provider result payloads', () => {
+  it('projects bounded durable Job facts and canonical result locators without provider payloads', () => {
     const snapshot: GenerationJobSnapshot = {
       ref: { kind: 'generation', jobId: 'job-1' },
-      phase: 'pending',
+      phase: 'succeeded',
       createdAt: 1,
       updatedAt: 2,
       lifecycleMode: 'detached',
@@ -106,21 +106,27 @@ describe('Generation DSH tool contract', () => {
         generationType: 'text-to-image',
         request: { prompt: 'secret prompt', width: 1024 },
       },
-      progress: { stage: 'queued', percent: 0 },
+      progress: { stage: 'completed', percent: 100 },
+      providerTask: { providerId: 'provider', externalTaskId: 'provider-task-1' },
+      resultLocators: [
+        { file: { authority: 'workspace', path: 'neko/generated/job-1/image.png' } },
+      ],
     };
 
     expect(projectGenerationJobSnapshot(snapshot)).toEqual({
       jobId: 'job-1',
       kind: 'generation',
-      phase: 'pending',
-      stage: 'queued',
+      phase: 'succeeded',
+      stage: 'completed',
       lifecycleMode: 'detached',
       generationType: 'text-to-image',
       createdAt: 1,
       updatedAt: 2,
+      resultLocators: [
+        { file: { authority: 'workspace', path: 'neko/generated/job-1/image.png' } },
+      ],
     });
     expect(projectGenerationJobSnapshot(snapshot)).not.toHaveProperty('request');
-    expect(projectGenerationJobSnapshot(snapshot)).not.toHaveProperty('resultLocators');
     expect(projectGenerationJobSnapshot(snapshot)).not.toHaveProperty('providerTask');
   });
 });

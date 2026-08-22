@@ -381,6 +381,7 @@ export interface GenerationDshToolBoundedFacts {
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly failure?: GenerationJobSnapshot['failure'];
+  readonly resultLocators?: NonNullable<GenerationJobSnapshot['resultLocators']>;
 }
 
 export function decodeGenerationDshToolInput(
@@ -411,6 +412,7 @@ export function projectGenerationJobSnapshot(
     createdAt: snapshot.createdAt,
     updatedAt: snapshot.updatedAt,
     ...(snapshot.failure === undefined ? {} : { failure: snapshot.failure }),
+    ...(snapshot.resultLocators === undefined ? {} : { resultLocators: snapshot.resultLocators }),
   };
 }
 

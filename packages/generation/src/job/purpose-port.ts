@@ -57,7 +57,8 @@ export function createPurposeGenerationJobPort(input: {
       }
     },
     describeGeneration: (ref: GenerationJobRef) => input.jobs.describeGeneration(ref),
-    observeGeneration: (ref: GenerationJobRef) => input.jobs.observeGeneration(ref),
+    observeGeneration: (ref: GenerationJobRef, signal?: AbortSignal) =>
+      input.jobs.observeGeneration(ref, signal),
     cancelGeneration: (command: GenerationJobCommandInput) => input.jobs.cancelGeneration(command),
     retryGeneration: (command: GenerationJobCommandInput) => input.jobs.retryGeneration(command),
     regenerateGeneration: (command: GenerationJobCommandInput) =>

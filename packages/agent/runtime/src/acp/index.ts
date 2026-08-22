@@ -7,7 +7,11 @@ export {
 } from './dsh-acp-application-client';
 export { CanvasDshHostAdapter } from './canvas-host-adapter';
 export { CutDshHostAdapter } from './cut-host-adapter';
-export { GenerationDshHostAdapter } from './generation-host-adapter';
+export {
+  GenerationDshHostAdapter,
+  type GenerationDshLifecycleProjectionOutcome,
+  type GenerationDshLifecycleProjectionPort,
+} from './generation-host-adapter';
 export { DocumentDshHostAdapter } from './document-host-adapter';
 export { ContentImageDshHostAdapter } from './content-image-host-adapter';
 export { CharacterDshHostAdapter } from './character-host-adapter';

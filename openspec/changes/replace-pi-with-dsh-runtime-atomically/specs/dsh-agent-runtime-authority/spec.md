@@ -139,8 +139,9 @@ The canonical product contract SHALL preserve the qualified DSH Session, turn, c
 #### Scenario: Tool starts a durable Generation Job
 
 - **WHEN** a DSH Tool call submits an authorized long-running Generation operation
-- **THEN** the same Tool call observes the exact returned Generation Job identity until Generation publishes a terminal snapshot
-- **AND** `succeeded` returns bounded terminal facts and canonical result locators, while `failed`, `cancelled`, `outcome-unknown` or premature observation completion fails the exact Tool call visibly
+- **THEN** the same Tool call observes the exact returned Generation Job identity until Generation publishes `succeeded`, `failed`, `cancelled` or the reconcile-required `outcome-unknown` state
+- **AND** `succeeded` returns bounded terminal facts and canonical result locators, while the other settlement states or premature observation completion fail the exact Tool call visibly
+- **AND** `outcome-unknown` remains reconcilable under Generation ownership rather than being rewritten as a terminal Job phase
 - **AND** Job cancellation, recovery, progress and result remain owned by Generation
 
 #### Scenario: A Generation Tool observer is cancelled

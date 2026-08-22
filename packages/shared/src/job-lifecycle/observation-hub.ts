@@ -63,7 +63,7 @@ class JobObservation<S extends JobSnapshotBase> implements AsyncIterableIterator
 }
 
 export interface JobObservationHub<S extends JobSnapshotBase> {
-  observe(ref: S['ref'], loadCurrent: () => Promise<S>): AsyncIterable<S>;
+  observe(ref: S['ref'], loadCurrent: () => Promise<S>, signal?: AbortSignal): AsyncIterable<S>;
   publish(snapshot: S): void;
 }
 
@@ -71,9 +71,13 @@ export function createJobObservationHub<S extends JobSnapshotBase>(): JobObserva
   const observations = new Map<string, Set<JobObservation<S>>>();
 
   return Object.freeze({
-    observe: (ref: S['ref'], loadCurrent: () => Promise<S>): AsyncIterable<S> => {
+    observe: (
+      ref: S['ref'],
+      loadCurrent: () => Promise<S>,
+      signal?: AbortSignal,
+    ): AsyncIterable<S> => {
       assertJobRef(ref);
-      return observe(ref, loadCurrent, observations);
+      return observe(ref, loadCurrent, observations, signal);
     },
     publish: (snapshot: S): void => {
       for (const observation of observations.get(formatJobRef(snapshot.ref)) ?? []) {
@@ -87,6 +91,7 @@ async function* observe<S extends JobSnapshotBase>(
   ref: S['ref'],
   loadCurrent: () => Promise<S>,
   observations: Map<string, Set<JobObservation<S>>>,
+  signal?: AbortSignal,
 ): AsyncIterable<S> {
   const key = formatJobRef(ref);
   const observation = new JobObservation<S>(() => {
@@ -97,9 +102,14 @@ async function* observe<S extends JobSnapshotBase>(
   const currentObservers = observations.get(key) ?? new Set<JobObservation<S>>();
   currentObservers.add(observation);
   observations.set(key, currentObservers);
+  const onAbort = (): void => observation.close();
+  if (signal?.aborted) observation.close();
+  else signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
+    if (signal?.aborted) return;
     const current = await loadCurrent();
+    if (signal?.aborted) return;
     observation.push(current);
     if (isTerminalJobPhase(current.phase)) {
       yield current;
@@ -107,6 +117,7 @@ async function* observe<S extends JobSnapshotBase>(
     }
     for await (const snapshot of observation) yield snapshot;
   } finally {
+    signal?.removeEventListener('abort', onAbort);
     observation.close();
   }
 }

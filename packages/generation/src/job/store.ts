@@ -210,8 +210,8 @@ function createPartitionedPersistentGenerationJobStore(
       return stored;
     },
 
-    observe: (ref) => {
-      return observations.observe(ref, () => store.get(ref));
+    observe: (ref, signal) => {
+      return observations.observe(ref, () => store.get(ref), signal);
     },
 
     listRecoverable: () => {

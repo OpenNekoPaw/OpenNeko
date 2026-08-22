@@ -113,7 +113,10 @@ export interface GenerationJobResultCommitter {
 export interface GenerationJobPort {
   submitGeneration(input: SubmitGenerationJobInput): Promise<GenerationJobSnapshot>;
   describeGeneration(ref: GenerationJobRef): Promise<GenerationJobSnapshot>;
-  observeGeneration(ref: GenerationJobRef): AsyncIterable<GenerationJobSnapshot>;
+  observeGeneration(
+    ref: GenerationJobRef,
+    signal?: AbortSignal,
+  ): AsyncIterable<GenerationJobSnapshot>;
   cancelGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot>;
   retryGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot>;
   regenerateGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot>;

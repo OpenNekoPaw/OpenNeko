@@ -127,8 +127,11 @@ export class GenerationJobCoordinator implements GenerationJobPort {
     return this.options.store.get(ref);
   }
 
-  observeGeneration(ref: GenerationJobRef): AsyncIterable<GenerationJobSnapshot> {
-    return this.options.store.observe(ref);
+  observeGeneration(
+    ref: GenerationJobRef,
+    signal?: AbortSignal,
+  ): AsyncIterable<GenerationJobSnapshot> {
+    return this.options.store.observe(ref, signal);
   }
 
   cancelGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot> {

@@ -10,7 +10,7 @@ Tool name: `openneko.generation`
 
 | Operation | Input | Output |
 | --- | --- | --- |
-| `submit` | `{ purpose, generationType, lifecycleMode, request }` | waits on the exact durable Job; terminal success facts include canonical `resultLocators`; terminal non-success is an explicit Tool failure |
+| `submit` | `{ purpose, generationType, lifecycleMode, request }` | waits on the exact durable Job; terminal success facts include canonical `resultLocators`; failed/cancelled/reconcile-required settlement is an explicit Tool failure |
 | `describe` | `{ jobId }` | one-shot bounded durable Job facts, including canonical `resultLocators` when present |
 
 Generation owns contract/schema/semantic validation/routing/durable Job. The Host adapter uses `PurposeGenerationJobPort.submitGeneration`, `observeGeneration` and `describeGeneration`. Agent `submit` keeps the same asynchronous reverse Tool request open and observes only the returned exact Job identity until a terminal snapshot; it does not block the process thread, poll through model Tool calls, or transfer Job ownership to DSH. It omits provider payloads, request text and provider task identity, but returns canonical Workspace `resultLocators` on success so the Tool result identifies the actual product artifact. Direct UI submission remains non-blocking.
@@ -40,7 +40,7 @@ Canvas owns contract/schema/exact document and node identity/freshness/mutation.
 
 - The reverse ACP request preserves `sessionId`, `turn`, `toolCallId`, exact `tool`, `operation`, and lossless JSON `input`.
 - A successful long-running Generation response returns the owning-domain `jobId`, terminal `succeeded` facts and canonical result locators; DSH call identity references but does not replace that Job identity.
-- A terminal `failed`, `cancelled` or `outcome-unknown` snapshot fails the exact Tool call with the owning Job identity and diagnostic. Cancelling the reverse Tool request releases its observer without cancelling the published durable Job.
+- A `failed`, `cancelled` or reconcile-required `outcome-unknown` snapshot fails the exact Tool call with the owning Job identity and diagnostic. `outcome-unknown` remains a non-terminal Generation state eligible for owning-domain reconciliation. Cancelling the reverse Tool request releases its observer without cancelling the published durable Job.
 - A Canvas mutation response returns the exact `fingerprint` and node identity for the written document.
 - Semantic negatives, stale fingerprints, invalid paths, and unknown tool names fail locally as typed failure diagnostics; they do not switch to MCP, another provider, another Tool handler, or Desktop logic.
 
@@ -68,6 +68,15 @@ Focused tests added:
 Generation and Canvas use the shared ACP permission owner/UI; they do not duplicate a domain permission runtime. The UI acceptance cases preserve exact Conversation, DSH Session, turn and Tool call identity for both first-party Tools. Domain authorization remains inside the owning Host-side service: Generation resolves an exact Conversation context and Workspace grant before selecting its owner/model binding, while Canvas validates input before resolving the exact Workspace grant and enforces document freshness before mutation.
 
 Direct Canvas Generation uses the native Canvas Webview, typed Canvas Host runtime and package-owned Generation runtime. Architecture poison tests reject an Agent prompt or DSH Tool shortcut from this direct path. Generation Job recovery/cancel and Canvas document/Generation projection restart behavior are covered by owning-package and Desktop runtime tests.
+
+Agent Generation settlement observation was updated on 2026-08-22:
+
+- `GenerationDshHostAdapter` keeps the original reverse Tool call open and consumes `PurposeGenerationJobPort.observeGeneration` for only the submitted exact Job identity.
+- The shared Job observation contract accepts the caller `AbortSignal`; cancellation closes a pending observer and does not call `cancelGeneration` or mutate the durable Job.
+- `succeeded` requires at least one canonical whole-file Workspace locator and returns it as `resultLocators`; failed, cancelled, outcome-unknown, identity mismatch, premature stream completion and invalid success result are explicit failures.
+- `pnpm --dir packages/shared test`, `pnpm --dir packages/generation test`, `pnpm --dir packages/agent/runtime test` and `pnpm --dir packages/generation/dsh-plugin test` passed with 61, 166, 356 and 2 tests respectively.
+- Evaluation disposition is `update` for `agent-runtime.workflow-controller`. The indexed `detached-generation-job-observation` case now asserts a terminal `openneko.generation` result with a Workspace locator and forbids retired model-polling Tool names. `pnpm test:agent:eval` passed 314 key-free tests and dry-ran all 69 indexed cases; this is schema/harness evidence only, not real Agent/provider acceptance.
+- Package boundaries, application boundaries, Agent boundaries, shared exports, strict TypeScript configuration and strict OpenSpec validation passed. The repository-wide internal-versioning audit remains blocked by unrelated baseline/allowance drift outside the files changed for this task; none of its reported new occurrences are in this change's implementation files.
 
 Tasks 5.3 and 5.6 are deterministically complete. The two complete Desktop vertical slices in task 5.8, visible UI acceptance and real provider validation remain incomplete and are not release evidence.
 

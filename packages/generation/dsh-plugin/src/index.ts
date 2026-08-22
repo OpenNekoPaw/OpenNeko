@@ -18,7 +18,8 @@ export function apply(ctx: Context): void {
       ctx.tools.register(
         defineTool({
           name: GENERATION_DSH_TOOL_NAME,
-          description: 'Submit and describe durable OpenNeko Generation Jobs.',
+          description:
+            'Submit a durable OpenNeko Generation Job and wait for its terminal result, or describe an existing Job by exact identity.',
           parameters: GENERATION_DSH_TOOL_PARAMETERS,
           output: {
             schema: { type: 'json' },
