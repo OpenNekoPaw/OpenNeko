@@ -15,6 +15,10 @@ proposal
 - 默认显示逻辑 canonical Workspace Board；不因选择或进入会话创建空 `workspace.nkc`，只在既有合格 creator-visible typed artifact 投递发生时由 Canvas owner lazy-create。
 - 选择具体 Canvas 后，本轮按需读取其轻量索引/摘要，并把合格 typed artifacts 精确写入该 Canvas；不镜像 canonical Board，不依据 active/recent Canvas 推断。
 - Canvas selection 属于 Workspace composer presentation state 或精确 turn intent，不进入 `AgentDomainBinding`，也不变成消息引用；跨会话复用时通过选择同一 Canvas identity 复用。
+- Composer selection 必须由 `@neko/agent-webview` 的 package-owned presentation snapshot 按精确
+  Conversation + Workspace 保存；首轮创建前按 Agent Surface draft + Workspace 保存，并且只在同一
+  mounted draft 被发布为 Conversation 时转交。界面切换卸载可见 Agent Root 后不得丢失选择，也不得
+  把一个会话的选择泄漏给 sibling Conversation 或 Workspace。
 - 保持唯一 canonical contract/owner/handler/projection 路径，fail-visible、fail-local；不引入 active/recent fallback、隐式工作区、版本字段、多路径或兼容分支。
 - Workspace 与入口可以匹配同一视觉规范，但必须保持独立组件、功能 class、状态和事件；补足 owning package contract/service/组件/投递目标测试。
 - Workspace/Canvas rail 保持与 composer 输入框一致的栏宽，并使用完整圆角容器；只有 Canvas 选择控件按内容收缩，不呈现为整栏小胶囊或贴边长方形区域。
@@ -42,6 +46,8 @@ proposal
 ## Verification constraints
 
 - 默认逻辑 Workspace Board 不提前创建。
+- 切换界面后重新挂载同一 Conversation 时恢复精确 Canvas selection；draft 发布后的首轮仍使用发送时
+  选择，且 sibling Conversation/Workspace 保持隔离。
 - 选定 Canvas 精确读取与写入。
 - 切换只影响后续 Turn。
 - 引用仍在输入框内。

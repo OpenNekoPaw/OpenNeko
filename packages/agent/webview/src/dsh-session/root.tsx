@@ -56,6 +56,11 @@ import { useTranslation as useUiTranslation } from '@neko/ui/i18n/react';
 import { AgentPresentationI18nProvider, useTranslation } from '../i18n/I18nContext';
 import { projectContentLocatorPath } from '../presenters/content-locator-presenter';
 import { projectPathReferenceToken } from '../presenters/reference-token-presenter';
+import {
+  useDshComposerCanvasSelection,
+  useDshComposerPresentationSnapshotStore,
+  type DshComposerCanvasSelectionScope,
+} from './presentation-snapshot';
 
 import '../index.css';
 import './root.css';
@@ -152,6 +157,9 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   >([]);
   const [entryWorldLaunch, setEntryWorldLaunch] = useState<SelectedWorldLaunch>();
   const [entryContextDiagnostic, setEntryContextDiagnostic] = useState<string>();
+  const composerPresentationSnapshots = useDshComposerPresentationSnapshotStore();
+  const previousConversationIdRef = useRef(props.conversationId);
+  const canvasWorkspaceId = props.composerConfiguration?.context?.canvas.workspaceId;
   const conversationTitle = props.projection?.title ?? copy.newConversation;
   const runtimeReady = props.runtime?.status === 'running';
   const hasEvents = (props.projection?.events.length ?? 0) > 0;
@@ -200,6 +208,33 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     };
   }, [entryDetail, entryDetailExpanded, props.entryContext]);
   useEffect(() => {
+    const previousConversationId = previousConversationIdRef.current;
+    previousConversationIdRef.current = props.conversationId;
+    if (
+      previousConversationId !== undefined ||
+      props.conversationId === undefined ||
+      canvasWorkspaceId === undefined
+    ) {
+      return;
+    }
+    composerPresentationSnapshots.transferIfAbsent(
+      {
+        agentSurfaceId: props.agentSurfaceId,
+        workspaceId: canvasWorkspaceId,
+      },
+      {
+        agentSurfaceId: props.agentSurfaceId,
+        conversationId: props.conversationId,
+        workspaceId: canvasWorkspaceId,
+      },
+    );
+  }, [
+    canvasWorkspaceId,
+    composerPresentationSnapshots,
+    props.agentSurfaceId,
+    props.conversationId,
+  ]);
+  useEffect(() => {
     if (!entryDetailExpanded || entryDetail !== 'world' || !props.entryContext) {
       return;
     }
@@ -236,6 +271,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     <DshComposer
       key={props.conversationId ?? `draft:${props.agentSurfaceId}`}
       copy={copy}
+      agentSurfaceId={props.agentSurfaceId}
       surfaceKind={props.surfaceKind}
       configuration={props.composerConfiguration}
       conversationId={props.conversationId}
@@ -434,6 +470,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
 }
 
 function DshComposer({
+  agentSurfaceId,
   copy,
   surfaceKind,
   configuration,
@@ -468,6 +505,7 @@ function DshComposer({
   onRemoveWorldLaunch,
   presentation,
 }: {
+  readonly agentSurfaceId: string;
   readonly copy: DshAgentCopy;
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
   readonly configuration?: DshComposerConfigurationProjection;
@@ -514,8 +552,6 @@ function DshComposer({
   const [inputDiagnostic, setInputDiagnostic] = useState<string>();
   const suppressInputDiagnosticClearRef = useRef(false);
   const [contextChips, setContextChips] = useState<readonly AgentContextPayload[]>([]);
-  const [selectedCanvasId, setSelectedCanvasId] = useState('workspace-board');
-  const selectedCanvasScopeRef = useRef<string>();
   const models: ChatModelOption[] = (configuration?.models ?? []).map((model) => ({
     id: model.id,
     label: model.label,
@@ -535,14 +571,16 @@ function DshComposer({
   };
   const configurationDiagnostic = configurationError ?? configuration?.diagnostic;
   const canvasCatalog = configuration?.context?.canvas;
-  const canvasSelectionScope =
+  const canvasSelectionScope: DshComposerCanvasSelectionScope | undefined =
     canvasCatalog === undefined
       ? undefined
-      : `${conversationId ?? 'draft'}:${canvasCatalog.workspaceId}`;
-  const effectiveSelectedCanvasId =
-    canvasSelectionScope !== undefined && selectedCanvasScopeRef.current === canvasSelectionScope
-      ? selectedCanvasId
-      : 'workspace-board';
+      : {
+          agentSurfaceId,
+          workspaceId: canvasCatalog.workspaceId,
+          ...(conversationId === undefined ? {} : { conversationId }),
+        };
+  const [effectiveSelectedCanvasId, selectCanvasId] =
+    useDshComposerCanvasSelection(canvasSelectionScope);
   const selectedCanvasOption = canvasCatalog?.options.find((option) => {
     const optionId =
       option.target.kind === 'workspace-board' ? 'workspace-board' : option.target.canvasId;
@@ -673,13 +711,6 @@ function DshComposer({
       return false;
     }
   };
-  useEffect(() => {
-    if (canvasCatalog === undefined) return;
-    const scope = `${conversationId ?? 'draft'}:${canvasCatalog.workspaceId}`;
-    if (selectedCanvasScopeRef.current === scope) return;
-    selectedCanvasScopeRef.current = scope;
-    setSelectedCanvasId('workspace-board');
-  }, [canvasCatalog, conversationId]);
   return (
     <InputAreaProvider
       isBusy={configuring || submitting || currentTurn !== undefined}
@@ -842,10 +873,7 @@ function DshComposer({
                         );
                         return;
                       }
-                      if (canvasSelectionScope !== undefined) {
-                        selectedCanvasScopeRef.current = canvasSelectionScope;
-                      }
-                      setSelectedCanvasId(optionId);
+                      selectCanvasId(optionId);
                       setInputDiagnostic(undefined);
                     },
                   },

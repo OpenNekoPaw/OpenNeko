@@ -35,6 +35,7 @@ import { useTranslation } from '@neko/ui/i18n/react';
 import type { SupportedLocale } from '@neko/ui/i18n';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { DshComposerPresentationSnapshotProvider } from '@neko/agent-webview/dsh-session/presentation-snapshot';
 import type {
   DesktopAgentHomeConversationSummary,
   DesktopConversationNavigationGroup,
@@ -285,6 +286,14 @@ interface ShellActions {
 }
 
 export function DesktopApplication(): JSX.Element {
+  return (
+    <DshComposerPresentationSnapshotProvider>
+      <DesktopApplicationContent />
+    </DshComposerPresentationSnapshotProvider>
+  );
+}
+
+function DesktopApplicationContent(): JSX.Element {
   const { locale, t } = useTranslation();
   const [state, setState] = useState<ShellState>({ kind: 'loading' });
   const [pending, setPending] = useState<DesktopShellPendingProjection>(
@@ -1131,12 +1140,14 @@ export function DesktopShellView({
     onLoadEntryWorldTargets: async () => ({ targets: [], diagnostics: [] }),
   };
   return (
-    <DesktopSceneWorkbench
-      actions={actions}
-      pending={EMPTY_DESKTOP_SHELL_PENDING}
-      projection={projection}
-      interactive={false}
-    />
+    <DshComposerPresentationSnapshotProvider>
+      <DesktopSceneWorkbench
+        actions={actions}
+        pending={EMPTY_DESKTOP_SHELL_PENDING}
+        projection={projection}
+        interactive={false}
+      />
+    </DshComposerPresentationSnapshotProvider>
   );
 }
 

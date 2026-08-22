@@ -14,6 +14,10 @@ Workspace Agent composer 当前已有 Workspace 绑定，但缺少精确的 Canv
 - Agent composer 持有 Canvas selection 为 presentation state；发送时把精确 selection
   作为 turn intent 交给 `@neko/agent-runtime`，runtime 只消费契约字段，不写入
   `AgentDomainBinding`，不生成消息引用。
+- `@neko/agent-webview` 通过 Renderer 根部组合的 package-owned、可丢弃 presentation snapshot
+  保存 selection。已发布会话以 Conversation + Workspace 为 scope；首轮前以 Agent Surface draft +
+  Workspace 为 scope。只有同一 mounted draft 的 `undefined -> exact Conversation` 转换可以把 draft
+  selection 转交给该 Conversation；普通重开不得从 draft、active 或 recent selection 推断。
 - 跨会话复用通过用户选择同一 Canvas identity 实现；不保存 active/recent Canvas 推断。
 
 ## Canonical path
@@ -55,6 +59,9 @@ AgentWebview composer canvas selector
 7. Workspace rail 与入口上下文栏保持一致的整栏宽度、间距、背景、阴影和圆角视觉；只有 Canvas 选择控件按内容收缩。视觉一致不构成功能 class、组件或状态复用。
 8. Canvas catalog 的用户可见 label 是 exact workspace-relative 文件名（含 `.nkc` 后缀），文档内部 `name` 仍仅属于轻量 summary，不取代文件 identity。
 9. 双击打开仅适用于 exact Canvas；Agent Webview 只发出已选 exact identity，Desktop 使用现有 creative-document open/focus authority 授权并创建或聚焦 Workbench View。Board 默认项不因双击而提前创建文件。
+10. 界面切换遵循 Window scene 生命周期：Agent Root 可以卸载，selection snapshot 继续由稳定 Renderer
+    provider 持有；重新进入时按 exact scope 重建。snapshot 不保存 Canvas 内容、Conversation binding、
+    runtime handle 或 durable project fact，应用完整重开后可丢弃。
 
 ## User-data impact
 

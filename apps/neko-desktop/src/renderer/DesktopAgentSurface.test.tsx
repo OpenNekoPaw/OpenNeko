@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderWithoutSnapshots,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DshPermissionHostProjection } from '@neko/agent-contracts/dsh-permission-host';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
@@ -19,6 +27,13 @@ vi.mock('@neko/ui/i18n/react', async (importOriginal) => {
 });
 
 import { DesktopAgentSurface } from './DesktopAgentSurface';
+import { DshComposerPresentationSnapshotProvider } from '@neko/agent-webview/dsh-session/presentation-snapshot';
+
+function render(view: ReactElement) {
+  return renderWithoutSnapshots(
+    <DshComposerPresentationSnapshotProvider>{view}</DshComposerPresentationSnapshotProvider>,
+  );
+}
 
 const projection: DshSessionHostProjection = {
   conversationId: 'conversation-1',

@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     "./dsh-session/root": "./src/dsh-session/root.tsx",
+    "./dsh-session/presentation-snapshot": "./src/dsh-session/presentation-snapshot.tsx",
     "./extension-management/root": "./src/extension-management/root.tsx"
   },
   "scripts": {

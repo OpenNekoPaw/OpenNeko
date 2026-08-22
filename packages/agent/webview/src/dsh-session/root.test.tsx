@@ -8,6 +8,7 @@ import { I18nProvider } from '@neko/ui/i18n/react';
 import type { DshComposerMaterializedAssetProjection } from '@neko/agent-contracts/dsh-session-host';
 
 import { DshAgentView } from './root';
+import { DshComposerPresentationSnapshotProvider } from './presentation-snapshot';
 
 const workspaceBoardTarget = {
   kind: 'workspace-board' as const,
@@ -650,6 +651,79 @@ describe('DshAgentView content-creation composer', () => {
           canvasId: 'neko/boards/story.nkc',
         },
       },
+    );
+  });
+
+  it('restores the exact Conversation Canvas after the Agent scene unmounts', async () => {
+    const onSubmit = vi.fn(
+      async (
+        _target: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[0],
+        _input: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[1],
+      ) => true,
+    );
+    const scene = (visible: boolean, conversationId = 'conversation-1') => (
+      <DshComposerPresentationSnapshotProvider>
+        <I18nProvider service={new I18nService('zh-cn')}>
+          {visible ? (
+            <WorkspaceCanvasSelectionHarness conversationId={conversationId} onSubmit={onSubmit} />
+          ) : null}
+        </I18nProvider>
+      </DshComposerPresentationSnapshotProvider>
+    );
+    const view = render(scene(true));
+    fireEvent.change(screen.getByRole('combobox', { name: '画布索引' }), {
+      target: { value: 'neko/boards/story.nkc' },
+    });
+
+    view.rerender(scene(false));
+    view.rerender(scene(true));
+
+    expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
+      'neko/boards/story.nkc',
+    );
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[1]).toMatchObject({
+      canvasTurnTarget: {
+        kind: 'exact-canvas',
+        workspaceId: 'workspace-1',
+        canvasId: 'neko/boards/story.nkc',
+      },
+    });
+  });
+
+  it('isolates sibling Conversation selections and transfers the first-turn draft selection', async () => {
+    const onSubmit = vi.fn(
+      async (
+        _target: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[0],
+        _input: Parameters<React.ComponentProps<typeof DshAgentView>['onSubmit']>[1],
+      ) => true,
+    );
+    const scene = (conversationId?: string) => (
+      <DshComposerPresentationSnapshotProvider>
+        <I18nProvider service={new I18nService('zh-cn')}>
+          <WorkspaceCanvasSelectionHarness conversationId={conversationId} onSubmit={onSubmit} />
+        </I18nProvider>
+      </DshComposerPresentationSnapshotProvider>
+    );
+    const view = render(scene());
+    fireEvent.change(screen.getByRole('combobox', { name: '画布索引' }), {
+      target: { value: 'neko/boards/story.nkc' },
+    });
+
+    view.rerender(scene('conversation-new'));
+    await waitFor(() =>
+      expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
+        'neko/boards/story.nkc',
+      ),
+    );
+    view.rerender(scene('conversation-sibling'));
+    expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
+      'workspace-board',
+    );
+    view.rerender(scene('conversation-new'));
+    expect((screen.getByRole('combobox', { name: '画布索引' }) as HTMLSelectElement).value).toBe(
+      'neko/boards/story.nkc',
     );
   });
 
@@ -1482,7 +1556,11 @@ function renderImageMessage(
 }
 
 function renderAgent(view: JSX.Element, locale: SupportedLocale = 'zh-cn') {
-  return render(<I18nProvider service={new I18nService(locale)}>{view}</I18nProvider>);
+  return render(
+    <DshComposerPresentationSnapshotProvider>
+      <I18nProvider service={new I18nService(locale)}>{view}</I18nProvider>
+    </DshComposerPresentationSnapshotProvider>,
+  );
 }
 
 function DshComposerHarness({
@@ -1578,10 +1656,83 @@ function DshComposerHarness({
   );
 }
 
+function WorkspaceCanvasSelectionHarness({
+  conversationId,
+  onSubmit,
+}: {
+  readonly conversationId?: string;
+  readonly onSubmit: React.ComponentProps<typeof DshAgentView>['onSubmit'];
+}): JSX.Element {
+  const [draft, setDraft] = useState('分析画布');
+  return (
+    <DshAgentView
+      agentSurfaceId="surface-workspace-selection"
+      surfaceKind="workspace"
+      conversationId={conversationId}
+      composerConfiguration={{
+        models: [
+          {
+            id: 'openai:gpt-5',
+            label: 'GPT-5',
+            providerId: 'openai',
+            modelId: 'gpt-5',
+            providerLabel: 'OpenAI',
+            category: 'llm',
+            capabilities: ['chat'],
+          },
+        ],
+        selectedModelOptionId: 'openai:gpt-5',
+        selectedMediaModelOptionIds: {},
+        permissionPresetId: 'workspace-write',
+        permissionPresets: [{ id: 'workspace-write', label: 'workspace-write', selectable: true }],
+        context: {
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceLabel: 'Workspace One',
+          canvas: {
+            workspaceId: 'workspace-1',
+            defaultTarget: workspaceBoardTarget,
+            options: [
+              { target: workspaceBoardTarget, label: 'Workspace Board' },
+              {
+                target: {
+                  kind: 'exact-canvas',
+                  workspaceId: 'workspace-1',
+                  canvasId: 'neko/boards/story.nkc',
+                },
+                label: 'story.nkc',
+              },
+            ],
+            diagnostics: [],
+          },
+        },
+      }}
+      configuring={false}
+      draft={draft}
+      loading={false}
+      permissions={[]}
+      runtime={{ status: 'running' }}
+      submitting={false}
+      onCancelPermission={vi.fn()}
+      onCancelTurn={vi.fn()}
+      onDecidePermission={vi.fn()}
+      onDraftChange={setDraft}
+      onModelChange={vi.fn()}
+      onPermissionPresetChange={vi.fn()}
+      onRestartRuntime={vi.fn()}
+      onSubmit={onSubmit}
+    />
+  );
+}
+
 function rerenderAgent(
   result: ReturnType<typeof renderAgent>,
   view: JSX.Element,
   locale: SupportedLocale = 'zh-cn',
 ): void {
-  result.rerender(<I18nProvider service={new I18nService(locale)}>{view}</I18nProvider>);
+  result.rerender(
+    <DshComposerPresentationSnapshotProvider>
+      <I18nProvider service={new I18nService(locale)}>{view}</I18nProvider>
+    </DshComposerPresentationSnapshotProvider>,
+  );
 }

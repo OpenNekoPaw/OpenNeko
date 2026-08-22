@@ -32,6 +32,9 @@
 - [x] 4.6 将 Workspace/Canvas rail 收敛为与 composer 一致的整栏宽度和完整圆角，仅 Canvas 选择控件按内容收缩；exact 选项显示带 `.nkc` 后缀的文件名。
 - [x] 4.7 通过 Desktop 已有 creative-document authority 支持双击当前 exact Canvas 打开/聚焦，Board 不提前创建。
 - [x] 4.8 Workspace 首轮发送前显示独立上下文栏；视觉匹配入口，但组件、功能 class、状态和事件独立，且不接触 Entry Draft/intent/receipt。
+- [x] 4.9 将 Canvas selection 从组件本地 state 提升到 `@neko/agent-webview` package-owned presentation
+      snapshot，按 exact Conversation/draft Surface + Workspace 隔离，并覆盖界面卸载重建、draft 发布转交、
+      sibling Conversation/Workspace 隔离和恢复后发送目标测试。
 
 ## 5. Tests
 

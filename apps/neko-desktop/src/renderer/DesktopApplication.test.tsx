@@ -3002,6 +3002,7 @@ function installBridge({
         selectComposerModel: vi.fn(),
         selectComposerMediaModel: vi.fn(),
         selectComposerPermissionPreset: vi.fn(),
+        releaseImageAttachmentPreviews: vi.fn(async () => undefined),
         subscribe: vi.fn(() => () => undefined),
       },
       dshRuntime: {

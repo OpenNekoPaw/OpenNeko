@@ -78,6 +78,20 @@ Canvas selection SHALL be composer presentation state or exact turn intent.
 - **THEN** that turn uses the selected Canvas
 - **AND** a later Canvas switch does not re-route the already submitted turn.
 
+#### Scenario: interface switch restores the Conversation selection
+
+- **WHEN** the user selects an exact Canvas, leaves the Workspace scene, and later reopens the same Conversation
+- **THEN** the composer SHALL restore that exact Canvas from package-owned presentation snapshot state
+- **AND** the Agent React Root SHALL NOT remain mounted merely to preserve the selection
+- **AND** a sibling Conversation or Workspace SHALL NOT inherit it.
+
+#### Scenario: first-turn draft selection transfers to the published Conversation
+
+- **WHEN** a mounted Workspace draft selects an exact Canvas and its first submission publishes a Conversation
+- **THEN** that exact selection SHALL become the new Conversation's composer presentation snapshot
+- **AND** the submitted turn SHALL retain the same exact Canvas target
+- **AND** reopening an unrelated existing Conversation SHALL NOT consult a stale draft selection.
+
 ### Requirement: Canonical Board default without eager creation
 
 The logical default Canvas SHALL be the canonical Workspace Board.
