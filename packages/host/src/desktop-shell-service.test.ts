@@ -3460,6 +3460,9 @@ describe('DesktopShellService', () => {
               displayLabel: 'resource-1',
               documentId: 'resource-1',
               previewPresentation: 'pinned',
+              previewContentLocator: {
+                file: { authority: 'workspace', path: 'resource-1.png' },
+              },
             },
           ],
           groups: [
@@ -3495,11 +3498,91 @@ describe('DesktopShellService', () => {
         ownerId: 'preview-session:pinned-1',
         documentId: 'resource-1',
         previewPresentation: 'pinned',
+        previewContentLocator: {
+          file: { authority: 'workspace', path: 'resource-1.png' },
+        },
       }),
     ]);
     expect(JSON.stringify(activeWorkbench(projection.window))).not.toMatch(
       /descriptor|absolutePath|neko-media:/u,
     );
+  });
+
+  it('isolates an old Preview presentation without a ContentLocator during restore', async () => {
+    const file = createMemoryFile();
+    const first = createFixture(file);
+    const windowId = await first.service.claimWindowId();
+    first.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await first.service.getProjection(windowId);
+    const opened = await openContent(first, windowId, '/workspace/demo', initial.rendererSessionId);
+    const current = activeWorkbench(opened.projection.window);
+    const canvasView = current.main.views[0]!;
+    const tab = opened.projection.window.tabs[0]!;
+    const project = opened.projection.catalog.projects[0]!;
+    const previewViewId = 'preview:view-legacy:pinned';
+    await first.service.updateWorkbench(
+      windowId,
+      opened.projection.rendererSessionId,
+      activeInstance(opened.projection.window).workbenchInstanceId,
+      {
+        ...current,
+        main: {
+          views: [
+            canvasView,
+            {
+              viewId: previewViewId,
+              viewInstanceId: tab.viewInstanceId,
+              projectId: project.projectId,
+              workspaceId: opened.workspace.workspaceId,
+              kind: 'preview',
+              ownerId: 'preview-session:legacy',
+              displayLabel: 'legacy.png',
+              documentId: 'legacy.png',
+              previewPresentation: 'pinned',
+              previewContentKind: 'image',
+            },
+          ],
+          groups: [
+            {
+              groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+              viewIds: [canvasView.viewId, previewViewId],
+              activeViewId: previewViewId,
+            },
+          ],
+          activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+        },
+      },
+    );
+    first.service.releaseWindow(windowId);
+    await first.service.dispose();
+
+    const restored = createFixture(file);
+    const restoredWindow = await restored.service.claimWindowId();
+    restored.service.setRendererSessionId(restoredWindow, 'renderer-session-2');
+    const entryProjection = await restored.service.getProjection(restoredWindow);
+    const projection = (
+      await openContent(
+        restored,
+        restoredWindow,
+        '/workspace/demo',
+        entryProjection.rendererSessionId,
+      )
+    ).projection;
+
+    expect(activeWorkbench(projection.window).main.views).toContainEqual(
+      expect.objectContaining({ viewId: canvasView.viewId, kind: 'canvas' }),
+    );
+    expect(activeWorkbench(projection.window).main.views).not.toContainEqual(
+      expect.objectContaining({ viewId: previewViewId }),
+    );
+    expect(projection.stateDiagnostics).toContainEqual({
+      code: 'desktop-presentation-reset',
+      severity: 'warning',
+      windowId,
+      owner: 'preview',
+      removedViewIds: [previewViewId],
+      message: expect.stringContaining('without a persistent ContentLocator'),
+    });
   });
 
   it('resolves a restored Agent workspace through the Host-only persisted locator', async () => {

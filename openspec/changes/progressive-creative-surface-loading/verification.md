@@ -129,3 +129,32 @@ Development-runtime note: adding new package export specifiers while an old Vite
 - `pnpm check:unused`: reported only pre-existing Canvas findings outside this change (`@neko/media` in Canvas Domain and two `previewResolver` exports); no changed Preview file was reported.
 - Authoritative Electron inspection: passed at 100% and 173% Canvas zoom. The black media field matched the node frame, native controls/progress aligned to the content-box bottom, and the source picture remained centered and undistorted with expected letterboxing.
 - Adjacent path: Main Preview and Lightweight Preview remain covered by the shared-element test and use the same full-size video element; control density remains the only presentation difference.
+
+## Preview Runtime Restoration — 2026-08-22
+
+### Canonical Path Evidence
+
+- Pinned and side Preview Views persist only canonical `ContentLocator`, content kind, presentation and stable View identity. Absolute paths, opaque resource URLs and live Preview descriptors remain process-local.
+- A renderer or application restart resolves the exact stored Workspace authority, re-authorizes the locator, creates a fresh resource lease and republishes the same Preview View through the single Preview runtime path.
+- Old Preview presentation records without `ContentLocator` are removed locally with a `desktop-presentation-reset` diagnostic. Source content and sibling Workspace Views remain intact.
+- A locator whose current source no longer exists reaches only its exact Preview session as `preview-source-unavailable`; it does not reset the Workbench or replace the source with stale bytes.
+
+### Automated Verification
+
+- Focused Preview/Host contract tests: passed, 4 files / 114 tests.
+- `pnpm --filter @neko/host exec tsc --noEmit`: passed.
+- `pnpm --filter @neko/app-desktop typecheck`: passed.
+- Scoped ESLint and Prettier checks: passed.
+- `pnpm exec openspec validate progressive-creative-surface-loading --strict`: passed.
+- `pnpm install --lockfile-only --offline --ignore-scripts`: passed for all workspace projects.
+
+### Quality And UI Review
+
+- `neko-quality-review`: no blocking or scoped architecture finding. Content identity remains owned by `@neko/content`; Host owns durable presentation identity; Desktop Main owns Workspace authorization and opaque resource lifetime; Preview Domain remains the sole runtime/session projection owner.
+- `neko-ui-validation` applicability: applicable because the fix changes the user-visible Preview unavailable/recovery state, while intentionally preserving the current UI.
+- Authoritative restarted-Electron inspection is blocked: `pnpm --filter @neko/app-desktop build` was rejected because Desktop process `18857` already owns this checkout's Vite bundle. The active user process was not terminated. The running instance cannot validate the new Main-process code until restarted.
+
+### Residual Risk
+
+- Production packaging and direct reload/reopen pixel inspection remain pending until the current Desktop process is closed and a fresh build/runtime is started.
+- Missing or moved source content is intentionally fail-visible in the exact Preview; no historical path, opaque URL, cached payload or active-Workspace fallback is used.

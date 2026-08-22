@@ -299,19 +299,19 @@ export class DesktopShellService {
         cutDraftCleanup.window,
         this.createIdentity,
       );
-      const restorableWorkbench = restoreWindowWorkbench(
+      const previewRestore = restoreWindowWorkbench(
         state,
         experimentalSceneReset.window,
         this.createIdentity,
       );
       const restoredSceneReconciliation = reconcileRestoredWorkspaceScene(
         activeDesktopWorkbench(experimentalSceneReset.window).scene,
-        restorableWorkbench,
+        previewRestore.layout,
         this.createIdentity,
       );
       const qualifiedWindow = captureActiveProjectPresentation(
         replaceActiveDesktopWorkbench(experimentalSceneReset.window, {
-          layout: restorableWorkbench,
+          layout: previewRestore.layout,
           scene: restoredSceneReconciliation.scene,
         }),
       );
@@ -326,6 +326,20 @@ export class DesktopShellService {
             removedViewIds: cutDraftCleanup.removedViewIds,
             message:
               'Expired unnamed Cut draft presentation was removed because its in-memory document ended with the previous application process.',
+          },
+        ];
+      }
+      if (previewRestore.removedViewIds.length > 0) {
+        this.isolatedWindowDiagnostics = [
+          ...this.isolatedWindowDiagnostics,
+          {
+            code: 'desktop-presentation-reset',
+            severity: 'warning',
+            windowId,
+            owner: 'preview',
+            removedViewIds: previewRestore.removedViewIds,
+            message:
+              'Preview presentation without a persistent ContentLocator was removed; source content and sibling Workspace views were preserved.',
           },
         ];
       }
@@ -2402,15 +2416,20 @@ function restoreWindowWorkbench(
   state: DesktopShellStoredState,
   window: DesktopStoredWindow,
   createIdentity: () => string,
-): DesktopWorkbenchLayoutProjection {
+): {
+  readonly layout: DesktopWorkbenchLayoutProjection;
+  readonly removedViewIds: readonly string[];
+} {
   let restored = activeDesktopWorkbench(window).layout;
+  const removedViewIds: string[] = [];
   for (const view of activeDesktopWorkbench(window).layout.main.views) {
     if (
       view.kind === 'preview' &&
-      view.previewPresentation === 'temporary' &&
-      view.ownerId.startsWith('preview-session:')
+      ((view.previewPresentation === 'temporary' && view.ownerId.startsWith('preview-session:')) ||
+        view.previewContentLocator === undefined)
     ) {
       restored = closeMainView(restored, view.viewId);
+      removedViewIds.push(view.viewId);
     }
   }
   if (window.activeTarget.kind === 'project') {
@@ -2421,15 +2440,21 @@ function restoreWindowWorkbench(
         `Desktop active Project Tab '${activeTabId}' is unavailable during Workbench restore.`,
       );
     }
-    return attachProjectWorkbench(
-      restored,
-      requireStoredProject(state, tab.projectId),
-      createIdentity,
-    );
+    return {
+      layout: attachProjectWorkbench(
+        restored,
+        requireStoredProject(state, tab.projectId),
+        createIdentity,
+      ),
+      removedViewIds,
+    };
   }
-  if (restored === activeDesktopWorkbench(window).layout) return restored;
+  if (restored === activeDesktopWorkbench(window).layout) {
+    return { layout: restored, removedViewIds };
+  }
   return {
-    ...createDefaultDesktopWorkbenchLayout(window.windowId),
+    layout: createDefaultDesktopWorkbenchLayout(window.windowId),
+    removedViewIds,
   };
 }
 

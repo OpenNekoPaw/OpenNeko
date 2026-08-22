@@ -69,6 +69,20 @@ Preview open 先创建 exact View/session 和 `loading` projection，保存 Host
 
 替代方案是在 Renderer 直接读取 archive Range。拒绝原因是 epub.js 仍需要可加载的章节相对 URL和资源 URL，最终会引入 archive 内部 adapter、Blob URL 图和第二套资源生命周期。
 
+### Restored Preview Views rebuild runtime authority from ContentLocator
+
+Pinned/side Preview View 的可恢复 presentation 只持久保存 document identity、显示元数据和 canonical
+`ContentLocator`。`preview-session:*` 只标识该 Preview instance，不是内容 authority；sender-bound opaque URL、
+pending source 和 resource lease 均为进程内 transient runtime state。Renderer reload 或 Desktop 重启释放旧
+runtime 后，首个 exact Snapshot 由 Desktop Preview adapter 校验恢复的 View 与 locator，通过当前 Workspace
+authority 重新解析源并注册新的 lease，再在同一 View identity 下提交 `loading -> ready | unavailable`。
+
+缺失或非法 locator 的旧 presentation 只关闭受影响的 Preview View；源文件和其他 Workbench View 保持不变。
+不得回退到 `documentId` 猜路径、active Workspace、旧 absolute path、旧 opaque URL 或最近一次 Preview session。
+
+替代方案是持久化 resource URL 或让 Shell 复用旧 session registry。前者跨 renderer/sender 后必然失效且会
+绕过授权生命周期，后者把可丢弃 runtime 提升为业务事实；两者都拒绝。
+
 ### Viewer modules follow the resolved format
 
 Preview Root 保留小型状态、header、snapshot provider 和 viewer selector。PDF、DOCX、EPUB、CBZ、Model、Audio、Video 各自通过 `React.lazy` 精确导入；Quick Preview 移到独立 public entry，避免其 audio/video imports 回流主 Preview Root。每个 Viewer 使用稳定、等尺寸的局部 Suspense fallback；模块失败由当前 Preview Surface error boundary 显示。
@@ -91,20 +105,22 @@ EPUB Viewer 删除 archived-binary loader，使用 descriptor base URL 以 `open
 
 ## Ownership And Runtime Path
 
-| Responsibility               | Owner / role                                  | Canonical public path                          | Producer                         | Consumer                      | Runtime boundary                  | Replaced path                                 |
-| ---------------------------- | --------------------------------------------- | ---------------------------------------------- | -------------------------------- | ----------------------------- | --------------------------------- | --------------------------------------------- |
-| Cut preparation/replay       | `@neko/cut-webview`, L2                       | `runtime-bridge`                               | exact Cut host runtime           | visible Cut Root              | Renderer -> typed Cut IPC         | Root-ready then first Snapshot                |
-| Preview preparation          | `@neko/preview-webview`, L2                   | `runtime-bootstrap`                            | exact Preview host runtime       | visible Preview Root          | Renderer -> typed Preview IPC     | Root effect then first Snapshot               |
-| Canvas preparation/replay    | `@neko/canvas-webview`, L2                    | `runtime-bootstrap`                            | exact Canvas host runtime        | visible Canvas Root           | Renderer -> typed Canvas IPC      | Root-ready then first Snapshot                |
-| Canvas Generation recovery   | `@neko/canvas-domain`, L0 application session | `CanvasHostRuntimeSession`                     | exact Canvas Session             | Canvas projection subscribers | Host-neutral async task           | Session creation waiting for every Job resume |
-| Text Editor preparation      | `@neko/text-editor-webview`, L2               | `runtime-bootstrap`                            | exact Text Editor host runtime   | visible Text Editor Root      | Renderer -> typed Text Editor IPC | Root effect then first projection             |
-| Resource Browser preparation | `@neko/assets-webview`, L2                    | `resource-browser/runtime-bootstrap`           | exact Resource Browser runtime   | visible Resource Browser Root | Renderer -> typed Assets IPC      | Root effect then first projection             |
-| Viewer selection             | `@neko/preview-webview`, L2                   | `root`, `quick-preview`                        | ready descriptor                 | exact Viewer                  | browser ESM                       | one static all-viewer Root chunk              |
-| ZIP entry index/read         | `@neko/content`, L1 Node                      | `@neko/content/document/node`                  | authorized absolute file adapter | Preview resource publisher    | Node file boundary                | Renderer full ArrayBuffer + JSZip             |
-| Opaque archive tree          | Desktop Application trust adapter             | `DesktopResourceRegistry.registerResourceTree` | package-owned entry source       | authorized WebContents        | Electron protocol/sender boundary | whole archive file registration               |
-| EPUB chapter render          | `@neko/preview-webview`, L2                   | EPUB Viewer module                             | opaque virtual directory         | visible chapter/rendition     | browser Renderer                  | archived epub.js full-open path               |
+| Responsibility               | Owner / role                                              | Canonical public path                                   | Producer                         | Consumer                      | Runtime boundary                           | Replaced path                                 |
+| ---------------------------- | --------------------------------------------------------- | ------------------------------------------------------- | -------------------------------- | ----------------------------- | ------------------------------------------ | --------------------------------------------- |
+| Cut preparation/replay       | `@neko/cut-webview`, L2                                   | `runtime-bridge`                                        | exact Cut host runtime           | visible Cut Root              | Renderer -> typed Cut IPC                  | Root-ready then first Snapshot                |
+| Preview preparation          | `@neko/preview-webview`, L2                               | `runtime-bootstrap`                                     | exact Preview host runtime       | visible Preview Root          | Renderer -> typed Preview IPC              | Root effect then first Snapshot               |
+| Preview restore source       | `@neko/preview-domain` source ref + Desktop trust adapter | Preview View `ContentLocator` / `DesktopPreviewRuntime` | persisted Workbench View         | fresh Preview runtime session | Host projection -> Electron resource lease | stale session/opaque URL reuse                |
+| Canvas preparation/replay    | `@neko/canvas-webview`, L2                                | `runtime-bootstrap`                                     | exact Canvas host runtime        | visible Canvas Root           | Renderer -> typed Canvas IPC               | Root-ready then first Snapshot                |
+| Canvas Generation recovery   | `@neko/canvas-domain`, L0 application session             | `CanvasHostRuntimeSession`                              | exact Canvas Session             | Canvas projection subscribers | Host-neutral async task                    | Session creation waiting for every Job resume |
+| Text Editor preparation      | `@neko/text-editor-webview`, L2                           | `runtime-bootstrap`                                     | exact Text Editor host runtime   | visible Text Editor Root      | Renderer -> typed Text Editor IPC          | Root effect then first projection             |
+| Resource Browser preparation | `@neko/assets-webview`, L2                                | `resource-browser/runtime-bootstrap`                    | exact Resource Browser runtime   | visible Resource Browser Root | Renderer -> typed Assets IPC               | Root effect then first projection             |
+| Viewer selection             | `@neko/preview-webview`, L2                               | `root`, `quick-preview`                                 | ready descriptor                 | exact Viewer                  | browser ESM                                | one static all-viewer Root chunk              |
+| ZIP entry index/read         | `@neko/content`, L1 Node                                  | `@neko/content/document/node`                           | authorized absolute file adapter | Preview resource publisher    | Node file boundary                         | Renderer full ArrayBuffer + JSZip             |
+| Opaque archive tree          | Desktop Application trust adapter                         | `DesktopResourceRegistry.registerResourceTree`          | package-owned entry source       | authorized WebContents        | Electron protocol/sender boundary          | whole archive file registration               |
+| EPUB chapter render          | `@neko/preview-webview`, L2                               | EPUB Viewer module                                      | opaque virtual directory         | visible chapter/rendition     | browser Renderer                           | archived epub.js full-open path               |
 
-User data is unchanged. Runtime preparation, entry maps, opaque URLs, module promises and loading/error state are disposable projections; none are persisted or used as content identity.
+User content is unchanged. Preview View persists only its canonical `ContentLocator` source identity. Runtime preparation,
+entry maps, opaque URLs, module promises and loading/error state remain disposable projections and are never recovery authority.
 
 ## Risks / Trade-offs
 
@@ -124,6 +140,7 @@ User data is unchanged. Runtime preparation, entry maps, opaque URLs, module pro
 5. Update the active EPUB progressive spec so full archive reads are no longer accepted; validate both changes strictly.
 6. Run package tests/typechecks/build, then visible Electron cold/warm Cut and EPUB acceptance with request instrumentation.
 7. Extend the same preparation contract to Canvas, Text Editor and Resource Browser; move Canvas Generation reattach behind the first Snapshot and qualify cold/warm Workbench View switching.
+8. Persist Preview `ContentLocator` source refs and rebuild fresh runtime authorization after renderer/Desktop restart; locally remove older invalid Preview presentation records.
 
 Rollback restores the previous code as one atomic boundary. No data migration or user-file rewrite is required.
 

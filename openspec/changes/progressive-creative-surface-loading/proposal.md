@@ -17,6 +17,7 @@ EPUB 虽已按视口渲染章节，但仍在打开阶段读取完整 ZIP，且 P
 - `@neko/content/document/node` 提供只读 ZIP entry 资源，Desktop exact-resource registry 只将该已授权资源树投影为 sender-bound opaque URL；Renderer 继续不接收本地路径。
 - EPUB 初始化只读取 ZIP 目录、container、OPF、navigation 和 spine metadata；当前章节及其 CSS、图片、字体等资源由浏览器按需请求，未访问章节不读取、不解压、不构建 DOM。
 - 快速切换或卸载时，旧 View/session 的异步结果不得覆盖当前 Surface，相关订阅、请求和资源注册按精确 identity 释放；失败在当前 Surface 可见且不影响 sibling Root。
+- 固定或侧栏 Preview View 持久保存 canonical `ContentLocator`，Renderer/Window 重新打开后从该 locator 重建新的 Host 授权和 transient resource lease；不得把已释放的 `preview-session:*` 或 opaque URL 当作恢复来源。
 
 ## Capabilities
 
@@ -35,5 +36,5 @@ EPUB 虽已按视口渲染章节，但仍在打开阶段读取完整 ZIP，且 P
 - Owning responsibility：各 Webview package 拥有自身可见 Surface bootstrap；`@neko/canvas-domain` 拥有 Canvas Session 文档就绪与 Generation 恢复的解耦；`@neko/preview-webview` 拥有 Viewer 模块选择和 EPUB 浏览器渲染；`@neko/content/document/node` 拥有 Node ZIP entry 解析与读取；`@neko/preview-domain` 拥有 EPUB entry MIME 语义。
 - Desktop role：`apps/neko-desktop` 只组合 package public entry、精确 View/session identity，并在 Electron trust boundary 将已授权只读资源树注册为 transient `openneko://resource` URL。
 - Public/API impact：Canvas、Preview、Text Editor、Resource Browser Root 使用 package-owned bootstrap resource；Cut runtime bridge增加显式 prepare/dispose 生命周期；Desktop resource registry 增加只读虚拟资源树注册。
-- User data：不修改 EPUB、OTIO、阅读位置或项目事实；opaque URL、ZIP entry 与加载状态仍为可丢弃 runtime projection。
+- User data：不修改 EPUB、OTIO、阅读位置或项目事实；Workbench 只新增持久的 Preview `ContentLocator` source ref，opaque URL、ZIP entry、runtime session 与加载状态仍为可丢弃 projection。
 - Dependencies：复用仓库已有 `@zip.js/zip.js` 和现有 `openneko:` resource handler，不新增协议、loopback server、缓存或隐藏 React Root。

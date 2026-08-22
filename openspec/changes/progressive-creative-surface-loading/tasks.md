@@ -43,3 +43,10 @@
 ## 7. Canvas Media Content-Box Alignment
 
 - [x] 7.1 Make the shared Preview video element fill its owning Surface while retaining `object-fit: contain`, update shared-path tests, and verify Canvas node/frame alignment without adding a Canvas-only player.
+
+## 8. Preview Runtime Restoration
+
+- [x] 8.1 Persist the canonical Preview `ContentLocator` in pinned/side Workbench View refs and locally remove restored Preview presentations that lack valid source identity.
+- [x] 8.2 Rebuild a fresh Preview runtime source authorization and resource lease from the persisted locator after renderer/window reload, without reusing stale sessions, absolute paths or opaque URLs.
+- [ ] 8.3 Add Host contract, Desktop runtime and Renderer regression coverage for reload recovery, missing-source isolation and adjacent normal Preview open/close behavior; validate the OpenSpec and authoritative UI path.
+      Host contract and Desktop runtime coverage pass. Authoritative restarted-Electron inspection remains blocked because the current checkout's Vite bundle is owned by the running Desktop process.

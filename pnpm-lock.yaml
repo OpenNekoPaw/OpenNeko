@@ -1397,6 +1397,9 @@ importers:
       '@neko/canvas-domain':
         specifier: workspace:*
         version: link:../canvas/domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../content
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:../cut/domain

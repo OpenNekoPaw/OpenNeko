@@ -66,6 +66,13 @@ export interface DesktopPreviewRuntimeOptions {
     DesktopResourceRegistry,
     'registerFile' | 'registerResourceSet' | 'registerResourceTree' | 'releaseSession'
   >;
+  readonly resolveRestoredSource?: (input: {
+    readonly projectId: string;
+    readonly workspaceId: string;
+    readonly contentLocator: ContentLocator;
+    readonly displayName: string;
+    readonly signal: AbortSignal;
+  }) => Promise<PreviewSourceInput>;
   readonly createIdentity?: () => string;
 }
 
@@ -168,7 +175,7 @@ export class DesktopPreviewRuntime {
         status: 'loading',
       });
       pendingSource = {
-        source,
+        source: Promise.resolve(source),
         displayName: input.item.label,
         contentKind,
         contentLocator,
@@ -190,6 +197,9 @@ export class DesktopPreviewRuntime {
       documentId: input.item.resourceId,
       previewPresentation: presentation,
       ...(contentKind === undefined ? {} : { previewContentKind: contentKind }),
+      ...(pendingSource === undefined
+        ? {}
+        : { previewContentLocator: pendingSource.contentLocator }),
     };
     let workbench: DesktopWorkbenchLayoutProjection;
     try {
@@ -310,7 +320,6 @@ export class DesktopPreviewRuntime {
   ): Promise<PreviewProjection> {
     this.requireActive();
     const request = parseDesktopPreviewBootstrapRequest(value);
-    const session = this.sessions.read(request.sessionId);
     const projection = await this.options.shell.getProjection(windowId);
     const workspaceWorkbench = resolveDesktopWindowWorkspaceWorkbench(
       projection.window,
@@ -326,6 +335,9 @@ export class DesktopPreviewRuntime {
     if (request.rendererSessionId !== projection.rendererSessionId) {
       throw new Error('Desktop Preview bootstrap endpoint is stale.');
     }
+    const session = this.sessions.has(request.sessionId)
+      ? this.sessions.read(request.sessionId)
+      : this.restoreSession(windowId, request, view);
     const requestedIdentity = {
       ...session.identity,
       projectId: request.projectId,
@@ -458,12 +470,14 @@ export class DesktopPreviewRuntime {
   ): Promise<PreviewProjection> {
     try {
       source.abortController.signal.throwIfAborted();
+      const previewSource = await source.source;
+      source.abortController.signal.throwIfAborted();
       const projected = await this.previewResources.project({
         descriptorId: source.descriptorId,
         source: source.contentLocator,
         displayName: source.displayName,
         owner: {
-          source: source.source,
+          source: previewSource,
           displayName: source.displayName,
           contentKind: source.contentKind,
           signal: source.abortController.signal,
@@ -474,7 +488,7 @@ export class DesktopPreviewRuntime {
             rendererSessionId: source.identity.rendererSessionId,
           },
         },
-        requestedMediaType: source.source.mediaType,
+        requestedMediaType: previewSource.mediaType,
       });
       if (projected.status === 'unavailable') throw new Error(projected.diagnostic.message);
       if (source.abortController.signal.aborted) {
@@ -524,6 +538,66 @@ export class DesktopPreviewRuntime {
       source.abortController.abort(new Error('Preview source preparation was released.'));
     }
     this.previewResources.release(`preview:${sessionId}`);
+  }
+
+  private restoreSession(
+    windowId: string,
+    request: DesktopPreviewBootstrapRequest,
+    view: DesktopWorkbenchLayoutProjection['main']['views'][number],
+  ): PreviewSessionSnapshot {
+    if (!this.options.resolveRestoredSource) {
+      throw new Error('Desktop Preview restored-source resolver is unavailable.');
+    }
+    if (
+      !view.documentId ||
+      !view.previewPresentation ||
+      !view.previewContentKind ||
+      !view.previewContentLocator
+    ) {
+      throw new Error('Desktop Preview View has no durable ContentLocator recovery source.');
+    }
+    const mediaType = getPreviewMediaType(view.displayLabel);
+    if (!mediaType) {
+      throw new Error(`Desktop Preview does not support '${view.displayLabel}'.`);
+    }
+    const identity: PreviewRuntimeIdentity = {
+      projectId: request.projectId,
+      workspaceId: request.workspaceId,
+      windowId,
+      viewId: request.viewId,
+      viewInstanceId: request.viewInstanceId,
+      documentId: view.documentId,
+      sessionId: request.sessionId,
+      rendererSessionId: request.rendererSessionId,
+    };
+    const projection = parsePreviewProjection({
+      identity,
+      presentation: view.previewPresentation,
+      status: 'loading',
+    });
+    const abortController = new AbortController();
+    const contentLocator = view.previewContentLocator;
+    const source = this.options
+      .resolveRestoredSource({
+        projectId: request.projectId,
+        workspaceId: request.workspaceId,
+        contentLocator,
+        displayName: view.displayLabel,
+        signal: abortController.signal,
+      })
+      .then((restored) => resolvePreviewSource(restored, mediaType));
+    this.sessions.register(projection);
+    this.pendingSources.set(request.sessionId, {
+      source,
+      displayName: view.displayLabel,
+      contentKind: view.previewContentKind,
+      contentLocator,
+      descriptorId: `preview:${request.sessionId}`,
+      identity,
+      presentation: view.previewPresentation,
+      abortController,
+    });
+    return this.sessions.read(request.sessionId);
   }
 
   private async updatePresentation(
@@ -648,7 +722,7 @@ async function resolvePreviewSource(
 }
 
 interface PendingPreviewSource {
-  readonly source: PreviewResourceSource;
+  readonly source: Promise<PreviewResourceSource>;
   readonly displayName: string;
   readonly contentKind: PreviewContentKind;
   readonly contentLocator: ResourceBrowserContentLocator;

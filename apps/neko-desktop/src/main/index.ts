@@ -175,6 +175,7 @@ import {
   WorkspaceAssetMaterializationService,
   createProjectContentReadService,
   readProjectContentReferences,
+  resolveProjectWorkspaceContentLocator,
   type ResourceBrowserNodeRuntimeOptions,
 } from '@neko/assets-node';
 import {
@@ -201,7 +202,7 @@ import {
 import { createNodeHostContentReadService } from '@neko/content/node';
 import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
-import type { ContentLocator } from '@neko/content';
+import { isWorkspaceFileContentLocator, type ContentLocator } from '@neko/content';
 import {
   createPreviewResourceProjectionService,
   type PreviewResourceSource,
@@ -676,9 +677,44 @@ async function startDesktop(): Promise<void> {
     const error = await shell.openPath(targetPath);
     if (error) throw new Error(error);
   };
+  const canvasDocumentEntryAccess = createNodeDocumentLowLevelAccess();
   const previewRuntime = new DesktopPreviewRuntime({
     shell: shellService,
     resources: resourceRegistry,
+    resolveRestoredSource: async ({ projectId, workspaceId, contentLocator, signal }) => {
+      signal.throwIfAborted();
+      const workspace = await shellService.resolveAgentWorkspace(workspaceId);
+      signal.throwIfAborted();
+      if (isWorkspaceFileContentLocator(contentLocator) && !contentLocator.selector) {
+        return {
+          absolutePath: await resolveProjectWorkspaceContentLocator(
+            {
+              projectId,
+              workspaceRoot: workspace.workspacePath,
+              globalMediaLibraryRoot: globalStorage.mediaLibraries,
+            },
+            contentLocator,
+          ),
+        };
+      }
+      const contentRead = createProjectContentReadService({
+        projectId,
+        workspaceRoot: workspace.workspacePath,
+        globalMediaLibraryRoot: globalStorage.mediaLibraries,
+        documentEntryReader: {
+          readEntry: (sourcePath, entryPath) =>
+            canvasDocumentEntryAccess.readEntry(sourcePath, entryPath),
+        },
+      });
+      const loaded = await contentRead.read(contentLocator, {
+        maxBytes: 64 * 1024 * 1024,
+        signal,
+      });
+      if (loaded.status !== 'ready') {
+        throw new Error(`Preview content is unavailable: ${loaded.diagnostic.code}.`);
+      }
+      return { bytes: loaded.bytes };
+    },
   });
   const textEditorRuntime = new DesktopTextEditorRuntime({
     shell: shellService,
@@ -803,7 +839,6 @@ async function startDesktop(): Promise<void> {
     }
   }
   const canvasUsesChineseLabels = app.getLocale().toLocaleLowerCase().startsWith('zh');
-  const canvasDocumentEntryAccess = createNodeDocumentLowLevelAccess();
   const canvasGenerationRuntime = new CanvasGenerationNodeRuntime({
     generation: {
       getWorkspaceJobs: (input) =>

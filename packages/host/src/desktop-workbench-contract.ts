@@ -1,4 +1,5 @@
 import type { PreviewContentKind } from '@neko/preview-domain';
+import { validateContentLocator, type ContentLocator } from '@neko/content';
 
 export const DESKTOP_PRIMARY_MAIN_GROUP_ID = 'main:primary';
 export const DESKTOP_SECONDARY_MAIN_GROUP_ID = 'main:secondary';
@@ -39,6 +40,7 @@ export interface DesktopWorkbenchViewRef {
   readonly worldProjectId?: string;
   readonly previewPresentation?: DesktopPreviewViewPresentation;
   readonly previewContentKind?: PreviewContentKind;
+  readonly previewContentLocator?: ContentLocator;
 }
 
 export interface DesktopWorkbenchMainGroup {
@@ -696,6 +698,7 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
       ...(record['worldProjectId'] === undefined ? [] : ['worldProjectId']),
       ...(record['previewPresentation'] === undefined ? [] : ['previewPresentation']),
       ...(record['previewContentKind'] === undefined ? [] : ['previewContentKind']),
+      ...(record['previewContentLocator'] === undefined ? [] : ['previewContentLocator']),
     ],
     'Desktop Workbench Main View',
   );
@@ -744,9 +747,19 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
           ['text', 'image', 'audio', 'video', 'document', 'model'] as const,
           'Desktop Workbench Preview content kind is invalid.',
         );
+  const previewContentLocatorResult =
+    record['previewContentLocator'] === undefined
+      ? undefined
+      : validateContentLocator(record['previewContentLocator']);
+  if (previewContentLocatorResult && !previewContentLocatorResult.ok) {
+    throw invalidPayload('Desktop Workbench Preview ContentLocator is invalid.');
+  }
+  const previewContentLocator = previewContentLocatorResult?.locator;
   if (
     kind !== 'preview' &&
-    (previewPresentation !== undefined || previewContentKind !== undefined)
+    (previewPresentation !== undefined ||
+      previewContentKind !== undefined ||
+      previewContentLocator !== undefined)
   ) {
     throw invalidPayload(
       'Desktop Workbench Preview presentation metadata belongs only to Preview Views.',
@@ -818,6 +831,7 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
     ...(worldProjectId ? { worldProjectId } : {}),
     ...(previewPresentation ? { previewPresentation } : {}),
     ...(previewContentKind ? { previewContentKind } : {}),
+    ...(previewContentLocator ? { previewContentLocator } : {}),
   };
 }
 

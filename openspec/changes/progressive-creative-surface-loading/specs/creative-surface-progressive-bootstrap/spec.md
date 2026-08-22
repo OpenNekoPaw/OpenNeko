@@ -57,6 +57,25 @@ The renderer MAY prefetch an ESM module from explicit user intent or bounded idl
 - **THEN** the new exact Surface reconstructs from its domain authority and presentation snapshot without a second module cold load
 - **AND** no hidden historical Root or document-data cache supplies success
 
+### Requirement: Restored Preview Views rebuild from durable content identity
+
+A pinned or side Preview View SHALL persist its canonical `ContentLocator` as the only recoverable source identity.
+After Renderer reload or Desktop restart, the Preview owner SHALL rebuild a fresh runtime source authorization and
+opaque resource lease from that locator before returning the first exact Snapshot. A released `preview-session:*`,
+absolute path, descriptor or opaque URL MUST NOT supply recovery success.
+
+#### Scenario: Renderer reloads with a pinned Preview attached
+
+- **WHEN** the old Preview runtime and sender-bound resource lease have been released but the pinned View remains in the restored Workbench
+- **THEN** the first exact Snapshot resolves the persisted `ContentLocator` against the current Workspace authority and returns a newly authorized descriptor
+- **AND** the View renders the same document without querying the released runtime session as its source
+
+#### Scenario: Restored Preview source is invalid
+
+- **WHEN** a restored Preview View has no valid `ContentLocator` or the current authority can no longer resolve it
+- **THEN** only that Preview View is closed or reports an owner-qualified unavailable diagnostic
+- **AND** no document path is inferred from `documentId`, no active/recent Workspace is used, and sibling Views remain available
+
 ### Requirement: Lightweight video SHALL fill the owning content box
 
 Canvas and other lightweight video consumers SHALL use the Preview-owned canonical video element.

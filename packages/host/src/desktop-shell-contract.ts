@@ -268,7 +268,7 @@ interface DesktopCutPresentationResetDiagnosticProjection {
   readonly code: 'desktop-presentation-reset';
   readonly severity: 'warning';
   readonly windowId: string;
-  readonly owner: 'cut';
+  readonly owner: 'cut' | 'preview';
   readonly removedViewIds: readonly string[];
   readonly message: string;
 }
@@ -1045,7 +1045,10 @@ function parseDesktopShellStateDiagnosticProjection(
       ['code', 'severity', 'windowId', 'owner', 'removedViewIds', 'message'],
       'Desktop Shell state diagnostic',
     );
-    if (record['severity'] !== 'warning' || record['owner'] !== 'cut') {
+    if (
+      record['severity'] !== 'warning' ||
+      (record['owner'] !== 'cut' && record['owner'] !== 'preview')
+    ) {
       throw invalidPayload('Desktop presentation reset diagnostic identity is invalid.');
     }
     const removedViewIds = requireArray(
@@ -1066,7 +1069,7 @@ function parseDesktopShellStateDiagnosticProjection(
         record['windowId'],
         'Desktop presentation reset Window identity is required.',
       ),
-      owner: 'cut',
+      owner: record['owner'],
       removedViewIds,
       message: requireNonEmptyString(
         record['message'],

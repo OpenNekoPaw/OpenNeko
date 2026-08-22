@@ -137,6 +137,141 @@ describe('DesktopPreviewRuntime', () => {
     expect(await range.text()).toBe('embedded');
   });
 
+  it('rebuilds a released Preview runtime from the persisted ContentLocator', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-restore-'));
+    roots.push(root);
+    const absolutePath = path.join(root, 'restored.md');
+    await writeFile(absolutePath, '# Restored preview');
+    const viewId = 'preview:project-view-1:pinned';
+    const sessionId = 'preview-session:restored';
+    let workbench = openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), {
+      viewId,
+      viewInstanceId: 'view-instance-1',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'preview',
+      ownerId: sessionId,
+      displayLabel: 'restored.md',
+      documentId: 'content:restored',
+      previewPresentation: 'pinned',
+      previewContentKind: 'text',
+      previewContentLocator: {
+        file: { authority: 'workspace', path: 'restored.md' },
+      },
+    });
+    const shell: DesktopPreviewShellPort = {
+      getProjection: async () => createShellProjection(workbench, 'endpoint-2'),
+      updateWorkbench: vi.fn(async (_windowId, _endpoint, _instanceId, next) => {
+        workbench = next;
+      }),
+    };
+    const resolveRestoredSource = vi.fn(async () => ({ absolutePath }));
+    const runtime = new DesktopPreviewRuntime({
+      shell,
+      resources: createResources(),
+      resolveRestoredSource,
+    });
+
+    const projection = await runtime.getSnapshot('window-1', {
+      requestId: 'restore-preview',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      viewId,
+      viewInstanceId: 'view-instance-1',
+      sessionId,
+      rendererSessionId: 'endpoint-2',
+    });
+
+    expect(resolveRestoredSource).toHaveBeenCalledOnce();
+    expect(resolveRestoredSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        contentLocator: {
+          file: { authority: 'workspace', path: 'restored.md' },
+        },
+      }),
+    );
+    expect(projection).toMatchObject({
+      status: 'ready',
+      identity: { sessionId, rendererSessionId: 'endpoint-2' },
+      descriptor: {
+        contentLocator: {
+          file: { authority: 'workspace', path: 'restored.md' },
+        },
+        contentKind: 'text',
+      },
+    });
+    if (projection.status !== 'ready') throw new Error('Expected a restored Preview.');
+    expect(await (await fetchResource(projection.descriptor.url)).text()).toBe(
+      '# Restored preview',
+    );
+  });
+
+  it('keeps a missing restored source local to its exact Preview session', async () => {
+    const viewId = 'preview:project-view-1:missing';
+    const sessionId = 'preview-session:missing';
+    const canvas = {
+      viewId: 'canvas:project-1:workspace',
+      viewInstanceId: 'view-instance-1',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'canvas' as const,
+      ownerId: 'canvas:project-1',
+      displayLabel: 'workspace.nkc',
+      documentId: 'neko/boards/workspace.nkc',
+    };
+    const withCanvas = openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), canvas);
+    let workbench = openOrFocusMainView(withCanvas, {
+      viewId,
+      viewInstanceId: 'view-instance-1',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'preview',
+      ownerId: sessionId,
+      displayLabel: 'missing.pdf',
+      documentId: 'content:missing',
+      previewPresentation: 'side',
+      previewContentKind: 'document',
+      previewContentLocator: {
+        file: { authority: 'workspace', path: 'missing.pdf' },
+      },
+    });
+    const shell: DesktopPreviewShellPort = {
+      getProjection: async () => createShellProjection(workbench, 'endpoint-2'),
+      updateWorkbench: vi.fn(async (_windowId, _endpoint, _instanceId, next) => {
+        workbench = next;
+      }),
+    };
+    const runtime = new DesktopPreviewRuntime({
+      shell,
+      resources: createResources(),
+      resolveRestoredSource: async () => {
+        throw new Error('Source file no longer exists.');
+      },
+    });
+
+    const projection = await runtime.getSnapshot('window-1', {
+      requestId: 'restore-missing-preview',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      viewId,
+      viewInstanceId: 'view-instance-1',
+      sessionId,
+      rendererSessionId: 'endpoint-2',
+    });
+
+    expect(projection).toMatchObject({
+      status: 'unavailable',
+      identity: { sessionId, rendererSessionId: 'endpoint-2' },
+      diagnostic: { code: 'preview-source-unavailable', message: 'Source file no longer exists.' },
+    });
+    expect(workbench.main.views).toContainEqual(
+      expect.objectContaining({ viewId: canvas.viewId, kind: 'canvas' }),
+    );
+    expect(workbench.main.views).toContainEqual(expect.objectContaining({ viewId }));
+  });
+
   it('publishes EPUB as one virtual directory only when the first exact Snapshot is requested', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'openneko-preview-epub-'));
     roots.push(root);
