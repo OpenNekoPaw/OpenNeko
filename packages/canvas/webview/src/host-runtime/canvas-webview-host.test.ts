@@ -6,6 +6,7 @@ import {
 } from '@neko/canvas-domain';
 import {
   DEFAULT_CANVAS_DATA,
+  type FileCanvasNode,
   type CanvasMaterialActionDescriptor,
   type MediaCanvasNode,
 } from '@neko/canvas-domain';
@@ -317,6 +318,200 @@ describe('createCanvasWebviewHost', () => {
 
     host.dispose();
     runtime.dispose();
+  });
+
+  it('waits for a copied image node submission before forwarding its preview resolution', async () => {
+    const identity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewInstanceId: 'view-instance-1',
+      documentId: 'neko/boards/workspace.nkc',
+      sessionId: 'session-1',
+      rendererSessionId: 'endpoint-1',
+    };
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'media/copied-cat.png' },
+    };
+    const copiedNode: MediaCanvasNode = {
+      id: 'copied-image-ref',
+      type: 'media',
+      position: { x: 320, y: 180 },
+      size: { width: 240, height: 180 },
+      zIndex: 1,
+      data: {
+        assetPath: locator.file.path,
+        mediaType: 'image',
+        contentLocator: locator,
+      },
+    };
+    const session = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: DEFAULT_CANVAS_DATA,
+      effects: {},
+    });
+    let releaseDocumentSubmission = (): void => undefined;
+    const documentSubmissionGate = new Promise<void>((resolve) => {
+      releaseDocumentSubmission = resolve;
+    });
+    let documentSubmissionStarted = false;
+    const runtime: CanvasHostRuntime = {
+      identity,
+      getSnapshot: () => session.getSnapshot(),
+      resolveMaterialActions: (request) => session.resolveMaterialActions(request),
+      readTextFilePreview: (request) => session.readTextFilePreview(request),
+      subscribe: (listener) => session.subscribe(listener),
+      async executeIntent(request) {
+        documentSubmissionStarted = true;
+        await documentSubmissionGate;
+        return session.executeIntent(request);
+      },
+    };
+    const forwardPreview = vi.fn((message: unknown) => {
+      const request = message as {
+        readonly type: 'preview:resolveResource' | 'preview:releaseResource';
+        readonly nodeId: string;
+        readonly outputId: string;
+        readonly contentLocator: typeof locator;
+        readonly contentKind: 'image';
+      };
+      if (request.type === 'preview:releaseResource') return;
+      session.authorizePreviewSource({
+        nodeId: request.nodeId,
+        outputId: request.outputId,
+        locator: request.contentLocator,
+        contentKind: request.contentKind,
+      });
+    });
+    const host = createCanvasWebviewHost(runtime, {
+      postMessage: forwardPreview,
+      getState: () => undefined,
+      setState: () => undefined,
+      supportsMessage: (messageType) => messageType.startsWith('preview:'),
+    });
+
+    host.postMessage({
+      type: 'canvasStatus',
+      data: {
+        ...DEFAULT_CANVAS_DATA,
+        nodes: [copiedNode],
+        _selection: { nodeIds: [copiedNode.id] },
+      },
+    });
+    host.postMessage({
+      type: 'preview:resolveResource',
+      requestId: 'copied-preview-request',
+      nodeId: copiedNode.id,
+      outputId: copiedNode.id,
+      contentLocator: locator,
+      contentKind: 'image',
+      mediaType: 'image/png',
+      displayName: 'copied-cat.png',
+    });
+
+    expect(forwardPreview).not.toHaveBeenCalled();
+    host.postMessage({ type: 'preview:releaseResource', descriptorId: 'existing-preview' });
+    expect(forwardPreview).toHaveBeenCalledOnce();
+    expect(forwardPreview).toHaveBeenLastCalledWith({
+      type: 'preview:releaseResource',
+      descriptorId: 'existing-preview',
+    });
+    await vi.waitFor(() => expect(documentSubmissionStarted).toBe(true));
+    expect(forwardPreview).toHaveBeenCalledOnce();
+
+    releaseDocumentSubmission();
+
+    await vi.waitFor(() => expect(forwardPreview).toHaveBeenCalledTimes(2));
+    expect((await session.getSnapshot()).canvas.nodes).toContainEqual(copiedNode);
+    host.dispose();
+    session.dispose();
+  });
+
+  it('waits for a copied file node submission before reading its text preview', async () => {
+    const identity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewInstanceId: 'view-instance-1',
+      documentId: 'neko/boards/workspace.nkc',
+      sessionId: 'session-1',
+      rendererSessionId: 'endpoint-1',
+    };
+    const locator = {
+      file: { authority: 'workspace' as const, path: 'notes/copied-reference.md' },
+    };
+    const copiedNode: FileCanvasNode = {
+      id: 'copied-file-ref',
+      type: 'file',
+      position: { x: 320, y: 180 },
+      size: { width: 280, height: 180 },
+      zIndex: 1,
+      data: {
+        path: locator.file.path,
+        title: 'copied-reference.md',
+        mediaType: 'text/markdown',
+        contentLocator: locator,
+      },
+    };
+    const readTextFilePreview = vi.fn(async (input) => ({
+      requestId: input.requestId,
+      nodeId: input.nodeId,
+      status: 'ready' as const,
+      kind: 'markdown' as const,
+      text: '# Copied reference',
+      truncated: false,
+      empty: false,
+    }));
+    const session = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: DEFAULT_CANVAS_DATA,
+      effects: { readTextFilePreview },
+    });
+    let releaseDocumentSubmission = (): void => undefined;
+    const documentSubmissionGate = new Promise<void>((resolve) => {
+      releaseDocumentSubmission = resolve;
+    });
+    let documentSubmissionStarted = false;
+    const runtime: CanvasHostRuntime = {
+      identity,
+      getSnapshot: () => session.getSnapshot(),
+      resolveMaterialActions: (request) => session.resolveMaterialActions(request),
+      readTextFilePreview: (request) => session.readTextFilePreview(request),
+      subscribe: (listener) => session.subscribe(listener),
+      async executeIntent(request) {
+        documentSubmissionStarted = true;
+        await documentSubmissionGate;
+        return session.executeIntent(request);
+      },
+    };
+    const host = createCanvasWebviewHost(runtime);
+
+    host.postMessage({
+      type: 'canvasStatus',
+      data: {
+        ...DEFAULT_CANVAS_DATA,
+        nodes: [copiedNode],
+        _selection: { nodeIds: [copiedNode.id] },
+      },
+    });
+    const result = host.readTextFilePreview(copiedNode.id, locator);
+
+    expect(readTextFilePreview).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(documentSubmissionStarted).toBe(true));
+    expect(readTextFilePreview).not.toHaveBeenCalled();
+
+    releaseDocumentSubmission();
+
+    await expect(result).resolves.toMatchObject({
+      nodeId: copiedNode.id,
+      status: 'ready',
+      kind: 'markdown',
+    });
+    expect(readTextFilePreview).toHaveBeenCalledOnce();
+    host.dispose();
+    session.dispose();
   });
 
   it('projects owner descriptors and dispatches the exact identity-bound material action', async () => {

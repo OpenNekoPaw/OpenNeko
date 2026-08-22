@@ -126,12 +126,17 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         `${JSON.stringify(
           canvasDocument('Audio View', 'audio-node', media.audio, 'audio', [
             markdownNode('markdown-node'),
+            textFileNode('text-file-node', 'copied-reference.md'),
           ]),
           null,
           2,
         )}\n`,
       ),
       writeFile(join(workspacePath, 'story.otio'), `${JSON.stringify(emptyOtioDocument())}\n`),
+      writeFile(
+        join(workspacePath, 'copied-reference.md'),
+        '# Copied reference\n\nThis file preview must remain available immediately after duplication.\n',
+      ),
     ]);
     return {
       workspacePath,
@@ -227,6 +232,9 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="markdown-node"] [data-markdown-document="ready"]',
     );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="text-file-node"] [data-text-preview-status="ready"]',
+    );
     await waitForCondition(
       evaluate,
       `(() => {
@@ -270,6 +278,18 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       resourceStatus: epubResourceStatus,
     });
     const epubImageScreenshot = await screenshot('canvas-epub-document-entry-image');
+    await click(
+      '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="text-file-node"]',
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:audio"] [data-selection-action="node:duplicate"]',
+    );
+    await click(
+      '[data-owner-view-id="canvas:functional:audio"] [data-selection-action="node:duplicate"]',
+    );
+    const duplicatedFilePreview = await waitForCopiedFilePreview(evaluate);
+    checkpoint('canvas-copied-file-preview-ready', duplicatedFilePreview);
+    const duplicatedFilePreviewScreenshot = await screenshot('canvas-copied-file-preview-ready');
     const markdownSelector =
       '[data-owner-view-id="canvas:functional:audio"] [data-node-presentation][data-node-id="markdown-node"]';
     const markdownPreview = await inspectCanvasMarkdownNode(evaluate, markdownSelector);
@@ -689,19 +709,26 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evaluate,
       'canvas:functional:video',
     );
+    const duplicatedImagePreview = await waitForCopiedImagePreview(evaluate);
     if (
       duplicatedImageActions.actionIds.join('|') !==
         'image:crop|image:upscale|image:redraw|node:duplicate|preview:open' ||
       duplicatedImageActions.disabledActionIds.join('|') !==
         'image:crop|image:upscale|image:redraw' ||
       duplicatedImageActions.overflowActionIds.length !== 0 ||
-      duplicatedImageActions.hasError
+      duplicatedImageActions.hasError ||
+      !duplicatedImagePreview.src.startsWith('openneko://resource/') ||
+      duplicatedImagePreview.naturalWidth <= 0 ||
+      duplicatedImagePreview.naturalHeight <= 0
     ) {
       throw new Error(
         `Duplicated Canvas image actions are invalid: ${JSON.stringify(duplicatedImageActions)}`,
       );
     }
-    checkpoint('canvas-duplicated-image-actions', duplicatedImageActions);
+    checkpoint('canvas-duplicated-image-actions', {
+      actions: duplicatedImageActions,
+      preview: duplicatedImagePreview,
+    });
     const duplicatedImageActionsScreenshot = await screenshot('canvas-duplicated-image-actions');
     const imagePreviewContextBefore = await inspectCanvasSelectionAndViewport(
       evaluate,
@@ -1048,6 +1075,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       epubImageProjection,
       epubResourceStatus,
       epubImageScreenshot,
+      duplicatedFilePreview,
+      duplicatedFilePreviewScreenshot,
       markdownPreview,
       markdownPreviewScreenshot,
       markdownScrolled,
@@ -1076,6 +1105,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       imageActions,
       imageActionsScreenshot,
       duplicatedImageActions,
+      duplicatedImagePreview,
       duplicatedImageActionsScreenshot,
       imagePreviewScreenshot,
       audioActions,
@@ -1209,6 +1239,12 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         'image:crop|image:upscale|image:redraw' ||
       evidence.duplicatedImageActions.overflowActionIds.length !== 0 ||
       evidence.duplicatedImageActions.hasError ||
+      !evidence.duplicatedImagePreview.src.startsWith('openneko://resource/') ||
+      evidence.duplicatedImagePreview.naturalWidth <= 0 ||
+      evidence.duplicatedImagePreview.naturalHeight <= 0 ||
+      evidence.duplicatedFilePreview.status !== 'ready' ||
+      evidence.duplicatedFilePreview.kind !== 'markdown' ||
+      !evidence.duplicatedFilePreview.text.includes('Copied reference') ||
       evidence.audioActions.actionIds.join('|') !==
         'cut:add-resource|audio:voice-denoise|node:duplicate|preview:open' ||
       evidence.audioActions.disabledActionIds.join('|') !== 'audio:voice-denoise' ||
@@ -2343,6 +2379,92 @@ function markdownNode(nodeId) {
       ].join('\n'),
     },
   };
+}
+
+function textFileNode(nodeId, path) {
+  return {
+    id: nodeId,
+    type: 'file',
+    position: { x: 440, y: 360 },
+    size: { width: 280, height: 180 },
+    zIndex: 2,
+    data: {
+      title: 'copied-reference.md',
+      path,
+      mediaType: 'text/markdown',
+      contentLocator: { file: { authority: 'workspace', path } },
+    },
+  };
+}
+
+async function waitForCopiedFilePreview(evaluate) {
+  return evaluate(`new Promise((resolve, reject) => {
+    const deadline = Date.now() + 5000;
+    const inspect = () => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:audio"]');
+      const copiedNode = [...(view?.querySelectorAll('[data-node-selected="true"]') ?? [])].find(
+        (node) =>
+          node.getAttribute('data-node-id') !== 'text-file-node' &&
+          node.querySelector('[data-canvas-content-kind="file"]')
+      );
+      const preview = copiedNode?.querySelector('[data-canvas-content-kind="file"]');
+      const status = preview?.getAttribute('data-text-preview-status');
+      if (copiedNode && preview && status === 'ready') {
+        resolve({
+          nodeId: copiedNode.getAttribute('data-node-id'),
+          status,
+          kind: preview.getAttribute('data-text-preview-kind'),
+          text: preview.textContent ?? '',
+        });
+        return;
+      }
+      if (status === 'unavailable' || status === 'local-error') {
+        reject(new Error('Copied Canvas file preview failed: ' + (preview?.textContent ?? status)));
+        return;
+      }
+      if (Date.now() >= deadline) {
+        reject(new Error('Copied Canvas file preview did not become ready.'));
+        return;
+      }
+      window.setTimeout(inspect, 25);
+    };
+    inspect();
+  })`);
+}
+
+async function waitForCopiedImagePreview(evaluate) {
+  return evaluate(`new Promise((resolve, reject) => {
+    const deadline = Date.now() + 5000;
+    const inspect = () => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      const copiedNode = [...(view?.querySelectorAll('[data-node-selected="true"]') ?? [])].find(
+        (node) =>
+          node.getAttribute('data-node-id') !== 'epub-image-node' &&
+          node.querySelector('[data-testid="canvas-media-node"][data-media-type="image"]')
+      );
+      const image = copiedNode?.querySelector('img');
+      if (image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0) {
+        resolve({
+          nodeId: copiedNode.getAttribute('data-node-id'),
+          src: image.currentSrc || image.src,
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight,
+        });
+        return;
+      }
+      const diagnostic = copiedNode?.querySelector('[role="status"]');
+      if (diagnostic && !image) {
+        reject(new Error('Copied Canvas image preview failed: ' + (diagnostic.textContent ?? '')));
+        return;
+      }
+      if (Date.now() >= deadline) {
+        reject(new Error('Copied Canvas image preview did not decode.'));
+        return;
+      }
+      window.setTimeout(inspect, 25);
+    };
+    inspect();
+  })`);
 }
 
 function emptyOtioDocument() {

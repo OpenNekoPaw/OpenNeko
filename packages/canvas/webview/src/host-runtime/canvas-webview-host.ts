@@ -281,11 +281,12 @@ export function createCanvasWebviewHost(
     return result.snapshot;
   };
 
-  const readTextFilePreview = (
+  const readTextFilePreview = async (
     nodeId: string,
     locator: ContentLocator,
   ): Promise<CanvasTextFilePreviewResult> => {
     if (disposed) return Promise.reject(new Error('Canvas Webview Host is disposed.'));
+    await waitForOperationQueueToSettle();
     textFilePreviewRequestSequence += 1;
     const request = createCanvasTextFilePreviewRequest({
       requestId: `canvas-webview-text-preview:${textFilePreviewRequestSequence}`,
@@ -337,6 +338,11 @@ export function createCanvasWebviewHost(
         }
         return;
       case 'preview:resolveResource':
+        if (!delegate || !supportsMessage(value['type'])) {
+          throw new Error(`Canvas Host runtime does not implement message '${value['type']}'.`);
+        }
+        enqueue(async () => delegate.postMessage(value));
+        return;
       case 'preview:releaseResource':
         if (!delegate || !supportsMessage(value['type'])) {
           throw new Error(`Canvas Host runtime does not implement message '${value['type']}'.`);
