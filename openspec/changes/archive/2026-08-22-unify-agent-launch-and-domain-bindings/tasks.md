@@ -98,7 +98,10 @@
 - [x] 11.4 Update `agent-runtime.workflow-controller` with exact `/compact` Session operation, continuation after compaction and Entry `session-required` boundary coverage.
 - [x] 11.5 Add Character binding Evaluation only after the visible Chara path exposes sufficient owner/context evidence; otherwise record the minimal neutral observability gap as infrastructure-blocked.
 - [x] 11.6 Run `pnpm test:agent:eval` and the selected suite dry-runs, recording that key-free success proves only schema/runner readiness.
-- [ ] 11.7 Run the focused visible Desktop cases and matching hidden complete-session cases with a real provider/model and explicit cost authorization; record suite/case/run ids, effective identities, hard gates, no-fallback evidence, reports and blockers.
+- [x] 11.7 Stop provider execution against the retired Pi path and transfer the exact visible/hidden
+      Desktop, provider/model, hard-gate, no-fallback and report requirements to
+      `replace-pi-with-dsh-runtime-atomically` 10.4–10.8 and
+      `add-desktop-agent-evaluation-matrix` 7.9–7.10.
 - [x] 11.8 Audit the foundational matrix for basic/multi-turn conversation, compaction continuation, owner/application reopen, generation record restoration, Conversation switching and transcript/queue/config/context/artifact isolation; record every covered, unaffected or blocked cell.
 
 ## 12. Completion And Quality Gates
@@ -181,7 +184,9 @@
 - [x] 21.2 Catch only typed lifecycle/context decode failures for the requested Conversation at Desktop bootstrap; retain strict codecs and stored payloads without migration, missing-field defaults, deletion or alternate readers.
 - [x] 21.3 Render the invalid Conversation as a local internationalized Agent Surface diagnostic without mounting a connection or blocking Window Shell, Workspace Main, navigation or valid sibling Conversations.
 - [x] 21.4 Add repository, Main contract/boundary and Renderer tests for obsolete fields, missing canonical fields, unchanged storage, valid sibling readiness and forged-identity fail-closed behavior.
-- [ ] 21.5 Run focused tests/typechecks, strict OpenSpec validation, key-free Agent Evaluation disposition, visible Desktop UI validation and Neko quality review; retain task 11.7 as the only real-provider cost blocker.
+- [x] 21.5 Accept the recorded focused tests/typechecks, strict OpenSpec validation, key-free disposition
+      and quality review as historical evidence; transfer visible/provider execution to the DSH successor
+      instead of rerunning the retired Pi path.
   - Automated gates and the quality review passed on 2026-08-09; visible Desktop UI validation remains blocked because the Mac is locked.
 
 ## 22. Pi Document Range And Image Tool Result Regression
@@ -190,7 +195,9 @@
 - [x] 22.2 Add one package-owned Pi Tool-result asset loader that uses the exact Workspace `AgentContentAccessRuntime` for content and representation locators plus the existing bounded single/batch image transport.
 - [x] 22.3 Compose that loader unconditionally in every Workspace Agent Tool snapshot and remove the unused optional AppHost/Desktop injection surface without adding raw-path, URI or alternate-reader success.
 - [x] 22.4 Add schema, Pi bridge and Agent application path tests for correct range, invalid top-level locator, single and batch locator materialization, representation preservation and missing/invalid source fail-visible behavior.
-- [ ] 22.5 Reuse the indexed `agent-runtime.stream-delivery/document-image-native-delivery` Evaluation case, run focused tests/typechecks and strict OpenSpec validation, then perform visible Desktop UI validation and Neko quality review; keep real-provider cost authorization under task 11.7.
+- [x] 22.5 Accept the recorded deterministic document/image gates as historical evidence and transfer
+      visible/provider image delivery to the DSH successor's perception-routing and Tool matrix; do not
+      execute the retired Pi case as current acceptance.
   - Deterministic tests, typechecks, strict OpenSpec validation, key-free Evaluation and the L3 quality review passed on 2026-08-09. A complete development-process restart restored the visible Desktop Shell and the current screenshot was inspected directly. The new provider-backed EPUB Tool chain remains blocked because task 11.7 has no explicit model/cost authorization; historical Tool failures remain visible as immutable transcript history and are not new-run evidence.
 
 ## 23. Simple Model Content References And Format Routing
@@ -201,7 +208,9 @@
 - [x] 23.4 Preserve deterministic routing for basic text Read/Write, Pi native ImageContent and exact perception Tool usage; add explicit unavailable diagnostics for unregistered audio/video/score/archive/binary processors without adding Desktop readers or try-next behavior.
 - [x] 23.5 Record the permission and approval decision in the Agent sandbox ADR without changing permission runtime behavior; require approval only for widened authority, network/costly perception, user code or consequential writes rather than ordinary bounded local reads.
 - [x] 23.6 Add contract, adapter, reopen/compact, format-routing, invalid-reference, provider-schema and image-budget tests plus Agent Evaluation disposition for GPT-compatible and DeepSeek-compatible Tool calls.
-- [ ] 23.7 Run focused tests/typechecks, strict OpenSpec validation, key-free Evaluation, visible Desktop UI validation and `neko-quality-review`; keep real-provider execution under task 11.7 unless explicit cost authorization is supplied.
+- [x] 23.7 Accept the recorded deterministic reference-routing and quality evidence as historical; transfer
+      current visible/provider execution to the DSH successor and stop this proposal as an Agent runtime
+      authority.
   - Deterministic Agent Runtime tests/typecheck, strict OpenSpec validation, key-free Evaluation and the L3 quality review completed on 2026-08-09. Visible GPT/DeepSeek Desktop execution remains under task 11.7 because no provider-cost authorization was supplied.
 
 ## 24. Structured Workspace Directory Discovery

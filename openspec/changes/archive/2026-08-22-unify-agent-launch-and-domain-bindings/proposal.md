@@ -42,3 +42,8 @@ Agent Entry Draft 与 Assistant/Workspace 会话目前使用不同的状态与�
 - `apps/neko-desktop` 仅保留 Electron sender/window/path/grant 信任边界、typed IPC、Scene composition 和 package public port wiring；Host-neutral binding resolution、catalog policy 与领域结果不得留在应用组合根。
 - 影响 `compose-desktop-workbench-scenes`、`define-character-chatroom-play-use`、`define-ai-native-interactive-world`、`clarify-desktop-capability-catalog` 与 `add-desktop-agent-evaluation-matrix` 的重叠约束，实施前必须同步消除相互矛盾的 requirement 与 verification 声明。
 - 不修改用户创作事实；现有 Conversation 记录无法满足新 canonical binding 时保留原记录并在该 Conversation 边界显示 diagnostic，不迁移、猜测或覆盖 owner。
+
+> **后继处置（2026-08-22）**：本提案已经完成的 Launch Draft、binding、content reference 与 UI
+> 约束作为历史实现证据保留；所有 Pi runtime/provider 行为验收停止。仍需执行的真实
+> visible/hidden Desktop + provider 矩阵由 `replace-pi-with-dsh-runtime-atomically` 10.4–10.8 和
+> `add-desktop-agent-evaluation-matrix` 7.9–7.10 接管。本提案不得继续作为平行 Agent authority。
