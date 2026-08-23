@@ -1,4 +1,4 @@
 interface:
-  display_name: 'Character Creator'
-  short_description: 'Create reviewable characters from prompts and evidence'
-  default_prompt: 'Use $character-creator to create a reviewable Character from my prompt and authorized references in the current creation authority.'
+  display_name: '角色创作 / Character Creator'
+  short_description: '根据提示词与证据创建可评审角色 / Create reviewable characters from prompts and evidence'
+  default_prompt: '使用 $character-creator，根据我的提示词和当前创作权限已授权的参考创建可评审角色。 / Use $character-creator to create a reviewable Character from my prompt and authorized references in the current creation authority.'
