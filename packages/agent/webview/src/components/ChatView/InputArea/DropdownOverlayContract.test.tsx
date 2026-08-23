@@ -207,6 +207,21 @@ describe('dropdown overlay presentation contract', () => {
     expect(triggerRule).toContain('max-width: 144px');
   });
 
+  it('preserves canonical light-theme button and supporting-copy contrast', () => {
+    const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
+    const lightRule = css.match(
+      /body\.neko-light,[\s\S]*?body\[data-neko-theme-kind='neko-light'\]\s*\{(?<body>[^}]+)\}/,
+    )?.groups?.body;
+    const buttonRule = css.match(/\.neko-button\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const controlRule = css.match(/\.agent-control-chip\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+
+    expect(lightRule).toContain('--agent-empty-copy: var(--agent-fg-secondary)');
+    expect(lightRule).toContain('--agent-empty-muted: var(--agent-fg-muted)');
+    expect(lightRule).not.toContain('var(--agent-fg) 32%');
+    expect(buttonRule).toContain('var(--neko-button-background, var(--agent-accent))');
+    expect(controlRule).toContain('var(--neko-button-secondaryForeground');
+  });
+
   it('keeps the Desktop composer centered and elevated above the Main conversation surface', () => {
     const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
     const desktopDockRule = css.match(/\[data-presentation='desktop-dock'\]\s*\{(?<body>[^}]+)\}/)

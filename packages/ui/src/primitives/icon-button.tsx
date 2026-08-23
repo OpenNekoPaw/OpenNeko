@@ -17,7 +17,7 @@ const sizeClassNames = {
 
 const variantClassNames = {
   default:
-    'bg-[var(--neko-accent)] text-[var(--neko-button-foreground)] hover:bg-[var(--neko-button-hoverBackground,var(--neko-accent))]',
+    'bg-[var(--neko-button-background,var(--neko-accent))] text-[var(--neko-button-foreground)] hover:bg-[var(--neko-button-hoverBackground,var(--neko-button-background,var(--neko-accent)))]',
   ghost: 'bg-transparent text-[var(--neko-foreground)] hover:bg-[var(--neko-hover)]',
   secondary:
     'bg-[var(--neko-surface)] text-[var(--neko-foreground)] border border-[var(--neko-border)] hover:bg-[var(--neko-hover)]',

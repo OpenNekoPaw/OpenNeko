@@ -42,6 +42,12 @@ describe('Character Webview architecture boundary', () => {
     expect(detail?.groups?.body).toMatch(/border-radius\s*:\s*0/u);
     expect(detail?.groups?.body).toMatch(/overflow\s*:\s*visible/u);
     expect(style).toMatch(/\.character-management--detail\s*\{[^}]*overflow-y\s*:\s*auto/u);
+    expect(style).toMatch(
+      /\.character-management__(?:hero-actions button\.is-primary,[\s\S]*?|hero-copy button)\s*\{[^}]*background:\s*var\(--neko-button-background/u,
+    );
+    expect(style).toMatch(
+      /\.character-management__(?:hero-actions|hero-copy) button,[\s\S]*?\{[^}]*color:\s*var\(--neko-button-secondaryForeground/u,
+    );
   });
 });
 

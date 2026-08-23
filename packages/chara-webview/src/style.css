@@ -1223,7 +1223,7 @@
   max-width: 430px;
   margin: 0;
   color: var(--neko-fg-secondary, var(--neko-descriptionForeground, #6c7178));
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
@@ -1239,16 +1239,16 @@
   border: 1px solid var(--neko-border, #d7dadd);
   border-radius: 8px;
   padding: 0 10px;
-  color: var(--neko-fg-secondary, #656a70);
-  background: var(--neko-elevated, #fff);
+  color: var(--neko-button-secondaryForeground, var(--neko-fg, #202124));
+  background: var(--neko-button-secondaryBackground, var(--neko-elevated, #fff));
 }
 
 .character-management__hero-copy button {
   margin-top: 7px;
-  border-color: var(--neko-accent, #2d6b54);
+  border-color: var(--neko-button-background, #202124);
   padding: 0 13px;
   color: var(--neko-button-foreground, #fff);
-  background: var(--neko-accent, var(--neko-button-background, #2d6b54));
+  background: var(--neko-button-background, #202124);
   font-weight: 650;
 }
 
@@ -1546,6 +1546,7 @@
 
 .character-management__template-copy small {
   color: var(--neko-fg-secondary, #656a70);
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -1631,8 +1632,8 @@
 
 .character-management__catalog-copy small,
 .character-management__catalog-copy > span {
-  color: var(--neko-fg-muted, #73777d);
-  font-size: 10px;
+  color: var(--neko-fg-secondary, #656a70);
+  font-size: 11px;
 }
 
 .character-management__catalog .character-management__catalog-copy small {

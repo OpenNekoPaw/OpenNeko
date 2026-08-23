@@ -129,8 +129,14 @@
     0 12px 34px rgba(0, 0, 0, 0.17), 0 3px 10px rgba(0, 0, 0, 0.09),
     inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 5%, transparent);
   --agent-control-muted-bg: color-mix(in srgb, var(--agent-fg) 7%, transparent);
-  --agent-composer-send-bg: color-mix(in srgb, var(--agent-accent) 88%, var(--agent-fg) 12%);
-  --agent-composer-send-border: color-mix(in srgb, var(--agent-accent) 72%, transparent);
+  --agent-composer-send-bg: var(
+    --neko-button-background,
+    color-mix(in srgb, var(--agent-accent) 88%, var(--agent-fg) 12%)
+  );
+  --agent-composer-send-border: var(
+    --neko-button-background,
+    color-mix(in srgb, var(--agent-accent) 72%, transparent)
+  );
   --agent-composer-send-fg: var(--agent-accent-fg);
   --agent-tab-active-bg: color-mix(in srgb, var(--agent-accent) 18%, transparent);
   --agent-menu-bg: color-mix(
@@ -263,8 +269,8 @@ body[data-neko-theme-kind='neko-light'] {
   --agent-empty-panel-border: color-mix(in srgb, var(--agent-fg) 12%, transparent);
   --agent-empty-panel-shadow:
     0 1px 2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.68);
-  --agent-empty-copy: color-mix(in srgb, var(--agent-fg) 66%, transparent);
-  --agent-empty-muted: color-mix(in srgb, var(--agent-fg) 32%, transparent);
+  --agent-empty-copy: var(--agent-fg-secondary);
+  --agent-empty-muted: var(--agent-fg-muted);
   --agent-empty-action-bg: #ffffff;
   --agent-empty-action-border: color-mix(in srgb, var(--agent-fg) 13%, transparent);
   --agent-empty-action-hover-bg: color-mix(in srgb, var(--agent-accent) 6%, #ffffff 94%);
@@ -310,7 +316,7 @@ body {
 
 /* Compact workbench buttons */
 .neko-button {
-  background-color: var(--agent-accent);
+  background-color: var(--neko-button-background, var(--agent-accent));
   color: var(--agent-accent-fg);
   border: 1px solid transparent;
   padding: 5px 14px;
@@ -322,11 +328,15 @@ body {
     background-color 0.15s ease,
     box-shadow 0.15s ease,
     opacity 0.15s ease;
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--agent-accent) 22%, transparent);
+  box-shadow: 0 2px 10px
+    color-mix(in srgb, var(--neko-button-background, var(--agent-accent)) 22%, transparent);
 }
 
 .neko-button:hover {
-  background-color: color-mix(in srgb, var(--agent-accent) 88%, #ffffff 12%);
+  background-color: var(
+    --neko-button-hoverBackground,
+    color-mix(in srgb, var(--neko-button-background, var(--agent-accent)) 88%, #ffffff 12%)
+  );
 }
 
 .neko-button:focus {
@@ -2697,7 +2707,7 @@ body {
   padding: 3px 6px;
   border: 1px solid transparent;
   border-radius: 6px;
-  color: var(--neko-descriptionForeground);
+  color: var(--neko-button-secondaryForeground, var(--agent-fg-secondary));
   font-size: 11px;
   line-height: 16px;
   white-space: nowrap;
@@ -2731,7 +2741,7 @@ body {
 }
 
 .agent-control-chip-muted {
-  opacity: 0.62;
+  opacity: 0.78;
 }
 
 .agent-control-chip-static {
@@ -3556,7 +3566,7 @@ body {
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  color: var(--neko-descriptionForeground);
+  color: var(--neko-button-secondaryForeground, var(--agent-fg-secondary));
   cursor: pointer;
   transition:
     background-color 0.15s ease,
