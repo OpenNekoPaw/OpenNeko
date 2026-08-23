@@ -16,29 +16,47 @@ import {
 const now = '2026-08-10T10:00:00.000Z';
 
 describe('World package Webview roots', () => {
-  it('renders the canonical card-only empty catalog without fabricating an active World', () => {
+  it('renders the canonical card-only empty catalog without fabricating an active World', async () => {
     const onImport = vi.fn();
-    render(
+    const onStartFromTemplate = vi.fn();
+    const reload = vi.fn(async () => undefined);
+    const { container } = render(
       <WorldManagementCatalogRoot
-        actions={{ onImport }}
+        actions={{ onImport, onStartFromTemplate }}
         locale="en"
         onSelect={vi.fn()}
         runtime={{
           loadState: { kind: 'ready', catalog: { ...managementCatalog(), items: [] } },
-          reload: vi.fn(async () => undefined),
+          reload,
           readDetail: vi.fn(async () => managementDetail()),
         }}
       />,
     );
 
+    expect(screen.getByRole('heading', { name: 'Worlds' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'My Worlds' })).toBeTruthy();
+    expect(screen.getByLabelText('0 worlds')).toBeTruthy();
     expect(screen.getByText('Import your first World package')).toBeTruthy();
+    expect(container.querySelector('.world-management__hero-visual')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Create from a World template' })).toBeTruthy();
+    const template = container.querySelector<HTMLButtonElement>(
+      '[data-world-template="world-bible"]',
+    );
+    if (!template) throw new Error('World catalog fixture requires the World Bible.');
     expect(screen.queryByText('Archive City')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Quick generate' })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Search worlds'), { target: { value: 'archive' } });
+    await waitFor(() =>
+      expect(reload).toHaveBeenCalledWith({ search: 'archive', sort: 'recently-updated' }),
+    );
     fireEvent.click(screen.getAllByRole('button', { name: 'Import package' })[0]!);
     expect(onImport).toHaveBeenCalledOnce();
+    fireEvent.click(template);
+    expect(onStartFromTemplate).toHaveBeenCalledOnce();
   });
 
   it('keeps an invalid card visible beside valid siblings', () => {
+    const onSelect = vi.fn();
     const catalog: WorldManagementCatalogProjection = {
       ...managementCatalog(),
       items: [
@@ -52,9 +70,9 @@ describe('World package Webview roots', () => {
     };
     const { container } = render(
       <WorldManagementCatalogRoot
-        actions={{ onImport: vi.fn() }}
+        actions={{ onImport: vi.fn(), onStartFromTemplate: vi.fn() }}
         locale="en"
-        onSelect={vi.fn()}
+        onSelect={onSelect}
         runtime={{
           loadState: { kind: 'ready', catalog },
           reload: vi.fn(async () => undefined),
@@ -64,6 +82,9 @@ describe('World package Webview roots', () => {
     );
 
     expect(screen.getByRole('button', { name: /Archive City/u })).toBeTruthy();
+    expect(screen.getByLabelText('2 worlds')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Archive City/u }));
+    expect(onSelect).toHaveBeenCalledWith('global-world-a');
     expect(screen.getByText('World project file cannot be decoded.')).toBeTruthy();
     expect(container.querySelectorAll('[data-world-management-invalid-card="true"]')).toHaveLength(
       1,

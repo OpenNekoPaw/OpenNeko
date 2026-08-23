@@ -7,7 +7,16 @@ import type {
   WorldManagementVersionSummary,
   WorldPortableImportPreview,
 } from '@neko/world/contracts';
-import { EmptyState, GridIcon, RefreshIcon, SearchIcon, WarningIcon } from '@neko/ui';
+import {
+  CubeIcon,
+  EmptyState,
+  GridIcon,
+  PackageIcon,
+  PanoramaIcon,
+  RefreshIcon,
+  SearchIcon,
+  WarningIcon,
+} from '@neko/ui';
 import type { SupportedLocale } from '@neko/ui/i18n';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -27,6 +36,10 @@ export type WorldDetailSelection = { readonly kind: 'global'; readonly globalWor
 
 export interface WorldManagementCreateActions {
   readonly onImport: () => void;
+}
+
+interface WorldManagementCatalogActions extends WorldManagementCreateActions {
+  readonly onStartFromTemplate: () => void;
 }
 
 export interface WorldManagementDetailActions extends WorldManagementCreateActions {
@@ -250,7 +263,7 @@ export function WorldManagementCatalogRoot({
   runtime,
   selectedGlobalWorldId,
 }: {
-  readonly actions: WorldManagementCreateActions;
+  readonly actions: WorldManagementCatalogActions;
   readonly locale: SupportedLocale;
   readonly onSelect: (globalWorldId: string) => void;
   readonly runtime: WorldManagementRuntime;
@@ -271,153 +284,223 @@ export function WorldManagementCatalogRoot({
       className="world-management world-management--catalog"
       data-world-management-catalog-root="true"
     >
-      <header className="world-management__header">
-        <div className="world-management__header-copy">
-          <span>{text(locale, '世界管理', 'World management')}</span>
-          <h1>{text(locale, '世界', 'Worlds')}</h1>
-          <p>
-            {text(
-              locale,
-              '管理可用于互动的全局世界版本与运行记录。',
-              'Manage global World versions and their runtime history.',
-            )}
-          </p>
-        </div>
-        <div className="world-management__header-actions">
-          <button className="is-primary" type="button" onClick={actions.onImport}>
-            <span>{text(locale, '导入世界包', 'Import package')}</span>
-          </button>
-        </div>
-      </header>
+      <div className="world-management__content">
+        <header className="world-management__hero">
+          <div className="world-management__hero-copy">
+            <h1>{text(locale, '世界', 'Worlds')}</h1>
+            <p>
+              {text(
+                locale,
+                '管理可用于互动的全局世界版本与运行记录。',
+                'Manage global World versions and their runtime history.',
+              )}
+            </p>
+            <button type="button" onClick={actions.onImport}>
+              <PackageIcon size={15} />
+              <span>{text(locale, '导入世界包', 'Import package')}</span>
+            </button>
+          </div>
+          <div className="world-management__hero-visual" aria-hidden="true">
+            <span className="world-management__hero-connector" />
+            <span className="world-management__hero-tile is-world">
+              <GridIcon size={25} />
+            </span>
+            <span className="world-management__hero-tile is-environment">
+              <PanoramaIcon size={23} />
+            </span>
+            <span className="world-management__hero-tile is-object">
+              <CubeIcon size={21} />
+            </span>
+          </div>
+        </header>
 
-      <div className="world-management__toolbar">
-        <label className="world-management__search">
-          <SearchIcon size={16} />
-          <input
-            aria-label={text(locale, '搜索世界', 'Search worlds')}
-            placeholder={text(locale, '搜索世界', 'Search worlds')}
-            value={search}
-            onChange={(event) => setSearch(event.currentTarget.value)}
-          />
-        </label>
-        <select
-          aria-label={text(locale, '世界排序', 'World sort')}
-          value={sort}
-          onChange={(event) =>
-            setSort(event.currentTarget.value === 'title' ? 'title' : 'recently-updated')
-          }
-        >
-          <option value="recently-updated">{text(locale, '最近更新', 'Recently updated')}</option>
-          <option value="title">{text(locale, '名称', 'Title')}</option>
-        </select>
-        <button type="button" onClick={actions.onImport}>
-          {text(locale, '导入', 'Import')}
-        </button>
-        <button
-          aria-label={text(locale, '刷新世界', 'Refresh worlds')}
-          disabled={runtime.loadState.kind === 'loading'}
-          title={text(locale, '刷新', 'Refresh')}
-          type="button"
-          onClick={() => void runtime.reload(query)}
-        >
-          <RefreshIcon size={16} />
-        </button>
-      </div>
-
-      {runtime.loadState.kind === 'idle' || runtime.loadState.kind === 'loading' ? (
-        <ManagementStatus>
-          {text(locale, '正在读取世界资料...', 'Loading worlds...')}
-        </ManagementStatus>
-      ) : runtime.loadState.kind === 'failed' ? (
-        <ManagementStatus error>
-          <span>{runtime.loadState.message}</span>
-          <button type="button" onClick={() => void runtime.reload(query)}>
-            {text(locale, '重试', 'Retry')}
-          </button>
-        </ManagementStatus>
-      ) : (
-        <div className="world-management__catalog-grid" data-world-management-card-catalog="true">
-          {catalog?.items.length === 0 ? (
-            <EmptyState
-              fill
-              icon={<GridIcon size={22} />}
-              title={
-                search
-                  ? text(locale, '没有匹配的世界', 'No matching worlds')
-                  : text(locale, '导入第一个世界包', 'Import your first World package')
-              }
-              description={
-                search
-                  ? text(locale, '尝试更换搜索内容。', 'Try another search.')
-                  : text(
-                      locale,
-                      '工作区世界同步或 ZIP 导入后会显示在这里。',
-                      'Worlds appear here after Workspace synchronization or ZIP import.',
-                    )
-              }
-              action={
-                search ? undefined : (
-                  <button type="button" onClick={actions.onImport}>
-                    {text(locale, '导入世界包', 'Import package')}
-                  </button>
-                )
-              }
-            />
-          ) : null}
-          {catalog?.items.map((item) =>
-            item.status === 'invalid' ? (
-              <article
-                className="world-management__world-card is-invalid"
-                data-world-management-invalid-card="true"
-                key={item.globalWorldId}
+        <section className="world-management__collection" aria-labelledby="my-worlds-heading">
+          <header className="world-management__collection-header">
+            <div className="world-management__collection-title">
+              <h2 id="my-worlds-heading">{text(locale, '我的世界', 'My Worlds')}</h2>
+              <span
+                aria-label={text(
+                  locale,
+                  `${catalog?.items.length ?? 0} 个世界`,
+                  `${catalog?.items.length ?? 0} worlds`,
+                )}
               >
-                <span className="world-management__world-icon">
-                  <WarningIcon size={19} />
-                </span>
-                <div className="world-management__world-card-copy">
-                  <strong>{item.globalWorldId}</strong>
-                  <p>{item.message}</p>
-                  <span>{text(locale, '全局目录', 'Global catalog')}</span>
-                </div>
-              </article>
-            ) : (
+                {catalog?.items.length ?? 0}
+              </span>
+            </div>
+            <div className="world-management__controls">
+              <label className="world-management__search">
+                <SearchIcon size={16} />
+                <input
+                  aria-label={text(locale, '搜索世界', 'Search worlds')}
+                  placeholder={text(locale, '搜索世界', 'Search worlds')}
+                  value={search}
+                  onChange={(event) => setSearch(event.currentTarget.value)}
+                />
+              </label>
+              <select
+                aria-label={text(locale, '世界排序', 'World sort')}
+                value={sort}
+                onChange={(event) =>
+                  setSort(event.currentTarget.value === 'title' ? 'title' : 'recently-updated')
+                }
+              >
+                <option value="recently-updated">
+                  {text(locale, '最近更新', 'Recently updated')}
+                </option>
+                <option value="title">{text(locale, '名称', 'Title')}</option>
+              </select>
               <button
-                aria-pressed={item.globalWorldId === selectedGlobalWorldId}
-                className="world-management__world-card"
-                data-world-management-world-card="true"
-                key={item.globalWorldId}
+                aria-label={text(locale, '刷新世界', 'Refresh worlds')}
+                disabled={runtime.loadState.kind === 'loading'}
+                title={text(locale, '刷新', 'Refresh')}
                 type="button"
-                onClick={() => onSelect(item.globalWorldId)}
+                onClick={() => void runtime.reload(query)}
               >
-                <span className="world-management__world-icon">
-                  <GridIcon size={20} />
-                </span>
-                <span className="world-management__world-card-copy">
-                  <span className="world-management__world-card-heading">
-                    <strong>{item.title}</strong>
-                    <span>{text(locale, '当前版本', 'Current')}</span>
-                  </span>
-                  <p>{item.summary || text(locale, '暂无世界简介', 'No world summary')}</p>
-                  <span className="world-management__world-card-meta">
-                    <span>{text(locale, '全局目录', 'Global catalog')}</span>
-                    <span>
-                      {item.versionCount} {text(locale, '个版本', 'versions')}
-                    </span>
-                    <span>
-                      {item.runtimeCount} {text(locale, '次运行', 'runs')}
-                    </span>
-                    {item.attentionCount > 0 ? (
-                      <span className="is-attention">
-                        {item.attentionCount} {text(locale, '项待处理', 'need attention')}
-                      </span>
-                    ) : null}
-                  </span>
-                </span>
+                <RefreshIcon size={16} />
               </button>
-            ),
+            </div>
+          </header>
+
+          {runtime.loadState.kind === 'idle' || runtime.loadState.kind === 'loading' ? (
+            <ManagementStatus>
+              {text(locale, '正在读取世界资料...', 'Loading worlds...')}
+            </ManagementStatus>
+          ) : runtime.loadState.kind === 'failed' ? (
+            <ManagementStatus error>
+              <span>{runtime.loadState.message}</span>
+              <button type="button" onClick={() => void runtime.reload(query)}>
+                {text(locale, '重试', 'Retry')}
+              </button>
+            </ManagementStatus>
+          ) : (
+            <div
+              className="world-management__catalog-grid"
+              data-world-management-card-catalog="true"
+            >
+              {catalog?.items.length === 0 ? (
+                <EmptyState
+                  fill
+                  icon={<GridIcon size={22} />}
+                  title={
+                    search
+                      ? text(locale, '没有匹配的世界', 'No matching worlds')
+                      : text(locale, '导入第一个世界包', 'Import your first World package')
+                  }
+                  description={
+                    search
+                      ? text(locale, '尝试更换搜索内容。', 'Try another search.')
+                      : text(
+                          locale,
+                          '工作区世界同步或 ZIP 导入后会显示在这里。',
+                          'Worlds appear here after Workspace synchronization or ZIP import.',
+                        )
+                  }
+                  action={
+                    search ? undefined : (
+                      <button type="button" onClick={actions.onImport}>
+                        {text(locale, '导入世界包', 'Import package')}
+                      </button>
+                    )
+                  }
+                />
+              ) : null}
+              {catalog?.items.map((item) =>
+                item.status === 'invalid' ? (
+                  <article
+                    className="world-management__world-card is-invalid"
+                    data-world-management-invalid-card="true"
+                    key={item.globalWorldId}
+                  >
+                    <span className="world-management__world-icon">
+                      <WarningIcon size={19} />
+                    </span>
+                    <div className="world-management__world-card-copy">
+                      <strong>{item.globalWorldId}</strong>
+                      <p>{item.message}</p>
+                      <span>{text(locale, '全局目录', 'Global catalog')}</span>
+                    </div>
+                  </article>
+                ) : (
+                  <button
+                    aria-pressed={item.globalWorldId === selectedGlobalWorldId}
+                    className="world-management__world-card"
+                    data-world-management-world-card="true"
+                    key={item.globalWorldId}
+                    type="button"
+                    onClick={() => onSelect(item.globalWorldId)}
+                  >
+                    <span className="world-management__world-icon">
+                      <GridIcon size={20} />
+                    </span>
+                    <span className="world-management__world-card-copy">
+                      <span className="world-management__world-card-heading">
+                        <strong>{item.title}</strong>
+                        <span>{text(locale, '当前版本', 'Current')}</span>
+                      </span>
+                      <p>{item.summary || text(locale, '暂无世界简介', 'No world summary')}</p>
+                      <span className="world-management__world-card-meta">
+                        <span>{text(locale, '全局目录', 'Global catalog')}</span>
+                        <span>
+                          {item.versionCount} {text(locale, '个版本', 'versions')}
+                        </span>
+                        <span>
+                          {item.runtimeCount} {text(locale, '次运行', 'runs')}
+                        </span>
+                        {item.attentionCount > 0 ? (
+                          <span className="is-attention">
+                            {item.attentionCount} {text(locale, '项待处理', 'need attention')}
+                          </span>
+                        ) : null}
+                      </span>
+                    </span>
+                  </button>
+                ),
+              )}
+            </div>
           )}
-        </div>
-      )}
+        </section>
+
+        <section className="world-management__templates" aria-labelledby="world-templates-heading">
+          <h2 id="world-templates-heading">
+            {text(locale, '从世界模板创建', 'Create from a World template')}
+          </h2>
+          <div className="world-management__template-grid">
+            <button
+              className="world-management__template-card"
+              data-world-template="world-bible"
+              type="button"
+              onClick={actions.onStartFromTemplate}
+            >
+              <span className="world-management__template-preview" aria-hidden="true">
+                <span className="world-management__template-pattern">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                <span className="world-management__template-icon">
+                  <GridIcon size={26} />
+                </span>
+              </span>
+              <span className="world-management__template-body">
+                <span className="world-management__template-copy">
+                  <strong>{text(locale, '建立世界设定集', 'Build a world bible')}</strong>
+                  <small>
+                    {text(
+                      locale,
+                      '梳理地理、规则、势力、历史与互动基础。',
+                      'Define geography, rules, factions, history, and interaction foundations.',
+                    )}
+                  </small>
+                </span>
+                <span className="world-management__template-action">
+                  {text(locale, '开始创作', 'Start creating')}
+                </span>
+              </span>
+            </button>
+          </div>
+        </section>
+      </div>
     </section>
   );
 }

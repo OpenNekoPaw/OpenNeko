@@ -233,49 +233,202 @@
   outline-offset: 1px;
 }
 
-.world-management__header {
+.world-management--catalog {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.world-management__content {
+  display: grid;
+  width: min(1118px, calc(100% - 72px));
+  margin: 0 auto;
+  align-content: start;
+  gap: 36px;
+  padding: clamp(48px, 7vh, 76px) 0 48px;
+}
+
+.world-management__hero {
+  position: relative;
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 22px;
-}
-
-.world-management__header-copy {
-  min-width: 0;
-}
-
-.world-management__header-copy > span {
-  color: var(--neko-fg-muted, #73777d);
-  font-size: 10px;
-  font-weight: 650;
-  text-transform: uppercase;
-}
-
-.world-management__header h1 {
-  margin: 3px 0 0;
-  font-size: 27px;
-  line-height: 1.2;
-}
-
-.world-management__header-copy > p {
-  max-width: 620px;
-  margin: 7px 0 0;
-  color: var(--neko-fg-secondary, var(--neko-descriptionForeground, #6c7178));
-}
-
-.world-management__toolbar {
-  display: flex;
+  min-height: 184px;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  justify-content: space-between;
+  gap: 36px;
+  overflow: hidden;
+  padding: 8px 4px 18px;
+}
+
+.world-management__hero-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+}
+
+.world-management__hero-copy h1 {
+  margin: 0;
+  color: var(--neko-fg, #202124);
+  font-size: 24px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.world-management__hero-copy p {
+  max-width: 430px;
+  margin: 0;
+  color: var(--neko-fg-secondary, var(--neko-descriptionForeground, #6c7178));
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.world-management__hero-copy button,
+.world-management__controls > button,
+.world-management__controls > select,
+.world-management__primary-actions button,
+.world-management__version-list button,
+.world-management__status button,
+.world-management__empty-actions button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--neko-border, #d7dadd);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--neko-fg-secondary, #656a70);
+  background: var(--neko-elevated, #fff);
+}
+
+.world-management__hero-copy button {
+  margin-top: 7px;
+  border-color: var(--neko-accent, #2d6b54);
+  color: #fff;
+  background: var(--neko-accent, #2d6b54);
+  font-weight: 650;
+}
+
+.world-management__hero-visual {
+  position: relative;
+  width: clamp(300px, 40%, 420px);
+  height: 152px;
+  flex: 0 1 420px;
+}
+
+.world-management__hero-visual::before,
+.world-management__hero-visual::after {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--neko-accent, #2d6b54) 16%, var(--neko-border, #d7dadd));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--neko-accent, #2d6b54) 5%, transparent);
+  content: '';
+}
+
+.world-management__hero-visual::before {
+  inset: 20px 20px 18px 54px;
+  transform: rotate(-2deg);
+}
+
+.world-management__hero-visual::after {
+  right: 0;
+  bottom: 5px;
+  width: 92px;
+  height: 58px;
+  transform: rotate(7deg);
+}
+
+.world-management__hero-connector {
+  position: absolute;
+  z-index: 1;
+  top: 76px;
+  right: 54px;
+  left: 56px;
+  border-top: 1px dashed
+    color-mix(in srgb, var(--neko-accent, #2d6b54) 42%, var(--neko-border, #d7dadd));
+}
+
+.world-management__hero-tile {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--neko-accent, #2d6b54) 22%, var(--neko-border, #d7dadd));
+  border-radius: 15px;
+  color: var(--neko-accent, #2d6b54);
+  background: color-mix(in srgb, var(--neko-elevated, #fff) 94%, transparent);
+  box-shadow: var(--neko-shadow-sm, 0 2px 8px rgb(0 0 0 / 10%));
+}
+
+.world-management__hero-tile.is-world {
+  top: 14px;
+  left: 46px;
+}
+
+.world-management__hero-tile.is-environment {
+  top: 49px;
+  left: calc(50% - 27px);
+}
+
+.world-management__hero-tile.is-object {
+  right: 34px;
+  bottom: 20px;
+}
+
+.world-management__collection {
+  display: grid;
+  gap: 14px;
+}
+
+.world-management__collection-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.world-management__collection-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.world-management__collection-title h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 690;
+}
+
+.world-management__collection-title > span {
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--neko-fg-secondary, #656a70);
+  background: color-mix(in srgb, var(--neko-fg, #202124) 7%, transparent);
+  font-size: 10px;
+  text-align: center;
+}
+
+.world-management__controls {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .world-management__search {
   display: flex;
   min-width: 0;
-  min-height: 38px;
-  flex: 1;
+  min-height: 36px;
+  width: clamp(220px, 24vw, 288px);
+  flex: 0 1 288px;
   align-items: center;
   gap: 7px;
   border: 1px solid var(--neko-border, #d7dadd);
@@ -294,43 +447,10 @@
   background: transparent;
 }
 
-.world-management--catalog {
-  width: 100%;
-  margin: 0;
-  padding: var(--neko-management-content-top, clamp(66px, 10vh, 104px))
-    var(--neko-management-content-inline, 32px) 48px;
-  overflow-y: auto;
-}
-
-.world-management--catalog > * {
-  width: min(1020px, 100%);
-  margin-inline: auto;
-}
-
-.world-management__header-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-}
-
-.world-management__header-actions button,
-.world-management__toolbar > button,
-.world-management__toolbar > select,
-.world-management__primary-actions button,
-.world-management__version-list button,
-.world-management__status button,
-.world-management__empty-actions button {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 1px solid var(--neko-border, #d7dadd);
-  border-radius: 8px;
-  padding: 0 12px;
-  color: var(--neko-fg-secondary, #656a70);
-  background: var(--neko-elevated, #fff);
+.world-management__controls > button {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
 }
 
 .world-management__primary-actions button:first-child {
@@ -343,8 +463,9 @@
 .world-management__catalog-grid {
   display: grid;
   min-height: 220px;
-  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 280px));
   align-content: start;
+  justify-content: start;
   gap: 12px;
 }
 
@@ -352,30 +473,178 @@
   grid-column: 1 / -1;
 }
 
-.world-management__world-card {
+.world-management__templates {
   display: grid;
+  gap: 14px;
+}
+
+.world-management__templates > h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 690;
+}
+
+.world-management__template-grid {
+  display: grid;
+  width: 100%;
+  align-content: start;
+  grid-template-columns: repeat(auto-fit, minmax(min(236px, 100%), 280px));
+  justify-content: start;
+  gap: 18px;
+}
+
+.world-management__template-card {
+  display: flex;
   min-width: 0;
-  min-height: 148px;
-  grid-template-columns: 42px minmax(0, 1fr);
-  align-items: start;
-  gap: 12px;
+  min-height: 250px;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
   border: 1px solid var(--neko-border, #d7dadd);
-  border-radius: 10px;
-  padding: 16px;
-  color: inherit;
-  background: var(--neko-surface, #fff);
+  border-radius: 13px;
+  color: var(--neko-fg, #202124);
+  background: var(--neko-elevated, var(--neko-surface, #fff));
   text-align: left;
 }
 
+.world-management__template-card:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--neko-accent, #2d6b54) 34%, var(--neko-border, #d7dadd));
+  background: color-mix(
+    in srgb,
+    var(--neko-accent, #2d6b54) 3%,
+    var(--neko-elevated, var(--neko-surface, #fff))
+  );
+  box-shadow: var(--neko-shadow-sm, 0 2px 8px rgb(0 0 0 / 10%));
+}
+
+.world-management__template-preview {
+  position: relative;
+  display: grid;
+  width: 100%;
+  aspect-ratio: 16 / 8;
+  flex: 0 0 auto;
+  overflow: hidden;
+  place-items: center;
+  color: var(--neko-accent, #2d6b54);
+  background:
+    linear-gradient(
+      120deg,
+      transparent 44%,
+      color-mix(in srgb, var(--neko-accent, #2d6b54) 10%, transparent) 44% 57%,
+      transparent 57%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--neko-fg, #202124) 4%, transparent),
+      var(--neko-elevated, #fff)
+    );
+}
+
+.world-management__template-pattern {
+  position: absolute;
+  inset: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  opacity: 0.55;
+}
+
+.world-management__template-pattern i {
+  align-self: end;
+  height: 34%;
+  border: 1px solid color-mix(in srgb, var(--neko-accent, #2d6b54) 20%, var(--neko-border));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--neko-elevated, #fff) 76%, transparent);
+}
+
+.world-management__template-pattern i:nth-child(2) {
+  align-self: center;
+  height: 48%;
+}
+
+.world-management__template-pattern i:nth-child(3) {
+  align-self: start;
+  height: 40%;
+}
+
+.world-management__template-icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--neko-accent, #2d6b54) 22%, var(--neko-border));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--neko-elevated, #fff) 90%, transparent);
+  box-shadow: var(--neko-shadow-sm, 0 2px 8px rgb(0 0 0 / 10%));
+}
+
+.world-management__template-body {
+  display: grid;
+  min-height: 112px;
+  flex: 1 1 auto;
+  gap: 12px;
+  padding: 15px 16px;
+}
+
+.world-management__template-copy {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.world-management__template-copy small {
+  color: var(--neko-fg-secondary, #656a70);
+  line-height: 1.5;
+}
+
+.world-management__template-action {
+  align-self: end;
+  color: var(--neko-accent, #2d6b54);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.world-management__world-card {
+  display: grid;
+  min-width: 0;
+  min-height: 112px;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--neko-border, #d7dadd) 78%, transparent);
+  border-radius: 13px;
+  padding: 12px;
+  color: inherit;
+  background: var(--neko-elevated, var(--neko-surface, #fff));
+  text-align: left;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
 button.world-management__world-card:hover {
-  border-color: color-mix(in srgb, var(--neko-accent, #2d6b54) 35%, var(--neko-border));
-  background: color-mix(in srgb, var(--neko-accent, #2d6b54) 3%, var(--neko-surface, #fff));
+  border-color: color-mix(in srgb, var(--neko-accent, #2d6b54) 34%, var(--neko-border));
+  background: color-mix(
+    in srgb,
+    var(--neko-accent, #2d6b54) 3%,
+    var(--neko-elevated, var(--neko-surface, #fff))
+  );
+  box-shadow: var(--neko-shadow-sm, 0 2px 8px rgb(0 0 0 / 10%));
 }
 
 .world-management__world-card[aria-pressed='true'] {
-  border-color: color-mix(in srgb, var(--neko-accent, #2d6b54) 65%, var(--neko-border));
-  background: color-mix(in srgb, var(--neko-accent, #2d6b54) 6%, var(--neko-surface, #fff));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--neko-accent, #2d6b54) 22%, transparent);
+  border-color: color-mix(in srgb, var(--neko-accent, #2d6b54) 58%, var(--neko-border));
+  background: color-mix(
+    in srgb,
+    var(--neko-accent, #2d6b54) 7%,
+    var(--neko-elevated, var(--neko-surface, #fff))
+  );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--neko-accent, #2d6b54) 20%, transparent),
+    var(--neko-shadow-sm, 0 2px 8px rgb(0 0 0 / 10%));
 }
 
 .world-management__world-card.is-invalid {
@@ -384,13 +653,13 @@ button.world-management__world-card:hover {
 
 .world-management__world-icon {
   display: inline-grid;
-  width: 42px;
-  height: 42px;
+  width: 32px;
+  height: 32px;
   place-items: center;
-  border: 1px solid var(--neko-border, #d7dadd);
-  border-radius: 9px;
-  color: var(--neko-fg-secondary, #656a70);
-  background: var(--neko-bg, var(--neko-editor-background, #f7f8f8));
+  border: 0;
+  border-radius: 50%;
+  color: var(--neko-accent, var(--neko-fg-secondary, #656a70));
+  background: color-mix(in srgb, var(--neko-accent, #2d6b54) 12%, transparent);
 }
 
 .world-management__world-card.is-invalid .world-management__world-icon {
@@ -406,7 +675,7 @@ button.world-management__world-card:hover {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .world-management__world-card-heading {
@@ -436,7 +705,7 @@ button.world-management__world-card:hover {
 
 .world-management__world-card-copy p {
   display: -webkit-box;
-  min-height: 34px;
+  min-height: 2.9em;
   margin: 0;
   overflow: hidden;
   color: var(--neko-fg-muted, #73777d);
@@ -763,21 +1032,27 @@ button.world-management__world-card:hover {
 }
 
 @media (max-width: 760px) {
-  .world-management--catalog {
-    padding: 24px 16px 36px;
+  .world-management__content {
+    width: min(100% - 32px, 1118px);
+    padding: 40px 0 36px;
   }
 
-  .world-management__header,
-  .world-management__header-actions {
-    align-items: stretch;
+  .world-management__collection-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
-  .world-management__header-actions {
+  .world-management__controls {
+    display: grid;
     width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
   }
 
-  .world-management__header-actions button {
-    flex: 1;
+  .world-management__search {
+    width: 100%;
+    flex-basis: 100%;
+    grid-column: 1 / -1;
   }
 
   .world-management__facts {
@@ -795,8 +1070,9 @@ button.world-management__world-card:hover {
 }
 
 @container (max-width: 720px) {
-  .world-management--catalog {
-    padding: 40px 16px 36px;
+  .world-management__content {
+    width: min(100% - 32px, 1118px);
+    padding: 40px 0 36px;
   }
 
   .world-management__detail-section {
@@ -809,8 +1085,26 @@ button.world-management__world-card:hover {
 }
 
 @container (max-width: 460px) {
-  .world-management--catalog {
-    padding: 28px 12px 32px;
+  .world-management__content {
+    width: min(100% - 24px, 1118px);
+    padding: 28px 0 32px;
+  }
+
+  .world-management__hero {
+    min-height: 0;
+    padding-bottom: 0;
+  }
+
+  .world-management__hero-visual {
+    display: none;
+  }
+
+  .world-management__controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .world-management__controls > select {
+    min-width: 0;
   }
 
   .world-management__detail-section {

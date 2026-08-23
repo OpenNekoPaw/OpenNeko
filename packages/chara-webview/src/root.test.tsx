@@ -59,9 +59,14 @@ describe('Character Management surfaces', () => {
     expect(
       screen.getByText('Manage characters used in creation, dialogue, and interaction.'),
     ).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'My Characters' })).toBeTruthy();
+    expect(screen.getByLabelText('0 characters')).toBeTruthy();
     await waitFor(() => {
       expect(container.querySelector('[data-neko-empty-state="fill"] svg')).not.toBeNull();
     });
+    expect(container.querySelector('.character-management__hero-visual')).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Create from a Character template' })).toBeTruthy();
+    expect(container.querySelector('[data-character-template="character-kit"]')).not.toBeNull();
     expect(container.querySelector('.character-management__view-switcher')).toBeNull();
     expect(screen.getByText('No characters yet. Import the first package.')).toBeTruthy();
     expect(screen.queryByRole('navigation', { name: 'Character workspace views' })).toBeNull();
@@ -398,6 +403,24 @@ describe('Character Management surfaces', () => {
     expect(screen.queryByRole('button', { name: 'Create manually' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Import package' }));
     expect(onImport).toHaveBeenCalledOnce();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('starts from the exact Character Kit quick start without creating a local record', async () => {
+    const execute = vi.fn();
+    const onStartFromTemplate = vi.fn();
+    const { container } = render(
+      <Harness host={createHost(execute)} onStartFromTemplate={onStartFromTemplate} />,
+    );
+    await screen.findByRole('heading', { name: 'Characters' });
+
+    const template = container.querySelector<HTMLButtonElement>(
+      '[data-character-template="character-kit"]',
+    );
+    if (!template) throw new Error('Character catalog fixture requires the Character Kit.');
+    fireEvent.click(template);
+
+    expect(onStartFromTemplate).toHaveBeenCalledOnce();
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -959,10 +982,12 @@ function Harness({
   detailActions,
   host,
   onImport,
+  onStartFromTemplate = () => undefined,
 }: {
   readonly detailActions?: CharacterManagementDetailActions;
   readonly host: OpenNekoDesktopCharacterBridge['characterFoundation'];
   readonly onImport?: () => void;
+  readonly onStartFromTemplate?: () => void;
 }): JSX.Element {
   const runtime = useCharacterManagementRuntime({ active: true, host });
   const [selection, setSelection] = useState<CharacterDetailSelection>();
@@ -971,6 +996,7 @@ function Harness({
       <CharacterCatalogSurface
         locale="en"
         onImport={onImport}
+        onStartFromTemplate={onStartFromTemplate}
         onSelect={(globalCharacterId) => setSelection({ kind: 'global', globalCharacterId })}
         runtime={runtime}
         selectedGlobalCharacterId={selection?.globalCharacterId}
