@@ -2233,14 +2233,196 @@ code {
 }
 
 .project-main-group__tabs .neko-workbench-editor-tabs {
+  width: max-content;
+  max-width: calc(100% - 32px);
   height: var(--neko-desktop-workbench-panel-header-height);
   min-height: var(--neko-desktop-workbench-panel-header-height);
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  overflow-x: auto;
+  padding-right: 2px;
   padding-block: 4px;
 }
 
 .project-main-group__tabs .neko-workbench-editor-tabs__list {
   padding-block: 0;
+}
+
+.workspace-main-quick-create__tab-trigger {
+  width: 24px;
+  height: 24px;
+  margin: 7px 8px 7px 0;
+  align-self: center;
+  flex: 0 0 auto;
+  color: var(--neko-descriptionForeground);
+}
+
+.workspace-main-quick-create__tab-trigger:hover,
+.workspace-main-quick-create__tab-trigger:focus-visible {
+  color: var(--neko-foreground);
+}
+
+.workspace-main-quick-create__empty-trigger {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 7px;
+  padding: 5px 12px;
+  border: 1px solid var(--neko-button-border, transparent);
+  border-radius: 6px;
+  color: var(--neko-button-foreground);
+  background: var(--neko-button-background);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.workspace-main-quick-create__empty-trigger:hover:not(:disabled) {
+  background: var(--neko-button-hoverBackground, var(--neko-button-background));
+}
+
+.workspace-main-quick-create__empty-trigger:disabled,
+.workspace-main-quick-create__tab-trigger:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.workspace-quick-create-popover {
+  width: min(292px, calc(100vw - 24px));
+  padding: 6px;
+}
+
+.workspace-quick-create-popover__menu,
+.workspace-quick-create-popover__form {
+  display: grid;
+  gap: 3px;
+}
+
+.workspace-quick-create-popover__target {
+  padding: 5px 8px 4px;
+  color: var(--neko-fg-secondary);
+  font-size: 10px;
+}
+
+.workspace-quick-create-popover__menu > button {
+  display: grid;
+  min-height: 32px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--neko-fg);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-quick-create-popover__menu > button:hover,
+.workspace-quick-create-popover__menu > button:focus-visible {
+  outline: 0;
+  background: var(--neko-list-hoverBackground, var(--neko-desktop-control-hover));
+}
+
+.workspace-quick-create-popover__form {
+  gap: 10px;
+  padding: 5px;
+}
+
+.workspace-quick-create-popover__form header {
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-quick-create-popover__form header strong {
+  color: var(--neko-fg);
+  font-size: 12px;
+}
+
+.workspace-quick-create-popover__form header span,
+.workspace-quick-create-popover__name > span:first-child {
+  color: var(--neko-fg-secondary);
+  font-size: 10px;
+}
+
+.workspace-quick-create-popover__name {
+  display: grid;
+  gap: 5px;
+}
+
+.workspace-quick-create-popover__name-field {
+  display: flex;
+  min-width: 0;
+  min-height: 30px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--neko-input-border, var(--neko-desktop-border-strong));
+  border-radius: 5px;
+  color: var(--neko-fg-secondary);
+  background: var(--neko-input-background, var(--neko-desktop-surface));
+}
+
+.workspace-quick-create-popover__name-field:focus-within {
+  border-color: var(--neko-focusBorder, var(--neko-accent));
+  box-shadow: 0 0 0 1px var(--neko-focusBorder, var(--neko-accent));
+}
+
+.workspace-quick-create-popover__name-field input {
+  min-width: 0;
+  min-height: 28px;
+  flex: 1 1 auto;
+  padding: 5px 7px;
+  border: 0;
+  outline: 0;
+  color: var(--neko-input-foreground, var(--neko-fg));
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+}
+
+.workspace-quick-create-popover__name-field > span {
+  padding-right: 7px;
+  font-size: 10px;
+}
+
+.workspace-quick-create-popover__diagnostic {
+  margin: -2px 0 0;
+  color: var(--neko-danger-text, var(--neko-danger));
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.workspace-quick-create-popover__form footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.workspace-quick-create-popover__form footer button {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--neko-border, var(--neko-desktop-border));
+  border-radius: 5px;
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control-hover);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.workspace-quick-create-popover__form footer button[type='submit'] {
+  border-color: var(--neko-button-border, transparent);
+  color: var(--neko-button-foreground);
+  background: var(--neko-button-background);
+}
+
+.workspace-quick-create-popover__form footer button:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .project-main-group__content {

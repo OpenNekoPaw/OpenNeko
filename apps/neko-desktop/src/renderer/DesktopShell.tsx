@@ -80,6 +80,13 @@ import { DesktopTextEditorSurface } from './DesktopTextEditorSurface';
 import { DesktopCanvasSurface } from './DesktopCanvasSurface';
 import { DesktopCutSurface } from './DesktopCutSurface';
 import {
+  WorkspaceQuickCreateControl,
+  type WorkspaceQuickCreateSubmission,
+} from './WorkspaceQuickCreateControl';
+import { executeDesktopWorkspaceQuickCreation } from './desktop-workspace-quick-creation';
+import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
+import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
+import {
   DesktopSettingsMainSurface,
   DesktopSettingsNavigationSurface,
   parseDesktopSettingsSection,
@@ -249,6 +256,13 @@ interface ShellActions {
     workbenchInstanceId: string,
     workbench: DesktopWorkbenchLayoutProjection,
   ) => void;
+  readonly onQuickCreateWorkspaceContent: (input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly workbenchInstanceId: string;
+    readonly workbench: DesktopWorkbenchLayoutProjection;
+    readonly mainGroupId: string;
+    readonly submission: WorkspaceQuickCreateSubmission;
+  }) => Promise<void>;
   readonly onCreateCutDraft: (workbenchInstanceId: string) => void;
   readonly onCloseCutView: (workbenchInstanceId: string, view: DesktopWorkbenchViewRef) => void;
   readonly onCloseWorkbenchView: (
@@ -467,6 +481,7 @@ function DesktopApplicationContent(): JSX.Element {
     async (
       scope: DesktopShellPendingScope,
       operation: () => Promise<DesktopShellProjection>,
+      options?: { readonly rethrow?: boolean },
     ): Promise<void> => {
       const finishPending = beginPending(scope);
       setDiagnostic(undefined);
@@ -484,6 +499,7 @@ function DesktopApplicationContent(): JSX.Element {
       } catch (error: unknown) {
         setDiagnostic(describeError(error));
         await refresh();
+        if (options?.rethrow) throw error;
       } finally {
         finishPending();
       }
@@ -626,6 +642,39 @@ function DesktopApplicationContent(): JSX.Element {
       void runMutation('workbench', () =>
         window.openNekoDesktop.workbench.update(workbenchInstanceId, workbench),
       );
+    },
+    onQuickCreateWorkspaceContent: async (input) => {
+      if (projection.window.workbench.workbenchInstanceId !== input.workbenchInstanceId) {
+        throw new Error(`Desktop Workbench '${input.workbenchInstanceId}' is unavailable.`);
+      }
+      let retainedDiagnostic: string | undefined;
+      await runMutation(
+        'workbench',
+        async () => {
+          const outcome = await executeDesktopWorkspaceQuickCreation(
+            {
+              requestId: `workspace-quick-create:${globalThis.crypto.randomUUID()}`,
+              identity: input.identity,
+              workbenchInstanceId: input.workbenchInstanceId,
+              workbench: input.workbench,
+              mainGroupId: input.mainGroupId,
+              kind: input.submission.kind,
+              name: input.submission.name,
+            },
+            {
+              updateWorkbench: (workbenchInstanceId, workbench) =>
+                window.openNekoDesktop.workbench.update(workbenchInstanceId, workbench),
+              search: (request) => window.openNekoDesktop.resources.search(request),
+              execute: (request) => window.openNekoDesktop.resources.execute(request),
+              getShellSnapshot: () => window.openNekoDesktop.shell.getSnapshot(),
+            },
+          );
+          retainedDiagnostic = outcome.retainedDiagnostic?.message;
+          return outcome.projection;
+        },
+        { rethrow: true },
+      );
+      if (retainedDiagnostic) setDiagnostic(retainedDiagnostic);
     },
     onCreateCutDraft: (workbenchInstanceId) => {
       void runMutation('workbench', async () => {
@@ -1124,6 +1173,7 @@ export function DesktopShellView({
     onRemoveProjects: () => undefined,
     onArchiveProjectConversations: () => undefined,
     onUpdateWorkbench: () => undefined,
+    onQuickCreateWorkspaceContent: async () => undefined,
     onCreateCutDraft: () => undefined,
     onCloseCutView: () => undefined,
     onCloseWorkbenchView: () => undefined,
@@ -2916,6 +2966,14 @@ function useContentProjectWorkbenchSlots({
   if (!tab) {
     throw new Error(`Content Project '${project.projectId}' has no Window-owned View.`);
   }
+  const resourceBrowserIdentity = createDesktopResourceBrowserIdentity({
+    projectId: project.projectId,
+    workspaceId: project.workspaceId,
+    windowId: projection.window.windowId,
+    projectViewId: tab.viewId,
+    projectViewInstanceId: tab.viewInstanceId,
+    rendererSessionId: projection.rendererSessionId,
+  });
   const primaryGroup = workbench.main.groups[0];
   if (!primaryGroup) {
     throw new Error('Desktop Workbench requires a primary Main Group.');
@@ -3069,6 +3127,7 @@ function useContentProjectWorkbenchSlots({
       previewCapability={previewCapability}
       project={project}
       projection={projection}
+      resourceBrowserIdentity={resourceBrowserIdentity}
       workbenchInstanceId={instance.workbenchInstanceId}
       workbench={workbench}
       authoringAuthority={
@@ -3113,6 +3172,7 @@ function useContentProjectWorkbenchSlots({
         previewCapability={previewCapability}
         project={project}
         projection={projection}
+        resourceBrowserIdentity={resourceBrowserIdentity}
         workbenchInstanceId={instance.workbenchInstanceId}
         workbench={workbench}
         authoringAuthority={
@@ -3249,6 +3309,7 @@ function MainViewGroupSurface({
   previewCapability,
   project,
   projection,
+  resourceBrowserIdentity,
   workbenchInstanceId,
   visible,
   workbench,
@@ -3264,6 +3325,7 @@ function MainViewGroupSurface({
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
+  readonly resourceBrowserIdentity: ResourceBrowserIdentity;
   readonly workbenchInstanceId: string;
   readonly visible: boolean;
   readonly workbench: DesktopWorkbenchLayoutProjection;
@@ -3283,6 +3345,23 @@ function MainViewGroupSurface({
   });
   const activeView = views.find((view) => view.viewId === group.activeViewId);
   const requestedTarget = activeView ? projectAuthoringItemForView(activeView, project) : undefined;
+  const quickCreate = useCallback(
+    (submission: WorkspaceQuickCreateSubmission) =>
+      actions.onQuickCreateWorkspaceContent({
+        identity: resourceBrowserIdentity,
+        workbenchInstanceId,
+        workbench,
+        mainGroupId: group.groupId,
+        submission,
+      }),
+    [
+      actions,
+      group.groupId,
+      resourceBrowserIdentity,
+      workbench,
+      workbenchInstanceId,
+    ],
+  );
   if (activeView && requestedTarget) {
     targetViews.current.set(requestedTarget.identity, activeView);
   }
@@ -3342,38 +3421,50 @@ function MainViewGroupSurface({
       panelId={`workspace:${group.groupId}`}
       tabs={
         visible ? (
-          <WorkbenchEditorTabs
-            activeId={group.activeViewId}
-            emptyLabel={t('workspace.mainTabs.empty')}
-            label={t('workspace.mainTabs.label')}
-            contextActionsRef={setContextActionsTarget}
-            tabs={views.map((view) => ({
-              id: view.viewId,
-              label: view.displayLabel,
-              closeLabel: t('workspace.mainTabs.close', { name: view.displayLabel }),
-            }))}
-            onClose={(viewId) => {
-              const view = views.find((candidate) => candidate.viewId === viewId);
-              if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
-              actions.onCloseWorkbenchView(workbenchInstanceId, workbench, view);
-            }}
-            onReorder={(sourceViewId, targetViewId) => {
-              actions.onUpdateWorkbench(
-                workbenchInstanceId,
-                reorderMainView(workbench, group.groupId, sourceViewId, targetViewId),
-              );
-            }}
-            onSelect={(viewId) => {
-              const view = views.find((candidate) => candidate.viewId === viewId);
-              if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
-              actions.onUpdateWorkbench(workbenchInstanceId, openOrFocusMainView(workbench, view));
-            }}
-          />
+          <>
+            <WorkbenchEditorTabs
+              activeId={group.activeViewId}
+              emptyLabel={t('workspace.mainTabs.empty')}
+              label={t('workspace.mainTabs.label')}
+              contextActionsRef={setContextActionsTarget}
+              tabs={views.map((view) => ({
+                id: view.viewId,
+                label: view.displayLabel,
+                closeLabel: t('workspace.mainTabs.close', { name: view.displayLabel }),
+              }))}
+              onClose={(viewId) => {
+                const view = views.find((candidate) => candidate.viewId === viewId);
+                if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
+                actions.onCloseWorkbenchView(workbenchInstanceId, workbench, view);
+              }}
+              onReorder={(sourceViewId, targetViewId) => {
+                actions.onUpdateWorkbench(
+                  workbenchInstanceId,
+                  reorderMainView(workbench, group.groupId, sourceViewId, targetViewId),
+                );
+              }}
+              onSelect={(viewId) => {
+                const view = views.find((candidate) => candidate.viewId === viewId);
+                if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
+                actions.onUpdateWorkbench(
+                  workbenchInstanceId,
+                  openOrFocusMainView(workbench, view),
+                );
+              }}
+            />
+            <WorkspaceQuickCreateControl onCreate={quickCreate} variant="tab" />
+          </>
         ) : undefined
       }
     >
       {!visible || views.length === 0 ? (
-        <EmptyMainSurface />
+        <EmptyMainSurface
+          action={
+            visible ? (
+              <WorkspaceQuickCreateControl onCreate={quickCreate} variant="empty" />
+            ) : undefined
+          }
+        />
       ) : activeView && visible ? (
         <div className="project-main-view-stack__item" data-main-view-id={activeView.viewId}>
           <ProjectAuthoringTargetSwitchRoot
@@ -3984,7 +4075,7 @@ function CreativeMainPlaceholder({
   );
 }
 
-function EmptyMainSurface(): JSX.Element {
+function EmptyMainSurface({ action }: { readonly action?: ReactNode } = {}): JSX.Element {
   const { t } = useTranslation();
   return (
     <section
@@ -3996,6 +4087,7 @@ function EmptyMainSurface(): JSX.Element {
         <GridIcon size={24} />
         <h2>{t('workspace.mainTabs.empty')}</h2>
         <p>{t('workspace.mainTabs.emptyDetail')}</p>
+        {action}
       </div>
     </section>
   );
