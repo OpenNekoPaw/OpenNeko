@@ -4,7 +4,7 @@
  * The grid follows runtime viewport pan/zoom without creating one DOM node per dot.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CanvasViewport } from '@neko/canvas-domain';
 
 const GRID_SIZE = 20;
@@ -19,6 +19,21 @@ export interface CanvasGridProps {
 
 export function CanvasGrid({ viewport, width, height }: CanvasGridProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [resolvedThemeMarker, setResolvedThemeMarker] = useState(() =>
+    typeof document === 'undefined' ? '' : (document.documentElement.dataset.nekoTheme ?? ''),
+  );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      setResolvedThemeMarker(root.dataset.nekoTheme ?? '');
+    });
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ['data-neko-theme'],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -55,7 +70,7 @@ export function CanvasGrid({ viewport, width, height }: CanvasGridProps) {
       gridColor,
       majorColor,
     });
-  }, [height, viewport, width]);
+  }, [height, resolvedThemeMarker, viewport, width]);
 
   return (
     <canvas

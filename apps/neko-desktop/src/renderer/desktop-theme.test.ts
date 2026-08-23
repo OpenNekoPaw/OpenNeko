@@ -37,6 +37,9 @@ describe('Desktop system theme', () => {
       expect(document.documentElement.style.getPropertyValue('--neko-menu-background')).toBe(
         'var(--neko-desktop-overlay)',
       );
+      expect(document.documentElement.style.getPropertyValue('--neko-fg-muted')).toBe(
+        theme === 'dark' ? '#9aa19c' : '#70706c',
+      );
     },
   );
 
@@ -54,6 +57,12 @@ describe('Desktop system theme', () => {
     );
     expect(style.getPropertyValue('--neko-list-activeSelectionBackground')).toBe('#f3f3f2');
     expect(style.getPropertyValue('--neko-focusBorder')).toBe('#6d716f');
+    expect(style.getPropertyValue('--neko-desktop-text')).toBe('#3f3f3c');
+    expect(style.getPropertyValue('--neko-desktop-text-muted')).toBe('#6b6b67');
+    expect(style.getPropertyValue('--neko-desktop-text-subtle')).toBe('#72726e');
+    expect(style.getPropertyValue('--neko-descriptionForeground')).toBe('#5f5f5b');
+    expect(style.getPropertyValue('--neko-fg-muted')).toBe('#70706c');
+    expect(style.getPropertyValue('--neko-button-background')).toBe('#20201f');
   });
 
   it('follows operating-system appearance changes and releases the listener', () => {
