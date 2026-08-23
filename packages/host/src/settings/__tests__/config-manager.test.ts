@@ -736,6 +736,64 @@ describe('ConfigManager', () => {
       });
     });
 
+    it('persists one typed default model without replacing sibling defaults', async () => {
+      const imageModel: Model = {
+        ...SAMPLE_MODEL,
+        id: 'image-model',
+        name: 'image-model',
+        type: 'image',
+        capabilities: ['image.generate'],
+      };
+      const userConfigManager = createMockUserConfigManager(
+        {
+          providers: [SAMPLE_PROVIDER],
+          models: [SAMPLE_MODEL, imageModel],
+        },
+        {
+          defaultModels: {
+            llm: {
+              providerId: SAMPLE_PROVIDER.id,
+              modelId: SAMPLE_MODEL.id,
+            },
+          },
+        },
+      );
+      const updateScalars = vi.spyOn(userConfigManager, 'updateScalars');
+      const manager = new ConfigManager({ userConfigManager });
+
+      await manager.setDefaultModelRef('image', {
+        providerId: SAMPLE_PROVIDER.id,
+        modelId: imageModel.id,
+      });
+
+      expect(updateScalars).toHaveBeenCalledWith({
+        defaultModels: {
+          llm: {
+            providerId: SAMPLE_PROVIDER.id,
+            modelId: SAMPLE_MODEL.id,
+          },
+          image: {
+            providerId: SAMPLE_PROVIDER.id,
+            modelId: imageModel.id,
+          },
+        },
+      });
+      expect(manager.getDefaultModelRef('llm')).toEqual({
+        providerId: SAMPLE_PROVIDER.id,
+        modelId: SAMPLE_MODEL.id,
+      });
+      expect(manager.getDefaultModelRef('image')).toEqual({
+        providerId: SAMPLE_PROVIDER.id,
+        modelId: imageModel.id,
+      });
+      await expect(
+        manager.setDefaultModelRef('video', {
+          providerId: SAMPLE_PROVIDER.id,
+          modelId: imageModel.id,
+        }),
+      ).rejects.toThrow('is not a video model');
+    });
+
     it('preserves existing purpose bindings while adding a missing Character purpose', async () => {
       const userConfigManager = createMockUserConfigManager(
         {

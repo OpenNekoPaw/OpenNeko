@@ -8,11 +8,14 @@ export const DESKTOP_APPLICATION_SETTINGS_CHANNELS = {
 export type DesktopThemePreference = 'system' | 'light' | 'dark';
 export type DesktopLocalePreference = 'system' | 'en' | 'zh-cn';
 export type DesktopResourceBrowserViewPreference = 'list' | 'grid';
+export type DesktopFontSizePreference = 'small' | 'default' | 'large';
 
 export interface DesktopApplicationPreferences {
   readonly theme: DesktopThemePreference;
   readonly locale: DesktopLocalePreference;
   readonly resourceBrowserView: DesktopResourceBrowserViewPreference;
+  readonly fontSize: DesktopFontSizePreference;
+  readonly defaultWorkspaceLocator: string;
 }
 
 export interface DesktopApplicationSettingsProjection {
@@ -71,6 +74,8 @@ export const DEFAULT_DESKTOP_APPLICATION_PREFERENCES: DesktopApplicationPreferen
   theme: 'light',
   locale: 'system',
   resourceBrowserView: 'list',
+  fontSize: 'default',
+  defaultWorkspaceLocator: '${HOME}/OpenNeko',
 };
 
 export function createDesktopApplicationSettingsRequest(
@@ -121,7 +126,7 @@ export function parseDesktopApplicationSettingsUpdateRequest(
 export function parseDesktopApplicationPreferences(value: unknown): DesktopApplicationPreferences {
   const record = requireExactRecord(
     value,
-    ['theme', 'locale', 'resourceBrowserView'],
+    ['theme', 'locale', 'resourceBrowserView', 'fontSize', 'defaultWorkspaceLocator'],
     'Desktop application preferences must be an object.',
   );
   return {
@@ -132,7 +137,20 @@ export function parseDesktopApplicationPreferences(value: unknown): DesktopAppli
       ['list', 'grid'] as const,
       'resourceBrowserView',
     ),
+    fontSize: requireOneOf(record['fontSize'], ['small', 'default', 'large'] as const, 'fontSize'),
+    defaultWorkspaceLocator: requireHomeLocator(record['defaultWorkspaceLocator']),
   };
+}
+
+function requireHomeLocator(value: unknown): string {
+  const locator = requireNonEmptyString(value, 'defaultWorkspaceLocator is required.');
+  if (!/^\$\{HOME\}\/[A-Za-z0-9._ /-]+$/u.test(locator) || locator.includes('/../')) {
+    throw new DesktopApplicationSettingsContractError(
+      'invalid-desktop-application-settings-payload',
+      'defaultWorkspaceLocator must be a safe ${HOME}/... locator.',
+    );
+  }
+  return locator;
 }
 
 function parseDesktopApplicationSettingsProjection(

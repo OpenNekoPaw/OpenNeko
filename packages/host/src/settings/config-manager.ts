@@ -406,6 +406,37 @@ export class ConfigManager {
     return defaults[type];
   }
 
+  async setDefaultModelRef(type: ModelType, ref: ModelRefConfig): Promise<void> {
+    this.ensureUserConfigManager();
+    this.ensureMerged();
+    const provider = this.providers.get(ref.providerId);
+    const model = this.models.get(ref.modelId);
+    if (!provider || provider.enabled === false) {
+      throw new Error(`Provider ${ref.providerId} is unavailable for default ${type} model.`);
+    }
+    if (!model || model.enabled === false) {
+      throw new Error(
+        `Model ${ref.providerId}/${ref.modelId} is unavailable for default ${type} model.`,
+      );
+    }
+    if (model.providerId !== provider.id) {
+      throw new Error(
+        `Model ${model.id} belongs to provider ${model.providerId}, not ${provider.id}.`,
+      );
+    }
+    if ((model.type ?? 'llm') !== type) {
+      throw new Error(`Model ${provider.id}/${model.id} is not a ${type} model.`);
+    }
+
+    await this.userConfigManager!.updateScalars({
+      defaultModels: {
+        ...(this.getScalar('defaultModels') ?? {}),
+        [type]: ref,
+      },
+    });
+    this.reloadConfig();
+  }
+
   getDefaultModelPurposeRef(purpose: string): ModelRefConfig | undefined {
     return this.getScalar('defaultModelPurposes')?.[purpose];
   }

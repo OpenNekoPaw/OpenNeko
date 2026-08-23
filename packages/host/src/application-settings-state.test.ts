@@ -21,6 +21,8 @@ describe('Desktop application settings state codec', () => {
         theme: 'light',
         locale: 'system',
         resourceBrowserView: 'list',
+        fontSize: 'default',
+        defaultWorkspaceLocator: '${HOME}/OpenNeko',
       },
       opaqueSourceMarker: { source: 'settings-fixture' },
     };
