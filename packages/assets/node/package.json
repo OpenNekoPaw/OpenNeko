@@ -22,10 +22,12 @@
     "@neko/local-metadata": "workspace:*",
     "@neko/project": "workspace:*",
     "@neko/preview-domain": "workspace:*",
+    "@neko/preview-node": "workspace:*",
     "@neko/world-node": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@zip.js/zip.js": "^2.8.26",
     "typescript": "^5.9.3",
     "vitest": "4.1.2"
   },

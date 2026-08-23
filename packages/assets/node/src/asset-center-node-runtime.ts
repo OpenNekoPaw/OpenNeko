@@ -27,6 +27,7 @@ import {
   createPreviewResourceProjectionService,
   type PreviewResourceProjectionService,
 } from '@neko/preview-domain/resource-projection';
+import { publishEpubPreviewResource, type EpubPreviewResourceTree } from '@neko/preview-node';
 import type { ResourceBrowserNodeRuntime } from './resource-browser-node-runtime';
 
 type AssetCenterResourceBrowserPort = Pick<
@@ -64,6 +65,18 @@ export interface AssetCenterNodeRuntimeOptions {
     ): Promise<{
       readonly url: string;
       readonly resourceUris?: Readonly<Record<string, string>>;
+    }>;
+    registerResourceTree(
+      owner: {
+        readonly windowId: string;
+        readonly viewId: string;
+        readonly sessionId: string;
+        readonly sourceFingerprint: string;
+      },
+      tree: EpubPreviewResourceTree,
+    ): Promise<{
+      readonly url: string;
+      release(): void;
     }>;
     releaseSession(sessionId: string): void;
   };
@@ -144,15 +157,20 @@ export class AssetCenterNodeRuntime {
         if (source.kind !== 'file') {
           throw new Error('Asset Center Preview requires a file source.');
         }
-        const lease = await this.options.resources.registerFile(
-          {
-            windowId: owner.identity.windowId,
-            viewId: owner.identity.assetCenterSessionId,
-            sessionId: owner.previewSessionId,
-            sourceFingerprint: source.sourceFingerprint,
-          },
-          source,
-        );
+        const resourceOwner = {
+          windowId: owner.identity.windowId,
+          viewId: owner.identity.assetCenterSessionId,
+          sessionId: owner.previewSessionId,
+          sourceFingerprint: source.sourceFingerprint,
+        };
+        const lease =
+          source.mediaType === 'application/epub+zip'
+            ? await publishEpubPreviewResource({
+                absolutePath: source.absolutePath,
+                registerResourceTree: (tree) =>
+                  this.options.resources.registerResourceTree(resourceOwner, tree),
+              })
+            : await this.options.resources.registerFile(resourceOwner, source);
         return {
           status: 'ready',
           lease: {

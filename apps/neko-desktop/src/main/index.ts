@@ -1448,6 +1448,18 @@ async function startDesktop(): Promise<void> {
           },
         );
       },
+      registerResourceTree: async (owner, tree) => {
+        const shellProjection = await shellService.getProjection(owner.windowId);
+        return resourceRegistry.registerResourceTree(
+          {
+            windowId: owner.windowId,
+            viewId: owner.viewId,
+            sessionId: owner.sessionId,
+            rendererSessionId: shellProjection.rendererSessionId,
+          },
+          tree,
+        );
+      },
       releaseSession: (sessionId) => resourceRegistry.releaseSession(sessionId),
     },
   });
