@@ -196,8 +196,9 @@ export function applyDesktopFontSize(
 ): void {
   const root = target.documentElement;
   const scale = preference === 'small' ? 0.92 : preference === 'large' ? 1.12 : 1;
+  const rootFontSize = Math.round(13 * scale * 100) / 100;
   root.dataset.nekoFontSize = preference;
-  root.style.setProperty('--neko-font-size', `${13 * scale}px`);
+  root.style.setProperty('--neko-font-size', `${rootFontSize}px`);
   root.style.zoom = String(scale);
 }
 
