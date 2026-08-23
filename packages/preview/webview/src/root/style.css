@@ -165,7 +165,7 @@
 .neko-preview-text-reader__page {
   position: relative;
   box-sizing: border-box;
-  width: min(100%, 1040px);
+  width: min(100%, 1120px);
   min-height: 100%;
   margin: 0 auto;
   padding: clamp(24px, 4vw, 64px) clamp(22px, 5vw, 76px);
@@ -207,8 +207,58 @@
   --node-fg: var(--neko-preview-document-fg, #1f2523);
   --node-fg-secondary: var(--neko-preview-document-muted, #66706b);
   --node-divider: var(--neko-preview-document-border, rgba(31, 37, 35, 0.14));
-  font-size: 14px;
-  line-height: 1.75;
+  font-size: 15px;
+  line-height: 1.78;
+}
+
+.neko-preview-text-reader .neko-markdown-table-scroll {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  margin-block: 1.35em;
+  overflow-x: auto;
+  border: 1px solid var(--neko-preview-document-border, rgba(31, 37, 35, 0.14));
+  border-radius: 7px;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.neko-preview-text-reader .neko-markdown-table {
+  width: 100%;
+  min-width: 40rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.neko-preview-text-reader .neko-markdown-table th,
+.neko-preview-text-reader .neko-markdown-table td {
+  min-width: 12rem;
+  padding: 9px 11px;
+  border: 0;
+  border-inline-end: 1px solid var(--neko-preview-document-border, rgba(31, 37, 35, 0.14));
+  border-block-end: 1px solid var(--neko-preview-document-border, rgba(31, 37, 35, 0.14));
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.neko-preview-text-reader .neko-markdown-table th {
+  background: color-mix(in srgb, var(--neko-preview-document-field, #ecefed) 64%, transparent);
+  font-weight: 650;
+}
+
+.neko-preview-text-reader .neko-markdown-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--neko-preview-document-field, #ecefed) 22%, transparent);
+}
+
+.neko-preview-text-reader .neko-markdown-table tr > :last-child {
+  border-inline-end: 0;
+}
+
+.neko-preview-text-reader .neko-markdown-table tbody tr:last-child > td {
+  border-block-end: 0;
 }
 
 @media (max-width: 640px), (max-height: 520px) {

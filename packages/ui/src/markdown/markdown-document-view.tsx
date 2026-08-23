@@ -132,8 +132,12 @@ function renderMarkdownNode(node: MarkdownNode): ReactNode {
       return renderNonFetchingImage(node.altText, node.identifier, node.label);
     case 'table':
       return (
-        <div className="my-3 overflow-auto">
-          <table className="w-full border-collapse text-left text-xs">
+        <div
+          className="neko-markdown-table-scroll my-4 max-w-full overflow-x-auto rounded-md"
+          data-markdown-table-scroll="true"
+          data-markdown-table-columns={node.header.cells.length}
+        >
+          <table className="neko-markdown-table min-w-[40rem] w-full border-collapse text-left text-xs">
             <thead>{renderMarkdownNode(node.header)}</thead>
             <tbody>{node.rows.map((row) => renderMarkdownNode(row))}</tbody>
           </table>
@@ -142,9 +146,12 @@ function renderMarkdownNode(node: MarkdownNode): ReactNode {
     case 'tableRow': {
       const Cell = node.header ? 'th' : 'td';
       return (
-        <tr>
+        <tr data-markdown-table-header={node.header ? 'true' : undefined}>
           {node.cells.map((cell) => (
-            <Cell key={cell.id} className="border border-[var(--node-divider)] px-2 py-1 align-top">
+            <Cell
+              key={cell.id}
+              className="min-w-48 border border-[var(--node-divider)] px-3 py-2 align-top"
+            >
               {renderMarkdownChildren(cell.children)}
             </Cell>
           ))}

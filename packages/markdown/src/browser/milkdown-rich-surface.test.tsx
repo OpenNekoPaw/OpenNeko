@@ -122,6 +122,66 @@ describe('MilkdownRichSurface', () => {
     }
     expect(actions?.revealHeading(3)).toBe(false);
   });
+
+  it('keeps wide GFM tables inside the package-owned presentation wrapper', async () => {
+    ({ root, container } = createTestRoot());
+    await act(async () => {
+      root?.render(
+        <MilkdownRichSurface
+          value={
+            '| A | B | C | D | E | F | G |\n| - | - | - | - | - | - | - |\n| 1 | 2 | 3 | 4 | 5 | 6 | 7 |'
+          }
+          ariaLabel="Wide Markdown table"
+          readOnly={false}
+          onChange={() => undefined}
+        />,
+      );
+    });
+
+    await vi.waitFor(() => {
+      const wrapper = container?.querySelector<HTMLElement>('[data-markdown-table-scroll="true"]');
+      const table = wrapper?.querySelector<HTMLTableElement>('table');
+      expect(wrapper?.dataset['markdownTableColumns']).toBe('7');
+      expect(table?.getAttribute('style')).toBeNull();
+      expect(table?.querySelectorAll('th')).toHaveLength(7);
+      expect(table?.querySelectorAll('td')).toHaveLength(7);
+    });
+  });
+
+  it('rejects a second table NodeView owner', async () => {
+    const states: [MilkdownRichSurfaceState, string | undefined][] = [];
+    ({ root, container } = createTestRoot());
+    await act(async () => {
+      root?.render(
+        <MilkdownRichSurface
+          value={'| A |\n| - |\n| 1 |'}
+          ariaLabel="Canonical table owner"
+          readOnly={false}
+          onChange={() => undefined}
+          createExtensions={() => ({
+            nodeViews: [
+              [
+                'table',
+                () => {
+                  const dom = document.createElement('table');
+                  return { dom };
+                },
+              ],
+            ],
+          })}
+          onStateChange={(state, failure) => states.push([state, failure])}
+        />,
+      );
+    });
+
+    await vi.waitFor(() => {
+      expect(states.at(-1)).toEqual([
+        'error',
+        'Markdown table presentation is owned by the Rich Surface.',
+      ]);
+      expect(container?.querySelector('[data-markdown-table-scroll]')).toBeNull();
+    });
+  });
 });
 
 function selectedHeadingText(): string | undefined {

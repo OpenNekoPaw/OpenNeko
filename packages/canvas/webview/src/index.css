@@ -2763,16 +2763,66 @@ html.canvas-webview-document #root,
   padding-inline-start: 1.55em;
 }
 
-.canvas-markdown-editor-surface__mount .ProseMirror table {
+.canvas-markdown-editor-surface__mount .neko-markdown-table-scroll {
+  box-sizing: border-box;
   width: 100%;
-  border-collapse: collapse;
+  max-width: 100%;
+  margin: 1.25em 0;
+  overflow-x: auto;
+  border: 1px solid var(--canvas-surface-border);
+  border-radius: 7px;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  white-space: normal;
+}
+
+.canvas-markdown-editor-surface__mount .neko-markdown-table {
+  width: 100%;
+  min-width: 40rem;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
 }
 
 .canvas-markdown-editor-surface__mount .ProseMirror th,
 .canvas-markdown-editor-surface__mount .ProseMirror td {
-  padding: 7px 9px;
-  border: 1px solid var(--canvas-surface-border);
+  min-width: 12rem;
+  padding: 9px 11px;
+  border: 0;
+  border-inline-end: 1px solid var(--canvas-surface-border);
+  border-block-end: 1px solid var(--canvas-surface-border);
   vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror th {
+  background: color-mix(in srgb, var(--neko-surface) 58%, transparent);
+  font-weight: 650;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--neko-surface) 24%, transparent);
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror tr > :last-child {
+  border-inline-end: 0;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror tbody tr:last-child > td {
+  border-block-end: 0;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror th > :first-child,
+.canvas-markdown-editor-surface__mount .ProseMirror td > :first-child {
+  margin-top: 0;
+}
+
+.canvas-markdown-editor-surface__mount .ProseMirror th > :last-child,
+.canvas-markdown-editor-surface__mount .ProseMirror td > :last-child {
+  margin-bottom: 0;
 }
 
 .canvas-markdown-editor-overlay__status {
