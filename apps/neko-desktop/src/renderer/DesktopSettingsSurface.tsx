@@ -302,7 +302,9 @@ function StorageSettingsGroup({
             <span>
               <strong>{storageLabel(entry.kind, entry.label, t)}</strong>
               <small>{entry.locator}</small>
-              {entry.diagnostic ? <small className="desktop-settings__storage-error">{entry.diagnostic}</small> : null}
+              {entry.diagnostic ? (
+                <small className="desktop-settings__storage-error">{entry.diagnostic}</small>
+              ) : null}
             </span>
             <span className="desktop-settings__storage-actions">
               <span>{entry.bytes === undefined ? '—' : formatBytes(entry.bytes)}</span>
@@ -398,6 +400,7 @@ function AgentModelSettingsGroup({
   const [editingProvider, setEditingProvider] = useState<DesktopAiProviderView>();
   const [showProviderForm, setShowProviderForm] = useState(false);
   const [showModelForm, setShowModelForm] = useState(false);
+  const [expandedCatalog, setExpandedCatalog] = useState<'providers' | 'models'>();
 
   useEffect(() => {
     if (!port) {
@@ -443,6 +446,50 @@ function AgentModelSettingsGroup({
     }
   };
 
+  const toggleCatalog = (catalog: 'providers' | 'models'): void => {
+    setExpandedCatalog((current) => (current === catalog ? undefined : catalog));
+    setEditingProvider(undefined);
+    setShowProviderForm(false);
+    setShowModelForm(false);
+  };
+
+  const renderDefaultModel = (type: ModelType): JSX.Element => (
+    <label key={type} className="desktop-settings__compact-field">
+      <span>{t(`settings.agent.modelType.${type}`)}</span>
+      <select
+        aria-label={t(`settings.agent.modelType.${type}`)}
+        disabled={pending || !port || !projection}
+        value={modelRefValue(projection?.defaults[type])}
+        onChange={(event) => {
+          const model = projection?.models.find(
+            (candidate) =>
+              candidate.type === type &&
+              `${candidate.providerId}:${candidate.id}` === event.currentTarget.value,
+          );
+          if (!model || !port) return;
+          void execute(() =>
+            port.setDefault(type, {
+              providerId: model.providerId,
+              modelId: model.id,
+            }),
+          );
+        }}
+      >
+        <option value="">{t('settings.agent.defaultMissing')}</option>
+        {projection?.models
+          .filter((model) => model.type === type && model.enabled)
+          .map((model) => (
+            <option
+              key={`${model.providerId}:${model.id}`}
+              value={`${model.providerId}:${model.id}`}
+            >
+              {model.displayName} · {model.providerId}
+            </option>
+          ))}
+      </select>
+    </label>
+  );
+
   return (
     <SettingsGroup
       description={t('settings.category.agent.description')}
@@ -454,136 +501,154 @@ function AgentModelSettingsGroup({
         </div>
       ) : null}
       <div className="desktop-settings__subsection">
-        <div className="desktop-settings__subsection-heading">
-          <div>
-            <strong>{t('settings.agent.defaults')}</strong>
-            <small>{t('settings.agent.defaultsDescription')}</small>
-          </div>
-        </div>
-        <div className="desktop-settings__model-defaults">
-          {(['llm', 'image', 'video', 'audio'] as const).map((type) => (
-            <label key={type} className="desktop-settings__compact-field">
-              <span>{t(`settings.agent.modelType.${type}`)}</span>
-              <select
-                aria-label={t(`settings.agent.modelType.${type}`)}
-                disabled={pending || !port || !projection}
-                value={modelRefValue(projection?.defaults[type])}
-                onChange={(event) => {
-                  const model = projection?.models.find(
-                    (candidate) =>
-                      candidate.type === type &&
-                      `${candidate.providerId}:${candidate.id}` === event.currentTarget.value,
-                  );
-                  if (!model || !port) return;
-                  void execute(() =>
-                    port.setDefault(type, {
-                      providerId: model.providerId,
-                      modelId: model.id,
-                    }),
-                  );
-                }}
-              >
-                <option value="">{t('settings.agent.defaultMissing')}</option>
-                {projection?.models
-                  .filter((model) => model.type === type && model.enabled)
-                  .map((model) => (
-                    <option key={`${model.providerId}:${model.id}`} value={`${model.providerId}:${model.id}`}>
-                      {model.displayName} · {model.providerId}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          ))}
+        <div className="desktop-settings__default-groups">
+          <section className="desktop-settings__default-group">
+            <div>
+              <strong>{t('settings.agent.dialogueModels')}</strong>
+              <small>{t('settings.agent.dialogueModelsDescription')}</small>
+            </div>
+            <div className="desktop-settings__model-defaults desktop-settings__model-defaults--dialogue">
+              {renderDefaultModel('llm')}
+            </div>
+          </section>
+          <section className="desktop-settings__default-group">
+            <div>
+              <strong>{t('settings.agent.generationModels')}</strong>
+              <small>{t('settings.agent.generationModelsDescription')}</small>
+            </div>
+            <div className="desktop-settings__model-defaults">
+              {(['image', 'video', 'audio'] as const).map(renderDefaultModel)}
+            </div>
+          </section>
         </div>
       </div>
 
       <div className="desktop-settings__subsection">
-        <div className="desktop-settings__subsection-heading">
+        <button
+          aria-expanded={expandedCatalog === 'providers'}
+          className="desktop-settings__management-summary"
+          type="button"
+          onClick={() => toggleCatalog('providers')}
+        >
           <div>
             <strong>{t('settings.agent.providers')}</strong>
             <small>{t('settings.agent.providersDescription')}</small>
           </div>
-          <button
-            className="desktop-settings__action"
-            disabled={pending || !port}
-            type="button"
-            onClick={() => {
-              setEditingProvider(undefined);
-              setShowProviderForm(true);
-            }}
-          >
-            {t('settings.agent.addProvider')}
-          </button>
-        </div>
-        <div className="desktop-settings__provider-list">
-          {projection?.providers.map((provider) => (
-            <button
-              key={provider.id}
-              className="desktop-settings__provider-card"
-              type="button"
-              onClick={() => {
-                setEditingProvider(provider);
-                setShowProviderForm(true);
-              }}
-            >
-              <span>
-                <strong>{provider.displayName}</strong>
-                <small>{provider.apiUrl}</small>
-              </span>
-              <span className={`desktop-settings__credential desktop-settings__credential--${provider.credentialStatus}`}>
-                {t(`settings.agent.credential.${provider.credentialStatus}`)}
-              </span>
-            </button>
-          ))}
-        </div>
-        {showProviderForm && port ? (
-          <ProviderForm
-            disabled={pending}
-            initial={editingProvider}
-            onCancel={() => setShowProviderForm(false)}
-            onSave={(provider, apiKey) =>
-              execute(() => port.saveProvider(provider, apiKey)).then((saved) => {
-                if (saved) setShowProviderForm(false);
-              })
-            }
-          />
+          <span>
+            <span className="desktop-settings__count">{projection?.providers.length ?? 0}</span>
+            {t(
+              expandedCatalog === 'providers' ? 'settings.agent.collapse' : 'settings.agent.manage',
+            )}
+          </span>
+        </button>
+        {expandedCatalog === 'providers' ? (
+          <div className="desktop-settings__management-panel">
+            <div className="desktop-settings__management-actions">
+              <button
+                className="desktop-settings__action"
+                disabled={pending || !port}
+                type="button"
+                onClick={() => {
+                  setEditingProvider(undefined);
+                  setShowProviderForm(true);
+                }}
+              >
+                {t('settings.agent.addProvider')}
+              </button>
+            </div>
+            <div className="desktop-settings__provider-list">
+              {projection?.providers.map((provider) => (
+                <button
+                  key={provider.id}
+                  className="desktop-settings__provider-card"
+                  type="button"
+                  onClick={() => {
+                    setEditingProvider(provider);
+                    setShowProviderForm(true);
+                  }}
+                >
+                  <span>
+                    <strong>{provider.displayName}</strong>
+                    <small>{provider.apiUrl}</small>
+                  </span>
+                  <span
+                    className={`desktop-settings__credential desktop-settings__credential--${provider.credentialStatus}`}
+                  >
+                    {t(`settings.agent.credential.${provider.credentialStatus}`)}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {showProviderForm && port ? (
+              <ProviderForm
+                disabled={pending}
+                initial={editingProvider}
+                onCancel={() => setShowProviderForm(false)}
+                onSave={(provider, apiKey) =>
+                  execute(() => port.saveProvider(provider, apiKey)).then((saved) => {
+                    if (saved) setShowProviderForm(false);
+                  })
+                }
+              />
+            ) : null}
+          </div>
         ) : null}
       </div>
 
       <div className="desktop-settings__subsection">
-        <div className="desktop-settings__subsection-heading">
+        <button
+          aria-expanded={expandedCatalog === 'models'}
+          className="desktop-settings__management-summary"
+          type="button"
+          onClick={() => toggleCatalog('models')}
+        >
           <div>
             <strong>{t('settings.agent.modelCatalog')}</strong>
             <small>{t('settings.agent.modelCatalogDescription')}</small>
           </div>
-          <button
-            className="desktop-settings__action"
-            disabled={pending || !port || !projection?.providers.length}
-            type="button"
-            onClick={() => setShowModelForm(true)}
-          >
-            {t('settings.agent.addModel')}
-          </button>
-        </div>
-        <div className="desktop-settings__model-list">
-          {projection?.models.map((model) => (
-            <div key={`${model.providerId}:${model.id}`} className="desktop-settings__model-chip">
-              <strong>{model.displayName}</strong>
-              <span>{t(`settings.agent.modelType.${model.type}`)} · {model.providerId}</span>
+          <span>
+            <span className="desktop-settings__count">{projection?.models.length ?? 0}</span>
+            {t(expandedCatalog === 'models' ? 'settings.agent.collapse' : 'settings.agent.manage')}
+          </span>
+        </button>
+        {expandedCatalog === 'models' ? (
+          <div className="desktop-settings__management-panel">
+            <div className="desktop-settings__management-actions">
+              <button
+                className="desktop-settings__action"
+                disabled={pending || !port || !projection?.providers.length}
+                type="button"
+                onClick={() => setShowModelForm(true)}
+              >
+                {t('settings.agent.addModel')}
+              </button>
             </div>
-          ))}
-        </div>
-        {showModelForm && port && projection ? (
-          <ModelForm
-            disabled={pending}
-            providers={projection.providers}
-            onCancel={() => setShowModelForm(false)}
-            onSave={(model) =>
-              execute(() => port.saveModel(model)).then((saved) => {
-                if (saved) setShowModelForm(false);
-              })
-            }
-          />
+            <div className="desktop-settings__model-list">
+              {projection?.models.map((model) => (
+                <div
+                  key={`${model.providerId}:${model.id}`}
+                  className="desktop-settings__model-chip"
+                >
+                  <strong>{model.displayName}</strong>
+                  <span>
+                    {t(`settings.agent.modelType.${model.type}`)} · {model.providerId}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {showModelForm && port && projection ? (
+              <ModelForm
+                disabled={pending}
+                providers={projection.providers}
+                onCancel={() => setShowModelForm(false)}
+                onSave={(model) =>
+                  execute(() => port.saveModel(model)).then((saved) => {
+                    if (saved) setShowModelForm(false);
+                  })
+                }
+              />
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -652,13 +717,66 @@ function ProviderForm({
   return (
     <form className="desktop-settings__editor" onSubmit={submit}>
       <div className="desktop-settings__form-grid">
-        <label><span>{t('settings.agent.providerId')}</span><input disabled={disabled || !!initial} required value={id} onChange={(e) => setId(e.currentTarget.value)} /></label>
-        <label><span>{t('settings.agent.providerName')}</span><input disabled={disabled} required value={displayName} onChange={(e) => setDisplayName(e.currentTarget.value)} /></label>
-        <label><span>{t('settings.agent.protocol')}</span><select disabled={disabled} value={protocol} onChange={(e) => setProtocol(e.currentTarget.value as DesktopAiModelProtocol)}><option value="openai-chat">OpenAI Chat compatible</option><option value="openai-responses">OpenAI Responses</option><option value="anthropic">Anthropic Messages</option></select></label>
-        <label><span>{t('settings.agent.apiUrl')}</span><input disabled={disabled} required type="url" value={apiUrl} onChange={(e) => setApiUrl(e.currentTarget.value)} /></label>
-        <label className="desktop-settings__form-wide"><span>{t('settings.agent.apiKey')}</span><input autoComplete="off" disabled={disabled} placeholder={initial ? t('settings.agent.apiKeyKeep') : ''} type="password" value={apiKey} onChange={(e) => setApiKey(e.currentTarget.value)} /></label>
+        <label>
+          <span>{t('settings.agent.providerId')}</span>
+          <input
+            disabled={disabled || !!initial}
+            required
+            value={id}
+            onChange={(e) => setId(e.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>{t('settings.agent.providerName')}</span>
+          <input
+            disabled={disabled}
+            required
+            value={displayName}
+            onChange={(e) => setDisplayName(e.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>{t('settings.agent.protocol')}</span>
+          <select
+            disabled={disabled}
+            value={protocol}
+            onChange={(e) => setProtocol(e.currentTarget.value as DesktopAiModelProtocol)}
+          >
+            <option value="openai-chat">OpenAI Chat compatible</option>
+            <option value="openai-responses">OpenAI Responses</option>
+            <option value="anthropic">Anthropic Messages</option>
+          </select>
+        </label>
+        <label>
+          <span>{t('settings.agent.apiUrl')}</span>
+          <input
+            disabled={disabled}
+            required
+            type="url"
+            value={apiUrl}
+            onChange={(e) => setApiUrl(e.currentTarget.value)}
+          />
+        </label>
+        <label className="desktop-settings__form-wide">
+          <span>{t('settings.agent.apiKey')}</span>
+          <input
+            autoComplete="off"
+            disabled={disabled}
+            placeholder={initial ? t('settings.agent.apiKeyKeep') : ''}
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.currentTarget.value)}
+          />
+        </label>
       </div>
-      <div className="desktop-settings__editor-actions"><button type="button" onClick={onCancel}>{t('common.cancel')}</button><button className="desktop-settings__action" disabled={disabled} type="submit">{t('common.save')}</button></div>
+      <div className="desktop-settings__editor-actions">
+        <button type="button" onClick={onCancel}>
+          {t('common.cancel')}
+        </button>
+        <button className="desktop-settings__action" disabled={disabled} type="submit">
+          {t('common.save')}
+        </button>
+      </div>
     </form>
   );
 }
@@ -671,7 +789,14 @@ function ModelForm({
 }: {
   readonly disabled: boolean;
   readonly onCancel: () => void;
-  readonly onSave: (model: { readonly id: string; readonly providerId: string; readonly apiName: string; readonly displayName: string; readonly type: ModelType; readonly enabled: boolean }) => Promise<void>;
+  readonly onSave: (model: {
+    readonly id: string;
+    readonly providerId: string;
+    readonly apiName: string;
+    readonly displayName: string;
+    readonly type: ModelType;
+    readonly enabled: boolean;
+  }) => Promise<void>;
   readonly providers: readonly DesktopAiProviderView[];
 }): JSX.Element {
   const { t } = useTranslation();
@@ -681,20 +806,85 @@ function ModelForm({
   const [displayName, setDisplayName] = useState('');
   const [type, setType] = useState<ModelType>('llm');
   return (
-    <form className="desktop-settings__editor" onSubmit={(event) => { event.preventDefault(); void onSave({ id, providerId, apiName, displayName, type, enabled: true }); }}>
+    <form
+      className="desktop-settings__editor"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void onSave({ id, providerId, apiName, displayName, type, enabled: true });
+      }}
+    >
       <div className="desktop-settings__form-grid">
-        <label><span>{t('settings.agent.provider')}</span><select disabled={disabled} value={providerId} onChange={(e) => setProviderId(e.currentTarget.value)}>{providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.displayName}</option>)}</select></label>
-        <label><span>{t('settings.agent.modelType')}</span><select disabled={disabled} value={type} onChange={(e) => setType(e.currentTarget.value as ModelType)}>{(['llm', 'image', 'video', 'audio'] as const).map((candidate) => <option key={candidate} value={candidate}>{t(`settings.agent.modelType.${candidate}`)}</option>)}</select></label>
-        <label><span>{t('settings.agent.modelId')}</span><input disabled={disabled} required value={id} onChange={(e) => setId(e.currentTarget.value)} /></label>
-        <label><span>{t('settings.agent.apiModelName')}</span><input disabled={disabled} required value={apiName} onChange={(e) => setApiName(e.currentTarget.value)} /></label>
-        <label className="desktop-settings__form-wide"><span>{t('settings.agent.modelName')}</span><input disabled={disabled} required value={displayName} onChange={(e) => setDisplayName(e.currentTarget.value)} /></label>
+        <label>
+          <span>{t('settings.agent.provider')}</span>
+          <select
+            disabled={disabled}
+            value={providerId}
+            onChange={(e) => setProviderId(e.currentTarget.value)}
+          >
+            {providers.map((provider) => (
+              <option key={provider.id} value={provider.id}>
+                {provider.displayName}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>{t('settings.agent.modelType')}</span>
+          <select
+            disabled={disabled}
+            value={type}
+            onChange={(e) => setType(e.currentTarget.value as ModelType)}
+          >
+            {(['llm', 'image', 'video', 'audio'] as const).map((candidate) => (
+              <option key={candidate} value={candidate}>
+                {t(`settings.agent.modelType.${candidate}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>{t('settings.agent.modelId')}</span>
+          <input
+            disabled={disabled}
+            required
+            value={id}
+            onChange={(e) => setId(e.currentTarget.value)}
+          />
+        </label>
+        <label>
+          <span>{t('settings.agent.apiModelName')}</span>
+          <input
+            disabled={disabled}
+            required
+            value={apiName}
+            onChange={(e) => setApiName(e.currentTarget.value)}
+          />
+        </label>
+        <label className="desktop-settings__form-wide">
+          <span>{t('settings.agent.modelName')}</span>
+          <input
+            disabled={disabled}
+            required
+            value={displayName}
+            onChange={(e) => setDisplayName(e.currentTarget.value)}
+          />
+        </label>
       </div>
-      <div className="desktop-settings__editor-actions"><button type="button" onClick={onCancel}>{t('common.cancel')}</button><button className="desktop-settings__action" disabled={disabled} type="submit">{t('common.save')}</button></div>
+      <div className="desktop-settings__editor-actions">
+        <button type="button" onClick={onCancel}>
+          {t('common.cancel')}
+        </button>
+        <button className="desktop-settings__action" disabled={disabled} type="submit">
+          {t('common.save')}
+        </button>
+      </div>
     </form>
   );
 }
 
-function modelRefValue(ref: { readonly providerId: string; readonly modelId: string } | undefined): string {
+function modelRefValue(
+  ref: { readonly providerId: string; readonly modelId: string } | undefined,
+): string {
   return ref ? `${ref.providerId}:${ref.modelId}` : '';
 }
 

@@ -18,4 +18,8 @@ The canonical configuration owner remains `~/.neko/config.toml` through `ConfigM
 
 Focused lint on the new contracts, services, runtime, and Settings UI passed. A broader lint invocation that included the concurrently modified `app-host.ts` reported unrelated unused Character imports and an empty block outside these settings hunks, so repository-wide lint is not claimed.
 
-Visible Electron UI and real Provider execution remain blocked as described in the verification reports. These are advisory UI/behavior evidence gaps, not substituted by unit tests.
+The progressive-disclosure follow-up is L1 presentation state: it does not change the canonical
+configuration, credential, routing, or generation authorities reviewed above. A visible Electron run
+verified the compact initial state and mutually exclusive Provider/model expansion at 1220×768. Dark
+theme and a narrower supported window remain advisory visual evidence gaps; real Provider execution
+is unchanged by this presentation-only follow-up.

@@ -5,6 +5,7 @@ import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type DesktopApplicationSettingsProjection } from '@neko/host/application-settings';
+import type { OpenNekoDesktopAiModelSettingsBridge } from '@neko/host/ai-model-settings';
 import {
   DesktopSettingsMainSurface,
   DesktopSettingsNavigationSurface,
@@ -110,15 +111,84 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => root.unmount());
     container.remove();
   });
+
+  it('separates dialogue and generation defaults and expands one catalog on demand', async () => {
+    const projection = {
+      providers: [
+        {
+          id: 'deepseek',
+          displayName: 'DeepSeek Provider',
+          apiUrl: 'https://api.deepseek.com/v1',
+          protocol: 'openai-chat' as const,
+          enabled: true,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [
+        {
+          id: 'deepseek-chat',
+          providerId: 'deepseek',
+          apiName: 'deepseek-chat',
+          displayName: 'DeepSeek Dialogue',
+          type: 'llm' as const,
+          enabled: true,
+        },
+        {
+          id: 'image-model',
+          providerId: 'deepseek',
+          apiName: 'image-model',
+          displayName: 'Image Model',
+          type: 'image' as const,
+          enabled: true,
+        },
+      ],
+      defaults: {
+        llm: { providerId: 'deepseek', modelId: 'deepseek-chat' },
+        image: { providerId: 'deepseek', modelId: 'image-model' },
+      },
+    };
+    const response = { requestId: 'fixture', projection, restartRequired: false };
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    expect(container.textContent).toContain('Dialogue models');
+    expect(container.textContent).toContain('Generation models');
+    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(0);
+    expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(0);
+
+    const providerSummary = findButtonContaining(container, 'Providers');
+    await act(async () => providerSummary.click());
+    expect(providerSummary.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(1);
+    expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(0);
+
+    const modelSummary = findButtonContaining(container, 'Model catalog');
+    await act(async () => modelSummary.click());
+    expect(modelSummary.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(0);
+    expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(2);
+    await act(async () => root.unmount());
+  });
 });
 
 async function renderSettings({
+  aiModelSettings,
   openAgentAdvanced = vi.fn(async () => undefined),
   initialSection = 'general',
   onClose = vi.fn(),
   overlay = false,
   update = vi.fn(async () => undefined),
 }: {
+  readonly aiModelSettings?: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'];
   readonly openAgentAdvanced?: () => Promise<void>;
   readonly initialSection?: DesktopSettingsSection;
   readonly onClose?: () => void;
@@ -163,6 +233,7 @@ async function renderSettings({
             },
             update,
             openAgentAdvanced,
+            aiModelSettings,
           }}
         >
           <Fixture />
@@ -178,5 +249,13 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
     (candidate) => candidate.textContent?.trim() === label,
   );
   if (!button) throw new Error(`Settings fixture requires button '${label}'.`);
+  return button;
+}
+
+function findButtonContaining(container: HTMLElement, label: string): HTMLButtonElement {
+  const button = [...container.querySelectorAll('button')].find((candidate) =>
+    candidate.textContent?.includes(label),
+  );
+  if (!button) throw new Error(`Settings fixture requires button containing '${label}'.`);
   return button;
 }
