@@ -158,6 +158,37 @@ describe('DSH Session Host contract', () => {
         target: { kind: 'project', projectId: 'project-1' },
       }),
     ).toMatchObject({ target: { kind: 'project', projectId: 'project-1' } });
+    expect(
+      parseDshSessionHostRequest({
+        ...createRequest,
+        target: {
+          kind: 'character-dialogue',
+          mode: 'companion',
+          participants: [
+            {
+              globalCharacterId: 'global-character-1',
+              characterVersionId: 'character-version-1',
+            },
+          ],
+        },
+      }),
+    ).toMatchObject({
+      target: {
+        kind: 'character-dialogue',
+        mode: 'companion',
+        participants: [{ characterVersionId: 'character-version-1' }],
+      },
+    });
+    expect(() =>
+      parseDshSessionHostRequest({
+        ...createRequest,
+        target: {
+          kind: 'character-dialogue',
+          mode: 'companion',
+          participants: [],
+        },
+      }),
+    ).toThrow(/at least one participant/u);
     expect(() =>
       parseDshSessionHostRequest({
         ...createRequest,

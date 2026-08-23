@@ -46,6 +46,9 @@ export async function resolveDesktopDshConversationContext(options: {
       surfaceBinding: options.surfaceBinding,
     };
   }
+  if (options.target.kind === 'character-dialogue') {
+    throw new Error('Character Dialogue context must be created by the Chara launch owner.');
+  }
   if (!options.surfaceIsUnbound) {
     throw new Error('Entry Project selection requires an unbound Agent Draft.');
   }

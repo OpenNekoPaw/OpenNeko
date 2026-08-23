@@ -157,6 +157,7 @@ export class DesktopDshSessionHost {
         readonly reference: DshSessionTerminalArtifactReference;
       }) => Promise<void>;
       readonly createConversation: (input: {
+        readonly requestId: string;
         readonly windowId: string;
         readonly rendererSessionId: string;
         readonly workbenchInstanceId: string;
@@ -164,7 +165,19 @@ export class DesktopDshSessionHost {
         readonly permissionPresetId: string;
         readonly target: DshConversationCreationTarget;
         readonly initialInput: DshComposerSubmitInput;
-      }) => Promise<{ readonly conversationId: string }>;
+      }) => Promise<{
+        readonly conversationId: string;
+        readonly completeInitialTurn?: () => Promise<void>;
+      }>;
+      readonly domainTurns?: {
+        submit(input: {
+          readonly requestId: string;
+          readonly conversationId: string;
+          readonly windowId: string;
+          readonly running: boolean;
+          readonly input: DshComposerSubmitInput;
+        }): Promise<boolean>;
+      };
       readonly projection: Pick<DshAcpProjection, 'snapshot'>;
       readonly windows: {
         resolveSender(sender: DesktopSenderIdentity): {
@@ -315,21 +328,32 @@ export class DesktopDshSessionHost {
     let stopReason: string | undefined;
     let conversationId: string;
     if (request.operation === 'create') {
-      conversationId = (
-        await this.options.createConversation({
-          windowId: request.windowId,
-          rendererSessionId: request.rendererSessionId,
-          workbenchInstanceId: request.workbenchInstanceId,
-          agentSurfaceId: request.agentSurfaceId,
-          permissionPresetId: request.permissionPresetId,
-          target: request.target,
-          initialInput: request.initialInput,
-        })
-      ).conversationId;
-      stopReason = await this.submitInput(conversationId, request.windowId, request.initialInput);
+      const created = await this.options.createConversation({
+        requestId: request.requestId,
+        windowId: request.windowId,
+        rendererSessionId: request.rendererSessionId,
+        workbenchInstanceId: request.workbenchInstanceId,
+        agentSurfaceId: request.agentSurfaceId,
+        permissionPresetId: request.permissionPresetId,
+        target: request.target,
+        initialInput: request.initialInput,
+      });
+      conversationId = created.conversationId;
+      stopReason = await this.submitInput(
+        request.requestId,
+        conversationId,
+        request.windowId,
+        request.initialInput,
+      );
+      await created.completeInitialTurn?.();
     } else if (request.operation === 'submit') {
       conversationId = request.conversationId;
-      stopReason = await this.submitInput(conversationId, request.windowId, request.input);
+      stopReason = await this.submitInput(
+        request.requestId,
+        conversationId,
+        request.windowId,
+        request.input,
+      );
     } else if (request.operation === 'cancel') {
       conversationId = request.conversationId;
       await this.options.conversations.cancel(request.conversationId);
@@ -351,12 +375,24 @@ export class DesktopDshSessionHost {
   }
 
   private async submitInput(
+    requestId: string,
     conversationId: string,
     windowId: string,
     input: DshComposerSubmitInput,
   ): Promise<string | undefined> {
     const dshSessionId = await this.options.conversations.ensureLoaded(conversationId);
     const isRunning = this.options.projection.snapshot(dshSessionId).currentTurn !== undefined;
+    if (
+      (await this.options.domainTurns?.submit({
+        requestId,
+        conversationId,
+        windowId,
+        running: isRunning,
+        input,
+      })) === true
+    ) {
+      return undefined;
+    }
     if (isRunning && input.kind !== 'message') {
       throw new Error('Only ordinary messages can enter a running DSH Session inbox.');
     }

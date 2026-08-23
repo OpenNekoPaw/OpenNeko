@@ -12,6 +12,7 @@ import type {
   DshSessionHostProjection,
 } from '@neko/agent-contracts/dsh-session-host';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
+import type { CharacterDialogueHandoffIntent } from '@neko/agent-contracts';
 import {
   DshAgentView,
   type DshEntryContextPresentation,
@@ -26,6 +27,8 @@ export interface DesktopAgentSurfaceProps {
   readonly conversationId?: string;
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
   readonly entryContext?: DshEntryContextPresentation;
+  readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
+  readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
   readonly conversationFeed?: ReactNode;
 }
 
@@ -40,9 +43,11 @@ type DesktopAgentSurfaceState =
 
 export function DesktopAgentSurface({
   agentSurfaceId,
+  characterDialogueHandoff,
   conversationFeed,
   conversationId,
   entryContext,
+  onCharacterDialogueHandoffConsumed,
   sceneId,
   surfaceKind,
   workbenchInstanceId,
@@ -449,6 +454,7 @@ export function DesktopAgentSurface({
       conversationId={effectiveConversationId}
       surfaceKind={surfaceKind}
       entryContext={entryContext}
+      initialCharacterDialogueHandoff={characterDialogueHandoff}
       draft={draft}
       composerConfiguration={composerConfiguration}
       composerConfigurationError={composerConfigurationError}
@@ -462,6 +468,7 @@ export function DesktopAgentSurface({
       runtime={runtime}
       submitting={submitting}
       onCancelPermission={(permission) => void cancelPermission(permission)}
+      onCharacterDialogueHandoffConsumed={onCharacterDialogueHandoffConsumed}
       onCancelTurn={() => void cancelTurn()}
       onDecidePermission={(permission, optionId) => void decidePermission(permission, optionId)}
       onDraftChange={(value) => {

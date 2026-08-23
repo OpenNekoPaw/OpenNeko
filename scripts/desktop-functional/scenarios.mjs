@@ -9,6 +9,7 @@ import {
 import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview/functional/desktop-asset-record-removal.mjs';
 import { desktopMarkdownMediaScenario } from '../../packages/text-editor/webview/functional/desktop-markdown-media.mjs';
 import { desktopTextEditorScenario } from '../../packages/text-editor/webview/functional/desktop-text-editor.mjs';
+import { characterManagementDialogueScenario } from './character-management-dialogue.mjs';
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
 import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
@@ -38,6 +39,7 @@ const scenarios = new Map(
     desktopAgentDiagnosticPortalScenario,
     desktopInvalidWindowConvergenceScenario,
     domainManagementWorkbenchScenario,
+    characterManagementDialogueScenario,
     desktopAgentEntryWorkspaceSkillScenario,
     desktopAgentLinkedMediaMentionScenario,
     desktopAgentMessageQueueScenario,

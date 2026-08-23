@@ -1077,11 +1077,6 @@ function DesktopApplicationContent(): JSX.Element {
             setCharacterDialogueHandoff((current) =>
               current?.intent.intentId === intentId ? undefined : current,
             );
-            setDiagnostic(
-              locale === 'zh-cn'
-                ? '角色对话上下文尚未接入 DSH，已拒绝本次切换，未丢失角色数据。'
-                : 'Character dialogue context is not connected to DSH yet. The launch was rejected without discarding character data.',
-            );
           }}
           pending={pending}
           projection={projection}
@@ -1240,10 +1235,6 @@ function DesktopSceneWorkbench({
   const [portalTargets, setPortalTargets] = useState<ReadonlyMap<string, HTMLDivElement>>(
     () => new Map(),
   );
-  useEffect(() => {
-    if (characterDialogueHandoff === undefined) return;
-    onCharacterDialogueHandoffConsumed?.(characterDialogueHandoff.intent.intentId);
-  }, [characterDialogueHandoff, onCharacterDialogueHandoffConsumed]);
   const registerPortalTarget = useCallback(
     (
       workbenchInstanceId: string,
@@ -1457,6 +1448,13 @@ function DesktopSceneWorkbench({
           workbenchInstanceId: activeWorkbench.workbenchInstanceId,
           sceneId: scene.sceneId,
           interaction: scene.slots.interaction,
+          ...(scene.slots.interaction.scope.kind === 'unbound' &&
+          characterDialogueHandoff?.draftId === scene.slots.interaction.scope.draftId
+            ? {
+                characterDialogueHandoff: characterDialogueHandoff.intent,
+                onCharacterDialogueHandoffConsumed,
+              }
+            : {}),
           ...(scene.slots.interaction.scope.kind === 'unbound'
             ? {
                 entryContext: {
@@ -2628,6 +2626,8 @@ export function createDesktopAgentSurfaceProps(input: {
   readonly sceneId: string;
   readonly interaction: DesktopAgentInteractionSurfaceRef;
   readonly entryContext?: DesktopAgentSurfaceProps['entryContext'];
+  readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
+  readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
 }): DesktopAgentSurfaceProps {
   const { interaction } = input;
   return {
@@ -2641,6 +2641,12 @@ export function createDesktopAgentSurfaceProps(input: {
           ? 'assistant'
           : 'workspace',
     ...(input.entryContext === undefined ? {} : { entryContext: input.entryContext }),
+    ...(input.characterDialogueHandoff === undefined
+      ? {}
+      : {
+          characterDialogueHandoff: input.characterDialogueHandoff,
+          onCharacterDialogueHandoffConsumed: input.onCharacterDialogueHandoffConsumed,
+        }),
     ...(interaction.scope.kind === 'unbound' || interaction.scope.conversationId === undefined
       ? {}
       : { conversationId: interaction.scope.conversationId }),

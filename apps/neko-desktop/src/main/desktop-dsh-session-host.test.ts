@@ -55,6 +55,7 @@ describe('Desktop DSH Session Host', () => {
     );
 
     expect(createConversation).toHaveBeenCalledWith({
+      requestId: 'request-create',
       windowId: 'window-1',
       rendererSessionId: 'renderer-1',
       workbenchInstanceId: 'workbench-1',
@@ -79,6 +80,122 @@ describe('Desktop DSH Session Host', () => {
     );
     expect(result.stopReason).toBe('end_turn');
     expect(result.projection).toMatchObject({ ...identity, title: 'Create in project' });
+  });
+
+  it('delegates an exact Character Conversation turn without invoking the generic prompt path', async () => {
+    const prompt = vi.fn();
+    const order: string[] = [];
+    const completeInitialTurn = vi.fn(async () => {
+      order.push('complete');
+    });
+    const domainTurns = {
+      submit: vi.fn(async () => {
+        order.push('turn');
+        return true;
+      }),
+    };
+    const host = createHost({
+      prompt,
+      domainTurns,
+      createConversation: vi.fn(async () => ({
+        conversationId: identity.conversationId,
+        completeInitialTurn,
+      })),
+    });
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      {
+        requestId: 'request-character',
+        operation: 'create',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        permissionPresetId: 'workspace-write',
+        target: {
+          kind: 'character-dialogue',
+          mode: 'companion',
+          participants: [
+            {
+              globalCharacterId: 'global-character-1',
+              characterVersionId: 'character-version-1',
+            },
+          ],
+        },
+        initialInput: {
+          kind: 'message',
+          text: 'Hello Neko',
+          references: [],
+          images: [],
+          contextPayloads: [],
+        },
+      },
+    );
+
+    expect(domainTurns.submit).toHaveBeenCalledWith({
+      requestId: 'request-character',
+      conversationId: identity.conversationId,
+      windowId: 'window-1',
+      running: false,
+      input: {
+        kind: 'message',
+        text: 'Hello Neko',
+        references: [],
+        images: [],
+        contextPayloads: [],
+      },
+    });
+    expect(prompt).not.toHaveBeenCalled();
+    expect(order).toEqual(['turn', 'complete']);
+  });
+
+  it('does not complete a Character create when its first domain turn fails', async () => {
+    const completeInitialTurn = vi.fn(async () => undefined);
+    const host = createHost({
+      domainTurns: {
+        submit: vi.fn(async () => {
+          throw new Error('Character provider unavailable.');
+        }),
+      },
+      createConversation: vi.fn(async () => ({
+        conversationId: identity.conversationId,
+        completeInitialTurn,
+      })),
+    });
+
+    await expect(
+      host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-character-failed',
+          operation: 'create',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          workbenchInstanceId: 'workbench-1',
+          agentSurfaceId: 'surface-1',
+          permissionPresetId: 'workspace-write',
+          target: {
+            kind: 'character-dialogue',
+            mode: 'companion',
+            participants: [
+              {
+                globalCharacterId: 'global-character-1',
+                characterVersionId: 'character-version-1',
+              },
+            ],
+          },
+          initialInput: {
+            kind: 'message',
+            text: 'Hello Neko',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
+        },
+      ),
+    ).rejects.toThrow('Character provider unavailable.');
+    expect(completeInitialTurn).not.toHaveBeenCalled();
   });
 
   it('routes a first Command through the same create command', async () => {
@@ -1354,16 +1471,10 @@ function createHost(overrides: {
   readonly projection?: DshAcpProjection;
   readonly publishChanged?: (event: DshSessionChangedEvent) => void;
   readonly getByDshSessionId?: (sessionId: string) => Promise<typeof identity | undefined>;
-  readonly createConversation?: (input: {
-    readonly windowId: string;
-    readonly rendererSessionId: string;
-    readonly workbenchInstanceId: string;
-    readonly agentSurfaceId: string;
-    readonly permissionPresetId: string;
-    readonly target:
-      { readonly kind: 'surface' } | { readonly kind: 'project'; readonly projectId: string };
-    readonly initialInput: import('@neko/agent-contracts/dsh-session-host').DshComposerSubmitInput;
-  }) => Promise<{ readonly conversationId: string }>;
+  readonly createConversation?: ConstructorParameters<
+    typeof DesktopDshSessionHost
+  >[0]['createConversation'];
+  readonly domainTurns?: ConstructorParameters<typeof DesktopDshSessionHost>[0]['domainTurns'];
   readonly applyConversation?: (
     conversationId: string,
     windowId: string,
@@ -1505,6 +1616,7 @@ function createHost(overrides: {
     createConversation:
       overrides.createConversation ??
       vi.fn(async () => ({ conversationId: identity.conversationId })),
+    ...(overrides.domainTurns === undefined ? {} : { domainTurns: overrides.domainTurns }),
     projection: overrides.projection ?? new DshAcpProjection(),
     windows: {
       resolveSender: () => ({ windowId: 'window-1', rendererSessionId: 'renderer-1' }),

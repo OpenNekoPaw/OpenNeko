@@ -1099,6 +1099,96 @@ describe('DshAgentView content-creation composer', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: '清除: Neko' })).toBeNull());
   });
 
+  it('submits the exact adopted Character handoff instead of a surface Assistant target', async () => {
+    const onSubmit = vi.fn(async () => true);
+    const onConsumed = vi.fn();
+    renderAgent(
+      <DshAgentView
+        agentSurfaceId="surface-character-handoff"
+        surfaceKind="entry"
+        composerConfiguration={{
+          models: [
+            {
+              id: 'provider:model',
+              label: 'Model',
+              providerId: 'provider',
+              modelId: 'model',
+              providerLabel: 'Provider',
+              category: 'llm',
+              capabilities: ['chat'],
+            },
+          ],
+          selectedModelOptionId: 'provider:model',
+          selectedMediaModelOptionIds: {},
+          permissionPresetId: 'workspace-write',
+          permissionPresets: [
+            { id: 'workspace-write', label: 'Workspace Write', selectable: true },
+          ],
+        }}
+        entryContext={{
+          workspace: { projects: [] },
+          loadCharacterTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+          loadWorldTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+        }}
+        initialCharacterDialogueHandoff={{
+          kind: 'character-dialogue',
+          intentId: 'intent-character-1',
+          label: 'Neko',
+          binding: {
+            kind: 'character-dialogue',
+            mode: 'companion',
+            participants: [
+              {
+                globalCharacterId: 'global-character-1',
+                characterVersionId: 'character-version-1',
+              },
+            ],
+          },
+        }}
+        onCharacterDialogueHandoffConsumed={onConsumed}
+        configuring={false}
+        draft="Hello Neko"
+        loading={false}
+        permissions={[]}
+        runtime={{ status: 'running' }}
+        submitting={false}
+        onCancelPermission={vi.fn()}
+        onCancelTurn={vi.fn()}
+        onDecidePermission={vi.fn()}
+        onDraftChange={vi.fn()}
+        onModelChange={vi.fn()}
+        onPermissionPresetChange={vi.fn()}
+        onRestartRuntime={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(await screen.findByRole('button', { name: '清除: Neko' })).toBeTruthy();
+    expect(onConsumed).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        {
+          kind: 'character-dialogue',
+          mode: 'companion',
+          participants: [
+            {
+              globalCharacterId: 'global-character-1',
+              characterVersionId: 'character-version-1',
+            },
+          ],
+        },
+        {
+          kind: 'message',
+          text: 'Hello Neko',
+          references: [],
+          images: [],
+          contextPayloads: [],
+        },
+      ),
+    );
+  });
+
   it('shows live elapsed time for the active DSH turn and removes it on canonical completion', () => {
     vi.useFakeTimers();
     vi.setSystemTime(10_000);

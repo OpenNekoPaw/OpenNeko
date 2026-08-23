@@ -301,7 +301,7 @@ describe('Character Management surfaces', () => {
 
   it('launches the exact selected global version without authoring controls', async () => {
     const base = projectSnapshot();
-    const version = base.character.versions[0]!;
+    const publication = base.character.versions[0]!;
     const onStartInteraction = vi.fn();
     render(<Harness detailActions={{ onStartInteraction }} host={createHost(undefined, base)} />);
     fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
@@ -310,9 +310,82 @@ describe('Character Management surfaces', () => {
     expect(screen.queryByRole('button', { name: /Edit character/u })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Start conversation' }));
     expect(onStartInteraction).toHaveBeenCalledWith(
-      version.globalCharacterId,
-      version.characterVersionId,
+      publication.globalCharacterId,
+      publication.characterVersionId,
     );
+  });
+
+  it('previews immutable Character facts, representation models, and TTS defaults read-only', async () => {
+    const base = projectSnapshot();
+    const publication = base.character.versions[0]!;
+    const snapshot = {
+      ...base,
+      character: {
+        ...base.character,
+        versions: [
+          {
+            ...publication,
+            definition: {
+              ...publication.definition,
+              summary: 'A careful archive keeper.',
+              backgroundStory: {
+                ...publication.definition.backgroundStory,
+                overview: 'Raised among living records.',
+                origins: [
+                  {
+                    loreEntryId: 'lore-origin-1',
+                    statement: 'Born in Archive City.',
+                    evidenceIds: [],
+                  },
+                ],
+              },
+              originSetting: {
+                ...publication.definition.originSetting,
+                overview: 'Archive City remembers every promise.',
+              },
+              canon: ['Never destroys an original record.'],
+              knowledgeBoundary: ['Does not know sealed collections.'],
+              behaviorPolicy: ['Ask before revealing private notes.'],
+              expressionPolicy: ['Speaks precisely and warmly.'],
+              representationRefs: [
+                {
+                  representationId: 'avatar-vrm-1',
+                  kind: 'vrm' as const,
+                  resourceRef: '${ASSET_ROOT}/characters/neko.vrm',
+                },
+                {
+                  representationId: 'voice-neko-1',
+                  kind: 'voice' as const,
+                  resourceRef: 'voice://neko-1',
+                },
+              ],
+              representationDefaults: { avatarRepresentationId: 'avatar-vrm-1' },
+              voiceDefaults: {
+                providerRef: 'tts-provider-local',
+                voiceRepresentationId: 'voice-neko-1',
+                speed: 1.05,
+                autoRead: true,
+              },
+            },
+          },
+        ],
+      },
+    };
+    const { container } = render(<Harness host={createHost(undefined, snapshot)} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
+
+    expect(screen.getAllByText('A careful archive keeper.').length).toBeGreaterThan(1);
+    expect(screen.getByText('Raised among living records.')).toBeTruthy();
+    expect(screen.getByText('Never destroys an original record.')).toBeTruthy();
+    expect(screen.getAllByText('avatar-vrm-1')).toHaveLength(2);
+    expect(screen.getByText('tts-provider-local')).toBeTruthy();
+    expect(
+      screen.getByText(/chat LLM provider and model belong to the exact conversation/u),
+    ).toBeTruthy();
+    const detail = container.querySelector('[data-character-management-detail-surface="true"]');
+    expect(detail?.querySelector('input')).toBeNull();
+    expect(detail?.querySelector('textarea')).toBeNull();
+    expect(screen.queryByRole('button', { name: /save|publish|edit/u })).toBeNull();
   });
 
   it('offers global package import without standalone draft creation', async () => {
@@ -369,6 +442,45 @@ describe('Character Management surfaces', () => {
     expect(onStartInteraction).toHaveBeenCalledWith(
       globalCharacterId,
       versions[1]!.characterVersionId,
+    );
+  });
+
+  it('resets the preview to another Character current version without reusing stale selection', async () => {
+    const base = projectSnapshot();
+    const first = base.character.versions[0]!;
+    const secondVersion = {
+      ...first,
+      characterVersionId: 'character-version:mio-current',
+      globalCharacterId: 'global-character:mio',
+      label: 'Mio current',
+      definition: { ...first.definition, summary: 'Mio current summary.' },
+    };
+    const snapshot: CharacterFoundationFixture = {
+      ...base,
+      character: {
+        ...base.character,
+        globalCharacters: [
+          ...base.character.globalCharacters,
+          {
+            globalCharacterId: secondVersion.globalCharacterId,
+            displayName: 'Mio',
+            currentCharacterVersionId: secondVersion.characterVersionId,
+            characterVersionIds: [secondVersion.characterVersionId],
+            createdAt: '2026-08-10T00:00:00.000Z',
+            updatedAt: '2026-08-10T00:00:00.000Z',
+          },
+        ],
+        versions: [...base.character.versions, secondVersion],
+      },
+    };
+    render(<Harness host={createHost(undefined, snapshot)} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Lin/u }));
+    fireEvent.click(screen.getByRole('button', { name: /Mio/u }));
+
+    expect(screen.getAllByText('Mio current summary.').length).toBeGreaterThan(1);
+    expect(screen.getByLabelText('Conversation version')).toHaveProperty(
+      'value',
+      secondVersion.characterVersionId,
     );
   });
 

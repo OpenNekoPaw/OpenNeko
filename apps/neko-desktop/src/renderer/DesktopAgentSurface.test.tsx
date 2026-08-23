@@ -742,6 +742,43 @@ describe('DesktopAgentSurface', () => {
     expect(dshSessions.create).not.toHaveBeenCalled();
   });
 
+  it('adopts an exact Character detail handoff before acknowledging consumption', async () => {
+    const onCharacterDialogueHandoffConsumed = vi.fn();
+    dshSessions.getComposerConfiguration.mockResolvedValueOnce(entryComposerConfiguration);
+    const { container } = render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-character-handoff"
+        agentSurfaceId="surface-character-handoff"
+        surfaceKind="entry"
+        characterDialogueHandoff={{
+          kind: 'character-dialogue',
+          intentId: 'intent-character-handoff',
+          label: 'Neko',
+          binding: {
+            kind: 'character-dialogue',
+            mode: 'companion',
+            participants: [
+              {
+                globalCharacterId: 'global-character-1',
+                characterVersionId: 'character-version-1',
+              },
+            ],
+          },
+        }}
+        onCharacterDialogueHandoffConsumed={onCharacterDialogueHandoffConsumed}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        container.querySelector('[data-entry-binding-kind="character-dialogue"][title="Neko"]'),
+      ).toBeTruthy(),
+    );
+    expect(onCharacterDialogueHandoffConsumed).toHaveBeenCalledWith('intent-character-handoff');
+    expect(dshSessions.create).not.toHaveBeenCalled();
+  });
+
   it('projects content context and changes models and DSH permissions through Host ports', async () => {
     dshSessions.getSnapshot.mockResolvedValueOnce({
       conversationId: projection.conversationId,

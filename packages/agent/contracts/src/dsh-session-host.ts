@@ -27,6 +27,10 @@ import {
   type WorkspaceFileContentLocator,
 } from '@neko/content';
 import { decodedBase64ByteLength, requireCanonicalBase64 } from './canonical-base64';
+import {
+  parseAgentEntryTargetBinding,
+  type AgentCharacterDialogueLaunchBinding,
+} from './agent-entry-intent';
 
 export const DSH_SESSION_HOST_CHANNEL = 'openneko:dsh:session';
 export const DSH_SESSION_CHANGED_CHANNEL = 'openneko:dsh:session:changed';
@@ -238,7 +242,9 @@ interface DshSessionHostConversationRequest extends DshSessionHostSenderRequest 
 }
 
 export type DshConversationCreationTarget =
-  { readonly kind: 'surface' } | { readonly kind: 'project'; readonly projectId: string };
+  | { readonly kind: 'surface' }
+  | { readonly kind: 'project'; readonly projectId: string }
+  | AgentCharacterDialogueLaunchBinding;
 
 export type DshSessionHostRequest =
   | (DshSessionHostSenderRequest & {
@@ -592,6 +598,13 @@ function parseConversationCreationTarget(value: unknown): DshConversationCreatio
   if (record.kind === 'project') {
     requireExactKeys(record, ['kind', 'projectId']);
     return { kind: 'project', projectId: requireIdentity(record.projectId, 'projectId') };
+  }
+  if (record.kind === 'character-dialogue') {
+    const binding = parseAgentEntryTargetBinding(record);
+    if (binding.kind !== 'character-dialogue') {
+      throw new Error('DSH Character Conversation target must use a Character Dialogue binding.');
+    }
+    return binding;
   }
   throw new Error(`DSH Conversation creation target '${String(record.kind)}' is unsupported.`);
 }

@@ -134,6 +134,7 @@ import {
   CharacterAuthoringHostService,
   CharacterAvatarAuthorityService,
   CharacterCompanionContinuityService,
+  CharacterConversationLaunchService,
   CharacterFoundationCommandService,
   CharacterFoundationService,
   CharacterGlobalCatalogService,
@@ -241,7 +242,10 @@ import {
 import { ProjectPortabilityRuntime } from '@neko/assets-node';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import { DSH_PERMISSION_CHANGED_CHANNEL } from '@neko/agent-contracts/dsh-permission-host';
-import { DSH_SESSION_CHANGED_CHANNEL } from '@neko/agent-contracts/dsh-session-host';
+import {
+  DSH_SESSION_CHANGED_CHANNEL,
+  type DshComposerSubmitInput,
+} from '@neko/agent-contracts/dsh-session-host';
 import {
   DSH_RUNTIME_CHANGED_CHANNEL,
   type DshRuntimeHostProjection,
@@ -485,6 +489,7 @@ async function startDesktop(): Promise<void> {
     }),
   );
   const retainedProjects = await workspaceRegistry.listProjects([assistantSpaceId]);
+  const experimentalCreativeCapabilitiesReady = !app.isPackaged;
   const shellService = new DesktopShellService({
     applicationInstanceId,
     stateRepository: shellStateRepository,
@@ -1521,6 +1526,11 @@ async function startDesktop(): Promise<void> {
       submitTurn: (input) => requireDshDomainConversations().submitTurn(input),
     },
   });
+  const characterConversationLaunches = new CharacterConversationLaunchService({
+    repository: characterRuntimeRepositories.conversationLaunch,
+    publications: characterGlobalCatalog,
+    agentConversations: characterAgentConversations,
+  });
   const characterPresentation = new CharacterPresentationService(
     characterRuntimeRepositories.presentation,
   );
@@ -2436,6 +2446,7 @@ async function startDesktop(): Promise<void> {
     },
     composer: dshComposerConfiguration,
     createConversation: async ({
+      requestId,
       windowId,
       rendererSessionId,
       workbenchInstanceId,
@@ -2454,6 +2465,86 @@ async function startDesktop(): Promise<void> {
         throw new Error(`Agent Surface '${agentSurfaceId}' already has a Conversation.`);
       }
       const scope = grant.interaction.scope;
+      if (target.kind === 'character-dialogue') {
+        if (!experimentalCreativeCapabilitiesReady) {
+          throw new Error('Character Dialogue is unavailable in the Release composition.');
+        }
+        requirePlainCharacterMessage(initialInput);
+        const catalog = await characterGlobalCatalog.readCatalog();
+        for (const participant of target.participants) {
+          const publication = catalog.versions.find(
+            (candidate) => candidate.characterVersionId === participant.characterVersionId,
+          );
+          if (publication?.globalCharacterId !== participant.globalCharacterId) {
+            throw new Error(
+              `CharacterVersion '${participant.characterVersionId}' does not belong to GlobalCharacter '${participant.globalCharacterId}'.`,
+            );
+          }
+        }
+        const launched = await characterConversationLaunches.launch({
+          requestId,
+          userId: 'user:local',
+          userDisplayName: 'You',
+          selection: {
+            mode: target.mode,
+            characters: target.participants.map((participant) => ({
+              characterVersionId: participant.characterVersionId,
+              ...(participant.roleProfileId === undefined
+                ? {}
+                : { roleProfileId: participant.roleProfileId }),
+              ...('storyline' in participant && participant.storyline !== undefined
+                ? { storyline: participant.storyline }
+                : {}),
+            })),
+          },
+        });
+        const conversationId =
+          launched.topology === 'dialogue'
+            ? launched.primaryAgentSessionId
+            : launched.interactionAgentSessionId;
+        const context = (() => {
+          if (launched.topology === 'dialogue') {
+            return {
+              kind: 'character' as const,
+              characterId: launched.characterProjectId,
+              characterVersionId: launched.characterVersionId,
+              characterRunId: launched.characterRunId,
+              dialogueRunId: launched.dialogueRunId,
+            };
+          }
+          const participant = launched.participants[0];
+          if (participant === undefined) {
+            throw new Error(
+              `Character Room '${launched.roomRunId}' has no interaction participant.`,
+            );
+          }
+          return {
+            kind: 'room' as const,
+            scope: 'participant' as const,
+            roomId: launched.characterRoomId,
+            roomRunId: launched.roomRunId,
+            participantId: participant.participantId,
+            characterRunId: participant.characterRunId,
+          };
+        })();
+        await dshProduct.runtime.conversations.conversations.setSessionMode(
+          conversationId,
+          permissionPresetId,
+        );
+        return {
+          conversationId,
+          completeInitialTurn: async () => {
+            await shellService.attachAgentConversation({
+              windowId,
+              rendererSessionId,
+              agentViewId: grant.interaction.agentViewId,
+              draftId: scope.draftId,
+              context,
+              conversationId,
+            });
+          },
+        };
+      }
       const context = await resolveDesktopDshConversationContext({
         windowId,
         target,
@@ -2480,6 +2571,44 @@ async function startDesktop(): Promise<void> {
         conversationId: published.conversationId,
       });
       return { conversationId: published.conversationId };
+    },
+    domainTurns: {
+      submit: async ({ requestId, conversationId, windowId, running, input }) => {
+        const context = await agentConversationContexts.readContext(conversationId);
+        if (context?.kind !== 'character' && context?.kind !== 'room') return false;
+        if (running) {
+          throw new Error(
+            `Character Conversation '${conversationId}' cannot start another turn while its exact turn is active.`,
+          );
+        }
+        const message = requirePlainCharacterMessage(input);
+        await dshComposerConfiguration.applyConversation(conversationId, windowId);
+        if (context.kind === 'character') {
+          const dialogueRunId = context.dialogueRunId;
+          const characterRunId = context.characterRunId;
+          if (dialogueRunId === undefined || characterRunId === undefined) {
+            throw new Error(
+              `Character Conversation '${conversationId}' is missing its exact Run or Dialogue binding.`,
+            );
+          }
+          await characterInteractions.submitTurn({
+            topology: 'dialogue',
+            dialogueRunId,
+            characterRunId,
+            requestId,
+            message,
+          });
+        } else {
+          await characterInteractions.submitTurn({
+            topology: 'chatroom',
+            roomRunId: context.roomRunId,
+            primaryAgentSessionId: conversationId,
+            requestId,
+            message,
+          });
+        }
+        return true;
+      },
     },
     projection: dshProduct.runtime.client.projection,
     windows: appHost.windows,
@@ -3266,4 +3395,20 @@ function requireProjectIdentity(workspaceId: string, projectId: string): void {
   if (projectId !== expected) {
     throw new Error(`Project '${projectId}' does not match authorized Workspace '${workspaceId}'.`);
   }
+}
+
+function requirePlainCharacterMessage(input: DshComposerSubmitInput): string {
+  if (
+    input.kind !== 'message' ||
+    input.text.trim().length === 0 ||
+    input.references.length > 0 ||
+    input.images.length > 0 ||
+    input.contextPayloads.length > 0 ||
+    input.canvasTurnTarget !== undefined
+  ) {
+    throw new Error(
+      'Character Dialogue currently accepts one plain text message through its Chara-owned turn context.',
+    );
+  }
+  return input.text.trim();
 }

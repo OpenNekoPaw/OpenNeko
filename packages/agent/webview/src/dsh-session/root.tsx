@@ -15,6 +15,7 @@ import type {
 } from '@neko/agent-contracts/dsh-session-host';
 import type {
   AgentContextPayload,
+  CharacterDialogueHandoffIntent,
   AgentCharacterDialogueTargetOption,
   AgentInputCatalogEntry,
   AgentWorldExperienceTargetOption,
@@ -72,6 +73,7 @@ export interface DshAgentViewProps {
   readonly conversationId?: string;
   readonly surfaceKind: 'entry' | 'assistant' | 'workspace';
   readonly entryContext?: DshEntryContextPresentation;
+  readonly initialCharacterDialogueHandoff?: CharacterDialogueHandoffIntent;
   readonly composerConfiguration?: DshComposerConfigurationProjection;
   readonly composerConfigurationError?: string;
   readonly mentionItems?: readonly DshComposerMentionProjection[];
@@ -104,6 +106,7 @@ export interface DshAgentViewProps {
     attachmentId: string,
   ) => Promise<DshImageAttachmentPreviewHostResult['preview']>;
   readonly onOpenTerminalArtifact?: (messageId: string) => void;
+  readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
   readonly onSubmit: (
     target: DshConversationCreationTarget,
     input: DshComposerSubmitInput,
@@ -137,6 +140,8 @@ export function DshAgentView(props: DshAgentViewProps): JSX.Element {
 
 function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const { locale } = useTranslation();
+  const { initialCharacterDialogueHandoff, onCharacterDialogueHandoffConsumed, surfaceKind } =
+    props;
   const copy = locale === 'zh-cn' ? ZH_COPY : EN_COPY;
   const [entryExperience, setEntryExperience] = useState<'assistant' | 'authoring'>('assistant');
   const [entryDetail, setEntryDetail] = useState<'project' | 'character' | 'world'>('character');
@@ -157,10 +162,14 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
   const [entryCharacterLaunches, setEntryCharacterLaunches] = useState<
     readonly SelectedCharacterLaunch[]
   >([]);
+  const [entryCharacterConversationMode, setEntryCharacterConversationMode] = useState<
+    'companion' | 'narrative'
+  >('companion');
   const [entryWorldLaunch, setEntryWorldLaunch] = useState<SelectedWorldLaunch>();
   const [entryContextDiagnostic, setEntryContextDiagnostic] = useState<string>();
   const composerPresentationSnapshots = useDshComposerPresentationSnapshotStore();
   const previousConversationIdRef = useRef(props.conversationId);
+  const adoptedCharacterHandoffRef = useRef<string>();
   const canvasWorkspaceId = props.composerConfiguration?.context?.canvas.workspaceId;
   const conversationTitle = props.projection?.title ?? copy.newConversation;
   const runtimeReady = props.runtime?.status === 'running';
@@ -185,6 +194,31 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
     props.surfaceKind === 'workspace'
       ? 'agent-workspace-initial-center-group'
       : 'agent-entry-center-group';
+  useEffect(() => {
+    const handoff = initialCharacterDialogueHandoff;
+    if (
+      handoff === undefined ||
+      surfaceKind !== 'entry' ||
+      adoptedCharacterHandoffRef.current === handoff.intentId
+    ) {
+      return;
+    }
+    adoptedCharacterHandoffRef.current = handoff.intentId;
+    setEntryExperience('assistant');
+    setEntryDetail('character');
+    setEntryDetailExpanded(true);
+    setEntryCharacterConversationMode(handoff.binding.mode);
+    setEntryWorldLaunch(undefined);
+    setEntryWorkspaceTarget(undefined);
+    setEntryCharacterLaunches(
+      handoff.binding.participants.map((participant, index) => ({
+        globalCharacterId: participant.globalCharacterId,
+        characterVersionId: participant.characterVersionId,
+        label: index === 0 ? handoff.label : participant.characterVersionId,
+      })),
+    );
+    onCharacterDialogueHandoffConsumed?.(handoff.intentId);
+  }, [initialCharacterDialogueHandoff, onCharacterDialogueHandoffConsumed, surfaceKind]);
   useEffect(() => {
     if (!entryDetailExpanded || entryDetail !== 'character' || !props.entryContext) {
       return;
@@ -301,6 +335,8 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
       entryContextAvailable={props.entryContext !== undefined}
       entryWorkspaceTarget={entryWorkspaceTarget}
       selectedCharacterLaunches={entryCharacterLaunches}
+      entryCharacterConversationMode={entryCharacterConversationMode}
+      onEntryCharacterConversationModeChange={setEntryCharacterConversationMode}
       selectedWorldLaunch={entryWorldLaunch}
       onChooseEntryDetail={chooseEntryDetail}
       onClearEntryWorkspaceTarget={() => setEntryWorkspaceTarget(undefined)}
@@ -504,6 +540,8 @@ function DshComposer({
   entryContextAvailable,
   entryWorkspaceTarget,
   selectedCharacterLaunches,
+  entryCharacterConversationMode,
+  onEntryCharacterConversationModeChange,
   selectedWorldLaunch,
   onChooseEntryDetail,
   onClearEntryWorkspaceTarget,
@@ -547,6 +585,8 @@ function DshComposer({
   readonly entryContextAvailable: boolean;
   readonly entryWorkspaceTarget?: DshEntryProjectSelection;
   readonly selectedCharacterLaunches: readonly SelectedCharacterLaunch[];
+  readonly entryCharacterConversationMode: 'companion' | 'narrative';
+  readonly onEntryCharacterConversationModeChange: (mode: 'companion' | 'narrative') => void;
   readonly selectedWorldLaunch?: SelectedWorldLaunch;
   readonly onChooseEntryDetail: (detail: 'project' | 'character' | 'world') => void;
   readonly onClearEntryWorkspaceTarget: () => void;
@@ -630,10 +670,24 @@ function DshComposer({
       source: 'user' as const,
     }),
   );
-  const submitTarget = (): DshConversationCreationTarget =>
-    entryExperience === 'authoring' && entryWorkspaceTarget !== undefined
-      ? { kind: 'project', projectId: entryWorkspaceTarget.projectId }
-      : { kind: 'surface' };
+  const submitTarget = (): DshConversationCreationTarget => {
+    if (entryExperience === 'authoring' && entryWorkspaceTarget !== undefined) {
+      return { kind: 'project', projectId: entryWorkspaceTarget.projectId };
+    }
+    if (selectedWorldLaunch !== undefined) {
+      throw new Error(
+        'World Experience is not connected to a qualified World-owned DSH binding provider.',
+      );
+    }
+    if (selectedCharacterLaunches.length === 0) return { kind: 'surface' };
+    const participants = selectedCharacterLaunches.map((selection) => ({
+      globalCharacterId: selection.globalCharacterId,
+      characterVersionId: selection.characterVersionId,
+    }));
+    return entryCharacterConversationMode === 'companion'
+      ? { kind: 'character-dialogue', mode: 'companion', participants }
+      : { kind: 'character-dialogue', mode: 'narrative', participants };
+  };
   const resolveCanvasTurnTarget = () => {
     if (canvasCatalog === undefined) return undefined;
     if (selectedCanvasOption === undefined || selectedCanvasOption.disabled === true) {
@@ -927,6 +981,12 @@ function DshComposer({
           selectedCharacterLaunches={
             entryExperience === 'assistant' ? selectedCharacterLaunches : []
           }
+          entryCharacterConversationMode={
+            entryExperience === 'assistant' && selectedCharacterLaunches.length > 0
+              ? entryCharacterConversationMode
+              : undefined
+          }
+          onEntryCharacterConversationModeChange={onEntryCharacterConversationModeChange}
           selectedWorldLaunch={entryExperience === 'assistant' ? selectedWorldLaunch : undefined}
           onClearEntryWorkspaceTarget={async () => onClearEntryWorkspaceTarget()}
           onRemoveCharacterLaunch={onRemoveCharacterLaunch}
