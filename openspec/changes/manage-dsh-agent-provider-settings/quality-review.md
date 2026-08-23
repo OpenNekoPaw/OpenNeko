@@ -23,3 +23,9 @@ configuration, credential, routing, or generation authorities reviewed above. A 
 verified the compact initial state and mutually exclusive Provider/model expansion at 1220×768. Dark
 theme and a narrower supported window remain advisory visual evidence gaps; real Provider execution
 is unchanged by this presentation-only follow-up.
+
+The default-model card follow-up remains L1 Renderer presentation and reuses the existing canonical
+`setDefault` bridge. Removing the duplicate selector surface does not remove or duplicate the Agent
+default authority: the projection still supplies current defaults and the card action writes the same
+type/ref contract. No Renderer secret access, alternate provider/model registry, or fallback routing was
+introduced.

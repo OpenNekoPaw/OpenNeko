@@ -141,6 +141,14 @@ describe('Desktop Settings surfaces', () => {
           type: 'image' as const,
           enabled: true,
         },
+        {
+          id: 'audio-model',
+          providerId: 'deepseek',
+          apiName: 'audio-model',
+          displayName: 'Audio Model',
+          type: 'audio' as const,
+          enabled: true,
+        },
       ],
       defaults: {
         llm: { providerId: 'deepseek', modelId: 'deepseek-chat' },
@@ -148,11 +156,12 @@ describe('Desktop Settings surfaces', () => {
       },
     };
     const response = { requestId: 'fixture', projection, restartRequired: false };
+    const setDefault = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
       get: async () => projection,
       saveProvider: async () => response,
       saveModel: async () => response,
-      setDefault: async () => response,
+      setDefault,
     };
     const { container, root } = await renderSettings({
       aiModelSettings,
@@ -160,8 +169,9 @@ describe('Desktop Settings surfaces', () => {
     });
     await act(async () => Promise.resolve());
 
-    expect(container.textContent).toContain('Dialogue models');
-    expect(container.textContent).toContain('Generation models');
+    expect(container.textContent).not.toContain('Dialogue models');
+    expect(container.textContent).not.toContain('Generation models');
+    expect(container.querySelectorAll('select')).toHaveLength(0);
     expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(0);
     expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(0);
 
@@ -175,7 +185,17 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => modelSummary.click());
     expect(modelSummary.getAttribute('aria-expanded')).toBe('true');
     expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(0);
-    expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(2);
+    expect(container.textContent).toContain('Dialogue models');
+    expect(container.textContent).toContain('Generation models');
+    expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(3);
+    expect(container.querySelectorAll('.desktop-settings__model-default-badge')).toHaveLength(2);
+    expect(container.querySelectorAll('.desktop-settings__model-default-action')).toHaveLength(1);
+
+    await act(async () => findButtonContaining(container, 'Set as default').click());
+    expect(setDefault).toHaveBeenCalledWith('audio', {
+      providerId: 'deepseek',
+      modelId: 'audio-model',
+    });
     await act(async () => root.unmount());
   });
 });

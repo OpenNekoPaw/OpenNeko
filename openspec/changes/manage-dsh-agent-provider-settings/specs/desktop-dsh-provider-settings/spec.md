@@ -29,16 +29,23 @@ Default dialogue changes SHALL apply to future conversations. Provider catalog c
 
 ### Requirement: Model configuration uses progressive disclosure
 
-The Agent settings surface SHALL separate dialogue defaults from generation defaults and SHALL keep Provider and model catalogs collapsed until the user explicitly opens the corresponding management area.
+The Agent settings surface SHALL keep Provider and model catalogs collapsed until the user explicitly opens the corresponding management area. Default model selection SHALL be part of the configured model catalog rather than a separate settings block.
 
 #### Scenario: Agent settings are opened
 
 - **WHEN** the Agent settings category becomes visible
-- **THEN** dialogue and generation defaults are shown as separate groups
-- **AND** Provider and model catalog entries are represented by compact management summaries rather than fully expanded catalogs
+- **THEN** Provider and model catalog entries are represented by compact management summaries rather than fully expanded catalogs
+- **AND** no separate default-model selectors are shown
 
 #### Scenario: A catalog is managed
 
 - **WHEN** the user opens Provider management or model management
 - **THEN** only the selected catalog and its applicable actions are expanded
 - **AND** opening the other catalog replaces the previously expanded management area
+
+#### Scenario: Configured models are managed
+
+- **WHEN** the user opens model management
+- **THEN** configured models are grouped into dialogue and generation models
+- **AND** the current default for each model type is marked on the corresponding model card
+- **AND** another enabled model of the same type can be made default from its card

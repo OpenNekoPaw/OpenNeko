@@ -8,6 +8,7 @@
 - [x] 2.1 接入 sender-bound Main/preload bridge，并保留高级配置入口。
 - [x] 2.2 实现 Provider 列表、编辑/API Key、模型目录与新会话默认对话模型 UI，显示重启边界。
 - [x] 2.3 将对话模型与生成模型明确分组，并把 Provider/模型目录改为按需展开的渐进式配置。
+- [x] 2.4 移除独立默认模型选择区，在模型目录卡片中标识并切换各类型默认模型。
 
 ## 3. Verification
 

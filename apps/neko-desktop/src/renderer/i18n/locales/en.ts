@@ -93,16 +93,18 @@ export const en = {
     'Provider or model catalog changed. Restart OpenNeko before using it in DSH conversations.',
   'settings.agent.dialogueModels': 'Dialogue models',
   'settings.agent.dialogueModelsDescription':
-    'Choose the language model used by new conversations.',
+    'Language models for new conversations; the current default is marked on its card.',
   'settings.agent.generationModels': 'Generation models',
   'settings.agent.generationModelsDescription':
-    'Choose defaults independently for image, video, and audio jobs.',
-  'settings.agent.defaultMissing': 'Not configured',
+    'Models are separated by image, video, and audio; each default is marked on its card.',
+  'settings.agent.defaultModel': 'Default',
+  'settings.agent.setAsDefault': 'Set as default',
   'settings.agent.providers': 'Providers',
   'settings.agent.providersDescription': 'Configured providers consumed by DSH and generation.',
   'settings.agent.addProvider': 'Add provider',
   'settings.agent.modelCatalog': 'Model catalog',
-  'settings.agent.modelCatalogDescription': 'Models remain owned by the canonical Agent config.',
+  'settings.agent.modelCatalogDescription':
+    'Configure dialogue and generation models, including the default for each type.',
   'settings.agent.manage': 'Manage',
   'settings.agent.collapse': 'Collapse',
   'settings.agent.addModel': 'Add model',

@@ -453,42 +453,73 @@ function AgentModelSettingsGroup({
     setShowModelForm(false);
   };
 
-  const renderDefaultModel = (type: ModelType): JSX.Element => (
-    <label key={type} className="desktop-settings__compact-field">
-      <span>{t(`settings.agent.modelType.${type}`)}</span>
-      <select
-        aria-label={t(`settings.agent.modelType.${type}`)}
-        disabled={pending || !port || !projection}
-        value={modelRefValue(projection?.defaults[type])}
-        onChange={(event) => {
-          const model = projection?.models.find(
-            (candidate) =>
-              candidate.type === type &&
-              `${candidate.providerId}:${candidate.id}` === event.currentTarget.value,
-          );
-          if (!model || !port) return;
-          void execute(() =>
-            port.setDefault(type, {
-              providerId: model.providerId,
-              modelId: model.id,
-            }),
-          );
-        }}
-      >
-        <option value="">{t('settings.agent.defaultMissing')}</option>
-        {projection?.models
-          .filter((model) => model.type === type && model.enabled)
-          .map((model) => (
-            <option
-              key={`${model.providerId}:${model.id}`}
-              value={`${model.providerId}:${model.id}`}
-            >
-              {model.displayName} · {model.providerId}
-            </option>
-          ))}
-      </select>
-    </label>
-  );
+  const renderModelGroup = (kind: 'dialogue' | 'generation'): JSX.Element => {
+    const models = projection?.models.filter((model) =>
+      kind === 'dialogue' ? model.type === 'llm' : model.type !== 'llm',
+    );
+    return (
+      <section className="desktop-settings__model-group">
+        <div className="desktop-settings__model-group-heading">
+          <strong>
+            {t(
+              kind === 'dialogue'
+                ? 'settings.agent.dialogueModels'
+                : 'settings.agent.generationModels',
+            )}
+          </strong>
+          <small>
+            {t(
+              kind === 'dialogue'
+                ? 'settings.agent.dialogueModelsDescription'
+                : 'settings.agent.generationModelsDescription',
+            )}
+          </small>
+        </div>
+        <div className="desktop-settings__model-list">
+          {models?.map((model) => {
+            const isDefault =
+              modelRefValue(projection?.defaults[model.type]) === `${model.providerId}:${model.id}`;
+            return (
+              <div
+                key={`${model.providerId}:${model.id}`}
+                className="desktop-settings__model-chip"
+                data-default={isDefault}
+              >
+                <span className="desktop-settings__model-copy">
+                  <strong>{model.displayName}</strong>
+                  <span>
+                    {t(`settings.agent.modelType.${model.type}`)} · {model.providerId}
+                  </span>
+                </span>
+                {isDefault ? (
+                  <span className="desktop-settings__model-default-badge">
+                    {t('settings.agent.defaultModel')}
+                  </span>
+                ) : (
+                  <button
+                    className="desktop-settings__model-default-action"
+                    disabled={pending || !port || !model.enabled}
+                    type="button"
+                    onClick={() => {
+                      if (!port) return;
+                      void execute(() =>
+                        port.setDefault(model.type, {
+                          providerId: model.providerId,
+                          modelId: model.id,
+                        }),
+                      );
+                    }}
+                  >
+                    {t('settings.agent.setAsDefault')}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
 
   return (
     <SettingsGroup
@@ -500,29 +531,6 @@ function AgentModelSettingsGroup({
           {t('settings.agent.restartRequired')}
         </div>
       ) : null}
-      <div className="desktop-settings__subsection">
-        <div className="desktop-settings__default-groups">
-          <section className="desktop-settings__default-group">
-            <div>
-              <strong>{t('settings.agent.dialogueModels')}</strong>
-              <small>{t('settings.agent.dialogueModelsDescription')}</small>
-            </div>
-            <div className="desktop-settings__model-defaults desktop-settings__model-defaults--dialogue">
-              {renderDefaultModel('llm')}
-            </div>
-          </section>
-          <section className="desktop-settings__default-group">
-            <div>
-              <strong>{t('settings.agent.generationModels')}</strong>
-              <small>{t('settings.agent.generationModelsDescription')}</small>
-            </div>
-            <div className="desktop-settings__model-defaults">
-              {(['image', 'video', 'audio'] as const).map(renderDefaultModel)}
-            </div>
-          </section>
-        </div>
-      </div>
-
       <div className="desktop-settings__subsection">
         <button
           aria-expanded={expandedCatalog === 'providers'}
@@ -623,18 +631,9 @@ function AgentModelSettingsGroup({
                 {t('settings.agent.addModel')}
               </button>
             </div>
-            <div className="desktop-settings__model-list">
-              {projection?.models.map((model) => (
-                <div
-                  key={`${model.providerId}:${model.id}`}
-                  className="desktop-settings__model-chip"
-                >
-                  <strong>{model.displayName}</strong>
-                  <span>
-                    {t(`settings.agent.modelType.${model.type}`)} · {model.providerId}
-                  </span>
-                </div>
-              ))}
+            <div className="desktop-settings__model-groups">
+              {renderModelGroup('dialogue')}
+              {renderModelGroup('generation')}
             </div>
             {showModelForm && port && projection ? (
               <ModelForm

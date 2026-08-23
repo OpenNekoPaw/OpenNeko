@@ -17,4 +17,8 @@ Real visible execution is `infrastructure-blocked`: `~/.neko/config.toml` is rea
 
 ## Progressive settings follow-up
 
-The live Electron Settings overlay was inspected for the initial collapsed state, Provider-only expansion, and model-only replacement expansion. Dialogue and generation defaults are visibly separated and the full catalogs are no longer rendered until requested. Functional component tests cover the same state cycle. See `ui-validation.md` for artifact mapping and the remaining dark/narrow visual evidence gap.
+The live Electron Settings overlay was inspected for the initial collapsed state, Provider-only expansion, and model-only replacement expansion. The full catalogs are no longer rendered until requested. Functional component tests cover the same state cycle.
+
+## Default-model card follow-up
+
+The standalone default selectors were removed. Focused Renderer tests assert that the compact state contains no model selector, the model catalog separates dialogue and generation entries, projected defaults are marked on their cards, and a non-default model sends its exact type and identity through the existing `setDefault` bridge. Visible Electron inspection covered the simplified initial state and dense grouped model catalog at 1220×768 in the light theme. See `ui-validation.md` for artifact mapping and remaining evidence gaps.

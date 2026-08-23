@@ -388,46 +388,10 @@ code {
   font-size: 11px;
 }
 
-.desktop-settings__default-groups {
-  display: grid;
-  gap: 20px;
-}
-
-.desktop-settings__default-group {
-  display: grid;
-  gap: 10px;
-}
-
-.desktop-settings__default-group > div:first-child {
-  display: grid;
-  gap: 3px;
-}
-
-.desktop-settings__default-group > div:first-child strong {
-  color: var(--neko-desktop-text-strong);
-  font-size: 13px;
-  font-weight: 680;
-}
-
-.desktop-settings__default-group > div:first-child small {
-  color: var(--neko-desktop-text-muted);
-  font-size: 11px;
-}
-
-.desktop-settings__model-defaults,
 .desktop-settings__form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 9px 12px;
-}
-
-.desktop-settings__model-defaults--dialogue {
-  max-width: calc(50% - 6px);
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.desktop-settings__default-group:last-child .desktop-settings__model-defaults {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .desktop-settings__management-summary {
@@ -529,6 +493,32 @@ code {
   gap: 8px;
 }
 
+.desktop-settings__model-groups {
+  display: grid;
+  gap: 16px;
+}
+
+.desktop-settings__model-group {
+  display: grid;
+  gap: 8px;
+}
+
+.desktop-settings__model-group-heading {
+  display: grid;
+  gap: 3px;
+}
+
+.desktop-settings__model-group-heading strong {
+  color: var(--neko-desktop-text-strong);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.desktop-settings__model-group-heading small {
+  color: var(--neko-desktop-text-muted);
+  font-size: 10px;
+}
+
 .desktop-settings__provider-card {
   display: flex;
   min-width: 0;
@@ -565,7 +555,7 @@ code {
 }
 
 .desktop-settings__provider-card small,
-.desktop-settings__model-chip span {
+.desktop-settings__model-copy > span {
   overflow: hidden;
   color: var(--neko-desktop-text-muted);
   font-size: 10px;
@@ -593,12 +583,56 @@ code {
 }
 
 .desktop-settings__model-chip {
-  display: grid;
+  display: flex;
   min-width: 0;
-  gap: 3px;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 9px 10px;
   border: 1px solid var(--neko-desktop-border);
   border-radius: 8px;
+}
+
+.desktop-settings__model-chip[data-default='true'] {
+  border-color: color-mix(in srgb, var(--neko-desktop-accent) 38%, var(--neko-desktop-border));
+  background: color-mix(in srgb, var(--neko-desktop-accent) 5%, transparent);
+}
+
+.desktop-settings__model-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.desktop-settings__model-default-badge,
+.desktop-settings__model-default-action {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+}
+
+.desktop-settings__model-default-badge {
+  color: var(--neko-desktop-accent);
+  background: color-mix(in srgb, var(--neko-desktop-accent) 10%, transparent);
+}
+
+.desktop-settings__model-default-action {
+  border: 0;
+  color: var(--neko-desktop-text-muted);
+  background: var(--neko-desktop-control);
+  cursor: pointer;
+}
+
+.desktop-settings__model-default-action:hover {
+  color: var(--neko-desktop-text-strong);
+  background: var(--neko-desktop-control-hover);
+}
+
+.desktop-settings__model-default-action:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
 }
 
 .desktop-settings__editor {
@@ -2427,16 +2461,10 @@ code {
     padding-inline: 16px;
   }
 
-  .desktop-settings__model-defaults,
-  .desktop-settings__default-group:last-child .desktop-settings__model-defaults,
   .desktop-settings__provider-list,
   .desktop-settings__model-list,
   .desktop-settings__form-grid {
     grid-template-columns: 1fr;
-  }
-
-  .desktop-settings__model-defaults--dialogue {
-    max-width: none;
   }
 
   .desktop-settings__subsection-heading {
