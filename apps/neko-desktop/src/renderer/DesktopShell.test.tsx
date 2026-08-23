@@ -442,6 +442,30 @@ describe('Desktop scene Workbench', () => {
     );
   });
 
+  it('keeps Workspace quick creation beside Main tabs and in only the Workspace empty state', () => {
+    const start = desktopShellSource.indexOf('function MainViewGroupSurface');
+    const end = desktopShellSource.indexOf('function renderWorkbenchMainView', start);
+    const mainGroupSource = desktopShellSource.slice(start, end);
+    const standaloneEmptyStart = desktopShellSource.indexOf(
+      'data-authoring-authority="standalone-empty"',
+    );
+    const standaloneEmptyEnd = desktopShellSource.indexOf('return { main:', standaloneEmptyStart);
+    const standaloneEmptySource = desktopShellSource.slice(
+      standaloneEmptyStart,
+      standaloneEmptyEnd,
+    );
+
+    expect(mainGroupSource).toContain('<WorkbenchEditorTabs');
+    expect(mainGroupSource).toContain('variant="tab"');
+    expect(mainGroupSource).toContain('variant="empty"');
+    expect(mainGroupSource).toContain('<EmptyMainSurface');
+    expect(mainGroupSource.indexOf('variant="tab"')).toBeGreaterThan(
+      mainGroupSource.indexOf('<WorkbenchEditorTabs'),
+    );
+    expect(standaloneEmptySource).toContain('<EmptyMainSurface />');
+    expect(standaloneEmptySource).not.toContain('WorkspaceQuickCreateControl');
+  });
+
   it('selects Workspace region controls only while their exact layout regions are visible', () => {
     const projection = workspaceProjection();
     const scene = workspaceScene();

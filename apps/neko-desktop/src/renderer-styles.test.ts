@@ -355,6 +355,9 @@ describe('Desktop renderer styles', () => {
     const mainTabsRule = styles.match(
       /\.project-main-group__tabs \.neko-workbench-editor-tabs\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
+    const mainCreateRule = styles.match(
+      /\.workspace-main-quick-create__tab-trigger\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
     const resourceDockRule = styles.match(/\.project-resource-dock\s*\{(?<body>[\s\S]*?)\n\}/u);
 
     expect(workspaceRule?.groups?.body).toMatch(
@@ -367,6 +370,11 @@ describe('Desktop renderer styles', () => {
       /height\s*:\s*var\(--neko-desktop-workbench-panel-header-height\)/u,
     );
     expect(mainTabsRule?.groups?.body).toMatch(/padding-block\s*:\s*4px/u);
+    expect(mainTabsRule?.groups?.body).toMatch(/width\s*:\s*max-content/u);
+    expect(mainTabsRule?.groups?.body).toMatch(/max-width\s*:\s*calc\(100% - 32px\)/u);
+    expect(mainTabsRule?.groups?.body).toMatch(/flex\s*:\s*0 1 auto/u);
+    expect(mainCreateRule?.groups?.body).toMatch(/width\s*:\s*24px/u);
+    expect(mainCreateRule?.groups?.body).toMatch(/height\s*:\s*24px/u);
     expect(styles).toMatch(
       /\.project-workspace\[data-right-presentation='hidden'\] \.project-main-group__tabs,[\s\S]*?\.project-workspace\[data-right-presentation='overlay'\] \.project-main-group__tabs\s*\{[^}]*padding-right\s*:\s*132px/u,
     );

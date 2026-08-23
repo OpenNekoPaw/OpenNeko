@@ -15,6 +15,7 @@ import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-windo
 import { domainManagementWorkbenchScenario } from './domain-management-workbench.mjs';
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import { projectContentScenario } from './project-content.mjs';
+import { workspaceMainQuickCreationScenario } from './workspace-main-quick-creation.mjs';
 import {
   desktopAgentEntryWorkspaceSkillScenario,
   desktopAgentLinkedMediaMentionScenario,
@@ -49,6 +50,7 @@ const scenarios = new Map(
     workspaceFileCreationScenario,
     workspaceRetiredStorageIsolationScenario,
     projectContentScenario,
+    workspaceMainQuickCreationScenario,
     assetLibraryRecordRemovalScenario,
     desktopMarkdownMediaScenario,
     desktopTextEditorScenario,
