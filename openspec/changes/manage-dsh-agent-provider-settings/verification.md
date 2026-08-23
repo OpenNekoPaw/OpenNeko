@@ -22,3 +22,13 @@ The live Electron Settings overlay was inspected for the initial collapsed state
 ## Default-model card follow-up
 
 The standalone default selectors were removed. Focused Renderer tests assert that the compact state contains no model selector, the model catalog separates dialogue and generation entries, projected defaults are marked on their cards, and a non-default model sends its exact type and identity through the existing `setDefault` bridge. Visible Electron inspection covered the simplified initial state and dense grouped model catalog at 1220×768 in the light theme. See `ui-validation.md` for artifact mapping and remaining evidence gaps.
+
+## Provider-scoped editor follow-up
+
+The parallel model-management summary was removed. Focused Renderer tests assert that selecting a Provider
+reveals only its exact models, model defaults continue to use the canonical type/ref bridge, and a custom
+Provider cannot configure models before its canonical Provider record is saved. Typecheck, focused ESLint,
+13 Settings/theme tests, formatting, diff check and strict OpenSpec validation passed. Visible Electron
+inspection covered the compact catalog, configured Provider, collapsed/expanded connection fields, model
+catalog, custom Provider and scrollable footer at 1220×768. The final post-polish recapture was blocked by
+macOS lock; see `ui-validation.md`.

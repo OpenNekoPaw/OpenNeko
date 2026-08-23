@@ -104,15 +104,31 @@ export const en = {
   'settings.agent.addProvider': 'Add provider',
   'settings.agent.modelCatalog': 'Model catalog',
   'settings.agent.modelCatalogDescription':
-    'Configure dialogue and generation models, including the default for each type.',
+    'Configure this provider’s dialogue and generation models, including each default.',
   'settings.agent.manage': 'Manage',
   'settings.agent.collapse': 'Collapse',
   'settings.agent.addModel': 'Add model',
+  'settings.agent.providerSettings': 'Provider settings',
+  'settings.agent.providerSettingsDescription':
+    'Update credentials and expand connection or model settings only when needed.',
+  'settings.agent.customProvider': 'Custom provider',
+  'settings.agent.customProviderDescription':
+    'Configure a compatible provider and its access credential.',
+  'settings.agent.advancedProviderSettings': 'Custom settings',
+  'settings.agent.saveProviderBeforeModels':
+    'Save the provider before configuring its model catalog.',
+  'settings.agent.noModels': 'No models are configured for this provider yet.',
   'settings.agent.providerId': 'Provider ID',
+  'settings.agent.providerIdPlaceholder': 'For example, acme-gateway',
+  'settings.agent.providerIdHelp':
+    'Use a unique identifier starting with a lowercase letter; it also scopes the credential.',
   'settings.agent.providerName': 'Display name',
+  'settings.agent.providerNamePlaceholder': 'Provider display name',
   'settings.agent.protocol': 'Protocol',
   'settings.agent.apiUrl': 'API URL',
+  'settings.agent.apiUrlPlaceholder': 'https://gateway.example/v1',
   'settings.agent.apiKey': 'API Key',
+  'settings.agent.apiKeyPlaceholder': 'Enter API Key',
   'settings.agent.apiKeyKeep': 'Leave empty to keep the existing credential',
   'settings.agent.provider': 'Provider',
   'settings.agent.modelType': 'Model type',

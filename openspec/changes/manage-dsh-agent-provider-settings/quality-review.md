@@ -29,3 +29,9 @@ The default-model card follow-up remains L1 Renderer presentation and reuses the
 default authority: the projection still supplies current defaults and the card action writes the same
 type/ref contract. No Renderer secret access, alternate provider/model registry, or fallback routing was
 introduced.
+
+The Provider-scoped editor follow-up is L1 Renderer presentation. It removes the parallel model-management
+entry and filters the existing projection by exact Provider identity; provider, model and default mutations
+still call the same typed bridge independently. New custom Providers are saved before model configuration,
+so the UI does not create a second draft catalog or batch authority. Model editing prevents Enter from
+submitting the surrounding Provider form, and no credential value is read back into Renderer state.

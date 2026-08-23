@@ -29,23 +29,30 @@ Default dialogue changes SHALL apply to future conversations. Provider catalog c
 
 ### Requirement: Model configuration uses progressive disclosure
 
-The Agent settings surface SHALL keep Provider and model catalogs collapsed until the user explicitly opens the corresponding management area. Default model selection SHALL be part of the configured model catalog rather than a separate settings block.
+The Agent settings surface SHALL keep Provider configuration collapsed until the user explicitly opens the management area. Models SHALL be managed within their owning Provider editor, and default model selection SHALL be part of that Provider's configured model catalog rather than a separate settings block.
 
 #### Scenario: Agent settings are opened
 
 - **WHEN** the Agent settings category becomes visible
-- **THEN** Provider and model catalog entries are represented by compact management summaries rather than fully expanded catalogs
+- **THEN** Provider configuration is represented by a compact management summary rather than a fully expanded catalog
 - **AND** no separate default-model selectors are shown
+- **AND** no parallel model-catalog management summary is shown
 
-#### Scenario: A catalog is managed
+#### Scenario: Provider configuration is managed
 
-- **WHEN** the user opens Provider management or model management
-- **THEN** only the selected catalog and its applicable actions are expanded
-- **AND** opening the other catalog replaces the previously expanded management area
+- **WHEN** the user opens Provider management and selects a configured Provider
+- **THEN** its credential, endpoint, protocol and model catalog are edited in one scoped panel
+- **AND** advanced Provider fields remain collapsed until explicitly requested
 
 #### Scenario: Configured models are managed
 
-- **WHEN** the user opens model management
+- **WHEN** the user edits a configured Provider
 - **THEN** configured models are grouped into dialogue and generation models
 - **AND** the current default for each model type is marked on the corresponding model card
 - **AND** another enabled model of the same type can be made default from its card
+
+#### Scenario: A custom Provider is created
+
+- **WHEN** the user chooses to add a custom Provider
+- **THEN** Provider identity, display name, API endpoint, protocol and credential fields are shown as one focused form
+- **AND** model configuration becomes available from the saved Provider editor without creating a second configuration authority

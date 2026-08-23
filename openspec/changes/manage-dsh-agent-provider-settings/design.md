@@ -22,6 +22,10 @@ Renderer 可在一次表单提交中携带用户输入的 API Key，但不得读
 
 TOML 写入立即成为 authority；DSH catalog 的结构变更需要重启后重新物化。默认 LLM 只用于新会话，既有 session identity、queue 和运行模型不被静默修改。
 
+### 5. Provider-scoped 渐进式编辑
+
+设置页只保留一个 Provider 管理入口。Provider 列表负责选择配置单元；选中后在同一局部编辑面板中展示凭据、按需展开的协议/API 地址，以及仅属于该 Provider 的对话和生成模型。模型新增、默认用途切换仍调用现有 model settings service，不建立 Renderer catalog、批量草稿 authority 或平行保存路径。自定义 Provider 先保存为 canonical Provider，随后从该 Provider 编辑面板增加模型。
+
 ## Runtime Boundary
 
 - Owner: `@neko/host/settings` and model-settings service.

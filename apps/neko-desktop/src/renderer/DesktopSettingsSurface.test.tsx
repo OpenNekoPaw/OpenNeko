@@ -112,7 +112,7 @@ describe('Desktop Settings surfaces', () => {
     container.remove();
   });
 
-  it('separates dialogue and generation defaults and expands one catalog on demand', async () => {
+  it('keeps provider configuration on demand and scopes models to the selected provider', async () => {
     const projection = {
       providers: [
         {
@@ -174,6 +174,7 @@ describe('Desktop Settings surfaces', () => {
     expect(container.querySelectorAll('select')).toHaveLength(0);
     expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(0);
     expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(0);
+    expect(container.textContent).not.toContain('Model catalog');
 
     const providerSummary = findButtonContaining(container, 'Providers');
     await act(async () => providerSummary.click());
@@ -181,21 +182,59 @@ describe('Desktop Settings surfaces', () => {
     expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(1);
     expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(0);
 
-    const modelSummary = findButtonContaining(container, 'Model catalog');
-    await act(async () => modelSummary.click());
-    expect(modelSummary.getAttribute('aria-expanded')).toBe('true');
-    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(0);
+    const providerCard = container.querySelector<HTMLButtonElement>(
+      '.desktop-settings__provider-card',
+    );
+    if (!providerCard) throw new Error('Provider settings fixture requires a provider card.');
+    await act(async () => providerCard.click());
+    expect(container.textContent).toContain('Provider settings');
+    expect(container.textContent).toContain('Model catalog');
     expect(container.textContent).toContain('Dialogue models');
     expect(container.textContent).toContain('Generation models');
     expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(3);
     expect(container.querySelectorAll('.desktop-settings__model-default-badge')).toHaveLength(2);
     expect(container.querySelectorAll('.desktop-settings__model-default-action')).toHaveLength(1);
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('.desktop-settings__editor-disclosure')
+        ?.getAttribute('aria-expanded'),
+    ).toBe('false');
 
     await act(async () => findButtonContaining(container, 'Set as default').click());
     expect(setDefault).toHaveBeenCalledWith('audio', {
       providerId: 'deepseek',
       modelId: 'audio-model',
     });
+    await act(async () => root.unmount());
+  });
+
+  it('shows a focused custom-provider form before model configuration is available', async () => {
+    const projection = { providers: [], models: [], defaults: {} };
+    const response = { requestId: 'fixture', projection, restartRequired: false };
+    const saveProvider = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider,
+      saveModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    await act(async () => findButtonContaining(container, 'Providers').click());
+    await act(async () => findButtonContaining(container, 'Add provider').click());
+
+    expect(container.textContent).toContain('Custom provider');
+    expect(container.querySelectorAll('.desktop-settings__editor input')).toHaveLength(4);
+    expect(container.querySelectorAll('.desktop-settings__editor select')).toHaveLength(1);
+    expect(container.textContent).toContain(
+      'Save the provider before configuring its model catalog.',
+    );
+    expect(container.querySelectorAll('.desktop-settings__model-editor')).toHaveLength(0);
+    expect(saveProvider).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 });

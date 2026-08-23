@@ -489,8 +489,15 @@ code {
 .desktop-settings__provider-list,
 .desktop-settings__model-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.desktop-settings__provider-list {
+  grid-template-columns: 1fr;
+}
+
+.desktop-settings__model-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .desktop-settings__model-groups {
@@ -637,11 +644,121 @@ code {
 
 .desktop-settings__editor {
   display: grid;
-  gap: 11px;
+  gap: 16px;
+  padding: 18px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--neko-desktop-control);
+}
+
+.desktop-settings__editor-heading,
+.desktop-settings__provider-models-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.desktop-settings__editor-heading > div,
+.desktop-settings__provider-models-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.desktop-settings__editor-heading strong,
+.desktop-settings__provider-models-heading strong {
+  color: var(--neko-desktop-text-strong);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.desktop-settings__editor-heading small,
+.desktop-settings__provider-models-heading small,
+.desktop-settings__form-grid label > small {
+  color: var(--neko-desktop-text-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.desktop-settings__editor > .desktop-settings__form-grid,
+.desktop-settings__advanced-fields {
+  grid-template-columns: 1fr;
+}
+
+.desktop-settings__field-compact {
+  max-width: 360px;
+}
+
+.desktop-settings__editor-disclosure {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 0 0;
+  border: 0;
+  border-top: 1px solid var(--neko-desktop-border);
+  color: var(--neko-desktop-text-strong);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 640;
+  text-align: left;
+  cursor: pointer;
+}
+
+.desktop-settings__editor-disclosure > span {
+  width: 12px;
+  color: var(--neko-desktop-text-muted);
+  font-size: 15px;
+  text-align: center;
+}
+
+.desktop-settings__editor-disclosure:focus-visible {
+  outline: 0;
+  box-shadow: var(--neko-desktop-focus-ring);
+}
+
+.desktop-settings__provider-models {
+  display: grid;
+  gap: 12px;
+  padding-top: 15px;
+  border-top: 1px solid var(--neko-desktop-border);
+}
+
+.desktop-settings__action--quiet {
+  min-height: 30px;
+  padding-inline: 10px;
+  color: var(--neko-desktop-text-strong);
+  background: var(--neko-desktop-surface-raised);
+  box-shadow: none;
+}
+
+.desktop-settings__model-empty {
+  display: grid;
+  min-height: 64px;
+  place-items: center;
   padding: 12px;
+  border: 1px dashed var(--neko-desktop-border);
+  border-radius: 9px;
+  color: var(--neko-desktop-text-muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.desktop-settings__model-editor {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
   border: 1px solid var(--neko-desktop-border);
   border-radius: 9px;
-  background: var(--neko-desktop-control);
+  background: var(--neko-desktop-surface-raised);
+}
+
+.desktop-settings__model-editor .desktop-settings__form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .desktop-settings__form-wide {
@@ -652,6 +769,8 @@ code {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--neko-desktop-border);
 }
 
 .desktop-settings__editor-actions button:not(.desktop-settings__action) {
@@ -2463,8 +2582,23 @@ code {
 
   .desktop-settings__provider-list,
   .desktop-settings__model-list,
-  .desktop-settings__form-grid {
+  .desktop-settings__form-grid,
+  .desktop-settings__model-editor .desktop-settings__form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .desktop-settings__editor {
+    padding: 14px;
+  }
+
+  .desktop-settings__provider-models-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .desktop-settings__provider-models-heading .desktop-settings__action {
+    width: auto;
+    align-self: flex-start;
   }
 
   .desktop-settings__subsection-heading {

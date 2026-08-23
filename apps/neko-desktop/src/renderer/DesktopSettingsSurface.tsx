@@ -4,6 +4,7 @@ import { Dialog } from '@neko/ui/primitives';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { DesktopApplicationPreferences } from '@neko/host/application-settings';
 import type {
+  DesktopAiModelView,
   DesktopAiModelProtocol,
   DesktopAiModelSettingsProjection,
   DesktopAiProviderView,
@@ -399,8 +400,7 @@ function AgentModelSettingsGroup({
   const [restartRequired, setRestartRequired] = useState(false);
   const [editingProvider, setEditingProvider] = useState<DesktopAiProviderView>();
   const [showProviderForm, setShowProviderForm] = useState(false);
-  const [showModelForm, setShowModelForm] = useState(false);
-  const [expandedCatalog, setExpandedCatalog] = useState<'providers' | 'models'>();
+  const [providersExpanded, setProvidersExpanded] = useState(false);
 
   useEffect(() => {
     if (!port) {
@@ -446,79 +446,10 @@ function AgentModelSettingsGroup({
     }
   };
 
-  const toggleCatalog = (catalog: 'providers' | 'models'): void => {
-    setExpandedCatalog((current) => (current === catalog ? undefined : catalog));
+  const toggleProviders = (): void => {
+    setProvidersExpanded((current) => !current);
     setEditingProvider(undefined);
     setShowProviderForm(false);
-    setShowModelForm(false);
-  };
-
-  const renderModelGroup = (kind: 'dialogue' | 'generation'): JSX.Element => {
-    const models = projection?.models.filter((model) =>
-      kind === 'dialogue' ? model.type === 'llm' : model.type !== 'llm',
-    );
-    return (
-      <section className="desktop-settings__model-group">
-        <div className="desktop-settings__model-group-heading">
-          <strong>
-            {t(
-              kind === 'dialogue'
-                ? 'settings.agent.dialogueModels'
-                : 'settings.agent.generationModels',
-            )}
-          </strong>
-          <small>
-            {t(
-              kind === 'dialogue'
-                ? 'settings.agent.dialogueModelsDescription'
-                : 'settings.agent.generationModelsDescription',
-            )}
-          </small>
-        </div>
-        <div className="desktop-settings__model-list">
-          {models?.map((model) => {
-            const isDefault =
-              modelRefValue(projection?.defaults[model.type]) === `${model.providerId}:${model.id}`;
-            return (
-              <div
-                key={`${model.providerId}:${model.id}`}
-                className="desktop-settings__model-chip"
-                data-default={isDefault}
-              >
-                <span className="desktop-settings__model-copy">
-                  <strong>{model.displayName}</strong>
-                  <span>
-                    {t(`settings.agent.modelType.${model.type}`)} · {model.providerId}
-                  </span>
-                </span>
-                {isDefault ? (
-                  <span className="desktop-settings__model-default-badge">
-                    {t('settings.agent.defaultModel')}
-                  </span>
-                ) : (
-                  <button
-                    className="desktop-settings__model-default-action"
-                    disabled={pending || !port || !model.enabled}
-                    type="button"
-                    onClick={() => {
-                      if (!port) return;
-                      void execute(() =>
-                        port.setDefault(model.type, {
-                          providerId: model.providerId,
-                          modelId: model.id,
-                        }),
-                      );
-                    }}
-                  >
-                    {t('settings.agent.setAsDefault')}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
-    );
   };
 
   return (
@@ -533,10 +464,10 @@ function AgentModelSettingsGroup({
       ) : null}
       <div className="desktop-settings__subsection">
         <button
-          aria-expanded={expandedCatalog === 'providers'}
+          aria-expanded={providersExpanded}
           className="desktop-settings__management-summary"
           type="button"
-          onClick={() => toggleCatalog('providers')}
+          onClick={toggleProviders}
         >
           <div>
             <strong>{t('settings.agent.providers')}</strong>
@@ -544,12 +475,10 @@ function AgentModelSettingsGroup({
           </div>
           <span>
             <span className="desktop-settings__count">{projection?.providers.length ?? 0}</span>
-            {t(
-              expandedCatalog === 'providers' ? 'settings.agent.collapse' : 'settings.agent.manage',
-            )}
+            {t(providersExpanded ? 'settings.agent.collapse' : 'settings.agent.manage')}
           </span>
         </button>
-        {expandedCatalog === 'providers' ? (
+        {providersExpanded ? (
           <div className="desktop-settings__management-panel">
             <div className="desktop-settings__management-actions">
               <button
@@ -591,58 +520,27 @@ function AgentModelSettingsGroup({
               <ProviderForm
                 disabled={pending}
                 initial={editingProvider}
+                models={
+                  editingProvider
+                    ? (projection?.models.filter(
+                        (model) => model.providerId === editingProvider.id,
+                      ) ?? [])
+                    : []
+                }
+                defaults={projection?.defaults ?? {}}
                 onCancel={() => setShowProviderForm(false)}
+                onSaveModel={(model) => execute(() => port.saveModel(model))}
+                onSetDefault={(model) =>
+                  execute(() =>
+                    port.setDefault(model.type, {
+                      providerId: model.providerId,
+                      modelId: model.id,
+                    }),
+                  )
+                }
                 onSave={(provider, apiKey) =>
                   execute(() => port.saveProvider(provider, apiKey)).then((saved) => {
                     if (saved) setShowProviderForm(false);
-                  })
-                }
-              />
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="desktop-settings__subsection">
-        <button
-          aria-expanded={expandedCatalog === 'models'}
-          className="desktop-settings__management-summary"
-          type="button"
-          onClick={() => toggleCatalog('models')}
-        >
-          <div>
-            <strong>{t('settings.agent.modelCatalog')}</strong>
-            <small>{t('settings.agent.modelCatalogDescription')}</small>
-          </div>
-          <span>
-            <span className="desktop-settings__count">{projection?.models.length ?? 0}</span>
-            {t(expandedCatalog === 'models' ? 'settings.agent.collapse' : 'settings.agent.manage')}
-          </span>
-        </button>
-        {expandedCatalog === 'models' ? (
-          <div className="desktop-settings__management-panel">
-            <div className="desktop-settings__management-actions">
-              <button
-                className="desktop-settings__action"
-                disabled={pending || !port || !projection?.providers.length}
-                type="button"
-                onClick={() => setShowModelForm(true)}
-              >
-                {t('settings.agent.addModel')}
-              </button>
-            </div>
-            <div className="desktop-settings__model-groups">
-              {renderModelGroup('dialogue')}
-              {renderModelGroup('generation')}
-            </div>
-            {showModelForm && port && projection ? (
-              <ModelForm
-                disabled={pending}
-                providers={projection.providers}
-                onCancel={() => setShowModelForm(false)}
-                onSave={(model) =>
-                  execute(() => port.saveModel(model)).then((saved) => {
-                    if (saved) setShowModelForm(false);
                   })
                 }
               />
@@ -680,12 +578,18 @@ function AgentModelSettingsGroup({
 
 function ProviderForm({
   disabled,
+  defaults,
   initial,
+  models,
   onCancel,
   onSave,
+  onSaveModel,
+  onSetDefault,
 }: {
   readonly disabled: boolean;
+  readonly defaults: DesktopAiModelSettingsProjection['defaults'];
   readonly initial?: DesktopAiProviderView;
+  readonly models: readonly DesktopAiModelView[];
   readonly onCancel: () => void;
   readonly onSave: (
     provider: {
@@ -697,6 +601,15 @@ function ProviderForm({
     },
     apiKey?: string,
   ) => Promise<void>;
+  readonly onSaveModel: (model: {
+    readonly id: string;
+    readonly providerId: string;
+    readonly apiName: string;
+    readonly displayName: string;
+    readonly type: ModelType;
+    readonly enabled: boolean;
+  }) => Promise<boolean>;
+  readonly onSetDefault: (model: DesktopAiModelView) => Promise<boolean>;
 }): JSX.Element {
   const { t } = useTranslation();
   const [id, setId] = useState(initial?.id ?? '');
@@ -706,6 +619,9 @@ function ProviderForm({
     initial?.protocol ?? 'openai-chat',
   );
   const [apiKey, setApiKey] = useState('');
+  const [advancedOpen, setAdvancedOpen] = useState(!initial);
+  const [showModelForm, setShowModelForm] = useState(false);
+  const canSave = Boolean(id.trim() && displayName.trim() && apiUrl.trim());
   const submit = (event: FormEvent): void => {
     event.preventDefault();
     void onSave(
@@ -715,64 +631,180 @@ function ProviderForm({
   };
   return (
     <form className="desktop-settings__editor" onSubmit={submit}>
-      <div className="desktop-settings__form-grid">
-        <label>
-          <span>{t('settings.agent.providerId')}</span>
-          <input
-            disabled={disabled || !!initial}
-            required
-            value={id}
-            onChange={(e) => setId(e.currentTarget.value)}
-          />
-        </label>
-        <label>
-          <span>{t('settings.agent.providerName')}</span>
-          <input
-            disabled={disabled}
-            required
-            value={displayName}
-            onChange={(e) => setDisplayName(e.currentTarget.value)}
-          />
-        </label>
-        <label>
-          <span>{t('settings.agent.protocol')}</span>
-          <select
-            disabled={disabled}
-            value={protocol}
-            onChange={(e) => setProtocol(e.currentTarget.value as DesktopAiModelProtocol)}
+      <header className="desktop-settings__editor-heading">
+        <div>
+          <strong>
+            {initial ? t('settings.agent.providerSettings') : t('settings.agent.customProvider')}
+          </strong>
+          <small>
+            {initial
+              ? t('settings.agent.providerSettingsDescription')
+              : t('settings.agent.customProviderDescription')}
+          </small>
+        </div>
+        {initial ? (
+          <span
+            className={`desktop-settings__credential desktop-settings__credential--${initial.credentialStatus}`}
           >
-            <option value="openai-chat">OpenAI Chat compatible</option>
-            <option value="openai-responses">OpenAI Responses</option>
-            <option value="anthropic">Anthropic Messages</option>
-          </select>
-        </label>
-        <label>
-          <span>{t('settings.agent.apiUrl')}</span>
-          <input
-            disabled={disabled}
-            required
-            type="url"
-            value={apiUrl}
-            onChange={(e) => setApiUrl(e.currentTarget.value)}
-          />
-        </label>
-        <label className="desktop-settings__form-wide">
-          <span>{t('settings.agent.apiKey')}</span>
-          <input
-            autoComplete="off"
-            disabled={disabled}
-            placeholder={initial ? t('settings.agent.apiKeyKeep') : ''}
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.currentTarget.value)}
-          />
-        </label>
+            {t(`settings.agent.credential.${initial.credentialStatus}`)}
+          </span>
+        ) : null}
+      </header>
+
+      <div className="desktop-settings__form-grid">
+        {!initial ? (
+          <>
+            <label>
+              <span>{t('settings.agent.providerId')}</span>
+              <input
+                disabled={disabled}
+                placeholder={t('settings.agent.providerIdPlaceholder')}
+                required
+                value={id}
+                onChange={(e) => setId(e.currentTarget.value)}
+              />
+              <small>{t('settings.agent.providerIdHelp')}</small>
+            </label>
+            <label>
+              <span>{t('settings.agent.providerName')}</span>
+              <input
+                disabled={disabled}
+                placeholder={t('settings.agent.providerNamePlaceholder')}
+                required
+                value={displayName}
+                onChange={(e) => setDisplayName(e.currentTarget.value)}
+              />
+            </label>
+          </>
+        ) : null}
+
+        {initial ? (
+          <label>
+            <span>{t('settings.agent.apiKey')}</span>
+            <input
+              autoComplete="off"
+              disabled={disabled}
+              placeholder={t('settings.agent.apiKeyKeep')}
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.currentTarget.value)}
+            />
+          </label>
+        ) : null}
       </div>
+
+      {initial ? (
+        <button
+          aria-expanded={advancedOpen}
+          className="desktop-settings__editor-disclosure"
+          type="button"
+          onClick={() => setAdvancedOpen((current) => !current)}
+        >
+          <span aria-hidden="true">{advancedOpen ? '⌄' : '›'}</span>
+          {t('settings.agent.advancedProviderSettings')}
+        </button>
+      ) : null}
+
+      {advancedOpen ? (
+        <div className="desktop-settings__form-grid desktop-settings__advanced-fields">
+          {initial ? (
+            <label>
+              <span>{t('settings.agent.providerName')}</span>
+              <input
+                disabled={disabled}
+                required
+                value={displayName}
+                onChange={(e) => setDisplayName(e.currentTarget.value)}
+              />
+            </label>
+          ) : null}
+          <label>
+            <span>{t('settings.agent.apiUrl')}</span>
+            <input
+              disabled={disabled}
+              placeholder={t('settings.agent.apiUrlPlaceholder')}
+              required
+              type="url"
+              value={apiUrl}
+              onChange={(e) => setApiUrl(e.currentTarget.value)}
+            />
+          </label>
+          <label className="desktop-settings__field-compact">
+            <span>{t('settings.agent.protocol')}</span>
+            <select
+              disabled={disabled}
+              value={protocol}
+              onChange={(e) => setProtocol(e.currentTarget.value as DesktopAiModelProtocol)}
+            >
+              <option value="openai-chat">OpenAI Chat compatible</option>
+              <option value="openai-responses">OpenAI Responses</option>
+              <option value="anthropic">Anthropic Messages</option>
+            </select>
+          </label>
+          {!initial ? (
+            <label>
+              <span>{t('settings.agent.apiKey')}</span>
+              <input
+                autoComplete="off"
+                disabled={disabled}
+                placeholder={t('settings.agent.apiKeyPlaceholder')}
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.currentTarget.value)}
+              />
+            </label>
+          ) : null}
+        </div>
+      ) : null}
+
+      <section className="desktop-settings__provider-models">
+        <div className="desktop-settings__provider-models-heading">
+          <div>
+            <strong>{t('settings.agent.modelCatalog')}</strong>
+            <small>{t('settings.agent.modelCatalogDescription')}</small>
+          </div>
+          {initial ? (
+            <button
+              className="desktop-settings__action desktop-settings__action--quiet"
+              disabled={disabled}
+              type="button"
+              onClick={() => setShowModelForm((current) => !current)}
+            >
+              {showModelForm ? t('common.cancel') : t('settings.agent.addModel')}
+            </button>
+          ) : null}
+        </div>
+        {initial ? (
+          <ProviderModelCatalog
+            defaults={defaults}
+            disabled={disabled}
+            models={models}
+            onSetDefault={onSetDefault}
+          />
+        ) : (
+          <div className="desktop-settings__model-empty">
+            {t('settings.agent.saveProviderBeforeModels')}
+          </div>
+        )}
+        {initial && showModelForm ? (
+          <ModelForm
+            disabled={disabled}
+            providerId={initial.id}
+            onCancel={() => setShowModelForm(false)}
+            onSave={(model) =>
+              onSaveModel(model).then((saved) => {
+                if (saved) setShowModelForm(false);
+              })
+            }
+          />
+        ) : null}
+      </section>
+
       <div className="desktop-settings__editor-actions">
         <button type="button" onClick={onCancel}>
           {t('common.cancel')}
         </button>
-        <button className="desktop-settings__action" disabled={disabled} type="submit">
+        <button className="desktop-settings__action" disabled={disabled || !canSave} type="submit">
           {t('common.save')}
         </button>
       </div>
@@ -784,7 +816,7 @@ function ModelForm({
   disabled,
   onCancel,
   onSave,
-  providers,
+  providerId,
 }: {
   readonly disabled: boolean;
   readonly onCancel: () => void;
@@ -796,37 +828,30 @@ function ModelForm({
     readonly type: ModelType;
     readonly enabled: boolean;
   }) => Promise<void>;
-  readonly providers: readonly DesktopAiProviderView[];
+  readonly providerId: string;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [providerId, setProviderId] = useState(providers[0]?.id ?? '');
   const [id, setId] = useState('');
   const [apiName, setApiName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [type, setType] = useState<ModelType>('llm');
+  const canSave = Boolean(id.trim() && apiName.trim() && displayName.trim());
+  const save = (): void => {
+    if (disabled || !canSave) return;
+    void onSave({ id, providerId, apiName, displayName, type, enabled: true });
+  };
   return (
-    <form
-      className="desktop-settings__editor"
-      onSubmit={(event) => {
+    <div
+      aria-label={t('settings.agent.addModel')}
+      className="desktop-settings__model-editor"
+      role="group"
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter') return;
         event.preventDefault();
-        void onSave({ id, providerId, apiName, displayName, type, enabled: true });
+        save();
       }}
     >
       <div className="desktop-settings__form-grid">
-        <label>
-          <span>{t('settings.agent.provider')}</span>
-          <select
-            disabled={disabled}
-            value={providerId}
-            onChange={(e) => setProviderId(e.currentTarget.value)}
-          >
-            {providers.map((provider) => (
-              <option key={provider.id} value={provider.id}>
-                {provider.displayName}
-              </option>
-            ))}
-          </select>
-        </label>
         <label>
           <span>{t('settings.agent.modelType')}</span>
           <select
@@ -873,11 +898,92 @@ function ModelForm({
         <button type="button" onClick={onCancel}>
           {t('common.cancel')}
         </button>
-        <button className="desktop-settings__action" disabled={disabled} type="submit">
+        <button
+          className="desktop-settings__action"
+          disabled={disabled || !canSave}
+          type="button"
+          onClick={save}
+        >
           {t('common.save')}
         </button>
       </div>
-    </form>
+    </div>
+  );
+}
+
+function ProviderModelCatalog({
+  defaults,
+  disabled,
+  models,
+  onSetDefault,
+}: {
+  readonly defaults: DesktopAiModelSettingsProjection['defaults'];
+  readonly disabled: boolean;
+  readonly models: readonly DesktopAiModelView[];
+  readonly onSetDefault: (model: DesktopAiModelView) => Promise<boolean>;
+}): JSX.Element {
+  const { t } = useTranslation();
+  if (models.length === 0) {
+    return <div className="desktop-settings__model-empty">{t('settings.agent.noModels')}</div>;
+  }
+  const renderGroup = (kind: 'dialogue' | 'generation'): JSX.Element | null => {
+    const grouped = models.filter((model) =>
+      kind === 'dialogue' ? model.type === 'llm' : model.type !== 'llm',
+    );
+    if (grouped.length === 0) return null;
+    return (
+      <section className="desktop-settings__model-group">
+        <div className="desktop-settings__model-group-heading">
+          <strong>
+            {t(
+              kind === 'dialogue'
+                ? 'settings.agent.dialogueModels'
+                : 'settings.agent.generationModels',
+            )}
+          </strong>
+        </div>
+        <div className="desktop-settings__model-list">
+          {grouped.map((model) => {
+            const isDefault =
+              modelRefValue(defaults[model.type]) === `${model.providerId}:${model.id}`;
+            return (
+              <div
+                key={`${model.providerId}:${model.id}`}
+                className="desktop-settings__model-chip"
+                data-default={isDefault}
+              >
+                <span className="desktop-settings__model-copy">
+                  <strong>{model.displayName}</strong>
+                  <span>
+                    {t(`settings.agent.modelType.${model.type}`)} · {model.apiName}
+                  </span>
+                </span>
+                {isDefault ? (
+                  <span className="desktop-settings__model-default-badge">
+                    {t('settings.agent.defaultModel')}
+                  </span>
+                ) : (
+                  <button
+                    className="desktop-settings__model-default-action"
+                    disabled={disabled || !model.enabled}
+                    type="button"
+                    onClick={() => void onSetDefault(model)}
+                  >
+                    {t('settings.agent.setAsDefault')}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+  return (
+    <div className="desktop-settings__model-groups">
+      {renderGroup('dialogue')}
+      {renderGroup('generation')}
+    </div>
   );
 }
 
