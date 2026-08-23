@@ -48,7 +48,7 @@ export const en = {
   'settings.category.creative': 'Creative workspace',
   'settings.category.creative.description': 'Defaults for creative surfaces',
   'settings.category.agent': 'Agent',
-  'settings.category.agent.description': 'Open Agent-owned advanced provider settings',
+  'settings.category.agent.description': 'Manage providers and models used by Agent',
   'settings.startup.label': 'Application entry',
   'settings.startup.description':
     'OpenNeko always starts with a new Entry Draft. Projects and conversations remain available from navigation.',
@@ -82,12 +82,7 @@ export const en = {
   'settings.storage.mediaLibraries': 'Media libraries',
   'settings.storage.newProjects': 'New-project default',
   'settings.storage.project': 'Project',
-  'settings.agent.advanced': 'Advanced Agent settings',
-  'settings.agent.advancedDescription':
-    'Provider, model, credentials, tools, and Agent runtime options remain owned by Agent.',
   'settings.agent.openConfig': 'Open Agent config',
-  'settings.agent.authority':
-    'Providers, models, and defaults use the Agent-owned config.toml. Credentials remain in the Host credential authority.',
   'settings.agent.unavailable': 'AI model settings are unavailable in this Desktop runtime.',
   'settings.agent.restartRequired':
     'Provider or model catalog changed. Restart OpenNeko before using it in DSH conversations.',

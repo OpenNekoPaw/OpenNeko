@@ -502,12 +502,18 @@ code {
 
 .desktop-settings__model-groups {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
 .desktop-settings__model-group {
   display: grid;
+  align-content: start;
   gap: 8px;
+}
+
+.desktop-settings__model-group .desktop-settings__model-list {
+  grid-template-columns: 1fr;
 }
 
 .desktop-settings__model-group-heading {
@@ -795,8 +801,21 @@ code {
 }
 
 .desktop-settings__group-heading {
+  display: flex;
+  min-width: 0;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 13px;
   padding-inline: 3px;
+}
+
+.desktop-settings__group-heading-copy {
+  min-width: 0;
+}
+
+.desktop-settings__group-action {
+  flex: 0 0 auto;
 }
 
 .desktop-settings__group-heading h2 {
@@ -2563,6 +2582,11 @@ code {
 }
 
 @container desktop-settings-content (max-width: 620px) {
+  .desktop-settings__group-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .desktop-settings__row {
     align-items: stretch;
     gap: 14px;
@@ -2581,6 +2605,7 @@ code {
   }
 
   .desktop-settings__provider-list,
+  .desktop-settings__model-groups,
   .desktop-settings__model-list,
   .desktop-settings__form-grid,
   .desktop-settings__model-editor .desktop-settings__form-grid {

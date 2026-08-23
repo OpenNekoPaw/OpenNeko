@@ -44,7 +44,7 @@ export const zhCN = {
   'settings.category.creative': '创作工作区',
   'settings.category.creative.description': '创作界面的默认选项',
   'settings.category.agent': 'Agent',
-  'settings.category.agent.description': '进入 Agent 所属的高级服务配置',
+  'settings.category.agent.description': '管理 Agent 使用的 Provider 与模型',
   'settings.startup.label': '应用入口',
   'settings.startup.description':
     'OpenNeko 每次启动都进入新的入口草稿；项目和会话继续保留在导航中。',
@@ -76,12 +76,7 @@ export const zhCN = {
   'settings.storage.mediaLibraries': '媒体库',
   'settings.storage.newProjects': '新项目默认位置',
   'settings.storage.project': '项目',
-  'settings.agent.advanced': 'Agent 高级设置',
-  'settings.agent.advancedDescription':
-    'Provider、模型、凭据、工具和 Agent 运行时选项继续由 Agent 管理。',
   'settings.agent.openConfig': '打开 Agent 配置',
-  'settings.agent.authority':
-    'Provider、模型和默认用途写入 Agent 所属的 config.toml；凭据继续由 Host credential authority 保存。',
   'settings.agent.unavailable': '当前 Desktop 运行时未提供模型设置能力。',
   'settings.agent.restartRequired': 'Provider 或模型目录已更改，重启 OpenNeko 后可用于 DSH 对话。',
   'settings.agent.dialogueModels': '对话模型',
