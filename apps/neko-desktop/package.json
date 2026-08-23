@@ -39,6 +39,7 @@
     "@neko/local-metadata": "workspace:*",
     "@neko/media": "workspace:*",
     "@neko/preview-domain": "workspace:*",
+    "@neko/preview-node": "workspace:*",
     "@neko/preview-webview": "workspace:*",
     "@neko/project": "workspace:*",
     "@neko/project-node": "workspace:*",

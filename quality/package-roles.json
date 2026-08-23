@@ -325,6 +325,15 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/preview/node",
+      "name": "@neko/preview-node",
+      "family": "preview",
+      "roles": ["node"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/preview/webview",
       "name": "@neko/preview-webview",
       "family": "preview",

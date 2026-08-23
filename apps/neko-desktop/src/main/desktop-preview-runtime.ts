@@ -5,7 +5,6 @@ import {
   PREVIEW_HOST_RUNTIME_ROUTES,
   assertPreviewRuntimeIdentity,
   detectPreviewContentKind,
-  getEpubResourceMediaType,
   getPreviewMediaType,
   parsePreviewProjection,
   parsePreviewRuntimeRequest,
@@ -22,7 +21,7 @@ import {
   type PreviewResourceProjectionService,
   type PreviewResourceSource,
 } from '@neko/preview-domain/resource-projection';
-import { createNodeArchiveResource } from '@neko/content/document/node';
+import { publishEpubPreviewResource } from '@neko/preview-node';
 import type {
   ResourceBrowserIdentity,
   ResourceBrowserItem,
@@ -773,30 +772,11 @@ async function publishPreviewResource(input: {
   }
   const absolutePath = input.source.absolutePath;
   if (input.source.mediaType === 'application/epub+zip') {
-    const archive = await createNodeArchiveResource(absolutePath, {
+    return publishEpubPreviewResource({
+      absolutePath,
       signal: input.signal,
+      registerResourceTree: (tree) => input.resources.registerResourceTree(input.owner, tree),
     });
-    try {
-      if (!archive.entries.some((entry) => entry.path === 'META-INF/container.xml')) {
-        throw new Error('EPUB container descriptor is missing.');
-      }
-      const lease = input.resources.registerResourceTree(input.owner, {
-        entries: archive.entries.map((entry) => ({
-          virtualPath: entry.path,
-          byteLength: entry.byteLength,
-          contentType: getEpubResourceMediaType(entry.path),
-          read: (signal) => archive.readEntry(entry.path, signal),
-        })),
-        release: () => {
-          void archive.dispose();
-        },
-      });
-      releaseLeaseIfAborted(lease, input.signal);
-      return lease;
-    } catch (error) {
-      await archive.dispose();
-      throw error;
-    }
   }
   if (
     input.contentKind !== 'model' ||
