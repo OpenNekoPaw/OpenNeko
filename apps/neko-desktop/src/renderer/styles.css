@@ -265,6 +265,10 @@ code {
   overflow: auto;
 }
 
+.desktop-settings-overlay__layout {
+  height: 100%;
+}
+
 .desktop-settings__overview {
   width: min(820px, calc(100% - 64px));
   min-height: 100%;

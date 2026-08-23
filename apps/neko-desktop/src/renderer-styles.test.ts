@@ -216,6 +216,12 @@ describe('Desktop renderer styles', () => {
     expect(settingsSearchRule?.groups?.body).toMatch(/width\s*:\s*100%/u);
   });
 
+  it('stretches the Settings overlay layout through the Dialog body', () => {
+    expect(styles).toMatch(
+      /\.desktop-settings-overlay__layout\s*\{[^}]*height\s*:\s*100%/u,
+    );
+  });
+
   it('uses a text-only primary brand action without icon chrome', () => {
     const titleRule = styles.match(/\.home-brand-title\s*\{(?<body>[\s\S]*?)\n\}/u);
 
