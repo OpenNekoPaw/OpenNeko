@@ -430,6 +430,8 @@ The package-owned Agent application SHALL own the only new-Conversation publicat
 
 For a Conversation created by the native Composer's first submission, the same strict-decoded input SHALL be the sole title source. The package-owned publication logic SHALL normalize it to one bounded catalog title before Session creation. The retained Agent Webview SHALL render a dedicated top title bar from the exact Session projection's catalog title, and PrimarySidebar SHALL render the same title from Agent Home. Neither surface may independently derive, cache or override the title.
 
+The first submission from an unbound Draft SHALL cross the Renderer-to-Host boundary as one sender-bound `create` command carrying the strict-decoded `initialInput`. Within that same Host command, Desktop Main SHALL publish and attach the exact Conversation, then SHALL route `initialInput` through the same canonical command, Skill, message, attachment, context and Canvas-target submission logic used by subsequent input. Renderer MUST NOT issue a second `submit` for that first input, and Host MUST NOT require a second request to start its first DSH turn. If execution fails after durable publication, the exact Conversation SHALL remain visible with the propagated diagnostic; OpenNeko MUST NOT delete or replace the DSH Session, restore a retired first-submit lifecycle, or retry the input implicitly.
+
 The unbound Entry Draft SHALL NOT render a Conversation title bar before durable Conversation publication.
 
 When Desktop navigation preserves an Agent Draft Surface while changing its exact Scene scope, Renderer SHALL preserve the unsent Draft presentation and SHALL invalidate the previous Composer configuration projection. It SHALL re-read configuration through the same sender-bound Host operation for the new Scene before enabling submission. Renderer SHALL NOT retain the previous application or Workspace context as a successful projection, remount the Agent Surface to force state loss, or create a Conversation solely because navigation occurred.
@@ -440,6 +442,20 @@ When Desktop navigation preserves an Agent Draft Surface while changing its exac
 - **THEN** Renderer submits only that Project choice with the exact Agent Surface identity
 - **AND** Desktop Main resolves the Project to its exact Workspace, signs a process-scoped grant, publishes a Workspace Conversation and attaches the original Draft before prompting
 - **AND** it does not publish an Assistant Conversation or switch Scene when the Project is merely selected
+
+#### Scenario: First input is consumed by one Host command
+
+- **WHEN** the user submits a message, Command or Skill from an unbound Draft
+- **THEN** Renderer sends exactly one sender-bound `create` request containing that input
+- **AND** the Host publishes the exact Conversation and routes that input through the canonical DSH submission chain before the request settles
+- **AND** no Renderer `submit`, retired Pi lifecycle or parallel first-message handler consumes the same input
+
+#### Scenario: First DSH execution fails after publication
+
+- **WHEN** the exact Conversation has been durably published and its first DSH command, Skill or Prompt fails
+- **THEN** the `create` request fails visibly with the owning diagnostic
+- **AND** the published Conversation and binding remain available for inspection or a later explicit user action
+- **AND** OpenNeko does not delete, replace or silently retry the Session or first input
 
 #### Scenario: Entry Draft navigates into a Workspace Draft
 

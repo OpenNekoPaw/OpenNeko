@@ -326,142 +326,10 @@ export class DesktopDshSessionHost {
           initialInput: request.initialInput,
         })
       ).conversationId;
+      stopReason = await this.submitInput(conversationId, request.windowId, request.initialInput);
     } else if (request.operation === 'submit') {
       conversationId = request.conversationId;
-      const dshSessionId = await this.options.conversations.ensureLoaded(conversationId);
-      const isRunning = this.options.projection.snapshot(dshSessionId).currentTurn !== undefined;
-      if (isRunning && request.input.kind !== 'message') {
-        throw new Error('Only ordinary messages can enter a running DSH Session inbox.');
-      }
-      if (request.input.kind === 'command') {
-        await this.options.conversations.executeCommand(conversationId, request.input.line);
-      } else {
-        const admission = this.options.turnCanvasTargets.admit(
-          dshSessionId,
-          request.input.canvasTurnTarget,
-        );
-        let retainAdmission = false;
-        try {
-          const appliedModel = isRunning
-            ? await this.options.composer.readConversationExecution(
-                conversationId,
-                request.windowId,
-              )
-            : await this.options.composer.applyConversation(conversationId, request.windowId);
-          const context = await this.options.promptContext.resolve(
-            conversationId,
-            request.input.kind === 'message' ? request.input.contextPayloads : [],
-            request.input.kind === 'message'
-              ? request.input.references.map((reference) => ({
-                  label: reference.label,
-                  contentLocator: reference.contentLocator,
-                }))
-              : [],
-            request.input.canvasTurnTarget,
-          );
-          if (request.input.kind === 'skill') {
-            await this.options.conversations.setSessionContext(conversationId, context);
-            const response = await this.options.conversations.invokeSkill({
-              conversationId,
-              skillName: request.input.skillName,
-              displayText: request.input.displayText,
-              ...(request.input.args === undefined ? {} : { args: request.input.args }),
-            });
-            stopReason = response.stopReason;
-            retainAdmission = true;
-          } else {
-            const images = await this.options.promptImages.admit({
-              conversationId,
-              windowId: request.windowId,
-              references: request.input.references,
-              images: request.input.images,
-              modelSupportsImageInput: appliedModel.supportsImageInput,
-            });
-            const imageByReferenceIndex = new Map(
-              images.flatMap((image) =>
-                image.source.kind === 'reference'
-                  ? [[image.source.referenceIndex, image] as const]
-                  : [],
-              ),
-            );
-            const imageByInlineIndex = new Map(
-              images.flatMap((image) =>
-                image.source.kind === 'inline' ? [[image.source.imageIndex, image] as const] : [],
-              ),
-            );
-            const prompt = [
-              ...(request.input.text.length === 0
-                ? []
-                : [{ type: 'text' as const, text: request.input.text }]),
-              ...request.input.images.map((image, imageIndex) => {
-                const admitted = imageByInlineIndex.get(imageIndex);
-                if (admitted === undefined) {
-                  throw new Error(`DSH Prompt inline image ${imageIndex} was not admitted.`);
-                }
-                return {
-                  type: 'image' as const,
-                  data: admitted.data,
-                  mimeType: admitted.mimeType,
-                  _meta: { opennekoDisplayName: image.name },
-                };
-              }),
-              ...request.input.references.flatMap((reference, referenceIndex) => {
-                const image = imageByReferenceIndex.get(referenceIndex);
-                return [
-                  {
-                    type: 'resource_link' as const,
-                    name: reference.label,
-                    uri: serializeContentLocatorResourceUri(reference.contentLocator),
-                  },
-                  ...(image === undefined
-                    ? []
-                    : [
-                        {
-                          type: 'image' as const,
-                          data: image.data,
-                          mimeType: image.mimeType,
-                        },
-                      ]),
-                ];
-              }),
-            ];
-            if (isRunning) {
-              const before = await this.options.conversations.readInbox(conversationId);
-              const after = await this.options.conversations.enqueueInboxMessage({
-                conversationId,
-                prompt,
-                displayContent: [
-                  ...(request.input.text.length === 0
-                    ? []
-                    : [{ type: 'text' as const, text: request.input.text }]),
-                  ...request.input.images.map((image) => ({
-                    type: 'image' as const,
-                    name: image.name,
-                  })),
-                  ...request.input.references.map((reference) => ({
-                    type: 'resource-link' as const,
-                    name: reference.label,
-                    uri: serializeContentLocatorResourceUri(reference.contentLocator),
-                  })),
-                ],
-                contextText: context,
-              });
-              const messageId = resolveNewNextTurnMessageId(before, after);
-              this.options.turnCanvasTargets.bindQueuedMessage(admission.admissionId, messageId);
-              retainAdmission = true;
-            } else {
-              await this.options.conversations.setSessionContext(conversationId, context);
-              const response = await this.options.conversations.prompt({ conversationId, prompt });
-              stopReason = response.stopReason;
-              retainAdmission = true;
-            }
-          }
-        } finally {
-          if (!retainAdmission) {
-            this.options.turnCanvasTargets.releaseAdmission(admission.admissionId);
-          }
-        }
-      }
+      stopReason = await this.submitInput(conversationId, request.windowId, request.input);
     } else if (request.operation === 'cancel') {
       conversationId = request.conversationId;
       await this.options.conversations.cancel(request.conversationId);
@@ -480,6 +348,128 @@ export class DesktopDshSessionHost {
       projection: await this.project(conversationId),
       ...(stopReason === undefined ? {} : { stopReason }),
     };
+  }
+
+  private async submitInput(
+    conversationId: string,
+    windowId: string,
+    input: DshComposerSubmitInput,
+  ): Promise<string | undefined> {
+    const dshSessionId = await this.options.conversations.ensureLoaded(conversationId);
+    const isRunning = this.options.projection.snapshot(dshSessionId).currentTurn !== undefined;
+    if (isRunning && input.kind !== 'message') {
+      throw new Error('Only ordinary messages can enter a running DSH Session inbox.');
+    }
+    if (input.kind === 'command') {
+      await this.options.conversations.executeCommand(conversationId, input.line);
+      return undefined;
+    }
+
+    const admission = this.options.turnCanvasTargets.admit(dshSessionId, input.canvasTurnTarget);
+    let retainAdmission = false;
+    try {
+      const appliedModel = isRunning
+        ? await this.options.composer.readConversationExecution(conversationId, windowId)
+        : await this.options.composer.applyConversation(conversationId, windowId);
+      const context = await this.options.promptContext.resolve(
+        conversationId,
+        input.kind === 'message' ? input.contextPayloads : [],
+        input.kind === 'message'
+          ? input.references.map((reference) => ({
+              label: reference.label,
+              contentLocator: reference.contentLocator,
+            }))
+          : [],
+        input.canvasTurnTarget,
+      );
+      if (input.kind === 'skill') {
+        await this.options.conversations.setSessionContext(conversationId, context);
+        const response = await this.options.conversations.invokeSkill({
+          conversationId,
+          skillName: input.skillName,
+          displayText: input.displayText,
+          ...(input.args === undefined ? {} : { args: input.args }),
+        });
+        retainAdmission = true;
+        return response.stopReason;
+      }
+
+      const images = await this.options.promptImages.admit({
+        conversationId,
+        windowId,
+        references: input.references,
+        images: input.images,
+        modelSupportsImageInput: appliedModel.supportsImageInput,
+      });
+      const imageByReferenceIndex = new Map(
+        images.flatMap((image) =>
+          image.source.kind === 'reference' ? [[image.source.referenceIndex, image] as const] : [],
+        ),
+      );
+      const imageByInlineIndex = new Map(
+        images.flatMap((image) =>
+          image.source.kind === 'inline' ? [[image.source.imageIndex, image] as const] : [],
+        ),
+      );
+      const prompt = [
+        ...(input.text.length === 0 ? [] : [{ type: 'text' as const, text: input.text }]),
+        ...input.images.map((image, imageIndex) => {
+          const admitted = imageByInlineIndex.get(imageIndex);
+          if (admitted === undefined) {
+            throw new Error(`DSH Prompt inline image ${imageIndex} was not admitted.`);
+          }
+          return {
+            type: 'image' as const,
+            data: admitted.data,
+            mimeType: admitted.mimeType,
+            _meta: { opennekoDisplayName: image.name },
+          };
+        }),
+        ...input.references.flatMap((reference, referenceIndex) => {
+          const image = imageByReferenceIndex.get(referenceIndex);
+          return [
+            {
+              type: 'resource_link' as const,
+              name: reference.label,
+              uri: serializeContentLocatorResourceUri(reference.contentLocator),
+            },
+            ...(image === undefined
+              ? []
+              : [{ type: 'image' as const, data: image.data, mimeType: image.mimeType }]),
+          ];
+        }),
+      ];
+      if (isRunning) {
+        const before = await this.options.conversations.readInbox(conversationId);
+        const after = await this.options.conversations.enqueueInboxMessage({
+          conversationId,
+          prompt,
+          displayContent: [
+            ...(input.text.length === 0 ? [] : [{ type: 'text' as const, text: input.text }]),
+            ...input.images.map((image) => ({ type: 'image' as const, name: image.name })),
+            ...input.references.map((reference) => ({
+              type: 'resource-link' as const,
+              name: reference.label,
+              uri: serializeContentLocatorResourceUri(reference.contentLocator),
+            })),
+          ],
+          contextText: context,
+        });
+        const messageId = resolveNewNextTurnMessageId(before, after);
+        this.options.turnCanvasTargets.bindQueuedMessage(admission.admissionId, messageId);
+        retainAdmission = true;
+        return undefined;
+      }
+
+      await this.options.conversations.setSessionContext(conversationId, context);
+      const response = await this.options.conversations.prompt({ conversationId, prompt });
+      retainAdmission = true;
+      return response.stopReason;
+    } finally {
+      if (!retainAdmission) {
+        this.options.turnCanvasTargets.releaseAdmission(admission.admissionId);
+      }
+    }
   }
 
   async publishChanged(dshSessionId: string): Promise<void> {

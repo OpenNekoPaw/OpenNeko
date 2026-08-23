@@ -250,21 +250,22 @@ export function DesktopAgentSurface({
       if (permissionPresetId === undefined) {
         throw new Error('DSH permission preset is unavailable.');
       }
-      const targetConversationId =
-        conversationId ??
-        (state.kind === 'ready' ? state.projection.conversationId : undefined) ??
-        (
-          await window.openNekoDesktop.dshSessions.create(
-            workbenchInstanceId,
-            agentSurfaceId,
-            permissionPresetId,
-            creationTarget,
-            input,
-          )
-        ).conversationId;
-      const result = await window.openNekoDesktop.dshSessions.submit(targetConversationId, input);
+      const existingConversationId =
+        conversationId ?? (state.kind === 'ready' ? state.projection.conversationId : undefined);
+      const projection =
+        existingConversationId === undefined
+          ? await window.openNekoDesktop.dshSessions.create(
+              workbenchInstanceId,
+              agentSurfaceId,
+              permissionPresetId,
+              creationTarget,
+              input,
+            )
+          : (await window.openNekoDesktop.dshSessions.submit(existingConversationId, input))
+              .projection;
+      const targetConversationId = projection.conversationId;
       const permissions = await window.openNekoDesktop.dshPermissions.list(targetConversationId);
-      setState(requireReadyState(targetConversationId, result.projection, permissions));
+      setState(requireReadyState(targetConversationId, projection, permissions));
       return true;
     } catch (error) {
       setOperationError(describeError(error));

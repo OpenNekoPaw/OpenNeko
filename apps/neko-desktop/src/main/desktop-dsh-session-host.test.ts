@@ -23,11 +23,13 @@ const workspaceBoardTarget = {
 };
 
 describe('Desktop DSH Session Host', () => {
-  it('creates only through the exact sender-bound Agent Surface identity', async () => {
+  it('publishes and submits the first message through one sender-bound create command', async () => {
     const createConversation = vi.fn(async () => ({
       conversationId: identity.conversationId,
     }));
-    const host = createHost({ createConversation });
+    const prompt = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
+    const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
+    const host = createHost({ createConversation, prompt, applyConversation });
 
     const result = requireSessionResult(
       await host.execute(
@@ -67,7 +69,112 @@ describe('Desktop DSH Session Host', () => {
         contextPayloads: [],
       },
     });
+    expect(applyConversation).toHaveBeenCalledWith(identity.conversationId, 'window-1');
+    expect(prompt).toHaveBeenCalledWith({
+      conversationId: identity.conversationId,
+      prompt: [{ type: 'text', text: 'Create in project' }],
+    });
+    expect(createConversation.mock.invocationCallOrder[0]).toBeLessThan(
+      prompt.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+    expect(result.stopReason).toBe('end_turn');
     expect(result.projection).toMatchObject({ ...identity, title: 'Create in project' });
+  });
+
+  it('routes a first Command through the same create command', async () => {
+    const executeCommand = vi.fn(async () => ({
+      commandId: 'command-1',
+      outcome: 'success' as const,
+    }));
+    const host = createHost({ executeCommand });
+
+    await host.execute(
+      { webContentsId: 1, frameUrl: 'openneko://app' },
+      {
+        requestId: 'request-create-command',
+        operation: 'create',
+        windowId: 'window-1',
+        rendererSessionId: 'renderer-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        permissionPresetId: 'workspace-write',
+        target: { kind: 'surface' },
+        initialInput: { kind: 'command', line: '/help models' },
+      },
+    );
+
+    expect(executeCommand).toHaveBeenCalledWith(identity.conversationId, '/help models');
+  });
+
+  it('routes a first Skill through the same create command', async () => {
+    const invokeSkill = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
+    const host = createHost({ invokeSkill });
+
+    const result = requireSessionResult(
+      await host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-create-skill',
+          operation: 'create',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          workbenchInstanceId: 'workbench-1',
+          agentSurfaceId: 'surface-1',
+          permissionPresetId: 'workspace-write',
+          target: { kind: 'surface' },
+          initialInput: {
+            kind: 'skill',
+            skillName: 'story-review',
+            displayText: 'Review this story',
+          },
+        },
+      ),
+    );
+
+    expect(invokeSkill).toHaveBeenCalledWith({
+      conversationId: identity.conversationId,
+      skillName: 'story-review',
+      displayText: 'Review this story',
+    });
+    expect(result.stopReason).toBe('end_turn');
+  });
+
+  it('propagates a first prompt failure after publication without retrying', async () => {
+    const createConversation = vi.fn(async () => ({
+      conversationId: identity.conversationId,
+    }));
+    const prompt = vi.fn(async () => {
+      throw new Error('Provider rejected the first prompt.');
+    });
+    const host = createHost({ createConversation, prompt });
+
+    await expect(
+      host.execute(
+        { webContentsId: 1, frameUrl: 'openneko://app' },
+        {
+          requestId: 'request-create-failed-prompt',
+          operation: 'create',
+          windowId: 'window-1',
+          rendererSessionId: 'renderer-1',
+          workbenchInstanceId: 'workbench-1',
+          agentSurfaceId: 'surface-1',
+          permissionPresetId: 'workspace-write',
+          target: { kind: 'surface' },
+          initialInput: {
+            kind: 'message',
+            text: 'First prompt',
+            references: [],
+            images: [],
+            contextPayloads: [],
+          },
+        },
+      ),
+    ).rejects.toThrow('Provider rejected the first prompt.');
+    expect(createConversation).toHaveBeenCalledOnce();
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(createConversation.mock.invocationCallOrder[0]).toBeLessThan(
+      prompt.mock.invocationCallOrder[0]!,
+    );
   });
 
   it('rejects a stale sender before creating a Conversation', async () => {

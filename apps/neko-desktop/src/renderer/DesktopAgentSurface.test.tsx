@@ -800,18 +800,16 @@ describe('DesktopAgentSurface', () => {
     ).toBe(false);
   });
 
-  it('creates an exact Conversation and submits the first Draft message through it', async () => {
+  it('submits the first Draft message atomically through create', async () => {
     const createdProjection: DshSessionHostProjection = {
       ...projection,
       conversationId: 'conversation-created',
       dshSessionId: 'dsh-session-created',
     };
     dshSessions.create.mockResolvedValueOnce(createdProjection);
-    dshSessions.submit.mockResolvedValueOnce({
-      requestId: 'request-created',
-      projection: createdProjection,
-      stopReason: 'end_turn',
-    });
+    dshSessions.submit.mockRejectedValueOnce(
+      new Error('First Draft input must not use a second submit request.'),
+    );
     dshPermissions.list.mockResolvedValueOnce([]);
     render(
       <DesktopAgentSurface
@@ -843,14 +841,7 @@ describe('DesktopAgentSurface', () => {
         },
       ),
     );
-    expect(dshSessions.submit).toHaveBeenCalledWith('conversation-created', {
-      kind: 'message',
-      text: 'first message',
-      references: [],
-      images: [],
-      contextPayloads: [],
-      canvasTurnTarget: workspaceBoardTarget,
-    });
+    expect(dshSessions.submit).not.toHaveBeenCalled();
     expect(dshPermissions.list).toHaveBeenCalledWith('conversation-created');
     expect(await screen.findByText('Create a node')).toBeTruthy();
   });
@@ -862,11 +853,9 @@ describe('DesktopAgentSurface', () => {
       dshSessionId: 'dsh-session-project',
     };
     dshSessions.create.mockResolvedValueOnce(createdProjection);
-    dshSessions.submit.mockResolvedValueOnce({
-      requestId: 'request-project',
-      projection: createdProjection,
-      stopReason: 'end_turn',
-    });
+    dshSessions.submit.mockRejectedValueOnce(
+      new Error('First Project input must not use a second submit request.'),
+    );
     dshPermissions.list.mockResolvedValueOnce([]);
     const { container } = render(
       <DesktopAgentSurface
@@ -908,14 +897,7 @@ describe('DesktopAgentSurface', () => {
         },
       ),
     );
-    expect(dshSessions.submit).toHaveBeenCalledWith('conversation-project', {
-      kind: 'message',
-      text: 'create in project',
-      references: [],
-      images: [],
-      contextPayloads: [],
-      canvasTurnTarget: workspaceBoardTarget,
-    });
+    expect(dshSessions.submit).not.toHaveBeenCalled();
   });
 
   it('fails locally instead of rendering a permission from another DSH Session', async () => {
