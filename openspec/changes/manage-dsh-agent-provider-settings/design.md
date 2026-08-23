@@ -26,6 +26,8 @@ TOML 写入立即成为 authority；DSH catalog 的结构变更需要重启后�
 
 设置页只保留一个 Provider 管理入口。Provider 列表负责选择配置单元；选中后在同一局部编辑面板中展示凭据、按需展开的协议/API 地址，以及仅属于该 Provider 的对话和生成模型。模型新增、默认用途切换仍调用现有 model settings service，不建立 Renderer catalog、批量草稿 authority 或平行保存路径。自定义 Provider 先保存为 canonical Provider，随后从该 Provider 编辑面板增加模型。
 
+Agent 配置文件入口直接位于 Agent 标题右侧，不再用单独的“高级设置”内容行重复表达。Provider 不按模型用途复制到多个列表；用途分组只发生在选中 Provider 的模型目录中，对话与生成在宽布局中左右并列，窄布局恢复为单列。
+
 ## Runtime Boundary
 
 - Owner: `@neko/host/settings` and model-settings service.

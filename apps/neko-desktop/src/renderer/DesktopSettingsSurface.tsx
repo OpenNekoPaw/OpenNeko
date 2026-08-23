@@ -248,7 +248,7 @@ export function DesktopSettingsMainSurface({
         {section === 'agent' ? (
           <AgentModelSettingsGroup
             onDiagnostic={setDiagnostic}
-            onOpenAdvanced={() => {
+            onOpenConfig={() => {
               setPending(true);
               setDiagnostic(undefined);
               return settings.openAgentAdvanced().finally(() => setPending(false));
@@ -387,10 +387,10 @@ function formatBytes(bytes: number): string {
 
 function AgentModelSettingsGroup({
   onDiagnostic,
-  onOpenAdvanced,
+  onOpenConfig,
 }: {
   readonly onDiagnostic: (diagnostic: string | undefined) => void;
-  readonly onOpenAdvanced: () => Promise<void>;
+  readonly onOpenConfig: () => Promise<void>;
 }): JSX.Element {
   const { t } = useTranslation();
   const settings = useDesktopApplicationSettings();
@@ -454,6 +454,24 @@ function AgentModelSettingsGroup({
 
   return (
     <SettingsGroup
+      action={
+        <button
+          className="desktop-settings__action desktop-settings__group-action"
+          disabled={pending}
+          type="button"
+          onClick={() => {
+            setPending(true);
+            onDiagnostic(undefined);
+            void onOpenConfig()
+              .catch((error: unknown) =>
+                onDiagnostic(error instanceof Error ? error.message : String(error)),
+              )
+              .finally(() => setPending(false));
+          }}
+        >
+          {t('settings.agent.openConfig')}
+        </button>
+      }
       description={t('settings.category.agent.description')}
       title={t('settings.category.agent')}
     >
@@ -548,30 +566,6 @@ function AgentModelSettingsGroup({
           </div>
         ) : null}
       </div>
-
-      <div className="desktop-settings__row">
-        <div>
-          <strong>{t('settings.agent.advanced')}</strong>
-          <p>{t('settings.agent.advancedDescription')}</p>
-        </div>
-        <button
-          className="desktop-settings__action"
-          disabled={pending}
-          type="button"
-          onClick={() => {
-            setPending(true);
-            onDiagnostic(undefined);
-            void onOpenAdvanced()
-              .catch((error: unknown) =>
-                onDiagnostic(error instanceof Error ? error.message : String(error)),
-              )
-              .finally(() => setPending(false));
-          }}
-        >
-          {t('settings.agent.openConfig')}
-        </button>
-      </div>
-      <p className="desktop-settings__authority">{t('settings.agent.authority')}</p>
     </SettingsGroup>
   );
 }
@@ -1032,10 +1026,12 @@ export function parseDesktopSettingsSection(value: string): DesktopSettingsSecti
 }
 
 function SettingsGroup({
+  action,
   children,
   description,
   title,
 }: {
+  readonly action?: ReactNode;
   readonly children: ReactNode;
   readonly description: string;
   readonly title: string;
@@ -1043,8 +1039,11 @@ function SettingsGroup({
   return (
     <section className="desktop-settings__group">
       <div className="desktop-settings__group-heading">
-        <h2>{title}</h2>
-        <p>{description}</p>
+        <div className="desktop-settings__group-heading-copy">
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+        {action}
       </div>
       <div className="desktop-settings__card">{children}</div>
     </section>

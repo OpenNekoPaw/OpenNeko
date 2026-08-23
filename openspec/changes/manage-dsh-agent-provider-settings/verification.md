@@ -32,3 +32,11 @@ Provider cannot configure models before its canonical Provider record is saved. 
 inspection covered the compact catalog, configured Provider, collapsed/expanded connection fields, model
 catalog, custom Provider and scrollable footer at 1220×768. The final post-polish recapture was blocked by
 macOS lock; see `ui-validation.md`.
+
+## Title action and responsive model groups follow-up
+
+The redundant Agent advanced-settings row was removed and its existing Host action moved to the Agent
+group heading. Focused tests assert the action location, removed copy and exact dialogue/generation group
+count. Typecheck, focused Renderer tests, ESLint, formatting and diff checks passed. The real Electron
+initial Agent state was inspected successfully; configured-Provider and narrow-window recapture were
+blocked by concurrent development-runtime reloads that closed the overlay or navigated to unrelated scenes.

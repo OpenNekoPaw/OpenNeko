@@ -35,3 +35,8 @@ entry and filters the existing projection by exact Provider identity; provider, 
 still call the same typed bridge independently. New custom Providers are saved before model configuration,
 so the UI does not create a second draft catalog or batch authority. Model editing prevents Enter from
 submitting the surrounding Provider form, and no credential value is read back into Renderer state.
+
+The title-action and model-group layout follow-up remains L1 Renderer presentation. It removes duplicate
+advanced-settings copy while retaining the same `openAgentAdvanced` Host action as the single canonical
+configuration-file entry. Provider records are not assigned a fabricated dialogue/generation type and are
+not duplicated; only their owned model catalog is split into responsive dialogue and generation columns.

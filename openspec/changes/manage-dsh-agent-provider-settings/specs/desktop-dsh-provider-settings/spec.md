@@ -35,6 +35,8 @@ The Agent settings surface SHALL keep Provider configuration collapsed until the
 
 - **WHEN** the Agent settings category becomes visible
 - **THEN** Provider configuration is represented by a compact management summary rather than a fully expanded catalog
+- **AND** the canonical Agent configuration action is shown beside the Agent heading
+- **AND** no separate advanced-settings content row is shown
 - **AND** no separate default-model selectors are shown
 - **AND** no parallel model-catalog management summary is shown
 
@@ -48,6 +50,7 @@ The Agent settings surface SHALL keep Provider configuration collapsed until the
 
 - **WHEN** the user edits a configured Provider
 - **THEN** configured models are grouped into dialogue and generation models
+- **AND** the two groups use a side-by-side layout when space permits and a single-column layout in narrow containers
 - **AND** the current default for each model type is marked on the corresponding model card
 - **AND** another enabled model of the same type can be made default from its card
 

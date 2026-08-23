@@ -38,10 +38,10 @@ describe('Desktop Settings surfaces', () => {
     expect(update).not.toHaveBeenCalled();
 
     await act(async () => findButton(container, 'Agent').click());
-    expect(container.textContent).toContain(
-      'Providers, models, and defaults use the Agent-owned config.toml.',
-    );
-    await act(async () => findButton(container, 'Open Agent config').click());
+    expect(container.textContent).not.toContain('Advanced Agent settings');
+    const openConfig = findButton(container, 'Open Agent config');
+    expect(openConfig.closest('.desktop-settings__group-heading')).not.toBeNull();
+    await act(async () => openConfig.click());
     expect(openAgentAdvanced).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
   });
@@ -191,6 +191,7 @@ describe('Desktop Settings surfaces', () => {
     expect(container.textContent).toContain('Model catalog');
     expect(container.textContent).toContain('Dialogue models');
     expect(container.textContent).toContain('Generation models');
+    expect(container.querySelectorAll('.desktop-settings__model-group')).toHaveLength(2);
     expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(3);
     expect(container.querySelectorAll('.desktop-settings__model-default-badge')).toHaveLength(2);
     expect(container.querySelectorAll('.desktop-settings__model-default-action')).toHaveLength(1);
