@@ -13,6 +13,8 @@
 - [x] 2.5 Add producer, Desktop delegation, turn lifecycle and session projection tests proving the unique path, durable file, idempotency, exact target and local failure isolation.
 - [x] 2.6 Project one persisted Markdown `ContentLocator` beside the final summary only after byte-identical publication can be resolved, including full owner/application reopen.
 - [x] 2.7 Reuse the existing Agent Webview reference presentation and sender-bound Markdown open path; Renderer submits only conversation/message identity and never a raw path or authoritative locator.
+- [x] 2.8 Distinguish published assistant documents from user input references with one lightweight file link whose icon and complete title share the same activation target; keep relative-path detail in the hover title and reuse the same sender-bound open action without saved-state or open-button chrome.
+- [x] 2.9 Align the output link with transcript typography: regular inherited text, compact spacing, and underline feedback only on hover or keyboard focus without opacity fading.
 
 ## 3. Evaluation and review
 

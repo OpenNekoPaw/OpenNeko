@@ -24,6 +24,17 @@ The product SHALL treat a final assistant Markdown message as an always-present 
 - **AND** activating the reference opens that exact Markdown document through the sender-bound Host action
 - **AND** the conversation does not duplicate the complete document body
 
+#### Scenario: Input source and published output remain visually distinct
+
+- **WHEN** a user message contains an attached source file and the final assistant message contains a published Markdown artifact
+- **THEN** the source file remains an input reference token inside the user message
+- **AND** the assistant artifact is presented after the summary as one lightweight document link whose file icon and readable title form the same activation target
+- **AND** the output link inherits the surrounding transcript typography with regular weight, compact spacing and no persistent underline
+- **AND** hover or keyboard focus provides the underline interaction feedback without reducing the link opacity
+- **AND** no separate saved-state label, path label or open button is added
+- **AND** the full Workspace-relative path remains available as secondary hover detail instead of truncating the primary title
+- **AND** activating the output link still submits only the exact conversation and message identity
+
 #### Scenario: Conversation is reopened after publication
 
 - **WHEN** the application or Agent owner is reopened with the terminal message and published Workspace file still available

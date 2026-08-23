@@ -2432,6 +2432,57 @@ body {
   background: color-mix(in srgb, var(--agent-accent) 15%, var(--agent-composer-bg));
 }
 
+.agent-terminal-artifact-reference {
+  margin-top: 4px;
+}
+
+.agent-terminal-artifact-link {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--neko-textLink-foreground, #3794ff);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-terminal-artifact-icon {
+  display: inline-flex;
+  flex: none;
+  color: currentColor;
+}
+
+.agent-terminal-artifact-title {
+  min-width: 0;
+  color: currentColor;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.agent-terminal-artifact-link:hover .agent-terminal-artifact-title,
+.agent-terminal-artifact-link:focus-visible .agent-terminal-artifact-title {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.agent-terminal-artifact-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--agent-accent) 72%, transparent);
+  outline-offset: 2px;
+}
+
+.agent-terminal-artifact-link:disabled {
+  color: var(--agent-fg-secondary);
+  cursor: default;
+  opacity: 0.72;
+}
+
 .agent-user-prompt-primary {
   min-width: 0;
 }

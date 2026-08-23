@@ -4,13 +4,13 @@ DSH 只提供 Markdown assistant message。产品必须在不要求模型输出 
 
 ### Five-layer analysis
 
-| Layer | Decision |
-| --- | --- |
-| Responsibility | DSH Bridge 定义通用输出语法；Agent Runtime 决定 Workspace 准入、解析、文档 identity 和 workflow；Desktop 只实现 Host 文件 authority；Canvas 只消费 locator projection。 |
-| Dependency | Host-neutral parser/workflow 不依赖 Electron、Node writer 或 Canvas Webview；Desktop adapter 依赖精确 Workspace restoration 和授权 writer。 |
-| Interface | Agent 继续输出 Markdown。唯一边界是独占行 `<!-- neko:artifact -->`；Host 内部投影为 `summaryMarkdown` 和可选 `reviewable-markdown` artifact。 |
-| Extension | `DocumentProfileId` 由 Host 准入并校验；默认 profile 可由当前 Skill 收紧内容规范，但 Skill 不拥有 marker、路径、工具或写入协议。 |
-| Test | Pure parser、prompt/context、workflow producer、Desktop writer/consumer、session projection 和 Agent evaluation 分层验证；路径测试证明不恢复 CompositeArtifact 或 whole-reply auto-save。 |
+| Layer          | Decision                                                                                                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Responsibility | DSH Bridge 定义通用输出语法；Agent Runtime 决定 Workspace 准入、解析、文档 identity 和 workflow；Desktop 只实现 Host 文件 authority；Canvas 只消费 locator projection。                   |
+| Dependency     | Host-neutral parser/workflow 不依赖 Electron、Node writer 或 Canvas Webview；Desktop adapter 依赖精确 Workspace restoration 和授权 writer。                                               |
+| Interface      | Agent 继续输出 Markdown。唯一边界是独占行 `<!-- neko:artifact -->`；Host 内部投影为 `summaryMarkdown` 和可选 `reviewable-markdown` artifact。                                             |
+| Extension      | `DocumentProfileId` 由 Host 准入并校验；默认 profile 可由当前 Skill 收紧内容规范，但 Skill 不拥有 marker、路径、工具或写入协议。                                                          |
+| Test           | Pure parser、prompt/context、workflow producer、Desktop writer/consumer、session projection 和 Agent evaluation 分层验证；路径测试证明不恢复 CompositeArtifact 或 whole-reply auto-save。 |
 
 ## Goals / Non-Goals
 
@@ -60,16 +60,18 @@ DSH streaming message 保持原始文本。最终 assistant event 使用同一�
 
 持久引用不是进程内 publication 回执。Agent Runtime 从 canonical terminal artifact identity 派生同一 Workspace 相对路径，并通过 publication port 校验当前文件；完整 owner/应用重开后仍用终态消息、精确 Workspace context 和持久文件重建引用。Renderer 只提交 conversation/message identity，Desktop Main 重新解析并授权精确 `ContentLocator` 后调用现有 Markdown 编辑器打开路径；不得把绝对路径、临时 preview session 或 Renderer 提供的 locator 当作 authority。
 
+用户消息中的文件是输入来源，继续使用既有 attached reference token。assistant 终态 artifact 是已发布的输出文档，必须在总结之后使用一个轻量文件链接呈现：文件图标和可读标题共同构成同一点击目标，不额外显示保存状态、路径或独立打开按钮。链接继承会话正文的字号、行高和常规字重，不使用常驻下划线或 hover 透明度制造第二层强调；只有 hover/focus 时显示下划线反馈，并与总结保持紧凑间距。完整 Workspace 相对路径只作为悬停详情和打开所需 locator 的可读投影。该链接复用同一 sender-bound open action，不把路径重新注入 `summaryMarkdown`，也不新增 artifact authority。
+
 ## Boundary inventory
 
-| Owner / role | Canonical path | Producer -> consumer | Runtime boundary | Replaced path / user-data impact |
-| --- | --- | --- | --- | --- |
-| `@neko/dsh-bridge` L0 prompt | product system prompt | Host prompt -> DSH Agent | provider prompt boundary | 删除 dangling CompositeArtifact JSON 指令；无数据迁移 |
-| `@neko/agent-runtime` application | terminal Markdown parser + publication resolver + delivery service | final projected event -> publication/delivery ports | host-neutral Node/application | 替代 whole-final heuristic；普通回复不落盘；重开时从终态 artifact 和持久文件重建引用 |
-| `@neko/agent-runtime` context | DSH conversation turn context | exact Workspace binding -> turn admission prompt | session context boundary | 非 Workspace 不默认准入 |
-| `apps/neko-desktop` Main adapter | existing Workspace Board delivery | publication request -> authorized Workspace writer -> Canvas projection | Electron trust boundary | 新文件为 Workspace 相对路径；不覆盖不同内容 |
-| Canvas domain/Webview | existing locator-backed file node | delivery request -> current bound board | typed IPC/Webview | 无 contract/UI 变化 |
-| Agent contract/Webview | optional terminal Markdown reference | projected final message -> existing reference token -> sender-bound Host open | typed IPC/Webview | 不复制完整文档；不持久化 preview session |
+| Owner / role                      | Canonical path                                                     | Producer -> consumer                                                                 | Runtime boundary              | Replaced path / user-data impact                                                     |
+| --------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------ |
+| `@neko/dsh-bridge` L0 prompt      | product system prompt                                              | Host prompt -> DSH Agent                                                             | provider prompt boundary      | 删除 dangling CompositeArtifact JSON 指令；无数据迁移                                |
+| `@neko/agent-runtime` application | terminal Markdown parser + publication resolver + delivery service | final projected event -> publication/delivery ports                                  | host-neutral Node/application | 替代 whole-final heuristic；普通回复不落盘；重开时从终态 artifact 和持久文件重建引用 |
+| `@neko/agent-runtime` context     | DSH conversation turn context                                      | exact Workspace binding -> turn admission prompt                                     | session context boundary      | 非 Workspace 不默认准入                                                              |
+| `apps/neko-desktop` Main adapter  | existing Workspace Board delivery                                  | publication request -> authorized Workspace writer -> Canvas projection              | Electron trust boundary       | 新文件为 Workspace 相对路径；不覆盖不同内容                                          |
+| Canvas domain/Webview             | existing locator-backed file node                                  | delivery request -> current bound board                                              | typed IPC/Webview             | 无 contract/UI 变化                                                                  |
+| Agent contract/Webview            | optional terminal Markdown reference                               | projected final message -> dedicated durable-document link -> sender-bound Host open | typed IPC/Webview             | 输入文件仍使用 reference token；不复制完整文档；不持久化 preview session             |
 
 ## Risks / Trade-offs
 

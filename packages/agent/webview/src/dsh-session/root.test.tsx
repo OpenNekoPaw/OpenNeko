@@ -1346,7 +1346,7 @@ describe('DshAgentView content-creation composer', () => {
     expect(view.container.querySelector('[data-agent-thought-state="final"]')).toBeTruthy();
   });
 
-  it('renders a persistent document reference separately from the assistant summary', () => {
+  it('renders a published document link separately from the assistant summary and input tokens', () => {
     const onOpenTerminalArtifact = vi.fn();
     const view = renderAgent(
       <DshAgentView
@@ -1369,7 +1369,7 @@ describe('DshAgentView content-creation composer', () => {
               state: 'final',
               artifact: {
                 kind: 'reviewable-markdown',
-                title: '故事规划',
+                title: '《BLAME！》动画化企划方案与具体操作步骤',
                 contentLocator: {
                   file: {
                     authority: 'workspace',
@@ -1403,7 +1403,19 @@ describe('DshAgentView content-creation composer', () => {
       '[data-agent-terminal-artifact="reviewable-markdown"]',
     );
     expect(reference).toBeTruthy();
-    fireEvent.click(screen.getByText('故事规划'));
+    expect(reference?.classList.contains('agent-terminal-artifact-reference')).toBe(true);
+    expect(reference?.querySelector('[data-agent-reference-token="true"]')).toBeNull();
+    const link = screen.getByRole('button', {
+      name: '打开文档：《BLAME！》动画化企划方案与具体操作步骤',
+    });
+    expect(link.textContent).toBe('《BLAME！》动画化企划方案与具体操作步骤');
+    expect(link.textContent).not.toContain('已保存');
+    expect(link.querySelector('svg')).toBeTruthy();
+    expect(link.getAttribute('title')).toBe(
+      '《BLAME！》动画化企划方案与具体操作步骤\nneko/generated/file/story-plan.md',
+    );
+    expect(reference?.textContent).not.toContain('neko/generated/file');
+    fireEvent.click(link);
     expect(onOpenTerminalArtifact).toHaveBeenCalledWith('assistant-final');
   });
 

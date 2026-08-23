@@ -52,6 +52,7 @@ import {
   SuccessIcon,
   WarningIcon,
 } from '@neko/ui';
+import { FileIcon } from '@neko/ui/icons';
 import { useTranslation as useUiTranslation } from '@neko/ui/i18n/react';
 import { AgentPresentationI18nProvider, useTranslation } from '../i18n/I18nContext';
 import { projectContentLocatorPath } from '../presenters/content-locator-presenter';
@@ -1251,6 +1252,7 @@ function DshSessionEvent({
                       {event.artifact === undefined ? null : (
                         <TerminalArtifactReference
                           artifact={event.artifact}
+                          copy={copy}
                           messageId={event.messageId}
                           onOpen={onOpenTerminalArtifact}
                         />
@@ -1301,6 +1303,7 @@ function DshSessionEvent({
 
 function TerminalArtifactReference({
   artifact,
+  copy,
   messageId,
   onOpen,
 }: {
@@ -1310,24 +1313,30 @@ function TerminalArtifactReference({
       { readonly kind: 'message'; readonly role: 'assistant' }
     >['artifact']
   >;
+  readonly copy: DshAgentCopy;
   readonly messageId: string;
   readonly onOpen?: DshAgentViewProps['onOpenTerminalArtifact'];
 }): JSX.Element {
-  const projection = projectPathReferenceToken({
-    path: projectContentLocatorPath(artifact.contentLocator),
-    label: artifact.title,
-  });
+  const path = projectContentLocatorPath(artifact.contentLocator);
+  const openLabel = copy.openPersistedDocument.replace('{title}', artifact.title);
   return (
-    <div className="mt-2" data-agent-terminal-artifact="reviewable-markdown">
-      <ReferenceToken
-        kind={projection.kind}
-        label={projection.label}
-        title={projection.title}
-        meta={projection.meta}
-        thumbnailSrc={projection.thumbnailSrc}
-        variant="inline"
+    <div
+      className="agent-terminal-artifact-reference"
+      data-agent-terminal-artifact="reviewable-markdown"
+    >
+      <button
+        type="button"
+        className="agent-terminal-artifact-link"
+        title={`${artifact.title}\n${path}`}
+        aria-label={openLabel}
+        disabled={onOpen === undefined}
         onClick={onOpen === undefined ? undefined : () => onOpen(messageId)}
-      />
+      >
+        <span className="agent-terminal-artifact-icon" aria-hidden="true">
+          <FileIcon size={14} strokeWidth={1.7} />
+        </span>
+        <span className="agent-terminal-artifact-title">{artifact.title}</span>
+      </button>
     </div>
   );
 }
@@ -1792,6 +1801,7 @@ interface DshAgentCopy {
   readonly modelRequired: string;
   readonly loading: string;
   readonly output: string;
+  readonly openPersistedDocument: string;
   readonly permissions: string;
   readonly placeholder: string;
   readonly restartRuntime: string;
@@ -1851,6 +1861,7 @@ const EN_COPY: DshAgentCopy = {
   loadingConfiguration: 'Loading model configuration…',
   loading: 'Loading DSH session…',
   output: 'Result',
+  openPersistedDocument: 'Open document: {title}',
   model: 'Model',
   newConversation: 'New conversation',
   modelRequired: 'Select a configured model before sending.',
@@ -1917,6 +1928,7 @@ const ZH_COPY: DshAgentCopy = {
   loadingConfiguration: '正在加载模型配置…',
   loading: '正在加载 DSH 会话…',
   output: '结果',
+  openPersistedDocument: '打开文档：{title}',
   model: '模型',
   newConversation: '新会话',
   modelRequired: '发送前请选择已配置的模型。',
