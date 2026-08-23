@@ -7,6 +7,8 @@ import { TEXT_EDITOR_HOST_CHANNELS } from '@neko/text-editor-domain';
 import { DESKTOP_CANVAS_CHANNELS } from '../shared/canvas-bridge-contract';
 import { DESKTOP_CUT_CHANNELS } from '../shared/cut-bridge-contract';
 import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '@neko/host/application-settings';
+import { DESKTOP_AI_MODEL_SETTINGS_CHANNEL } from '@neko/host/ai-model-settings';
+import { DESKTOP_STORAGE_SETTINGS_CHANNEL } from '@neko/host/desktop-storage-settings-contract';
 import { DESKTOP_PROJECT_PORTABILITY_CHANNELS } from '@neko/assets-domain/contracts';
 import { ASSET_CENTER_HOST_CHANNEL } from '@neko/assets-domain/asset-center/host-contract';
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
@@ -198,6 +200,12 @@ export function registerDesktopIpc(
     DESKTOP_APPLICATION_SETTINGS_CHANNELS.agentAdvancedOpen,
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.openAgentAdvancedSettings(requireSender(event), payload),
+  );
+  ipcMain.handle(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeAiModelSettings(requireSender(event), payload),
+  );
+  ipcMain.handle(DESKTOP_STORAGE_SETTINGS_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeStorageSettings(requireSender(event), payload),
   );
   ipcMain.handle(DESKTOP_WORKSPACE_GRANT_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.resolveWorkspaceTarget(requireSender(event), payload, () =>
@@ -470,6 +478,8 @@ export function registerDesktopIpc(
       DESKTOP_APPLICATION_SETTINGS_CHANNELS.snapshotGet,
       DESKTOP_APPLICATION_SETTINGS_CHANNELS.update,
       DESKTOP_APPLICATION_SETTINGS_CHANNELS.agentAdvancedOpen,
+      DESKTOP_AI_MODEL_SETTINGS_CHANNEL,
+      DESKTOP_STORAGE_SETTINGS_CHANNEL,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.snapshotGet,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.children,
       DESKTOP_RESOURCE_BROWSER_CHANNELS.search,

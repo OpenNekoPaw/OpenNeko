@@ -223,6 +223,8 @@ import {
   serializeDesktopApplicationSettingsStoredState,
 } from '@neko/host/application-settings-state';
 import { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
+import { DesktopAiModelSettingsService } from '@neko/host/ai-model-settings-service';
+import { DesktopStorageSettingsRuntime } from './desktop-storage-settings-runtime';
 import {
   DESKTOP_APPLICATION_SETTINGS_CHANNELS,
   type DesktopApplicationSettingsProjectionEvent,
@@ -488,6 +490,27 @@ async function startDesktop(): Promise<void> {
       filePath: buildConfigFilePath(homedir),
     }),
   );
+  const applicationAgentConfig = workspaceConfigAuthority.getApplicationConfig();
+  const aiModelSettings = new DesktopAiModelSettingsService(
+    applicationAgentConfig,
+    providerCredentials,
+  );
+  const storageSettings = new DesktopStorageSettingsRuntime({
+    homedir,
+    repositories: metadataRepositories,
+    applicationSettings,
+    selectDirectory: async (defaultPath) => {
+      const selection = await dialog.showOpenDialog({
+        defaultPath,
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      return selection.canceled ? undefined : selection.filePaths[0];
+    },
+    openDirectory: async (targetPath) => {
+      const error = await shell.openPath(targetPath);
+      if (error) throw new Error(`Could not open storage directory: ${error}`);
+    },
+  });
   const retainedProjects = await workspaceRegistry.listProjects([assistantSpaceId]);
   const experimentalCreativeCapabilitiesReady = !app.isPackaged;
   const shellService = new DesktopShellService({
@@ -1967,6 +1990,8 @@ async function startDesktop(): Promise<void> {
     canvasWorkspaceIndexService,
     cut: cutRuntime,
     settings: applicationSettings,
+    aiModelSettings,
+    storageSettings,
     openAgentAdvancedSettings: () => openHostPath(buildConfigFilePath(homedir)),
     instanceId: applicationInstanceId,
   });
@@ -1990,7 +2015,6 @@ async function startDesktop(): Promise<void> {
       if (!owner.isDestroyed()) owner.webContents.send(DSH_RUNTIME_CHANGED_CHANNEL, projection);
     }
   };
-  const applicationAgentConfig = workspaceConfigAuthority.getApplicationConfig();
   const dshProviderRuntime = await createDesktopDshProviderRuntimeProjection({
     providers: applicationAgentConfig.getEnabledProviders(),
     models: applicationAgentConfig.getEnabledModels(),
@@ -2707,7 +2731,13 @@ async function startDesktop(): Promise<void> {
             })
           : undefined) ??
         functionalWorkspace ??
-        (await chooseWorkspaceDirectory(owner));
+        (await chooseWorkspaceDirectory(
+          owner,
+          resolveDefaultWorkspacePath(
+            homedir,
+            applicationSettings.current.preferences.defaultWorkspaceLocator,
+          ),
+        ));
       return selectedPath
         ? { label: path.basename(selectedPath), hostResource: selectedPath }
         : undefined;
@@ -2719,6 +2749,10 @@ async function startDesktop(): Promise<void> {
       const result = await dialog.showOpenDialog(owner, {
         title: 'Open Content Project',
         buttonLabel: 'Open Project',
+        defaultPath: resolveDefaultWorkspacePath(
+          homedir,
+          applicationSettings.current.preferences.defaultWorkspaceLocator,
+        ),
         properties: ['openDirectory', 'createDirectory'],
       });
       if (result.canceled) return undefined;
@@ -3033,10 +3067,14 @@ async function consumeFunctionalMarker(markerPath: string): Promise<boolean> {
   }
 }
 
-async function chooseWorkspaceDirectory(owner: BrowserWindow): Promise<string | undefined> {
+async function chooseWorkspaceDirectory(
+  owner: BrowserWindow,
+  defaultPath: string,
+): Promise<string | undefined> {
   const result = await dialog.showOpenDialog(owner, {
     title: 'Open Workspace',
     buttonLabel: 'Open Workspace',
+    defaultPath,
     properties: ['openDirectory', 'createDirectory'],
   });
   if (result.canceled) return undefined;
@@ -3045,6 +3083,14 @@ async function chooseWorkspaceDirectory(owner: BrowserWindow): Promise<string | 
     throw new Error('Desktop workspace picker completed without a selected directory.');
   }
   return selectedPath;
+}
+
+function resolveDefaultWorkspacePath(homedir: string, locator: string): string {
+  const prefix = '${HOME}/';
+  if (!locator.startsWith(prefix)) {
+    throw new Error('Default Workspace locator must use the HOME variable.');
+  }
+  return path.resolve(homedir, locator.slice(prefix.length));
 }
 
 async function selectCanvasMediaLibrary(input: {

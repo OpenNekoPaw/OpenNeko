@@ -85,6 +85,8 @@ function createSettings(): DesktopApplicationSettingsProjection {
       theme: 'light',
       locale: 'system',
       resourceBrowserView: 'list',
+      fontSize: 'default',
+      defaultWorkspaceLocator: '${HOME}/OpenNeko',
     },
   };
 }

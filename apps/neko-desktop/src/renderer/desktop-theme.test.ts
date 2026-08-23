@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { nekoDesignTokens } from '@neko/ui/theme';
 import {
+  applyDesktopFontSize,
   applyResolvedDesktopTheme,
   desktopNativeThemeTokens,
   startDesktopTheme,
@@ -10,6 +11,14 @@ import {
 } from './desktop-theme';
 
 describe('Desktop system theme', () => {
+  it('applies the font-size preference to the complete document root', () => {
+    applyDesktopFontSize(document, 'large');
+
+    expect(document.documentElement.dataset.nekoFontSize).toBe('large');
+    expect(document.documentElement.style.getPropertyValue('--neko-font-size')).toBe('14.56px');
+    expect(document.documentElement.style.zoom).toBe('1.12');
+  });
+
   it.each(['light', 'dark'] as const)(
     'projects the shared Desktop Webview theme contract for %s',
     (theme) => {

@@ -3,11 +3,15 @@ import type {
   DesktopApplicationPreferences,
   DesktopApplicationSettingsProjection,
 } from '@neko/host/application-settings';
+import type { OpenNekoDesktopAiModelSettingsBridge } from '@neko/host/ai-model-settings';
+import type { OpenNekoDesktopStorageSettingsBridge } from '@neko/host/desktop-storage-settings-contract';
 
 export interface DesktopApplicationSettingsRuntime {
   readonly projection: DesktopApplicationSettingsProjection;
   update(preferences: DesktopApplicationPreferences): Promise<void>;
   openAgentAdvanced(): Promise<void>;
+  readonly aiModelSettings?: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'];
+  readonly storageSettings?: OpenNekoDesktopStorageSettingsBridge['storageSettings'];
 }
 
 const DesktopApplicationSettingsContext = createContext<DesktopApplicationSettingsRuntime | null>(

@@ -8,6 +8,7 @@ import { type DesktopApplicationSettingsProjection } from '@neko/host/applicatio
 import {
   DesktopSettingsMainSurface,
   DesktopSettingsNavigationSurface,
+  DesktopSettingsOverlaySurface,
   type DesktopSettingsSection,
 } from './DesktopSettingsSurface';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
@@ -15,13 +16,13 @@ import { createDesktopI18n } from './i18n';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-describe('Desktop Settings scene surfaces', () => {
+describe('Desktop Settings surfaces', () => {
   afterEach(() => {
     document.body.replaceChildren();
     vi.restoreAllMocks();
   });
 
-  it('keeps navigation and settings mutations in separate Workbench slots', async () => {
+  it('keeps navigation and settings mutations in separate overlay regions', async () => {
     const update = vi.fn(async () => undefined);
     const openAgentAdvanced = vi.fn(async () => undefined);
     const { container, root } = await renderSettings({ update, openAgentAdvanced });
@@ -37,7 +38,7 @@ describe('Desktop Settings scene surfaces', () => {
 
     await act(async () => findButton(container, 'Agent').click());
     expect(container.textContent).toContain(
-      'Desktop preferences are stored separately and never written to that file.',
+      'Providers, models, and defaults use the Agent-owned config.toml.',
     );
     await act(async () => findButton(container, 'Open Agent config').click());
     expect(openAgentAdvanced).toHaveBeenCalledTimes(1);
@@ -49,6 +50,7 @@ describe('Desktop Settings scene surfaces', () => {
     const heading = container.querySelector('.desktop-settings__title');
 
     expect(heading?.querySelector('svg')).toBeNull();
+    expect(heading?.classList.contains('home-launchpad-heading')).toBe(false);
     expect(heading?.textContent).toContain('Settings');
     await act(async () => root.unmount());
   });
@@ -73,7 +75,7 @@ describe('Desktop Settings scene surfaces', () => {
     await act(async () => root.unmount());
   });
 
-  it('restores only the Host-owned section and resets transient search on remount', async () => {
+  it('uses the supplied overlay section and resets transient search on remount', async () => {
     const first = await renderSettings();
     const search = first.container.querySelector<HTMLInputElement>('input[type="search"]');
     if (!search) throw new Error('Settings fixture requires a search field.');
@@ -92,15 +94,35 @@ describe('Desktop Settings scene surfaces', () => {
     ).toContain('Theme');
     await act(async () => restored.root.unmount());
   });
+
+  it('renders a modal overlay and closes without a Scene transition', async () => {
+    const onClose = vi.fn();
+    const { container, root } = await renderSettings({ overlay: true, onClose });
+
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[data-settings-overlay="true"]')).not.toBeNull();
+    expect(document.querySelectorAll('h1')).toHaveLength(0);
+
+    const close = document.querySelector<HTMLButtonElement>('button[aria-label="Close settings"]');
+    if (!close) throw new Error('Settings overlay fixture requires a close action.');
+    await act(async () => close.click());
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await act(async () => root.unmount());
+    container.remove();
+  });
 });
 
 async function renderSettings({
   openAgentAdvanced = vi.fn(async () => undefined),
   initialSection = 'general',
+  onClose = vi.fn(),
+  overlay = false,
   update = vi.fn(async () => undefined),
 }: {
   readonly openAgentAdvanced?: () => Promise<void>;
   readonly initialSection?: DesktopSettingsSection;
+  readonly onClose?: () => void;
+  readonly overlay?: boolean;
   readonly update?: (
     preferences: DesktopApplicationSettingsProjection['preferences'],
   ) => Promise<void>;
@@ -111,7 +133,13 @@ async function renderSettings({
   const root = createRoot(container);
   function Fixture(): JSX.Element {
     const [section, setSection] = useState<DesktopSettingsSection>(initialSection);
-    return (
+    return overlay ? (
+      <DesktopSettingsOverlaySurface
+        onClose={onClose}
+        onSectionChange={setSection}
+        section={section}
+      />
+    ) : (
       <>
         <DesktopSettingsNavigationSurface activeSection={section} onSectionChange={setSection} />
         <DesktopSettingsMainSurface section={section} />
@@ -129,6 +157,8 @@ async function renderSettings({
                 theme: 'system',
                 locale: 'system',
                 resourceBrowserView: 'list',
+                fontSize: 'default',
+                defaultWorkspaceLocator: '${HOME}/OpenNeko',
               },
             },
             update,

@@ -2,7 +2,11 @@ import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import { DesktopApplication } from './DesktopShell';
-import { startDesktopTheme, type DesktopThemeController } from './desktop-theme';
+import {
+  applyDesktopFontSize,
+  startDesktopTheme,
+  type DesktopThemeController,
+} from './desktop-theme';
 import { applyDesktopLocale, createDesktopI18n, resolveDesktopLocalePreference } from './i18n';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import type {
@@ -21,6 +25,7 @@ export async function mountDesktopRenderer(container: HTMLElement): Promise<void
   const desktopI18n = createDesktopI18n(initialLocale);
   applyDesktopLocale(document, initialLocale);
   const themeController = startDesktopTheme(document, initialSettings.preferences.theme);
+  applyDesktopFontSize(document, initialSettings.preferences.fontSize);
 
   const disposeTheme = (): void => themeController.dispose();
   try {
@@ -64,6 +69,7 @@ function DesktopRendererRoot({
       themeController.update(projection.preferences.theme);
       i18n.setLocale(locale);
       applyDesktopLocale(document, locale);
+      applyDesktopFontSize(document, projection.preferences.fontSize);
       setSettings(projection);
     },
     [i18n, themeController],
@@ -82,6 +88,8 @@ function DesktopRendererRoot({
         applyProjection(await window.openNekoDesktop.settings.update(preferences));
       },
       openAgentAdvanced: () => window.openNekoDesktop.settings.openAgentAdvanced(),
+      aiModelSettings: window.openNekoDesktop.aiModelSettings,
+      storageSettings: window.openNekoDesktop.storageSettings,
     }),
     [applyProjection, settings],
   );

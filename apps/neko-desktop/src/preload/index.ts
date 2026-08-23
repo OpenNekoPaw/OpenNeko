@@ -167,6 +167,18 @@ import {
   type OpenNekoDesktopApplicationSettingsBridge,
 } from '@neko/host/application-settings';
 import {
+  createDesktopAiModelSettingsRequest,
+  DESKTOP_AI_MODEL_SETTINGS_CHANNEL,
+  parseDesktopAiModelSettingsResponse,
+  type OpenNekoDesktopAiModelSettingsBridge,
+} from '@neko/host/ai-model-settings';
+import {
+  createDesktopStorageSettingsRequest,
+  DESKTOP_STORAGE_SETTINGS_CHANNEL,
+  parseDesktopStorageSettingsResponse,
+  type OpenNekoDesktopStorageSettingsBridge,
+} from '@neko/host/desktop-storage-settings-contract';
+import {
   DESKTOP_PROJECT_PORTABILITY_CHANNELS,
   isSameDesktopProjectPortabilityIdentity,
   parseDesktopProjectPortabilityCancelResult,
@@ -345,6 +357,8 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopWorkspaceGrantBridge &
   OpenNekoAgentExtensionManagementBridge &
   OpenNekoDesktopApplicationSettingsBridge &
+  OpenNekoDesktopAiModelSettingsBridge &
+  OpenNekoDesktopStorageSettingsBridge &
   OpenNekoDesktopProjectPortabilityBridge &
   OpenNekoDesktopProjectAuthoringBridge &
   OpenNekoDesktopProjectLocalAuthoringBridge &
@@ -1153,6 +1167,72 @@ const bridge: OpenNekoDesktopBridge &
       return () => {
         settingsListeners.delete(listener);
       };
+    },
+  },
+  aiModelSettings: {
+    async get() {
+      const request = createDesktopAiModelSettingsRequest({
+        requestId: nextRequestId('desktop-ai-model-settings'),
+        operation: 'get',
+      });
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      return parseDesktopAiModelSettingsResponse(response, request.requestId).projection;
+    },
+    async saveProvider(provider, apiKey) {
+      const request = createDesktopAiModelSettingsRequest({
+        requestId: nextRequestId('desktop-ai-provider-save'),
+        operation: 'save-provider',
+        provider,
+        ...(apiKey === undefined ? {} : { apiKey }),
+      });
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      return parseDesktopAiModelSettingsResponse(response, request.requestId);
+    },
+    async saveModel(model) {
+      const request = createDesktopAiModelSettingsRequest({
+        requestId: nextRequestId('desktop-ai-model-save'),
+        operation: 'save-model',
+        model,
+      });
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      return parseDesktopAiModelSettingsResponse(response, request.requestId);
+    },
+    async setDefault(modelType, ref) {
+      const request = createDesktopAiModelSettingsRequest({
+        requestId: nextRequestId('desktop-ai-model-default'),
+        operation: 'set-default',
+        modelType,
+        ref,
+      });
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      return parseDesktopAiModelSettingsResponse(response, request.requestId);
+    },
+  },
+  storageSettings: {
+    async get() {
+      const request = createDesktopStorageSettingsRequest({
+        requestId: nextRequestId('desktop-storage-settings'),
+        operation: 'get',
+      });
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_STORAGE_SETTINGS_CHANNEL, request);
+      return parseDesktopStorageSettingsResponse(response, request.requestId).projection;
+    },
+    async open(entryId) {
+      const request = createDesktopStorageSettingsRequest({
+        requestId: nextRequestId('desktop-storage-open'),
+        operation: 'open',
+        entryId,
+      });
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_STORAGE_SETTINGS_CHANNEL, request);
+      return parseDesktopStorageSettingsResponse(response, request.requestId).projection;
+    },
+    async selectDefaultWorkspace() {
+      const request = createDesktopStorageSettingsRequest({
+        requestId: nextRequestId('desktop-storage-default-select'),
+        operation: 'select-default-workspace',
+      });
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_STORAGE_SETTINGS_CHANNEL, request);
+      return parseDesktopStorageSettingsResponse(response, request.requestId);
     },
   },
   assetCenter: {

@@ -3,7 +3,10 @@ import {
   DESKTOP_BACKGROUND_COLORS,
   type DesktopResolvedTheme,
 } from '../shared/desktop-presentation-contract';
-import type { DesktopThemePreference } from '@neko/host/application-settings';
+import type {
+  DesktopFontSizePreference,
+  DesktopThemePreference,
+} from '@neko/host/application-settings';
 
 const DESKTOP_DARK_THEME_QUERY = '(prefers-color-scheme: dark)';
 
@@ -185,6 +188,17 @@ export function applyResolvedDesktopTheme(target: Document, theme: DesktopResolv
   applyTokens(root, desktopNativeThemeTokens[theme]);
   applyTokens(root, desktopWebviewSharedThemeTokens);
   applyTokens(root, desktopWebviewThemeTokens[theme]);
+}
+
+export function applyDesktopFontSize(
+  target: Document,
+  preference: DesktopFontSizePreference,
+): void {
+  const root = target.documentElement;
+  const scale = preference === 'small' ? 0.92 : preference === 'large' ? 1.12 : 1;
+  root.dataset.nekoFontSize = preference;
+  root.style.setProperty('--neko-font-size', `${13 * scale}px`);
+  root.style.zoom = String(scale);
 }
 
 export function startDesktopSystemTheme(

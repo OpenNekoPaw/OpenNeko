@@ -9,6 +9,8 @@ import type { OpenNekoDesktopTextEditorBridge } from '@neko/text-editor-domain';
 import type { OpenNekoDesktopCanvasBridge } from './canvas-bridge-contract';
 import type { OpenNekoDesktopCutBridge } from './cut-bridge-contract';
 import type { OpenNekoDesktopApplicationSettingsBridge } from '@neko/host/application-settings';
+import type { OpenNekoDesktopAiModelSettingsBridge } from '@neko/host/ai-model-settings';
+import type { OpenNekoDesktopStorageSettingsBridge } from '@neko/host/desktop-storage-settings-contract';
 import type { OpenNekoDesktopProjectPortabilityBridge } from '@neko/assets-domain/contracts';
 import type {
   OpenNekoDesktopProjectAuthoringBridge,
@@ -47,6 +49,8 @@ declare global {
       OpenNekoDesktopWorkspaceGrantBridge &
       OpenNekoAgentExtensionManagementBridge &
       OpenNekoDesktopApplicationSettingsBridge &
+      OpenNekoDesktopAiModelSettingsBridge &
+      OpenNekoDesktopStorageSettingsBridge &
       OpenNekoDesktopProjectPortabilityBridge &
       OpenNekoDesktopProjectAuthoringBridge &
       OpenNekoDesktopProjectLocalAuthoringBridge &

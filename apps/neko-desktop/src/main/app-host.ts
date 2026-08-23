@@ -117,6 +117,16 @@ import {
   type DesktopApplicationSettingsResponse,
 } from '@neko/host/application-settings';
 import type { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
+import {
+  parseDesktopAiModelSettingsRequest,
+  type DesktopAiModelSettingsResponse,
+} from '@neko/host/ai-model-settings';
+import type { DesktopAiModelSettingsService } from '@neko/host/ai-model-settings-service';
+import {
+  parseDesktopStorageSettingsRequest,
+  type DesktopStorageSettingsResponse,
+} from '@neko/host/desktop-storage-settings-contract';
+import type { DesktopStorageSettingsRuntime } from './desktop-storage-settings-runtime';
 import type { ProjectPortabilityRuntime } from '@neko/assets-node';
 import type {
   DesktopProjectPortabilityCancelResult,
@@ -322,6 +332,8 @@ export interface DesktopAppHostOptions {
   readonly canvasWorkspaceIndexService?: CanvasWorkspaceIndexService;
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
+  readonly aiModelSettings: DesktopAiModelSettingsService;
+  readonly storageSettings: DesktopStorageSettingsRuntime;
   readonly openAgentAdvancedSettings: () => Promise<void>;
   readonly instanceId?: string;
 }
@@ -349,6 +361,8 @@ export class DesktopAppHost {
   readonly canvasWorkspaceIndexService: CanvasWorkspaceIndexService | undefined;
   readonly cut: DesktopCutRuntime | undefined;
   readonly settings: DesktopApplicationSettingsService;
+  readonly aiModelSettings: DesktopAiModelSettingsService;
+  readonly storageSettings: DesktopStorageSettingsRuntime;
   private readonly resourceSubscriptions = new Map<number, () => void>();
   private readonly canvasSubscriptions = new Map<number, Map<string, () => void>>();
   private readonly cutSubscriptions = new Map<number, Map<string, () => void>>();
@@ -384,6 +398,8 @@ export class DesktopAppHost {
     this.canvasWorkspaceIndexService = options.canvasWorkspaceIndexService;
     this.cut = options.cut;
     this.settings = options.settings;
+    this.aiModelSettings = options.aiModelSettings;
+    this.storageSettings = options.storageSettings;
     this.shell.setAgentCapabilityReady(false);
     this.shell.setResourceBrowserCapabilityReady(this.resourceBrowser !== undefined);
     this.shell.setPreviewCapabilityReady(this.preview !== undefined);
@@ -966,6 +982,31 @@ export class DesktopAppHost {
       requestId: request.requestId,
       status: 'opened',
     };
+  }
+
+  async executeAiModelSettings(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopAiModelSettingsResponse> {
+    this.requireActive();
+    const request = parseDesktopAiModelSettingsRequest(payload);
+    this.windows.resolveSender(sender);
+    const result = await this.aiModelSettings.execute(request);
+    return {
+      requestId: request.requestId,
+      ...result,
+    };
+  }
+
+  async executeStorageSettings(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopStorageSettingsResponse> {
+    this.requireActive();
+    const request = parseDesktopStorageSettingsRequest(payload);
+    this.windows.resolveSender(sender);
+    const result = await this.storageSettings.execute(request);
+    return { requestId: request.requestId, ...result };
   }
 
   async createBootstrapProjection(
