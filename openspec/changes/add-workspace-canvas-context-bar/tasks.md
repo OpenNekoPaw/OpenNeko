@@ -21,6 +21,7 @@
 
 - [x] 3.1 Desktop Main/preload 投影最小 typed IPC：仅读取 catalog/轻量 summary；Canvas selection/turn target 只存在于 Agent submit contract 与 Renderer presentation state，不通过 selection-write IPC。Renderer 不访问文件系统或 Electron。
 - [x] 3.2 Desktop adapter 只做 sender/workspace grant 授权和 package service 调用；不保存 active/recent Canvas，不镜像 Board。
+- [x] 3.3 通过 Canvas-owned Desktop bridge 投影 Workspace-scoped index invalidation；仅在 sender-bound Resource Browser 成功新增 Canvas 后发布，失败、Cut/普通文件创建不发布。
 
 ## 4. Composer UI
 
@@ -35,6 +36,7 @@
 - [x] 4.9 将 Canvas selection 从组件本地 state 提升到 `@neko/agent-webview` package-owned presentation
       snapshot，按 exact Conversation/draft Surface + Workspace 隔离，并覆盖界面卸载重建、draft 发布转交、
       sibling Conversation/Workspace 隔离和恢复后发送目标测试。
+- [x] 4.10 Workspace/Scene 切换继续读取 canonical composer configuration；收到匹配 Workspace 的 Canvas index invalidation 后重读 catalog，切换已有选项不查询且不触发 Agent turn。
 
 ## 5. Tests
 
@@ -45,12 +47,14 @@
 - [x] 5.5 补足 exact Canvas 文件名、双击 open/focus、Board no-op、rail 整栏宽度与圆角样式测试。
 - [x] 5.6 补足 Workspace 首轮不读取/配置/提交 Entry intent/receipt 且不写 Entry snapshot 的回归测试。
 - [x] 5.7 补足 Canvas prompt 路由测试：Board/exact identity、exact authoritative summary、优先查询 selected Canvas、禁止通用目录/文件重新发现、Board 缺失不预创建/不伪装为空成功，以及无 target 不注入。
+- [x] 5.8 补足 Main 发布条件、preload strict event decode 和 Desktop Agent consumer 测试：匹配 Workspace 新增后刷新、foreign Workspace 隔离、selection 不重读、未提交不创建 Conversation/Turn。
 
 ## 6. UI / Agent Evaluation
 
 - [x] 6.1 按仓库文档判断 Agent Evaluation reuse/update/create/excluded，并把证据要求写入 OpenSpec；不得仅凭最终文本宣称通过。
 - [x] 6.2 真实 Electron UI 验收：通过可见 Desktop + Computer Use 验证 Workspace/Canvas 左侧连续排列、透明无描边样式、选项切换与窄 Agent 面板适配；真实 artifact routing 仍由 6.3 覆盖。
 - [ ] 6.3 真实 API Agent 行为验收（若可运行）：turn context 与 artifact routing 实际执行证据；无法运行时记录 `infrastructure-blocked` 与 blocker。**infrastructure-blocked**
+- [x] 6.4 记录本次 Evaluation disposition：Canvas catalog freshness 仅改变 Desktop UI projection，使用确定性 Main/preload/Renderer 测试；已有 per-turn Canvas target 路由继续 reuse 现有 suite/blocker，不伪装为真实 Agent 行为证据。
 
 ## 完成定义
 

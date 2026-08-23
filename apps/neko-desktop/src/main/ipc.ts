@@ -274,7 +274,11 @@ export function registerDesktopIpc(
   ipcMain.handle(
     DESKTOP_RESOURCE_BROWSER_CHANNELS.execute,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeResourceBrowser(requireSender(event), payload),
+      appHost.executeResourceBrowser(requireSender(event), payload, (changed) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send(DESKTOP_CANVAS_CHANNELS.workspaceIndexChangedEvent, changed);
+        }
+      }),
   );
   ipcMain.handle(
     DESKTOP_PROJECT_PORTABILITY_CHANNELS.inspect,

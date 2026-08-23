@@ -19,6 +19,7 @@ Workspace Agent composer 当前已有 Workspace 绑定，但缺少精确的 Canv
   Workspace 为 scope。只有同一 mounted draft 的 `undefined -> exact Conversation` 转换可以把 draft
   selection 转交给该 Conversation；普通重开不得从 draft、active 或 recent selection 推断。
 - 跨会话复用通过用户选择同一 Canvas identity 实现；不保存 active/recent Canvas 推断。
+- Canvas catalog 是从当前授权 Workspace 文件系统重建的 read-through projection，不持久化第二份索引。Canvas 新增成功后由 Desktop 组合边界发布 Workspace-scoped catalog invalidation；Canvas/Assets owner 不依赖 Agent。
 
 ## Canonical path
 
@@ -62,6 +63,8 @@ AgentWebview composer canvas selector
 10. 界面切换遵循 Window scene 生命周期：Agent Root 可以卸载，selection snapshot 继续由稳定 Renderer
     provider 持有；重新进入时按 exact scope 重建。snapshot 不保存 Canvas 内容、Conversation binding、
     runtime handle 或 durable project fact，应用完整重开后可丢弃。
+11. Workspace/Scene 切换继续通过现有 sender-bound composer configuration 读取 canonical Canvas catalog。成功新增 `.nkc` 后，Resource Browser 只向同一 Desktop sender 发布 Canvas-owned Workspace index invalidation；`DesktopAgentSurface` 仅当事件 Workspace 与当前 Composer 一致时重读同一 configuration projection。已有 Canvas 选项的 `onChange` 不触发 catalog 查询。
+12. UI catalog 与 Agent turn context 保持分离：Renderer 可在首轮前读取文件列表以展示 selector，但不向 DSH Session/模型注入整个 catalog。用户提交后，Host 在模型执行前只通过 `CanvasWorkspaceIndexService.resolveTurnContext` 重新验证并冻结选中 target；已排队/已运行 Turn 不被后续 catalog 或 selection 更新重定向。
 
 ## User-data impact
 

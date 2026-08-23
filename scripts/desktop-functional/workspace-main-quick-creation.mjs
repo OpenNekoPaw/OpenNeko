@@ -91,6 +91,31 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
         `Main quick creation wrote invalid Canvas bytes: ${JSON.stringify(canvasDocument)}`,
       );
     }
+    await waitForCondition(
+      evaluate,
+      `Array.from(document.querySelectorAll('[data-workspace-canvas-context="true"] select option')).some((option) => option.textContent?.trim() === 'Quick Board')`,
+      'Agent Canvas index did not refresh after Canvas creation.',
+    );
+    const agentCanvasIndex = await evaluate(`(() => {
+      const select = document.querySelector('[data-workspace-canvas-context="true"] select');
+      if (!(select instanceof HTMLSelectElement)) return null;
+      return {
+        selectedId: select.value,
+        options: Array.from(select.options).map((option) => ({
+          id: option.value,
+          label: option.textContent?.trim() ?? '',
+        })),
+      };
+    })()`);
+    if (
+      agentCanvasIndex?.selectedId !== 'workspace-board' ||
+      !agentCanvasIndex.options.some((option) => option.label === 'Quick Board')
+    ) {
+      throw new Error(
+        `Agent Canvas index did not preserve Board while adding the new Canvas: ${JSON.stringify(agentCanvasIndex)}`,
+      );
+    }
+    checkpoint('agent-canvas-index-refreshed', agentCanvasIndex);
     const populatedState = await inspectQuickCreationState(evaluate, MAIN_SLOT);
     assertQuickCreationState(populatedState, { empty: false });
     const populatedScreenshot = await screenshot('workspace-main-quick-create-populated');
@@ -213,6 +238,7 @@ export const workspaceMainQuickCreationScenario = Object.freeze({
       conflict,
       splitState,
       narrowState,
+      agentCanvasIndex,
       screenshots: [
         emptyScreenshot,
         emptyMenuScreenshot,

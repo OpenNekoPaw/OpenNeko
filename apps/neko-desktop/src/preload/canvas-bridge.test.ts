@@ -116,6 +116,27 @@ describe('Desktop Canvas preload bridge', () => {
     unsubscribe();
   });
 
+  it('projects strictly decoded Workspace index changes independently of Canvas sessions', () => {
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+    const listener = vi.fn();
+    const unsubscribe = bridge.canvas.subscribeWorkspaceIndex(listener);
+
+    electron.listeners.get(DESKTOP_CANVAS_CHANNELS.workspaceIndexChangedEvent)?.(
+      {},
+      { workspaceId: 'workspace-1' },
+    );
+    expect(listener).toHaveBeenCalledWith({ workspaceId: 'workspace-1' });
+
+    expect(() =>
+      electron.listeners.get(DESKTOP_CANVAS_CHANNELS.workspaceIndexChangedEvent)?.(
+        {},
+        { workspaceId: 'workspace-1', extra: true },
+      ),
+    ).toThrow("unsupported field 'extra'");
+    unsubscribe();
+  });
+
   it('accepts the first projection from an exact Canvas session rebound by a new snapshot', async () => {
     const reboundIdentity = {
       ...identity,

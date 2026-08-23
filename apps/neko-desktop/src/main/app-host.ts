@@ -50,7 +50,10 @@ import type {
   ResourceBrowserThumbnailRequest,
   ResourceBrowserThumbnailResult,
 } from '@neko/assets-domain/resource-browser/contract';
-import { parseResourceBrowserIntentRequest } from '@neko/assets-domain/resource-browser/contract';
+import {
+  parseResourceBrowserIntentRequest,
+  RESOURCE_BROWSER_ROUTES,
+} from '@neko/assets-domain/resource-browser/contract';
 import {
   DESKTOP_WORKBENCH_LIMITS,
   DesktopWorkbenchContractError,
@@ -91,6 +94,7 @@ import {
 import {
   parseDesktopCanvasWorkspaceDocumentOpenRequest,
   parseDesktopCanvasWorkspaceIndexCatalogRequest,
+  type DesktopCanvasWorkspaceIndexChangedEvent,
   type DesktopCanvasPreviewResourceResult,
 } from '../shared/canvas-bridge-contract';
 import { openDesktopWorkspaceCanvasDocument } from './desktop-creative-document-runtime';
@@ -1633,12 +1637,19 @@ export class DesktopAppHost {
   async executeResourceBrowser(
     sender: DesktopSenderIdentity,
     payload: ResourceBrowserIntentRequest | unknown,
+    publishCanvasWorkspaceIndexChanged: (event: DesktopCanvasWorkspaceIndexChangedEvent) => void,
   ): Promise<ResourceBrowserIntentResult> {
     this.requireActive();
     const window = this.windows.resolveSender(sender);
     const request = parseResourceBrowserIntentRequest(payload);
     try {
       const projection = await this.requireResourceBrowser().execute(window.windowId, request);
+      if (
+        request.route === RESOURCE_BROWSER_ROUTES.createCreativeDocument &&
+        request.documentKind === 'canvas'
+      ) {
+        publishCanvasWorkspaceIndexChanged({ workspaceId: request.identity.workspaceId });
+      }
       return {
         requestId: request.requestId,
         identity: request.identity,

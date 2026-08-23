@@ -126,6 +126,7 @@ import {
   DESKTOP_CANVAS_CHANNELS,
   isSameCanvasHostIdentity,
   parseDesktopCanvasPreviewResourceReleaseRequest,
+  parseDesktopCanvasWorkspaceIndexChangedEvent,
   parseDesktopCanvasWorkspaceIndexCatalogRequest,
   parseDesktopCanvasWorkspaceIndexCatalogResult,
   parseDesktopCanvasWorkspaceDocumentOpenRequest,
@@ -296,6 +297,9 @@ const canvasListeners = new Set<{
   readonly identity: CanvasHostRuntimeIdentity;
   readonly listener: Parameters<OpenNekoDesktopCanvasBridge['canvas']['subscribe']>[1];
 }>();
+const canvasWorkspaceIndexListeners = new Set<
+  Parameters<OpenNekoDesktopCanvasBridge['canvas']['subscribeWorkspaceIndex']>[0]
+>();
 const currentCutIdentities = new Map<string, CutHostRuntimeIdentity>();
 const currentCutEventSequences = new Map<string, number>();
 const cutListeners = new Set<{
@@ -1628,6 +1632,10 @@ const bridge: OpenNekoDesktopBridge &
       );
       return parseDesktopCanvasWorkspaceDocumentOpenResult(response, parsed.requestId);
     },
+    subscribeWorkspaceIndex(listener) {
+      canvasWorkspaceIndexListeners.add(listener);
+      return () => canvasWorkspaceIndexListeners.delete(listener);
+    },
     subscribe(identity, listener) {
       const entry = { identity: parseCanvasHostRuntimeIdentity(identity), listener };
       canvasListeners.add(entry);
@@ -2042,6 +2050,14 @@ ipcRenderer.on(
     for (const entry of textEditorListeners) {
       if (sameTextEditorRuntimeIdentity(entry.identity, identity)) entry.listener(event);
     }
+  },
+);
+
+ipcRenderer.on(
+  DESKTOP_CANVAS_CHANNELS.workspaceIndexChangedEvent,
+  (_event: Electron.IpcRendererEvent, value: unknown): void => {
+    const changed = parseDesktopCanvasWorkspaceIndexChangedEvent(value);
+    for (const listener of canvasWorkspaceIndexListeners) listener(changed);
   },
 );
 

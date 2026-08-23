@@ -3,6 +3,7 @@ import { createCanvasHostSessionId, parseCanvasHostRuntimeIdentity } from '@neko
 import {
   parseDesktopCanvasWorkspaceIndexCatalogRequest,
   parseDesktopCanvasWorkspaceIndexCatalogResult,
+  parseDesktopCanvasWorkspaceIndexChangedEvent,
   parseDesktopCanvasWorkspaceDocumentOpenRequest,
   parseDesktopCanvasWorkspaceDocumentOpenResult,
   isSameCanvasHostIdentity,
@@ -95,6 +96,15 @@ describe('Desktop Canvas bridge contract', () => {
 });
 
 describe('Desktop Canvas workspace index catalog contract', () => {
+  it('strictly parses one Workspace-scoped changed event', () => {
+    expect(parseDesktopCanvasWorkspaceIndexChangedEvent({ workspaceId: 'ws1' })).toEqual({
+      workspaceId: 'ws1',
+    });
+    expect(() =>
+      parseDesktopCanvasWorkspaceIndexChangedEvent({ workspaceId: 'ws1', extra: true }),
+    ).toThrow("unsupported field 'extra'");
+  });
+
   it('parses an exact request', () => {
     expect(
       parseDesktopCanvasWorkspaceIndexCatalogRequest({

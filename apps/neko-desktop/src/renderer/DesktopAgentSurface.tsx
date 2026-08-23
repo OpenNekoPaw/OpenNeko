@@ -120,6 +120,15 @@ export function DesktopAgentSurface({
     }
   }, [agentSurfaceId, sceneId, workbenchInstanceId]);
 
+  const composerWorkspaceId = composerConfiguration?.context?.workspaceId;
+  useEffect(() => {
+    return window.openNekoDesktop.canvas.subscribeWorkspaceIndex((event) => {
+      if (surfaceKind !== 'workspace') return;
+      if (composerWorkspaceId !== undefined && event.workspaceId !== composerWorkspaceId) return;
+      void refreshComposerConfiguration();
+    });
+  }, [composerWorkspaceId, refreshComposerConfiguration, surfaceKind]);
+
   useEffect(() => {
     let active = true;
     let refreshInFlight = false;

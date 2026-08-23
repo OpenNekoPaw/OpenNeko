@@ -50,6 +50,19 @@ Workspace Agent composer SHALL render its own context rail as a sibling above th
 - **AND** the first submitted turn preserves the selected Canvas target.
 - **AND** it does not read, persist, configure, or submit Entry Draft state or an Entry target receipt.
 
+#### Scenario: successful Canvas creation refreshes the Workspace index
+
+- **WHEN** the current Desktop sender successfully creates a new Canvas document in its authorized Workspace
+- **THEN** Desktop publishes one Workspace-scoped Canvas index invalidation
+- **AND** the matching Workspace Agent composer re-reads the canonical Canvas catalog and displays the new `.nkc` option
+- **AND** an Agent composer bound to another Workspace does not refresh from that event.
+
+#### Scenario: selecting an existing Canvas does not rescan the Workspace
+
+- **WHEN** the user switches between options already present in the Canvas selector
+- **THEN** only the package-owned presentation selection changes
+- **AND** no Canvas catalog read, directory scan, Conversation submission, or model turn is started.
+
 #### Scenario: Workspace rail width and radius do not change Entry binding rail
 
 - **WHEN** the Workspace Canvas rail adopts its full-width rounded presentation and the Canvas selector fits its content
@@ -77,6 +90,12 @@ Canvas selection SHALL be composer presentation state or exact turn intent.
 - **WHEN** a turn is submitted with a selected Canvas
 - **THEN** that turn uses the selected Canvas
 - **AND** a later Canvas switch does not re-route the already submitted turn.
+
+#### Scenario: Agent receives only the submitted Canvas target
+
+- **WHEN** the user has not submitted a message after loading or refreshing the Canvas catalog
+- **THEN** the catalog remains a Renderer composer projection and is not injected into the DSH Session or model context
+- **AND** after submission, but before model execution, Host validates and freezes only the selected Board or exact Canvas target and its light summary for that Turn.
 
 #### Scenario: interface switch restores the Conversation selection
 

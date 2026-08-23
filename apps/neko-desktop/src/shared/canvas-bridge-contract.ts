@@ -29,6 +29,7 @@ export const DESKTOP_CANVAS_CHANNELS = {
   previewResourceResolve: 'open-neko:canvas:preview-resource-resolve',
   previewResourceRelease: 'open-neko:canvas:preview-resource-release',
   workspaceIndexCatalogRead: 'open-neko:canvas:workspace-index-catalog-read',
+  workspaceIndexChangedEvent: 'open-neko:canvas:workspace-index-changed-event',
   workspaceDocumentOpen: 'open-neko:canvas:workspace-document-open',
   projectionEvent: 'open-neko:canvas:projection-event',
 } as const;
@@ -53,11 +54,18 @@ export interface OpenNekoDesktopCanvasBridge {
     openWorkspaceDocument(
       request: DesktopCanvasWorkspaceDocumentOpenRequest,
     ): Promise<DesktopCanvasWorkspaceDocumentOpenResult>;
+    subscribeWorkspaceIndex(
+      listener: (event: DesktopCanvasWorkspaceIndexChangedEvent) => void,
+    ): () => void;
     subscribe(
       identity: CanvasHostRuntimeIdentity,
       listener: (event: CanvasHostProjectionEvent) => void,
     ): () => void;
   };
+}
+
+export interface DesktopCanvasWorkspaceIndexChangedEvent {
+  readonly workspaceId: string;
 }
 
 export interface DesktopCanvasWorkspaceIndexCatalogRequest {
@@ -69,6 +77,16 @@ export interface DesktopCanvasWorkspaceIndexCatalogRequest {
 export interface DesktopCanvasWorkspaceIndexCatalogResult {
   readonly requestId: string;
   readonly catalog: CanvasWorkspaceContextCatalog;
+}
+
+export function parseDesktopCanvasWorkspaceIndexChangedEvent(
+  value: unknown,
+): DesktopCanvasWorkspaceIndexChangedEvent {
+  if (isRecord(value) === false) {
+    throw new Error('Desktop Canvas workspace index changed event must be an object.');
+  }
+  requireExactKeys(value, ['workspaceId'], 'Desktop Canvas workspace index changed event');
+  return { workspaceId: requireString(value['workspaceId'], 'workspaceId') };
 }
 
 export interface DesktopCanvasWorkspaceDocumentOpenRequest {

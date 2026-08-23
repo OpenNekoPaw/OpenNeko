@@ -23,6 +23,8 @@ proposal
 - Workspace 与入口可以匹配同一视觉规范，但必须保持独立组件、功能 class、状态和事件；补足 owning package contract/service/组件/投递目标测试。
 - Workspace/Canvas rail 保持与 composer 输入框一致的栏宽，并使用完整圆角容器；只有 Canvas 选择控件按内容收缩，不呈现为整栏小胶囊或贴边长方形区域。
 - exact Canvas 选项显示带 `.nkc` 后缀的 workspace-relative 文件名；用户双击当前 exact Canvas 时，通过 Desktop 已有 creative-document authority 打开或聚焦该文件。
+- Canvas catalog 以当前授权 Workspace 中的 `.nkc` 文件为可重建只读索引；切换 Workspace/Scene 与成功新增 Canvas 时重读 canonical catalog，在已有选项之间切换只更新 presentation selection，不重扫目录。
+- Catalog 仅服务 Composer UI；Agent runtime 不接收整个文件列表，只在用户提交后、模型执行前由 Host 验证并注入本轮选中的 Board/exact Canvas target 及轻量 summary。
 
 ## Affected packages and ownership
 
@@ -41,6 +43,7 @@ proposal
 - 不建立 Board 镜像、active/recent Canvas 推断、隐式 workspace 或回退链。
 - 不实现普通对话/推理/日志的 Board 写入。
 - 不提前创建或迁移 `workspace.nkc`。
+- 不把 Workspace Canvas catalog 整体注入 Agent Session 或模型上下文。
 - 不修改入口界面的内容、交互、Entry Draft snapshot、Entry target intent 或 receipt。
 
 ## Verification constraints

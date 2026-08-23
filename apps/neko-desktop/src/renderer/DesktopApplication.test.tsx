@@ -3005,6 +3005,9 @@ function installBridge({
         cancel: vi.fn(async () => []),
         subscribe: vi.fn(() => () => undefined),
       },
+      canvas: {
+        subscribeWorkspaceIndex: vi.fn(() => () => undefined),
+      },
       projectPortability,
     },
   });

@@ -164,6 +164,7 @@ const entryComposerConfiguration: DshComposerConfigurationProjection = {
 
 let sessionListener: ((event: { readonly conversationId: string }) => void) | undefined;
 let permissionListener: ((event: { readonly conversationId: string }) => void) | undefined;
+let canvasWorkspaceIndexListener: ((event: { readonly workspaceId: string }) => void) | undefined;
 const dshSessions = {
   create: vi.fn(async () => projection),
   getSnapshot: vi.fn<() => Promise<DshSessionHostProjection>>(async () => projection),
@@ -222,10 +223,16 @@ const dshRuntime = {
     return vi.fn();
   }),
 };
+const canvas = {
+  subscribeWorkspaceIndex: vi.fn((listener: typeof canvasWorkspaceIndexListener) => {
+    canvasWorkspaceIndexListener = listener;
+    return vi.fn();
+  }),
+};
 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-  Object.assign(window, { openNekoDesktop: { dshSessions, dshPermissions, dshRuntime } });
+  Object.assign(window, { openNekoDesktop: { dshSessions, dshPermissions, dshRuntime, canvas } });
   vi.resetAllMocks();
   dshSessions.create.mockResolvedValue(projection);
   dshSessions.getSnapshot.mockResolvedValue(projection);
@@ -265,9 +272,16 @@ beforeEach(() => {
     runtimeListener = listener;
     return vi.fn();
   });
+  canvas.subscribeWorkspaceIndex.mockImplementation(
+    (listener: typeof canvasWorkspaceIndexListener) => {
+      canvasWorkspaceIndexListener = listener;
+      return vi.fn();
+    },
+  );
   sessionListener = undefined;
   permissionListener = undefined;
   runtimeListener = undefined;
+  canvasWorkspaceIndexListener = undefined;
 });
 
 afterEach(() => {
@@ -691,6 +705,54 @@ describe('DesktopAgentSurface', () => {
     expect(screen.queryByText('My Film')).toBeNull();
     expect(await screen.findByText('Character Studio')).toBeTruthy();
     expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshes only the matching Workspace Canvas catalog after creation without starting a Turn', async () => {
+    const exactCanvasTarget = {
+      kind: 'exact-canvas' as const,
+      workspaceId: 'workspace-1',
+      canvasId: 'test.nkc',
+    };
+    dshSessions.getComposerConfiguration
+      .mockResolvedValueOnce(composerConfiguration)
+      .mockResolvedValueOnce({
+        ...composerConfiguration,
+        context: {
+          ...composerConfiguration.context!,
+          canvas: {
+            ...composerConfiguration.context!.canvas,
+            options: [
+              ...composerConfiguration.context!.canvas.options,
+              { target: exactCanvasTarget, label: 'test.nkc' },
+            ],
+          },
+        },
+      });
+    render(
+      <DesktopAgentSurface
+        workbenchInstanceId="workbench-1"
+        sceneId="scene-workspace"
+        agentSurfaceId="surface-draft"
+        surfaceKind="workspace"
+      />,
+    );
+
+    expect(await screen.findByText('My Film')).toBeTruthy();
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledOnce();
+
+    await act(async () => canvasWorkspaceIndexListener?.({ workspaceId: 'workspace-other' }));
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledOnce();
+
+    await act(async () => canvasWorkspaceIndexListener?.({ workspaceId: 'workspace-1' }));
+    expect(await screen.findByRole('option', { name: 'test.nkc' })).toBeTruthy();
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(2);
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Canvas index' }), {
+      target: { value: exactCanvasTarget.canvasId },
+    });
+    expect(dshSessions.getComposerConfiguration).toHaveBeenCalledTimes(2);
+    expect(dshSessions.create).not.toHaveBeenCalled();
+    expect(dshSessions.submit).not.toHaveBeenCalled();
   });
 
   it('passes the complete Entry context presentation to the retained selector components', async () => {
