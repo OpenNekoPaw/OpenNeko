@@ -11,6 +11,47 @@ import {
 } from '@neko/canvas-domain';
 
 describe('DSH Host adapters for the W2 domain Tool slice', () => {
+  it('denies read-only Generation and Canvas mutations before resolving their services', async () => {
+    const resolveJobs = vi.fn();
+    const generation = new GenerationDshHostAdapter(resolveJobs);
+    const resolveCanvas = vi.fn();
+    const canvas = new CanvasDshHostAdapter(resolveCanvas);
+
+    await expect(
+      generation.execute(
+        request(
+          'openneko.generation',
+          'submit',
+          {
+            purpose: 'image.generate',
+            generationType: 'text-to-image',
+            lifecycleMode: 'detached',
+            request: { prompt: 'A quiet harbor' },
+          },
+          'read-only',
+        ),
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: { code: 'DSH_DOMAIN_TOOL_READ_ONLY' },
+    });
+    await expect(
+      canvas.execute(
+        request(
+          'openneko.canvas',
+          'create-node',
+          { documentPath: 'boards/story.nkc', node: { type: 'markdown' } },
+          'read-only',
+        ),
+      ),
+    ).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: { code: 'DSH_DOMAIN_TOOL_READ_ONLY' },
+    });
+    expect(resolveJobs).not.toHaveBeenCalled();
+    expect(resolveCanvas).not.toHaveBeenCalled();
+  });
+
   it('keeps Generation submit active until the exact Job succeeds with result locators', async () => {
     const jobs = createGenerationJobs();
     const adapter = new GenerationDshHostAdapter(jobs);
@@ -415,11 +456,17 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
   });
 });
 
-function request(tool: string, operation: string, input: unknown): DshAcpDomainToolRequest {
+function request(
+  tool: string,
+  operation: string,
+  input: unknown,
+  sandboxMode: DshAcpDomainToolRequest['sandboxMode'] = 'workspace-write',
+): DshAcpDomainToolRequest {
   return {
     sessionId: 'session-1',
     turn: 0,
     toolCallId: `call-${tool}`,
+    sandboxMode,
     tool,
     operation,
     input: input as never,

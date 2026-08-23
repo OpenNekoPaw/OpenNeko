@@ -8,6 +8,7 @@ import {
   WorldDshAuthoringService,
   decodeWorldDshToolInput,
 } from '@neko/world/application';
+import { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
 
 export class WorldDshHostAdapter {
   constructor(
@@ -36,6 +37,11 @@ export class WorldDshHostAdapter {
     } catch (error) {
       return failure('WORLD_DSH_TOOL_INVALID_INPUT', message(error));
     }
+    const permissionFailure = enforceDshDomainToolEffect(
+      request,
+      decoded.operation === 'query' ? 'read' : 'write',
+    );
+    if (permissionFailure !== undefined) return permissionFailure;
     try {
       const service = typeof this.service === 'function' ? await this.service() : this.service;
       const facts =

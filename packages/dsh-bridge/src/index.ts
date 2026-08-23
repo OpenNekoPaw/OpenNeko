@@ -32,6 +32,7 @@ import {
 } from '@deepseek-ai/dsh-skill';
 import type {} from '@deepseek-ai/dsh-system-prompt';
 import type {} from '@deepseek-ai/dsh-permission-presets';
+import type {} from '@deepseek-ai/dsh-sandbox-policy';
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools';
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval';
 import Schema from '@deepseek-ai/schemastery';
@@ -71,6 +72,7 @@ export const inject = [
   'attachments',
   'commands',
   'permissionPresets',
+  'sandboxPolicy',
   'sessions',
   'sessionPersistence',
   'sessionProjections',
@@ -190,10 +192,12 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
         throw new Error(`OpenNeko Host Tool ${execution.callId} has a stale DSH Agent owner.`);
       }
       const turn = findToolCallTurn(agent.session.events, execution.callId);
+      const sandboxMode = ctx.sandboxPolicy.resolve({ session: agent.session }).mode;
       const wireRequest = decodeDshAcpDomainToolRequest({
         sessionId: agent.id,
         turn,
         toolCallId: execution.callId,
+        sandboxMode,
         tool: request.tool,
         operation: request.operation,
         input: request.input,

@@ -137,6 +137,35 @@ describe('DSH domain Tool handlers', () => {
     expect(resolveJobs).not.toHaveBeenCalled();
   });
 
+  it('rejects a read-only Generation mutation before resolving Conversation context', async () => {
+    const resolve = vi.fn();
+    const resolveJobs = vi.fn();
+    const handlers = createDshDomainToolHandlers({
+      contexts: { resolve },
+      generation: generationHandlers(resolveJobs),
+      canvas: { resolveService: vi.fn() },
+      cut: { resolveService: vi.fn() },
+      document: { resolveRuntime: vi.fn() },
+      character: { resolveService: vi.fn() },
+    });
+
+    await expect(
+      handlers.executeGenerationTool(
+        { ...generationRequest(), sandboxMode: 'read-only' },
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual({
+      outcome: 'failure',
+      diagnostic: {
+        code: 'DSH_DOMAIN_TOOL_READ_ONLY',
+        message:
+          "DSH sandbox mode 'read-only' does not permit openneko.generation operation 'submit'.",
+      },
+    });
+    expect(resolve).not.toHaveBeenCalled();
+    expect(resolveJobs).not.toHaveBeenCalled();
+  });
+
   it('rejects Cut for a non-Workspace context without resolving a service', async () => {
     const resolveService = vi.fn();
     const handlers = createDshDomainToolHandlers({
@@ -166,6 +195,7 @@ describe('DSH domain Tool handlers', () => {
           sessionId: 'dsh-session:assistant',
           turn: 1,
           toolCallId: 'call:cut',
+          sandboxMode: 'read-only',
           tool: 'openneko.cut',
           operation: 'query',
           input: { documentPath: 'cuts/story.otio' },
@@ -237,6 +267,7 @@ describe('DSH domain Tool handlers', () => {
           sessionId: 'dsh-session:character',
           turn: 1,
           toolCallId: 'call:character',
+          sandboxMode: 'read-only',
           tool: 'openneko.character',
           operation: 'query',
           input: { characterProjectId: 'character:one' },
@@ -265,6 +296,7 @@ describe('DSH domain Tool handlers', () => {
           sessionId: 'dsh-session:one',
           turn: 1,
           toolCallId: 'call:character',
+          sandboxMode: 'read-only',
           tool: 'openneko.character',
           operation: 'query',
           input: { characterProjectId: 'character:one' },
@@ -317,6 +349,7 @@ function generationRequest(): DshAcpDomainToolRequest {
     sessionId: 'dsh-session:one',
     turn: 1,
     toolCallId: 'call:one',
+    sandboxMode: 'workspace-write',
     tool: 'openneko.generation',
     operation: 'submit',
     input: {
@@ -333,6 +366,7 @@ function canvasRequest(): DshAcpDomainToolRequest {
     sessionId: 'dsh-session:assistant',
     turn: 1,
     toolCallId: 'call:canvas',
+    sandboxMode: 'workspace-write',
     tool: 'openneko.canvas',
     operation: 'query',
     input: { documentPath: 'boards/main.nkc' },

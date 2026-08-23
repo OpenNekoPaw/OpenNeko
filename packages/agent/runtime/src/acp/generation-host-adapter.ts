@@ -17,6 +17,7 @@ import {
   type PurposeGenerationJobPort,
 } from '@neko/generation/job';
 import { isTerminalJobPhase } from '@neko/shared/job-lifecycle';
+import { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
 
 type GenerationDshJobPort = Pick<
   PurposeGenerationJobPort,
@@ -69,6 +70,11 @@ export class GenerationDshHostAdapter {
     } catch (error) {
       return failure('GENERATION_DSH_TOOL_INVALID_INPUT', errorMessage(error));
     }
+    const permissionFailure = enforceDshDomainToolEffect(
+      request,
+      decoded.operation === 'describe' ? 'read' : 'write',
+    );
+    if (permissionFailure !== undefined) return permissionFailure;
     try {
       const jobs = typeof this.jobs === 'function' ? await this.jobs() : this.jobs;
       if (decoded.operation === 'submit') {

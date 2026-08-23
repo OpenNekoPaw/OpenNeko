@@ -8,6 +8,7 @@ import {
   CharacterDshAuthoringService,
   decodeCharacterDshToolInput,
 } from '@neko/chara/application';
+import { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
 
 export class CharacterDshHostAdapter {
   private readonly toolName: string;
@@ -41,6 +42,11 @@ export class CharacterDshHostAdapter {
     } catch (error) {
       return failure('CHARACTER_DSH_TOOL_INVALID_INPUT', errorMessage(error));
     }
+    const permissionFailure = enforceDshDomainToolEffect(
+      request,
+      decoded.operation === 'query' ? 'read' : 'write',
+    );
+    if (permissionFailure !== undefined) return permissionFailure;
     try {
       const service = typeof this.service === 'function' ? await this.service() : this.service;
       const facts =

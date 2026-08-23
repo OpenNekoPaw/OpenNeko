@@ -5,6 +5,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { CutDshHostAdapter } from './cut-host-adapter';
 
 describe('Cut DSH Host adapter', () => {
+  it('denies read-only Cut mutations before resolving the service', async () => {
+    const resolveService = vi.fn();
+    const adapter = new CutDshHostAdapter(resolveService);
+
+    await expect(
+      adapter.execute({ ...applyRequest(), sandboxMode: 'read-only' }),
+    ).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: { code: 'DSH_DOMAIN_TOOL_READ_ONLY' },
+    });
+    await expect(
+      adapter.execute({ ...exportRequest('export-cancel'), sandboxMode: 'read-only' }),
+    ).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: { code: 'DSH_DOMAIN_TOOL_READ_ONLY' },
+    });
+    expect(resolveService).not.toHaveBeenCalled();
+  });
+
   it('keeps the fingerprint internal while returning bounded facts', async () => {
     const apply = vi.fn<Pick<CutProjectAuthoringService, 'apply'>['apply']>(async () => snapshot());
     const query = vi.fn<Pick<CutProjectAuthoringService, 'query'>['query']>(async () =>
@@ -102,6 +121,7 @@ function applyRequest(): DshAcpDomainToolRequest {
     sessionId: 'dsh-session:one',
     turn: 1,
     toolCallId: 'call:cut',
+    sandboxMode: 'workspace-write',
     tool: 'openneko.cut',
     operation: 'apply',
     input: {
@@ -126,6 +146,7 @@ function exportRequest(
     sessionId: 'dsh-session:one',
     turn: 1,
     toolCallId: `call:${operation}`,
+    sandboxMode: 'workspace-write',
     tool: 'openneko.cut',
     operation,
     input:

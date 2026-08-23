@@ -233,6 +233,7 @@ describe('DSH ACP extension contract', () => {
         sessionId: 'session-1',
         turn: 2,
         toolCallId: 'call-3',
+        sandboxMode: 'workspace-write',
         tool: 'openneko.generation',
         operation: 'generate-image',
         input: { prompt: 'cat' },
@@ -241,6 +242,7 @@ describe('DSH ACP extension contract', () => {
       sessionId: 'session-1',
       turn: 2,
       toolCallId: 'call-3',
+      sandboxMode: 'workspace-write',
       tool: 'openneko.generation',
       operation: 'generate-image',
       input: { prompt: 'cat' },
@@ -283,6 +285,7 @@ describe('DSH ACP extension contract', () => {
         sessionId: 'session-1',
         turn: 0,
         toolCallId: 'call-1',
+        sandboxMode: 'workspace-write',
         tool: 'openneko.generation',
         operation: 'submit',
         input: oversized,
@@ -375,6 +378,7 @@ describe('DSH ACP extension contract', () => {
         sessionId: 'session-1',
         turn: 0,
         toolCallId: 'call-1',
+        sandboxMode: 'workspace-write',
         tool: 'openneko.canvas',
         operation: 'apply',
         input: { value: undefined },
@@ -395,5 +399,28 @@ describe('DSH ACP extension contract', () => {
     expect(() => decodeDshAcpDomainToolResponse({ outcome: 'success', result: sparse })).toThrow(
       /result must be a dense plain JSON array/,
     );
+  });
+
+  it('requires one exact DSH sandbox mode on every Host Tool request', () => {
+    const request = {
+      sessionId: 'session-1',
+      turn: 0,
+      toolCallId: 'call-1',
+      tool: 'openneko.canvas',
+      operation: 'query',
+      input: { documentPath: 'neko/boards/workspace.nkc' },
+    };
+
+    expect(() => decodeDshAcpDomainToolRequest(request)).toThrow(/sandboxMode/u);
+    expect(() => decodeDshAcpDomainToolRequest({ ...request, sandboxMode: 'ask' })).toThrow(
+      /sandboxMode is invalid/u,
+    );
+    expect(() =>
+      decodeDshAcpDomainToolRequest({
+        ...request,
+        sandboxMode: 'read-only',
+        permissionPreset: 'workspace-write',
+      }),
+    ).toThrow(/must contain exactly/u);
   });
 });

@@ -121,10 +121,14 @@ export function createDshDomainToolHandlers(options: {
 }): DshDomainToolHandlers {
   return Object.freeze({
     async executeGenerationTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
-      const context = options.contexts.resolve(request.sessionId);
+      let context: Promise<DshDomainToolContext> | undefined;
+      const resolveContext = (): Promise<DshDomainToolContext> => {
+        context ??= Promise.resolve(options.contexts.resolve(request.sessionId));
+        return context;
+      };
       return new GenerationDshHostAdapter(
         async () => {
-          const resolved = await context;
+          const resolved = await resolveContext();
           if (
             resolved.binding.kind !== 'workspace' &&
             resolved.binding.kind !== 'assistant' &&
@@ -141,7 +145,7 @@ export function createDshDomainToolHandlers(options: {
         {
           project: async ({ request: projectionRequest, snapshot }) =>
             options.generation.projectSnapshot({
-              context: await context,
+              context: await resolveContext(),
               request: projectionRequest,
               snapshot,
             }),

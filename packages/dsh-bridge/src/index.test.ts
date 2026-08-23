@@ -491,6 +491,21 @@ describe('OpenNeko DSH ACP bridge boundaries', () => {
     expect(source).toMatch(/decodeDshAcpDomainToolResponse/);
   });
 
+  it('resolves the exact DSH Session sandbox policy for every Host Tool dispatch', () => {
+    const source = readPackageFile('src/index.ts');
+    const hostTools = source.slice(
+      source.indexOf('const hostTools:'),
+      source.indexOf("ctx.provide('opennekoHostTools'"),
+    );
+    expect(source).toContain("import type {} from '@deepseek-ai/dsh-sandbox-policy'");
+    expect(source).toContain("'sandboxPolicy'");
+    expect(hostTools).toMatch(
+      /ctx\.sandboxPolicy\.resolve\(\{ session: agent\.session \}\)\.mode/u,
+    );
+    expect(hostTools).toMatch(/decodeDshAcpDomainToolRequest\(\{[\s\S]*sandboxMode,/u);
+    expect(hostTools).not.toMatch(/permissionPresets|defaultPreset/u);
+  });
+
   it('does not define a second Agent, Session, queue, Tool, Skill, MCP, or Plugin runtime', () => {
     const source = readPackageFile('src/index.ts');
     const forbiddenAuthorities = [

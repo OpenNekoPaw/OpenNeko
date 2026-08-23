@@ -12,6 +12,7 @@ import {
   projectCutDshToolFacts,
 } from '@neko/cut-domain';
 import type { CutExportTaskSnapshot } from '@neko/cut-domain';
+import { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
 
 type CutAuthoringPort = Pick<CutProjectAuthoringService, 'query' | 'apply'>;
 interface CutExportPort {
@@ -63,6 +64,11 @@ export class CutDshHostAdapter {
     } catch (error) {
       return failure('CUT_DSH_TOOL_INVALID_INPUT', errorMessage(error));
     }
+    const permissionFailure = enforceDshDomainToolEffect(
+      request,
+      decoded.operation === 'query' || decoded.operation === 'export-describe' ? 'read' : 'write',
+    );
+    if (permissionFailure !== undefined) return permissionFailure;
     try {
       const service = typeof this.service === 'function' ? await this.service() : this.service;
       if (decoded.operation === 'query') {

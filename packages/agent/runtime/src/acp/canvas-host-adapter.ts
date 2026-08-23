@@ -10,6 +10,7 @@ import {
   projectCanvasCreateNodeResult,
   projectCanvasQuerySnapshot,
 } from '@neko/canvas-domain';
+import { enforceDshDomainToolEffect } from './dsh-domain-tool-access';
 
 export class CanvasDshHostAdapter {
   private readonly toolName: string;
@@ -43,6 +44,11 @@ export class CanvasDshHostAdapter {
     } catch (error) {
       return failure('CANVAS_DSH_TOOL_INVALID_INPUT', errorMessage(error));
     }
+    const permissionFailure = enforceDshDomainToolEffect(
+      request,
+      decoded.operation === 'query' ? 'read' : 'write',
+    );
+    if (permissionFailure !== undefined) return permissionFailure;
     try {
       const service = typeof this.service === 'function' ? await this.service() : this.service;
       if (decoded.operation === 'query') {

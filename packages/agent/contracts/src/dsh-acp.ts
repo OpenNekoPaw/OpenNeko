@@ -470,10 +470,13 @@ export interface DshAcpContextPressureNotification {
   readonly pressure: DshAcpContextPressureProjection;
 }
 
+export type DshAcpSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
+
 export interface DshAcpDomainToolRequest {
   readonly sessionId: string;
   readonly turn: number;
   readonly toolCallId: string;
+  readonly sandboxMode: DshAcpSandboxMode;
   readonly tool: string;
   readonly operation: string;
   readonly input: DshAcpJsonValue;
@@ -688,14 +691,27 @@ export function decodeDshAcpDomainToolRequest(
   input: Record<string, unknown>,
 ): DshAcpDomainToolRequest {
   decodeDshAcpJsonPayload(input, 'request');
+  requireExactKeys(
+    input,
+    ['sessionId', 'turn', 'toolCallId', 'sandboxMode', 'tool', 'operation', 'input'],
+    'domain Tool request',
+  );
   return {
     sessionId: requireNonEmptyString(input.sessionId, 'sessionId'),
     turn: requireNonNegativeInteger(input.turn, 'turn'),
     toolCallId: requireNonEmptyString(input.toolCallId, 'toolCallId'),
+    sandboxMode: requireDshAcpSandboxMode(input.sandboxMode),
     tool: requireNonEmptyString(input.tool, 'tool'),
     operation: requireNonEmptyString(input.operation, 'operation'),
     input: requireJsonValue(input.input, 'input', 0),
   };
+}
+
+function requireDshAcpSandboxMode(input: unknown): DshAcpSandboxMode {
+  if (input === 'read-only' || input === 'workspace-write' || input === 'danger-full-access') {
+    return input;
+  }
+  throw new Error('DSH ACP sandboxMode is invalid.');
 }
 
 export function decodeDshAcpDomainToolResponse(

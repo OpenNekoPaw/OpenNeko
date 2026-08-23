@@ -2,6 +2,38 @@ import { describe, expect, it, vi } from 'vitest';
 import { WorldDshHostAdapter } from './world-host-adapter';
 
 describe('World DSH Host adapter', () => {
+  it('denies read-only draft mutation before resolving the authoring service', async () => {
+    const resolveService = vi.fn();
+    const adapter = new WorldDshHostAdapter(resolveService);
+
+    await expect(
+      adapter.execute({
+        sessionId: 'session-1',
+        turn: 1,
+        toolCallId: 'call-1',
+        sandboxMode: 'read-only',
+        tool: 'openneko.world',
+        operation: 'fill-draft',
+        input: {
+          worldProjectId: 'world-1',
+          title: 'Aster',
+          draft: {
+            background: '',
+            worldBook: [],
+            locations: [],
+            organizations: [],
+            rules: [],
+            initialFacts: [],
+          },
+        },
+      }),
+    ).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: { code: 'DSH_DOMAIN_TOOL_READ_ONLY' },
+    });
+    expect(resolveService).not.toHaveBeenCalled();
+  });
+
   it('dispatches the canonical World Tool and preserves bounded facts', async () => {
     const query = vi.fn(async () => ({
       worldProjectId: 'world-1',
@@ -29,6 +61,7 @@ describe('World DSH Host adapter', () => {
         sessionId: 'session-1',
         turn: 1,
         toolCallId: 'call-1',
+        sandboxMode: 'read-only',
         tool: 'openneko.world',
         operation: 'query',
         input: { worldProjectId: 'world-1' },
@@ -45,6 +78,7 @@ describe('World DSH Host adapter', () => {
         sessionId: 'session-1',
         turn: 1,
         toolCallId: 'call-1',
+        sandboxMode: 'read-only',
         tool: 'openneko.character',
         operation: 'query',
         input: { worldProjectId: 'world-1' },

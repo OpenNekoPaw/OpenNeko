@@ -3,6 +3,31 @@ import { describe, expect, it, vi } from 'vitest';
 import { CharacterDshHostAdapter } from './character-host-adapter';
 
 describe('CharacterDshHostAdapter', () => {
+  it('denies read-only draft mutation before resolving the authoring service', async () => {
+    const resolveService = vi.fn();
+    const adapter = new CharacterDshHostAdapter(resolveService);
+
+    await expect(
+      adapter.execute({
+        sessionId: 'session-1',
+        turn: 1,
+        toolCallId: 'call-1',
+        sandboxMode: 'read-only',
+        tool: 'openneko.character',
+        operation: 'fill-draft',
+        input: {
+          characterProjectId: 'character-project-1',
+          displayName: 'Mira',
+          definition: emptyDefinition(),
+        },
+      }),
+    ).resolves.toMatchObject({
+      outcome: 'failure',
+      diagnostic: { code: 'DSH_DOMAIN_TOOL_READ_ONLY' },
+    });
+    expect(resolveService).not.toHaveBeenCalled();
+  });
+
   it('strictly decodes and delegates query/fill-draft through one service', async () => {
     const facts = {
       characterProjectId: 'character-project-1',
@@ -39,6 +64,7 @@ describe('CharacterDshHostAdapter', () => {
           sessionId: 'session-1',
           turn: 1,
           toolCallId: 'call-1',
+          sandboxMode: 'read-only',
           tool: 'openneko.character',
           operation: 'query',
           input: { characterProjectId: 'character-project-1' },
@@ -52,6 +78,7 @@ describe('CharacterDshHostAdapter', () => {
           sessionId: 'session-1',
           turn: 1,
           toolCallId: 'call-2',
+          sandboxMode: 'workspace-write',
           tool: 'openneko.character',
           operation: 'fill-draft',
           input: {
@@ -99,6 +126,7 @@ describe('CharacterDshHostAdapter', () => {
           sessionId: 'session-1',
           turn: 1,
           toolCallId: 'call-1',
+          sandboxMode: 'read-only',
           tool: 'openneko.canvas',
           operation: 'query',
           input: {},
@@ -115,6 +143,7 @@ describe('CharacterDshHostAdapter', () => {
           sessionId: 'session-1',
           turn: 1,
           toolCallId: 'call-2',
+          sandboxMode: 'read-only',
           tool: 'openneko.character',
           operation: 'query',
           input: { characterProjectId: 'character-project-1', unexpected: true },
@@ -128,3 +157,30 @@ describe('CharacterDshHostAdapter', () => {
     expect(service.query).not.toHaveBeenCalled();
   });
 });
+
+function emptyDefinition() {
+  return {
+    summary: '',
+    backgroundStory: {
+      overview: '',
+      origins: [],
+      personalHistory: [],
+      formativeEvents: [],
+      establishedRelationships: [],
+    },
+    originSetting: {
+      overview: '',
+      eras: [],
+      cultures: [],
+      socialEnvironment: [],
+      importantPlaces: [],
+      organizations: [],
+      believedRules: [],
+    },
+    canon: [],
+    knowledgeBoundary: [],
+    behaviorPolicy: [],
+    expressionPolicy: [],
+    representationRefs: [],
+  };
+}

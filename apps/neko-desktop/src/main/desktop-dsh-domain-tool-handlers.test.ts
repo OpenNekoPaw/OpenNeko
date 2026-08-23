@@ -19,6 +19,15 @@ afterEach(async () => {
 });
 
 describe('Desktop DSH domain Tool handlers', () => {
+  it('does not define a Desktop or Symlink-owned DSH permission policy', async () => {
+    const source = await readFile(
+      new URL('./desktop-dsh-domain-tool-handlers.ts', import.meta.url),
+      'utf8',
+    );
+
+    expect(source).not.toMatch(/sandboxMode|permissionPreset|SymlinkAccessMode/u);
+  });
+
   it('resolves the exact Workspace grant for the canonical document Tool', async () => {
     const root = await createRoot();
     await writeFile(join(root, 'notes.md'), '# Story');
@@ -128,6 +137,7 @@ describe('Desktop DSH domain Tool handlers', () => {
           sessionId: 'dsh-session:one',
           turn: 1,
           toolCallId: 'tool:image',
+          sandboxMode: 'read-only',
           tool: 'openneko.read_image',
           operation: 'read-chunk',
           input: {
@@ -274,6 +284,7 @@ describe('Desktop DSH domain Tool handlers', () => {
           sessionId: 'dsh-session:one',
           turn: 1,
           toolCallId: 'call:character',
+          sandboxMode: 'read-only',
           tool: 'openneko.character',
           operation: 'query',
           input: { characterProjectId: 'character:one' },
@@ -430,6 +441,7 @@ describe('Desktop DSH domain Tool handlers', () => {
     const applied = await handlers.executeCutTool(
       {
         ...cutQueryRequest(),
+        sandboxMode: 'workspace-write',
         operation: 'apply',
         input: {
           documentPath: 'cuts/story.otio',
@@ -528,6 +540,7 @@ function generationRequest(): DshAcpDomainToolRequest {
     sessionId: 'dsh-session:one',
     turn: 1,
     toolCallId: 'call:one',
+    sandboxMode: 'workspace-write',
     tool: 'openneko.generation',
     operation: 'submit',
     input: {
@@ -544,6 +557,7 @@ function canvasRequest(): DshAcpDomainToolRequest {
     sessionId: 'dsh-session:one',
     turn: 1,
     toolCallId: 'call:canvas',
+    sandboxMode: 'workspace-write',
     tool: 'openneko.canvas',
     operation: 'query',
     input: { documentPath: 'boards/main.nkc' },
@@ -555,6 +569,7 @@ function documentRequest(): DshAcpDomainToolRequest {
     sessionId: 'dsh-session:one',
     turn: 1,
     toolCallId: 'call:document',
+    sandboxMode: 'read-only',
     tool: 'openneko.document',
     operation: 'read',
     input: { source: { file: { authority: 'workspace', path: 'notes.md' } } },
@@ -566,6 +581,7 @@ function cutQueryRequest(): DshAcpDomainToolRequest {
     sessionId: 'dsh-session:one',
     turn: 1,
     toolCallId: 'call:cut',
+    sandboxMode: 'read-only',
     tool: 'openneko.cut',
     operation: 'query',
     input: { documentPath: 'cuts/story.otio' },
