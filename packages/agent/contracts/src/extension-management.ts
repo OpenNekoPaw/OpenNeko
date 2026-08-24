@@ -6,6 +6,7 @@ export interface AgentManagedSkillItem {
   readonly id: string;
   readonly name: string;
   readonly description: string;
+  readonly whenToUse?: string;
   readonly source: string;
   readonly provider: string;
   readonly userInvocable: boolean;
@@ -22,6 +23,7 @@ export interface AgentManagedMcpItem {
 
 export interface AgentExtensionManagementProjection {
   readonly identity: AgentExtensionManagementSessionIdentity;
+  readonly catalogScope: 'global';
   readonly skills: readonly AgentManagedSkillItem[];
   readonly mcp: readonly AgentManagedMcpItem[];
   readonly diagnostics: readonly {
@@ -41,7 +43,7 @@ export function parseAgentExtensionManagementProjection(
 ): AgentExtensionManagementProjection {
   const record = requireExactRecord(
     value,
-    ['identity', 'skills', 'mcp', 'diagnostics'],
+    ['identity', 'catalogScope', 'skills', 'mcp', 'diagnostics'],
     'DSH extension management projection is invalid.',
   );
   if (
@@ -53,6 +55,7 @@ export function parseAgentExtensionManagementProjection(
   }
   return {
     identity: parseIdentity(record.identity),
+    catalogScope: requireGlobalCatalogScope(record.catalogScope),
     skills: record.skills.map(parseSkill),
     mcp: record.mcp.map(parseMcp),
     diagnostics: record.diagnostics.map(parseDiagnostic),
@@ -71,20 +74,38 @@ function parseIdentity(value: unknown): AgentExtensionManagementSessionIdentity 
 }
 
 function parseSkill(value: unknown): AgentManagedSkillItem {
-  const record = requireExactRecord(
-    value,
-    ['id', 'name', 'description', 'source', 'provider', 'userInvocable', 'modelInvocable'],
-    'DSH Skill item is invalid.',
-  );
+  const skill = requireRecord(value, 'DSH Skill item is invalid.');
+  const keys =
+    skill.whenToUse === undefined
+      ? ['id', 'name', 'description', 'source', 'provider', 'userInvocable', 'modelInvocable']
+      : [
+          'id',
+          'name',
+          'description',
+          'whenToUse',
+          'source',
+          'provider',
+          'userInvocable',
+          'modelInvocable',
+        ];
+  const record = requireExactRecord(value, keys, 'DSH Skill item is invalid.');
   return {
     id: requireNonEmptyString(record.id, 'DSH Skill id'),
     name: requireNonEmptyString(record.name, 'DSH Skill name'),
     description: requireString(record.description, 'DSH Skill description'),
+    ...(record.whenToUse === undefined
+      ? {}
+      : { whenToUse: requireNonEmptyString(record.whenToUse, 'DSH Skill whenToUse') }),
     source: requireNonEmptyString(record.source, 'DSH Skill source'),
     provider: requireNonEmptyString(record.provider, 'DSH Skill provider'),
     userInvocable: requireBoolean(record.userInvocable, 'DSH Skill user invocation flag'),
     modelInvocable: requireBoolean(record.modelInvocable, 'DSH Skill model invocation flag'),
   };
+}
+
+function requireGlobalCatalogScope(value: unknown): 'global' {
+  if (value !== 'global') throw new Error('DSH extension catalog scope is invalid.');
+  return value;
 }
 
 function parseMcp(value: unknown): AgentManagedMcpItem {
@@ -135,6 +156,11 @@ function requireExactRecord(
     throw new Error(message);
   }
   return record;
+}
+
+function requireRecord(value: unknown, message: string): Readonly<Record<string, unknown>> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(message);
+  return value as Readonly<Record<string, unknown>>;
 }
 
 function requireNonEmptyString(value: unknown, label: string): string {

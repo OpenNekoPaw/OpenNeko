@@ -192,6 +192,7 @@ export async function startDesktopDshAgentRuntime(
     staleConversations,
     conversationIdentitySeed: options.virtualCwd,
     activity: projection,
+    lookupCwd: { resolve: options.resolveSessionCwd },
   });
   await conversations.home.refresh();
   return Object.freeze({

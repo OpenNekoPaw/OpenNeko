@@ -311,8 +311,9 @@ action summary 和 diagnostic。
 - optional Skill，描述专业方法、判断、输出要求和审阅标准；
 - optional Context Dock/diagnostic projection。
 
-Skill content 不写具体 tool name、参数表、命令流程或 MCP 轮询协议；这些属于
-integration catalog、tool schema 和 capability prompt。Computer Use profile 不得包含
+Skill content 可以说明公开专业工具的用户级方法、参数选择和审阅标准，但实际可用 tool、schema、
+permission、MCP transport 和轮询 lifecycle 仍属于 integration catalog、tool schema、DSH profile
+和 capability boundary；Skill 文本不能授予或伪造这些 authority。Computer Use profile 不得包含
 任意坐标宏、隐藏循环或跨应用观察规则。Plugin 不能任意增加 Shell、
 顶栏或 Home 一级入口，也不能因 manifest 声明而获得 `core` trust。
 

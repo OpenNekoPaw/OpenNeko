@@ -21,6 +21,8 @@ test('accepts the canonical minimal extension surface', () => {
   assert.equal('skillAuthoringMetadata' in surface, false);
   assert.deepEqual(surface.extensionManagement.visibleTypes, ['skill', 'mcp']);
   assert.equal(surface.extensionManagement.pluginVisible, false);
+  assert.deepEqual(surface.portableSkill.layouts, ['directory-skill-md', 'flat-markdown']);
+  assert.equal(surface.portableSkill.multiSkill, true);
 });
 
 test('rejects coupling portable Skills to Host packaging or MCP', () => {
@@ -38,6 +40,19 @@ test('rejects retired private Skill overlay claims', () => {
   assert.deepEqual(findForbiddenArchitectureClaims('Skill 使用 agents/neko.yaml。', 'adr.md'), [
     'adr.md: retired private Skill overlay',
   ]);
+});
+
+test('rejects OpenNeko restrictions that narrow DSH Skill semantics', () => {
+  for (const [claim, diagnostic] of [
+    ['Skill 正文不得写具体工具名教程。', 'DSH-valid public Tool guidance is forbidden'],
+    ['每次只允许一个 primary Skill。', 'single-primary-Skill restriction'],
+    ['Skill 数量最多为 4。', 'fixed Skill-count restriction'],
+    ['必须选择 Artifact Profile 才能加载 Skill。', 'artifact-profile-first Skill restriction'],
+  ]) {
+    assert.deepEqual(findForbiddenArchitectureClaims(claim, 'adr.md'), [
+      `adr.md: ${diagnostic}`,
+    ]);
+  }
 });
 
 test('rejects retired Agent Skill Tool instructions in stable architecture', () => {

@@ -78,7 +78,9 @@ cross-session identity、过大 payload 或权限拒绝必须 fail-local、fail-
 
 ## Skill、MCP 与 Plugin
 
-- Skill discovery/read/injection 由 DSH Skill runtime 拥有；Skill content 不承载工具协议。
+- Skill discovery/read/injection 由 DSH Skill runtime 拥有；Skill content 可以说明公开模型/工具的
+  用户级方法，但不能授予 Tool visibility、schema、permission、Workspace authorization 或 Host trust，
+  也不能把私有 transport/package schema 伪装成 portable runtime authority。
 - MCP configuration/connection/tool exposure 由 DSH profile 拥有；OpenNeko 不维护 MCP client/manager。
 - Plugin discovery/load/enablement 由精确锁定的官方 DSH profile 拥有；它是内部装配机制，不是用户可安装或配置的第三类扩展。首版不加载第三方 runtime/Webview JS。
 - OpenNeko extension management 只展示 Skill/MCP，消费 DSH inventory/readiness/config/diagnostics projection 并提交精确命令，不建立第二 catalog/config authority。

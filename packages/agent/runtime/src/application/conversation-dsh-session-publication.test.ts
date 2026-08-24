@@ -22,6 +22,7 @@ describe('Conversation DSH Session publication', () => {
       staleConversations: memoryStaleCleanup(catalog, store),
       conversationIdentitySeed: '/workspace/publication',
       activity: idleActivity(),
+      lookupCwd: testLookupCwd(),
     });
 
     const result = await application.publication.publish({
@@ -62,6 +63,7 @@ describe('Conversation DSH Session publication', () => {
       staleConversations: memoryStaleCleanup(catalog, store),
       conversationIdentitySeed: '/workspace/create-failure',
       activity: idleActivity(),
+      lookupCwd: testLookupCwd(),
     });
 
     await expect(
@@ -95,6 +97,7 @@ describe('Conversation DSH Session publication', () => {
       staleConversations: memoryStaleCleanup(catalog, store),
       conversationIdentitySeed: '/workspace/bind-failure',
       activity: idleActivity(),
+      lookupCwd: testLookupCwd(),
     });
 
     await expect(
@@ -125,6 +128,7 @@ describe('Conversation DSH Session publication', () => {
       staleConversations: memoryStaleCleanup(catalog, store),
       conversationIdentitySeed: '/workspace/exact',
       activity: idleActivity(),
+      lookupCwd: testLookupCwd(),
     });
 
     await expect(
@@ -158,6 +162,7 @@ describe('Conversation DSH Session publication', () => {
       staleConversations,
       conversationIdentitySeed: '/workspace/archive',
       activity: idleActivity(),
+      lookupCwd: testLookupCwd(),
     });
     const published = await application.publication.publish({
       title: 'Archive me',
@@ -189,6 +194,7 @@ describe('Conversation DSH Session publication', () => {
       staleConversations,
       conversationIdentitySeed: '/workspace/stale',
       activity: idleActivity(),
+      lookupCwd: testLookupCwd(),
     });
     const published = await application.publication.publish({
       title: 'Stale conversation',
@@ -237,10 +243,10 @@ describe('Conversation DSH Session publication', () => {
     );
     expect(
       projectDshConversationTitle({
-        kind: 'skill',
-        skillName: 'storyboard',
+        kind: 'skills',
+        invocations: [{ skillName: 'storyboard' }],
         displayText: '$storyboard Draft three beats',
-        args: 'Draft three beats',
+        promptText: 'Draft three beats',
       }),
     ).toBe('$storyboard Draft three beats');
     expect(
@@ -330,6 +336,10 @@ function idleActivity() {
       return { sessionId, currentTurn: undefined, events: [], tools: [] };
     },
   };
+}
+
+function testLookupCwd() {
+  return { resolve: async () => '/workspace' };
 }
 
 function clientWith(options: { readonly order?: string[]; readonly createError?: Error }) {

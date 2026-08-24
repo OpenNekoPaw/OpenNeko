@@ -20,7 +20,7 @@ import type {
   AgentInputCatalogEntry,
   AgentWorldExperienceTargetOption,
 } from '@neko/agent-contracts';
-import { parseAgentInputTrigger } from '@neko/agent-contracts';
+import { parseAgentInputTrigger, type ParsedAgentInputTrigger } from '@neko/agent-contracts';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
 import type { ChatModelOption } from '@neko/ai-contracts';
 import { InputArea } from '../components/ChatView/InputArea/InputArea';
@@ -722,27 +722,42 @@ function DshComposer({
         if (references.length > 0 || images.length > 0 || submittedContextPayloads.length > 0) {
           throw new Error('DSH commands and Skills do not accept attached Workspace context.');
         }
-        const executableTrigger =
-          trigger.trigger === 'command'
-            ? { ...trigger, trigger: 'command' as const }
-            : { ...trigger, trigger: 'skill' as const };
-        const intent = resolveAgentInputInvocationIntent({
-          trigger: executableTrigger,
-          entries: inputCatalog,
-          phase: 'session',
-          bindingKind: inputCatalogBindingKind,
-        });
-        const canvasTurnTarget = intent.kind === 'skill' ? resolveCanvasTurnTarget() : undefined;
-        const submitInput: DshComposerSubmitInput =
-          intent.kind === 'command'
-            ? { kind: 'command', line: messageText.trim() }
-            : {
-                kind: 'skill',
-                skillName: intent.skillName,
-                displayText: `$${intent.skillName}${intent.args === undefined ? '' : ` ${intent.args}`}`,
-                ...(intent.args === undefined ? {} : { args: intent.args }),
-                ...(canvasTurnTarget === undefined ? {} : { canvasTurnTarget }),
-              };
+        let submitInput: DshComposerSubmitInput;
+        if (trigger.trigger === 'command') {
+          resolveAgentInputInvocationIntent({
+            trigger: { ...trigger, trigger: 'command' },
+            entries: inputCatalog,
+            phase: 'session',
+            bindingKind: inputCatalogBindingKind,
+          });
+          submitInput = { kind: 'command', line: messageText.trim() };
+        } else {
+          const sequence = parseLeadingSkillInvocationSequence(messageText);
+          if (sequence === null) {
+            throw new Error('DSH Skill invocation sequence is malformed.');
+          }
+          const invocations = sequence.triggers.map((selection) => {
+            const { args: _ignoredArgs, ...selectionTrigger } = selection;
+            const intent = resolveAgentInputInvocationIntent({
+              trigger: selectionTrigger,
+              entries: inputCatalog,
+              phase: 'session',
+              bindingKind: inputCatalogBindingKind,
+            });
+            if (intent.kind !== 'skill') {
+              throw new Error(`Agent input '$${selection.name}' is not a Skill.`);
+            }
+            return { skillName: intent.skillName };
+          });
+          const canvasTurnTarget = resolveCanvasTurnTarget();
+          submitInput = {
+            kind: 'skills',
+            invocations,
+            displayText: sequence.displayText,
+            promptText: sequence.promptText,
+            ...(canvasTurnTarget === undefined ? {} : { canvasTurnTarget }),
+          };
+        }
         const accepted = await onSubmit(submitTarget(), submitInput);
         if (accepted) setInputDiagnostic(undefined);
         return accepted;
@@ -995,6 +1010,29 @@ function DshComposer({
       </div>
     </InputAreaProvider>
   );
+}
+
+function parseLeadingSkillInvocationSequence(input: string): {
+  readonly triggers: readonly (ParsedAgentInputTrigger & { readonly trigger: 'skill' })[];
+  readonly displayText: string;
+  readonly promptText: string;
+} | null {
+  const displayText = input.trim();
+  const triggers: (ParsedAgentInputTrigger & { readonly trigger: 'skill' })[] = [];
+  let cursor = 0;
+  while (cursor < displayText.length) {
+    const trigger = parseAgentInputTrigger(displayText, { startIndex: cursor });
+    if (trigger?.trigger !== 'skill' || trigger.startIndex !== cursor) break;
+    triggers.push({ ...trigger, trigger: 'skill' });
+    cursor = trigger.endIndex;
+    while (/\s/u.test(displayText[cursor] ?? '')) cursor += 1;
+  }
+  if (triggers.length === 0) return null;
+  return {
+    triggers,
+    displayText,
+    promptText: displayText.slice(cursor),
+  };
 }
 
 function projectComposerImages(

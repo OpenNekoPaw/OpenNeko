@@ -37,6 +37,7 @@ export class DesktopDshExtensionManagementHost {
     if (status.status !== 'running') {
       return {
         identity: { windowId },
+        catalogScope: 'global' as const,
         skills: [],
         mcp: [],
         diagnostics: [{ code: 'runtime_unavailable' as const, count: 1 }],
@@ -45,6 +46,7 @@ export class DesktopDshExtensionManagementHost {
     const snapshot = await this.options.runtime.client.readExtensions();
     return {
       identity: { windowId },
+      catalogScope: snapshot.catalogScope,
       skills: snapshot.skills.map(toSkill),
       mcp: snapshot.mcp,
       diagnostics: snapshot.diagnostics,
@@ -57,6 +59,7 @@ function toSkill(skill: DshAcpExtensionSkill) {
     id: `dsh-skill:${skill.name}`,
     name: skill.name,
     description: skill.description,
+    ...(skill.whenToUse === undefined ? {} : { whenToUse: skill.whenToUse }),
     source: skill.source,
     provider: skill.provider,
     userInvocable: skill.userInvocable,

@@ -21,6 +21,7 @@ describe('Conversation DSH Session bound client', () => {
     const bound = createConversationDshSessionBoundClient({
       client: fixture.client,
       binding: fixture.binding,
+      resolveCwd: resolveTestCwd,
     });
 
     await bound.loadSession({
@@ -31,6 +32,7 @@ describe('Conversation DSH Session bound client', () => {
     expect(fixture.client.loadSession).toHaveBeenCalledWith({
       mcpServers: [],
       sessionId: dshSessionId,
+      cwd: '/workspace',
     });
   });
 
@@ -42,7 +44,7 @@ describe('Conversation DSH Session bound client', () => {
         conversationId: string,
       ) => bound.loadSession({ conversationId, mcpServers: [] }),
       expectedMethod: 'loadSession' as const,
-      expectedArgs: { mcpServers: [], sessionId: 'dsh-session-table' },
+      expectedArgs: { mcpServers: [], sessionId: 'dsh-session-table', cwd: '/workspace' },
     },
     {
       name: 'resumeSession',
@@ -51,7 +53,7 @@ describe('Conversation DSH Session bound client', () => {
         conversationId: string,
       ) => bound.resumeSession({ conversationId, mcpServers: [] }),
       expectedMethod: 'resumeSession' as const,
-      expectedArgs: { mcpServers: [], sessionId: 'dsh-session-table' },
+      expectedArgs: { mcpServers: [], sessionId: 'dsh-session-table', cwd: '/workspace' },
     },
     {
       name: 'closeSession',
@@ -182,6 +184,7 @@ describe('Conversation DSH Session bound client', () => {
       const bound = createConversationDshSessionBoundClient({
         client: fixture.client,
         binding: fixture.binding,
+        resolveCwd: resolveTestCwd,
       });
 
       await invoke(bound, conversationId);
@@ -196,6 +199,7 @@ describe('Conversation DSH Session bound client', () => {
     const bound = createConversationDshSessionBoundClient({
       client: fixture.client,
       binding: fixture.binding,
+      resolveCwd: resolveTestCwd,
     });
 
     await expect(bound.loadSession({ conversationId, mcpServers: [] })).rejects.toThrow(
@@ -221,6 +225,7 @@ describe('Conversation DSH Session bound client', () => {
     const bound = createConversationDshSessionBoundClient({
       client: fixture.client,
       binding: fixture.binding,
+      resolveCwd: resolveTestCwd,
     });
 
     await expect(bound.loadSession({ conversationId, mcpServers: [] })).rejects.toThrow(
@@ -244,6 +249,7 @@ describe('Conversation DSH Session bound client', () => {
     const bound = createConversationDshSessionBoundClient({
       client: fixture.client,
       binding: fixture.binding,
+      resolveCwd: resolveTestCwd,
     });
 
     await expect(bound.loadSession({ conversationId, mcpServers: [] })).rejects.toThrow(
@@ -271,6 +277,7 @@ describe('Conversation DSH Session bound client', () => {
     const bound = createConversationDshSessionBoundClient({
       client: fixture.client,
       binding: fixture.binding,
+      resolveCwd: resolveTestCwd,
     });
 
     resolvable.delete(firstSession);
@@ -284,6 +291,7 @@ describe('Conversation DSH Session bound client', () => {
     expect(fixture.client.loadSession).toHaveBeenCalledWith({
       mcpServers: [],
       sessionId: secondSession,
+      cwd: '/workspace',
     });
   });
 
@@ -293,6 +301,7 @@ describe('Conversation DSH Session bound client', () => {
     const bound = createConversationDshSessionBoundClient({
       client: fixture.client,
       binding: fixture.binding,
+      resolveCwd: resolveTestCwd,
     });
 
     await expect(
@@ -348,6 +357,10 @@ function createFixture(
     removeInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
   } satisfies ConversationDshSessionAcpClient;
   return { store, binding, client };
+}
+
+async function resolveTestCwd(): Promise<string> {
+  return '/workspace';
 }
 
 function createMemoryStore(): ConversationDshSessionBindingStore & {

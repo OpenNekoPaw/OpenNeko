@@ -403,7 +403,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       },
       async newSession(params) {
         requireOpen();
-        validateLifecycleRequest(params, virtualCwd);
+        validateLifecycleRequest(params);
         const sessionId = SessionId(randomUUID());
         const configuration = defaultSessionConfiguration(config);
         const runtimeContext = createSessionRuntimeContext();
@@ -437,11 +437,11 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           );
         }
         const headers = await ctx.sessionPersistence.list();
-        return listOpenNekoSessions(headers, preset, virtualCwd);
+        return listOpenNekoSessions(headers, preset);
       },
       async loadSession(params) {
         requireOpen();
-        validateLifecycleRequest(params, virtualCwd);
+        validateLifecycleRequest(params);
         const record = await resumeOwnedSession(
           ctx,
           owned,
@@ -459,7 +459,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
       },
       async resumeSession(params) {
         requireOpen();
-        validateLifecycleRequest({ ...params, mcpServers: params.mcpServers ?? [] }, virtualCwd);
+        validateLifecycleRequest({ ...params, mcpServers: params.mcpServers ?? [] });
         const record = await resumeOwnedSession(
           ctx,
           owned,
@@ -576,8 +576,11 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
                 'Extension catalog read does not accept parameters.',
               );
             }
-            const snapshot = await ctx.skills.snapshot({ cwd: virtualCwd });
-            return { ...projectDshExtensionCatalog(snapshot) };
+            const snapshot = await readSkillCatalog(ctx, {
+              kind: 'global',
+              cwd: virtualCwd,
+            });
+            return { ...projectDshExtensionCatalog(snapshot, 'global') };
           }
           case DSH_ACP_EXTENSION_METHODS.validateStagedSkill: {
             const request = decodeDshAcpStagedSkillValidationRequest(params);
@@ -598,9 +601,9 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
               );
             }
             const record = requireOwned(request.sessionId);
-            const snapshot = await ctx.skills.snapshot({
-              cwd: record.handle.agent.session.header.cwd,
-              scope: record.handle.agent,
+            const snapshot = await readSkillCatalog(ctx, {
+              kind: 'session',
+              agent: record.handle.agent,
             });
             const skill = snapshot.skills.find((candidate) => candidate.name === request.name);
             return {
@@ -698,39 +701,48 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           }
           case DSH_ACP_EXTENSION_METHODS.invokeSkill: {
             const request = decodeDshAcpSkillInvokeRequest(params);
-            if (!isSkillName(request.skillName)) {
-              throw RequestError.invalidParams(
-                undefined,
-                `Invalid DSH Skill name: ${request.skillName}`,
-              );
+            for (const invocation of request.invocations) {
+              if (!isSkillName(invocation.skillName)) {
+                throw RequestError.invalidParams(
+                  undefined,
+                  `Invalid DSH Skill name: ${invocation.skillName}`,
+                );
+              }
             }
             const record = requireOwned(request.sessionId);
             const agent = record.handle.agent;
-            const snapshot = await ctx.skills.snapshot({
-              cwd: agent.session.header.cwd,
-              scope: agent,
-            });
+            const snapshot = await readSkillCatalog(ctx, { kind: 'session', agent });
             if (!snapshot.complete) {
               throw RequestError.invalidParams(
                 undefined,
                 `DSH Skill catalog is incomplete for Session: ${request.sessionId}`,
               );
             }
-            const skill = snapshot.skills.find((candidate) => candidate.name === request.skillName);
-            if (skill === undefined || !isUserInvocable(skill)) {
-              throw RequestError.invalidParams(
-                undefined,
-                `Unknown, stale, or non-user-invocable DSH Skill: ${request.skillName}`,
+            for (const invocation of request.invocations) {
+              const skill = snapshot.skills.find(
+                (candidate) => candidate.name === invocation.skillName,
               );
+              if (skill === undefined || !isUserInvocable(skill)) {
+                throw RequestError.invalidParams(
+                  undefined,
+                  `Unknown, stale, or non-user-invocable DSH Skill: ${invocation.skillName}`,
+                );
+              }
             }
-            const canonicalDisplay = `$${request.skillName}${request.args === undefined ? '' : ` ${request.args}`}`;
+            const displayGestures = request.invocations
+              .map((invocation) => `$${invocation.skillName}`)
+              .join(' ');
+            const promptSuffix = request.promptText.length === 0 ? '' : ` ${request.promptText}`;
+            const canonicalDisplay = `${displayGestures}${promptSuffix}`;
             if (request.displayText !== canonicalDisplay) {
               throw RequestError.invalidParams(
                 undefined,
                 'DSH Skill display text does not match its canonical invocation.',
               );
             }
-            const gesture = `/${request.skillName}${request.args === undefined ? '' : ` ${request.args}`}`;
+            const gesture = `${request.invocations
+              .map((invocation) => `/${invocation.skillName}`)
+              .join(' ')}${promptSuffix}`;
             const response = await runPrompt(
               request.sessionId,
               [{ type: 'text', text: gesture }],
@@ -883,11 +895,14 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
 
 export function projectDshExtensionCatalog(
   snapshot: SkillCatalogSnapshot,
+  catalogScope: 'global',
 ): DshAcpExtensionProjection {
   return {
+    catalogScope,
     skills: snapshot.skills.map((skill) => ({
       name: skill.name,
       description: skill.description,
+      ...(skill.whenToUse === undefined ? {} : { whenToUse: skill.whenToUse }),
       source: skill.source,
       provider: skill.provider,
       userInvocable: isUserInvocable(skill),
@@ -898,14 +913,25 @@ export function projectDshExtensionCatalog(
   };
 }
 
+async function readSkillCatalog(
+  ctx: Pick<Context, 'skills'>,
+  view:
+    | { readonly kind: 'global'; readonly cwd: string }
+    | { readonly kind: 'session'; readonly agent: AgentHandle['agent'] },
+): Promise<SkillCatalogSnapshot> {
+  return view.kind === 'global'
+    ? ctx.skills.snapshot({ cwd: view.cwd })
+    : ctx.skills.snapshot({
+        cwd: view.agent.session.header.cwd,
+        scope: view.agent,
+      });
+}
+
 async function readAgentInputCatalog(
   ctx: Pick<Context, 'commands' | 'skills'>,
   agent: AgentHandle['agent'],
 ): Promise<DshAcpInputCatalogProjection> {
-  const skills = await ctx.skills.snapshot({
-    cwd: agent.session.header.cwd,
-    scope: agent,
-  });
+  const skills = await readSkillCatalog(ctx, { kind: 'session', agent });
   return {
     commands: ctx.commands.list(agent).map((command) => ({
       name: command.name,
@@ -915,6 +941,7 @@ async function readAgentInputCatalog(
     skills: skills.skills.filter(isUserInvocable).map((skill) => ({
       name: skill.name,
       description: skill.description,
+      ...(skill.whenToUse === undefined ? {} : { whenToUse: skill.whenToUse }),
       source: skill.source,
       provider: skill.provider,
     })),
@@ -1042,7 +1069,6 @@ export async function validateStagedSkillPackage(
 export function listOpenNekoSessions(
   headers: readonly SessionHeader[],
   preset: string,
-  virtualCwd: string,
 ): ListSessionsResponse {
   const sessions: ListSessionsResponse['sessions'] = [];
   const diagnostics: { code: string; message: string; sessionId: string }[] = [];
@@ -1056,10 +1082,10 @@ export function listOpenNekoSessions(
       });
       continue;
     }
-    if (header.cwd !== virtualCwd) {
+    if (!isAbsolute(header.cwd)) {
       diagnostics.push({
-        code: 'SESSION_CWD_MISMATCH',
-        message: `OpenNeko DSH session ${header.id} is outside the configured virtual workspace.`,
+        code: 'SESSION_CWD_INVALID',
+        message: `OpenNeko DSH session ${header.id} has a non-absolute working directory.`,
         sessionId: header.id,
       });
       continue;
@@ -1593,22 +1619,13 @@ function withOpenNekoMeta(
   };
 }
 
-function validateLifecycleRequest(
-  params: {
-    readonly cwd: string;
-    readonly additionalDirectories?: readonly string[];
-    readonly mcpServers: readonly unknown[];
-  },
-  virtualCwd: string,
-): void {
+function validateLifecycleRequest(params: {
+  readonly cwd: string;
+  readonly additionalDirectories?: readonly string[];
+  readonly mcpServers: readonly unknown[];
+}): void {
   if (!isAbsolute(params.cwd)) {
     throw RequestError.invalidParams(undefined, 'cwd must be absolute.');
-  }
-  if (params.cwd !== virtualCwd) {
-    throw RequestError.invalidParams(
-      undefined,
-      'cwd does not match the configured virtual workspace.',
-    );
   }
   if ((params.additionalDirectories?.length ?? 0) > 0) {
     throw RequestError.invalidParams(undefined, 'additionalDirectories are not supported.');

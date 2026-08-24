@@ -60,6 +60,7 @@ describe('DSH ACP extension contract', () => {
 
   it('accepts only Skill/MCP extension projection fields', () => {
     const projection = {
+      catalogScope: 'global',
       skills: [],
       mcp: [],
       diagnostics: [],

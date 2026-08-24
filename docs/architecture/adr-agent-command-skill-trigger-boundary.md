@@ -2,7 +2,7 @@
 
 状态：Accepted
 
-更新日期：2026-08-01
+更新日期：2026-08-24
 
 范围：Desktop Chat 输入框、Slash command catalog、Skill catalog、上下文引用、typed input contract 与 prompt 注入。
 
@@ -10,12 +10,12 @@
 
 输入前缀只承担稳定、可解释的职责：
 
-| 入口 | 语义 | Owner |
-| --- | --- | --- |
-| `/command` | 会话或产品控制命令 | Desktop/Agent command catalog |
-| `$skill` | 显式选择 reusable Skill | Skill Host + Agent runtime |
+| 入口       | 语义                                   | Owner                            |
+| ---------- | -------------------------------------- | -------------------------------- |
+| `/command` | 会话或产品控制命令                     | DSH command runtime              |
+| `$skill`   | 显式选择 reusable Skill                | DSH Skill runtime                |
 | `@context` | 引用文件、资源、项目、selection 或实体 | Context resolver / owning domain |
-| 自然语言 | 开放意图与创作请求 | 主 Agent reasoning |
+| 自然语言   | 开放意图与创作请求                     | 主 Agent reasoning               |
 
 Renderer 可以完成 tokenization、菜单过滤和 keyboard interaction，但不执行 command、不读取文件、
 不选择 Skill、不解析领域资源，也不改变 Agent 状态。提交后由 Desktop typed port 校验 schema、

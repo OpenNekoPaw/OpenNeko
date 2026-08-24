@@ -97,16 +97,16 @@ describe('DshAgentView content-creation composer', () => {
       ),
     );
 
-    fireEvent.change(composer, { target: { value: '$story-review chapter-1' } });
+    fireEvent.change(composer, { target: { value: '$story-review $scene-plan chapter-1' } });
     fireEvent.click(screen.getByRole('button', { name: '发送 (Enter)' }));
     await waitFor(() =>
       expect(onSubmit).toHaveBeenLastCalledWith(
         { kind: 'surface' },
         {
-          kind: 'skill',
-          skillName: 'story-review',
-          displayText: '$story-review chapter-1',
-          args: 'chapter-1',
+          kind: 'skills',
+          invocations: [{ skillName: 'story-review' }, { skillName: 'scene-plan' }],
+          displayText: '$story-review $scene-plan chapter-1',
+          promptText: 'chapter-1',
           canvasTurnTarget: workspaceBoardTarget,
         },
       ),
@@ -1792,6 +1792,12 @@ function DshComposerHarness({
             {
               name: 'story-review',
               description: 'Review a story',
+              source: 'personal',
+              provider: 'filesystem',
+            },
+            {
+              name: 'scene-plan',
+              description: 'Plan a scene',
               source: 'personal',
               provider: 'filesystem',
             },

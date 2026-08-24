@@ -145,10 +145,10 @@
 
 - 系统提示词负责默认 Agent 人设、通用行为准则、通用工具协议、Markdown/引用/视觉证据/安全边界、工具发现与失败处理规则。
 - 子包 capability 注入负责领域工具、operation 名称、参数 schema、validation、diagnostics、资源绑定、authoring lifecycle 和领域能力目录。
-- Skill content 负责扩展能力、领域方法论、创作语义、任务判断、输出风格和提示词写作规则；不得承担运行时工具协议或子包内部 schema。
-- Skill 正文不得写具体工具名教程、命令名、参数表、轮询/任务协议、UI 命令流程、缓存/Webview/path 协议或子包 authoring 细节。需要这些信息时，放到系统提示词、子包 capability prompt、tool schema 或运行时 catalog。
-- 工具名允许出现在机器可读元数据中，例如 `allowedTools`、`optionalTools`、`toolDefinitions`、tool registry、tool schema 和测试 fixture；不得以自然语言教程形式进入 Skill prompt content。
-- 新增/修改 Skill 时必须补充或维护防回流测试，确保 builtin/custom skill content 不重新包含被系统提示词或子包 capability 拥有的工具协议。
+- Skill content 负责扩展能力、领域方法论、创作语义、任务判断、输出风格和提示词写作规则；可以说明公开、稳定且对用户有意义的模型或工具如何参与该方法，但执行前必须以当前 DSH Tool catalog、schema、permission 和 Host authorization 为准。
+- Skill 正文不能授予工具可见性、权限、Workspace access、可执行 Plugin authority 或 Host trust，也不能把私有 ACP/MCP transport、缓存/Webview/path 协议、package-private schema 或 Host authorization 流程伪装成 portable runtime 能力；这些信息由系统提示词、子包 capability prompt、tool schema、profile 或 owner 文档承载。
+- DSH Skill 格式、来源、调用策略、scope、正文加载和相对资源语义只以仓库锁定的公开 DSH package contract 为准。不得增加固定 Skill 数量、单一主 Skill、Artifact Profile 前置、仅 builtin 来源、禁止 flat Markdown 或“正文出现公开工具名即不合格”等额外运行限制。
+- 新增/修改 Skill 时必须补充或维护边界测试：证明 Skill 文本不能绕过 Tool/schema/permission/Host authority，且 builtin/custom Skill 不重新实现私有运行时协议；测试不得把公开工具名或用户可执行的工具指导本身判为 DSH 格式错误。
 
 ## Agent Evaluation 开发边界
 

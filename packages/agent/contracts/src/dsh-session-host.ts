@@ -224,10 +224,12 @@ export type DshComposerSubmitInput =
     }
   | { readonly kind: 'command'; readonly line: string }
   | {
-      readonly kind: 'skill';
-      readonly skillName: string;
+      readonly kind: 'skills';
+      readonly invocations: readonly {
+        readonly skillName: string;
+      }[];
       readonly displayText: string;
-      readonly args?: string;
+      readonly promptText: string;
       readonly canvasTurnTarget?: CanvasWorkspaceTurnTarget;
     };
 
@@ -1033,17 +1035,27 @@ function parseComposerSubmitInput(value: unknown): DshComposerSubmitInput {
     if (!line.startsWith('/')) throw new Error("DSH Composer command must start with '/'.");
     return { kind: 'command', line };
   }
-  if (record.kind === 'skill') {
+  if (record.kind === 'skills') {
     requireAllowedKeys(
       record,
-      ['kind', 'skillName', 'displayText', 'args', 'canvasTurnTarget'],
-      ['kind', 'skillName', 'displayText'],
+      ['kind', 'invocations', 'displayText', 'promptText', 'canvasTurnTarget'],
+      ['kind', 'invocations', 'displayText', 'promptText'],
     );
+    if (!Array.isArray(record.invocations) || record.invocations.length === 0) {
+      throw new Error('DSH Composer Skill invocations must be a non-empty array.');
+    }
+    const invocations = record.invocations.map((value, index) => {
+      const invocation = requireRecord(value, `DSH Composer Skill invocation[${index}]`);
+      requireExactKeys(invocation, ['skillName']);
+      return {
+        skillName: requireIdentity(invocation.skillName, `Skill invocation[${index}] name`),
+      };
+    });
     return {
-      kind: 'skill',
-      skillName: requireIdentity(record.skillName, 'Skill name'),
+      kind: 'skills',
+      invocations,
       displayText: requireIdentity(record.displayText, 'Skill display text'),
-      ...(record.args === undefined ? {} : { args: requireIdentity(record.args, 'Skill args') }),
+      promptText: requireString(record.promptText, 'Skill prompt text'),
       ...(record.canvasTurnTarget === undefined
         ? {}
         : { canvasTurnTarget: parseCanvasWorkspaceTurnTarget(record.canvasTurnTarget) }),

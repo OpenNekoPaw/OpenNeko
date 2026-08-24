@@ -9,6 +9,7 @@ describe('DesktopExtensionManagementRuntime', () => {
       route: request.route,
       projection: {
         identity: { windowId: 'window-1' },
+        catalogScope: 'global' as const,
         skills: [],
         mcp: [],
         diagnostics: [],

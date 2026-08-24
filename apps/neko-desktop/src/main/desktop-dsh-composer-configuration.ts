@@ -21,6 +21,7 @@ import type { ProjectEntityRecord } from '@neko/entity-domain';
 import type {
   AgentConversationContextAuthorityPort,
   ConversationDshSessionBoundClient,
+  DshSessionLookupCwdPort,
 } from '@neko/agent-runtime/application';
 import type { ConfigManager } from '@neko/host/settings';
 import type { DesktopDshExecutionCatalog } from './desktop-dsh-provider-runtime';
@@ -81,9 +82,7 @@ export function createDesktopDshComposerConfiguration(options: {
       readonly cwd: string;
     }): ReturnType<ConversationDshSessionBoundClient['readInputCatalog']>;
   };
-  readonly lookupCwd: {
-    resolve(context: AgentConversationContext): Promise<string>;
-  };
+  readonly lookupCwd: DshSessionLookupCwdPort;
   readonly executionCatalog: DesktopDshExecutionCatalog;
   readonly resourceBrowser: {
     query(windowId: string, request: unknown): Promise<ResourceBrowserProjection>;

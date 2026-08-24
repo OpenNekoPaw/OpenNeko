@@ -223,7 +223,7 @@ describe('Desktop DSH Session Host', () => {
     expect(executeCommand).toHaveBeenCalledWith(identity.conversationId, '/help models');
   });
 
-  it('routes a first Skill through the same create command', async () => {
+  it('routes initial Skills through the same create command', async () => {
     const invokeSkill = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
     const host = createHost({ invokeSkill });
 
@@ -240,9 +240,10 @@ describe('Desktop DSH Session Host', () => {
           permissionPresetId: 'workspace-write',
           target: { kind: 'surface' },
           initialInput: {
-            kind: 'skill',
-            skillName: 'story-review',
-            displayText: 'Review this story',
+            kind: 'skills',
+            invocations: [{ skillName: 'story-review' }],
+            displayText: '$story-review Review this story',
+            promptText: 'Review this story',
           },
         },
       ),
@@ -250,8 +251,9 @@ describe('Desktop DSH Session Host', () => {
 
     expect(invokeSkill).toHaveBeenCalledWith({
       conversationId: identity.conversationId,
-      skillName: 'story-review',
-      displayText: 'Review this story',
+      invocations: [{ skillName: 'story-review' }],
+      displayText: '$story-review Review this story',
+      promptText: 'Review this story',
     });
     expect(result.stopReason).toBe('end_turn');
   });
@@ -936,7 +938,7 @@ describe('Desktop DSH Session Host', () => {
     expect(prompt).not.toHaveBeenCalled();
   });
 
-  it('invokes a catalog-validated DSH Skill through the canonical prompt context path', async () => {
+  it('invokes catalog-validated DSH Skills through one canonical prompt context path', async () => {
     const prompt = vi.fn();
     const invokeSkill = vi.fn(async () => ({ stopReason: 'end_turn' as const }));
     const applyConversation = vi.fn(async () => ({ supportsImageInput: false }));
@@ -947,10 +949,10 @@ describe('Desktop DSH Session Host', () => {
         { webContentsId: 1, frameUrl: 'openneko://app' },
         request('submit', {
           input: {
-            kind: 'skill',
-            skillName: 'story-review',
-            displayText: '$story-review chapter-1',
-            args: 'chapter-1',
+            kind: 'skills',
+            invocations: [{ skillName: 'story-review' }, { skillName: 'scene-plan' }],
+            displayText: '$story-review $scene-plan chapter-1',
+            promptText: 'chapter-1',
           },
         }),
       ),
@@ -958,9 +960,9 @@ describe('Desktop DSH Session Host', () => {
 
     expect(invokeSkill).toHaveBeenCalledWith({
       conversationId: identity.conversationId,
-      skillName: 'story-review',
-      displayText: '$story-review chapter-1',
-      args: 'chapter-1',
+      invocations: [{ skillName: 'story-review' }, { skillName: 'scene-plan' }],
+      displayText: '$story-review $scene-plan chapter-1',
+      promptText: 'chapter-1',
     });
     expect(applyConversation).toHaveBeenCalledWith(identity.conversationId, 'window-1');
     expect(prompt).not.toHaveBeenCalled();

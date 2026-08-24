@@ -22,9 +22,13 @@ export interface ConversationDshSessionPublication {
 }
 
 export interface DshSessionCreationClient {
-  createSession(input: Omit<NewSessionRequest, 'cwd'>): Promise<NewSessionResponse>;
+  createSession(input: NewSessionRequest): Promise<NewSessionResponse>;
   closeSession(sessionId: string): Promise<void>;
-  resumeSession(input: Omit<ResumeSessionRequest, 'cwd'>): Promise<ResumeSessionResponse>;
+  resumeSession(input: ResumeSessionRequest): Promise<ResumeSessionResponse>;
+}
+
+export interface DshSessionLookupCwdPort {
+  resolve(context: AgentConversationContext): Promise<string>;
 }
 
 export function createConversationDshSessionPublication(options: {
@@ -34,6 +38,7 @@ export function createConversationDshSessionPublication(options: {
   readonly catalog: DshConversationCatalogStore;
   readonly home: Pick<DshConversationHomeProjection, 'refresh'>;
   readonly conversationIdentitySeed: string;
+  readonly lookupCwd: DshSessionLookupCwdPort;
   readonly now?: () => Date;
   readonly createConversationIdentity?: (seed: string) => string;
 }): ConversationDshSessionPublication {
@@ -59,11 +64,12 @@ export function createConversationDshSessionPublication(options: {
       });
       await options.home.refresh();
 
-      const created = await options.client.createSession({ mcpServers: [] });
+      const cwd = requireAbsoluteCwd(await options.lookupCwd.resolve(input.context));
+      const created = await options.client.createSession({ cwd, mcpServers: [] });
       const dshSessionId = requireSessionId(created.sessionId);
       await options.client.closeSession(dshSessionId);
       options.activation.markClosed(dshSessionId);
-      await options.client.resumeSession({ sessionId: dshSessionId, mcpServers: [] });
+      await options.client.resumeSession({ sessionId: dshSessionId, cwd, mcpServers: [] });
       options.activation.markLoaded(dshSessionId);
       const result = await options.binding.bind({ conversationId, dshSessionId });
       if (!result.ok) {
@@ -89,6 +95,11 @@ function requireSessionId(value: string): string {
 
 function requireConversationId(value: string): string {
   if (value.trim().length === 0) throw new Error('Conversation identity is required.');
+  return value;
+}
+
+function requireAbsoluteCwd(value: string): string {
+  if (!value.startsWith('/')) throw new Error('DSH Session lookup cwd must be absolute.');
   return value;
 }
 
@@ -121,7 +132,7 @@ function projectTitleSource(input: DshComposerSubmitInput): string {
     }
     case 'command':
       return input.line;
-    case 'skill':
+    case 'skills':
       return input.displayText;
   }
 }

@@ -12,6 +12,7 @@ describe('Conversation DSH Session activation', () => {
     const activation = createConversationDshSessionActivation({
       binding: bindingFor(dshSessionId),
       client: { loadSession },
+      resolveCwd: resolveTestCwd,
     });
 
     await expect(
@@ -21,7 +22,11 @@ describe('Conversation DSH Session activation', () => {
       ]),
     ).resolves.toEqual([dshSessionId, dshSessionId]);
     expect(loadSession).toHaveBeenCalledOnce();
-    expect(loadSession).toHaveBeenCalledWith({ sessionId: dshSessionId, mcpServers: [] });
+    expect(loadSession).toHaveBeenCalledWith({
+      sessionId: dshSessionId,
+      cwd: '/workspace',
+      mcpServers: [],
+    });
   });
 
   it('does not reload a marked Session until the DSH runtime state is reset', async () => {
@@ -29,6 +34,7 @@ describe('Conversation DSH Session activation', () => {
     const activation = createConversationDshSessionActivation({
       binding: bindingFor(dshSessionId),
       client: { loadSession },
+      resolveCwd: resolveTestCwd,
     });
     activation.markLoaded(dshSessionId);
 
@@ -48,12 +54,17 @@ describe('Conversation DSH Session activation', () => {
     const activation = createConversationDshSessionActivation({
       binding: bindingFor(dshSessionId),
       client: { loadSession },
+      resolveCwd: resolveTestCwd,
     });
 
     await expect(activation.ensureLoaded(conversationId)).rejects.toThrow('session/load failed');
     await expect(activation.ensureLoaded(conversationId)).resolves.toBe(dshSessionId);
     expect(loadSession).toHaveBeenCalledTimes(2);
-    expect(loadSession).toHaveBeenLastCalledWith({ sessionId: dshSessionId, mcpServers: [] });
+    expect(loadSession).toHaveBeenLastCalledWith({
+      sessionId: dshSessionId,
+      cwd: '/workspace',
+      mcpServers: [],
+    });
   });
 
   it('fails before transport when the exact binding is unavailable', async () => {
@@ -71,6 +82,7 @@ describe('Conversation DSH Session activation', () => {
         },
       },
       client: { loadSession },
+      resolveCwd: resolveTestCwd,
     });
 
     await expect(activation.ensureLoaded(conversationId)).rejects.toThrow(
@@ -91,4 +103,8 @@ function bindingFor(sessionId: string): ConversationDshSessionBindingService {
       };
     },
   };
+}
+
+async function resolveTestCwd(): Promise<string> {
+  return '/workspace';
 }

@@ -9,6 +9,7 @@ const identity = { windowId: 'window-1' };
 function projection() {
   return {
     identity,
+    catalogScope: 'global' as const,
     skills: [
       {
         id: 'dsh-skill:storyboard',
@@ -84,4 +85,31 @@ describe('DSH extension management contract', () => {
       ),
     ).toThrow('DSH extension management projection is invalid.');
   });
+
+  it.each(['path', 'resourceBase', 'content', 'metadata'])(
+    'rejects private Skill field %s from the Renderer projection',
+    (field) => {
+      const request = createAgentExtensionManagementHostRequest({
+        requestId: `request-private-${field}`,
+        identity,
+        route: 'snapshot.get',
+      });
+      const [skill] = projection().skills;
+      if (skill === undefined) throw new Error('Skill projection fixture is empty.');
+
+      expect(() =>
+        parseAgentExtensionManagementHostResult(
+          {
+            requestId: request.requestId,
+            route: request.route,
+            projection: {
+              ...projection(),
+              skills: [{ ...skill, [field]: field === 'metadata' ? {} : '/private/value' }],
+            },
+          },
+          request,
+        ),
+      ).toThrow('DSH Skill item is invalid.');
+    },
+  );
 });

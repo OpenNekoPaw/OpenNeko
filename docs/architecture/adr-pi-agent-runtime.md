@@ -54,7 +54,8 @@ active conversation 协调。
 ## Skill 与 Capability
 
 Builtin、project 和 personal Skill 使用同一 `SKILL.md` 形态。模型常驻上下文只包含 catalog
-metadata；完整 Skill 在明确匹配或显式激活时加载。Skill 正文负责方法和创作语义，不承担工具协议。
+metadata；完整 Skill 在明确匹配或显式激活时加载。Skill 正文负责方法和创作语义，可以说明公开
+模型/工具的用户级使用方法，但不能授予权限或取代当前 runtime Tool schema 与 Host authorization。
 
 Capability Host 在 turn 边界生成不可变 Tool snapshot。Pi bridge 只适配 schema、调用和结果，
 不成为 Capability authority，也不理解 Canvas、Cut、Assets、Quality 等领域内部状态。重复 identity、

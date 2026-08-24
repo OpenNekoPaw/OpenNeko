@@ -510,7 +510,13 @@ describe('DSH Session Host contract', () => {
   it('rejects prompt and authority fields smuggled into command and Skill submits', () => {
     for (const input of [
       { kind: 'command', line: '/help', text: 'fallback prompt' },
-      { kind: 'skill', skillName: 'story', displayText: '$story', line: '/story' },
+      {
+        kind: 'skills',
+        invocations: [{ skillName: 'story' }],
+        displayText: '$story',
+        promptText: '',
+        line: '/story',
+      },
       {
         kind: 'message',
         text: 'hello',

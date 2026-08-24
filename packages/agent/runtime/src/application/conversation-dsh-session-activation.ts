@@ -18,6 +18,7 @@ interface ActivationState {
 export function createConversationDshSessionActivation(options: {
   readonly binding: ConversationDshSessionBindingService;
   readonly client: Pick<ConversationDshSessionAcpClient, 'loadSession'>;
+  readonly resolveCwd: (conversationId: string) => Promise<string>;
 }): ConversationDshSessionActivation {
   let state = createState();
   return Object.freeze({
@@ -33,7 +34,11 @@ export function createConversationDshSessionActivation(options: {
       if (current.loaded.has(dshSessionId)) return dshSessionId;
       let pending = current.pending.get(dshSessionId);
       if (pending === undefined) {
-        pending = options.client.loadSession({ sessionId: dshSessionId, mcpServers: [] });
+        pending = options
+          .resolveCwd(conversationId)
+          .then((cwd) =>
+            options.client.loadSession({ sessionId: dshSessionId, cwd, mcpServers: [] }),
+          );
         current.pending.set(dshSessionId, pending);
       }
       try {

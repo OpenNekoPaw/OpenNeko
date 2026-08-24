@@ -7,9 +7,22 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const surfacePath = 'quality/agent-extension-surface.json';
 const architecturePaths = [
+  'AGENTS.md',
   'docs/architecture/adr-agent-skill-creator-and-validation.md',
   'docs/architecture/adr-agent-prompt-skill-validator-boundary.md',
+  'docs/architecture/adr-neko-desktop-professional-tool-handoff-and-mcp-boundary.md',
+  'docs/architecture/agent.md',
   'docs/architecture/README.md',
+];
+
+const dshSkillSourceKinds = [
+  'project-dsh',
+  'project-agents',
+  'runtime',
+  'custom',
+  'user-dsh',
+  'user-agents',
+  'bundled',
 ];
 
 export function validateSurfaceStructure(surface) {
@@ -21,14 +34,45 @@ export function validateSurfaceStructure(surface) {
   const capability = requireRecord(surface, 'hostCapability', findings);
   const standardsSupport = requireRecord(surface, 'standardsSupport', findings);
 
-  expectEqual(skill?.definition, 'SKILL.md', 'portableSkill.definition', findings);
-  expectEqual(skill?.classification, 'portable-standard', 'portableSkill.classification', findings);
+  expectEqual(
+    skill?.definition,
+    'dsh-filesystem-skill',
+    'portableSkill.definition',
+    findings,
+  );
+  expectEqual(skill?.classification, 'dsh-skill', 'portableSkill.classification', findings);
   expectFalse(skill?.hostManifestRequired, 'portableSkill.hostManifestRequired', findings);
   expectFalse(skill?.mcpRequired, 'portableSkill.mcpRequired', findings);
   expectStringArray(
     skill?.sourceKinds,
-    ['builtin', 'personal', 'plugin', 'project'],
+    dshSkillSourceKinds,
     'portableSkill.sourceKinds',
+    findings,
+  );
+  expectStringArray(
+    skill?.layouts,
+    ['directory-skill-md', 'flat-markdown'],
+    'portableSkill.layouts',
+    findings,
+  );
+  expectStringArray(
+    skill?.frontmatter,
+    [
+      'name',
+      'description',
+      'whenToUse',
+      'metadata',
+      'disable-model-invocation',
+      'user-invocable',
+    ],
+    'portableSkill.frontmatter',
+    findings,
+  );
+  expectEqual(skill?.multiSkill, true, 'portableSkill.multiSkill', findings);
+  expectEqual(
+    skill?.relativeResources,
+    'on-demand-guidance',
+    'portableSkill.relativeResources',
     findings,
   );
   expectEqual(
@@ -116,6 +160,22 @@ export function findForbiddenArchitectureClaims(source, path = '<document>') {
     [
       /Skill[^\n。]*必须[^\n。]*(?:plugin\.json|marketplace\.json|MCP)/iu,
       'mandatory host metadata for Skill',
+    ],
+    [
+      /Skill (?:content|正文)[^\n。]*(?:不写|不得|MUST NOT)[^\n。]*(?:tool name|Tool name|工具名|参数表|Tool 参数教程|concrete Tool tutorials)/iu,
+      'DSH-valid public Tool guidance is forbidden',
+    ],
+    [
+      /(?:一次|每次)[^\n。]*(?:仅|只)[^\n。]*(?:一个|one)[^\n。]*(?:主 Skill|primary Skill)/iu,
+      'single-primary-Skill restriction',
+    ],
+    [
+      /(?:Skill 数量|Skill 总数|number of Skills)[^\n。]*(?:上限|最多|limit|maximum)/iu,
+      'fixed Skill-count restriction',
+    ],
+    [
+      /(?:必须|MUST)[^\n。]*Artifact Profile[^\n。]*(?:才能|before)[^\n。]*(?:Skill|技能)/iu,
+      'artifact-profile-first Skill restriction',
     ],
   ]) {
     if (pattern.test(source)) findings.push(`${path}: ${diagnostic}`);
@@ -267,6 +327,38 @@ async function checkPortableSkillPackage(root, findings) {
       findings.push(
         `packages/skills/skills/${relativePath}: portable Skill contains Host protocol`,
       );
+    }
+  }
+  for (const skillDocument of skillDocuments) {
+    const skillDirectory = dirname(skillDocument);
+    const source = await readFile(skillDocument, 'utf8');
+    for (const match of source.matchAll(/\[[^\]]*\]\(([^)]+)\)/gu)) {
+      const target = match[1]?.trim();
+      if (
+        target === undefined ||
+        target.length === 0 ||
+        target.startsWith('#') ||
+        /^[a-z][a-z0-9+.-]*:/iu.test(target)
+      ) {
+        continue;
+      }
+      const normalizedTarget = target.split('#', 1)[0];
+      const absoluteTarget = resolve(skillDirectory, normalizedTarget);
+      const relativeTarget = normalize(relative(skillDirectory, absoluteTarget));
+      if (relativeTarget === '..' || relativeTarget.startsWith('../')) {
+        findings.push(
+          `${normalize(relative(root, skillDocument))}: Skill resource link escapes its package: ${target}`,
+        );
+        continue;
+      }
+      try {
+        await access(absoluteTarget);
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error;
+        findings.push(
+          `${normalize(relative(root, skillDocument))}: Skill resource link is missing: ${target}`,
+        );
+      }
     }
   }
 }

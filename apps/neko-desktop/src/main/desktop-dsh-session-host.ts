@@ -418,13 +418,13 @@ export class DesktopDshSessionHost {
           : [],
         input.canvasTurnTarget,
       );
-      if (input.kind === 'skill') {
+      if (input.kind === 'skills') {
         await this.options.conversations.setSessionContext(conversationId, context);
         const response = await this.options.conversations.invokeSkill({
           conversationId,
-          skillName: input.skillName,
+          invocations: input.invocations,
           displayText: input.displayText,
-          ...(input.args === undefined ? {} : { args: input.args }),
+          promptText: input.promptText,
         });
         retainAdmission = true;
         return response.stopReason;

@@ -19,6 +19,7 @@ import {
   createConversationDshSessionPublication,
   type ConversationDshSessionPublication,
   type DshSessionCreationClient,
+  type DshSessionLookupCwdPort,
 } from './conversation-dsh-session-publication';
 import type { DshConversationCatalogStore } from './dsh-conversation-catalog-repository';
 import type { DshStaleConversationCleanup } from './dsh-stale-conversation-cleanup';
@@ -63,16 +64,28 @@ export interface ConversationDshSessionApplicationOptions {
   readonly staleConversations: DshStaleConversationCleanup;
   readonly conversationIdentitySeed: string;
   readonly activity: Pick<DshAcpProjection, 'snapshot'>;
+  readonly lookupCwd: DshSessionLookupCwdPort;
 }
 
 export function createConversationDshSessionApplication(
   options: ConversationDshSessionApplicationOptions,
 ): ConversationDshSessionApplication {
+  const resolveCwd = async (conversationId: string): Promise<string> => {
+    const record = await options.catalog.get(conversationId);
+    if (record === undefined) {
+      throw new Error(`DSH Conversation lookup cwd is unavailable: ${conversationId}`);
+    }
+    return options.lookupCwd.resolve(record.context);
+  };
   const binding = createConversationDshSessionBindingService({
     store: options.store,
     sessions: createDshSessionResolvabilityPort(options.client),
   });
-  const activation = createConversationDshSessionActivation({ binding, client: options.client });
+  const activation = createConversationDshSessionActivation({
+    binding,
+    client: options.client,
+    resolveCwd,
+  });
   const home = createDshConversationHomeProjection({
     catalog: options.catalog,
     bindings: options.store,
@@ -86,6 +99,7 @@ export function createConversationDshSessionApplication(
       client: options.client,
       binding,
       activation,
+      resolveCwd,
     }),
     home,
     archive: Object.freeze({
@@ -112,6 +126,7 @@ export function createConversationDshSessionApplication(
       catalog: options.catalog,
       home,
       conversationIdentitySeed: options.conversationIdentitySeed,
+      lookupCwd: options.lookupCwd,
     }),
     catalog: options.catalog,
   };

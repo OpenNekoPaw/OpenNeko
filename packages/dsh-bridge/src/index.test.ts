@@ -69,19 +69,23 @@ describe('OpenNeko DSH ACP bridge projections', () => {
 
   it('projects only the real Skill catalog without exposing Plugin inventory', () => {
     expect(
-      projectDshExtensionCatalog({
-        complete: true,
-        skills: [
-          {
-            name: 'storyboard',
-            description: 'Create a storyboard.',
-            invocation: { userInvocable: true, modelInvocable: false },
-            source: 'bundled',
-            provider: 'openneko-builtin',
-          },
-        ],
-      }),
+      projectDshExtensionCatalog(
+        {
+          complete: true,
+          skills: [
+            {
+              name: 'storyboard',
+              description: 'Create a storyboard.',
+              invocation: { userInvocable: true, modelInvocable: false },
+              source: 'bundled',
+              provider: 'openneko-builtin',
+            },
+          ],
+        },
+        'global',
+      ),
     ).toEqual({
+      catalogScope: 'global',
       skills: [
         {
           name: 'storyboard',
@@ -95,17 +99,18 @@ describe('OpenNeko DSH ACP bridge projections', () => {
       mcp: [],
       diagnostics: [],
     });
-    expect(projectDshExtensionCatalog({ complete: false, skills: [] })).toEqual({
+    expect(projectDshExtensionCatalog({ complete: false, skills: [] }, 'global')).toEqual({
+      catalogScope: 'global',
       skills: [],
       mcp: [],
       diagnostics: [{ code: 'skill_catalog_incomplete', count: 1 }],
     });
-    expect(projectDshExtensionCatalog({ complete: true, skills: [] })).not.toHaveProperty(
+    expect(projectDshExtensionCatalog({ complete: true, skills: [] }, 'global')).not.toHaveProperty(
       'plugins',
     );
   });
 
-  it('lists only exact profile sessions without fabricating cwd', () => {
+  it('lists all exact profile sessions with their authoritative absolute cwd', () => {
     expect(
       listOpenNekoSessions(
         [
@@ -113,14 +118,12 @@ describe('OpenNeko DSH ACP bridge projections', () => {
           header({ id: SessionId('foreign'), cwd: '/workspace', agentPreset: 'web' }),
         ],
         'openneko',
-        '/workspace',
       ),
     ).toEqual({ sessions: [{ sessionId: 'owned', cwd: '/workspace' }] });
     expect(
       listOpenNekoSessions(
         [header({ id: SessionId('invalid'), agentPreset: 'openneko' })],
         'openneko',
-        '/workspace',
       ),
     ).toEqual({
       sessions: [],
@@ -136,17 +139,16 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     });
   });
 
-  it('rejects profile sessions outside the configured virtual cwd without projecting the path', () => {
+  it('rejects a profile session whose persisted cwd is not absolute', () => {
     const result = listOpenNekoSessions(
       [
         header({
-          id: SessionId('leaking'),
-          cwd: '/Users/private/project',
+          id: SessionId('invalid'),
+          cwd: 'relative/project',
           agentPreset: 'openneko',
         }),
       ],
       'openneko',
-      '/virtual/workspace',
     );
 
     expect(result.sessions).toEqual([]);
@@ -155,14 +157,14 @@ describe('OpenNeko DSH ACP bridge projections', () => {
       _meta: {
         opennekoDiagnostics: [
           {
-            code: 'SESSION_CWD_MISMATCH',
-            message: 'OpenNeko DSH session leaking is outside the configured virtual workspace.',
-            sessionId: 'leaking',
+            code: 'SESSION_CWD_INVALID',
+            message: 'OpenNeko DSH session invalid has a non-absolute working directory.',
+            sessionId: 'invalid',
           },
         ],
       },
     });
-    expect(JSON.stringify(result)).not.toContain('/Users/private/project');
+    expect(JSON.stringify(result)).not.toContain('relative/project');
   });
 
   it('projects committed text and Tool events onto standard ACP updates', () => {

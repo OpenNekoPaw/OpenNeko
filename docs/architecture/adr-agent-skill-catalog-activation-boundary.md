@@ -2,7 +2,7 @@
 
 状态：Accepted
 
-更新日期：2026-08-21
+更新日期：2026-08-24
 
 范围：Agent Skill catalog、Desktop 输入、Skill metadata、trust、enablement 与 prompt 注入。
 

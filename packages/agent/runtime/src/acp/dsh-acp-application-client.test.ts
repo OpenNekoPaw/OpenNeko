@@ -329,9 +329,17 @@ describe('DshAcpApplicationClient', () => {
     });
 
     await client.listSessions();
-    await client.createSession({ mcpServers: [] });
-    await client.loadSession({ sessionId: 'session-1', mcpServers: [] });
-    await client.resumeSession({ sessionId: 'session-1', mcpServers: [] });
+    await client.createSession({ mcpServers: [], cwd: '/virtual/workspace' });
+    await client.loadSession({
+      sessionId: 'session-1',
+      mcpServers: [],
+      cwd: '/virtual/workspace',
+    });
+    await client.resumeSession({
+      sessionId: 'session-1',
+      mcpServers: [],
+      cwd: '/virtual/workspace',
+    });
     await client.closeSession('session-1');
     await client.setSessionMode({ sessionId: 'session-1', modeId: 'auto' });
     await client.setSessionConfigOption({
@@ -339,15 +347,15 @@ describe('DshAcpApplicationClient', () => {
       configId: 'model',
       value: '["deepseek-official","deepseek-v4",8192]',
     });
-    const leakedCwd = '/Users/private/real-workspace';
-    await client.createSession({ mcpServers: [], cwd: leakedCwd } as never);
-    await client.listSessions({ cwd: leakedCwd } as never);
-    await client.loadSession({ sessionId: 'session-1', mcpServers: [], cwd: leakedCwd } as never);
+    const sessionCwd = '/Users/private/real-workspace';
+    await client.createSession({ mcpServers: [], cwd: sessionCwd });
+    await client.listSessions({ cwd: sessionCwd } as never);
+    await client.loadSession({ sessionId: 'session-1', mcpServers: [], cwd: sessionCwd });
     await client.resumeSession({
       sessionId: 'session-1',
       mcpServers: [],
-      cwd: leakedCwd,
-    } as never);
+      cwd: sessionCwd,
+    });
 
     expect(fixture.connection.newSession).toHaveBeenCalledWith({
       cwd: '/virtual/workspace',
@@ -374,15 +382,23 @@ describe('DshAcpApplicationClient', () => {
       configId: 'model',
       value: '["deepseek-official","deepseek-v4",8192]',
     });
-    for (const request of [
-      fixture.connection.newSession,
-      fixture.connection.listSessions,
-      fixture.connection.loadSession,
-      fixture.connection.resumeSession,
-    ]) {
-      expect(request).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/virtual/workspace' }));
-      expect(JSON.stringify(request.mock.calls)).not.toContain(leakedCwd);
-    }
+    expect(fixture.connection.newSession).toHaveBeenLastCalledWith({
+      mcpServers: [],
+      cwd: sessionCwd,
+    });
+    expect(fixture.connection.loadSession).toHaveBeenLastCalledWith({
+      sessionId: 'session-1',
+      mcpServers: [],
+      cwd: sessionCwd,
+    });
+    expect(fixture.connection.resumeSession).toHaveBeenLastCalledWith({
+      sessionId: 'session-1',
+      mcpServers: [],
+      cwd: sessionCwd,
+    });
+    expect(fixture.connection.listSessions).toHaveBeenLastCalledWith({
+      cwd: '/virtual/workspace',
+    });
   });
 
   it('routes exact domain tools and one notification', async () => {

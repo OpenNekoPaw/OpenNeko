@@ -126,6 +126,7 @@ export interface DshAcpExtensionMcp {
 }
 
 export interface DshAcpExtensionProjection {
+  readonly catalogScope: 'global';
   readonly skills: readonly DshAcpExtensionSkill[];
   readonly mcp: readonly DshAcpExtensionMcp[];
   readonly diagnostics: readonly {
@@ -138,7 +139,10 @@ export function decodeDshAcpExtensionProjection(
   input: Record<string, unknown>,
 ): DshAcpExtensionProjection {
   decodeDshAcpJsonPayload(input, 'extension projection');
-  requireExactKeys(input, ['skills', 'mcp', 'diagnostics'], 'extension projection');
+  requireExactKeys(input, ['catalogScope', 'skills', 'mcp', 'diagnostics'], 'extension projection');
+  if (input.catalogScope !== 'global') {
+    throw new Error('DSH ACP extension projection catalog scope is invalid.');
+  }
   if (
     !Array.isArray(input.skills) ||
     !Array.isArray(input.mcp) ||
@@ -148,14 +152,25 @@ export function decodeDshAcpExtensionProjection(
   }
   const skills = input.skills.map((value, index) => {
     const skill = requireRecord(value, `extensions.skills[${index}]`);
-    requireExactKeys(
-      skill,
-      ['name', 'description', 'source', 'provider', 'userInvocable', 'modelInvocable'],
-      `extensions.skills[${index}]`,
-    );
+    const skillKeys =
+      skill.whenToUse === undefined
+        ? ['name', 'description', 'source', 'provider', 'userInvocable', 'modelInvocable']
+        : [
+            'name',
+            'description',
+            'whenToUse',
+            'source',
+            'provider',
+            'userInvocable',
+            'modelInvocable',
+          ];
+    requireExactKeys(skill, skillKeys, `extensions.skills[${index}]`);
     return {
       name: requireNonEmptyString(skill.name, 'Skill name'),
       description: requireString(skill.description, 'Skill description'),
+      ...(skill.whenToUse === undefined
+        ? {}
+        : { whenToUse: requireNonEmptyString(skill.whenToUse, 'Skill whenToUse') }),
       source: requireNonEmptyString(skill.source, 'Skill source'),
       provider: requireNonEmptyString(skill.provider, 'Skill provider'),
       userInvocable: requireBoolean(skill.userInvocable, 'Skill userInvocable'),
@@ -193,7 +208,7 @@ export function decodeDshAcpExtensionProjection(
       };
     },
   );
-  return { skills, mcp, diagnostics };
+  return { catalogScope: 'global', skills, mcp, diagnostics };
 }
 
 export const DSH_ACP_EXTENSION_NOTIFICATIONS = {
@@ -256,6 +271,7 @@ export interface DshAcpCommandDescriptor {
 export interface DshAcpSkillDescriptor {
   readonly name: string;
   readonly description: string;
+  readonly whenToUse?: string;
   readonly source: string;
   readonly provider: string;
 }
@@ -279,9 +295,11 @@ export interface DshAcpCommandExecuteProjection {
 
 export interface DshAcpSkillInvokeRequest {
   readonly sessionId: string;
-  readonly skillName: string;
+  readonly invocations: readonly {
+    readonly skillName: string;
+  }[];
   readonly displayText: string;
-  readonly args?: string;
+  readonly promptText: string;
 }
 
 export interface DshAcpSkillInvokeProjection {
@@ -317,10 +335,19 @@ export function decodeDshAcpInputCatalogProjection(
   });
   const skills = input.skills.map((value, index) => {
     const skill = requireRecord(value, `skills[${index}]`);
-    requireExactKeys(skill, ['name', 'description', 'source', 'provider'], `skills[${index}]`);
+    const skillKeys =
+      skill.whenToUse === undefined
+        ? ['name', 'description', 'source', 'provider']
+        : ['name', 'description', 'whenToUse', 'source', 'provider'];
+    requireExactKeys(skill, skillKeys, `skills[${index}]`);
     return {
       name: requireNonEmptyString(skill.name, `skills[${index}].name`),
       description: requireNonEmptyString(skill.description, `skills[${index}].description`),
+      ...(skill.whenToUse === undefined
+        ? {}
+        : {
+            whenToUse: requireNonEmptyString(skill.whenToUse, `skills[${index}].whenToUse`),
+          }),
       source: requireNonEmptyString(skill.source, `skills[${index}].source`),
       provider: requireNonEmptyString(skill.provider, `skills[${index}].provider`),
     };
@@ -366,16 +393,26 @@ export function decodeDshAcpSkillInvokeRequest(
   input: Record<string, unknown>,
 ): DshAcpSkillInvokeRequest {
   decodeDshAcpJsonPayload(input, 'Skill invoke request');
-  const keys =
-    input.args === undefined
-      ? ['sessionId', 'skillName', 'displayText']
-      : ['sessionId', 'skillName', 'displayText', 'args'];
-  requireExactKeys(input, keys, 'Skill invoke request');
+  requireExactKeys(
+    input,
+    ['sessionId', 'invocations', 'displayText', 'promptText'],
+    'Skill invoke request',
+  );
+  if (!Array.isArray(input.invocations) || input.invocations.length === 0) {
+    throw new Error('DSH ACP Skill invocations must be a non-empty array.');
+  }
+  const invocations = input.invocations.map((value, index) => {
+    const invocation = requireRecord(value, `Skill invocations[${index}]`);
+    requireExactKeys(invocation, ['skillName'], `Skill invocations[${index}]`);
+    return {
+      skillName: requireNonEmptyString(invocation.skillName, `Skill invocations[${index}].name`),
+    };
+  });
   return {
     sessionId: requireNonEmptyString(input.sessionId, 'sessionId'),
-    skillName: requireNonEmptyString(input.skillName, 'Skill name'),
+    invocations,
     displayText: requireNonEmptyString(input.displayText, 'Skill display text'),
-    ...(input.args === undefined ? {} : { args: requireNonEmptyString(input.args, 'Skill args') }),
+    promptText: requireString(input.promptText, 'Skill prompt text'),
   };
 }
 

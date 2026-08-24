@@ -224,8 +224,8 @@ export class DshAcpApplicationClient {
     return this.connection.closed;
   }
 
-  createSession(input: Omit<NewSessionRequest, 'cwd'>): Promise<NewSessionResponse> {
-    return this.connection.newSession({ ...input, cwd: this.virtualCwd });
+  createSession(input: NewSessionRequest): Promise<NewSessionResponse> {
+    return this.connection.newSession({ ...input, cwd: requireAbsoluteSessionCwd(input.cwd) });
   }
 
   async listSessions(input: Omit<ListSessionsRequest, 'cwd'> = {}): Promise<ListSessionsResponse> {
@@ -237,21 +237,21 @@ export class DshAcpApplicationClient {
     return this.connection.listSessions({ ...input, cwd: this.virtualCwd });
   }
 
-  async loadSession(input: Omit<LoadSessionRequest, 'cwd'>): Promise<LoadSessionResponse> {
+  async loadSession(input: LoadSessionRequest): Promise<LoadSessionResponse> {
     this.requireCapability(
       this.initializeResponse.agentCapabilities?.loadSession === true,
       'session/load',
     );
-    return this.connection.loadSession({ ...input, cwd: this.virtualCwd });
+    return this.connection.loadSession({ ...input, cwd: requireAbsoluteSessionCwd(input.cwd) });
   }
 
-  async resumeSession(input: Omit<ResumeSessionRequest, 'cwd'>): Promise<ResumeSessionResponse> {
+  async resumeSession(input: ResumeSessionRequest): Promise<ResumeSessionResponse> {
     this.requireCapability(
       this.initializeResponse.agentCapabilities?.sessionCapabilities?.resume !== undefined &&
         this.initializeResponse.agentCapabilities.sessionCapabilities.resume !== null,
       'session/resume',
     );
-    return this.connection.resumeSession({ ...input, cwd: this.virtualCwd });
+    return this.connection.resumeSession({ ...input, cwd: requireAbsoluteSessionCwd(input.cwd) });
   }
 
   async closeSession(sessionId: string): Promise<void> {
@@ -337,9 +337,9 @@ export class DshAcpApplicationClient {
 
   async invokeSkill(input: {
     readonly sessionId: string;
-    readonly skillName: string;
+    readonly invocations: readonly { readonly skillName: string }[];
     readonly displayText: string;
-    readonly args?: string;
+    readonly promptText: string;
   }): Promise<DshAcpSkillInvokeProjection> {
     const request = decodeDshAcpSkillInvokeRequest({ ...input });
     const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.invokeSkill, {
@@ -439,6 +439,11 @@ export class DshAcpApplicationClient {
 
 function requireAbsoluteVirtualCwd(value: string): string {
   if (!value.startsWith('/')) throw new Error('DSH ACP virtual cwd must be absolute.');
+  return value;
+}
+
+function requireAbsoluteSessionCwd(value: string): string {
+  if (!value.startsWith('/')) throw new Error('DSH ACP Session cwd must be absolute.');
   return value;
 }
 

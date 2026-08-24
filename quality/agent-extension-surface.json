@@ -1,15 +1,34 @@
 {
   "portableSkill": {
     "standard": "Agent Skills",
-    "classification": "portable-standard",
-    "definition": "SKILL.md",
+    "classification": "dsh-skill",
+    "definition": "dsh-filesystem-skill",
     "hostManifestRequired": false,
     "mcpRequired": false,
-    "sourceKinds": ["builtin", "personal", "plugin", "project"],
-    "fixedRoots": ["packages/skills/skills", ".agents/skills", "~/.agents/skills"],
+    "layouts": ["directory-skill-md", "flat-markdown"],
+    "sourceKinds": [
+      "project-dsh",
+      "project-agents",
+      "runtime",
+      "custom",
+      "user-dsh",
+      "user-agents",
+      "bundled"
+    ],
+    "frontmatter": [
+      "name",
+      "description",
+      "whenToUse",
+      "metadata",
+      "disable-model-invocation",
+      "user-invocable"
+    ],
+    "multiSkill": true,
+    "relativeResources": "on-demand-guidance",
     "evidence": [
+      "packages/dsh-bridge/package.json",
       "packages/skills/README.md",
-      "openspec/changes/replace-pi-with-dsh-runtime-atomically/specs/dsh-extension-runtime-boundary/spec.md"
+      "openspec/changes/align-dsh-skill-runtime-semantics/compatibility-inventory.md"
     ]
   },
   "compositionPackage": {

@@ -23,8 +23,8 @@ import type { ConversationDshSessionBindingService } from './conversation-dsh-se
 import type { ConversationDshSessionActivation } from './conversation-dsh-session-activation';
 
 export interface ConversationDshSessionAcpClient {
-  loadSession(input: Omit<LoadSessionRequest, 'cwd'>): Promise<LoadSessionResponse>;
-  resumeSession(input: Omit<ResumeSessionRequest, 'cwd'>): Promise<ResumeSessionResponse>;
+  loadSession(input: LoadSessionRequest): Promise<LoadSessionResponse>;
+  resumeSession(input: ResumeSessionRequest): Promise<ResumeSessionResponse>;
   closeSession(sessionId: string): Promise<void>;
   setSessionMode(input: {
     readonly sessionId: string;
@@ -48,9 +48,9 @@ export interface ConversationDshSessionAcpClient {
   }): Promise<DshAcpCommandExecuteProjection>;
   invokeSkill(input: {
     readonly sessionId: string;
-    readonly skillName: string;
+    readonly invocations: readonly { readonly skillName: string }[];
     readonly displayText: string;
-    readonly args?: string;
+    readonly promptText: string;
   }): Promise<DshAcpSkillInvokeProjection>;
   readInbox(sessionId: string): Promise<DshAcpInboxSnapshot>;
   readImageAttachment(input: {
@@ -94,9 +94,9 @@ export interface ConversationDshSessionBoundClient {
   executeCommand(conversationId: string, line: string): Promise<DshAcpCommandExecuteProjection>;
   invokeSkill(input: {
     readonly conversationId: string;
-    readonly skillName: string;
+    readonly invocations: readonly { readonly skillName: string }[];
     readonly displayText: string;
-    readonly args?: string;
+    readonly promptText: string;
   }): Promise<DshAcpSkillInvokeProjection>;
   readInbox(conversationId: string): Promise<DshAcpInboxSnapshot>;
   readImageAttachment(
@@ -121,6 +121,7 @@ export interface ConversationDshSessionBoundClientOptions {
   readonly client: ConversationDshSessionAcpClient;
   readonly binding: ConversationDshSessionBindingService;
   readonly activation?: ConversationDshSessionActivation;
+  readonly resolveCwd: (conversationId: string) => Promise<string>;
 }
 
 export function createConversationDshSessionBoundClient(
@@ -135,13 +136,23 @@ export function createConversationDshSessionBoundClient(
     },
     async loadSession({ conversationId, ...request }) {
       const dshSessionId = await resolveBoundSession(options.binding, conversationId);
-      const response = await options.client.loadSession({ ...request, sessionId: dshSessionId });
+      const cwd = await options.resolveCwd(conversationId);
+      const response = await options.client.loadSession({
+        ...request,
+        sessionId: dshSessionId,
+        cwd,
+      });
       options.activation?.markLoaded(dshSessionId);
       return response;
     },
     async resumeSession({ conversationId, ...request }) {
       const dshSessionId = await resolveBoundSession(options.binding, conversationId);
-      const response = await options.client.resumeSession({ ...request, sessionId: dshSessionId });
+      const cwd = await options.resolveCwd(conversationId);
+      const response = await options.client.resumeSession({
+        ...request,
+        sessionId: dshSessionId,
+        cwd,
+      });
       options.activation?.markLoaded(dshSessionId);
       return response;
     },

@@ -26,6 +26,7 @@ describe('Conversation DSH Session application composition', () => {
     const application = createConversationDshSessionApplication({
       client,
       store: createMemoryStore(),
+      ...applicationFixture(conversationId),
     });
 
     await expect(
@@ -50,7 +51,11 @@ describe('Conversation DSH Session application composition', () => {
     const client = createClient([
       { sessions: [{ sessionId: 'session-other', cwd: '/workspace' }] },
     ]);
-    const application = createConversationDshSessionApplication({ client, store });
+    const application = createConversationDshSessionApplication({
+      client,
+      store,
+      ...applicationFixture(conversationId),
+    });
 
     await expect(
       application.binding.bind({ conversationId, dshSessionId: 'session-missing' }),
@@ -132,6 +137,38 @@ function createClient(pages: readonly ListSessionsResponse[]): ConversationDshSe
     readInbox: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     replaceInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
     removeInboxMessage: vi.fn(async () => ({ nextTurn: [], nextStep: [] })),
+  };
+}
+
+function applicationFixture(conversationId: string) {
+  const record = {
+    conversationId,
+    title: 'Test conversation',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    context: {
+      kind: 'workspace' as const,
+      workspaceId: 'workspace:test',
+      workspaceGrantId: 'grant:test',
+    },
+  };
+  return {
+    catalog: {
+      reserve: vi.fn(async () => undefined),
+      get: vi.fn(async (requested: string) => (requested === conversationId ? record : undefined)),
+      read: vi.fn(async () => ({ records: [record], diagnostics: [] })),
+    },
+    staleConversations: { discard: vi.fn(async () => undefined) },
+    conversationIdentitySeed: '/workspace/test',
+    activity: {
+      snapshot: (sessionId: string) => ({
+        sessionId,
+        currentTurn: undefined,
+        events: [],
+        tools: [],
+      }),
+    },
+    lookupCwd: { resolve: async () => '/workspace' },
   };
 }
 

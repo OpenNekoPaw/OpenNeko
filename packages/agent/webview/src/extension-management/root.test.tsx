@@ -16,6 +16,7 @@ describe('Agent Skill/MCP extension management', () => {
       identity: { windowId: 'window-1' },
       getSnapshot: vi.fn(async () => ({
         identity: { windowId: 'window-1' },
+        catalogScope: 'global' as const,
         skills: [
           {
             id: 'dsh-skill:storyboard',
