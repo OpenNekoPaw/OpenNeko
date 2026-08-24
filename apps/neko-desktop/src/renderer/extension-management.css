@@ -128,6 +128,44 @@
   gap: 12px;
 }
 
+.extension-detail-overlay__actions,
+.extension-lifecycle-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.extension-mcp-add-form {
+  display: grid;
+  gap: 12px;
+}
+
+.extension-mcp-add-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--neko-desktop-text-muted);
+  font-size: 12px;
+}
+
+.extension-mcp-add-form input,
+.extension-mcp-add-form select,
+.extension-mcp-add-form textarea {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  color: var(--neko-desktop-text);
+  background: var(--neko-desktop-surface-raised);
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.extension-mcp-add-form textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
 .agent-extension-management-root .management-surface-list.is-grid,
 .professional-application-management-root .management-surface-list.is-grid {
   grid-template-columns: repeat(auto-fill, 214px);
@@ -136,7 +174,8 @@
 
 .agent-extension-management-root .agent-extension-catalog-row,
 .professional-application-management-root .professional-application-row {
-  min-height: 82px;
+  height: 120px;
+  min-height: 120px;
   align-items: stretch;
   flex-direction: column;
   gap: 0;
@@ -148,10 +187,6 @@
     border-color 120ms ease,
     background 120ms ease,
     box-shadow 120ms ease;
-}
-
-.professional-application-management-root .professional-application-row {
-  min-height: 88px;
 }
 
 .agent-extension-management-root .agent-extension-catalog-row:hover,
@@ -176,16 +211,37 @@
   box-shadow: var(--neko-desktop-focus-ring);
 }
 
+.agent-extension-management-root .agent-extension-catalog-row[data-lifecycle-state='disabled'],
+.professional-application-management-root
+  .professional-application-row[data-lifecycle-state='disabled'] {
+  border-color: color-mix(in srgb, var(--neko-desktop-border) 68%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--neko-desktop-surface-muted) 72%,
+    var(--neko-desktop-surface-raised)
+  );
+}
+
+.agent-extension-catalog-row[data-lifecycle-state='disabled']
+  :is(.management-surface-icon, .agent-extension-catalog-row__summary),
+.professional-application-row[data-lifecycle-state='disabled']
+  :is(.management-surface-icon, .professional-application-row__summary) {
+  color: var(--neko-desktop-text-muted);
+}
+
 .agent-extension-catalog-row__open,
 .professional-application-row__open {
+  box-sizing: border-box;
   display: flex;
   width: 100%;
+  height: 100%;
   min-width: 0;
-  min-height: 100%;
+  min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
   align-items: stretch;
-  gap: 7px;
+  justify-content: center;
+  gap: 6px;
   padding: 10px 12px;
   border: 0;
   outline: 0;
@@ -218,6 +274,7 @@
   color: var(--neko-desktop-text-strong);
   font-size: 13px;
   font-weight: 680;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -243,13 +300,13 @@
 .professional-application-row__summary {
   display: -webkit-box;
   overflow: hidden;
-  min-height: 2.75em;
+  min-height: 2.8em;
   color: var(--neko-fg-secondary);
   font-size: 10px;
   white-space: normal;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .agent-extension-catalog-row__diagnostic,
@@ -260,21 +317,44 @@
   white-space: normal;
 }
 
+.agent-extension-catalog-row:has(.agent-extension-catalog-row__diagnostic),
+.professional-application-row:has(.professional-application-row__diagnostic) {
+  height: auto;
+}
+
 .professional-application-row__title {
   display: grid;
   min-width: 0;
   gap: 3px;
 }
 
+.agent-extension-catalog-row__status,
 .professional-application-row__readiness {
+  display: inline-flex;
   width: fit-content;
-  padding: 4px 8px;
+  max-width: 100%;
+  min-height: 20px;
+  align-items: center;
+  align-self: flex-start;
+  margin-top: 0;
+  overflow: hidden;
+  padding: 3px 7px;
   border: 1px solid color-mix(in srgb, var(--neko-desktop-border) 76%, transparent);
   border-radius: 999px;
   color: var(--neko-fg-secondary);
   background: color-mix(in srgb, var(--neko-desktop-control) 76%, transparent);
   font-size: 9px;
   font-weight: 620;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-extension-catalog-row__status[data-extension-lifecycle-state='disabled'],
+.professional-application-row[data-lifecycle-state='disabled']
+  .professional-application-row__readiness {
+  color: var(--neko-desktop-text-muted);
+  background: var(--neko-desktop-control);
 }
 
 .professional-application-install-policy {

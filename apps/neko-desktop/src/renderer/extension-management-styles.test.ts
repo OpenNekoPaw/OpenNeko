@@ -43,4 +43,28 @@ describe('Extension management styles', () => {
       /\[role='dialog'\]\.professional-application-detail-overlay\s*\{[^}]*width:\s*min\(760px,/u,
     );
   });
+
+  it('aligns Skill, MCP and professional application card density and lifecycle treatment', () => {
+    expect(styles).toMatch(
+      /\.agent-extension-management-root \.agent-extension-catalog-row,[\s\S]*?\.professional-application-management-root \.professional-application-row\s*\{[^}]*height:\s*120px;[^}]*min-height:\s*120px/u,
+    );
+    expect(styles).toMatch(
+      /\.agent-extension-catalog-row__status,[\s\S]*?\.professional-application-row__readiness\s*\{[^}]*display:\s*inline-flex;[^}]*margin-top:\s*0;[^}]*border-radius:\s*999px/u,
+    );
+    expect(styles).toMatch(
+      /\.agent-extension-catalog-row__open,[\s\S]*?\.professional-application-row__open\s*\{[^}]*box-sizing:\s*border-box;[^}]*height:\s*100%;[^}]*justify-content:\s*center;[^}]*gap:\s*6px;[^}]*padding:\s*10px 12px/u,
+    );
+    expect(styles).toMatch(
+      /\.agent-extension-catalog-row__summary,[\s\S]*?\.professional-application-row__summary\s*\{[^}]*min-height:\s*2\.8em;[^}]*line-height:\s*1\.4/u,
+    );
+    expect(styles).toMatch(
+      /\.agent-extension-catalog-row__status,[\s\S]*?\.professional-application-row__readiness\s*\{[^}]*min-height:\s*20px;[^}]*padding:\s*3px 7px/u,
+    );
+    expect(styles).toMatch(
+      /\.agent-extension-management-root \.agent-extension-catalog-row\[data-lifecycle-state='disabled'\],[\s\S]*?background:\s*color-mix/u,
+    );
+    expect(styles).toMatch(
+      /\.agent-extension-catalog-row:has\(\.agent-extension-catalog-row__diagnostic\),[\s\S]*?height:\s*auto/u,
+    );
+  });
 });
