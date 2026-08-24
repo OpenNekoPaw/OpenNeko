@@ -57,16 +57,10 @@ export function groupModelOptionsByProvider(
 function buildProviderTags(model: ChatModelOption, t: Translate): readonly string[] {
   const tags: string[] = [];
   if (model.source === 'explicit-config') {
-    tags.push(readTranslation(t, 'chat.modelSource.custom', 'Custom'));
+    tags.push(t('chat.modelSource.custom'));
   }
   if (model.connectionKind) {
-    tags.push(
-      readTranslation(
-        t,
-        `chat.modelConnection.${model.connectionKind}`,
-        formatTagValue(model.connectionKind),
-      ),
-    );
+    tags.push(t(`chat.modelConnection.${model.connectionKind}`));
   }
   return dedupeTags(tags);
 }
@@ -74,15 +68,9 @@ function buildProviderTags(model: ChatModelOption, t: Translate): readonly strin
 export function buildModelTags(model: ChatModelOption, t: Translate): readonly string[] {
   const tags: string[] = [];
   const category = model.category ?? 'llm';
-  tags.push(readTranslation(t, `chat.modelCategory.${category}`, formatTagValue(category)));
+  tags.push(t(`chat.modelCategory.${category}`));
   for (const capability of resolveVisibleCapabilityTags(model)) {
-    tags.push(
-      readTranslation(
-        t,
-        `chat.modelCapability.${capability}`,
-        formatTagValue(capability.replaceAll('_', '-')),
-      ),
-    );
+    tags.push(t(`chat.modelCapability.${capability}`));
   }
   return dedupeTags(tags);
 }
@@ -110,19 +98,6 @@ function resolveVisibleCapabilityTags(model: ChatModelOption): readonly string[]
 function inferProviderLabel(label: string | undefined): string | undefined {
   if (!label?.includes('/')) return undefined;
   return label.split('/')[0]?.trim() || undefined;
-}
-
-function readTranslation(t: Translate, key: string, fallback: string): string {
-  const value = t(key);
-  return value === key ? fallback : value;
-}
-
-function formatTagValue(value: string): string {
-  return value
-    .split('-')
-    .filter(Boolean)
-    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-    .join(' ');
 }
 
 function dedupeTags(tags: readonly string[]): readonly string[] {
