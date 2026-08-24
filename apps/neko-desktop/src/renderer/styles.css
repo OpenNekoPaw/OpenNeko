@@ -866,12 +866,25 @@ code {
   border-top: 1px solid var(--neko-desktop-border);
 }
 
-.desktop-settings__action--quiet {
+.desktop-settings__action.desktop-settings__action--quiet {
   min-height: 30px;
   padding-inline: 10px;
-  color: var(--neko-desktop-text-strong);
-  background: var(--neko-desktop-surface-raised);
+  border-color: color-mix(
+    in srgb,
+    var(--neko-button-background, var(--neko-accent)) 44%,
+    var(--neko-desktop-border)
+  );
+  color: var(--neko-button-background, var(--neko-accent));
+  background: transparent;
   box-shadow: none;
+}
+
+.desktop-settings__action.desktop-settings__action--quiet:hover:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--neko-button-background, var(--neko-accent)) 10%,
+    transparent
+  );
 }
 
 .desktop-settings__model-empty {
@@ -938,16 +951,23 @@ code {
 .desktop-settings__editor-actions button:not(.desktop-settings__action) {
   min-height: 34px;
   padding: 0 12px;
-  border: 0;
-  color: var(--neko-desktop-text-muted);
-  background: transparent;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 8px;
+  color: var(--neko-desktop-text-strong);
+  background: var(--neko-desktop-surface-raised);
   font: inherit;
   cursor: pointer;
 }
 
+.desktop-settings__editor-actions button:not(.desktop-settings__action):hover:not(:disabled) {
+  background: var(--neko-desktop-control-hover);
+}
+
 .desktop-settings__editor-actions .desktop-settings__danger-action,
 .desktop-settings__delete-confirmation .desktop-settings__danger-action {
+  border-color: transparent;
   color: var(--neko-desktop-danger-foreground);
+  background: transparent;
 }
 
 .desktop-settings__group-heading p {
@@ -1029,10 +1049,10 @@ code {
 .desktop-settings__action {
   min-height: 34px;
   flex: 0 0 auto;
-  border: 1px solid var(--neko-desktop-border);
+  border: 1px solid var(--neko-button-border, transparent);
   border-radius: 8px;
-  color: var(--neko-fg);
-  background: var(--neko-desktop-surface-raised);
+  color: var(--neko-button-foreground, #fff);
+  background: var(--neko-button-background, #202124);
   font: inherit;
   font-size: 12px;
 }
@@ -1041,6 +1061,9 @@ code {
   min-width: 164px;
   max-width: 240px;
   padding: 0 32px 0 12px;
+  border-color: var(--neko-desktop-border);
+  color: var(--neko-fg);
+  background: var(--neko-desktop-surface-raised);
 }
 
 .desktop-settings__action {
@@ -1049,7 +1072,7 @@ code {
 }
 
 .desktop-settings__action:hover:not(:disabled) {
-  background: var(--neko-desktop-control-hover);
+  background: var(--neko-button-hoverBackground, var(--neko-button-background, #202124));
 }
 
 .desktop-settings__action:focus-visible,
@@ -1062,7 +1085,10 @@ code {
 .desktop-settings__action:disabled,
 .desktop-settings__row select:disabled {
   cursor: wait;
-  opacity: 0.55;
+  border-color: var(--neko-desktop-border);
+  color: var(--neko-desktop-text-muted);
+  background: var(--neko-desktop-control);
+  opacity: 0.68;
 }
 
 .desktop-settings__authority {
