@@ -23,6 +23,11 @@ export const characterWorldManagementHierarchyScenario = Object.freeze({
     checkpoint('character-management-hierarchy-wide', characterWide);
     const characterWideScreenshot = await screenshot('character-management-hierarchy-wide');
 
+    await click(`${MAIN_SLOT} [data-character-management-action="create"]`);
+    await waitForSelector('[data-primary-surface="agent"]');
+    const createDestination = await inspectStartCreatingDestination(evaluate, 'character');
+    checkpoint('character-create-start-creating', createDestination);
+
     await clickNavigation(evaluate, click, 'Worlds', '世界');
     await waitForSelector(`${MAIN_SLOT} [data-world-management-catalog-root="true"]`);
     const worldWide = await inspectCatalog(evaluate, 'world', false);
@@ -44,10 +49,7 @@ export const characterWorldManagementHierarchyScenario = Object.freeze({
 
     await click(`${MAIN_SLOT} [data-world-template="world-bible"]`);
     await waitForSelector('[data-primary-surface="agent"]');
-    const templateDestination = await evaluate(`(() => ({
-      agentSurfaces: document.querySelectorAll('[data-primary-surface="agent"]').length,
-      managementRoots: document.querySelectorAll(${JSON.stringify(MAIN_SLOT)} + ' [data-world-management-catalog-root="true"]').length,
-    }))()`);
+    const templateDestination = await inspectStartCreatingDestination(evaluate, 'world');
     if (templateDestination.agentSurfaces !== 1 || templateDestination.managementRoots !== 0) {
       throw new Error(
         `World template did not enter canonical Start Creating: ${JSON.stringify(templateDestination)}`,
@@ -90,6 +92,8 @@ async function inspectCatalog(evaluate, domain, narrow) {
       title: hero?.querySelector('h1')?.textContent?.trim() ?? '',
       collectionTitle: collection?.querySelector('h2')?.textContent?.trim() ?? '',
       heroActions: hero?.querySelectorAll('button').length ?? 0,
+      createActions: hero?.querySelectorAll('[data-${domain}-management-action="create"]').length ?? 0,
+      importActions: hero?.querySelectorAll('[data-${domain}-management-action="import"]').length ?? 0,
       heroVisuals: hero?.querySelectorAll('.${classPrefix}__hero-visual').length ?? 0,
       templateEntries: root?.querySelectorAll('[data-character-template], [data-world-template]').length ?? 0,
       templateIdentity: root?.querySelector('[data-character-template], [data-world-template]')?.getAttribute('data-character-template') ?? root?.querySelector('[data-world-template]')?.getAttribute('data-world-template') ?? '',
@@ -113,14 +117,16 @@ async function inspectCatalog(evaluate, domain, narrow) {
     state.roots !== 1 ||
     !validTitle ||
     !validCollection ||
-    state.heroActions !== 1 ||
+    state.heroActions !== 2 ||
+    state.createActions !== 1 ||
+    state.importActions !== 1 ||
     state.heroVisuals !== 1 ||
     state.templateEntries !== 1 ||
     !validTemplateIdentity ||
     state.templateHeading.length === 0 ||
     state.searchFields !== 1 ||
     state.sortControls !== 1 ||
-    state.refreshControls !== 1 ||
+    state.refreshControls !== 0 ||
     state.contentWidth <= 0 ||
     state.contentWidth > 1118 ||
     !validWideSearch ||
@@ -129,6 +135,23 @@ async function inspectCatalog(evaluate, domain, narrow) {
   ) {
     throw new Error(
       `${domain} management hierarchy is invalid: ${JSON.stringify({ narrow, ...state })}`,
+    );
+  }
+  return state;
+}
+
+async function inspectStartCreatingDestination(evaluate, domain) {
+  const managementSelector =
+    domain === 'character'
+      ? `${MAIN_SLOT} [data-character-management-catalog="true"]`
+      : `${MAIN_SLOT} [data-world-management-catalog-root="true"]`;
+  const state = await evaluate(`(() => ({
+    agentSurfaces: document.querySelectorAll('[data-primary-surface="agent"]').length,
+    managementRoots: document.querySelectorAll(${JSON.stringify(managementSelector)}).length,
+  }))()`);
+  if (state.agentSurfaces !== 1 || state.managementRoots !== 0) {
+    throw new Error(
+      `${domain} action did not enter canonical Start Creating: ${JSON.stringify(state)}`,
     );
   }
   return state;

@@ -1596,9 +1596,9 @@
   line-height: 1.6;
 }
 
-.character-management__hero-copy button,
-.character-management__controls > button,
+.character-management__hero-actions button,
 .character-management__controls > select,
+.character-management__empty-actions button,
 .character-management__status > button {
   display: inline-flex;
   min-height: 36px;
@@ -1612,19 +1612,24 @@
   background: var(--neko-button-secondaryBackground, var(--neko-elevated, #fff));
 }
 
-.character-management__hero-copy button {
+.character-management__hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 7px;
-  border-color: var(--neko-button-background, #202124);
+}
+
+.character-management__hero-actions button,
+.character-management__empty-actions button {
   padding: 0 13px;
+}
+
+.character-management__hero-actions button.is-primary,
+.character-management__empty-actions button.is-primary {
+  border-color: var(--neko-button-background, #202124);
   color: var(--neko-button-foreground, #fff);
   background: var(--neko-button-background, #202124);
   font-weight: 650;
-}
-
-.character-management__controls > button {
-  width: 36px;
-  min-width: 36px;
-  padding: 0;
 }
 
 .character-management__hero-visual {
@@ -1771,7 +1776,6 @@
 
 .character-management__catalog {
   display: grid;
-  min-height: 220px;
   align-content: start;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 214px), 214px));
   justify-content: start;
@@ -1785,12 +1789,20 @@
 }
 
 .character-management__catalog.is-empty {
+  min-height: 220px;
   grid-template-rows: auto minmax(0, 1fr);
 }
 
 .character-management__catalog.is-empty > [data-neko-empty-state] {
   min-height: 0;
   grid-row: 2;
+}
+
+.character-management__empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
 }
 
 .character-management__templates {

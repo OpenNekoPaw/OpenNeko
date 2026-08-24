@@ -13,7 +13,7 @@ import {
   GridIcon,
   PackageIcon,
   PanoramaIcon,
-  RefreshIcon,
+  PlusIcon,
   SearchIcon,
   WarningIcon,
 } from '@neko/ui';
@@ -39,6 +39,7 @@ export interface WorldManagementCreateActions {
 }
 
 interface WorldManagementCatalogActions extends WorldManagementCreateActions {
+  readonly onCreate: () => void;
   readonly onStartFromTemplate: () => void;
 }
 
@@ -273,11 +274,15 @@ export function WorldManagementCatalogRoot({
   const [sort, setSort] = useState<WorldManagementSort>('recently-updated');
   const query = { search, sort } satisfies WorldManagementCatalogQuery;
   const catalog = runtime.loadState.kind === 'ready' ? runtime.loadState.catalog : undefined;
+  const reload = runtime.reload;
 
   useEffect(() => {
-    const timer = window.setTimeout(() => void runtime.reload(query), 120);
+    const timer = window.setTimeout(
+      () => void reload({ search, sort } satisfies WorldManagementCatalogQuery),
+      120,
+    );
     return () => window.clearTimeout(timer);
-  }, [runtime.reload, search, sort]);
+  }, [reload, search, sort]);
 
   return (
     <section
@@ -295,10 +300,25 @@ export function WorldManagementCatalogRoot({
                 'Manage global World versions and their runtime history.',
               )}
             </p>
-            <button type="button" onClick={actions.onImport}>
-              <PackageIcon size={15} />
-              <span>{text(locale, '导入世界包', 'Import package')}</span>
-            </button>
+            <div className="world-management__hero-actions">
+              <button
+                className="is-primary"
+                data-world-management-action="create"
+                type="button"
+                onClick={actions.onCreate}
+              >
+                <PlusIcon size={15} />
+                <span>{text(locale, '新增世界', 'Add world')}</span>
+              </button>
+              <button
+                data-world-management-action="import"
+                type="button"
+                onClick={actions.onImport}
+              >
+                <PackageIcon size={15} />
+                <span>{text(locale, '导入世界包', 'Import world package')}</span>
+              </button>
+            </div>
           </div>
           <div className="world-management__hero-visual" aria-hidden="true">
             <span className="world-management__hero-connector" />
@@ -350,15 +370,6 @@ export function WorldManagementCatalogRoot({
                 </option>
                 <option value="title">{text(locale, '名称', 'Title')}</option>
               </select>
-              <button
-                aria-label={text(locale, '刷新世界', 'Refresh worlds')}
-                disabled={runtime.loadState.kind === 'loading'}
-                title={text(locale, '刷新', 'Refresh')}
-                type="button"
-                onClick={() => void runtime.reload(query)}
-              >
-                <RefreshIcon size={16} />
-              </button>
             </div>
           </header>
 
@@ -369,13 +380,13 @@ export function WorldManagementCatalogRoot({
           ) : runtime.loadState.kind === 'failed' ? (
             <ManagementStatus error>
               <span>{runtime.loadState.message}</span>
-              <button type="button" onClick={() => void runtime.reload(query)}>
+              <button type="button" onClick={() => void reload(query)}>
                 {text(locale, '重试', 'Retry')}
               </button>
             </ManagementStatus>
           ) : (
             <div
-              className="world-management__catalog-grid"
+              className={`world-management__catalog-grid${catalog?.items.length === 0 ? ' is-empty' : ''}`}
               data-world-management-card-catalog="true"
             >
               {catalog?.items.length === 0 ? (
@@ -385,7 +396,7 @@ export function WorldManagementCatalogRoot({
                   title={
                     search
                       ? text(locale, '没有匹配的世界', 'No matching worlds')
-                      : text(locale, '导入第一个世界包', 'Import your first World package')
+                      : text(locale, '新增或导入第一个世界', 'Add or import your first World')
                   }
                   description={
                     search
@@ -398,9 +409,14 @@ export function WorldManagementCatalogRoot({
                   }
                   action={
                     search ? undefined : (
-                      <button type="button" onClick={actions.onImport}>
-                        {text(locale, '导入世界包', 'Import package')}
-                      </button>
+                      <div className="world-management__empty-actions">
+                        <button className="is-primary" type="button" onClick={actions.onCreate}>
+                          {text(locale, '新增世界', 'Add world')}
+                        </button>
+                        <button type="button" onClick={actions.onImport}>
+                          {text(locale, '导入世界包', 'Import world package')}
+                        </button>
+                      </div>
                     )
                   }
                 />
@@ -524,6 +540,7 @@ export function WorldManagementDetailRoot({
 }): JSX.Element {
   const [loadState, setLoadState] = useState<DetailLoadState>({ kind: 'idle' });
   const requestRef = useRef(0);
+  const readDetail = runtime.readDetail;
 
   useEffect(() => {
     const requestId = requestRef.current + 1;
@@ -533,8 +550,7 @@ export function WorldManagementDetailRoot({
       return;
     }
     setLoadState({ kind: 'loading' });
-    void runtime
-      .readDetail(selection.globalWorldId)
+    void readDetail(selection.globalWorldId)
       .then((detail) => {
         if (requestRef.current === requestId) setLoadState({ kind: 'ready', detail });
       })
@@ -546,7 +562,7 @@ export function WorldManagementDetailRoot({
     return () => {
       requestRef.current += 1;
     };
-  }, [runtime.readDetail, selection]);
+  }, [readDetail, selection]);
 
   return (
     <section

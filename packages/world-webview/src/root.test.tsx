@@ -17,12 +17,13 @@ const now = '2026-08-10T10:00:00.000Z';
 
 describe('World package Webview roots', () => {
   it('renders the canonical card-only empty catalog without fabricating an active World', async () => {
+    const onCreate = vi.fn();
     const onImport = vi.fn();
     const onStartFromTemplate = vi.fn();
     const reload = vi.fn(async () => undefined);
     const { container } = render(
       <WorldManagementCatalogRoot
-        actions={{ onImport, onStartFromTemplate }}
+        actions={{ onCreate, onImport, onStartFromTemplate }}
         locale="en"
         onSelect={vi.fn()}
         runtime={{
@@ -36,8 +37,9 @@ describe('World package Webview roots', () => {
     expect(screen.getByRole('heading', { name: 'Worlds' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'My Worlds' })).toBeTruthy();
     expect(screen.getByLabelText('0 worlds')).toBeTruthy();
-    expect(screen.getByText('Import your first World package')).toBeTruthy();
+    expect(screen.getByText('Add or import your first World')).toBeTruthy();
     expect(container.querySelector('.world-management__hero-visual')).not.toBeNull();
+    expect(container.querySelector('.world-management__catalog-grid.is-empty')).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Create from a World template' })).toBeTruthy();
     const template = container.querySelector<HTMLButtonElement>(
       '[data-world-template="world-bible"]',
@@ -45,12 +47,22 @@ describe('World package Webview roots', () => {
     if (!template) throw new Error('World catalog fixture requires the World Bible.');
     expect(screen.queryByText('Archive City')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Quick generate' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Refresh worlds' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Add world' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Import world package' })).toHaveLength(2);
+    await waitFor(() =>
+      expect(reload).toHaveBeenCalledWith({ search: '', sort: 'recently-updated' }),
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add world' })[0]!);
+    expect(onCreate).toHaveBeenCalledOnce();
+    expect(onImport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Import world package' })[0]!);
+    expect(onImport).toHaveBeenCalledOnce();
+    expect(onCreate).toHaveBeenCalledOnce();
     fireEvent.change(screen.getByLabelText('Search worlds'), { target: { value: 'archive' } });
     await waitFor(() =>
       expect(reload).toHaveBeenCalledWith({ search: 'archive', sort: 'recently-updated' }),
     );
-    fireEvent.click(screen.getAllByRole('button', { name: 'Import package' })[0]!);
-    expect(onImport).toHaveBeenCalledOnce();
     fireEvent.click(template);
     expect(onStartFromTemplate).toHaveBeenCalledOnce();
   });
@@ -70,7 +82,7 @@ describe('World package Webview roots', () => {
     };
     const { container } = render(
       <WorldManagementCatalogRoot
-        actions={{ onImport: vi.fn(), onStartFromTemplate: vi.fn() }}
+        actions={{ onCreate: vi.fn(), onImport: vi.fn(), onStartFromTemplate: vi.fn() }}
         locale="en"
         onSelect={onSelect}
         runtime={{
@@ -89,6 +101,29 @@ describe('World package Webview roots', () => {
     expect(container.querySelectorAll('[data-world-management-invalid-card="true"]')).toHaveLength(
       1,
     );
+    expect(container.querySelector('.world-management__catalog-grid.is-empty')).toBeNull();
+  });
+
+  it('keeps catalog failure visible and retries the canonical runtime', async () => {
+    const reload = vi.fn(async () => undefined);
+    render(
+      <WorldManagementCatalogRoot
+        actions={{ onCreate: vi.fn(), onImport: vi.fn(), onStartFromTemplate: vi.fn() }}
+        locale="en"
+        onSelect={vi.fn()}
+        runtime={{
+          loadState: { kind: 'failed', message: 'World catalog unavailable' },
+          reload,
+          readDetail: vi.fn(async () => managementDetail()),
+        }}
+      />,
+    );
+
+    expect(screen.getByText('World catalog unavailable')).toBeTruthy();
+    await waitFor(() => expect(reload).toHaveBeenCalled());
+    reload.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(reload).toHaveBeenCalledWith({ search: '', sort: 'recently-updated' });
   });
 
   it('delegates the exact global export identity from one detail scroller', async () => {

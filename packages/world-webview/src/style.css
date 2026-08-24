@@ -284,8 +284,7 @@
   line-height: 1.6;
 }
 
-.world-management__hero-copy button,
-.world-management__controls > button,
+.world-management__hero-actions button,
 .world-management__controls > select,
 .world-management__primary-actions button,
 .world-management__version-list button,
@@ -303,8 +302,15 @@
   background: var(--neko-button-secondaryBackground, var(--neko-elevated, #fff));
 }
 
-.world-management__hero-copy button {
+.world-management__hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 7px;
+}
+
+.world-management__hero-actions button.is-primary,
+.world-management__empty-actions button.is-primary {
   border-color: var(--neko-button-background, #202124);
   color: var(--neko-button-foreground, #fff);
   background: var(--neko-button-background, #202124);
@@ -447,12 +453,6 @@
   background: transparent;
 }
 
-.world-management__controls > button {
-  width: 36px;
-  min-width: 36px;
-  padding: 0;
-}
-
 .world-management__primary-actions button:first-child {
   border-color: var(--neko-accent, #2d6b54);
   color: #fff;
@@ -462,11 +462,14 @@
 
 .world-management__catalog-grid {
   display: grid;
-  min-height: 220px;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 280px));
   align-content: start;
   justify-content: start;
   gap: 12px;
+}
+
+.world-management__catalog-grid.is-empty {
+  min-height: 220px;
 }
 
 .world-management__catalog-grid > [data-neko-empty-state] {

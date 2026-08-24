@@ -2059,6 +2059,7 @@ function DesktopWorkbenchRuntimePortals({
       ) : scene.context.catalog === 'characters' ? (
         <CharacterCatalogSurface
           locale={locale}
+          onCreate={() => actions.onTransitionScene({ kind: 'open-agent-entry' })}
           onImport={actions.onImportCharacterPackage}
           onStartFromTemplate={() => actions.onTransitionScene({ kind: 'open-agent-entry' })}
           onSelect={(globalCharacterId) =>
@@ -2073,6 +2074,7 @@ function DesktopWorkbenchRuntimePortals({
       ) : (
         <WorldManagementCatalogRoot
           actions={{
+            onCreate: () => actions.onTransitionScene({ kind: 'open-agent-entry' }),
             onImport: actions.onImportWorldPackage,
             onStartFromTemplate: () => actions.onTransitionScene({ kind: 'open-agent-entry' }),
           }}

@@ -54,7 +54,8 @@ describe('Character Management surfaces', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('loads one catalog and exposes no Dialogue, Room or World peer tabs', async () => {
-    const { container } = render(<Harness host={createHost()} />);
+    const host = createHost();
+    const { container } = render(<Harness host={host} />);
 
     expect(await screen.findByRole('heading', { name: 'Characters' })).toBeTruthy();
     expect(
@@ -66,14 +67,17 @@ describe('Character Management surfaces', () => {
       expect(container.querySelector('[data-neko-empty-state="fill"] svg')).not.toBeNull();
     });
     expect(container.querySelector('.character-management__hero-visual')).not.toBeNull();
+    expect(container.querySelector('.character-management__catalog.is-empty')).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Create from a Character template' })).toBeTruthy();
     expect(container.querySelector('[data-character-template="character-kit"]')).not.toBeNull();
     expect(container.querySelector('.character-management__view-switcher')).toBeNull();
-    expect(screen.getByText('No characters yet. Import the first package.')).toBeTruthy();
+    expect(screen.getByText('No characters yet. Add or import the first character.')).toBeTruthy();
     expect(screen.queryByRole('navigation', { name: 'Character workspace views' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Dialogues' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Rooms' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'World Foundation' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Refresh characters' })).toBeNull();
+    expect(host.getSnapshot).toHaveBeenCalledOnce();
   });
 
   it('mounts the project-local authoring-only Studio from validated authority', async () => {
@@ -394,16 +398,22 @@ describe('Character Management surfaces', () => {
     expect(screen.queryByRole('button', { name: /save|publish|edit/u })).toBeNull();
   });
 
-  it('offers global package import without standalone draft creation', async () => {
+  it('keeps add and package import as distinct catalog actions', async () => {
     const execute = vi.fn();
+    const onCreate = vi.fn();
     const onImport = vi.fn();
-    render(<Harness host={createHost(execute)} onImport={onImport} />);
+    render(<Harness host={createHost(execute)} onCreate={onCreate} onImport={onImport} />);
     await screen.findByRole('heading', { name: 'Characters' });
     expect(screen.queryByRole('button', { name: 'Generate with AI' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Import package' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Add character' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Import character package' })).toHaveLength(2);
     expect(screen.queryByRole('button', { name: 'Create manually' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Import package' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add character' })[0]!);
+    expect(onCreate).toHaveBeenCalledOnce();
+    expect(onImport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Import character package' })[0]!);
     expect(onImport).toHaveBeenCalledOnce();
+    expect(onCreate).toHaveBeenCalledOnce();
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -981,11 +991,13 @@ describe('Character Room Workbench surfaces', () => {
 function Harness({
   detailActions,
   host,
+  onCreate = () => undefined,
   onImport,
   onStartFromTemplate = () => undefined,
 }: {
   readonly detailActions?: CharacterManagementDetailActions;
   readonly host: OpenNekoDesktopCharacterBridge['characterFoundation'];
+  readonly onCreate?: () => void;
   readonly onImport?: () => void;
   readonly onStartFromTemplate?: () => void;
 }): JSX.Element {
@@ -995,7 +1007,8 @@ function Harness({
     <>
       <CharacterCatalogSurface
         locale="en"
-        onImport={onImport}
+        onCreate={onCreate}
+        onImport={onImport ?? (() => undefined)}
         onStartFromTemplate={onStartFromTemplate}
         onSelect={(globalCharacterId) => setSelection({ kind: 'global', globalCharacterId })}
         runtime={runtime}

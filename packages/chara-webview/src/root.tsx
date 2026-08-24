@@ -11,7 +11,7 @@ import {
   EmptyState,
   MessageIcon,
   PackageIcon,
-  RefreshIcon,
+  PlusIcon,
   SearchIcon,
   StorylineIcon,
   UserIcon,
@@ -128,6 +128,7 @@ export function useCharacterManagementRuntime(input: {
 
 export function CharacterCatalogSurface({
   locale,
+  onCreate,
   onImport,
   onSelect,
   onStartFromTemplate,
@@ -135,7 +136,8 @@ export function CharacterCatalogSurface({
   selectedGlobalCharacterId,
 }: {
   readonly locale: SupportedLocale;
-  readonly onImport?: () => void;
+  readonly onCreate: () => void;
+  readonly onImport: () => void;
   readonly onSelect: (globalCharacterId: string) => void;
   readonly onStartFromTemplate: () => void;
   readonly runtime: CharacterManagementRuntime;
@@ -173,12 +175,21 @@ export function CharacterCatalogSurface({
                 'Manage characters used in creation, dialogue, and interaction.',
               )}
             </p>
-            {onImport ? (
-              <button type="button" onClick={onImport}>
-                <PackageIcon size={15} />
-                <span>{foundationLabel(locale, '导入角色包', 'Import package')}</span>
+            <div className="character-management__hero-actions">
+              <button
+                className="is-primary"
+                data-character-management-action="create"
+                type="button"
+                onClick={onCreate}
+              >
+                <PlusIcon size={15} />
+                <span>{foundationLabel(locale, '新增角色', 'Add character')}</span>
               </button>
-            ) : null}
+              <button data-character-management-action="import" type="button" onClick={onImport}>
+                <PackageIcon size={15} />
+                <span>{foundationLabel(locale, '导入角色包', 'Import character package')}</span>
+              </button>
+            </div>
           </div>
           <div className="character-management__hero-visual" aria-hidden="true">
             <span className="character-management__hero-connector" />
@@ -235,15 +246,6 @@ export function CharacterCatalogSurface({
                 </option>
                 <option value="name">{foundationLabel(locale, '名称', 'Name')}</option>
               </select>
-              <button
-                aria-label={foundationLabel(locale, '刷新角色', 'Refresh characters')}
-                disabled={runtime.loadState.kind === 'loading'}
-                title={foundationLabel(locale, '刷新', 'Refresh')}
-                type="button"
-                onClick={() => void runtime.reload()}
-              >
-                <RefreshIcon size={16} />
-              </button>
             </div>
           </header>
           {runtime.loadState.kind === 'loading' || runtime.loadState.kind === 'idle' ? (
@@ -275,9 +277,21 @@ export function CharacterCatalogSurface({
                       ? foundationLabel(locale, '没有匹配的角色', 'No matching characters')
                       : foundationLabel(
                           locale,
-                          '尚无角色，请导入第一个角色包。',
-                          'No characters yet. Import the first package.',
+                          '尚无角色，请新增或导入第一个角色。',
+                          'No characters yet. Add or import the first character.',
                         )
+                  }
+                  action={
+                    query ? undefined : (
+                      <div className="character-management__empty-actions">
+                        <button className="is-primary" type="button" onClick={onCreate}>
+                          {foundationLabel(locale, '新增角色', 'Add character')}
+                        </button>
+                        <button type="button" onClick={onImport}>
+                          {foundationLabel(locale, '导入角色包', 'Import character package')}
+                        </button>
+                      </div>
+                    )
                   }
                 />
               ) : null}
