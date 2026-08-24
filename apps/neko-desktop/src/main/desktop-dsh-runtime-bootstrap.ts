@@ -83,6 +83,11 @@ export async function startDesktopDshProductRuntime(options: {
   ) => Promise<string>;
   readonly createHandlers: (input: {
     readonly bindings: ConversationDshSessionBindingStore;
+    readonly skillAuthoringBridge: Pick<
+      DesktopDshAgentRuntime['client'],
+      'validateStagedSkill' | 'observeSkill'
+    >;
+    readonly personalSkillRoot: string;
   }) => DesktopDshAgentHandlerAssembly;
   readonly onStderr?: (chunk: string) => void;
 }): Promise<{
@@ -98,7 +103,11 @@ export async function startDesktopDshProductRuntime(options: {
       context.kind === 'workspace' || context.kind === 'authoring'
         ? options.resolveWorkspaceSessionCwd(context)
         : Promise.resolve(prepared.workingDirectory),
-    createHandlers: options.createHandlers,
+    createHandlers: (input) =>
+      options.createHandlers({
+        ...input,
+        personalSkillRoot: join(prepared.profile.dshHome, 'skills'),
+      }),
   });
   return Object.freeze({ prepared, runtime });
 }

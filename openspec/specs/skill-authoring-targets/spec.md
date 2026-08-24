@@ -5,7 +5,7 @@ TBD - created by archiving change unify-skill-creator-authoring-targets. Update 
 ## Requirements
 ### Requirement: Skill Creator is an ordinary portable Skill
 
-The system SHALL expose one builtin `skill-creator` Skill through the same discovery, invocation, activation and prompt-injection path as every other Skill. The system SHALL NOT introduce a Skill-name-specific Entry target, receipt, selector, command alias or runtime branch.
+The system SHALL expose one builtin `skill-creator` Skill through the same DSH discovery, invocation and prompt-injection path as every other Skill. The system SHALL NOT introduce a Skill-name-specific target, receipt, selector, command alias, Tool grant or runtime branch.
 
 #### Scenario: Same ordinary Skill is discovered in eligible catalogs
 
@@ -36,7 +36,7 @@ The system SHALL expose one confirmation-gated `CreateSkill` Host operation whos
 
 ### Requirement: Skill package creation is canonical and non-destructive
 
-The Agent-owned package service SHALL validate the canonical portable Skill definition and relative resources through the existing Skill contracts and SkillHost before atomically publishing one new package.
+The Agent-owned package service SHALL stage the supplied DSH Markdown and relative resources, validate them through the locked DSH filesystem provider, and ask the Host to publish one new package without replacement. It SHALL NOT restore Pi SkillHost or copy the DSH parser.
 
 #### Scenario: Package is valid
 

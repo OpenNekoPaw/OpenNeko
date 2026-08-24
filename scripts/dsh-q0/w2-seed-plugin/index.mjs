@@ -9,6 +9,8 @@ export function apply(ctx) {
 }
 
 async function appendW2ToolEvents(ctx, agent) {
+  agent.session.append('turn/start', { turn: 0 })
+  agent.session.append('step/start', { turn: 0, step: 0 })
   await executeDomainTool(
     ctx,
     agent,
@@ -23,6 +25,19 @@ async function appendW2ToolEvents(ctx, agent) {
     'openneko.canvas',
     { operation: 'query', input: { documentPath: 'boards/w2.nkc' } },
   )
+  await executeDomainTool(
+    ctx,
+    agent,
+    'w2-create-skill',
+    'CreateSkill',
+    {
+      layout: 'directory',
+      skillMarkdown: '---\nname: w2-created-skill\ndescription: Q0 Skill.\n---\n# Q0 Skill\n',
+      resources: [],
+    },
+  )
+  agent.session.append('step/end', { turn: 0, step: 0 })
+  agent.session.append('turn/end', { turn: 0, reason: { kind: 'completed' } })
 }
 
 async function executeDomainTool(ctx, agent, suffix, name, argumentsValue) {

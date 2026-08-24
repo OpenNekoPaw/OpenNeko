@@ -1,5 +1,6 @@
 import { AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES } from './agent-image-transport';
 import { decodedBase64ByteLength, requireCanonicalBase64 } from './canonical-base64';
+import type { DshSkillAuthoringLayout } from './dsh-skill-authoring';
 
 export const DSH_ACP_EXTENSION_METHODS = {
   setSessionContext: 'openneko/session/context/set',
@@ -15,13 +16,101 @@ export const DSH_ACP_EXTENSION_METHODS = {
   executeCommand: 'openneko/session/command/execute',
   invokeSkill: 'openneko/session/skill/invoke',
   readExtensions: 'openneko/extensions/read',
+  validateStagedSkill: 'openneko/skill-authoring/staged/validate',
+  observeSkill: 'openneko/skill-authoring/observe',
   executeDomainTool: 'openneko/domain-tool/execute',
   cancelDomainTool: 'openneko/domain-tool/cancel',
 } as const;
 
+export interface DshAcpStagedSkillValidationRequest {
+  readonly stagingRoot: string;
+  readonly layout: DshSkillAuthoringLayout;
+  readonly entry: string;
+}
+
+export interface DshAcpStagedSkillValidationProjection {
+  readonly name: string;
+}
+
+export interface DshAcpSkillObservationRequest {
+  readonly sessionId: string;
+  readonly name: string;
+}
+
+export interface DshAcpSkillObservationProjection {
+  readonly complete: boolean;
+  readonly skill?: {
+    readonly name: string;
+    readonly source: string;
+    readonly provider: string;
+    readonly userInvocable: boolean;
+    readonly modelInvocable: boolean;
+  };
+}
+
+export function decodeDshAcpStagedSkillValidationRequest(
+  input: Record<string, unknown>,
+): DshAcpStagedSkillValidationRequest {
+  decodeDshAcpJsonPayload(input, 'staged Skill validation request');
+  requireExactKeys(input, ['stagingRoot', 'layout', 'entry'], 'staged Skill validation request');
+  return {
+    stagingRoot: requireNonEmptyString(input.stagingRoot, 'staged Skill root'),
+    layout: requireDshSkillAuthoringLayout(input.layout),
+    entry: requireNonEmptyString(input.entry, 'staged Skill entry'),
+  };
+}
+
+export function decodeDshAcpStagedSkillValidationProjection(
+  input: Record<string, unknown>,
+): DshAcpStagedSkillValidationProjection {
+  decodeDshAcpJsonPayload(input, 'staged Skill validation projection');
+  requireExactKeys(input, ['name'], 'staged Skill validation projection');
+  return { name: requireNonEmptyString(input.name, 'staged Skill name') };
+}
+
+export function decodeDshAcpSkillObservationRequest(
+  input: Record<string, unknown>,
+): DshAcpSkillObservationRequest {
+  decodeDshAcpJsonPayload(input, 'Skill observation request');
+  requireExactKeys(input, ['sessionId', 'name'], 'Skill observation request');
+  return {
+    sessionId: requireNonEmptyString(input.sessionId, 'sessionId'),
+    name: requireNonEmptyString(input.name, 'Skill observation name'),
+  };
+}
+
+export function decodeDshAcpSkillObservationProjection(
+  input: Record<string, unknown>,
+): DshAcpSkillObservationProjection {
+  decodeDshAcpJsonPayload(input, 'Skill observation projection');
+  const keys = input.skill === undefined ? ['complete'] : ['complete', 'skill'];
+  requireExactKeys(input, keys, 'Skill observation projection');
+  if (typeof input.complete !== 'boolean') {
+    throw new Error('Skill observation completeness is invalid.');
+  }
+  if (input.skill === undefined) return { complete: input.complete };
+  const skill = requireRecord(input.skill, 'Skill observation');
+  requireExactKeys(
+    skill,
+    ['name', 'source', 'provider', 'userInvocable', 'modelInvocable'],
+    'Skill observation',
+  );
+  return {
+    complete: input.complete,
+    skill: {
+      name: requireNonEmptyString(skill.name, 'Skill observation name'),
+      source: requireNonEmptyString(skill.source, 'Skill observation source'),
+      provider: requireNonEmptyString(skill.provider, 'Skill observation provider'),
+      userInvocable: requireBoolean(skill.userInvocable, 'Skill observation userInvocable'),
+      modelInvocable: requireBoolean(skill.modelInvocable, 'Skill observation modelInvocable'),
+    },
+  };
+}
+
 export interface DshAcpExtensionSkill {
   readonly name: string;
   readonly description: string;
+  readonly whenToUse?: string;
   readonly source: string;
   readonly provider: string;
   readonly userInvocable: boolean;
@@ -712,6 +801,11 @@ function requireDshAcpSandboxMode(input: unknown): DshAcpSandboxMode {
     return input;
   }
   throw new Error('DSH ACP sandboxMode is invalid.');
+}
+
+function requireDshSkillAuthoringLayout(input: unknown): DshSkillAuthoringLayout {
+  if (input === 'directory' || input === 'flat') return input;
+  throw new Error('DSH ACP staged Skill layout is invalid.');
 }
 
 export function decodeDshAcpDomainToolResponse(

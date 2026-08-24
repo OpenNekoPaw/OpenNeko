@@ -7,6 +7,7 @@ import type { DesktopDshRuntimeResource } from './desktop-dsh-runtime-resource';
 const OPENNEKO_PROFILE_BUNDLES = Object.freeze([
   '@deepseek-ai/dsh-base',
   '@neko/dsh-bridge',
+  '@neko/agent-dsh-plugin',
   '@neko/chara-dsh-plugin',
   '@neko/world-dsh-plugin',
   '@neko/generation-dsh-plugin',
@@ -16,6 +17,7 @@ const OPENNEKO_PROFILE_BUNDLES = Object.freeze([
 ]);
 const OPENNEKO_PACKAGES = Object.freeze([
   '@neko/dsh-bridge',
+  '@neko/agent-dsh-plugin',
   '@neko/chara-dsh-plugin',
   '@neko/world-dsh-plugin',
   '@neko/generation-dsh-plugin',

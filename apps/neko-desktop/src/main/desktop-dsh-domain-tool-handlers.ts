@@ -33,6 +33,7 @@ import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-work
 import type { ConfigManager, WorkspaceConfigManagerAuthority } from '@neko/host/settings';
 import type { CharacterDshAuthoringService } from '@neko/chara/application';
 import type { WorldDshAuthoringService } from '@neko/world/application';
+import type { DshSkillAuthoringService } from '@neko/agent-runtime/application';
 
 export interface DesktopDshGenerationProjectionPort {
   projectSnapshot(input: {
@@ -56,6 +57,7 @@ export function createDesktopDshDomainToolHandlers(options: {
     readonly assistantSpaceId: string;
     readonly root: string;
   };
+  readonly skillAuthoring?: Pick<DshSkillAuthoringService, 'create'>;
   readonly cutRuntime?: {
     resolveExportService(input: {
       readonly workspaceId: string;
@@ -86,6 +88,7 @@ export function createDesktopDshDomainToolHandlers(options: {
   });
   return createDshDomainToolHandlers({
     contexts,
+    skillAuthoring: options.skillAuthoring,
     generation: {
       projectSnapshot: (input) => options.generationProjection.projectSnapshot(input),
       resolveJobs: async (context) => {

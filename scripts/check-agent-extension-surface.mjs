@@ -167,6 +167,7 @@ export function validateCanonicalAgentRegistrationGraph(graph) {
   expectExactIdentitySet(
     tools,
     [
+      'CreateSkill',
       'openneko.canvas',
       'openneko.character',
       'openneko.cut',
@@ -180,6 +181,7 @@ export function validateCanonicalAgentRegistrationGraph(graph) {
   expectExactIdentitySet(
     plugins,
     [
+      '@neko/agent-dsh-plugin',
       '@neko/canvas-dsh-plugin',
       '@neko/chara-dsh-plugin',
       '@neko/content-dsh-plugin',
@@ -322,6 +324,10 @@ async function checkCanonicalSourceEvidence(root, findings) {
     resolve(root, 'packages/generation/dsh-plugin/src/index.ts'),
     'utf8',
   );
+  const agentToolsSource = await readFile(
+    resolve(root, 'packages/agent/dsh-plugin/src/index.ts'),
+    'utf8',
+  );
   const characterToolsSource = await readFile(
     resolve(root, 'packages/chara/dsh-plugin/src/index.ts'),
     'utf8',
@@ -340,6 +346,10 @@ async function checkCanonicalSourceEvidence(root, findings) {
   );
   const generationProfile = await readFile(
     resolve(root, 'packages/generation/dsh-plugin/cordis.patch.yml'),
+    'utf8',
+  );
+  const agentToolsProfile = await readFile(
+    resolve(root, 'packages/agent/dsh-plugin/cordis.patch.yml'),
     'utf8',
   );
   const characterProfile = await readFile(
@@ -364,6 +374,15 @@ async function checkCanonicalSourceEvidence(root, findings) {
   );
   if (/ctx\.tools\.register\s*\(/u.test(bridgeSource)) {
     findings.push('DSH bridge must not register domain Tools');
+  }
+  if (
+    !agentToolsSource.includes('CREATE_SKILL_DSH_TOOL_NAME') ||
+    !/ctx\.tools\.register\s*\(/u.test(agentToolsSource)
+  ) {
+    findings.push('Agent DSH plugin does not register exact CreateSkill');
+  }
+  if (!agentToolsProfile.includes('@neko/agent-dsh-plugin')) {
+    findings.push('Agent DSH plugin profile patch is missing its canonical contribution');
   }
   if (
     !generationToolsSource.includes('GENERATION_DSH_TOOL_NAME') ||
@@ -435,6 +454,9 @@ async function checkCanonicalSourceEvidence(root, findings) {
     ...validateCanonicalAgentRegistrationGraph({
       runtimes: ['dsh'],
       tools: [
+        ...Array(countMatches(agentToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
+          'CreateSkill',
+        ),
         ...Array(countMatches(characterToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
           'openneko.character',
         ),
@@ -452,6 +474,7 @@ async function checkCanonicalSourceEvidence(root, findings) {
       mcpContributions: [],
       plugins: [
         bridgeProfile,
+        agentToolsProfile,
         characterProfile,
         worldProfile,
         generationProfile,

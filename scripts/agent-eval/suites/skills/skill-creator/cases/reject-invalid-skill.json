@@ -42,7 +42,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$skill-creator Call CreateSkill once with the deliberately invalid name Invalid Skill Name. The current Workspace Conversation owns the destination. Do not correct it, retry it, or use another file-writing path. Report the native error."
+      "prompt": "$skill-creator Call CreateSkill once with { layout: directory, skillMarkdown: \"---\\nname: Invalid Skill Name\\ndescription: Deliberately invalid Skill.\\n---\\n# Invalid Skill\", resources: [] }. The current Workspace Conversation owns the destination. Do not correct it, retry it, or use another file-writing path. Report the native error."
     },
     {
       "id": "idle",

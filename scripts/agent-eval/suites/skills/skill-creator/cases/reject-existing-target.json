@@ -42,7 +42,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$skill-creator Call CreateSkill exactly once with skill { name: eval-existing-target-skill, description: Evaluate canonical target conflict., body: # Replacement Must Not Commit }. The current Workspace Conversation owns the destination. Preserve the native conflict; do not overwrite, merge, remove, retry, or use another writer."
+      "prompt": "$skill-creator Call CreateSkill exactly once with { layout: directory, skillMarkdown: \"---\\nname: eval-existing-target-skill\\ndescription: Evaluate canonical target conflict.\\n---\\n# Replacement Must Not Commit\", resources: [] }. The current Workspace Conversation owns the destination. Preserve the native conflict; do not overwrite, merge, remove, retry, or use another writer."
     },
     {
       "id": "idle",
@@ -71,7 +71,7 @@
       "name": "CreateSkill",
       "status": "error",
       "resultIncludes": {
-        "code": "skill-already-exists"
+        "code": "SKILL_AUTHORING_ALREADY_EXISTS"
       },
       "evidenceRef": "tool-facts"
     }

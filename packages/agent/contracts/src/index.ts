@@ -31,6 +31,7 @@ export * from './dsh-acp';
 export * from './dsh-permission-host';
 export * from './dsh-runtime-host';
 export * from './dsh-session-host';
+export * from './dsh-skill-authoring';
 export * from './effective-agent-configuration';
 export * from './extension-management';
 export * from './extension-management-host';

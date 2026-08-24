@@ -69,6 +69,12 @@ function createHandlers(): DshAcpApplicationClientHandlers {
         result: {},
       }),
     ),
+    executeSkillAuthoringTool: vi.fn(
+      async (_request: DshAcpDomainToolRequest, _signal: AbortSignal) => ({
+        outcome: 'success' as const,
+        result: {},
+      }),
+    ),
     onSessionUpdate: vi.fn(),
     onSessionEvent: vi.fn(),
     onContextPressure: vi.fn(),
@@ -108,6 +114,59 @@ function createFixture(initializeResponse: InitializeResponse) {
 }
 
 describe('DshAcpApplicationClient', () => {
+  it('uses private extension methods for isolated staged validation and exact scoped observation', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    fixture.connection.extMethod = vi.fn(async (method) => {
+      if (method === 'openneko/skill-authoring/staged/validate') {
+        return { name: 'created-skill' };
+      }
+      if (method === 'openneko/skill-authoring/observe') {
+        return {
+          complete: true,
+          skill: {
+            name: 'created-skill',
+            source: 'project-agents',
+            provider: 'local',
+            userInvocable: true,
+            modelInvocable: true,
+          },
+        };
+      }
+      throw new Error(`Unexpected extension method ${method}.`);
+    });
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await expect(
+      client.validateStagedSkill({
+        stagingRoot: '/private/staging',
+        layout: 'directory',
+        entry: 'candidate/SKILL.md',
+      }),
+    ).resolves.toEqual({ name: 'created-skill' });
+    await expect(
+      client.observeSkill({ sessionId: 'session-1', name: 'created-skill' }),
+    ).resolves.toMatchObject({ complete: true, skill: { source: 'project-agents' } });
+    expect(fixture.connection.extMethod).toHaveBeenNthCalledWith(
+      1,
+      'openneko/skill-authoring/staged/validate',
+      {
+        stagingRoot: '/private/staging',
+        layout: 'directory',
+        entry: 'candidate/SKILL.md',
+      },
+    );
+    expect(fixture.connection.extMethod).toHaveBeenNthCalledWith(
+      2,
+      'openneko/skill-authoring/observe',
+      { sessionId: 'session-1', name: 'created-skill' },
+    );
+  });
+
   it('archives one exact Session and reads the strict DSH archive projection', async () => {
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     fixture.connection.extMethod = vi.fn(async (method) => {
@@ -349,6 +408,15 @@ describe('DshAcpApplicationClient', () => {
     await protocolClient.extMethod?.('openneko/domain-tool/execute', {
       sessionId: 'session-1',
       turn: 0,
+      toolCallId: 'call-skill-authoring',
+      sandboxMode: 'workspace-write',
+      tool: 'CreateSkill',
+      operation: 'create',
+      input: { layout: 'directory', skillMarkdown: '# Skill', resources: [] },
+    });
+    await protocolClient.extMethod?.('openneko/domain-tool/execute', {
+      sessionId: 'session-1',
+      turn: 0,
       toolCallId: 'call-content-image',
       sandboxMode: 'read-only',
       tool: 'openneko.read_image',
@@ -401,6 +469,10 @@ describe('DshAcpApplicationClient', () => {
     );
     expect(handlers.executeContentImageTool).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-1', toolCallId: 'call-content-image' }),
+      expect.any(AbortSignal),
+    );
+    expect(handlers.executeSkillAuthoringTool).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'session-1', toolCallId: 'call-skill-authoring' }),
       expect.any(AbortSignal),
     );
     expect(handlers.onSessionEvent).toHaveBeenCalledWith(

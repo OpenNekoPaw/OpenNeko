@@ -1,0 +1,3 @@
+- insert:
+    - id: openneko-agent-tools
+      name: '@neko/agent-dsh-plugin'

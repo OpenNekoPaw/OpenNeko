@@ -269,6 +269,7 @@ import {
 } from './desktop-dsh-conversation-context';
 import { DesktopDshRuntimeHost } from './desktop-dsh-runtime-host';
 import { DesktopDshExtensionManagementHost } from './desktop-dsh-extension-management-host';
+import { createDesktopDshSkillAuthoringService } from './desktop-dsh-skill-authoring';
 import { createDesktopDshProviderRuntimeProjection } from './desktop-dsh-provider-runtime';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 
@@ -2056,7 +2057,13 @@ async function startDesktop(): Promise<void> {
       return resolution.workspace.workspacePath;
     },
     onStderr: (chunk) => logger.warn('DSH runtime diagnostic.', { message: chunk.trimEnd() }),
-    createHandlers: ({ bindings }) => {
+    createHandlers: ({ bindings, skillAuthoringBridge, personalSkillRoot }) => {
+      const skillAuthoring = createDesktopDshSkillAuthoringService({
+        assistantSpaceId,
+        personalSkillRoot,
+        workspaceGrants: workspaceGrantAuthority,
+        bridge: skillAuthoringBridge,
+      });
       const assembly = createDesktopDshProductHandlers({
         bindings,
         contexts: agentConversationContexts,
@@ -2102,6 +2109,7 @@ async function startDesktop(): Promise<void> {
           },
         },
         configuration: workspaceConfigAuthority,
+        skillAuthoring,
         assistant: { assistantSpaceId, root: assistantSpaceRoot },
         cutRuntime,
         character: {

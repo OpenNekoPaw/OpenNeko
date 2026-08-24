@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { isAbsolute } from 'node:path';
+import { lstat, realpath } from 'node:fs/promises';
+import { isAbsolute, join, posix, relative } from 'node:path';
 import {
   AgentSideConnection,
   PROTOCOL_VERSION,
@@ -19,7 +20,7 @@ import type { AgentHandle } from '@deepseek-ai/dsh-agent';
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
 import type {} from '@deepseek-ai/dsh-agent-presets';
 import type {} from '@deepseek-ai/dsh-commands';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { createUserMessage, errorChain, type ContentBlock } from '@deepseek-ai/dsh-llm';
 import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-session-persistence';
@@ -30,6 +31,7 @@ import {
   isUserInvocable,
   type SkillCatalogSnapshot,
 } from '@deepseek-ai/dsh-skill';
+import { FileSystemSkillProvider } from '@deepseek-ai/dsh-skill-filesystem';
 import type {} from '@deepseek-ai/dsh-system-prompt';
 import type {} from '@deepseek-ai/dsh-permission-presets';
 import type {} from '@deepseek-ai/dsh-sandbox-policy';
@@ -45,6 +47,8 @@ import {
   decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpImageAttachmentReadRequest,
   decodeDshAcpSkillInvokeRequest,
+  decodeDshAcpSkillObservationRequest,
+  decodeDshAcpStagedSkillValidationRequest,
   decodeDshAcpSessionContextSetRequest,
   decodeDshAcpPermissionPresetProjection,
   decodeDshAcpDomainToolRequest,
@@ -575,6 +579,45 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
             const snapshot = await ctx.skills.snapshot({ cwd: virtualCwd });
             return { ...projectDshExtensionCatalog(snapshot) };
           }
+          case DSH_ACP_EXTENSION_METHODS.validateStagedSkill: {
+            const request = decodeDshAcpStagedSkillValidationRequest(params);
+            return {
+              ...(await validateStagedSkillPackage(
+                request.stagingRoot,
+                request.layout,
+                request.entry,
+              )),
+            };
+          }
+          case DSH_ACP_EXTENSION_METHODS.observeSkill: {
+            const request = decodeDshAcpSkillObservationRequest(params);
+            if (!isSkillName(request.name)) {
+              throw RequestError.invalidParams(
+                undefined,
+                `Invalid DSH Skill name: ${request.name}`,
+              );
+            }
+            const record = requireOwned(request.sessionId);
+            const snapshot = await ctx.skills.snapshot({
+              cwd: record.handle.agent.session.header.cwd,
+              scope: record.handle.agent,
+            });
+            const skill = snapshot.skills.find((candidate) => candidate.name === request.name);
+            return {
+              complete: snapshot.complete,
+              ...(skill === undefined
+                ? {}
+                : {
+                    skill: {
+                      name: skill.name,
+                      source: skill.source,
+                      provider: skill.provider,
+                      userInvocable: isUserInvocable(skill),
+                      modelInvocable: isModelInvocable(skill),
+                    },
+                  }),
+            };
+          }
           case DSH_ACP_EXTENSION_METHODS.readPermissionPresets: {
             const keys = Object.keys(params);
             if (keys.some((key) => key !== 'sessionId')) {
@@ -907,6 +950,92 @@ async function readPreTurnInputCatalog(
   } catch (error) {
     if (error === completed && catalog !== undefined) return catalog;
     throw error;
+  }
+}
+
+export async function validateStagedSkillPackage(
+  stagingRoot: string,
+  layout: 'directory' | 'flat',
+  entry: string,
+): Promise<{ readonly name: string }> {
+  if (!isAbsolute(stagingRoot)) {
+    throw RequestError.invalidParams(undefined, 'Staged Skill root must be absolute.');
+  }
+  const rootStats = await lstat(stagingRoot);
+  if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) {
+    throw RequestError.invalidParams(undefined, 'Staged Skill root must be a real directory.');
+  }
+  const canonicalRoot = await realpath(stagingRoot);
+  if (
+    entry.includes('\\') ||
+    entry.startsWith('/') ||
+    posix.normalize(entry) !== entry ||
+    (layout === 'directory' && !entry.endsWith('/SKILL.md')) ||
+    (layout === 'flat' && (entry.includes('/') || !entry.endsWith('.md')))
+  ) {
+    throw RequestError.invalidParams(undefined, 'Staged Skill entry is invalid for its layout.');
+  }
+  const expectedMain = await realpath(join(canonicalRoot, ...entry.split('/')));
+  const contained = relative(canonicalRoot, expectedMain);
+  if (contained.length === 0 || contained.startsWith('..') || isAbsolute(contained)) {
+    throw RequestError.invalidParams(undefined, 'Staged Skill entry escapes its root.');
+  }
+  const context = new Context();
+  const lifecycle = new AbortController();
+  const provider = new FileSystemSkillProvider(
+    context,
+    { signal: lifecycle.signal, invalidate: () => undefined },
+    {
+      providerName: `openneko-authoring-${randomUUID()}`,
+      includeDefaultRoots: false,
+      customSkillDirs: [canonicalRoot],
+      watch: false,
+    },
+  );
+  try {
+    const observation = await provider.list({ cwd: canonicalRoot });
+    const candidates = Array.isArray(observation) ? observation : observation.candidates;
+    if (!Array.isArray(observation) && !observation.complete) {
+      throw RequestError.invalidParams(
+        undefined,
+        'Staged root contains a DSH Skill entry that could not be validated.',
+      );
+    }
+    const matches = [];
+    for (const candidate of candidates) {
+      if (candidate.path !== undefined && (await realpath(candidate.path)) === expectedMain) {
+        matches.push(candidate);
+      }
+    }
+    if (matches.length !== 1 || candidates.length !== 1) {
+      throw RequestError.invalidParams(
+        undefined,
+        'Staged root must contain exactly one DSH Skill at the canonical candidate entry.',
+      );
+    }
+    const candidate = matches[0];
+    if (candidate === undefined) {
+      throw new Error('Validated staged Skill candidate disappeared.');
+    }
+    const definition = await provider.get(candidate, { cwd: canonicalRoot });
+    if (definition === undefined || definition.name !== candidate.name) {
+      throw RequestError.invalidParams(
+        undefined,
+        'Staged DSH Skill definition is incomplete or has a mismatched identity.',
+      );
+    }
+    const expectedResourceBase =
+      layout === 'directory' ? join(canonicalRoot, posix.dirname(entry)) : canonicalRoot;
+    if (
+      definition.resourceBase?.kind !== 'directory' ||
+      (await realpath(definition.resourceBase.path)) !== (await realpath(expectedResourceBase))
+    ) {
+      throw RequestError.invalidParams(undefined, 'Staged DSH Skill resource base is invalid.');
+    }
+    return { name: definition.name };
+  } finally {
+    lifecycle.abort();
+    await provider.dispose();
   }
 }
 

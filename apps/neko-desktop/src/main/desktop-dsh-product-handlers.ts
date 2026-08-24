@@ -6,6 +6,7 @@ import {
   DshPermissionOwner,
   type AgentConversationContextAuthorityPort,
   type ConversationDshSessionBindingStore,
+  type DshSkillAuthoringService,
 } from '@neko/agent-runtime/application';
 import type {
   DshAcpApplicationClientHandlers,
@@ -43,6 +44,7 @@ export function createDesktopDshProductHandlers(options: {
     readonly assistantSpaceId: string;
     readonly root: string;
   };
+  readonly skillAuthoring: Pick<DshSkillAuthoringService, 'create'>;
   readonly cutRuntime: {
     resolveExportService(input: {
       readonly workspaceId: string;
@@ -96,6 +98,8 @@ export function createDesktopDshProductHandlers(options: {
       domainTools.executeContentImageTool(request, signal),
     executeCharacterTool: (request, signal) => domainTools.executeCharacterTool(request, signal),
     executeWorldTool: (request, signal) => domainTools.executeWorldTool(request, signal),
+    executeSkillAuthoringTool: (request, signal) =>
+      domainTools.executeSkillAuthoringTool(request, signal),
     onSessionUpdate: options.onSessionUpdate,
     onSessionEvent: options.onSessionEvent,
     onContextPressure: options.onContextPressure,

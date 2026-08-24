@@ -18,10 +18,46 @@ import {
   decodeDshAcpSessionContextSetRequest,
   decodeDshAcpSessionArchiveRequest,
   decodeDshAcpSessionEventNotification,
+  decodeDshAcpSkillObservationProjection,
+  decodeDshAcpStagedSkillValidationRequest,
   encodeDshAcpModelConfiguration,
 } from './dsh-acp';
 
 describe('DSH ACP extension contract', () => {
+  it('decodes exact staged validation and scoped Skill observation payloads', () => {
+    expect(
+      decodeDshAcpStagedSkillValidationRequest({
+        stagingRoot: '/tmp/staged-skill',
+        layout: 'flat',
+        entry: '.openneko-candidate.md',
+      }),
+    ).toEqual({
+      stagingRoot: '/tmp/staged-skill',
+      layout: 'flat',
+      entry: '.openneko-candidate.md',
+    });
+    expect(() =>
+      decodeDshAcpStagedSkillValidationRequest({
+        stagingRoot: '/tmp/staged-skill',
+        layout: 'flat',
+        entry: '.openneko-candidate.md',
+        target: 'workspace',
+      }),
+    ).toThrow(/must contain exactly/u);
+    expect(
+      decodeDshAcpSkillObservationProjection({
+        complete: true,
+        skill: {
+          name: 'sample-skill',
+          source: 'project-agents',
+          provider: 'local',
+          userInvocable: true,
+          modelInvocable: false,
+        },
+      }),
+    ).toMatchObject({ complete: true, skill: { source: 'project-agents' } });
+  });
+
   it('accepts only Skill/MCP extension projection fields', () => {
     const projection = {
       skills: [],

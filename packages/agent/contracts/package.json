@@ -8,6 +8,7 @@
     "./dsh-permission-host": "./src/dsh-permission-host.ts",
     "./dsh-runtime-host": "./src/dsh-runtime-host.ts",
     "./dsh-session-host": "./src/dsh-session-host.ts",
+    "./dsh-skill-authoring": "./src/dsh-skill-authoring.ts",
     "./extension-management": "./src/extension-management.ts",
     "./extension-management-host": "./src/extension-management-host.ts",
     "./testing": "./src/testing/index.ts"

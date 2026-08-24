@@ -19,6 +19,15 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/agent/dsh-plugin",
+      "name": "@neko/agent-dsh-plugin",
+      "family": "agent",
+      "roles": ["infrastructure"],
+      "runtimes": ["node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/agent/webview",
       "name": "@neko/agent-webview",
       "family": "agent",

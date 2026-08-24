@@ -72,6 +72,7 @@ test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrat
   const canonical = {
     runtimes: ['dsh'],
     tools: [
+      'CreateSkill',
       'openneko.generation',
       'openneko.canvas',
       'openneko.cut',
@@ -80,6 +81,7 @@ test('rejects dual runtime, duplicate Tool or MCP, and wildcard Plugin registrat
     ],
     mcpContributions: ['official.browser'],
     plugins: [
+      '@neko/agent-dsh-plugin',
       '@neko/dsh-bridge',
       '@neko/generation-dsh-plugin',
       '@neko/canvas-dsh-plugin',

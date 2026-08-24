@@ -45,6 +45,10 @@ import {
   decodeDshAcpSessionEventNotification,
   decodeDshAcpSkillInvokeProjection,
   decodeDshAcpSkillInvokeRequest,
+  decodeDshAcpSkillObservationProjection,
+  decodeDshAcpSkillObservationRequest,
+  decodeDshAcpStagedSkillValidationProjection,
+  decodeDshAcpStagedSkillValidationRequest,
   type DshAcpContentBlock,
   type DshAcpDomainToolRequest,
   type DshAcpDomainToolResponse,
@@ -57,7 +61,10 @@ import {
   type DshAcpSkillInvokeProjection,
   type DshAcpExtensionProjection,
   type DshAcpArchivedSessionsProjection,
+  type DshAcpSkillObservationProjection,
+  type DshAcpStagedSkillValidationProjection,
 } from '@neko/agent-contracts/dsh-acp';
+import type { DshSkillAuthoringLayout } from '@neko/agent-contracts/dsh-skill-authoring';
 import { CANVAS_DSH_TOOL_NAME } from '@neko/canvas-domain';
 import { CUT_DSH_TOOL_NAME } from '@neko/cut-domain';
 import { GENERATION_DSH_TOOL_NAME } from '@neko/generation';
@@ -65,6 +72,7 @@ import { DOCUMENT_DSH_TOOL_NAME } from '@neko/content/document';
 import { CONTENT_IMAGE_DSH_TOOL_NAME } from '@neko/content';
 import { CHARACTER_DSH_TOOL_NAME } from '@neko/chara/application';
 import { WORLD_DSH_TOOL_NAME } from '@neko/world/application';
+import { CREATE_SKILL_DSH_TOOL_NAME } from '@neko/agent-contracts/dsh-skill-authoring';
 import { DshAcpProjection } from './dsh-acp-projection';
 
 export interface DshAcpApplicationClientHandlers {
@@ -101,6 +109,10 @@ export interface DshAcpApplicationClientHandlers {
     signal: AbortSignal,
   ) => Promise<DshAcpDomainToolResponse>;
   readonly executeWorldTool?: (
+    request: DshAcpDomainToolRequest,
+    signal: AbortSignal,
+  ) => Promise<DshAcpDomainToolResponse>;
+  readonly executeSkillAuthoringTool?: (
     request: DshAcpDomainToolRequest,
     signal: AbortSignal,
   ) => Promise<DshAcpDomainToolResponse>;
@@ -339,6 +351,30 @@ export class DshAcpApplicationClient {
   async readExtensions(): Promise<DshAcpExtensionProjection> {
     const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.readExtensions, {});
     return decodeDshAcpExtensionProjection(response);
+  }
+
+  async validateStagedSkill(input: {
+    readonly stagingRoot: string;
+    readonly layout: DshSkillAuthoringLayout;
+    readonly entry: string;
+  }): Promise<DshAcpStagedSkillValidationProjection> {
+    const request = decodeDshAcpStagedSkillValidationRequest({ ...input });
+    const response = await this.connection.extMethod(
+      DSH_ACP_EXTENSION_METHODS.validateStagedSkill,
+      { ...request },
+    );
+    return decodeDshAcpStagedSkillValidationProjection(response);
+  }
+
+  async observeSkill(input: {
+    readonly sessionId: string;
+    readonly name: string;
+  }): Promise<DshAcpSkillObservationProjection> {
+    const request = decodeDshAcpSkillObservationRequest({ ...input });
+    const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.observeSkill, {
+      ...request,
+    });
+    return decodeDshAcpSkillObservationProjection(response);
   }
 
   async readInbox(sessionId: string): Promise<DshAcpInboxSnapshot> {
@@ -685,6 +721,12 @@ class HostToolAdmission {
       if (this.handlers.executeWorldTool === undefined)
         throw new Error('DSH ACP World Tool handler is unavailable.');
       return this.handlers.executeWorldTool;
+    }
+    if (tool === CREATE_SKILL_DSH_TOOL_NAME) {
+      if (this.handlers.executeSkillAuthoringTool === undefined) {
+        throw new Error('DSH ACP Skill authoring Tool handler is unavailable.');
+      }
+      return this.handlers.executeSkillAuthoringTool;
     }
     throw new Error(`DSH ACP requested unsupported domain tool ${tool}.`);
   }

@@ -87,6 +87,7 @@ function createFixtureRuntime() {
           bundles: [
             '@deepseek-ai/dsh-base',
             '@neko/dsh-bridge',
+            '@neko/agent-dsh-plugin',
             '@neko/chara-dsh-plugin',
             '@neko/world-dsh-plugin',
             '@neko/generation-dsh-plugin',

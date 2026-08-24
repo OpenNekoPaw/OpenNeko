@@ -15,7 +15,7 @@ Neko 需要把四类边界分开：
 | 层              | 职责                                                                   | 不负责                                                        |
 | --------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- |
 | 默认提示词      | Agent 身份、项目背景、全局原则、通用工具纪律、跨领域安全边界           | 具体领域字段、分镜表 profile、Canvas/Cut 私有 DTO、旧协议兼容 |
-| Skill 提示词    | 应用场景、领域工作流、输出标准、交互方式、允许的 capability 和 profile | 全局身份重写、运行时权限授予、伪造工具结果                    |
+| Skill 提示词    | 应用场景、领域工作流、输出标准、交互方式、公开模型/工具使用方法       | 全局身份重写、运行时权限授予、伪造工具结果                    |
 | Validator       | 机器可判定的 correctness gate、诊断、失败可见                          | 创作推理、字段发明、替代 capability 执行                      |
 | Capability/Tool | 真实读取、转换、写入、执行和审批边界                                   | 从 prompt 文本猜测成功、接受 runtime-only 资源投影            |
 
@@ -69,7 +69,7 @@ Skill 提示词应提供：
 - 领域工作流和交互方式。
 - 输出标准：字段、表格、层次、示例和禁止项。
 - 资源引用规则：如何引用 host 已授权的素材，缺少绑定时如何诊断。
-- 相关 capability/profile：具体 id 由 owning package 的 runtime catalog 或 validator registry 拥有；正文只描述领域意图和成功条件，不写工具教程，也不伪造调用结果。Portable Skill 不增加 OpenNeko 私有 overlay。
+- 相关 capability/profile：正文可以说明公开、稳定且对用户有意义的模型或工具使用方法；实际 id、可见性、schema、permission 和 validator registration 由当前 DSH catalog 与 owning package 拥有，Skill 不授予权限也不伪造调用结果。Portable Skill 不增加 OpenNeko 私有 overlay。
 - 对应 validator id：由 Artifact/Profile Registry 或机器可读依赖声明，例如 `creative-table.storyboard`。
 
 Skill 提示词可以包含领域字段和示例，但示例必须能被对应 validator 通过。Skill 新增字段时，应同步更新 profile validator 或把字段标记为可扩展 metadata。
@@ -97,7 +97,7 @@ Capability/tool 是执行边界。Agent 或 Webview 不能因为 Markdown 看起
 - 每个 capability/operation 必须由自己的 schema 和 policy 声明副作用、审批、trust、validation 与 recovery；`validate`、`review`、`apply` 不是 Agent 全局强制状态机。
 - 一个具体的 validator 应保持只读；一个具体的 review operation 是否产生预览或草稿，由 owning domain contract 决定。
 - 写入真实节点、项目事实或生成结果是否需要审批，由通用 capability/tool policy 和风险边界决定，不能只根据 operation 名称推导。
-- Agent 原生 `CreateSkill` 可以在输入完整且通用文件 policy 允许时直接写入 canonical Skill 目录，不要求先产生 draft/review/apply；详见 [`adr-agent-skill-creator-and-validation.md`](adr-agent-skill-creator-and-validation.md)。
+- Agent 原生 `CreateSkill` 在 DSH approval 通过后，可以用完整 DSH package 输入直接进入 staged validation 与 no-replace publication，不要求先产生 draft/review/apply；目标只能来自 exact Conversation authority。详见 [`adr-agent-skill-creator-and-validation.md`](adr-agent-skill-creator-and-validation.md)。
 - 运行时投影如 Webview URI、blob URL、cache path 不能进入持久契约。
 
 ## 与 Creative Table 的关系

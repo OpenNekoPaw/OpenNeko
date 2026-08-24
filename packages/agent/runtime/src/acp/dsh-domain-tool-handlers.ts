@@ -11,6 +11,8 @@ import type {
 import type { GenerationJobSnapshot, PurposeGenerationJobPort } from '@neko/generation/job';
 import type { CharacterDshAuthoringService } from '@neko/chara/application';
 import type { WorldDshAuthoringService } from '@neko/world/application';
+import { SkillAuthoringDshHostAdapter } from './skill-authoring-host-adapter';
+import type { DshSkillAuthoringService } from '../application/dsh-skill-authoring';
 import type { AgentContentAccessRuntime } from '../runtime/capability/agent-content-access-runtime';
 
 import type {
@@ -54,6 +56,10 @@ export interface DshDomainToolHandlers {
     signal: AbortSignal,
   ): Promise<DshAcpDomainToolResponse>;
   executeWorldTool(
+    request: DshAcpDomainToolRequest,
+    signal: AbortSignal,
+  ): Promise<DshAcpDomainToolResponse>;
+  executeSkillAuthoringTool(
     request: DshAcpDomainToolRequest,
     signal: AbortSignal,
   ): Promise<DshAcpDomainToolResponse>;
@@ -118,6 +124,7 @@ export function createDshDomainToolHandlers(options: {
       },
     ): Promise<Pick<WorldDshAuthoringService, 'query' | 'fillDraft'>>;
   };
+  readonly skillAuthoring?: Pick<DshSkillAuthoringService, 'create'>;
 }): DshDomainToolHandlers {
   return Object.freeze({
     async executeGenerationTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
@@ -228,6 +235,22 @@ export function createDshDomainToolHandlers(options: {
           );
         }
         return options.world.resolveService({ ...context, binding: context.binding });
+      }).execute(request, signal);
+    },
+
+    async executeSkillAuthoringTool(request: DshAcpDomainToolRequest, signal: AbortSignal) {
+      if (options.skillAuthoring === undefined) {
+        return {
+          outcome: 'failure',
+          diagnostic: {
+            code: 'SKILL_AUTHORING_SERVICE_UNAVAILABLE',
+            message: 'DSH Skill authoring service is not composed by the Host.',
+          },
+        } satisfies DshAcpDomainToolResponse;
+      }
+      return new SkillAuthoringDshHostAdapter({
+        contexts: options.contexts,
+        service: options.skillAuthoring,
       }).execute(request, signal);
     },
   });

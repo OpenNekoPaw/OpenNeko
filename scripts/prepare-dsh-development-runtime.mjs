@@ -26,6 +26,7 @@ const developmentInputRoot = resolve(
 );
 const packageInputs = Object.freeze([
   Object.freeze({ name: '@neko/dsh-bridge', path: 'packages/dsh-bridge' }),
+  Object.freeze({ name: '@neko/agent-dsh-plugin', path: 'packages/agent/dsh-plugin' }),
   Object.freeze({ name: '@neko/chara-dsh-plugin', path: 'packages/chara/dsh-plugin' }),
   Object.freeze({ name: '@neko/world-dsh-plugin', path: 'packages/world/dsh-plugin' }),
   Object.freeze({

@@ -12,6 +12,7 @@ export * from './dsh-conversation-catalog-repository';
 export * from './dsh-conversation-home-projection';
 export * from './dsh-stale-conversation-cleanup';
 export * from './dsh-domain-tool-context-resolver';
+export * from './dsh-skill-authoring';
 export * from './dsh-conversation-turn-context';
 export * from './dsh-workspace-board-artifact-delivery';
 export * from './dsh-turn-canvas-target-owner';

@@ -55,6 +55,7 @@
     "evidence": [
       "packages/agent/contracts/src/dsh-acp.ts",
       "packages/dsh-bridge/src/index.ts",
+      "packages/agent/dsh-plugin/src/index.ts",
       "packages/generation/dsh-plugin/src/index.ts",
       "packages/canvas/dsh-plugin/src/index.ts",
       "packages/cut/dsh-plugin/src/index.ts",

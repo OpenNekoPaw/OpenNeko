@@ -15,6 +15,7 @@ import {
 
 const fixtureRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const dshBridgePackageRoot = join(fixtureRoot, '..', '..', 'packages', 'dsh-bridge');
+const agentDshPluginPackageRoot = join(fixtureRoot, '..', '..', 'packages', 'agent', 'dsh-plugin');
 const profileName = 'openneko-acp-q0';
 const w2ProfileName = 'openneko-w2-q0';
 const promptAdmissionProfileName = 'openneko-prompt-admission-q0';
@@ -27,12 +28,15 @@ function resolvePackageJson(packageName) {
 class QualificationClient {
   updates = [];
   events = [];
+  contextPressures = [];
   domainToolRequests = [];
   cancelRequests = [];
   pendingCancellations = new Map();
+  permissions = [];
 
-  async requestPermission() {
-    throw new Error('DSH Q0 must not request permission without a prompt');
+  async requestPermission(request) {
+    this.permissions.push(request);
+    return { outcome: { outcome: 'selected', optionId: 'allow-once' } };
   }
 
   async sessionUpdate(notification) {
@@ -40,6 +44,10 @@ class QualificationClient {
   }
 
   async extNotification(method, params) {
+    if (method === 'openneko/session/context-pressure') {
+      this.contextPressures.push(params);
+      return;
+    }
     if (method !== 'openneko/session/event') {
       throw new Error(`DSH Q0 received an unexpected extension notification: ${method}`);
     }
@@ -79,6 +87,18 @@ class QualificationClient {
           fingerprint: { strategy: 'sha256', value: 'q0-canvas' },
           nodeCount: 0,
           connectionCount: 0,
+        },
+      };
+    }
+    if (params.tool === 'CreateSkill' && params.operation === 'create') {
+      return {
+        outcome: 'success',
+        result: {
+          status: 'ready',
+          name: 'w2-created-skill',
+          layout: 'directory',
+          source: 'project-agents',
+          provider: 'local',
         },
       };
     }
@@ -169,6 +189,7 @@ async function createW2Profile(dshHome) {
         private: true,
         dependencies: {
           '@neko/dsh-bridge': '*',
+          '@neko/agent-dsh-plugin': '*',
           '@neko/generation-dsh-plugin': '*',
           '@neko/canvas-dsh-plugin': '*',
           '@neko/content-dsh-plugin': '*',
@@ -179,6 +200,7 @@ async function createW2Profile(dshHome) {
             bundles: [
               '@deepseek-ai/dsh-base',
               '@neko/dsh-bridge',
+              '@neko/agent-dsh-plugin',
               '@neko/generation-dsh-plugin',
               '@neko/canvas-dsh-plugin',
               '@neko/content-dsh-plugin',
@@ -197,6 +219,7 @@ async function createW2Profile(dshHome) {
     ),
   );
   await symlink(dshBridgePackageRoot, join(nekoNamespaceDir, 'dsh-bridge'), 'dir');
+  await symlink(agentDshPluginPackageRoot, join(nekoNamespaceDir, 'agent-dsh-plugin'), 'dir');
   await symlink(
     join(fixtureRoot, '..', '..', 'packages', 'generation', 'dsh-plugin'),
     join(nekoNamespaceDir, 'generation-dsh-plugin'),
@@ -645,11 +668,19 @@ async function qualify() {
       mcpServers: [],
     });
     await waitFor(
-      () => w2Client.domainToolRequests.length === 2,
-      'OpenNeko W2 profile did not execute both domain Tools',
+      () => w2Client.domainToolRequests.length >= 2,
+      'OpenNeko W2 profile did not execute its baseline domain Tools',
     );
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    if (w2Client.domainToolRequests.length !== 3 || w2Client.permissions.length !== 1) {
+      throw new Error(
+        `OpenNeko W2 profile did not execute CreateSkill through approval; requests=${w2Client.domainToolRequests.map((request) => request.tool).join(',')} permissions=${w2Client.permissions.length} updates=${JSON.stringify(w2Client.updates)} stderr=${w2.readStderr()}`,
+      );
+    }
     const generationRequest = w2Client.domainToolRequests[0];
     const canvasRequest = w2Client.domainToolRequests[1];
+    const skillRequest = w2Client.domainToolRequests[2];
+    const skillPermission = w2Client.permissions[0];
     if (
       generationRequest?.tool !== 'openneko.generation' ||
       generationRequest.operation !== 'describe' ||
@@ -657,10 +688,17 @@ async function qualify() {
       canvasRequest?.tool !== 'openneko.canvas' ||
       canvasRequest.operation !== 'query' ||
       canvasRequest.input?.documentPath !== 'boards/w2.nkc' ||
+      skillRequest?.tool !== 'CreateSkill' ||
+      skillRequest.operation !== 'create' ||
+      skillRequest.input?.layout !== 'directory' ||
+      skillPermission?.toolCall?.title !==
+        'Create a new DSH Skill in the exact current Conversation scope.' ||
       generationRequest.sessionId !== w2Session.sessionId ||
       canvasRequest.sessionId !== w2Session.sessionId ||
+      skillRequest.sessionId !== w2Session.sessionId ||
       typeof generationRequest.toolCallId !== 'string' ||
-      typeof canvasRequest.toolCallId !== 'string'
+      typeof canvasRequest.toolCallId !== 'string' ||
+      typeof skillRequest.toolCallId !== 'string'
     ) {
       throw new Error('OpenNeko W2 profile did not preserve domain Tool identities');
     }
@@ -822,6 +860,8 @@ async function qualify() {
         standardPromptQueuedCancellation: true,
         generationDomainTool: true,
         canvasDomainTool: true,
+        skillAuthoringDomainTool: true,
+        skillAuthoringApproval: true,
         processRestarts: 3,
         providerContacted: false,
         isolatedDshHome: true,

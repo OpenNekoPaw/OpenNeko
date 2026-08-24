@@ -23,6 +23,11 @@ import type { AgentConversationContext } from '@neko/agent-contracts';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
 import type { DshAcpExtensionProjection } from '@neko/agent-contracts/dsh-acp';
+import type {
+  DshAcpSkillObservationProjection,
+  DshAcpStagedSkillValidationProjection,
+} from '@neko/agent-contracts/dsh-acp';
+import type { DshSkillAuthoringLayout } from '@neko/agent-contracts/dsh-skill-authoring';
 
 import type {
   DesktopDshSubprocessHandle,
@@ -38,6 +43,15 @@ export interface DesktopDshAgentClient
   readonly closed: Promise<void>;
   readonly projection: DshAcpProjection;
   readExtensions(): Promise<DshAcpExtensionProjection>;
+  validateStagedSkill(input: {
+    readonly stagingRoot: string;
+    readonly layout: DshSkillAuthoringLayout;
+    readonly entry: string;
+  }): Promise<DshAcpStagedSkillValidationProjection>;
+  observeSkill(input: {
+    readonly sessionId: string;
+    readonly name: string;
+  }): Promise<DshAcpSkillObservationProjection>;
 }
 
 export interface DesktopDshAgentRuntime {
@@ -58,6 +72,10 @@ export interface DesktopDshAgentRuntimeOptions {
   readonly resolveSessionCwd: (context: AgentConversationContext) => Promise<string>;
   readonly createHandlers: (input: {
     readonly bindings: ConversationDshSessionBindingStore;
+    readonly skillAuthoringBridge: Pick<
+      DesktopDshAgentClient,
+      'validateStagedSkill' | 'observeSkill'
+    >;
   }) => DesktopDshAgentHandlerAssembly;
   readonly connectClient?: (
     options: DshAcpApplicationClientOptions,
@@ -85,10 +103,21 @@ export async function startDesktopDshAgentRuntime(
   const staleConversations = createPersistentDshStaleConversationCleanup({
     metadataStore: options.metadataStore,
   });
-  const handlerAssembly = options.createHandlers({ bindings });
   const connectClient = options.connectClient ?? DshAcpApplicationClient.connect;
   const projection = new DshAcpProjection();
   let current: DesktopDshRuntimeGeneration | undefined;
+  const requireGenerationClient = (): DesktopDshAgentClient => {
+    const client = current?.client;
+    if (client === undefined) throw new Error('Desktop DSH Agent runtime is unavailable.');
+    return client;
+  };
+  const handlerAssembly = options.createHandlers({
+    bindings,
+    skillAuthoringBridge: Object.freeze({
+      validateStagedSkill: (input) => requireGenerationClient().validateStagedSkill(input),
+      observeSkill: (input) => requireGenerationClient().observeSkill(input),
+    }),
+  });
   let retirement = Promise.resolve();
   let restartPromise: Promise<void> | undefined;
   let disposed = false;
@@ -315,6 +344,12 @@ function createStableDesktopDshAgentClient(
     },
     async readExtensions() {
       return requireClient().readExtensions();
+    },
+    async validateStagedSkill(input) {
+      return requireClient().validateStagedSkill(input);
+    },
+    async observeSkill(input) {
+      return requireClient().observeSkill(input);
     },
     async readInbox(sessionId) {
       return requireClient().readInbox(sessionId);
