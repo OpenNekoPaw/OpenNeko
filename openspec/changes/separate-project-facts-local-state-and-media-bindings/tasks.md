@@ -116,9 +116,8 @@
 ## 8. Documentation And Verification
 
 - [x] 8.1 Update the Local Metadata, Media/Asset Library, Content/path, package-boundary, creative-resource,
-      sync/package, and Project architecture documents; mark the replaced decisions in
-      `optimize-workspace-media-library-sync` and
-      `simplify-resource-entity-character-world-boundaries` as superseded by this change.
+      sync/package, and Project architecture documents; retire the earlier workspace-link sync
+      decisions and the replaced resource/entity boundary decisions in favor of this change.
 - [x] 8.2 Run focused contract/unit suites and package checks for Content, Assets, Local Metadata, Project,
       Chara, World, Entity, Canvas, Cut, Agent, Preview, Search, and Desktop, recording the exact commands
       and results in implementation evidence.

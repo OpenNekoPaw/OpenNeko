@@ -2,10 +2,10 @@
 
 更新日期：2026-08-12
 
-> Project Entity 的 repository、候选/可用性投影和基础 Inspector 已建立。当前收敛目标由
-> [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
-> 跟踪：Entity Asset 与 Entity-owned Character interaction 退出 canonical 路径；严格数据 contract
-> 必须在旧记录资格化后实施。本文不把尚未完成的路径描述为可用能力。
+> Project Entity 的 repository、候选/可用性投影和基础 Inspector 已建立。当前 canonical 约束见
+> [`project-entity-authority`](../../openspec/specs/project-entity-authority/spec.md) 与
+> [`unified-entity-representation-bindings`](../../openspec/specs/unified-entity-representation-bindings/spec.md)：
+> Entity Asset 与 Entity-owned Character interaction 已退出 canonical 路径。本文不把尚未完成的路径描述为可用能力。
 
 本文定义 Project Entity 的最小语义身份、候选、representation binding 和搜索投影。文件与素材入口见
 [`asset-library.md`](asset-library.md)，完整跨领域关系见

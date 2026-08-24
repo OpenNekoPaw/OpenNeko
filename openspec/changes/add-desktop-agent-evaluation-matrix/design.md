@@ -1,9 +1,8 @@
 ## Context
 
-OpenNeko 只有一个产品组合根 `apps/neko-desktop`。Desktop Main 已组合 sender-bound Agent
-controller、Pi conversation authority、Pi Session、CredentialStore、permission、Tool/Skill 和
-Conversation/Timeline projection；`integrate-desktop-agent-home` 仍负责补齐该产品路径本身的最终
-facts 与 Electron 验收。
+OpenNeko 只有一个产品组合根 `apps/neko-desktop`。Desktop Main 已组合 sender-bound DSH Agent
+application、DSH Session、CredentialStore、permission、Tool/Skill 和 Conversation/Timeline
+projection；产品路径的剩余 facts 与 Electron 验收由当前 DSH runtime 和 Shell focused changes 拥有。
 
 外部 `scripts/agent-eval` 已拥有 22 个 Suite、51 个 Case，以及 strict schema、fixture、硬门禁、
 artifact validator、baseline、Judge、optimization 和配置/实现消融契约，但真实 `runV2Case()`
@@ -168,7 +167,7 @@ CLIConfig 和 AppPort case 退役；若对应用户行为仍有价值，应建�
 
 ### 8. 与现有变更的依赖采用 fail-visible gate
 
-本变更不复制 `integrate-desktop-agent-home` 的 controller/session/permission/projection 实现。Driver
+本变更不复制当前 DSH application/session/permission/projection 实现。Driver
 启动时验证所需 Desktop facts 和 route capability；依赖未完成时真实 case 保持
 `infrastructure-blocked`，并指出缺失 contract。不得通过 mock、direct runtime 或旧 Host 暂时通过。
 
@@ -249,8 +248,8 @@ Agent Launch Draft 与领域 binding 使用独立的 `agent-runtime.launch-bindi
 
 ## Migration Plan
 
-1. 在现有 Desktop Agent composition 上补齐中立 facts 与显式 terminal/disposal contract，并完成
-   `integrate-desktop-agent-home` 的最终 qualification。
+1. 在现有 Desktop DSH Agent composition 上补齐中立 facts 与显式 terminal/disposal contract，并完成
+   对应 focused runtime/Shell change 的最终 qualification。
 2. 扩展 Desktop functional launch 为可选择隐藏窗口的隔离 automation mode，验证并行
    `userData`、single-instance lock、端口、安全和清理。
 3. 在现有 schema/runner 内实现薄 `resolveExecutionCase` 与通用 workflow interpreter，删除具体

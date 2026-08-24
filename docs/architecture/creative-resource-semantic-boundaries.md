@@ -2,8 +2,8 @@
 
 更新日期：2026-08-13
 
-本文定义文件、媒体库、素材、Project Entity、Character 与 World 的跨领域边界。实施入口是
-[`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)；
+本文定义文件、媒体库、素材、Project Entity、Character 与 World 的跨领域边界。已接受的 Entity
+边界见 [`unified-entity-representation-bindings`](../../openspec/specs/unified-entity-representation-bindings/spec.md)；
 Project facts、项目 `.neko` 与 Media Library binding 的后续原子切换由
 [`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)
 负责；

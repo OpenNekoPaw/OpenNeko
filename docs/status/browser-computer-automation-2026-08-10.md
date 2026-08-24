@@ -1,6 +1,7 @@
 # Browser Use / Computer Use 闭环状态
 
 日期：2026-08-10
+
 > **状态说明（2026-08-20）：** 本文记录旧 OpenNeko Plugin/MCP/Pi 组合的审计快照，不再定义目标执行路径。`replace-pi-with-dsh-runtime-atomically` 接管 DSH MCP contribution、删除旧 runtime 与新 Evaluation；本文的 upstream compatibility、exact target、OS permission、approval 与 evidence 结论仍可作为输入。
 >
 > **后续处置（2026-08-22）：** canonical
@@ -10,7 +11,7 @@
 > 通用 Extensions 入口只投影 DSH-owned Skill/MCP，不承载 Plugin 或 Automation 专用配置；
 > contracts/node 安全规则仅作为 retained kernel 保留，当前没有 Desktop 产品消费者。
 
-事实来源：2026-08-10 当前代码、`integrate-open-source-browser-and-computer-use` OpenSpec、固定 upstream release 与本地 deterministic tests。
+事实来源：2026-08-10 当前代码、已归档的 `integrate-open-source-browser-and-computer-use` OpenSpec、固定 upstream release 与本地 deterministic tests。
 
 ## 结论
 
@@ -126,4 +127,4 @@ endpoint/credential、连接外部服务或改变系统权限。由于当前 TCC
 仍保持未执行；该证据只验证 fail-visible catalog/management UI，不替代 packaged artifact、真实 endpoint/provider
 qualification、OS permission fixture 或 Agent Evaluation。
 
-上述门禁由 [`../../openspec/changes/integrate-open-source-browser-and-computer-use/tasks.md`](../../openspec/changes/integrate-open-source-browser-and-computer-use/tasks.md) 跟踪。缺少外部 artifact、签名/notarization 身份、真实 OS grant 或 runner 时必须报告 `infrastructure-blocked`，不得用 mock、raw MCP 或开发机临时安装替代发布证据。
+上述历史门禁记录见 [`integrate-open-source-browser-and-computer-use/tasks.md`](../../openspec/changes/archive/2026-08-21-integrate-open-source-browser-and-computer-use/tasks.md)。缺少外部 artifact、签名/notarization 身份、真实 OS grant 或 runner 时必须报告 `infrastructure-blocked`，不得用 mock、raw MCP 或开发机临时安装替代发布证据。

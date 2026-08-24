@@ -54,8 +54,8 @@ Run/Save/Branch 及其 Desktop 入口必须保持 fail-visible unavailable。多
 
 ## 阶段 1：前端界面与现有子包功能接入
 
-开发提案与实施切片：
-[`plan-neko-desktop-phase-1-delivery`](openspec/changes/plan-neko-desktop-phase-1-delivery/)。
+开发提案与实施切片由当前 `openspec/changes/` 中的 focused change 分别承载；Phase 1 不再维护一份
+重复子提案任务和过时 runtime 目标的总控提案。
 
 ### 目标
 

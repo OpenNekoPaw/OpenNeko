@@ -8,10 +8,10 @@
 > [`establish-manifest-backed-asset-library`](../../openspec/changes/establish-manifest-backed-asset-library/)
 > 跟踪；项目本机绑定、同步与便携性的新边界由
 > [`restore-workspace-linked-media-access`](../../openspec/changes/restore-workspace-linked-media-access/)
-> 负责收敛；资源展示与 Entity/Character/World 的边界由
-> [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
-> 与 [`unify-workspace-resource-and-project-content-browser`](../../openspec/changes/unify-workspace-resource-and-project-content-browser/)
-> 收敛。远程分发、发布、账户与云同步不属于当前 Asset change；未来需要独立 OpenSpec。
+> 负责收敛；资源展示与 Entity/Character/World 的稳定边界见
+> [`unified-entity-representation-bindings`](../../openspec/specs/unified-entity-representation-bindings/spec.md)
+> 与 [`workspace-project-browser`](../../openspec/specs/workspace-project-browser/spec.md)。
+> 远程分发、发布、账户与云同步不属于当前 Asset change；未来需要独立 OpenSpec。
 > 项目媒体继续使用 Workspace authority 的 canonical `ContentLocator`、target-free `.neko/media-libraries` binding 与
 > 用户全局 Media Library connection。`neko/assets/<libraryName>` 下的受管软链接（Windows 使用
 > directory junction）是由该授权链派生的 Workspace 访问投影，供 Agent 等仅能访问工作区的消费者

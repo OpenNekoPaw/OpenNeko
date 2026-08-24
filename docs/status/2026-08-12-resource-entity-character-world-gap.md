@@ -2,7 +2,7 @@
 
 本文是当前实现与目标架构之间的审计快照，不是长期架构事实。目标边界见
 [`creative-resource-semantic-boundaries.md`](../architecture/creative-resource-semantic-boundaries.md)，实施任务见
-[`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
+the accepted [`unified-entity-representation-bindings`](../../openspec/specs/unified-entity-representation-bindings/spec.md)
 与后续存储切换
 [`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)。
 

@@ -11,7 +11,7 @@
 当前 Accepted 基线保留两个彼此独立的模型：Media Library 是普通文件的直接入口；Project
 Entity 是 character、scene、object、location 和 style 在项目内唯一的可变语义身份 authority。
 Asset Library 作为第三个模型，只管理用户显式导入或安装的本地普通版本化素材包。后续
-[`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
+[`unified-entity-representation-bindings`](../../openspec/specs/unified-entity-representation-bindings/spec.md)
 取代了本 ADR 的 Entity Asset 扩展：Project Entity 保持最小项目语义锚点，Character 与 World
 分别拥有便携性和发布语义。项目 Media Library locator、本机 binding、全局 connection、受管链接投影与同步/打包边界由
 [`restore-workspace-linked-media-access`](../../openspec/changes/restore-workspace-linked-media-access/)
@@ -24,7 +24,7 @@ Resources source 或普通用户的顶层管理对象。关联 Character 的 Ent
 
 | Owner                            | 拥有                                                                                | 不拥有                                                                                            |
 | -------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Media Library                    | logical locator、target-free 项目 binding、受管 link projection、显式 copy/delete    | Entity identity、generated/package lifecycle                                                        |
+| Media Library                    | logical locator、target-free 项目 binding、受管 link projection、显式 copy/delete   | Entity identity、generated/package lifecycle                                                      |
 | Asset Library（目标）            | 显式本地 managed package、stable ID、revision/digest、dependency、install/uninstall | 任意文件 discovery、远程分发、Media link target、Project Entity mutation、generic path resolution |
 | Project Entity                   | identity、alias、status、binding、orphan/rebind                                     | 文件字节、Character/World facts、usage、package lifecycle、generated output                       |
 | ContentReadService               | locator 授权 stat/read                                                              | membership、cache path、UI projection                                                             |
@@ -94,6 +94,6 @@ thumbnail、proxy、archive extraction 和其他 cache 是 Host/representation o
 实施入口：
 
 - [`establish-manifest-backed-asset-library`](../../openspec/changes/establish-manifest-backed-asset-library/)
-- [`simplify-resource-entity-character-world-boundaries`](../../openspec/changes/simplify-resource-entity-character-world-boundaries/)
+- [`unified-entity-representation-bindings`](../../openspec/specs/unified-entity-representation-bindings/spec.md)
 - [`separate-project-facts-local-state-and-media-bindings`](../../openspec/changes/separate-project-facts-local-state-and-media-bindings/)
 - [`restore-workspace-linked-media-access`](../../openspec/changes/restore-workspace-linked-media-access/)

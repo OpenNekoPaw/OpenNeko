@@ -5,7 +5,7 @@
 状态：当前实现与迁移决策输入，不是新的稳定架构事实。稳定边界以
 [`docs/architecture/agent.md`](../architecture/agent.md) 和
 [`docs/architecture/adr-pi-agent-runtime.md`](../architecture/adr-pi-agent-runtime.md) 为准；清理实施见
-[`openspec/changes/remove-legacy-agent-skill-activation-protocol/`](../../openspec/changes/remove-legacy-agent-skill-activation-protocol/)。
+[`remove-legacy-agent-skill-activation-protocol`](../../openspec/changes/archive/2026-08-21-remove-legacy-agent-skill-activation-protocol/)。
 
 ## 结论
 

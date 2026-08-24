@@ -1,6 +1,6 @@
 ## 1. Baseline And Active-Change Reconciliation
 
-- [x] 1.1 Update `integrate-desktop-agent-home` and `plan-neko-desktop-phase-1-delivery` artifacts so Home handoff/standalone composer and Home -> Project -> Agent are explicitly superseded by direct unified Workbench entry; record `fix-desktop-agent-shell-regressions` and `integrate-desktop-assets-canvas` behavior as the unchanged baseline.
+- [x] 1.1 Retire the old Home handoff/standalone composer and Home -> Project -> Agent program assumptions in favor of direct unified Workbench entry; record `fix-desktop-agent-shell-regressions` and `integrate-desktop-assets-canvas` behavior as the unchanged baseline.
 - [x] 1.2 Add normal Workspace Agent negative-regression tests for Header, Tabs, history, composer, model, file/reference, command, Skill, execution/approval, voice and Host messages before adding draft presentation.
 - [x] 1.3 Add Desktop structure/parity tests for existing Project Main View identities, Resource Browser, display modes, theme surfaces, Timeline and resize behavior before Shell extraction.
 - [x] 1.4 Add red structure tests requiring exactly one PrimarySidebar and one `ControlledWorkbenchShell` for Agent, Workspace, resource center, Extensions, project management and Settings scenes.

@@ -1,7 +1,7 @@
 # Desktop Agent Driver Contract Audit
 
-本审计以 `integrate-desktop-agent-home` 已完成的产品 owner 为事实来源。后续实现只能从这些 owner
-投影中立 facts，不得创建第二套 conversation/session/configuration authority。
+本审计以当前 `@neko/agent-runtime` DSH application owner 和 Desktop sender-bound composition 为事实来源。
+后续实现只能从这些 owner 投影中立 facts，不得创建第二套 conversation/session/configuration authority。
 
 | Driver requirement                         | Existing authoritative owner                                        | Current evidence                                                                                                                 | Contract gap                                                                                 |
 | ------------------------------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |

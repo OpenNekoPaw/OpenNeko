@@ -62,7 +62,7 @@ Skill、Tool、模型、配置和工作流变更无法获得批量、可重复�
   TUI baseline 迁移；不得为每个 case 增加固定 runner/adapter。
 - `packages/agent/runtime` 与 package-owned contracts：仅在现有产品契约缺少通用有效配置或中立
   facts 时扩展最小 host-neutral contract；不得加入 Evaluation suite、score、variant 或 pass/fail 概念。
-- 依赖 `integrate-desktop-agent-home` 的唯一 Agent controller、Pi/session、permission、Tool/Skill 和
-  projection 组合；该依赖未完成时真实 case 必须保持 `infrastructure-blocked`。
+- 依赖当前唯一的 DSH Session/application、permission、Tool/Skill 和 projection 组合；所需公开 facts
+  或完整 Desktop path 未完成时，真实 case 必须保持 `infrastructure-blocked`。
 - 不恢复 `apps/neko-tui`，不增加直接 runtime/`AgentSession` runner，不把 Agent Evaluation harness、
   provider-backed Evaluation、Desktop UI 或消融实验加入通用 CI。

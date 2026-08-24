@@ -1,6 +1,6 @@
 ## 1. Contract and migration alignment
 
-- [x] 1.1 Audit the completed `integrate-desktop-agent-home` controller/session/permission/projection facts against the Desktop driver spec and record every owning contract gap without creating a parallel fact source.
+- [x] 1.1 Audit the canonical DSH application/session/permission/projection facts against the Desktop driver spec and record every owning contract gap without creating a parallel fact source.
 - [x] 1.2 Replace free-form ablation `expectedPath` ownership with references to Scenario evidence/assertion contracts, add strict rejection for TUI/legacy `AgentSession`/direct-runtime path terms, and update schema tests.
 - [x] 1.3 Add a TUI evidence migration ledger that preserves retired Host identity, rejects TUI reports as Desktop baselines and maps only reusable scenario intent, fixtures, validators and rubrics.
 - [x] 1.4 Update existing thinking-budget, media-production and affected workflow scenarios to the real Desktop controller/Pi Session path and remove stale TUI/`AgentSession` semantics.

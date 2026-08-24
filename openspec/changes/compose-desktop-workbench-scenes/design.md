@@ -4,7 +4,7 @@ Desktop 目前由 `DesktopShell` 在 Home、Project workspace 和 Settings 三�
 
 现有 workspace Agent 已拥有完整 composer、模型、文件/mention、命令、Skill、执行/审批、会话 Tab、历史和语音入口。现有 Agent application runtime 按 Workspace identity 组合，Assistant 的用户级 conversation storage、scratch 和无目录 capability scope 尚未定义。Assets 已有 global-library Root，资源管理与 Preview 仍缺少同一 package-owned selection session。
 
-本变更保留 `fix-desktop-agent-shell-regressions` 已验证的 Agent、Canvas、Preview、Cut、Resource Browser、主题、display mode 和 resize 行为，取代 `integrate-desktop-agent-home` 的 Home handoff 目标，并更新 Phase 1 workflow：窗口启动后直接进入统一 Workbench 的 Agent scene，不再经过独立 Home 页面。
+本变更保留 `fix-desktop-agent-shell-regressions` 已验证的 Agent、Canvas、Preview、Cut、Resource Browser、主题、display mode 和 resize 行为，退休旧 Home handoff 目标，并更新 Phase 1 workflow：窗口启动后直接进入统一 Workbench 的 Agent scene，不再经过独立 Home 页面。
 
 ### 五层分析
 

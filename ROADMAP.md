@@ -42,8 +42,8 @@ task inventories do not by themselves commit roadmap delivery.
 
 ## Phase 1: Desktop UI and retained-package integration
 
-Development proposal and implementation slices:
-[`plan-neko-desktop-phase-1-delivery`](openspec/changes/plan-neko-desktop-phase-1-delivery/).
+Current focused changes under `openspec/changes/` own the development and implementation slices;
+Phase 1 no longer maintains a program proposal that duplicates child tasks or retired runtime goals.
 
 Complete `apps/neko-desktop` with Electron main/preload/renderer, AppHost, typed IPC, Home, Project
 Tabs, Content Project, Context Dock, and Activity/Attention. Integrate real public paths from Agent,
