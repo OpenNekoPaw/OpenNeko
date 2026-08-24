@@ -3,6 +3,7 @@ import {
   MEDIA_MODEL_TYPES,
   MODEL_TYPES,
   PROVIDER_CONNECTION_KINDS,
+  PROVIDER_MODEL_FAMILIES,
   PROVIDER_TYPES,
   type ChatModelOption,
   type ModelRefConfig,
@@ -19,6 +20,7 @@ describe('AI configuration contracts', () => {
       apiUrl: 'https://fixture.invalid/api',
       enabled: true,
       connectionKind: 'direct',
+      supportedModelFamilies: ['dialogue'],
     };
     const modelRef: ModelRefConfig = {
       providerId: provider.id,
@@ -35,6 +37,7 @@ describe('AI configuration contracts', () => {
     expect(option.id).toBe('fixture-provider:fixture-model');
     expect(PROVIDER_TYPES).toContain(provider.type);
     expect(PROVIDER_CONNECTION_KINDS).toContain(provider.connectionKind);
+    expect(PROVIDER_MODEL_FAMILIES).toEqual(['dialogue', 'generation']);
     expect(MODEL_TYPES).toEqual(['llm', 'image', 'video', 'audio']);
     expect(MEDIA_MODEL_TYPES).toEqual(['image', 'video', 'audio']);
   });

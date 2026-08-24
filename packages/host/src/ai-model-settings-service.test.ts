@@ -52,7 +52,11 @@ describe('DesktopAiModelSettingsService', () => {
     const projection = await new DesktopAiModelSettingsService(config, credentials).project();
 
     expect(projection.providers).toEqual([
-      expect.objectContaining({ id: 'provider-a', credentialStatus: 'configured' }),
+      expect.objectContaining({
+        id: 'provider-a',
+        credentialStatus: 'configured',
+        supportedModelFamilies: ['dialogue'],
+      }),
     ]);
     expect(JSON.stringify(projection)).not.toContain('must-not-project');
   });
@@ -73,13 +77,18 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: 'Provider A',
         apiUrl: 'https://example.test/v1',
         protocol: 'openai-chat',
+        supportedModelFamilies: ['dialogue'],
         enabled: true,
       },
       apiKey: 'secret-value',
     });
 
     expect(config.setProvider).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'provider-a', protocolProfile: 'openai-chat' }),
+      expect.objectContaining({
+        id: 'provider-a',
+        protocolProfile: 'openai-chat',
+        supportedModelFamilies: ['dialogue'],
+      }),
     );
     expect(credentials.replaceApiKey).toHaveBeenCalledWith('provider-a', 'secret-value');
     expect(result.restartRequired).toBe(true);
@@ -108,6 +117,7 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: 'Provider A renamed',
         apiUrl: provider.apiUrl,
         protocol: 'openai-chat',
+        supportedModelFamilies: ['dialogue'],
         enabled: true,
       },
     });
@@ -140,6 +150,7 @@ describe('DesktopAiModelSettingsService', () => {
           displayName: provider.displayName,
           apiUrl: provider.apiUrl,
           protocol: 'ollama',
+          supportedModelFamilies: ['dialogue'],
           enabled: true,
         },
       }),
@@ -169,6 +180,7 @@ describe('DesktopAiModelSettingsService', () => {
         displayName: 'Local Ollama',
         apiUrl: 'http://localhost:11434/api',
         protocol: 'ollama',
+        supportedModelFamilies: ['dialogue'],
         enabled: true,
       },
     });
@@ -202,6 +214,7 @@ describe('DesktopAiModelSettingsService', () => {
           displayName: 'Local Ollama',
           apiUrl: 'http://localhost:11434/api',
           protocol: 'ollama',
+          supportedModelFamilies: ['dialogue'],
           enabled: true,
         },
         apiKey: 'must-not-store',
@@ -232,6 +245,31 @@ describe('DesktopAiModelSettingsService', () => {
     });
   });
 
+  it('rejects models outside an explicitly configured Provider family', async () => {
+    const { config, provider } = createConfig();
+    Object.assign(provider, { supportedModelFamilies: ['generation'] });
+    const credentials = {
+      read: vi.fn(async () => undefined),
+    } as unknown as ProviderCredentialAuthority;
+
+    await expect(
+      new DesktopAiModelSettingsService(config, credentials).execute({
+        requestId: 'request-family-mismatch',
+        operation: 'save-model',
+        model: {
+          id: 'chat-mismatch',
+          providerId: provider.id,
+          apiName: 'chat-mismatch',
+          displayName: 'Chat mismatch',
+          type: 'llm',
+          enabled: true,
+        },
+      }),
+    ).rejects.toThrow(/does not support dialogue models/u);
+
+    expect(config.setModel).not.toHaveBeenCalled();
+  });
+
   it('projects local Ollama without requiring credentials and classifies its model as dialogue', async () => {
     const { config, provider, model } = createConfig();
     Object.assign(provider, {
@@ -255,6 +293,7 @@ describe('DesktopAiModelSettingsService', () => {
         protocol: 'ollama',
         connectionKind: 'local',
         builtin: true,
+        supportedModelFamilies: ['dialogue'],
         credentialStatus: 'not-required',
       }),
     ]);

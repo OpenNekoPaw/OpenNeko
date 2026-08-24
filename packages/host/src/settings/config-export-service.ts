@@ -2,6 +2,7 @@ import {
   AUTH_TYPES,
   MODEL_TYPES,
   PROVIDER_CONNECTION_KINDS,
+  PROVIDER_MODEL_FAMILIES,
   PROVIDER_PROTOCOL_PROFILES,
   PROVIDER_SUPPORT_LEVELS,
   PROVIDER_TYPES,
@@ -32,6 +33,7 @@ export interface CustomProviderConfig {
   readonly type?: Provider['type'];
   readonly connectionKind?: Provider['connectionKind'];
   readonly protocolProfile?: Provider['protocolProfile'];
+  readonly supportedModelFamilies?: Provider['supportedModelFamilies'];
   readonly requiresApiKey?: boolean;
   readonly baseUrl?: string;
 }
@@ -97,6 +99,9 @@ export class ConfigExportService implements IConfigExportService {
         connectionKind: config.connectionKind ?? (isLocalProvider ? 'local' : 'direct'),
         protocolProfile: config.protocolProfile ?? (isLocalProvider ? 'ollama' : 'openai-chat'),
         supportLevel: 'custom',
+        ...(config.supportedModelFamilies === undefined
+          ? {}
+          : { supportedModelFamilies: config.supportedModelFamilies }),
         requiresApiKey: config.requiresApiKey ?? !isLocalProvider,
         apiUrl: config.baseUrl ?? '',
         enabled: true,
@@ -143,6 +148,9 @@ function projectPortableProvider(provider: Provider): PortableProviderDefinition
       ? {}
       : { protocolProfile: provider.protocolProfile }),
     ...(provider.supportLevel === undefined ? {} : { supportLevel: provider.supportLevel }),
+    ...(provider.supportedModelFamilies === undefined
+      ? {}
+      : { supportedModelFamilies: [...provider.supportedModelFamilies] }),
     ...(provider.requiresApiKey === undefined ? {} : { requiresApiKey: provider.requiresApiKey }),
     ...(provider.builtin === undefined ? {} : { builtin: provider.builtin }),
     ...(provider.supportsBeta === undefined ? {} : { supportsBeta: provider.supportsBeta }),
@@ -168,6 +176,7 @@ function parsePortableProvider(value: unknown): PortableProviderDefinition {
       'connectionKind',
       'protocolProfile',
       'supportLevel',
+      'supportedModelFamilies',
       'requiresApiKey',
       'builtin',
       'supportsBeta',
@@ -193,6 +202,7 @@ function parsePortableProvider(value: unknown): PortableProviderDefinition {
     ...optionalEnumField(value, 'connectionKind', PROVIDER_CONNECTION_KINDS),
     ...optionalEnumField(value, 'protocolProfile', PROVIDER_PROTOCOL_PROFILES),
     ...optionalEnumField(value, 'supportLevel', PROVIDER_SUPPORT_LEVELS),
+    ...optionalEnumArrayField(value, 'supportedModelFamilies', PROVIDER_MODEL_FAMILIES),
     ...optionalBooleanField(value, 'requiresApiKey'),
     ...optionalBooleanField(value, 'builtin'),
     ...optionalBooleanField(value, 'supportsBeta'),
@@ -398,6 +408,25 @@ function optionalEnumField<TKey extends string, TValue extends string>(
 ): Partial<Record<TKey, TValue>> {
   const result: Partial<Record<TKey, TValue>> = {};
   if (key in value) result[key] = requireEnum(value[key], allowed, key);
+  return result;
+}
+
+function optionalEnumArrayField<TKey extends string, TValue extends string>(
+  value: Record<string, unknown>,
+  key: TKey,
+  allowed: readonly TValue[],
+): Partial<Record<TKey, readonly TValue[]>> {
+  if (!(key in value)) return {};
+  const raw = value[key];
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new TypeError(`${key} must be a non-empty array.`);
+  }
+  const selected = raw.map((entry) => requireEnum(entry, allowed, key));
+  if (new Set(selected).size !== selected.length) {
+    throw new TypeError(`${key} must not contain duplicate values.`);
+  }
+  const result: Partial<Record<TKey, readonly TValue[]>> = {};
+  result[key] = selected;
   return result;
 }
 

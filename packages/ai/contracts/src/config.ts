@@ -190,6 +190,14 @@ export const PROVIDER_SUPPORT_LEVELS = [
   'custom',
 ] as const satisfies readonly ProviderSupportLevel[];
 
+/** Product model families exposed by a provider. */
+export type ProviderModelFamily = 'dialogue' | 'generation';
+
+export const PROVIDER_MODEL_FAMILIES = [
+  'dialogue',
+  'generation',
+] as const satisfies readonly ProviderModelFamily[];
+
 /**
  * AI service provider configuration
  */
@@ -214,6 +222,8 @@ export interface ProviderConfig {
   protocolProfile?: ProviderProtocolProfile;
   /** Product support confidence for this provider profile */
   supportLevel?: ProviderSupportLevel;
+  /** Model families intentionally exposed by this provider in product settings */
+  supportedModelFamilies?: readonly ProviderModelFamily[];
   /** Whether this provider requires an API key to be considered configured */
   requiresApiKey?: boolean;
   /** Whether this is a builtin provider */

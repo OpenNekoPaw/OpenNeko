@@ -15,6 +15,7 @@ describe('Desktop AI model settings contract', () => {
           displayName: 'DeepSeek',
           apiUrl: 'https://api.deepseek.com/v1',
           protocol: 'openai-chat',
+          supportedModelFamilies: ['dialogue'],
           enabled: true,
         },
         apiKey: 'transient-secret',
@@ -38,6 +39,7 @@ describe('Desktop AI model settings contract', () => {
                 connectionKind: 'direct',
                 enabled: true,
                 builtin: false,
+                supportedModelFamilies: ['dialogue'],
                 credentialStatus: 'configured',
                 apiKey: 'must-not-cross',
               },
@@ -61,6 +63,7 @@ describe('Desktop AI model settings contract', () => {
           displayName: 'Ollama Local',
           apiUrl: 'http://localhost:11434/api',
           protocol: 'ollama',
+          supportedModelFamilies: ['dialogue'],
           enabled: true,
         },
       }),
@@ -76,5 +79,29 @@ describe('Desktop AI model settings contract', () => {
       operation: 'delete-model',
       modelId: 'local-model',
     });
+  });
+
+  it('rejects an empty or duplicate Provider family declaration', () => {
+    const provider = {
+      id: 'invalid-families',
+      displayName: 'Invalid families',
+      apiUrl: 'https://example.test/v1',
+      protocol: 'openai-chat' as const,
+      enabled: true,
+    };
+    expect(() =>
+      createDesktopAiModelSettingsRequest({
+        requestId: 'request-empty-families',
+        operation: 'save-provider',
+        provider: { ...provider, supportedModelFamilies: [] },
+      }),
+    ).toThrow(/non-empty array/u);
+    expect(() =>
+      createDesktopAiModelSettingsRequest({
+        requestId: 'request-duplicate-families',
+        operation: 'save-provider',
+        provider: { ...provider, supportedModelFamilies: ['dialogue', 'dialogue'] },
+      }),
+    ).toThrow(/duplicates/u);
   });
 });

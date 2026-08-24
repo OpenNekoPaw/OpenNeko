@@ -1,6 +1,7 @@
 import type {
   ModelType,
   ProviderConnectionKind,
+  ProviderModelFamily,
   ProviderProtocolProfile,
 } from '@neko/ai-contracts';
 
@@ -10,6 +11,8 @@ export type DesktopAiModelProtocol = Extract<
   ProviderProtocolProfile,
   'openai-chat' | 'openai-responses' | 'anthropic' | 'ollama'
 >;
+export type DesktopAiModelType = ModelType;
+export type DesktopAiProviderModelFamily = ProviderModelFamily;
 
 export interface DesktopAiModelRef {
   readonly providerId: string;
@@ -24,6 +27,7 @@ export interface DesktopAiProviderView {
   readonly connectionKind: ProviderConnectionKind;
   readonly enabled: boolean;
   readonly builtin: boolean;
+  readonly supportedModelFamilies: readonly ProviderModelFamily[];
   readonly credentialStatus: 'configured' | 'missing' | 'invalid' | 'not-required';
   readonly diagnostic?: string;
 }
@@ -53,6 +57,7 @@ export type DesktopAiModelSettingsRequest =
         readonly displayName: string;
         readonly apiUrl: string;
         readonly protocol: DesktopAiModelProtocol;
+        readonly supportedModelFamilies: readonly ProviderModelFamily[];
         readonly enabled: boolean;
       };
       readonly apiKey?: string;
@@ -139,7 +144,11 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
   if (operation === 'save-provider') {
     exactKeys(record, ['requestId', 'operation', 'provider', 'apiKey'], 'Provider save request');
     const provider = exactRecord(record['provider'], 'Provider input');
-    exactKeys(provider, ['id', 'displayName', 'apiUrl', 'protocol', 'enabled'], 'Provider input');
+    exactKeys(
+      provider,
+      ['id', 'displayName', 'apiUrl', 'protocol', 'supportedModelFamilies', 'enabled'],
+      'Provider input',
+    );
     const apiKey = record['apiKey'];
     if (apiKey !== undefined && typeof apiKey !== 'string')
       throw invalid('apiKey must be a string.');
@@ -155,6 +164,7 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
           ['openai-chat', 'openai-responses', 'anthropic', 'ollama'] as const,
           'provider.protocol',
         ),
+        supportedModelFamilies: providerModelFamilies(provider['supportedModelFamilies']),
         enabled: booleanValue(provider['enabled'], 'provider.enabled'),
       },
       ...(apiKey === undefined ? {} : { apiKey: nonEmpty(apiKey, 'apiKey') }),
@@ -256,6 +266,7 @@ function parseProviderView(value: unknown): DesktopAiProviderView {
       'connectionKind',
       'enabled',
       'builtin',
+      'supportedModelFamilies',
       'credentialStatus',
       'diagnostic',
     ],
@@ -280,6 +291,7 @@ function parseProviderView(value: unknown): DesktopAiProviderView {
     ),
     enabled: booleanValue(record['enabled'], 'provider.enabled'),
     builtin: booleanValue(record['builtin'], 'provider.builtin'),
+    supportedModelFamilies: providerModelFamilies(record['supportedModelFamilies']),
     credentialStatus: oneOf(
       record['credentialStatus'],
       ['configured', 'missing', 'invalid', 'not-required'] as const,
@@ -317,6 +329,19 @@ function parseModelRef(value: unknown): DesktopAiModelRef {
 
 function modelType(value: unknown): ModelType {
   return oneOf(value, ['llm', 'image', 'video', 'audio'] as const, 'modelType');
+}
+
+function providerModelFamilies(value: unknown): readonly ProviderModelFamily[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw invalid('provider.supportedModelFamilies must be a non-empty array.');
+  }
+  const selected = value.map((entry) =>
+    oneOf(entry, ['dialogue', 'generation'] as const, 'provider.supportedModelFamilies'),
+  );
+  if (new Set(selected).size !== selected.length) {
+    throw invalid('provider.supportedModelFamilies must not contain duplicates.');
+  }
+  return selected;
 }
 
 function exactRecord(value: unknown, label: string): Record<string, unknown> {

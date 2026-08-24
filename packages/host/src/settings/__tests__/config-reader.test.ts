@@ -227,6 +227,43 @@ describe('config-reader typed results', () => {
     ]);
   });
 
+  it('isolates an invalid provider model-family declaration', () => {
+    const filePath = path.join(createTempRoot(), 'config.toml');
+    fs.writeFileSync(
+      filePath,
+      [
+        '[[providers]]',
+        'id = "invalid-family"',
+        'name = "Invalid Family"',
+        'type = "generic"',
+        'api_url = "https://invalid.example/v1"',
+        'protocol_profile = "openai-chat"',
+        'supported_model_families = ["dialogue", "embedding"]',
+        '',
+        '[[providers]]',
+        'id = "valid-generation"',
+        'name = "Valid Generation"',
+        'type = "generic"',
+        'api_url = "https://media.example/v1"',
+        'protocol_profile = "openai-chat"',
+        'supported_model_families = ["generation"]',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const result = readConfigFileResult(filePath);
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.providers?.map((provider) => provider.id)).toEqual(['valid-generation']);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'unsupportedProviderModelFamily',
+        path: 'providers.invalid-family.supported_model_families',
+      }),
+    ]);
+  });
+
   it('preserves type defaults and model capability metadata from TOML', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
@@ -555,6 +592,7 @@ describe('config-reader typed results', () => {
           apiUrl: 'http://localhost:11434/api',
           enabled: true,
           connectionKind: 'local',
+          supportedModelFamilies: ['dialogue'],
           requiresApiKey: false,
         },
       ],
@@ -575,6 +613,7 @@ describe('config-reader typed results', () => {
     expect(written).toContain('[default_models.llm]');
     expect(written).toContain('[[providers]]');
     expect(written).toContain('connection_kind = "local"');
+    expect(written).toContain('supported_model_families = [ "dialogue" ]');
     expect(written).toContain('protocol_profile = "ollama"');
 
     const result = readConfigFileResult(filePath);
@@ -586,6 +625,7 @@ describe('config-reader typed results', () => {
     });
     expect(result.config.models?.[0]?.providerId).toBe('ollama-local');
     expect(result.config.models?.[0]?.protocolProfile).toBe('ollama');
+    expect(result.config.providers?.[0]?.supportedModelFamilies).toEqual(['dialogue']);
   });
 
   it('diagnoses duplicate provider ids', () => {

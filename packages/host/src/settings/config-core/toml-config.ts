@@ -11,6 +11,7 @@ import {
   AUTH_TYPES,
   MODEL_TYPES,
   PROVIDER_CONNECTION_KINDS,
+  PROVIDER_MODEL_FAMILIES,
   PROVIDER_PROTOCOL_PROFILES,
   PROVIDER_SUPPORT_LEVELS,
   PROVIDER_TYPES,
@@ -57,6 +58,7 @@ export interface TomlProviderConfig {
   readonly connection_kind?: ProviderConfig['connectionKind'];
   readonly protocol_profile?: ProviderConfig['protocolProfile'];
   readonly support_level?: ProviderConfig['supportLevel'];
+  readonly supported_model_families?: ProviderConfig['supportedModelFamilies'];
   readonly requires_api_key?: boolean;
   readonly builtin?: boolean;
   readonly supports_beta?: boolean;
@@ -108,6 +110,7 @@ export interface TomlConfigValidationIssue {
     | 'unsupportedProviderConnectionKind'
     | 'unsupportedProviderProtocolProfile'
     | 'unsupportedProviderSupportLevel'
+    | 'unsupportedProviderModelFamily'
     | 'unsupportedProtocolAuthType'
     | 'unsupportedProtocolStreamFormat'
     | 'unsupportedModelProtocolProfile'
@@ -316,6 +319,14 @@ function decodeProviders(
       'unsupportedProviderSupportLevel',
       issues,
     );
+    const supportedModelFamilies = readOptionalAllowedStringArray(
+      record,
+      'supported_model_families',
+      path,
+      PROVIDER_MODEL_FAMILIES,
+      'unsupportedProviderModelFamily',
+      issues,
+    );
     const requiresApiKey = readOptionalBoolean(record, 'requires_api_key', path, issues);
     const builtin = readOptionalBoolean(record, 'builtin', path, issues);
     const supportsBeta = readOptionalBoolean(record, 'supports_beta', path, issues);
@@ -354,6 +365,9 @@ function decodeProviders(
       ...(connectionKind === undefined ? {} : { connection_kind: connectionKind }),
       ...(protocolProfile === undefined ? {} : { protocol_profile: protocolProfile }),
       ...(supportLevel === undefined ? {} : { support_level: supportLevel }),
+      ...(supportedModelFamilies === undefined
+        ? {}
+        : { supported_model_families: supportedModelFamilies }),
       ...(requiresApiKey === undefined ? {} : { requires_api_key: requiresApiKey }),
       ...(builtin === undefined ? {} : { builtin }),
       ...(supportsBeta === undefined ? {} : { supports_beta: supportsBeta }),
@@ -743,6 +757,33 @@ function readRequiredStringArray(
   return undefined;
 }
 
+function readOptionalAllowedStringArray<T extends string>(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  allowed: readonly T[],
+  code: TomlConfigValidationIssue['code'],
+  issues: TomlConfigValidationIssue[],
+): readonly T[] | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  const path = fieldPath(owner, key);
+  if (!Array.isArray(value) || value.length === 0) {
+    issues.push({ code, path, message: `${path} must be a non-empty array.` });
+    return undefined;
+  }
+  const selected = value.filter((entry): entry is T => isAllowedString(entry, allowed));
+  if (selected.length !== value.length || new Set(selected).size !== selected.length) {
+    issues.push({
+      code,
+      path,
+      message: `${path} must contain unique values from ${formatAllowedValues(allowed)}.`,
+    });
+    return undefined;
+  }
+  return selected;
+}
+
 function readOptionalRecord(
   record: Record<string, unknown>,
   key: string,
@@ -830,6 +871,9 @@ function tomlProviderToRuntime(provider: TomlProviderConfig): ProviderDefinition
       ? {}
       : { protocolProfile: provider.protocol_profile }),
     ...(provider.support_level === undefined ? {} : { supportLevel: provider.support_level }),
+    ...(provider.supported_model_families === undefined
+      ? {}
+      : { supportedModelFamilies: provider.supported_model_families }),
     ...(provider.requires_api_key === undefined
       ? {}
       : { requiresApiKey: provider.requires_api_key }),
@@ -858,6 +902,7 @@ function runtimeProviderToToml(
     connection_kind: provider.connectionKind,
     protocol_profile: provider.protocolProfile,
     support_level: provider.supportLevel,
+    supported_model_families: provider.supportedModelFamilies,
     requires_api_key: provider.requiresApiKey,
     builtin: provider.builtin,
     supports_beta: provider.supportsBeta,

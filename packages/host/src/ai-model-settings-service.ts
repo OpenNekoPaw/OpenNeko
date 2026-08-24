@@ -1,4 +1,9 @@
-import type { ModelCapability, ModelType, ProviderProtocolProfile } from '@neko/ai-contracts';
+import type {
+  ModelCapability,
+  ModelType,
+  ProviderModelFamily,
+  ProviderProtocolProfile,
+} from '@neko/ai-contracts';
 import type { ConfigManager } from './settings/config-manager';
 import type { ProviderCredentialAuthority } from './settings/provider-credential-authority';
 import type {
@@ -56,6 +61,15 @@ export class DesktopAiModelSettingsService {
       const existing = this.config.getProvider(request.provider.id);
       const isLocalOllama = request.provider.protocol === 'ollama';
       if (
+        isLocalOllama &&
+        (request.provider.supportedModelFamilies.length !== 1 ||
+          request.provider.supportedModelFamilies[0] !== 'dialogue')
+      ) {
+        throw new Error(
+          `Local Ollama Provider ${request.provider.id} only supports dialogue models.`,
+        );
+      }
+      if (
         existing?.builtin === true &&
         request.provider.protocol !== toDesktopProtocol(existing.protocolProfile)
       ) {
@@ -92,6 +106,10 @@ export class DesktopAiModelSettingsService {
               : 'direct',
         protocolProfile,
         supportLevel: existing?.supportLevel ?? 'custom',
+        supportedModelFamilies:
+          preserveBuiltinMetadata && existing?.supportedModelFamilies
+            ? existing.supportedModelFamilies
+            : request.provider.supportedModelFamilies,
         requiresApiKey:
           preserveBuiltinMetadata && existing
             ? (existing.requiresApiKey ?? !isLocalOllama)
@@ -122,6 +140,15 @@ export class DesktopAiModelSettingsService {
         request.model.type !== 'llm'
       ) {
         throw new Error(`Ollama Provider ${provider.id} only supports dialogue models.`);
+      }
+      const modelFamily = modelFamilyFor(request.model.type);
+      if (
+        provider.supportedModelFamilies !== undefined &&
+        !provider.supportedModelFamilies.includes(modelFamily)
+      ) {
+        throw new Error(
+          `Provider ${provider.id} does not support ${modelFamily} models. Add the model to a matching Provider instead.`,
+        );
       }
       await this.config.setModel({
         id: request.model.id,
@@ -197,6 +224,7 @@ export class DesktopAiModelSettingsService {
         connectionKind: provider.connectionKind ?? 'direct',
         enabled: provider.enabled,
         builtin: provider.builtin ?? false,
+        supportedModelFamilies: this.projectModelFamilies(provider.id),
         credentialStatus: 'not-required',
       };
     }
@@ -210,6 +238,7 @@ export class DesktopAiModelSettingsService {
         connectionKind: provider.connectionKind ?? 'direct',
         enabled: provider.enabled,
         builtin: provider.builtin ?? false,
+        supportedModelFamilies: this.projectModelFamilies(provider.id),
         credentialStatus: credential ? 'configured' : 'missing',
       };
     } catch (error: unknown) {
@@ -221,10 +250,28 @@ export class DesktopAiModelSettingsService {
         connectionKind: provider.connectionKind ?? 'direct',
         enabled: provider.enabled,
         builtin: provider.builtin ?? false,
+        supportedModelFamilies: this.projectModelFamilies(provider.id),
         credentialStatus: 'invalid',
         diagnostic: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  private projectModelFamilies(providerId: string): readonly ProviderModelFamily[] {
+    const provider = this.config.getProvider(providerId);
+    if (!provider) throw new Error(`Provider ${providerId} disappeared during projection.`);
+    if (provider.supportedModelFamilies && provider.supportedModelFamilies.length > 0) {
+      return provider.supportedModelFamilies;
+    }
+    const families = new Set(
+      this.config
+        .getModelsByProvider(providerId)
+        .map((model) => modelFamilyFor(model.type ?? 'llm')),
+    );
+    if (families.size > 0) {
+      return (['dialogue', 'generation'] as const).filter((family) => families.has(family));
+    }
+    return ['dialogue'];
   }
 }
 
@@ -248,6 +295,10 @@ function capabilitiesFor(type: ModelType): ModelCapability[] {
   if (type === 'image') return ['text_to_image', 'image.generate'];
   if (type === 'video') return ['text_to_video', 'video.generate'];
   return ['text_to_audio', 'audio.generate'];
+}
+
+function modelFamilyFor(type: ModelType): ProviderModelFamily {
+  return type === 'llm' ? 'dialogue' : 'generation';
 }
 
 function describeError(error: unknown): string {
