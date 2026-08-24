@@ -367,11 +367,44 @@ async function startBridge(
 }
 
 async function qualify() {
+  const draftInputCatalogOnly = process.argv.includes('--draft-input-catalog-only');
   await assertExactPackageVersions(resolvePackageJson);
   const dshHome = await mkdtemp(join(tmpdir(), 'openneko-dsh-q0-'));
   const processes = [];
 
   try {
+    if (draftInputCatalogOnly) {
+      await createIsolatedProfile(dshHome);
+      const dshPackageJsonPath = resolvePackageJson('@deepseek-ai/dsh');
+      const dshManifest = JSON.parse(await readFile(dshPackageJsonPath, 'utf8'));
+      if (typeof dshManifest.bin?.dsh !== 'string') {
+        throw new Error('@deepseek-ai/dsh does not publish the expected dsh executable');
+      }
+      const dshBin = join(dirname(dshPackageJsonPath), dshManifest.bin.dsh);
+      const client = new QualificationClient();
+      const bridge = await startBridge(dshHome, dshBin, client);
+      processes.push(bridge);
+      await assertMalformedPreTurnInputCatalogRejected(bridge.connection);
+      const before = await bridge.connection.listSessions({ cwd: fixtureRoot });
+      const catalog = await bridge.connection.extMethod('openneko/session/input-catalog/read', {
+        cwd: fixtureRoot,
+      });
+      const after = await bridge.connection.listSessions({ cwd: fixtureRoot });
+      assertPreTurnInputCatalog(catalog, before, after);
+      await stopChild(bridge.child, bridge.exitPromise);
+      process.stdout.write(
+        `${JSON.stringify({
+          qualified: true,
+          draftInputCatalogIsolation: true,
+          commands: catalog.commands.map((command) => command.name),
+          skillsComplete: catalog.skillsComplete,
+          persistedSessionCount: after.sessions.length,
+          providerContacted: false,
+          jsonRpcMessages: bridge.finishPurity(),
+        })}\n`,
+      );
+      return;
+    }
     await createIsolatedProfile(dshHome);
     await createW2Profile(dshHome);
     await createPromptAdmissionProfile(dshHome);
@@ -384,6 +417,17 @@ async function qualify() {
     const firstClient = new QualificationClient();
     const first = await startBridge(dshHome, dshBin, firstClient);
     processes.push(first);
+    const sessionsBeforePreTurnCatalog = await first.connection.listSessions({ cwd: fixtureRoot });
+    const preTurnInputCatalog = await first.connection.extMethod(
+      'openneko/session/input-catalog/read',
+      { cwd: fixtureRoot },
+    );
+    const sessionsAfterPreTurnCatalog = await first.connection.listSessions({ cwd: fixtureRoot });
+    assertPreTurnInputCatalog(
+      preTurnInputCatalog,
+      sessionsBeforePreTurnCatalog,
+      sessionsAfterPreTurnCatalog,
+    );
     const session = await first.connection.newSession({
       cwd: fixtureRoot,
       mcpServers: [],
@@ -796,6 +840,39 @@ async function qualify() {
     throw error;
   } finally {
     await rm(dshHome, { recursive: true, force: true });
+  }
+}
+
+function assertPreTurnInputCatalog(catalog, before, after) {
+  if (
+    !Array.isArray(catalog.commands) ||
+    catalog.commands.length === 0 ||
+    !Array.isArray(catalog.skills) ||
+    typeof catalog.skillsComplete !== 'boolean'
+  ) {
+    throw new Error('OpenNeko DSH bridge did not expose the effective pre-turn input catalog');
+  }
+  if (JSON.stringify(after.sessions) !== JSON.stringify(before.sessions)) {
+    throw new Error('OpenNeko DSH pre-turn input catalog published a durable Session');
+  }
+}
+
+async function assertMalformedPreTurnInputCatalogRejected(connection) {
+  const malformed = [
+    {},
+    { sessionId: 42 },
+    { cwd: 'relative/workspace' },
+    { sessionId: 'session-1', cwd: fixtureRoot },
+  ];
+  for (const input of malformed) {
+    try {
+      await connection.extMethod('openneko/session/input-catalog/read', input);
+    } catch {
+      continue;
+    }
+    throw new Error(
+      `OpenNeko DSH bridge accepted a malformed input catalog request: ${JSON.stringify(input)}`,
+    );
   }
 }
 

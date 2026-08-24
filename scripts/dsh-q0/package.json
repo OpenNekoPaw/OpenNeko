@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "qualify": "pnpm --dir ../../packages/dsh-bridge build && pnpm --dir ../../packages/generation/dsh-plugin build && pnpm --dir ../../packages/canvas/dsh-plugin build && node src/qualify.mjs",
+    "qualify:draft-input-catalog": "pnpm --dir ../../packages/dsh-bridge build && node src/qualify.mjs --draft-input-catalog-only",
     "test": "node --test src/*.test.mjs"
   },
   "dependencies": {

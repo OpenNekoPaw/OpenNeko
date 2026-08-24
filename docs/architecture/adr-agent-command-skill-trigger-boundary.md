@@ -21,6 +21,11 @@ Renderer 可以完成 tokenization、菜单过滤和 keyboard interaction，但�
 不选择 Skill、不解析领域资源，也不改变 Agent 状态。提交后由 Desktop typed port 校验 schema、
 identity、permission 和 catalog revision，再交给对应 owner。
 
+Draft 与 Conversation 使用同一 DSH input-catalog contract，但目标必须精确区分：Draft 以首次提交将使用的
+authoritative cwd 做 pre-turn discovery，Conversation 以绑定的 DSH Session identity 做 discovery。
+Draft discovery 不得创建 OpenNeko Conversation 或持久 DSH Session；命令或 Skill 首次提交仍先原子创建并
+绑定正式 Session，再由该 Session 重新解析和执行。
+
 自然语言不得在 Agent reasoning 之前被关键词规则映射到 Skill、Tool 或固定 workflow。命令和 Skill
 identity 冲突、未知前缀、禁用 Skill、无效 context 或陈旧 selection 必须 fail-visible。
 

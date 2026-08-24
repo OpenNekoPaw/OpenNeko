@@ -138,6 +138,43 @@ describe('DshAcpApplicationClient', () => {
     );
   });
 
+  it('reads the canonical input catalog with and without an exact Session identity', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    fixture.connection.extMethod = vi.fn(async (method) => {
+      if (method !== 'openneko/session/input-catalog/read') {
+        throw new Error(`Unexpected extension method ${method}.`);
+      }
+      return { commands: [], skills: [], skillsComplete: true };
+    });
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await expect(client.readInputCatalog({ cwd: '/workspace/draft' })).resolves.toEqual({
+      commands: [],
+      skills: [],
+      skillsComplete: true,
+    });
+    await expect(client.readInputCatalog({ sessionId: 'session-1' })).resolves.toEqual({
+      commands: [],
+      skills: [],
+      skillsComplete: true,
+    });
+    expect(fixture.connection.extMethod).toHaveBeenNthCalledWith(
+      1,
+      'openneko/session/input-catalog/read',
+      { cwd: '/workspace/draft' },
+    );
+    expect(fixture.connection.extMethod).toHaveBeenNthCalledWith(
+      2,
+      'openneko/session/input-catalog/read',
+      { sessionId: 'session-1' },
+    );
+  });
+
   it('sends one exact inbox enqueue extension request and decodes its DSH snapshot', async () => {
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     const client = await DshAcpApplicationClient.connect({

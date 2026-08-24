@@ -2048,6 +2048,13 @@ async function startDesktop(): Promise<void> {
     environment: process.env,
     providers: dshProviderRuntime,
     metadataStore: localMetadataStore,
+    resolveWorkspaceSessionCwd: async (context) => {
+      const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+        context.workspaceGrantId,
+        context.workspaceId,
+      );
+      return resolution.workspace.workspacePath;
+    },
     onStderr: (chunk) => logger.warn('DSH runtime diagnostic.', { message: chunk.trimEnd() }),
     createHandlers: ({ bindings }) => {
       const assembly = createDesktopDshProductHandlers({
@@ -2348,6 +2355,8 @@ async function startDesktop(): Promise<void> {
     workspaceGrants: workspaceGrantAuthority,
     configuration: workspaceConfigAuthority,
     sessions: dshProduct.runtime.conversations.conversations,
+    preTurnInputCatalog: dshProduct.runtime.client,
+    lookupCwd: { resolve: dshProduct.runtime.resolveSessionCwd },
     executionCatalog: dshProviderRuntime.executionCatalog,
     resourceBrowser,
     assets: {

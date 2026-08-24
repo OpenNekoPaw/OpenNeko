@@ -82,7 +82,7 @@ describe('DshAgentView content-creation composer', () => {
 
   it('dispatches DSH commands and Skills from the retained Composer menus without prompt fallback', async () => {
     const onSubmit = vi.fn(async () => true);
-    renderAgent(<DshComposerHarness onSubmit={onSubmit} />);
+    renderAgent(<DshComposerHarness conversationId={undefined} onSubmit={onSubmit} />);
     const composer = screen.getByLabelText('消息');
 
     fireEvent.change(composer, { target: { value: '/' } });

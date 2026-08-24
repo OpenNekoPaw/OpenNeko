@@ -39,7 +39,9 @@ export interface ConversationDshSessionAcpClient {
   cancel(sessionId: string): Promise<void>;
   setSessionContext(input: { readonly sessionId: string; readonly text: string }): Promise<void>;
   readPermissionPresets(sessionId?: string): Promise<DshAcpPermissionPresetProjection>;
-  readInputCatalog(sessionId: string): Promise<DshAcpInputCatalogProjection>;
+  readInputCatalog(
+    input: { readonly sessionId: string } | { readonly cwd: string },
+  ): Promise<DshAcpInputCatalogProjection>;
   executeCommand(input: {
     readonly sessionId: string;
     readonly line: string;
@@ -178,7 +180,7 @@ export function createConversationDshSessionBoundClient(
     },
     async readInputCatalog(conversationId) {
       const dshSessionId = await resolveForOperation(options, conversationId);
-      return options.client.readInputCatalog(dshSessionId);
+      return options.client.readInputCatalog({ sessionId: dshSessionId });
     },
     async executeCommand(conversationId, line) {
       const dshSessionId = await resolveForOperation(options, conversationId);

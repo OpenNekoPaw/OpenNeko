@@ -18,6 +18,11 @@ describe('Desktop DSH composer configuration', () => {
     const workspaceConfig = createConfig();
     const applicationConfig = createConfig();
     const setSessionConfigOption = vi.fn(async () => ({ configOptions: [] }));
+    const readConversationInputCatalog = vi.fn(async () => ({
+      commands: [],
+      skills: [],
+      skillsComplete: true,
+    }));
     const restoreWorkspace = vi.fn(async () => ({
       workspace: {
         workspaceId: 'workspace-1',
@@ -55,8 +60,10 @@ describe('Desktop DSH composer configuration', () => {
       },
       sessions: {
         setSessionConfigOption,
-        readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
+        readInputCatalog: readConversationInputCatalog,
       },
+      preTurnInputCatalog: emptyInputCatalogReader(),
+      lookupCwd: fixedCwdLookup(),
       executionCatalog: createExecutionCatalog(),
       resourceBrowser: unavailableResourceBrowser(),
       assets: unavailableAssets(),
@@ -84,6 +91,7 @@ describe('Desktop DSH composer configuration', () => {
       ],
     });
     expect(restoreWorkspace).toHaveBeenCalledWith('window-1', 'grant-1', 'workspace-1');
+    expect(readConversationInputCatalog).toHaveBeenCalledWith('conversation-1');
     await expect(
       service.project({
         windowId: 'window-1',
@@ -159,6 +167,146 @@ describe('Desktop DSH composer configuration', () => {
     ).rejects.toThrow(/Composer video model/u);
   });
 
+  it('reads the DSH pre-turn catalog for a Draft without requiring a Conversation', async () => {
+    const config = createConfig();
+    const readPreTurnInputCatalog = vi.fn(async () => ({
+      commands: [{ name: 'permission', description: 'Switch permissions.' }],
+      skills: [
+        {
+          name: 'storyboard',
+          description: 'Create a storyboard.',
+          source: 'bundled',
+          provider: 'openneko-builtin',
+        },
+      ],
+      skillsComplete: true,
+    }));
+    const readConversationInputCatalog = vi.fn(async () => {
+      throw new Error('A Draft must not resolve a Conversation-bound catalog.');
+    });
+    const service = createDesktopDshComposerConfiguration({
+      resolveSurface: vi.fn(async () => ({
+        windowId: 'window-1',
+        binding: { kind: 'assistant' as const, assistantSpaceId: 'assistant-1', baseGrantIds: [] },
+      })),
+      contexts: { readContext: vi.fn(async () => undefined) },
+      canvas: canvasIndex(),
+      workspaceGrants: {
+        restore: vi.fn(async () => {
+          throw new Error('Workspace resolution must not run.');
+        }),
+      },
+      configuration: { getApplicationConfig: () => config, getWorkspaceConfig: () => config },
+      sessions: {
+        setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
+        readInputCatalog: readConversationInputCatalog,
+      },
+      preTurnInputCatalog: { readInputCatalog: readPreTurnInputCatalog },
+      lookupCwd: fixedCwdLookup('/workspace/draft'),
+      executionCatalog: createExecutionCatalog(),
+      resourceBrowser: unavailableResourceBrowser(),
+      assets: unavailableAssets(),
+      entities: unavailableEntities(),
+      permissions: {
+        read: vi.fn(async () => permissionPresets('workspace-write')),
+        set: vi.fn(async () => permissionPresets('workspace-write')),
+      },
+    });
+
+    await expect(
+      service.project({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+      }),
+    ).resolves.toMatchObject({
+      inputCatalog: {
+        commands: [{ name: 'permission' }],
+        skills: [{ name: 'storyboard' }],
+        skillsComplete: true,
+      },
+    });
+    expect(readPreTurnInputCatalog).toHaveBeenCalledTimes(1);
+    expect(readPreTurnInputCatalog).toHaveBeenCalledWith({ cwd: '/workspace/draft' });
+    expect(readConversationInputCatalog).not.toHaveBeenCalled();
+
+    readPreTurnInputCatalog.mockRejectedValueOnce(new Error('DSH preset composition failed.'));
+    await expect(
+      service.project({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+      }),
+    ).rejects.toThrow('DSH preset composition failed.');
+    expect(readConversationInputCatalog).not.toHaveBeenCalled();
+  });
+
+  it('uses the exact Workspace cwd for a Workspace Draft Skill catalog', async () => {
+    const config = createConfig();
+    const binding = {
+      kind: 'workspace' as const,
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'grant-1',
+    };
+    const readPreTurnInputCatalog = vi.fn(async () => ({
+      commands: [],
+      skills: [
+        {
+          name: 'project-storyboard',
+          description: 'Create the project storyboard.',
+          source: 'project-agents',
+          provider: 'local',
+        },
+      ],
+      skillsComplete: true,
+    }));
+    const resolveCwd = vi.fn(async () => '/workspace/one');
+    const service = createDesktopDshComposerConfiguration({
+      resolveSurface: vi.fn(async () => ({ windowId: 'window-1', binding })),
+      contexts: { readContext: vi.fn(async () => undefined) },
+      canvas: canvasIndex(),
+      workspaceGrants: {
+        restore: vi.fn(async () => ({
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath: '/workspace/one',
+            displayName: 'Workspace One',
+          },
+        })),
+      },
+      configuration: { getApplicationConfig: () => config, getWorkspaceConfig: () => config },
+      sessions: {
+        setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
+        readInputCatalog: vi.fn(async () => {
+          throw new Error('A Workspace Draft must not use a bound Conversation catalog.');
+        }),
+      },
+      preTurnInputCatalog: { readInputCatalog: readPreTurnInputCatalog },
+      lookupCwd: { resolve: resolveCwd },
+      executionCatalog: createExecutionCatalog(),
+      resourceBrowser: unavailableResourceBrowser(),
+      assets: unavailableAssets(),
+      entities: unavailableEntities(),
+      permissions: {
+        read: vi.fn(async () => permissionPresets('workspace-write')),
+        set: vi.fn(async () => permissionPresets('workspace-write')),
+      },
+    });
+
+    await expect(
+      service.project({
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+      }),
+    ).resolves.toMatchObject({
+      context: { kind: 'workspace', workspaceId: 'workspace-1' },
+      inputCatalog: { skills: [{ name: 'project-storyboard', source: 'project-agents' }] },
+    });
+    expect(resolveCwd).toHaveBeenCalledWith(binding);
+    expect(readPreTurnInputCatalog).toHaveBeenCalledWith({ cwd: '/workspace/one' });
+  });
+
   it('does not block an executable model on a recoverable config diagnostic', async () => {
     const config = createConfig();
     config.getAssistantConfigState.mockReturnValue({
@@ -190,6 +338,8 @@ describe('Desktop DSH composer configuration', () => {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
         readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
       },
+      preTurnInputCatalog: emptyInputCatalogReader(),
+      lookupCwd: fixedCwdLookup(),
       executionCatalog: createExecutionCatalog(),
       resourceBrowser: unavailableResourceBrowser(),
       assets: unavailableAssets(),
@@ -233,6 +383,8 @@ describe('Desktop DSH composer configuration', () => {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
         readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
       },
+      preTurnInputCatalog: emptyInputCatalogReader(),
+      lookupCwd: fixedCwdLookup(),
       executionCatalog: createExecutionCatalog(),
       resourceBrowser: unavailableResourceBrowser(),
       assets: unavailableAssets(),
@@ -361,6 +513,8 @@ describe('Desktop DSH composer configuration', () => {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
         readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
       },
+      preTurnInputCatalog: emptyInputCatalogReader(),
+      lookupCwd: fixedCwdLookup(),
       executionCatalog: createExecutionCatalog(),
       resourceBrowser: { query },
       assets: { materialize },
@@ -483,6 +637,8 @@ describe('Desktop DSH composer configuration', () => {
         setSessionConfigOption: vi.fn(async () => ({ configOptions: [] })),
         readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
       },
+      preTurnInputCatalog: emptyInputCatalogReader(),
+      lookupCwd: fixedCwdLookup(),
       executionCatalog,
       resourceBrowser: unavailableResourceBrowser(),
       assets: unavailableAssets(),
@@ -532,6 +688,16 @@ function createExecutionCatalog(options: { readonly includeDeepSeek?: boolean } 
         : { providerId, productModelId, apiModelName, input: ['text'] as const };
     },
   };
+}
+
+function emptyInputCatalogReader() {
+  return {
+    readInputCatalog: vi.fn(async () => ({ commands: [], skills: [], skillsComplete: true })),
+  };
+}
+
+function fixedCwdLookup(cwd = '/virtual/workspace') {
+  return { resolve: vi.fn(async () => cwd) };
 }
 
 function canvasIndex() {

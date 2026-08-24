@@ -19,6 +19,7 @@ import {
   type DshAcpApplicationClientHandlers,
   type DshAcpApplicationClientOptions,
 } from '@neko/agent-runtime/acp';
+import type { AgentConversationContext } from '@neko/agent-contracts';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
 import type { DshAcpExtensionProjection } from '@neko/agent-contracts/dsh-acp';
@@ -43,6 +44,7 @@ export interface DesktopDshAgentRuntime {
   readonly client: DesktopDshAgentClient;
   readonly conversations: ConversationDshSessionApplication;
   readonly bindings: ConversationDshSessionBindingStore;
+  resolveSessionCwd(context: AgentConversationContext): Promise<string>;
   getStatus(): DshRuntimeHostProjection;
   subscribe(listener: (projection: DshRuntimeHostProjection) => void): () => void;
   restart(): Promise<void>;
@@ -53,6 +55,7 @@ export interface DesktopDshAgentRuntimeOptions {
   readonly supervisor: Pick<DesktopDshSubprocessSupervisor, 'start'>;
   readonly virtualCwd: string;
   readonly metadataStore: LocalMetadataStore;
+  readonly resolveSessionCwd: (context: AgentConversationContext) => Promise<string>;
   readonly createHandlers: (input: {
     readonly bindings: ConversationDshSessionBindingStore;
   }) => DesktopDshAgentHandlerAssembly;
@@ -166,6 +169,7 @@ export async function startDesktopDshAgentRuntime(
     client,
     conversations,
     bindings,
+    resolveSessionCwd: options.resolveSessionCwd,
     getStatus: () => status,
     subscribe(listener: (projection: DshRuntimeHostProjection) => void) {
       statusListeners.add(listener);
@@ -300,8 +304,8 @@ function createStableDesktopDshAgentClient(
     async readPermissionPresets(sessionId) {
       return requireClient().readPermissionPresets(sessionId);
     },
-    async readInputCatalog(sessionId) {
-      return requireClient().readInputCatalog(sessionId);
+    async readInputCatalog(input) {
+      return requireClient().readInputCatalog(input);
     },
     async executeCommand(input) {
       return requireClient().executeCommand(input);

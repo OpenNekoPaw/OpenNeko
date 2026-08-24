@@ -76,6 +76,14 @@ export function createDesktopDshComposerConfiguration(options: {
     ConversationDshSessionBoundClient,
     'setSessionConfigOption' | 'readInputCatalog'
   >;
+  readonly preTurnInputCatalog: {
+    readInputCatalog(input: {
+      readonly cwd: string;
+    }): ReturnType<ConversationDshSessionBoundClient['readInputCatalog']>;
+  };
+  readonly lookupCwd: {
+    resolve(context: AgentConversationContext): Promise<string>;
+  };
   readonly executionCatalog: DesktopDshExecutionCatalog;
   readonly resourceBrowser: {
     query(windowId: string, request: unknown): Promise<ResourceBrowserProjection>;
@@ -145,8 +153,15 @@ export function createDesktopDshComposerConfiguration(options: {
     return { supportsImageInput: effective.supportsImageInput };
   };
 
-  const readInputCatalog = (conversationId: string | undefined) =>
-    conversationId === undefined ? undefined : options.sessions.readInputCatalog(conversationId);
+  const readInputCatalog = async (
+    conversationId: string | undefined,
+    binding: AgentConversationContext,
+  ) =>
+    conversationId === undefined
+      ? options.preTurnInputCatalog.readInputCatalog({
+          cwd: await options.lookupCwd.resolve(binding),
+        })
+      : options.sessions.readInputCatalog(conversationId);
 
   return Object.freeze({
     async project(input: ComposerSurfaceIdentity): Promise<DshComposerConfigurationProjection> {
@@ -157,7 +172,7 @@ export function createDesktopDshComposerConfiguration(options: {
         options.executionCatalog,
         await options.permissions.read(scope.conversationId),
         resolved.context,
-        await readInputCatalog(scope.conversationId),
+        await readInputCatalog(scope.conversationId, scope.binding),
       );
     },
 
@@ -293,7 +308,7 @@ export function createDesktopDshComposerConfiguration(options: {
         options.executionCatalog,
         await options.permissions.read(scope.conversationId),
         resolved.context,
-        await readInputCatalog(scope.conversationId),
+        await readInputCatalog(scope.conversationId, scope.binding),
       );
     },
 
@@ -317,7 +332,7 @@ export function createDesktopDshComposerConfiguration(options: {
         options.executionCatalog,
         projection,
         resolved.context,
-        await readInputCatalog(scope.conversationId),
+        await readInputCatalog(scope.conversationId, scope.binding),
       );
     },
 
@@ -353,7 +368,7 @@ export function createDesktopDshComposerConfiguration(options: {
         options.executionCatalog,
         await options.permissions.read(scope.conversationId),
         resolved.context,
-        await readInputCatalog(scope.conversationId),
+        await readInputCatalog(scope.conversationId, scope.binding),
       );
     },
 

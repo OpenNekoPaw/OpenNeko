@@ -43,6 +43,7 @@ describe('Desktop DSH Agent runtime composition', () => {
       supervisor: { start: () => subprocess },
       virtualCwd: '/virtual/workspace',
       metadataStore: fixture.store,
+      resolveSessionCwd: async () => '/virtual/workspace',
       createHandlers: ({ bindings }) => {
         expect(bindings).toBeDefined();
         return handlerAssembly;
@@ -86,6 +87,7 @@ describe('Desktop DSH Agent runtime composition', () => {
         supervisor: { start: () => subprocess },
         virtualCwd: '/virtual/workspace',
         metadataStore: fixture.store,
+        resolveSessionCwd: async () => '/virtual/workspace',
         createHandlers: () => createHandlerAssembly(),
         connectClient: async () => Promise.reject(failure),
       }),
@@ -112,6 +114,7 @@ describe('Desktop DSH Agent runtime composition', () => {
         supervisor: { start: () => subprocess },
         virtualCwd: '/virtual/workspace',
         metadataStore: fixture.store,
+        resolveSessionCwd: async () => '/virtual/workspace',
         createHandlers,
       }),
     ).rejects.toThrow();
@@ -132,6 +135,7 @@ describe('Desktop DSH Agent runtime composition', () => {
         supervisor: { start: () => subprocess },
         virtualCwd: '/virtual/workspace',
         metadataStore: fixture.store,
+        resolveSessionCwd: async () => '/virtual/workspace',
         createHandlers: () => createHandlerAssembly(),
         connectClient: async () => Promise.reject(connectionFailure),
       }),
@@ -164,6 +168,7 @@ describe('Desktop DSH Agent runtime composition', () => {
       supervisor: { start },
       virtualCwd: '/virtual/workspace',
       metadataStore: fixture.store,
+      resolveSessionCwd: async () => '/virtual/workspace',
       createHandlers: () => handlerAssembly,
       connectClient,
     });
@@ -246,6 +251,7 @@ describe('Desktop DSH Agent runtime composition', () => {
       supervisor: { start },
       virtualCwd: '/virtual/workspace',
       metadataStore: fixture.store,
+      resolveSessionCwd: async () => '/virtual/workspace',
       createHandlers: () => handlerAssembly,
       connectClient,
     });
@@ -278,6 +284,7 @@ describe('Desktop DSH Agent runtime composition', () => {
       supervisor: { start: () => subprocess },
       virtualCwd: '/virtual/workspace',
       metadataStore: fixture.store,
+      resolveSessionCwd: async () => '/virtual/workspace',
       createHandlers: () => handlerAssembly,
       connectClient: async () => createClient([]),
     });
@@ -372,6 +379,8 @@ function createClient(
     executeCommand: async () => unsupported(),
     invokeSkill: async () => unsupported(),
     readExtensions: async () => unsupported(),
+    validateStagedSkill: async () => unsupported(),
+    observeSkill: async () => unsupported(),
     readInbox: async () => unsupported(),
     readImageAttachment: async () => unsupported(),
     enqueueInboxMessage: async () => unsupported(),

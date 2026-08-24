@@ -15,10 +15,15 @@ DSH Skill runtime 是 Skill discovery、读取和注入的唯一执行 owner；O
 ```text
 OpenNeko-authorized Skill roots
   -> DSH Skill discovery/catalog
-  -> exact Session input catalog
+  -> Draft pre-turn catalog by exact cwd OR exact Session input catalog
   -> explicit $skill or Agent decision
   -> DSH loads full SKILL.md
 ```
+
+Draft 尚未建立 OpenNeko Conversation 时，Host 以首次提交将使用的 authoritative absolute cwd 请求
+DSH pre-turn catalog；DSH 通过未发布 Agent 组合同一 preset，并在返回目录前回滚该 scope，不产生持久
+Session。既有 Conversation 始终通过精确绑定的 DSH Session 读取目录。两者只共享 DSH catalog owner，
+不共享或伪造 Conversation identity；实际执行仍由正式 Session 重新解析 Skill。
 
 Catalog 常驻上下文只包含稳定 identity、名称、描述、source、enablement 和必要 availability metadata。
 完整正文按需加载。Skill 激活属于当前 turn/input，不建立跨 turn 可变 active-skill authority；重开、

@@ -1,6 +1,7 @@
 import { mkdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import type { AgentConversationContext } from '@neko/agent-contracts';
 import type { ConversationDshSessionBindingStore } from '@neko/agent-runtime/application';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 
@@ -77,6 +78,9 @@ export async function startDesktopDshProductRuntime(options: {
   readonly environment: Readonly<Record<string, string | undefined>>;
   readonly providers: DesktopDshProviderRuntimeProjection;
   readonly metadataStore: LocalMetadataStore;
+  readonly resolveWorkspaceSessionCwd: (
+    context: Extract<AgentConversationContext, { readonly kind: 'workspace' | 'authoring' }>,
+  ) => Promise<string>;
   readonly createHandlers: (input: {
     readonly bindings: ConversationDshSessionBindingStore;
   }) => DesktopDshAgentHandlerAssembly;
@@ -90,6 +94,10 @@ export async function startDesktopDshProductRuntime(options: {
     supervisor: prepared.supervisor,
     virtualCwd: prepared.workingDirectory,
     metadataStore: options.metadataStore,
+    resolveSessionCwd: (context) =>
+      context.kind === 'workspace' || context.kind === 'authoring'
+        ? options.resolveWorkspaceSessionCwd(context)
+        : Promise.resolve(prepared.workingDirectory),
     createHandlers: options.createHandlers,
   });
   return Object.freeze({ prepared, runtime });

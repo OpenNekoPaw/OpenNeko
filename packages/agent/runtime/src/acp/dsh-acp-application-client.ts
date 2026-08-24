@@ -303,9 +303,11 @@ export class DshAcpApplicationClient {
     return decodeDshAcpPermissionPresetProjection(response);
   }
 
-  async readInputCatalog(sessionId: string): Promise<DshAcpInputCatalogProjection> {
+  async readInputCatalog(
+    input: { readonly sessionId: string } | { readonly cwd: string },
+  ): Promise<DshAcpInputCatalogProjection> {
     const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.readInputCatalog, {
-      sessionId,
+      ...input,
     });
     return decodeDshAcpInputCatalogProjection(response);
   }

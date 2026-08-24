@@ -3382,10 +3382,11 @@ async function openEntrySlashMenu({ evaluate, screenshot, type }) {
     `(() => [...document.querySelectorAll(
       '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-command-menu [role="menuitem"]',
     )].some((item) => item.querySelector('.agent-composer-popover-primary')
-      ?.textContent?.trim() === '/new'))()`,
-    'Unbound Entry slash menu did not expose the Draft-safe /new command.',
+      ?.textContent?.trim() === '/permission'))()`,
+    'Unbound Entry slash menu did not expose the DSH /permission command.',
   );
-  const selection = await evaluate(`(() => {
+  const selection = await evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
     const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
     const menu = activeSurface?.querySelector('.agent-composer-command-menu');
     const items = [...(menu?.querySelectorAll('[role="menuitem"]') ?? [])];
@@ -3397,6 +3398,7 @@ async function openEntrySlashMenu({ evaluate, screenshot, type }) {
       typedTriggerButtonCount:
         activeSurface?.querySelectorAll('.agent-composer-tool-button-text').length ?? -1,
       globalAlertCount: document.querySelectorAll('.shell-diagnostic[role="alert"]').length,
+      conversationCount: projection.agentHome.conversations.length,
       withinViewport:
         bounds !== undefined &&
         bounds.width > 0 &&
@@ -3408,9 +3410,10 @@ async function openEntrySlashMenu({ evaluate, screenshot, type }) {
     };
     if (
       !(menu instanceof HTMLElement) ||
-      !result.itemLabels.includes('/new') ||
+      !result.itemLabels.includes('/permission') ||
       result.typedTriggerButtonCount !== 0 ||
       result.globalAlertCount !== 0 ||
+      result.conversationCount !== 0 ||
       !result.withinViewport
     ) {
       throw new Error('Entry slash discovery is invalid: ' + JSON.stringify(result));

@@ -52,6 +52,7 @@ import {
   decodeDshAcpContextPressureProjection,
   encodeDshAcpModelConfiguration,
   type DshAcpExtensionProjection,
+  type DshAcpInputCatalogProjection,
   type DshAcpContextPressureProjection,
   type DshAcpHostToolPort,
   type DshAcpSessionEventNotification,
@@ -598,32 +599,20 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
           }
           case DSH_ACP_EXTENSION_METHODS.readInputCatalog: {
             const keys = Object.keys(params);
-            if (keys.length !== 1 || keys[0] !== 'sessionId') {
+            const hasSessionId = keys.length === 1 && keys[0] === 'sessionId';
+            const hasCwd = keys.length === 1 && keys[0] === 'cwd';
+            if (!hasSessionId && !hasCwd) {
               throw RequestError.invalidParams(
                 undefined,
-                'Input catalog read requires exactly one sessionId.',
+                'Input catalog read requires exactly one sessionId or cwd.',
               );
             }
+            if (hasCwd) {
+              const cwd = requireAbsoluteCwd(params.cwd, 'Input catalog cwd');
+              return { ...(await readPreTurnInputCatalog(ctx, preset, cwd, config)) };
+            }
             const record = requireOwned(requireNonEmptyString(params.sessionId, 'sessionId'));
-            const agent = record.handle.agent;
-            const skills = await ctx.skills.snapshot({
-              cwd: agent.session.header.cwd,
-              scope: agent,
-            });
-            return {
-              commands: ctx.commands.list(agent).map((command) => ({
-                name: command.name,
-                description: command.description,
-                ...(command.input === undefined ? {} : { inputHint: command.input.hint }),
-              })),
-              skills: skills.skills.filter(isUserInvocable).map((skill) => ({
-                name: skill.name,
-                description: skill.description,
-                source: skill.source,
-                provider: skill.provider,
-              })),
-              skillsComplete: skills.complete,
-            };
+            return { ...(await readAgentInputCatalog(ctx, record.handle.agent)) };
           }
           case DSH_ACP_EXTENSION_METHODS.executeCommand: {
             const request = decodeDshAcpCommandExecuteRequest(params);
@@ -864,6 +853,61 @@ export function projectDshExtensionCatalog(
     mcp: [],
     diagnostics: snapshot.complete ? [] : [{ code: 'skill_catalog_incomplete', count: 1 }],
   };
+}
+
+async function readAgentInputCatalog(
+  ctx: Pick<Context, 'commands' | 'skills'>,
+  agent: AgentHandle['agent'],
+): Promise<DshAcpInputCatalogProjection> {
+  const skills = await ctx.skills.snapshot({
+    cwd: agent.session.header.cwd,
+    scope: agent,
+  });
+  return {
+    commands: ctx.commands.list(agent).map((command) => ({
+      name: command.name,
+      description: command.description,
+      ...(command.input === undefined ? {} : { inputHint: command.input.hint }),
+    })),
+    skills: skills.skills.filter(isUserInvocable).map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      source: skill.source,
+      provider: skill.provider,
+    })),
+    skillsComplete: skills.complete,
+  };
+}
+
+async function readPreTurnInputCatalog(
+  ctx: Context,
+  preset: string,
+  cwd: string,
+  config: OpenNekoDshBridgeConfig,
+): Promise<DshAcpInputCatalogProjection> {
+  const completed = new Error('OpenNeko pre-turn input catalog probe completed.');
+  let catalog: DshAcpInputCatalogProjection | undefined;
+  try {
+    const handle = await ctx.agents.create({
+      sessionId: SessionId(randomUUID()),
+      meta: { cwd, agentPreset: preset },
+      agentOptions: agentOptions(defaultSessionConfiguration(config)),
+      setup: async (agentCtx) => {
+        await setupSessionRuntimeContext(ctx, preset, createSessionRuntimeContext())(agentCtx);
+        const agent = agentCtx.agent;
+        if (agent === undefined) {
+          throw new Error('DSH pre-turn input catalog setup has no unpublished Agent.');
+        }
+        catalog = await readAgentInputCatalog(ctx, agent);
+        throw completed;
+      },
+    });
+    await handle.dispose();
+    throw new Error('DSH pre-turn input catalog probe published an Agent unexpectedly.');
+  } catch (error) {
+    if (error === completed && catalog !== undefined) return catalog;
+    throw error;
+  }
 }
 
 export function listOpenNekoSessions(
@@ -1931,6 +1975,14 @@ function requireNonEmptyString(input: unknown, field: string): string {
   const value = requireString(input, field);
   if (value.length === 0) {
     throw RequestError.invalidParams(undefined, `${field} must not be empty.`);
+  }
+  return value;
+}
+
+function requireAbsoluteCwd(input: unknown, field: string): string {
+  const value = requireNonEmptyString(input, field);
+  if (!isAbsolute(value)) {
+    throw RequestError.invalidParams(undefined, `${field} must be absolute.`);
   }
   return value;
 }
