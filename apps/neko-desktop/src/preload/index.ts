@@ -1204,6 +1204,24 @@ const bridge: OpenNekoDesktopBridge &
       const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
       return parseDesktopAiModelSettingsResponse(response, request.requestId);
     },
+    async deleteProvider(providerId) {
+      const request = createDesktopAiModelSettingsRequest({
+        requestId: nextRequestId('desktop-ai-provider-delete'),
+        operation: 'delete-provider',
+        providerId,
+      });
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      return parseDesktopAiModelSettingsResponse(response, request.requestId);
+    },
+    async deleteModel(modelId) {
+      const request = createDesktopAiModelSettingsRequest({
+        requestId: nextRequestId('desktop-ai-model-delete'),
+        operation: 'delete-model',
+        modelId,
+      });
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_AI_MODEL_SETTINGS_CHANNEL, request);
+      return parseDesktopAiModelSettingsResponse(response, request.requestId);
+    },
     async setDefault(modelType, ref) {
       const request = createDesktopAiModelSettingsRequest({
         requestId: nextRequestId('desktop-ai-model-default'),

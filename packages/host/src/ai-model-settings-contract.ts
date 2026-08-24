@@ -1,10 +1,14 @@
-import type { ModelType, ProviderProtocolProfile } from '@neko/ai-contracts';
+import type {
+  ModelType,
+  ProviderConnectionKind,
+  ProviderProtocolProfile,
+} from '@neko/ai-contracts';
 
 export const DESKTOP_AI_MODEL_SETTINGS_CHANNEL = 'openneko:desktop:ai-model-settings:execute';
 
 export type DesktopAiModelProtocol = Extract<
   ProviderProtocolProfile,
-  'openai-chat' | 'openai-responses' | 'anthropic'
+  'openai-chat' | 'openai-responses' | 'anthropic' | 'ollama'
 >;
 
 export interface DesktopAiModelRef {
@@ -17,8 +21,10 @@ export interface DesktopAiProviderView {
   readonly displayName: string;
   readonly apiUrl: string;
   readonly protocol: DesktopAiModelProtocol;
+  readonly connectionKind: ProviderConnectionKind;
   readonly enabled: boolean;
-  readonly credentialStatus: 'configured' | 'missing' | 'invalid';
+  readonly builtin: boolean;
+  readonly credentialStatus: 'configured' | 'missing' | 'invalid' | 'not-required';
   readonly diagnostic?: string;
 }
 
@@ -65,6 +71,16 @@ export type DesktopAiModelSettingsRequest =
     }
   | {
       readonly requestId: string;
+      readonly operation: 'delete-provider';
+      readonly providerId: string;
+    }
+  | {
+      readonly requestId: string;
+      readonly operation: 'delete-model';
+      readonly modelId: string;
+    }
+  | {
+      readonly requestId: string;
       readonly operation: 'set-default';
       readonly modelType: ModelType;
       readonly ref: DesktopAiModelRef;
@@ -86,6 +102,8 @@ export interface OpenNekoDesktopAiModelSettingsBridge {
     saveModel(
       input: Extract<DesktopAiModelSettingsRequest, { operation: 'save-model' }>['model'],
     ): Promise<DesktopAiModelSettingsResponse>;
+    deleteProvider(providerId: string): Promise<DesktopAiModelSettingsResponse>;
+    deleteModel(modelId: string): Promise<DesktopAiModelSettingsResponse>;
     setDefault(
       modelType: ModelType,
       ref: DesktopAiModelRef,
@@ -104,7 +122,14 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
   const requestId = nonEmpty(record['requestId'], 'requestId');
   const operation = oneOf(
     record['operation'],
-    ['get', 'save-provider', 'save-model', 'set-default'] as const,
+    [
+      'get',
+      'save-provider',
+      'save-model',
+      'delete-provider',
+      'delete-model',
+      'set-default',
+    ] as const,
     'operation',
   );
   if (operation === 'get') {
@@ -127,7 +152,7 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
         apiUrl: httpUrl(provider['apiUrl']),
         protocol: oneOf(
           provider['protocol'],
-          ['openai-chat', 'openai-responses', 'anthropic'] as const,
+          ['openai-chat', 'openai-responses', 'anthropic', 'ollama'] as const,
           'provider.protocol',
         ),
         enabled: booleanValue(provider['enabled'], 'provider.enabled'),
@@ -154,6 +179,22 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
         type: modelType(model['type']),
         enabled: booleanValue(model['enabled'], 'model.enabled'),
       },
+    };
+  }
+  if (operation === 'delete-provider') {
+    exactKeys(record, ['requestId', 'operation', 'providerId'], 'Provider delete request');
+    return {
+      requestId,
+      operation,
+      providerId: identity(record['providerId'], 'providerId'),
+    };
+  }
+  if (operation === 'delete-model') {
+    exactKeys(record, ['requestId', 'operation', 'modelId'], 'Model delete request');
+    return {
+      requestId,
+      operation,
+      modelId: identity(record['modelId'], 'modelId'),
     };
   }
   exactKeys(record, ['requestId', 'operation', 'modelType', 'ref'], 'Default model request');
@@ -207,7 +248,17 @@ function parseProviderView(value: unknown): DesktopAiProviderView {
   const record = exactRecord(value, 'Provider view');
   exactKeys(
     record,
-    ['id', 'displayName', 'apiUrl', 'protocol', 'enabled', 'credentialStatus', 'diagnostic'],
+    [
+      'id',
+      'displayName',
+      'apiUrl',
+      'protocol',
+      'connectionKind',
+      'enabled',
+      'builtin',
+      'credentialStatus',
+      'diagnostic',
+    ],
     'Provider view',
   );
   const diagnostic = record['diagnostic'];
@@ -219,13 +270,19 @@ function parseProviderView(value: unknown): DesktopAiProviderView {
     apiUrl: httpUrl(record['apiUrl']),
     protocol: oneOf(
       record['protocol'],
-      ['openai-chat', 'openai-responses', 'anthropic'] as const,
+      ['openai-chat', 'openai-responses', 'anthropic', 'ollama'] as const,
       'provider.protocol',
     ),
+    connectionKind: oneOf(
+      record['connectionKind'],
+      ['gateway', 'local', 'direct'] as const,
+      'provider.connectionKind',
+    ),
     enabled: booleanValue(record['enabled'], 'provider.enabled'),
+    builtin: booleanValue(record['builtin'], 'provider.builtin'),
     credentialStatus: oneOf(
       record['credentialStatus'],
-      ['configured', 'missing', 'invalid'] as const,
+      ['configured', 'missing', 'invalid', 'not-required'] as const,
       'provider.credentialStatus',
     ),
     ...(diagnostic === undefined ? {} : { diagnostic }),

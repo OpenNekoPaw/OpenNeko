@@ -124,26 +124,28 @@ export async function createDesktopDshProviderRuntimeProjection(input: {
     if (dshModels.length === 0) continue;
 
     let credentialEnvironmentName: string | undefined;
-    try {
-      const credential = await input.credentials.read(provider.id);
-      if (credential === undefined && provider.requiresApiKey === true) {
+    if (provider.requiresApiKey !== false) {
+      try {
+        const credential = await input.credentials.read(provider.id);
+        if (credential === undefined && provider.requiresApiKey === true) {
+          diagnostics.push({
+            providerId: provider.id,
+            message: `Provider '${provider.id}' requires an API-key credential for DSH execution.`,
+          });
+          continue;
+        }
+        if (credential !== undefined) {
+          credentialEnvironmentName = `${DSH_CREDENTIAL_ENV_PREFIX}${credentialIndex}`;
+          credentialIndex += 1;
+          credentialEnvironment[credentialEnvironmentName] = credential.key;
+        }
+      } catch (error) {
         diagnostics.push({
           providerId: provider.id,
-          message: `Provider '${provider.id}' requires an API-key credential for DSH execution.`,
+          message: `Provider '${provider.id}' credential is unavailable: ${describeError(error)}`,
         });
         continue;
       }
-      if (credential !== undefined) {
-        credentialEnvironmentName = `${DSH_CREDENTIAL_ENV_PREFIX}${credentialIndex}`;
-        credentialIndex += 1;
-        credentialEnvironment[credentialEnvironmentName] = credential.key;
-      }
-    } catch (error) {
-      diagnostics.push({
-        providerId: provider.id,
-        message: `Provider '${provider.id}' credential is unavailable: ${describeError(error)}`,
-      });
-      continue;
     }
 
     profiles[provider.id] = Object.freeze({
@@ -224,6 +226,9 @@ function modelSupportsImageInput(capabilities: readonly string[]): boolean {
 }
 
 function resolveDshProtocol(provider: Provider): DshProviderProfile['api'] | undefined {
+  if (provider.protocolProfile === 'ollama' || provider.type === 'ollama') {
+    return 'openai-completions';
+  }
   if (provider.protocolProfile === 'openai-responses') return 'openai-responses';
   if (provider.protocolProfile === 'anthropic' || provider.type === 'anthropic') {
     return 'anthropic-messages';
@@ -264,6 +269,12 @@ function resolveDshBaseUrl(provider: Provider): string | undefined {
     parsed.hash.length > 0
   ) {
     return undefined;
+  }
+  if (provider.protocolProfile === 'ollama' || provider.type === 'ollama') {
+    const path = parsed.pathname.replace(/\/+$/u, '');
+    if (path !== '' && path !== '/api' && path !== '/v1') return undefined;
+    parsed.pathname = '/v1';
+    return parsed.toString().replace(/\/+$/u, '');
   }
   const basePath = provider.protocolVariant?.basePath?.trim().replace(/\/+$/u, '');
   if (!basePath || basePath === '/' || raw.endsWith(basePath)) return raw;

@@ -100,6 +100,38 @@ describe('Desktop DSH provider runtime projection', () => {
     expect(JSON.stringify(projection.profilePatchEntries)).toContain('"input":["text","image"]');
   });
 
+  it('projects local Ollama dialogue models through its OpenAI-compatible endpoint without credentials', async () => {
+    const readCredential = vi.fn(async () => undefined);
+    const projection = await createDesktopDshProviderRuntimeProjection({
+      providers: [
+        provider({
+          id: 'ollama-local',
+          type: 'ollama',
+          apiUrl: 'http://localhost:11434/api',
+          connectionKind: 'local',
+          protocolProfile: 'ollama',
+          requiresApiKey: false,
+          useBearerAuth: false,
+        }),
+      ],
+      models: [model({ id: 'llama-local', providerId: 'ollama-local', name: 'llama3.2' })],
+      credentials: { read: readCredential },
+    });
+
+    expect(projection.executionCatalog.resolve('ollama-local', 'llama-local')).toEqual({
+      providerId: 'ollama-local',
+      productModelId: 'llama-local',
+      apiModelName: 'llama3.2',
+      input: ['text'],
+    });
+    expect(JSON.stringify(projection.profilePatchEntries)).toContain(
+      '"baseURL":"http://localhost:11434/v1"',
+    );
+    expect(projection.credentialEnvironment).toEqual({});
+    expect(projection.diagnostics).toEqual([]);
+    expect(readCredential).not.toHaveBeenCalled();
+  });
+
   it('projects the canonical Host reasoning effort catalog into the DSH model profile', async () => {
     const projection = await createDesktopDshProviderRuntimeProjection({
       providers: [
