@@ -619,8 +619,15 @@ code {
   cursor: pointer;
 }
 
-.desktop-settings__provider-card-main:hover {
+.desktop-settings__provider-card:has(.desktop-settings__provider-card-main:hover),
+.desktop-settings__provider-card:has(.desktop-settings__provider-card-main:focus-visible) {
+  border-color: var(--neko-desktop-border-strong);
   background: var(--neko-desktop-control-hover);
+}
+
+.desktop-settings__provider-card-main:hover,
+.desktop-settings__provider-card-main:focus-visible {
+  background: transparent;
 }
 
 .desktop-settings__provider-card-main > span:first-child {
