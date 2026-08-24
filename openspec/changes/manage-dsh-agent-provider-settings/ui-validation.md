@@ -10,6 +10,7 @@ The authoritative runtime was the running OpenNeko Electron development applicat
 
 - Initial: open Settings → Agent; the compact Provider summary is visible, the canonical configuration action sits beside the Agent heading, and no separate advanced-settings content row is rendered.
 - Catalog: expand Provider management; configured Providers remain compact, full-width rows with credential status.
+- Provider capability groups: dialogue and generation Providers use side-by-side groups at desktop width; mixed Providers appear once; model-less Providers remain visible as unconfigured; narrow containers return all groups to one column.
 - Configured Provider: select a Provider; credential input, collapsed custom settings, Provider-owned model catalog and footer actions appear in one panel.
 - Advanced: expand and collapse custom settings; display name, API URL and protocol appear without changing model ownership.
 - Models: dialogue and generation entries are grouped side by side within the selected Provider when space permits, defaults are marked on cards and other enabled models expose Set as default; narrow containers return the groups to one column.
@@ -23,6 +24,8 @@ The authoritative runtime was the running OpenNeko Electron development applicat
 - Electron configured Provider state was directly inspected at 1220×768 after selecting DeepSeek Chat: credential status, collapsed disclosure, two dialogue cards and footer actions were visible.
 - Electron configured Provider footer was directly inspected after scrolling: the model catalog, Set as default actions, Cancel/Save footer and adjacent advanced Agent entry did not overlap or clip.
 - Electron custom Provider state was directly inspected at the top and after scrolling to its footer: all required fields, compact protocol control, empty model state and disabled incomplete save flow remained contained in the overlay.
+- Current Electron Provider catalog was directly inspected after the capability-group follow-up: DeepSeek Chat and Neko API Chat rendered in the left dialogue group, Neko API Media rendered in the right generation group, and model-less Olloma Chat remained visible in the full-width unconfigured group. Counts were 2, 1 and 1 respectively.
+- The focused component fixture proves dialogue-only, generation-only, mixed and unconfigured Providers enter their exact groups and that the mixed Provider appears once. The renderer style test proves the two-column rule and its 620px single-column container override.
 
 ## Visual findings
 
@@ -33,11 +36,12 @@ The authoritative runtime was the running OpenNeko Electron development applicat
 - Model cards stay compact in two columns and collapse to one column under the existing settings container query.
 - No clipping, overlap, unreadable labels or overlay-boundary regression was observed in the inspected light-theme 1220×768 states.
 - A current Electron screenshot directly confirms the Agent heading, description, right-aligned configuration action and compact Provider summary share one coherent initial viewport with no duplicate advanced-settings block.
+- A current Electron screenshot directly confirms the Provider-level two-column hierarchy, aligned group headings/counts, compact cards, readable credential badges and full-width unconfigured section without clipping or overlap.
 
 ## Result
 
-`blocked`: the current Agent initial state passed direct Electron inspection, and component tests cover the complete structural change. Concurrent development-runtime reloads repeatedly closed the Settings overlay before a current configured-Provider screenshot could be captured, so the new side-by-side model-group pixels and narrow-container return state remain blocked. Real credential entry/provider creation was intentionally not performed, and dark theme was not exercised.
+`blocked`: the current Agent initial state and wide Provider capability grouping passed direct Electron inspection, and component/style tests cover the complete grouping and responsive structure. The shared development Electron was replaced by its default page while resizing, so the narrow-container pixels remain blocked. Real credential entry/provider creation was intentionally not performed, and dark theme was not exercised.
 
 ## Residual risk
 
-The current title action is visually accepted. Side-by-side dialogue/generation pixels are supported by the mixed Provider component fixture and responsive CSS inspection but lack stable Electron evidence because the shared dev runtime reloaded into unrelated scenes. Credential submission, canonical Provider creation, dark-theme contrast and narrow-window pixels remain unexecuted. No secret was entered or projected during validation.
+The current title action and wide Provider grouping are visually accepted. Provider and model single-column responsive behavior is covered structurally but lacks stable Electron pixels because the shared dev runtime was replaced during resize. Credential submission, canonical Provider creation, dark-theme contrast and narrow-window pixels remain unexecuted. No secret was entered or projected during validation.

@@ -40,3 +40,8 @@ The title-action and model-group layout follow-up remains L1 Renderer presentati
 advanced-settings copy while retaining the same `openAgentAdvanced` Host action as the single canonical
 configuration-file entry. Provider records are not assigned a fabricated dialogue/generation type and are
 not duplicated; only their owned model catalog is split into responsive dialogue and generation columns.
+
+The Provider capability-group follow-up remains L1 Renderer presentation. Group membership is derived from
+the canonical projected model `type` values, so Host contracts, ConfigManager, credentials and runtime routing
+remain unchanged. Dialogue-only and generation-only Providers use separate columns; mixed Providers appear
+once and model-less Providers remain fail-visible as unconfigured instead of being classified by name or URL.

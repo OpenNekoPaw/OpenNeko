@@ -40,9 +40,18 @@ The Agent settings surface SHALL keep Provider configuration collapsed until the
 - **AND** no separate default-model selectors are shown
 - **AND** no parallel model-catalog management summary is shown
 
+#### Scenario: Providers are grouped by configured capability
+
+- **WHEN** the user opens Provider management
+- **THEN** providers with only dialogue models and providers with only generation models are shown in separate side-by-side groups when space permits
+- **AND** the groups use a single-column layout in narrow containers
+- **AND** a Provider with both dialogue and generation models is shown once in a multi-capability group
+- **AND** a Provider without configured models remains visible in an unconfigured group
+- **AND** Provider grouping is derived from the canonical model catalog rather than a parallel Provider type
+
 #### Scenario: Provider configuration is managed
 
-- **WHEN** the user opens Provider management and selects a configured Provider
+- **WHEN** the user selects a configured Provider
 - **THEN** its credential, endpoint, protocol and model catalog are edited in one scoped panel
 - **AND** advanced Provider fields remain collapsed until explicitly requested
 

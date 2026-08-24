@@ -180,6 +180,9 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => providerSummary.click());
     expect(providerSummary.getAttribute('aria-expanded')).toBe('true');
     expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(1);
+    expect(container.querySelector('[data-provider-group="mixed"]')?.textContent).toContain(
+      'DeepSeek Provider',
+    );
     expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(0);
 
     const providerCard = container.querySelector<HTMLButtonElement>(
@@ -206,6 +209,62 @@ describe('Desktop Settings surfaces', () => {
       providerId: 'deepseek',
       modelId: 'audio-model',
     });
+    await act(async () => root.unmount());
+  });
+
+  it('groups providers by canonical model capability without duplicating mixed providers', async () => {
+    const providers = (
+      [
+        ['chat', 'Dialogue Provider'],
+        ['media', 'Generation Provider'],
+        ['hybrid', 'Hybrid Provider'],
+        ['empty', 'Provider Without Models'],
+      ] as const
+    ).map(([id, displayName]) => ({
+      id,
+      displayName,
+      apiUrl: `https://${id}.example/v1`,
+      protocol: 'openai-chat' as const,
+      enabled: true,
+      credentialStatus: 'configured' as const,
+    }));
+    const projection = {
+      providers,
+      models: [
+        modelFixture('chat-model', 'chat', 'llm'),
+        modelFixture('image-model', 'media', 'image'),
+        modelFixture('hybrid-chat', 'hybrid', 'llm'),
+        modelFixture('hybrid-video', 'hybrid', 'video'),
+      ],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, restartRequired: false };
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+    await act(async () => findButtonContaining(container, 'Providers').click());
+
+    const expectedGroups = {
+      dialogue: 'Dialogue Provider',
+      generation: 'Generation Provider',
+      mixed: 'Hybrid Provider',
+      unconfigured: 'Provider Without Models',
+    } as const;
+    for (const [kind, providerName] of Object.entries(expectedGroups)) {
+      const group = container.querySelector(`[data-provider-group="${kind}"]`);
+      expect(group?.textContent).toContain(providerName);
+      expect(group?.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(1);
+    }
+    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(4);
+    expect(container.textContent?.match(/Hybrid Provider/g)).toHaveLength(1);
     await act(async () => root.unmount());
   });
 
@@ -318,4 +377,15 @@ function findButtonContaining(container: HTMLElement, label: string): HTMLButton
   );
   if (!button) throw new Error(`Settings fixture requires button containing '${label}'.`);
   return button;
+}
+
+function modelFixture(id: string, providerId: string, type: 'llm' | 'image' | 'video' | 'audio') {
+  return {
+    id,
+    providerId,
+    apiName: id,
+    displayName: id,
+    type,
+    enabled: true,
+  } as const;
 }

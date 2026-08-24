@@ -401,6 +401,10 @@ function AgentModelSettingsGroup({
   const [editingProvider, setEditingProvider] = useState<DesktopAiProviderView>();
   const [showProviderForm, setShowProviderForm] = useState(false);
   const [providersExpanded, setProvidersExpanded] = useState(false);
+  const providerGroups = useMemo(
+    () => groupProvidersByCapability(projection?.providers ?? [], projection?.models ?? []),
+    [projection],
+  );
 
   useEffect(() => {
     if (!port) {
@@ -511,27 +515,54 @@ function AgentModelSettingsGroup({
                 {t('settings.agent.addProvider')}
               </button>
             </div>
-            <div className="desktop-settings__provider-list">
-              {projection?.providers.map((provider) => (
-                <button
-                  key={provider.id}
-                  className="desktop-settings__provider-card"
-                  type="button"
-                  onClick={() => {
-                    setEditingProvider(provider);
-                    setShowProviderForm(true);
-                  }}
+            <div className="desktop-settings__provider-groups">
+              {providerGroups.map((group) => (
+                <section
+                  key={group.kind}
+                  className={`desktop-settings__provider-group${
+                    group.kind === 'mixed' || group.kind === 'unconfigured'
+                      ? ' desktop-settings__provider-group--wide'
+                      : ''
+                  }`}
+                  data-provider-group={group.kind}
                 >
-                  <span>
-                    <strong>{provider.displayName}</strong>
-                    <small>{provider.apiUrl}</small>
-                  </span>
-                  <span
-                    className={`desktop-settings__credential desktop-settings__credential--${provider.credentialStatus}`}
-                  >
-                    {t(`settings.agent.credential.${provider.credentialStatus}`)}
-                  </span>
-                </button>
+                  <div className="desktop-settings__provider-group-heading">
+                    <div>
+                      <strong>{t(`settings.agent.providerGroup.${group.kind}`)}</strong>
+                      <small>{t(`settings.agent.providerGroup.${group.kind}.description`)}</small>
+                    </div>
+                    <span className="desktop-settings__count">{group.providers.length}</span>
+                  </div>
+                  {group.providers.length > 0 ? (
+                    <div className="desktop-settings__provider-list">
+                      {group.providers.map((provider) => (
+                        <button
+                          key={provider.id}
+                          className="desktop-settings__provider-card"
+                          type="button"
+                          onClick={() => {
+                            setEditingProvider(provider);
+                            setShowProviderForm(true);
+                          }}
+                        >
+                          <span>
+                            <strong>{provider.displayName}</strong>
+                            <small>{provider.apiUrl}</small>
+                          </span>
+                          <span
+                            className={`desktop-settings__credential desktop-settings__credential--${provider.credentialStatus}`}
+                          >
+                            {t(`settings.agent.credential.${provider.credentialStatus}`)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="desktop-settings__provider-empty">
+                      {t('settings.agent.providerGroup.empty')}
+                    </p>
+                  )}
+                </section>
               ))}
             </div>
             {showProviderForm && port ? (
@@ -568,6 +599,53 @@ function AgentModelSettingsGroup({
       </div>
     </SettingsGroup>
   );
+}
+
+type ProviderCapabilityGroupKind = 'dialogue' | 'generation' | 'mixed' | 'unconfigured';
+
+interface ProviderCapabilityGroup {
+  readonly kind: ProviderCapabilityGroupKind;
+  readonly providers: readonly DesktopAiProviderView[];
+}
+
+function groupProvidersByCapability(
+  providers: readonly DesktopAiProviderView[],
+  models: readonly DesktopAiModelView[],
+): readonly ProviderCapabilityGroup[] {
+  const modelTypesByProvider = new Map<string, Set<ModelType>>();
+  for (const model of models) {
+    const types = modelTypesByProvider.get(model.providerId) ?? new Set<ModelType>();
+    types.add(model.type);
+    modelTypesByProvider.set(model.providerId, types);
+  }
+
+  const grouped: Record<ProviderCapabilityGroupKind, DesktopAiProviderView[]> = {
+    dialogue: [],
+    generation: [],
+    mixed: [],
+    unconfigured: [],
+  };
+  for (const provider of providers) {
+    const types = modelTypesByProvider.get(provider.id);
+    const hasDialogue = types?.has('llm') ?? false;
+    const hasGeneration =
+      (types?.has('image') ?? false) ||
+      (types?.has('video') ?? false) ||
+      (types?.has('audio') ?? false);
+    const kind: ProviderCapabilityGroupKind =
+      hasDialogue && hasGeneration
+        ? 'mixed'
+        : hasDialogue
+          ? 'dialogue'
+          : hasGeneration
+            ? 'generation'
+            : 'unconfigured';
+    grouped[kind].push(provider);
+  }
+
+  return (['dialogue', 'generation', 'mixed', 'unconfigured'] as const)
+    .filter((kind) => kind === 'dialogue' || kind === 'generation' || grouped[kind].length > 0)
+    .map((kind) => ({ kind, providers: grouped[kind] }));
 }
 
 function ProviderForm({

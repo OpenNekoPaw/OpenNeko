@@ -95,8 +95,22 @@ export const en = {
   'settings.agent.defaultModel': 'Default',
   'settings.agent.setAsDefault': 'Set as default',
   'settings.agent.providers': 'Providers',
-  'settings.agent.providersDescription': 'Configured providers consumed by DSH and generation.',
+  'settings.agent.providersDescription':
+    'Manage configured providers by dialogue and generation capability.',
   'settings.agent.addProvider': 'Add provider',
+  'settings.agent.providerGroup.dialogue': 'Dialogue providers',
+  'settings.agent.providerGroup.dialogue.description':
+    'Provide language models for DSH conversations.',
+  'settings.agent.providerGroup.generation': 'Generation providers',
+  'settings.agent.providerGroup.generation.description':
+    'Provide image, video, or audio generation models.',
+  'settings.agent.providerGroup.mixed': 'Multi-capability providers',
+  'settings.agent.providerGroup.mixed.description':
+    'Provide both dialogue and generation models and appear here only once.',
+  'settings.agent.providerGroup.unconfigured': 'Providers to configure',
+  'settings.agent.providerGroup.unconfigured.description':
+    'No models are configured, so no capability is inferred yet.',
+  'settings.agent.providerGroup.empty': 'No configured providers',
   'settings.agent.modelCatalog': 'Model catalog',
   'settings.agent.modelCatalogDescription':
     'Configure this provider’s dialogue and generation models, including each default.',

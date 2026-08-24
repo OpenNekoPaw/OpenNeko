@@ -492,8 +492,69 @@ code {
   gap: 8px;
 }
 
+.desktop-settings__provider-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.desktop-settings__provider-group {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--neko-desktop-control) 46%, transparent);
+}
+
+.desktop-settings__provider-group--wide {
+  grid-column: 1 / -1;
+}
+
+.desktop-settings__provider-group-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.desktop-settings__provider-group-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.desktop-settings__provider-group-heading strong {
+  color: var(--neko-desktop-text-strong);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.desktop-settings__provider-group-heading small,
+.desktop-settings__provider-empty {
+  color: var(--neko-desktop-text-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.desktop-settings__provider-empty {
+  min-height: 58px;
+  margin: 0;
+  padding: 18px 10px;
+  border: 1px dashed var(--neko-desktop-border);
+  border-radius: 9px;
+  text-align: center;
+}
+
 .desktop-settings__provider-list {
   grid-template-columns: 1fr;
+}
+
+.desktop-settings__provider-group--wide .desktop-settings__provider-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .desktop-settings__model-list {
@@ -2605,6 +2666,8 @@ code {
   }
 
   .desktop-settings__provider-list,
+  .desktop-settings__provider-groups,
+  .desktop-settings__provider-group--wide .desktop-settings__provider-list,
   .desktop-settings__model-groups,
   .desktop-settings__model-list,
   .desktop-settings__form-grid,

@@ -40,3 +40,12 @@ group heading. Focused tests assert the action location, removed copy and exact 
 count. Typecheck, focused Renderer tests, ESLint, formatting and diff checks passed. The real Electron
 initial Agent state was inspected successfully; configured-Provider and narrow-window recapture were
 blocked by concurrent development-runtime reloads that closed the overlay or navigated to unrelated scenes.
+
+## Provider capability groups follow-up
+
+Provider management now derives dialogue, generation, mixed and unconfigured groups from the canonical model
+catalog. Focused component tests prove exact group membership and non-duplication; renderer style tests prove
+the wide two-column and narrow single-column rules. Typecheck, focused ESLint, strict OpenSpec and diff checks
+passed. A real Electron capture verified the current wide layout with 2 dialogue, 1 generation and 1
+unconfigured Provider. Narrow-window recapture was blocked when the shared development Electron was replaced
+by its default page during resize; no credentials or Provider facts were changed during validation.
