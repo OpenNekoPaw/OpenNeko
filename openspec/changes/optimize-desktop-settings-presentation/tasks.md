@@ -52,3 +52,9 @@
 - [x] 9.1 Replace the full-height Provider delete segment with the compact action language used by model management.
 - [x] 9.2 Keep explicit confirmation and add an adjacent cancel action without changing the Provider card's primary open/edit target.
 - [x] 9.3 Run focused component/style tests, affected typecheck, strict OpenSpec and UI validation.
+
+## 10. Reduce Agent Configuration Fills
+
+- [x] 10.1 Replace broad control-gray fills on Provider directories and the expanded Provider editor with raised surfaces and quiet borders.
+- [x] 10.2 Give model cards an explicit raised surface so their hierarchy remains stable inside the low-fill editor.
+- [x] 10.3 Run focused component validation, affected typecheck, strict OpenSpec and visible Electron inspection.

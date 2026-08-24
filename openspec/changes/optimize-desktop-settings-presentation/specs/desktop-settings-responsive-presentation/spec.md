@@ -99,6 +99,8 @@ The overlay SHALL keep the search field, category navigation and current setting
 
 Agent model settings SHALL present dialogue Providers and generation Providers as two direct sibling directories. Each directory SHALL own its add action and SHALL NOT be wrapped by a generic Provider panel or accompanied by a pending/unconfigured Provider directory.
 
+Provider directories, the expanded Provider editor and model cards SHALL use raised surfaces with quiet borders instead of broad control-gray fills. Muted or tinted fills SHALL remain limited to compact status, selection and interaction feedback so that form hierarchy does not depend on stacked gray panels.
+
 #### Scenario: User opens Agent model settings
 
 - **WHEN** the Host projection contains dialogue and generation Providers
@@ -112,6 +114,13 @@ Agent model settings SHALL present dialogue Providers and generation Providers a
 - **THEN** the Provider editor is initialized with that exact model family
 - **AND** saving persists the family through the canonical Provider settings contract
 - **AND** the refreshed projection keeps the Provider in the selected directory without Renderer-owned classification state
+
+#### Scenario: User expands Provider configuration
+
+- **WHEN** a Provider directory and its configuration editor are visible together
+- **THEN** the directory, editor and model cards remain distinguishable through quiet borders and spacing
+- **AND** large neutral-gray background blocks are not used to create hierarchy
+- **AND** compact credential, default-model and destructive-confirmation states remain visually identifiable
 
 ### Requirement: Provider deletion is explicit and authority-owned
 

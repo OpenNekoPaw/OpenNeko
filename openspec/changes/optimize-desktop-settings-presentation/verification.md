@@ -108,3 +108,21 @@ Residual risk: new Provider-directory pixels and direct-delete confirmation have
 
 Residual visual risk is limited to the destructive hover/confirmation colors in dark theme; both states reuse the
 existing danger tokens and their DOM/state transitions are covered by focused tests.
+
+## Low-fill Agent Configuration Evidence
+
+- Dialogue and Generation Provider directories now use the raised surface token with the existing quiet border
+  instead of blending a broad control-gray fill into the Settings content canvas.
+- The expanded Provider editor uses the same raised surface and gains a quiet boundary; model cards explicitly use
+  that surface as well, so spacing and borders preserve hierarchy without stacked gray panels.
+- Compact count, credential, default-model and destructive-confirmation states keep their existing semantic fills;
+  the change does not remove state feedback or alter Provider/model operations.
+- The running Electron development instance was inspected in both directory-only and expanded-editor states. The
+  two Provider directories, API-key field, disclosure, model directory, actions and model cards remained readable.
+  The editor was cancelled and Settings was closed without saving or deleting a real Provider; the exact World
+  management scene remained mounted afterward.
+- Focused `DesktopSettingsSurface` tests passed 10/10, Desktop typecheck passed, strict OpenSpec validation passed,
+  and `git diff --check` passed.
+
+Residual visual risk remains limited to uninspected dark-theme pixels. The updated surfaces and borders reuse the
+existing theme tokens and introduce no light-only color literals.
