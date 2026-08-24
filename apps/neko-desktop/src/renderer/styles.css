@@ -625,6 +625,12 @@ code {
   background: var(--neko-desktop-control-hover);
 }
 
+.desktop-settings__provider-card[data-selected='true'] {
+  border-color: color-mix(in srgb, var(--neko-desktop-accent) 58%, var(--neko-desktop-border));
+  background: color-mix(in srgb, var(--neko-desktop-accent) 5%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--neko-desktop-accent) 18%, transparent);
+}
+
 .desktop-settings__provider-card-main:hover,
 .desktop-settings__provider-card-main:focus-visible {
   background: transparent;

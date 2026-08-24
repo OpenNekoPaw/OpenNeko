@@ -274,6 +274,107 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => root.unmount());
   });
 
+  it('keeps the selected Provider identity aligned with API and credential fields', async () => {
+    const projection = {
+      providers: [
+        {
+          id: 'deepseek-chat',
+          displayName: 'DeepSeek Chat',
+          apiUrl: 'https://api.deepseek.com/v1',
+          protocol: 'openai-chat' as const,
+          connectionKind: 'direct' as const,
+          enabled: true,
+          supportedModelFamilies: ['dialogue'] as const,
+          credentialStatus: 'configured' as const,
+        },
+        {
+          id: 'neko-chat',
+          displayName: 'Neko API Chat',
+          apiUrl: 'https://www.nekoapi.com/v1',
+          protocol: 'openai-responses' as const,
+          connectionKind: 'direct' as const,
+          enabled: true,
+          supportedModelFamilies: ['dialogue'] as const,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveProvider = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider,
+      saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    const cards = [...container.querySelectorAll<HTMLElement>('.desktop-settings__provider-card')];
+    const deepSeekCard = cards.find((card) => card.textContent?.includes('DeepSeek Chat'));
+    const nekoCard = cards.find((card) => card.textContent?.includes('Neko API Chat'));
+    if (!deepSeekCard || !nekoCard) throw new Error('Provider identity fixture is incomplete.');
+    const deepSeekButton = deepSeekCard.querySelector<HTMLButtonElement>('button');
+    const nekoButton = nekoCard.querySelector<HTMLButtonElement>('button');
+    if (!deepSeekButton || !nekoButton)
+      throw new Error('Provider cards require selection buttons.');
+
+    await act(async () => deepSeekButton.click());
+    expect(deepSeekCard.dataset.selected).toBe('true');
+    expect(nekoCard.dataset.selected).toBe('false');
+    await act(async () => findButtonContaining(container, 'Custom settings').click());
+    expect(container.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe(
+      'https://api.deepseek.com/v1',
+    );
+    const deepSeekKey = container.querySelector<HTMLInputElement>('input[type="password"]');
+    if (!deepSeekKey) throw new Error('Remote Provider requires an API Key field.');
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (!setValue) throw new Error('HTMLInputElement value setter is unavailable.');
+      setValue.call(deepSeekKey, 'deepseek-draft-key');
+      deepSeekKey.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(deepSeekKey.value).toBe('deepseek-draft-key');
+
+    await act(async () => nekoButton.click());
+    expect(deepSeekCard.dataset.selected).toBe('false');
+    expect(nekoCard.dataset.selected).toBe('true');
+    await act(async () => findButtonContaining(container, 'Custom settings').click());
+    expect(container.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe(
+      'https://www.nekoapi.com/v1',
+    );
+    expect(container.querySelector<HTMLSelectElement>('select')?.value).toBe('openai-responses');
+    const nekoKey = container.querySelector<HTMLInputElement>('input[type="password"]');
+    expect(nekoKey?.value).toBe('');
+    if (!nekoKey) throw new Error('Neko API Provider requires an API Key field.');
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (!setValue) throw new Error('HTMLInputElement value setter is unavailable.');
+      setValue.call(nekoKey, 'neko-draft-key');
+      nekoKey.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => findButton(container, 'Save').click());
+    expect(saveProvider).toHaveBeenCalledWith(
+      {
+        id: 'neko-chat',
+        displayName: 'Neko API Chat',
+        apiUrl: 'https://www.nekoapi.com/v1',
+        protocol: 'openai-responses',
+        supportedModelFamilies: ['dialogue'],
+        enabled: true,
+      },
+      'neko-draft-key',
+    );
+    await act(async () => root.unmount());
+  });
+
   it('requires explicit confirmation before deleting an empty configured provider', async () => {
     const projection = {
       providers: [

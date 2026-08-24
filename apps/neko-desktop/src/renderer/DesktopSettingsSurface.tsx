@@ -516,8 +516,10 @@ function AgentModelSettingsGroup({
                     <article
                       key={`${group.kind}:${provider.id}`}
                       className="desktop-settings__provider-card"
+                      data-selected={editingProvider?.id === provider.id}
                     >
                       <button
+                        aria-pressed={editingProvider?.id === provider.id}
                         className="desktop-settings__provider-card-main"
                         type="button"
                         onClick={() => {
@@ -593,6 +595,11 @@ function AgentModelSettingsGroup({
         </div>
         {(editingProvider || creatingProviderFamily) && port ? (
           <ProviderForm
+            key={
+              editingProvider
+                ? `provider:${editingProvider.id}`
+                : `new-provider:${creatingProviderFamily}`
+            }
             disabled={pending}
             initial={editingProvider}
             modelFamily={
