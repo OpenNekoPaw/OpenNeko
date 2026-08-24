@@ -1,13 +1,17 @@
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Session, SessionId, type SessionHeader } from '@deepseek-ai/dsh-session';
 import { CallId, MessageId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm';
-import { describe, expect, it } from 'vitest';
+import { Context } from '@deepseek-ai/cordis';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   listOpenNekoSessions,
+  DshExtensionLifecycle,
   projectDshExtensionCatalog,
   projectContextPressureNotification,
   projectExtensionSessionEvent,
@@ -28,6 +32,165 @@ const header = (input: Partial<SessionHeader> & Pick<SessionHeader, 'id'>): Sess
 });
 
 describe('OpenNeko DSH ACP bridge projections', () => {
+  it('moves only personal Skills between enabled and disabled roots and deletes the selected entry', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-dsh-extension-test-'));
+    const previousHome = process.env.DSH_HOME;
+    process.env.DSH_HOME = root;
+    try {
+      const active = join(root, 'skills', 'review');
+      await mkdir(active, { recursive: true });
+      await writeFile(join(active, 'SKILL.md'), '# Review\n', 'utf8');
+      const lifecycle = new DshExtensionLifecycle({} as Context);
+
+      await lifecycle.setSkillEnabled({ name: 'review', source: 'user-dsh', enabled: false });
+      await expect(
+        readFile(join(root, 'disabled-skills', 'review', 'SKILL.md'), 'utf8'),
+      ).resolves.toBe('# Review\n');
+      await expect(
+        lifecycle.setSkillEnabled({ name: 'review', source: 'bundled', enabled: true }),
+      ).rejects.toThrow('Only canonical personal DSH Skills');
+      await lifecycle.removeSkill({ name: 'review', source: 'user-dsh' });
+      await expect(
+        readFile(join(root, 'disabled-skills', 'review', 'SKILL.md'), 'utf8'),
+      ).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    } finally {
+      if (previousHome === undefined) delete process.env.DSH_HOME;
+      else process.env.DSH_HOME = previousHome;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('persists MCP enablement and reconciles the one canonical Loader entry', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-dsh-mcp-test-'));
+    const previousHome = process.env.DSH_HOME;
+    process.env.DSH_HOME = root;
+    const loader = {
+      create: vi.fn(async () => 'loader-filesystem'),
+      update: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+      resolve: vi.fn(() => ({ fiber: { state: 2 } })),
+    };
+    try {
+      const lifecycle = new DshExtensionLifecycle({ loader } as unknown as Context);
+      await lifecycle.addMcp({
+        serverName: 'filesystem',
+        description: 'Approved files',
+        transport: 'stdio',
+        command: 'mcp-filesystem',
+        args: ['--readonly'],
+      });
+      await expect(lifecycle.readMcp()).resolves.toMatchObject([
+        { id: 'openneko-mcp-filesystem', enabled: true, status: 'ready' },
+      ]);
+
+      await lifecycle.setMcpEnabled('openneko-mcp-filesystem', false);
+      await expect(lifecycle.readMcp()).resolves.toMatchObject([
+        { id: 'openneko-mcp-filesystem', enabled: false, status: 'disabled' },
+      ]);
+      expect(loader.update).toHaveBeenCalledWith(
+        'loader-filesystem',
+        expect.objectContaining({ disabled: true }),
+      );
+      expect(
+        JSON.parse(await readFile(join(root, 'extensions', 'mcp.json'), 'utf8')),
+      ).toMatchObject([{ id: 'openneko-mcp-filesystem', enabled: false }]);
+
+      await lifecycle.removeMcp('openneko-mcp-filesystem');
+      await expect(lifecycle.readMcp()).resolves.toEqual([]);
+      expect(loader.remove).toHaveBeenCalledWith('loader-filesystem');
+    } finally {
+      if (previousHome === undefined) delete process.env.DSH_HOME;
+      else process.env.DSH_HOME = previousHome;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('linearizes concurrent MCP mutations through persistence and Loader reconciliation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-dsh-mcp-concurrency-test-'));
+    const previousHome = process.env.DSH_HOME;
+    process.env.DSH_HOME = root;
+    const firstCreate = createVoidDeferred();
+    const loader = {
+      create: vi.fn(
+        async (input: { readonly config: { readonly serverName: string } }) => {
+          if (input.config.serverName === 'alpha') await firstCreate.promise;
+          return `loader-${input.config.serverName}`;
+        },
+      ),
+      update: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+      resolve: vi.fn(() => ({ fiber: { state: 2 } })),
+    };
+    try {
+      const lifecycle = new DshExtensionLifecycle({ loader } as unknown as Context);
+      const alpha = lifecycle.addMcp({
+        serverName: 'alpha',
+        description: 'Alpha tools',
+        transport: 'stdio',
+        command: 'mcp-alpha',
+        args: [],
+      });
+      await vi.waitFor(() => expect(loader.create).toHaveBeenCalledTimes(1));
+
+      const beta = lifecycle.addMcp({
+        serverName: 'beta',
+        description: 'Beta tools',
+        transport: 'stdio',
+        command: 'mcp-beta',
+        args: [],
+      });
+      let readSettled = false;
+      const readDuringMutation = lifecycle.readMcp().then((projection) => {
+        readSettled = true;
+        return projection;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(loader.create).toHaveBeenCalledTimes(1);
+      expect(readSettled).toBe(false);
+      firstCreate.resolve();
+
+      await Promise.all([alpha, beta]);
+      await expect(readDuringMutation).resolves.toMatchObject([
+        { id: 'openneko-mcp-alpha', status: 'ready' },
+        { id: 'openneko-mcp-beta', status: 'ready' },
+      ]);
+      expect(loader.create.mock.calls.map(([input]) => input.config.serverName)).toEqual([
+        'alpha',
+        'beta',
+      ]);
+      await expect(
+        readFile(join(root, 'extensions', 'mcp.json'), 'utf8').then(JSON.parse),
+      ).resolves.toMatchObject([
+        { id: 'openneko-mcp-alpha', enabled: true },
+        { id: 'openneko-mcp-beta', enabled: true },
+      ]);
+
+      await expect(
+        lifecycle.addMcp({
+          serverName: 'alpha',
+          description: 'Duplicate Alpha tools',
+          transport: 'stdio',
+          command: 'mcp-alpha-duplicate',
+          args: [],
+        }),
+      ).rejects.toThrow("MCP server 'alpha' already exists.");
+      await lifecycle.setMcpEnabled('openneko-mcp-beta', false);
+      await expect(lifecycle.readMcp()).resolves.toMatchObject([
+        { id: 'openneko-mcp-alpha', status: 'ready' },
+        { id: 'openneko-mcp-beta', status: 'disabled' },
+      ]);
+    } finally {
+      firstCreate.resolve();
+      if (previousHome === undefined) delete process.env.DSH_HOME;
+      else process.env.DSH_HOME = previousHome;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it('projects the exact DSH context-pressure whole value without inventing an empty capability', () => {
     expect(
       projectContextPressureNotification('session-1', {
@@ -94,6 +257,9 @@ describe('OpenNeko DSH ACP bridge projections', () => {
           provider: 'openneko-builtin',
           userInvocable: true,
           modelInvocable: false,
+          enabled: true,
+          manageable: false,
+          removable: false,
         },
       ],
       mcp: [],
@@ -460,6 +626,14 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     expect(projectSessionEvent('session-1', context)).toEqual([]);
   });
 });
+
+function createVoidDeferred(): { readonly promise: Promise<void>; readonly resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
+}
 
 describe('OpenNeko DSH ACP bridge boundaries', () => {
   it('imports DSH only through public package entrypoints', () => {

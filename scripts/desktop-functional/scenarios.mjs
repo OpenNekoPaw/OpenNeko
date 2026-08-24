@@ -16,6 +16,7 @@ import { desktopAiModelSettingsScenario } from './desktop-ai-model-settings.mjs'
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
 import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
 import { domainManagementWorkbenchScenario } from './domain-management-workbench.mjs';
+import { extensionManagementLifecycleScenario } from './extension-management-lifecycle.mjs';
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import { projectContentScenario } from './project-content.mjs';
 import { workspaceMainQuickCreationScenario } from './workspace-main-quick-creation.mjs';
@@ -41,9 +42,10 @@ const scenarios = new Map(
     desktopAiModelSettingsScenario,
     desktopAgentDiagnosticPortalScenario,
     desktopInvalidWindowConvergenceScenario,
-    domainManagementWorkbenchScenario,
     characterManagementDialogueScenario,
     characterWorldManagementHierarchyScenario,
+    domainManagementWorkbenchScenario,
+    extensionManagementLifecycleScenario,
     desktopAgentEntryWorkspaceSkillScenario,
     desktopAgentLinkedMediaMentionScenario,
     desktopAgentMessageQueueScenario,

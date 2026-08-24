@@ -1,6 +1,28 @@
 import type { MessageBundle } from '@neko/ui/i18n';
 
 const en = {
+  'extension.skill.add': 'Add Skill',
+  'extension.mcp.add': 'Add MCP',
+  'extension.mcp.addDescription':
+    'Adding this server starts a local command or connects to a network endpoint. Review the configuration before continuing; enter one stdio argument per line.',
+  'extension.mcp.serverName': 'Server name',
+  'extension.mcp.description': 'Description',
+  'extension.mcp.transport': 'Transport',
+  'extension.mcp.command': 'Command',
+  'extension.mcp.args': 'Arguments (one per line)',
+  'extension.lifecycle.enabled': 'Enabled',
+  'extension.lifecycle.disabled': 'Disabled',
+  'extension.lifecycle.management': 'Management',
+  'extension.lifecycle.enable': 'Enable',
+  'extension.lifecycle.disable': 'Disable',
+  'extension.lifecycle.remove': 'Delete',
+  'extension.lifecycle.removeTitle': 'Delete extension',
+  'extension.lifecycle.removeSkillDescription':
+    'This permanently removes the imported personal Skill content from the OpenNeko DSH home.',
+  'extension.lifecycle.removeMcpDescription':
+    'This removes only the selected MCP server configuration from OpenNeko.',
+  'extension.lifecycle.cancel': 'Cancel',
+  'extension.lifecycle.readOnly': 'This source is managed by its project or the application.',
   'extension.empty.mcpUnconfigured': 'No MCP servers configured',
   'extension.detail.capabilityInfo': 'Capability information',
   'extension.detail.close': 'Close extension details',
@@ -67,6 +89,27 @@ const en = {
 } as const satisfies MessageBundle;
 
 const zhCn = {
+  'extension.skill.add': '添加 Skill',
+  'extension.mcp.add': '添加 MCP',
+  'extension.mcp.addDescription':
+    '添加后会启动本地命令或连接网络端点。请确认配置可信后继续；stdio 参数每行填写一个。',
+  'extension.mcp.serverName': '服务名称',
+  'extension.mcp.description': '说明',
+  'extension.mcp.transport': '传输方式',
+  'extension.mcp.command': '命令',
+  'extension.mcp.args': '参数（每行一个）',
+  'extension.lifecycle.enabled': '已启用',
+  'extension.lifecycle.disabled': '已停用',
+  'extension.lifecycle.management': '管理',
+  'extension.lifecycle.enable': '启用',
+  'extension.lifecycle.disable': '停用',
+  'extension.lifecycle.remove': '删除',
+  'extension.lifecycle.removeTitle': '删除扩展',
+  'extension.lifecycle.removeSkillDescription':
+    '此操作会从 OpenNeko DSH Home 中永久删除已导入的个人 Skill 内容。',
+  'extension.lifecycle.removeMcpDescription': '此操作仅删除 OpenNeko 中所选的 MCP 服务配置。',
+  'extension.lifecycle.cancel': '取消',
+  'extension.lifecycle.readOnly': '此来源由所属项目或应用管理。',
   'extension.empty.mcpUnconfigured': '尚未配置 MCP',
   'extension.detail.capabilityInfo': '能力信息',
   'extension.detail.close': '关闭扩展详情',

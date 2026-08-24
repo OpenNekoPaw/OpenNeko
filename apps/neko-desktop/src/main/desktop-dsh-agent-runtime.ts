@@ -23,6 +23,7 @@ import type { AgentConversationContext } from '@neko/agent-contracts';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import type { DshRuntimeHostProjection } from '@neko/agent-contracts/dsh-runtime-host';
 import type { DshAcpExtensionProjection } from '@neko/agent-contracts/dsh-acp';
+import type { DshAcpMcpServerInput } from '@neko/agent-contracts/dsh-acp';
 import type {
   DshAcpSkillObservationProjection,
   DshAcpStagedSkillValidationProjection,
@@ -40,6 +41,15 @@ export interface DesktopDshAgentClient
   readonly closed: Promise<void>;
   readonly projection: DshAcpProjection;
   readExtensions(): Promise<DshAcpExtensionProjection>;
+  setSkillEnabled(input: {
+    readonly name: string;
+    readonly source: string;
+    readonly enabled: boolean;
+  }): Promise<void>;
+  removeSkill(input: { readonly name: string; readonly source: string }): Promise<void>;
+  addMcp(input: DshAcpMcpServerInput): Promise<void>;
+  setMcpEnabled(input: { readonly id: string; readonly enabled: boolean }): Promise<void>;
+  removeMcp(id: string): Promise<void>;
   validateStagedSkill(input: {
     readonly stagingRoot: string;
     readonly layout: DshSkillAuthoringLayout;
@@ -413,8 +423,23 @@ function createStableDesktopDshAgentClient(
     async readExtensions() {
       return requireClient().readExtensions();
     },
+    async setSkillEnabled(input) {
+      return runWork((client) => client.setSkillEnabled(input));
+    },
+    async removeSkill(input) {
+      return runWork((client) => client.removeSkill(input));
+    },
+    async addMcp(input) {
+      return runWork((client) => client.addMcp(input));
+    },
+    async setMcpEnabled(input) {
+      return runWork((client) => client.setMcpEnabled(input));
+    },
+    async removeMcp(id) {
+      return runWork((client) => client.removeMcp(id));
+    },
     async validateStagedSkill(input) {
-      return requireClient().validateStagedSkill(input);
+      return runWork((client) => client.validateStagedSkill(input));
     },
     async observeSkill(input) {
       return requireClient().observeSkill(input);

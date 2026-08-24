@@ -26,6 +26,42 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
     return this.execute({ route: 'snapshot.get' });
   }
 
+  async addSkill(): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'skill.add' });
+  }
+
+  async setSkillEnabled(input: {
+    readonly name: string;
+    readonly source: string;
+    readonly enabled: boolean;
+  }): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'skill.enablement.update', ...input });
+  }
+
+  async removeSkill(input: {
+    readonly name: string;
+    readonly source: string;
+  }): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'skill.remove', ...input });
+  }
+
+  async addMcp(
+    server: Parameters<AgentExtensionManagementRuntime['addMcp']>[0],
+  ): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'mcp.add', server });
+  }
+
+  async setMcpEnabled(input: {
+    readonly id: string;
+    readonly enabled: boolean;
+  }): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'mcp.enablement.update', ...input });
+  }
+
+  async removeMcp(id: string): Promise<AgentExtensionManagementProjection> {
+    return this.execute({ route: 'mcp.remove', id });
+  }
+
   dispose(): void {
     this.disposed = true;
   }

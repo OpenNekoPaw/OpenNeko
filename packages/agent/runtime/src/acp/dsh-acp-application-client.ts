@@ -34,6 +34,9 @@ import {
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
   decodeDshAcpExtensionProjection,
+  decodeDshAcpMcpIdentityRequest,
+  decodeDshAcpMcpServerInput,
+  decodeDshAcpSkillMutationRequest,
   decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpImageAttachmentReadProjection,
   decodeDshAcpImageAttachmentReadRequest,
@@ -60,6 +63,7 @@ import {
   type DshAcpCommandExecuteProjection,
   type DshAcpSkillInvokeProjection,
   type DshAcpExtensionProjection,
+  type DshAcpMcpServerInput,
   type DshAcpArchivedSessionsProjection,
   type DshAcpSkillObservationProjection,
   type DshAcpStagedSkillValidationProjection,
@@ -351,6 +355,35 @@ export class DshAcpApplicationClient {
   async readExtensions(): Promise<DshAcpExtensionProjection> {
     const response = await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.readExtensions, {});
     return decodeDshAcpExtensionProjection(response);
+  }
+
+  async setSkillEnabled(input: {
+    readonly name: string;
+    readonly source: string;
+    readonly enabled: boolean;
+  }): Promise<void> {
+    const request = decodeDshAcpSkillMutationRequest({ ...input });
+    await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.setSkillEnabled, { ...request });
+  }
+
+  async removeSkill(input: { readonly name: string; readonly source: string }): Promise<void> {
+    const request = decodeDshAcpSkillMutationRequest({ ...input });
+    await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.removeSkill, { ...request });
+  }
+
+  async addMcp(input: DshAcpMcpServerInput): Promise<void> {
+    const request = decodeDshAcpMcpServerInput({ ...input });
+    await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.addMcp, { ...request });
+  }
+
+  async setMcpEnabled(input: { readonly id: string; readonly enabled: boolean }): Promise<void> {
+    const request = decodeDshAcpMcpIdentityRequest({ ...input });
+    await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.setMcpEnabled, { ...request });
+  }
+
+  async removeMcp(id: string): Promise<void> {
+    const request = decodeDshAcpMcpIdentityRequest({ id });
+    await this.connection.extMethod(DSH_ACP_EXTENSION_METHODS.removeMcp, { ...request });
   }
 
   async validateStagedSkill(input: {

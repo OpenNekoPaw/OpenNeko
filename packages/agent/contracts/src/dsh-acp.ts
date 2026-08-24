@@ -16,6 +16,11 @@ export const DSH_ACP_EXTENSION_METHODS = {
   executeCommand: 'openneko/session/command/execute',
   invokeSkill: 'openneko/session/skill/invoke',
   readExtensions: 'openneko/extensions/read',
+  setSkillEnabled: 'openneko/extensions/skill/enabled/set',
+  removeSkill: 'openneko/extensions/skill/remove',
+  addMcp: 'openneko/extensions/mcp/add',
+  setMcpEnabled: 'openneko/extensions/mcp/enabled/set',
+  removeMcp: 'openneko/extensions/mcp/remove',
   validateStagedSkill: 'openneko/skill-authoring/staged/validate',
   observeSkill: 'openneko/skill-authoring/observe',
   executeDomainTool: 'openneko/domain-tool/execute',
@@ -115,14 +120,101 @@ export interface DshAcpExtensionSkill {
   readonly provider: string;
   readonly userInvocable: boolean;
   readonly modelInvocable: boolean;
+  readonly enabled: boolean;
+  readonly manageable: boolean;
+  readonly removable: boolean;
 }
 
 export interface DshAcpExtensionMcp {
   readonly id: string;
   readonly name: string;
   readonly description: string;
-  readonly status: 'ready' | 'unsupported' | 'error';
+  readonly transport: 'stdio' | 'streamable-http';
+  readonly enabled: boolean;
+  readonly status: 'ready' | 'disabled' | 'error';
   readonly diagnosticCode: string;
+}
+
+export type DshAcpMcpServerInput =
+  | {
+      readonly serverName: string;
+      readonly description: string;
+      readonly transport: 'stdio';
+      readonly command: string;
+      readonly args: readonly string[];
+    }
+  | {
+      readonly serverName: string;
+      readonly description: string;
+      readonly transport: 'streamable-http';
+      readonly url: string;
+    };
+
+export function decodeDshAcpSkillMutationRequest(input: Record<string, unknown>): {
+  readonly name: string;
+  readonly source: string;
+  readonly enabled?: boolean;
+} {
+  decodeDshAcpJsonPayload(input, 'Skill lifecycle request');
+  const keys = input.enabled === undefined ? ['name', 'source'] : ['name', 'source', 'enabled'];
+  requireExactKeys(input, keys, 'Skill lifecycle request');
+  return {
+    name: requireNonEmptyString(input.name, 'Skill lifecycle name'),
+    source: requireNonEmptyString(input.source, 'Skill lifecycle source'),
+    ...(input.enabled === undefined
+      ? {}
+      : { enabled: requireBoolean(input.enabled, 'Skill lifecycle enabled') }),
+  };
+}
+
+export function decodeDshAcpMcpServerInput(input: Record<string, unknown>): DshAcpMcpServerInput {
+  decodeDshAcpJsonPayload(input, 'MCP server input');
+  if (input.transport === 'stdio') {
+    requireExactKeys(
+      input,
+      ['serverName', 'description', 'transport', 'command', 'args'],
+      'MCP stdio server input',
+    );
+    if (!Array.isArray(input.args) || input.args.some((item) => typeof item !== 'string')) {
+      throw new Error('MCP stdio arguments must be strings.');
+    }
+    return {
+      serverName: requireNonEmptyString(input.serverName, 'MCP server name'),
+      description: requireString(input.description, 'MCP server description'),
+      transport: 'stdio',
+      command: requireNonEmptyString(input.command, 'MCP command'),
+      args: input.args,
+    };
+  }
+  if (input.transport === 'streamable-http') {
+    requireExactKeys(
+      input,
+      ['serverName', 'description', 'transport', 'url'],
+      'MCP HTTP server input',
+    );
+    return {
+      serverName: requireNonEmptyString(input.serverName, 'MCP server name'),
+      description: requireString(input.description, 'MCP server description'),
+      transport: 'streamable-http',
+      url: requireNonEmptyString(input.url, 'MCP server URL'),
+    };
+  }
+  throw new Error('MCP transport is invalid.');
+}
+
+export function decodeDshAcpMcpIdentityRequest(input: Record<string, unknown>): {
+  readonly id: string;
+  readonly enabled?: boolean;
+} {
+  decodeDshAcpJsonPayload(input, 'MCP lifecycle request');
+  const keys = input.enabled === undefined ? ['id'] : ['id', 'enabled'];
+  requireExactKeys(input, keys, 'MCP lifecycle request');
+  return {
+    id: requireNonEmptyString(input.id, 'MCP lifecycle id'),
+    ...(input.enabled === undefined
+      ? {}
+      : { enabled: requireBoolean(input.enabled, 'MCP lifecycle enabled') }),
+  };
 }
 
 export interface DshAcpExtensionProjection {
@@ -154,7 +246,17 @@ export function decodeDshAcpExtensionProjection(
     const skill = requireRecord(value, `extensions.skills[${index}]`);
     const skillKeys =
       skill.whenToUse === undefined
-        ? ['name', 'description', 'source', 'provider', 'userInvocable', 'modelInvocable']
+        ? [
+            'name',
+            'description',
+            'source',
+            'provider',
+            'userInvocable',
+            'modelInvocable',
+            'enabled',
+            'manageable',
+            'removable',
+          ]
         : [
             'name',
             'description',
@@ -163,6 +265,9 @@ export function decodeDshAcpExtensionProjection(
             'provider',
             'userInvocable',
             'modelInvocable',
+            'enabled',
+            'manageable',
+            'removable',
           ];
     requireExactKeys(skill, skillKeys, `extensions.skills[${index}]`);
     return {
@@ -175,22 +280,30 @@ export function decodeDshAcpExtensionProjection(
       provider: requireNonEmptyString(skill.provider, 'Skill provider'),
       userInvocable: requireBoolean(skill.userInvocable, 'Skill userInvocable'),
       modelInvocable: requireBoolean(skill.modelInvocable, 'Skill modelInvocable'),
+      enabled: requireBoolean(skill.enabled, 'Skill enabled'),
+      manageable: requireBoolean(skill.manageable, 'Skill manageable'),
+      removable: requireBoolean(skill.removable, 'Skill removable'),
     };
   });
   const mcp: DshAcpExtensionMcp[] = input.mcp.map((value, index) => {
     const item = requireRecord(value, `extensions.mcp[${index}]`);
     requireExactKeys(
       item,
-      ['id', 'name', 'description', 'status', 'diagnosticCode'],
+      ['id', 'name', 'description', 'transport', 'enabled', 'status', 'diagnosticCode'],
       `extensions.mcp[${index}]`,
     );
-    if (item.status !== 'ready' && item.status !== 'unsupported' && item.status !== 'error') {
+    if (item.status !== 'ready' && item.status !== 'disabled' && item.status !== 'error') {
       throw new Error('DSH ACP MCP status is invalid.');
+    }
+    if (item.transport !== 'stdio' && item.transport !== 'streamable-http') {
+      throw new Error('DSH ACP MCP transport is invalid.');
     }
     return {
       id: requireNonEmptyString(item.id, 'MCP id'),
       name: requireNonEmptyString(item.name, 'MCP name'),
       description: requireString(item.description, 'MCP description'),
+      transport: item.transport,
+      enabled: requireBoolean(item.enabled, 'MCP enabled'),
       status: item.status,
       diagnosticCode: requireString(item.diagnosticCode, 'MCP diagnostic code'),
     };

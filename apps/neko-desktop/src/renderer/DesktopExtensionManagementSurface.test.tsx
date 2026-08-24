@@ -38,8 +38,21 @@ afterEach(cleanup);
 
 describe('DesktopExtensionManagementSurface', () => {
   it('composes Skill, MCP and Professional applications without merging their runtimes', async () => {
+    const emptySnapshot = {
+      identity: { windowId: 'window-1' },
+      catalogScope: 'global' as const,
+      skills: [],
+      mcp: [],
+      diagnostics: [],
+    };
     const extensionRuntime: AgentExtensionManagementRuntime = {
       identity: { windowId: 'window-1' },
+      addSkill: vi.fn(async () => emptySnapshot),
+      setSkillEnabled: vi.fn(async () => emptySnapshot),
+      removeSkill: vi.fn(async () => emptySnapshot),
+      addMcp: vi.fn(async () => emptySnapshot),
+      setMcpEnabled: vi.fn(async () => emptySnapshot),
+      removeMcp: vi.fn(async () => emptySnapshot),
       getSnapshot: vi.fn(async () => ({
         identity: { windowId: 'window-1' },
         catalogScope: 'global' as const,

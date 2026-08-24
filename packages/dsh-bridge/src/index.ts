@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, posix, relative } from 'node:path';
 import {
   AgentSideConnection,
@@ -20,7 +20,9 @@ import type { AgentHandle } from '@deepseek-ai/dsh-agent';
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
 import type {} from '@deepseek-ai/dsh-agent-presets';
 import type {} from '@deepseek-ai/dsh-commands';
-import { Context } from '@deepseek-ai/cordis';
+import type { Config as DshMcpClientConfig } from '@deepseek-ai/dsh-mcp-client';
+import { Context, type FiberState } from '@deepseek-ai/cordis';
+import type {} from '@deepseek-ai/cordis-plugin-loader';
 import { createUserMessage, errorChain, type ContentBlock } from '@deepseek-ai/dsh-llm';
 import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session';
 import type {} from '@deepseek-ai/dsh-session-persistence';
@@ -47,6 +49,9 @@ import {
   decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpImageAttachmentReadRequest,
   decodeDshAcpSkillInvokeRequest,
+  decodeDshAcpMcpIdentityRequest,
+  decodeDshAcpMcpServerInput,
+  decodeDshAcpSkillMutationRequest,
   decodeDshAcpSkillObservationRequest,
   decodeDshAcpStagedSkillValidationRequest,
   decodeDshAcpSessionContextSetRequest,
@@ -56,9 +61,12 @@ import {
   decodeDshAcpContextPressureProjection,
   encodeDshAcpModelConfiguration,
   type DshAcpExtensionProjection,
-  type DshAcpInputCatalogProjection,
+  type DshAcpExtensionMcp,
+  type DshAcpExtensionSkill,
+  type DshAcpMcpServerInput,
   type DshAcpContextPressureProjection,
   type DshAcpHostToolPort,
+  type DshAcpInputCatalogProjection,
   type DshAcpSessionEventNotification,
 } from '@neko/agent-contracts/dsh-acp';
 import {
@@ -70,6 +78,7 @@ import { PromptAdmission } from './prompt-admission.js';
 import { OPENNEKO_PRODUCT_SYSTEM_PROMPT } from './product-system-prompt.js';
 
 export const name = 'openneko-acp';
+const CORDIS_ACTIVE_FIBER_STATE: FiberState = 2;
 export const inject = [
   'agents',
   'agentPresets',
@@ -77,6 +86,7 @@ export const inject = [
   'attachments',
   'commands',
   'permissionPresets',
+  'loader',
   'sandboxPolicy',
   'sessions',
   'sessionPersistence',
@@ -170,6 +180,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
   const promptAdmission = new PromptAdmission<PromptResponse>();
   const preset = config.agentPreset ?? 'standard';
   const virtualCwd = process.cwd();
+  const extensionLifecycle = new DshExtensionLifecycle(ctx);
   let connection: AcpConnection;
   let closed = false;
 
@@ -580,7 +591,47 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
               kind: 'global',
               cwd: virtualCwd,
             });
-            return { ...projectDshExtensionCatalog(snapshot, 'global') };
+            return {
+              ...projectDshExtensionCatalog(
+                snapshot,
+                'global',
+                await extensionLifecycle.readDisabledSkills(),
+                await extensionLifecycle.readMcp(),
+              ),
+            };
+          }
+          case DSH_ACP_EXTENSION_METHODS.setSkillEnabled: {
+            const request = decodeDshAcpSkillMutationRequest(params);
+            if (request.enabled === undefined) {
+              throw RequestError.invalidParams(undefined, 'Skill enablement is required.');
+            }
+            await extensionLifecycle.setSkillEnabled({
+              name: request.name,
+              source: request.source,
+              enabled: request.enabled,
+            });
+            return {};
+          }
+          case DSH_ACP_EXTENSION_METHODS.removeSkill: {
+            await extensionLifecycle.removeSkill(decodeDshAcpSkillMutationRequest(params));
+            return {};
+          }
+          case DSH_ACP_EXTENSION_METHODS.addMcp: {
+            await extensionLifecycle.addMcp(decodeDshAcpMcpServerInput(params));
+            return {};
+          }
+          case DSH_ACP_EXTENSION_METHODS.setMcpEnabled: {
+            const request = decodeDshAcpMcpIdentityRequest(params);
+            if (request.enabled === undefined) {
+              throw RequestError.invalidParams(undefined, 'MCP enablement is required.');
+            }
+            await extensionLifecycle.setMcpEnabled(request.id, request.enabled);
+            return {};
+          }
+          case DSH_ACP_EXTENSION_METHODS.removeMcp: {
+            const request = decodeDshAcpMcpIdentityRequest(params);
+            await extensionLifecycle.removeMcp(request.id);
+            return {};
           }
           case DSH_ACP_EXTENSION_METHODS.validateStagedSkill: {
             const request = decodeDshAcpStagedSkillValidationRequest(params);
@@ -893,22 +944,470 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
   }
 }
 
+type PersistedMcpServer = DshAcpMcpServerInput & {
+  readonly id: string;
+  readonly enabled: boolean;
+};
+
+export class DshExtensionLifecycle {
+  private readonly dshHome: string;
+  private readonly personalSkillRoot: string;
+  private readonly disabledSkillRoot: string;
+  private readonly mcpStatePath: string;
+  private readonly mcpLoaderIds = new Map<string, string>();
+  private readonly mcpErrors = new Map<string, string>();
+  private mcpState: PersistedMcpServer[] | undefined;
+  private initialization: Promise<void> | undefined;
+  private mcpMutationTail: Promise<void> = Promise.resolve();
+
+  constructor(private readonly ctx: Context) {
+    const dshHome = process.env.DSH_HOME;
+    if (dshHome === undefined || !isAbsolute(dshHome)) {
+      throw new Error('OpenNeko extension lifecycle requires an absolute DSH_HOME.');
+    }
+    this.dshHome = dshHome;
+    this.personalSkillRoot = join(dshHome, 'skills');
+    this.disabledSkillRoot = join(dshHome, 'disabled-skills');
+    this.mcpStatePath = join(dshHome, 'extensions', 'mcp.json');
+  }
+
+  async readDisabledSkills(): Promise<readonly DshAcpExtensionSkill[]> {
+    try {
+      const root = await realpath(this.disabledSkillRoot);
+      const context = new Context();
+      const lifecycle = new AbortController();
+      const provider = new FileSystemSkillProvider(
+        context,
+        { signal: lifecycle.signal, invalidate: () => undefined },
+        {
+          providerName: 'openneko-disabled-personal',
+          includeDefaultRoots: false,
+          customSkillDirs: [root],
+          watch: false,
+        },
+      );
+      try {
+        const observation = await provider.list({ cwd: root });
+        const candidates = Array.isArray(observation) ? observation : observation.candidates;
+        return candidates.map((skill) => ({
+          name: skill.name,
+          description: skill.description,
+          ...(skill.whenToUse === undefined ? {} : { whenToUse: skill.whenToUse }),
+          source: 'user-dsh',
+          provider: skill.provider,
+          userInvocable: isUserInvocable(skill),
+          modelInvocable: isModelInvocable(skill),
+          enabled: false,
+          manageable: true,
+          removable: true,
+        }));
+      } finally {
+        lifecycle.abort();
+        await provider.dispose();
+      }
+    } catch (error) {
+      if (hasNodeErrorCode(error, 'ENOENT')) return [];
+      throw error;
+    }
+  }
+
+  async setSkillEnabled(input: {
+    readonly name: string;
+    readonly source: string;
+    readonly enabled: boolean;
+  }): Promise<void> {
+    this.requirePersonalSkill(input.name, input.source);
+    const sourceRoot = input.enabled ? this.disabledSkillRoot : this.personalSkillRoot;
+    const destinationRoot = input.enabled ? this.personalSkillRoot : this.disabledSkillRoot;
+    const entry = await findSkillEntry(sourceRoot, input.name);
+    if (entry === undefined) {
+      throw RequestError.invalidParams(
+        undefined,
+        `Personal Skill '${input.name}' is not ${input.enabled ? 'disabled' : 'enabled'}.`,
+      );
+    }
+    await mkdir(destinationRoot, { recursive: true });
+    const destination = join(destinationRoot, entry.name);
+    await requireMissingPath(
+      destination,
+      `Personal Skill '${input.name}' destination already exists.`,
+    );
+    await rename(entry.path, destination);
+  }
+
+  async removeSkill(input: { readonly name: string; readonly source: string }): Promise<void> {
+    this.requirePersonalSkill(input.name, input.source);
+    const active = await findSkillEntry(this.personalSkillRoot, input.name);
+    const disabled = await findSkillEntry(this.disabledSkillRoot, input.name);
+    if (active !== undefined && disabled !== undefined) {
+      throw new Error(
+        `Personal Skill '${input.name}' has conflicting enabled and disabled entries.`,
+      );
+    }
+    const entry = active ?? disabled;
+    if (entry === undefined) {
+      throw RequestError.invalidParams(undefined, `Personal Skill '${input.name}' is unavailable.`);
+    }
+    await rm(entry.path, { recursive: entry.kind === 'directory', force: false });
+  }
+
+  async readMcp(): Promise<readonly DshAcpExtensionMcp[]> {
+    await this.mcpMutationTail;
+    await this.ensureMcpInitialized();
+    return (this.mcpState ?? []).map((server) => {
+      const loaderId = this.mcpLoaderIds.get(server.id);
+      const entry = loaderId === undefined ? undefined : this.ctx.loader.resolve(loaderId);
+      const error = this.mcpErrors.get(server.id);
+      const ready =
+        server.enabled && error === undefined && entry?.fiber?.state === CORDIS_ACTIVE_FIBER_STATE;
+      return {
+        id: server.id,
+        name: server.serverName,
+        description: server.description,
+        transport: server.transport,
+        enabled: server.enabled,
+        status: server.enabled ? (ready ? 'ready' : 'error') : 'disabled',
+        diagnosticCode: server.enabled
+          ? error === undefined
+            ? ready
+              ? ''
+              : 'MCP_NOT_READY'
+            : error
+          : '',
+      };
+    });
+  }
+
+  async addMcp(input: DshAcpMcpServerInput): Promise<void> {
+    validateMcpServerInput(input);
+    return this.enqueueMcpMutation(async () => {
+      await this.ensureMcpInitialized();
+      const id = `openneko-mcp-${input.serverName}`;
+      if ((this.mcpState ?? []).some((server) => server.id === id)) {
+        throw RequestError.invalidParams(
+          undefined,
+          `MCP server '${input.serverName}' already exists.`,
+        );
+      }
+      const server = { ...input, id, enabled: true };
+      const previous = this.mcpState ?? [];
+      this.mcpState = [...previous, server];
+      try {
+        await this.writeMcpState();
+      } catch (error) {
+        this.mcpState = previous;
+        throw error;
+      }
+      await this.reconcileMcp(server);
+    });
+  }
+
+  async setMcpEnabled(id: string, enabled: boolean): Promise<void> {
+    return this.enqueueMcpMutation(async () => {
+      await this.ensureMcpInitialized();
+      const current = this.requireMcp(id);
+      if (current.enabled === enabled) return;
+      const next = { ...current, enabled };
+      const previous = this.mcpState ?? [];
+      this.mcpState = previous.map((server) => (server.id === id ? next : server));
+      try {
+        await this.writeMcpState();
+      } catch (error) {
+        this.mcpState = previous;
+        throw error;
+      }
+      await this.reconcileMcp(next);
+    });
+  }
+
+  async removeMcp(id: string): Promise<void> {
+    return this.enqueueMcpMutation(async () => {
+      await this.ensureMcpInitialized();
+      const current = this.requireMcp(id);
+      const previous = this.mcpState ?? [];
+      const loaderId = this.mcpLoaderIds.get(id);
+      if (loaderId !== undefined) await this.ctx.loader.remove(loaderId);
+      this.mcpLoaderIds.delete(id);
+      this.mcpErrors.delete(id);
+      this.mcpState = previous.filter((server) => server.id !== id);
+      try {
+        await this.writeMcpState();
+      } catch (writeError) {
+        this.mcpState = previous;
+        try {
+          await this.reconcileMcp(current);
+          if (!this.mcpLoaderIds.has(current.id) || this.mcpErrors.has(current.id)) {
+            throw new Error(`MCP server '${current.serverName}' Loader restoration failed.`);
+          }
+        } catch (restoreError) {
+          throw new AggregateError(
+            [writeError, restoreError],
+            `MCP server '${current.serverName}' removal persistence and Loader restoration failed.`,
+          );
+        }
+        throw writeError;
+      }
+    });
+  }
+
+  private enqueueMcpMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.mcpMutationTail.then(operation);
+    this.mcpMutationTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  private requirePersonalSkill(name: string, source: string): void {
+    if (!isSkillName(name) || source !== 'user-dsh') {
+      throw RequestError.invalidParams(
+        undefined,
+        'Only canonical personal DSH Skills can be enabled, disabled, or removed.',
+      );
+    }
+  }
+
+  private ensureMcpInitialized(): Promise<void> {
+    return (this.initialization ??= this.initializeMcp());
+  }
+
+  private async initializeMcp(): Promise<void> {
+    this.mcpState = await readMcpState(this.mcpStatePath);
+    for (const server of this.mcpState) await this.reconcileMcp(server);
+  }
+
+  private async reconcileMcp(server: PersistedMcpServer): Promise<void> {
+    const loaderId = this.mcpLoaderIds.get(server.id);
+    try {
+      if (loaderId === undefined) {
+        const created = await this.ctx.loader.create({
+          name: '@deepseek-ai/dsh-mcp-client',
+          disabled: !server.enabled,
+          config: toMcpPluginConfig(server),
+        });
+        this.mcpLoaderIds.set(server.id, created);
+      } else {
+        await this.ctx.loader.update(loaderId, {
+          disabled: !server.enabled,
+          config: toMcpPluginConfig(server),
+        });
+      }
+      this.mcpErrors.delete(server.id);
+    } catch (startError) {
+      this.mcpErrors.set(server.id, 'MCP_START_FAILED');
+      const failedLoaderId = this.mcpLoaderIds.get(server.id);
+      if (failedLoaderId !== undefined) {
+        try {
+          await this.ctx.loader.remove(failedLoaderId);
+        } catch (cleanupError) {
+          throw new AggregateError(
+            [startError, cleanupError],
+            `MCP server '${server.serverName}' startup and Loader cleanup failed.`,
+          );
+        }
+        this.mcpLoaderIds.delete(server.id);
+      }
+    }
+  }
+
+  private requireMcp(id: string): PersistedMcpServer {
+    const server = (this.mcpState ?? []).find((candidate) => candidate.id === id);
+    if (server === undefined)
+      throw RequestError.invalidParams(undefined, `Unknown MCP server '${id}'.`);
+    return server;
+  }
+
+  private async writeMcpState(): Promise<void> {
+    await mkdir(join(this.dshHome, 'extensions'), { recursive: true });
+    const temporary = `${this.mcpStatePath}.${randomUUID()}.tmp`;
+    await writeFile(temporary, `${JSON.stringify(this.mcpState ?? [], null, 2)}\n`, {
+      encoding: 'utf8',
+      flag: 'wx',
+    });
+    try {
+      await rename(temporary, this.mcpStatePath);
+    } catch (writeError) {
+      try {
+        await rm(temporary, { force: true });
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [writeError, cleanupError],
+          'OpenNeko MCP state write and temporary-file cleanup failed.',
+        );
+      }
+      throw writeError;
+    }
+  }
+}
+
+async function readMcpState(path: string): Promise<PersistedMcpServer[]> {
+  let source: string;
+  try {
+    source = await readFile(path, 'utf8');
+  } catch (error) {
+    if (hasNodeErrorCode(error, 'ENOENT')) return [];
+    throw error;
+  }
+  const parsed: unknown = JSON.parse(source);
+  if (!Array.isArray(parsed)) throw new Error('OpenNeko MCP state must be an array.');
+  const entries = parsed.map((value) => parsePersistedMcpServer(value));
+  if (new Set(entries.map((entry) => entry.id)).size !== entries.length) {
+    throw new Error('OpenNeko MCP state contains duplicate identities.');
+  }
+  return entries;
+}
+
+function parsePersistedMcpServer(value: unknown): PersistedMcpServer {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('OpenNeko MCP state entry is invalid.');
+  }
+  const record = value as Record<string, unknown>;
+  const input = decodeDshAcpMcpServerInput(
+    record.transport === 'stdio'
+      ? {
+          serverName: record.serverName,
+          description: record.description,
+          transport: record.transport,
+          command: record.command,
+          args: record.args,
+        }
+      : {
+          serverName: record.serverName,
+          description: record.description,
+          transport: record.transport,
+          url: record.url,
+        },
+  );
+  const expectedKeys =
+    input.transport === 'stdio'
+      ? ['id', 'enabled', 'serverName', 'description', 'transport', 'command', 'args']
+      : ['id', 'enabled', 'serverName', 'description', 'transport', 'url'];
+  if (
+    Object.keys(record).length !== expectedKeys.length ||
+    expectedKeys.some((key) => !(key in record))
+  ) {
+    throw new Error('OpenNeko MCP state entry contains unsupported fields.');
+  }
+  if (typeof record.id !== 'string' || record.id !== `openneko-mcp-${input.serverName}`) {
+    throw new Error('OpenNeko MCP state identity is invalid.');
+  }
+  if (typeof record.enabled !== 'boolean')
+    throw new Error('OpenNeko MCP state enablement is invalid.');
+  return { ...input, id: record.id, enabled: record.enabled };
+}
+
+function validateMcpServerInput(input: DshAcpMcpServerInput): void {
+  if (!/^[A-Za-z0-9_-]{1,32}$/u.test(input.serverName)) {
+    throw RequestError.invalidParams(undefined, 'MCP server name is invalid.');
+  }
+  if (input.transport === 'streamable-http') {
+    const url = new URL(input.url);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw RequestError.invalidParams(undefined, 'MCP server URL must use HTTP or HTTPS.');
+    }
+  }
+}
+
+function toMcpPluginConfig(server: PersistedMcpServer): DshMcpClientConfig {
+  return server.transport === 'stdio'
+    ? {
+        serverName: server.serverName,
+        transport: server.transport,
+        command: server.command,
+        args: [...server.args],
+        env: {},
+        cwd: process.cwd(),
+        toolCallTimeoutMs: 60_000,
+        failOnStartupError: true,
+      }
+    : {
+        serverName: server.serverName,
+        transport: server.transport,
+        url: server.url,
+        headers: {},
+        toolCallTimeoutMs: 60_000,
+        failOnStartupError: true,
+      };
+}
+
+async function findSkillEntry(
+  root: string,
+  name: string,
+): Promise<
+  { readonly name: string; readonly path: string; readonly kind: 'directory' | 'file' } | undefined
+> {
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (hasNodeErrorCode(error, 'ENOENT')) return undefined;
+    throw error;
+  }
+  const candidates = entries.filter((entry) => entry.name === name || entry.name === `${name}.md`);
+  if (candidates.length > 1)
+    throw new Error(`Personal Skill '${name}' has duplicate filesystem entries.`);
+  const candidate = candidates[0];
+  if (candidate === undefined) return undefined;
+  if (candidate.isSymbolicLink() || (!candidate.isDirectory() && !candidate.isFile())) {
+    throw new Error(`Personal Skill '${name}' must be a real file or directory.`);
+  }
+  if (candidate.name === name && !candidate.isDirectory()) {
+    throw new Error(`Personal Skill '${name}' directory layout is invalid.`);
+  }
+  if (candidate.name === `${name}.md` && !candidate.isFile()) {
+    throw new Error(`Personal Skill '${name}' flat layout is invalid.`);
+  }
+  return {
+    name: candidate.name,
+    path: join(root, candidate.name),
+    kind: candidate.isDirectory() ? 'directory' : 'file',
+  };
+}
+
+async function requireMissingPath(path: string, message: string): Promise<void> {
+  try {
+    await lstat(path);
+  } catch (error) {
+    if (hasNodeErrorCode(error, 'ENOENT')) return;
+    throw error;
+  }
+  throw new Error(message);
+}
+
+function hasNodeErrorCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { readonly code?: unknown }).code === code
+  );
+}
+
 export function projectDshExtensionCatalog(
   snapshot: SkillCatalogSnapshot,
   catalogScope: 'global',
+  disabledSkills: readonly DshAcpExtensionSkill[] = [],
+  mcp: readonly DshAcpExtensionMcp[] = [],
 ): DshAcpExtensionProjection {
   return {
     catalogScope,
-    skills: snapshot.skills.map((skill) => ({
-      name: skill.name,
-      description: skill.description,
-      ...(skill.whenToUse === undefined ? {} : { whenToUse: skill.whenToUse }),
-      source: skill.source,
-      provider: skill.provider,
-      userInvocable: isUserInvocable(skill),
-      modelInvocable: isModelInvocable(skill),
-    })),
-    mcp: [],
+    skills: [
+      ...snapshot.skills.map((skill) => ({
+        name: skill.name,
+        description: skill.description,
+        ...(skill.whenToUse === undefined ? {} : { whenToUse: skill.whenToUse }),
+        source: skill.source,
+        provider: skill.provider,
+        userInvocable: isUserInvocable(skill),
+        modelInvocable: isModelInvocable(skill),
+        enabled: true,
+        manageable: skill.source === 'user-dsh',
+        removable: skill.source === 'user-dsh',
+      })),
+      ...disabledSkills,
+    ],
+    mcp,
     diagnostics: snapshot.complete ? [] : [{ code: 'skill_catalog_incomplete', count: 1 }],
   };
 }

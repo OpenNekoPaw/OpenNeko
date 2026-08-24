@@ -272,6 +272,7 @@ import {
 import { DesktopDshRuntimeHost } from './desktop-dsh-runtime-host';
 import { DesktopDshExtensionManagementHost } from './desktop-dsh-extension-management-host';
 import { createDesktopDshSkillAuthoringService } from './desktop-dsh-skill-authoring';
+import { importPersonalDshSkill } from './desktop-dsh-skill-import';
 import {
   COMFYUI_PROFESSIONAL_APPLICATION_PROFILE,
   createPersistentProfessionalApplicationBindingRepository,
@@ -2789,6 +2790,27 @@ async function startDesktop(): Promise<void> {
   const dshExtensionManagementHost = new DesktopDshExtensionManagementHost({
     runtime: dshProduct.runtime,
     windows: appHost.windows,
+    skills: {
+      async add(sender) {
+        const senderContents = webContents.fromId(sender.webContentsId);
+        if (!senderContents) throw new Error('DSH Skill import requires live WebContents.');
+        const owner = BrowserWindow.fromWebContents(senderContents);
+        if (!owner) throw new Error('DSH Skill import requires an owning window.');
+        const selection = await dialog.showOpenDialog(owner, {
+          title: '添加 Skill',
+          properties: ['openDirectory'],
+        });
+        const selectedDirectory = selection.filePaths[0];
+        if (selection.canceled || selectedDirectory === undefined) return false;
+        await importPersonalDshSkill({
+          selectedDirectory,
+          personalSkillRoot: path.join(dshProduct.prepared.profile.dshHome, 'skills'),
+          disabledSkillRoot: path.join(dshProduct.prepared.profile.dshHome, 'disabled-skills'),
+          bridge: dshProduct.runtime.client,
+        });
+        return true;
+      },
+    },
   });
   const professionalApplicationNative = createDesktopProfessionalApplicationNativePort();
   const professionalApplicationAdapter = new DesktopProfessionalApplicationAdapter(

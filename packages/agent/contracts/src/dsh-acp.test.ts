@@ -9,6 +9,9 @@ import {
   decodeDshAcpDomainToolRequest,
   decodeDshAcpDomainToolResponse,
   decodeDshAcpExtensionProjection,
+  decodeDshAcpMcpIdentityRequest,
+  decodeDshAcpMcpServerInput,
+  decodeDshAcpSkillMutationRequest,
   decodeDshAcpInboxSnapshot,
   decodeDshAcpInboxEnqueueRequest,
   decodeDshAcpImageAttachmentReadProjection,
@@ -69,6 +72,31 @@ describe('DSH ACP extension contract', () => {
     expect(() => decodeDshAcpExtensionProjection({ ...projection, plugins: [] })).toThrow(
       /must contain exactly/u,
     );
+  });
+
+  it('decodes exact Skill and MCP lifecycle payloads', () => {
+    expect(
+      decodeDshAcpSkillMutationRequest({
+        name: 'review',
+        source: 'user-dsh',
+        enabled: false,
+      }),
+    ).toEqual({ name: 'review', source: 'user-dsh', enabled: false });
+    expect(
+      decodeDshAcpMcpServerInput({
+        serverName: 'filesystem',
+        description: 'Approved files',
+        transport: 'stdio',
+        command: 'mcp-filesystem',
+        args: ['--readonly'],
+      }),
+    ).toMatchObject({ transport: 'stdio', command: 'mcp-filesystem' });
+    expect(decodeDshAcpMcpIdentityRequest({ id: 'openneko-mcp-filesystem' })).toEqual({
+      id: 'openneko-mcp-filesystem',
+    });
+    expect(() =>
+      decodeDshAcpMcpIdentityRequest({ id: 'openneko-mcp-filesystem', enabled: 'yes' }),
+    ).toThrow(/enabled/u);
   });
 
   it('decodes an exact native image read without applying the generic JSON limit to bytes', () => {

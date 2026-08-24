@@ -19,6 +19,9 @@ function projection() {
         provider: 'openneko-builtin',
         userInvocable: true,
         modelInvocable: true,
+        enabled: true,
+        manageable: false,
+        removable: false,
       },
     ],
     mcp: [],
@@ -27,7 +30,7 @@ function projection() {
 }
 
 describe('DSH extension management contract', () => {
-  it('accepts only the read-only snapshot command', () => {
+  it('accepts the canonical lifecycle routes and rejects unknown Plugin commands', () => {
     expect(
       createAgentExtensionManagementHostRequest({
         requestId: 'request-1',
@@ -35,6 +38,37 @@ describe('DSH extension management contract', () => {
         route: 'snapshot.get',
       }),
     ).toEqual({ requestId: 'request-1', identity, route: 'snapshot.get' });
+    expect(
+      createAgentExtensionManagementHostRequest({
+        requestId: 'request-skill',
+        identity,
+        route: 'skill.enablement.update',
+        name: 'review',
+        source: 'user-dsh',
+        enabled: false,
+      }),
+    ).toEqual({
+      requestId: 'request-skill',
+      identity,
+      route: 'skill.enablement.update',
+      name: 'review',
+      source: 'user-dsh',
+      enabled: false,
+    });
+    expect(
+      createAgentExtensionManagementHostRequest({
+        requestId: 'request-mcp',
+        identity,
+        route: 'mcp.add',
+        server: {
+          serverName: 'filesystem',
+          description: 'Approved files',
+          transport: 'stdio',
+          command: 'mcp-filesystem',
+          args: ['--readonly'],
+        },
+      }).route,
+    ).toBe('mcp.add');
     expect(() =>
       createAgentExtensionManagementHostRequest({
         requestId: 'request-2',

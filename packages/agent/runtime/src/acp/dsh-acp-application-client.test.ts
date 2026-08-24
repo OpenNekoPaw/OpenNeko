@@ -114,6 +114,57 @@ function createFixture(initializeResponse: InitializeResponse) {
 }
 
 describe('DshAcpApplicationClient', () => {
+  it('dispatches exact Skill and MCP lifecycle extension methods', async () => {
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    fixture.connection.extMethod = vi.fn(async () => ({}));
+    const client = await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers: createHandlers(),
+      createConnection: fixture.createConnection,
+    });
+
+    await client.setSkillEnabled({ name: 'review', source: 'user-dsh', enabled: false });
+    await client.removeSkill({ name: 'review', source: 'user-dsh' });
+    await client.addMcp({
+      serverName: 'filesystem',
+      description: 'Approved files',
+      transport: 'stdio',
+      command: 'mcp-filesystem',
+      args: ['--readonly'],
+    });
+    await client.setMcpEnabled({ id: 'openneko-mcp-filesystem', enabled: false });
+    await client.removeMcp('openneko-mcp-filesystem');
+
+    expect(fixture.connection.extMethod).toHaveBeenNthCalledWith(
+      1,
+      'openneko/extensions/skill/enabled/set',
+      { name: 'review', source: 'user-dsh', enabled: false },
+    );
+    expect(fixture.connection.extMethod).toHaveBeenNthCalledWith(
+      2,
+      'openneko/extensions/skill/remove',
+      { name: 'review', source: 'user-dsh' },
+    );
+    expect(fixture.connection.extMethod).toHaveBeenNthCalledWith(3, 'openneko/extensions/mcp/add', {
+      serverName: 'filesystem',
+      description: 'Approved files',
+      transport: 'stdio',
+      command: 'mcp-filesystem',
+      args: ['--readonly'],
+    });
+    expect(fixture.connection.extMethod).toHaveBeenNthCalledWith(
+      4,
+      'openneko/extensions/mcp/enabled/set',
+      { id: 'openneko-mcp-filesystem', enabled: false },
+    );
+    expect(fixture.connection.extMethod).toHaveBeenNthCalledWith(
+      5,
+      'openneko/extensions/mcp/remove',
+      { id: 'openneko-mcp-filesystem' },
+    );
+  });
+
   it('uses private extension methods for isolated staged validation and exact scoped observation', async () => {
     const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
     fixture.connection.extMethod = vi.fn(async (method) => {

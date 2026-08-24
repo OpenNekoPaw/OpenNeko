@@ -334,6 +334,53 @@ describe('Desktop DSH Agent runtime composition', () => {
     await fixture.store.dispose();
   });
 
+  it('does not replace the subprocess while an extension mutation is still in flight', async () => {
+    const fixture = await createFixture();
+    const firstSubprocess = createSubprocess(createTransport());
+    const secondSubprocess = createSubprocess(createTransport());
+    const start = vi
+      .fn()
+      .mockReturnValueOnce(firstSubprocess)
+      .mockReturnValueOnce(secondSubprocess);
+    const mutation = deferred<void>();
+    const firstClient = {
+      ...createClient(['dsh-session-a']),
+      setSkillEnabled: vi.fn(async () => mutation.promise),
+    };
+    const connectClient = vi
+      .fn()
+      .mockResolvedValueOnce(firstClient)
+      .mockResolvedValueOnce(createClient(['dsh-session-a']));
+    const runtime = await startDesktopDshAgentRuntime({
+      supervisor: { start },
+      virtualCwd: '/virtual/workspace',
+      metadataStore: fixture.store,
+      resolveSessionCwd: async () => '/virtual/workspace',
+      createHandlers: () => createHandlerAssembly(),
+      connectClient,
+    });
+
+    const update = runtime.client.setSkillEnabled({
+      name: 'review',
+      source: 'user-dsh',
+      enabled: false,
+    });
+    await Promise.resolve();
+    await expect(runtime.refreshConfiguration()).resolves.toBe('pending');
+    expect(firstSubprocess.dispose).not.toHaveBeenCalled();
+
+    mutation.resolve(undefined);
+    await update;
+    await vi.waitFor(() => expect(start).toHaveBeenCalledTimes(2));
+    expect(firstSubprocess.dispose).toHaveBeenCalledOnce();
+    await expect(runtime.client.listSessions()).resolves.toEqual({
+      sessions: [{ sessionId: 'dsh-session-a', cwd: '/workspace' }],
+    });
+
+    await runtime.dispose();
+    await fixture.store.dispose();
+  });
+
   it('keeps the stable runtime unavailable when a configuration refresh handshake fails', async () => {
     const fixture = await createFixture();
     const firstSubprocess = createSubprocess(createTransport());
@@ -482,6 +529,11 @@ function createClient(
     readExtensions: async () => unsupported(),
     validateStagedSkill: async () => unsupported(),
     observeSkill: async () => unsupported(),
+    setSkillEnabled: async () => unsupported(),
+    removeSkill: async () => unsupported(),
+    addMcp: async () => unsupported(),
+    setMcpEnabled: async () => unsupported(),
+    removeMcp: async () => unsupported(),
     readInbox: async () => unsupported(),
     readImageAttachment: async () => unsupported(),
     enqueueInboxMessage: async () => unsupported(),

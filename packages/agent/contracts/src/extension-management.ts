@@ -11,15 +11,35 @@ export interface AgentManagedSkillItem {
   readonly provider: string;
   readonly userInvocable: boolean;
   readonly modelInvocable: boolean;
+  readonly enabled: boolean;
+  readonly manageable: boolean;
+  readonly removable: boolean;
 }
 
 export interface AgentManagedMcpItem {
   readonly id: string;
   readonly name: string;
   readonly description: string;
-  readonly status: 'ready' | 'unsupported' | 'error';
+  readonly transport: 'stdio' | 'streamable-http';
+  readonly enabled: boolean;
+  readonly status: 'ready' | 'disabled' | 'error';
   readonly diagnosticCode: string;
 }
+
+export type AgentMcpServerInput =
+  | {
+      readonly serverName: string;
+      readonly description: string;
+      readonly transport: 'stdio';
+      readonly command: string;
+      readonly args: readonly string[];
+    }
+  | {
+      readonly serverName: string;
+      readonly description: string;
+      readonly transport: 'streamable-http';
+      readonly url: string;
+    };
 
 export interface AgentExtensionManagementProjection {
   readonly identity: AgentExtensionManagementSessionIdentity;
@@ -35,6 +55,22 @@ export interface AgentExtensionManagementProjection {
 export interface AgentExtensionManagementRuntime {
   readonly identity: AgentExtensionManagementSessionIdentity;
   getSnapshot(): Promise<AgentExtensionManagementProjection>;
+  addSkill(): Promise<AgentExtensionManagementProjection>;
+  setSkillEnabled(input: {
+    readonly name: string;
+    readonly source: string;
+    readonly enabled: boolean;
+  }): Promise<AgentExtensionManagementProjection>;
+  removeSkill(input: {
+    readonly name: string;
+    readonly source: string;
+  }): Promise<AgentExtensionManagementProjection>;
+  addMcp(input: AgentMcpServerInput): Promise<AgentExtensionManagementProjection>;
+  setMcpEnabled(input: {
+    readonly id: string;
+    readonly enabled: boolean;
+  }): Promise<AgentExtensionManagementProjection>;
+  removeMcp(id: string): Promise<AgentExtensionManagementProjection>;
   dispose(): void;
 }
 
@@ -77,7 +113,18 @@ function parseSkill(value: unknown): AgentManagedSkillItem {
   const skill = requireRecord(value, 'DSH Skill item is invalid.');
   const keys =
     skill.whenToUse === undefined
-      ? ['id', 'name', 'description', 'source', 'provider', 'userInvocable', 'modelInvocable']
+      ? [
+          'id',
+          'name',
+          'description',
+          'source',
+          'provider',
+          'userInvocable',
+          'modelInvocable',
+          'enabled',
+          'manageable',
+          'removable',
+        ]
       : [
           'id',
           'name',
@@ -87,6 +134,9 @@ function parseSkill(value: unknown): AgentManagedSkillItem {
           'provider',
           'userInvocable',
           'modelInvocable',
+          'enabled',
+          'manageable',
+          'removable',
         ];
   const record = requireExactRecord(value, keys, 'DSH Skill item is invalid.');
   return {
@@ -100,6 +150,9 @@ function parseSkill(value: unknown): AgentManagedSkillItem {
     provider: requireNonEmptyString(record.provider, 'DSH Skill provider'),
     userInvocable: requireBoolean(record.userInvocable, 'DSH Skill user invocation flag'),
     modelInvocable: requireBoolean(record.modelInvocable, 'DSH Skill model invocation flag'),
+    enabled: requireBoolean(record.enabled, 'DSH Skill enabled flag'),
+    manageable: requireBoolean(record.manageable, 'DSH Skill manageable flag'),
+    removable: requireBoolean(record.removable, 'DSH Skill removable flag'),
   };
 }
 
@@ -111,17 +164,22 @@ function requireGlobalCatalogScope(value: unknown): 'global' {
 function parseMcp(value: unknown): AgentManagedMcpItem {
   const record = requireExactRecord(
     value,
-    ['id', 'name', 'description', 'status', 'diagnosticCode'],
+    ['id', 'name', 'description', 'transport', 'enabled', 'status', 'diagnosticCode'],
     'DSH MCP item is invalid.',
   );
   const status = record.status;
-  if (status !== 'ready' && status !== 'unsupported' && status !== 'error') {
+  if (status !== 'ready' && status !== 'disabled' && status !== 'error') {
     throw new Error('DSH MCP status is invalid.');
+  }
+  if (record.transport !== 'stdio' && record.transport !== 'streamable-http') {
+    throw new Error('DSH MCP transport is invalid.');
   }
   return {
     id: requireNonEmptyString(record.id, 'DSH MCP id'),
     name: requireNonEmptyString(record.name, 'DSH MCP name'),
     description: requireString(record.description, 'DSH MCP description'),
+    transport: record.transport,
+    enabled: requireBoolean(record.enabled, 'DSH MCP enabled flag'),
     status,
     diagnosticCode: requireString(record.diagnosticCode, 'DSH MCP diagnostic code'),
   };

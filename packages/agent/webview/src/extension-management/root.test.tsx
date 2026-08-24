@@ -14,6 +14,7 @@ afterEach(cleanup);
 describe('Agent Skill/MCP extension management', () => {
   it('renders exactly Skill and MCP tabs without a Plugin management surface', async () => {
     const runtime: AgentExtensionManagementRuntime = {
+      ...extensionLifecycleMethods(),
       identity: { windowId: 'window-1' },
       getSnapshot: vi.fn(async () => ({
         identity: { windowId: 'window-1' },
@@ -27,6 +28,9 @@ describe('Agent Skill/MCP extension management', () => {
             provider: 'openneko-builtin',
             userInvocable: true,
             modelInvocable: true,
+            enabled: true,
+            manageable: false,
+            removable: false,
           },
         ],
         mcp: [],
@@ -59,6 +63,7 @@ describe('Agent Skill/MCP extension management', () => {
 
   it('projects the canonical MCP kind without changing the runtime item', async () => {
     const runtime: AgentExtensionManagementRuntime = {
+      ...extensionLifecycleMethods(),
       identity: { windowId: 'window-1' },
       getSnapshot: vi.fn(async () => ({
         identity: { windowId: 'window-1' },
@@ -71,6 +76,8 @@ describe('Agent Skill/MCP extension management', () => {
             description: 'Access approved workspace files.',
             status: 'ready' as const,
             diagnosticCode: '',
+            transport: 'stdio' as const,
+            enabled: true,
           },
         ],
         diagnostics: [],
@@ -162,6 +169,9 @@ describe('Agent Skill/MCP extension management', () => {
           provider: 'openneko-builtin',
           userInvocable: true,
           modelInvocable: true,
+          enabled: true,
+          manageable: false,
+          removable: false,
         },
         {
           id: 'dsh-skill:personal-review',
@@ -171,6 +181,9 @@ describe('Agent Skill/MCP extension management', () => {
           provider: 'filesystem',
           userInvocable: true,
           modelInvocable: true,
+          enabled: true,
+          manageable: true,
+          removable: true,
         },
         {
           id: 'dsh-skill:project-review',
@@ -180,12 +193,16 @@ describe('Agent Skill/MCP extension management', () => {
           provider: 'filesystem',
           userInvocable: true,
           modelInvocable: false,
+          enabled: true,
+          manageable: false,
+          removable: false,
         },
       ],
       mcp: [],
       diagnostics: [],
     }));
     const runtime: AgentExtensionManagementRuntime = {
+      ...extensionLifecycleMethods(),
       identity: { windowId: 'window-1' },
       getSnapshot,
       dispose: vi.fn(),
@@ -207,6 +224,7 @@ describe('Agent Skill/MCP extension management', () => {
 
   it('describes an empty MCP projection as unconfigured without an added-state filter', async () => {
     const runtime: AgentExtensionManagementRuntime = {
+      ...extensionLifecycleMethods(),
       identity: { windowId: 'window-1' },
       getSnapshot: vi.fn(async () => ({
         identity: { windowId: 'window-1' },
@@ -272,6 +290,7 @@ describe('Agent Skill/MCP extension management', () => {
 
   it('keeps a non-ready MCP diagnostic local to its card', async () => {
     const runtime: AgentExtensionManagementRuntime = {
+      ...extensionLifecycleMethods(),
       identity: { windowId: 'window-1' },
       getSnapshot: vi.fn(async () => ({
         identity: { windowId: 'window-1' },
@@ -284,6 +303,8 @@ describe('Agent Skill/MCP extension management', () => {
             description: 'Requires a local service.',
             status: 'error' as const,
             diagnosticCode: 'connection-refused',
+            transport: 'streamable-http' as const,
+            enabled: true,
           },
         ],
         diagnostics: [],
@@ -320,6 +341,7 @@ describe('Agent Skill/MCP extension management', () => {
     );
 
     const card = await screen.findByRole('listitem', { name: 'Storyboard creation' });
+    expect(card.getAttribute('data-lifecycle-state')).toBe('enabled');
     expect(card.querySelector('.agent-extension-catalog-row__heading > strong')).toBeTruthy();
     expect(card.querySelector('.agent-extension-catalog-row__summary')).toBeTruthy();
     expect(card.querySelector('.agent-extension-catalog-row__affordance')).toBeTruthy();
@@ -327,21 +349,163 @@ describe('Agent Skill/MCP extension management', () => {
     expect(screen.queryByRole('button', { name: 'Refresh catalog' })).toBeNull();
     expect(document.querySelector('[data-catalog-view-control]')).toBeNull();
   });
+
+  it('adds Skills and manages only personal Skill lifecycle state', async () => {
+    const personalSkill = {
+      id: 'dsh-skill:user-dsh:review',
+      name: 'review',
+      description: 'Review a draft.',
+      source: 'user-dsh',
+      provider: 'filesystem',
+      userInvocable: true,
+      modelInvocable: true,
+      enabled: true,
+      manageable: true,
+      removable: true,
+    };
+    const projection = {
+      identity: { windowId: 'window-1' },
+      catalogScope: 'global' as const,
+      skills: [personalSkill],
+      mcp: [],
+      diagnostics: [],
+    };
+    const runtime: AgentExtensionManagementRuntime = {
+      identity: projection.identity,
+      getSnapshot: vi.fn(async () => projection),
+      addSkill: vi.fn(async () => projection),
+      setSkillEnabled: vi.fn(async () => ({
+        ...projection,
+        skills: [{ ...personalSkill, enabled: false }],
+      })),
+      removeSkill: vi.fn(async () => ({ ...projection, skills: [] })),
+      addMcp: vi.fn(async () => projection),
+      setMcpEnabled: vi.fn(async () => projection),
+      removeMcp: vi.fn(async () => projection),
+      dispose: vi.fn(),
+    };
+
+    render(
+      <I18nProvider service={createI18n()}>
+        <AgentExtensionManagementRoot interactive runtime={runtime} />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Skill' }));
+    await waitFor(() => expect(runtime.addSkill).toHaveBeenCalledTimes(1));
+    const personalCard = screen.getByRole('listitem', { name: 'review' });
+    expect(personalCard.getAttribute('data-lifecycle-state')).toBe('enabled');
+    fireEvent.click(within(personalCard).getByRole('button'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Disable' }));
+    await waitFor(() =>
+      expect(runtime.setSkillEnabled).toHaveBeenCalledWith({
+        name: 'review',
+        source: 'user-dsh',
+        enabled: false,
+      }),
+    );
+    await waitFor(() => expect(personalCard.getAttribute('data-lifecycle-state')).toBe('disabled'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    const confirmation = await screen.findByRole('dialog', { name: 'Delete extension' });
+    expect(confirmation.textContent).toContain('permanently removes the imported personal Skill');
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Delete' }));
+    await waitFor(() =>
+      expect(runtime.removeSkill).toHaveBeenCalledWith({
+        name: 'review',
+        source: 'user-dsh',
+      }),
+    );
+  });
+
+  it('adds an MCP server through the canonical transport form', async () => {
+    const projection = {
+      identity: { windowId: 'window-1' },
+      catalogScope: 'global' as const,
+      skills: [],
+      mcp: [],
+      diagnostics: [],
+    };
+    const runtime: AgentExtensionManagementRuntime = {
+      identity: projection.identity,
+      getSnapshot: vi.fn(async () => projection),
+      addSkill: vi.fn(async () => projection),
+      setSkillEnabled: vi.fn(async () => projection),
+      removeSkill: vi.fn(async () => projection),
+      addMcp: vi.fn(async () => projection),
+      setMcpEnabled: vi.fn(async () => projection),
+      removeMcp: vi.fn(async () => projection),
+      dispose: vi.fn(),
+    };
+
+    render(
+      <I18nProvider service={createI18n()}>
+        <AgentExtensionManagementRoot interactive runtime={runtime} selectedTab="mcp" />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add MCP' }));
+    fireEvent.change(screen.getByLabelText('Server name'), { target: { value: 'filesystem' } });
+    fireEvent.change(screen.getByLabelText('Command'), { target: { value: 'mcp-filesystem' } });
+    fireEvent.change(screen.getByLabelText('Arguments (one per line)'), {
+      target: { value: '--readonly' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add MCP' }).at(-1)!);
+
+    await waitFor(() =>
+      expect(runtime.addMcp).toHaveBeenCalledWith({
+        serverName: 'filesystem',
+        description: '',
+        transport: 'stdio',
+        command: 'mcp-filesystem',
+        args: ['--readonly'],
+      }),
+    );
+  });
 });
 
 function runtimeWithSkill(
-  skill: Awaited<ReturnType<AgentExtensionManagementRuntime['getSnapshot']>>['skills'][number],
+  skill: Omit<
+    Awaited<ReturnType<AgentExtensionManagementRuntime['getSnapshot']>>['skills'][number],
+    'enabled' | 'manageable' | 'removable'
+  > &
+    Partial<
+      Pick<
+        Awaited<ReturnType<AgentExtensionManagementRuntime['getSnapshot']>>['skills'][number],
+        'enabled' | 'manageable' | 'removable'
+      >
+    >,
 ): AgentExtensionManagementRuntime {
+  const managedSkill = {
+    enabled: true,
+    manageable: skill.source === 'user-dsh',
+    removable: skill.source === 'user-dsh',
+    ...skill,
+  };
   return {
+    ...extensionLifecycleMethods(),
     identity: { windowId: 'window-1' },
     getSnapshot: vi.fn(async () => ({
       identity: { windowId: 'window-1' },
       catalogScope: 'global' as const,
-      skills: [skill],
+      skills: [managedSkill],
       mcp: [],
       diagnostics: [],
     })),
     dispose: vi.fn(),
+  };
+}
+
+function extensionLifecycleMethods() {
+  const unsupported = async (): Promise<never> => {
+    throw new Error('Unexpected extension lifecycle mutation.');
+  };
+  return {
+    addSkill: vi.fn(unsupported),
+    setSkillEnabled: vi.fn(unsupported),
+    removeSkill: vi.fn(unsupported),
+    addMcp: vi.fn(unsupported),
+    setMcpEnabled: vi.fn(unsupported),
+    removeMcp: vi.fn(unsupported),
   };
 }
 

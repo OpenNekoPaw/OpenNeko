@@ -3,11 +3,13 @@ import {
   ChevronRightIcon,
   CodeIcon,
   PackageIcon,
+  PlusIcon,
   SearchIcon,
+  TrashIcon,
   WarningIcon,
 } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { Dialog, EmptyState } from '@neko/ui/primitives';
+import { Button, Dialog, EmptyState } from '@neko/ui/primitives';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
   AgentExtensionManagementProjection,
@@ -46,7 +48,107 @@ export function AgentExtensionManagementRoot({
   const [projection, setProjection] = useState<AgentExtensionManagementProjection>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
+  const [pendingIdentity, setPendingIdentity] = useState<string>();
   const [selectedEntryIdentity, setSelectedEntryIdentity] = useState<string>();
+  const [addMcpOpen, setAddMcpOpen] = useState(false);
+  const [removeEntry, setRemoveEntry] = useState<AgentExtensionCatalogEntry>();
+  const [mcpDraft, setMcpDraft] = useState({
+    serverName: '',
+    description: '',
+    transport: 'stdio' as 'stdio' | 'streamable-http',
+    command: '',
+    args: '',
+    url: '',
+  });
+
+  const runMutation = (
+    identity: string,
+    mutation: () => Promise<AgentExtensionManagementProjection>,
+    after?: () => void,
+  ): void => {
+    setPendingIdentity(identity);
+    setError(undefined);
+    void mutation()
+      .then((next) => {
+        setProjection(next);
+        after?.();
+      })
+      .catch((reason: unknown) =>
+        setError(reason instanceof Error ? reason.message : String(reason)),
+      )
+      .finally(() => setPendingIdentity(undefined));
+  };
+
+  const addCurrent = (): void => {
+    if (tab === 'skills') {
+      runMutation('skill:add', () => runtime.addSkill());
+    } else {
+      setAddMcpOpen(true);
+    }
+  };
+
+  const addMcp = (): void => {
+    const common = {
+      serverName: mcpDraft.serverName.trim(),
+      description: mcpDraft.description.trim(),
+    };
+    runMutation(
+      'mcp:add',
+      () =>
+        mcpDraft.transport === 'stdio'
+          ? runtime.addMcp({
+              ...common,
+              transport: 'stdio',
+              command: mcpDraft.command.trim(),
+              args: mcpDraft.args
+                .split('\n')
+                .map((value) => value.trim())
+                .filter(Boolean),
+            })
+          : runtime.addMcp({
+              ...common,
+              transport: 'streamable-http',
+              url: mcpDraft.url.trim(),
+            }),
+      () => {
+        setAddMcpOpen(false);
+        setMcpDraft({
+          serverName: '',
+          description: '',
+          transport: 'stdio',
+          command: '',
+          args: '',
+          url: '',
+        });
+      },
+    );
+  };
+
+  const setEnabled = (entry: AgentExtensionCatalogEntry, enabled: boolean): void => {
+    runMutation(`${entry.kind}:${entry.item.id}`, () =>
+      entry.kind === 'skill'
+        ? runtime.setSkillEnabled({
+            name: entry.item.name,
+            source: entry.item.source,
+            enabled,
+          })
+        : runtime.setMcpEnabled({ id: entry.item.id, enabled }),
+    );
+  };
+
+  const remove = (entry: AgentExtensionCatalogEntry): void => {
+    runMutation(
+      `${entry.kind}:${entry.item.id}`,
+      () =>
+        entry.kind === 'skill'
+          ? runtime.removeSkill({ name: entry.item.name, source: entry.item.source })
+          : runtime.removeMcp(entry.item.id),
+      () => {
+        setRemoveEntry(undefined);
+        setSelectedEntryIdentity(undefined);
+      },
+    );
+  };
 
   useEffect(() => {
     if (!interactive) return;
@@ -146,6 +248,15 @@ export function AgentExtensionManagementRoot({
               </button>
             </div>
           ) : null)}
+        <Button
+          data-extension-add-action={tab}
+          disabled={!interactive || loading || pendingIdentity !== undefined}
+          onClick={addCurrent}
+          size="sm"
+        >
+          <PlusIcon size={14} />
+          {tab === 'skills' ? t('extension.skill.add') : t('extension.mcp.add')}
+        </Button>
       </div>
       {error ? (
         <div className="management-surface-diagnostic" role="alert">
@@ -185,6 +296,7 @@ export function AgentExtensionManagementRoot({
             aria-label={presentation.name}
             className="management-surface-row agent-extension-catalog-row"
             data-extension-kind={kind}
+            data-lifecycle-state={item.enabled ? 'enabled' : 'disabled'}
             data-selected={selectedEntryIdentity === `${kind}:${item.id}`}
             key={`${kind}:${item.id}`}
           >
@@ -211,6 +323,14 @@ export function AgentExtensionManagementRoot({
                   {describeMcp(item)}
                 </small>
               ) : null}
+              <small
+                className="agent-extension-catalog-row__status"
+                data-extension-lifecycle-state={item.enabled ? 'enabled' : 'disabled'}
+              >
+                {item.enabled
+                  ? t('extension.lifecycle.enabled')
+                  : t('extension.lifecycle.disabled')}
+              </small>
             </button>
           </li>
         ))}
@@ -219,8 +339,45 @@ export function AgentExtensionManagementRoot({
         <AgentExtensionDetailOverlay
           entry={selectedEntry}
           onClose={() => setSelectedEntryIdentity(undefined)}
+          onRemove={() => setRemoveEntry(selectedEntry)}
+          onSetEnabled={(enabled) => setEnabled(selectedEntry, enabled)}
+          pending={pendingIdentity === `${selectedEntry.kind}:${selectedEntry.item.id}`}
         />
       ) : null}
+      <McpAddDialog
+        draft={mcpDraft}
+        onAdd={addMcp}
+        onChange={setMcpDraft}
+        onOpenChange={setAddMcpOpen}
+        open={addMcpOpen}
+        pending={pendingIdentity === 'mcp:add'}
+      />
+      <Dialog
+        closeLabel={t('extension.lifecycle.cancel')}
+        description={
+          removeEntry?.kind === 'skill'
+            ? t('extension.lifecycle.removeSkillDescription')
+            : t('extension.lifecycle.removeMcpDescription')
+        }
+        onOpenChange={(open) => {
+          if (!open) setRemoveEntry(undefined);
+        }}
+        open={removeEntry !== undefined}
+        title={t('extension.lifecycle.removeTitle')}
+      >
+        <div className="extension-lifecycle-confirm-actions">
+          <Button onClick={() => setRemoveEntry(undefined)} variant="secondary">
+            {t('extension.lifecycle.cancel')}
+          </Button>
+          <Button
+            disabled={!removeEntry || pendingIdentity !== undefined}
+            onClick={() => removeEntry && remove(removeEntry)}
+          >
+            <TrashIcon size={14} />
+            {t('extension.lifecycle.remove')}
+          </Button>
+        </div>
+      </Dialog>
     </section>
   );
 }
@@ -228,9 +385,15 @@ export function AgentExtensionManagementRoot({
 function AgentExtensionDetailOverlay({
   entry,
   onClose,
+  onRemove,
+  onSetEnabled,
+  pending,
 }: {
   readonly entry: AgentExtensionCatalogEntry;
   readonly onClose: () => void;
+  readonly onRemove: () => void;
+  readonly onSetEnabled: (enabled: boolean) => void;
+  readonly pending: boolean;
 }): JSX.Element {
   const { t } = useTranslation();
   const { item, kind, presentation } = entry;
@@ -307,6 +470,140 @@ function AgentExtensionDetailOverlay({
             <span>{describeMcp(item)}</span>
           </div>
         ) : null}
+        <section className="extension-detail-overlay__section">
+          <h3>{t('extension.lifecycle.management')}</h3>
+          <div className="extension-detail-overlay__actions">
+            {kind === 'mcp' || item.manageable ? (
+              <Button
+                disabled={pending}
+                onClick={() => onSetEnabled(!item.enabled)}
+                size="sm"
+                variant="secondary"
+              >
+                {item.enabled ? t('extension.lifecycle.disable') : t('extension.lifecycle.enable')}
+              </Button>
+            ) : (
+              <span>{t('extension.lifecycle.readOnly')}</span>
+            )}
+            {kind === 'mcp' || item.removable ? (
+              <Button disabled={pending} onClick={onRemove} size="sm" variant="secondary">
+                <TrashIcon size={14} />
+                {t('extension.lifecycle.remove')}
+              </Button>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </Dialog>
+  );
+}
+
+function McpAddDialog({
+  draft,
+  onAdd,
+  onChange,
+  onOpenChange,
+  open,
+  pending,
+}: {
+  readonly draft: {
+    readonly serverName: string;
+    readonly description: string;
+    readonly transport: 'stdio' | 'streamable-http';
+    readonly command: string;
+    readonly args: string;
+    readonly url: string;
+  };
+  readonly onAdd: () => void;
+  readonly onChange: (value: {
+    readonly serverName: string;
+    readonly description: string;
+    readonly transport: 'stdio' | 'streamable-http';
+    readonly command: string;
+    readonly args: string;
+    readonly url: string;
+  }) => void;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly open: boolean;
+  readonly pending: boolean;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const valid =
+    draft.serverName.trim().length > 0 &&
+    (draft.transport === 'stdio' ? draft.command.trim().length > 0 : draft.url.trim().length > 0);
+  return (
+    <Dialog
+      closeLabel={t('extension.lifecycle.cancel')}
+      description={t('extension.mcp.addDescription')}
+      onOpenChange={onOpenChange}
+      open={open}
+      title={t('extension.mcp.add')}
+    >
+      <div className="extension-mcp-add-form">
+        <label>
+          <span>{t('extension.mcp.serverName')}</span>
+          <input
+            value={draft.serverName}
+            onChange={(event) => onChange({ ...draft, serverName: event.currentTarget.value })}
+          />
+        </label>
+        <label>
+          <span>{t('extension.mcp.description')}</span>
+          <input
+            value={draft.description}
+            onChange={(event) => onChange({ ...draft, description: event.currentTarget.value })}
+          />
+        </label>
+        <label>
+          <span>{t('extension.mcp.transport')}</span>
+          <select
+            value={draft.transport}
+            onChange={(event) =>
+              onChange({
+                ...draft,
+                transport: event.currentTarget.value as 'stdio' | 'streamable-http',
+              })
+            }
+          >
+            <option value="stdio">stdio</option>
+            <option value="streamable-http">streamable-http</option>
+          </select>
+        </label>
+        {draft.transport === 'stdio' ? (
+          <>
+            <label>
+              <span>{t('extension.mcp.command')}</span>
+              <input
+                value={draft.command}
+                onChange={(event) => onChange({ ...draft, command: event.currentTarget.value })}
+              />
+            </label>
+            <label>
+              <span>{t('extension.mcp.args')}</span>
+              <textarea
+                value={draft.args}
+                onChange={(event) => onChange({ ...draft, args: event.currentTarget.value })}
+              />
+            </label>
+          </>
+        ) : (
+          <label>
+            <span>URL</span>
+            <input
+              value={draft.url}
+              onChange={(event) => onChange({ ...draft, url: event.currentTarget.value })}
+            />
+          </label>
+        )}
+        <div className="extension-lifecycle-confirm-actions">
+          <Button onClick={() => onOpenChange(false)} variant="secondary">
+            {t('extension.lifecycle.cancel')}
+          </Button>
+          <Button disabled={!valid || pending} onClick={onAdd}>
+            <PlusIcon size={14} />
+            {t('extension.mcp.add')}
+          </Button>
+        </div>
       </div>
     </Dialog>
   );
