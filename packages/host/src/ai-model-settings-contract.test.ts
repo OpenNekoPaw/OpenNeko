@@ -13,6 +13,7 @@ describe('Desktop AI model settings contract', () => {
         provider: {
           id: 'deepseek',
           displayName: 'DeepSeek',
+          type: 'generic',
           apiUrl: 'https://api.deepseek.com/v1',
           protocol: 'openai-chat',
           supportedModelFamilies: ['dialogue'],
@@ -34,6 +35,7 @@ describe('Desktop AI model settings contract', () => {
               {
                 id: 'deepseek',
                 displayName: 'DeepSeek',
+                type: 'generic',
                 apiUrl: 'https://api.deepseek.com/v1',
                 protocol: 'openai-chat',
                 connectionKind: 'direct',
@@ -76,6 +78,7 @@ describe('Desktop AI model settings contract', () => {
               {
                 id: 'deepseek',
                 displayName: 'DeepSeek',
+                type: 'generic',
                 apiUrl: 'https://api.deepseek.com/v1',
                 protocol: 'openai-chat',
                 connectionKind: 'direct',
@@ -102,8 +105,10 @@ describe('Desktop AI model settings contract', () => {
         provider: {
           id: 'ollama-local',
           displayName: 'Ollama Local',
+          type: 'ollama',
           apiUrl: 'http://localhost:11434/api',
           protocol: 'ollama',
+          presetId: 'dialogue-ollama',
           supportedModelFamilies: ['dialogue'],
           enabled: true,
         },
@@ -126,6 +131,7 @@ describe('Desktop AI model settings contract', () => {
     const provider = {
       id: 'invalid-families',
       displayName: 'Invalid families',
+      type: 'generic' as const,
       apiUrl: 'https://example.test/v1',
       protocol: 'openai-chat' as const,
       enabled: true,
@@ -144,5 +150,26 @@ describe('Desktop AI model settings contract', () => {
         provider: { ...provider, supportedModelFamilies: ['dialogue', 'dialogue'] },
       }),
     ).toThrow(/duplicates/u);
+  });
+
+  it('accepts native generation Providers without a DSH dialogue protocol', () => {
+    expect(
+      createDesktopAiModelSettingsRequest({
+        requestId: 'request-minimax',
+        operation: 'save-provider',
+        provider: {
+          id: 'minimax-media',
+          displayName: 'MiniMax H3',
+          type: 'minimax',
+          apiUrl: 'https://api.minimaxi.com/v2',
+          presetId: 'generation-minimax-h3',
+          supportedModelFamilies: ['generation'],
+          enabled: true,
+        },
+      }),
+    ).toMatchObject({
+      operation: 'save-provider',
+      provider: { type: 'minimax', supportedModelFamilies: ['generation'] },
+    });
   });
 });

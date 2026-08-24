@@ -2099,6 +2099,7 @@ async function startDesktop(): Promise<void> {
     settings: applicationSettings,
     aiModelSettings,
     refreshAiModelExecutionConfiguration: () => {
+      workspaceConfigAuthority.reloadAll();
       const refresh = dshProviderRefresh.current;
       if (refresh === undefined) {
         throw new Error('Desktop DSH Provider runtime refresh is not initialized.');

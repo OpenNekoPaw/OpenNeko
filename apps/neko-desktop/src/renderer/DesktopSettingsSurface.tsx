@@ -3,13 +3,16 @@ import { useTranslation } from '@neko/ui/i18n/react';
 import { Dialog } from '@neko/ui/primitives';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { DesktopApplicationPreferences } from '@neko/host/application-settings';
-import type {
-  DesktopAiModelType,
-  DesktopAiModelView,
-  DesktopAiModelProtocol,
-  DesktopAiModelSettingsProjection,
-  DesktopAiProviderModelFamily,
-  DesktopAiProviderView,
+import {
+  DESKTOP_AI_PROVIDER_PRESETS,
+  type DesktopAiModelTemplate,
+  type DesktopAiModelType,
+  type DesktopAiModelView,
+  type DesktopAiModelProtocol,
+  type DesktopAiModelSettingsProjection,
+  type DesktopAiProviderModelFamily,
+  type DesktopAiProviderType,
+  type DesktopAiProviderView,
 } from '@neko/host/ai-model-settings';
 import type { DesktopStorageSettingsProjection } from '@neko/host/desktop-storage-settings-contract';
 import { useDesktopApplicationSettings } from './application-settings-context';
@@ -699,8 +702,10 @@ function ProviderForm({
     provider: {
       readonly id: string;
       readonly displayName: string;
+      readonly type: DesktopAiProviderType;
       readonly apiUrl: string;
-      readonly protocol: DesktopAiModelProtocol;
+      readonly protocol?: DesktopAiModelProtocol;
+      readonly presetId?: string;
       readonly supportedModelFamilies: readonly DesktopAiProviderModelFamily[];
       readonly enabled: boolean;
     },
@@ -713,27 +718,54 @@ function ProviderForm({
     readonly displayName: string;
     readonly type: DesktopAiModelType;
     readonly enabled: boolean;
+    readonly templateId?: string;
   }) => Promise<boolean>;
   readonly onSetDefault: (model: DesktopAiModelView) => Promise<boolean>;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [id, setId] = useState(initial?.id ?? '');
-  const [displayName, setDisplayName] = useState(initial?.displayName ?? '');
-  const [apiUrl, setApiUrl] = useState(initial?.apiUrl ?? '');
-  const [protocol, setProtocol] = useState<DesktopAiModelProtocol>(
-    initial?.protocol ?? 'openai-chat',
+  const creationFamily = modelFamily.length === 1 ? modelFamily[0] : undefined;
+  const availablePresets = DESKTOP_AI_PROVIDER_PRESETS.filter(
+    (preset) => preset.family === creationFamily,
+  );
+  const initialPreset = initial ? undefined : availablePresets[0];
+  if (!initial && !initialPreset) {
+    throw new Error(`No Provider preset is available for ${String(creationFamily)} settings.`);
+  }
+  const [presetId, setPresetId] = useState(initialPreset?.id);
+  const selectedPreset = presetId
+    ? DESKTOP_AI_PROVIDER_PRESETS.find((preset) => preset.id === presetId)
+    : undefined;
+  const [id, setId] = useState(initial?.id ?? initialPreset?.suggestedProviderId ?? '');
+  const [displayName, setDisplayName] = useState(
+    initial?.displayName ?? initialPreset?.displayName ?? '',
+  );
+  const [apiUrl, setApiUrl] = useState(initial?.apiUrl ?? initialPreset?.defaultApiUrl ?? '');
+  const [providerType, setProviderType] = useState<DesktopAiProviderType>(
+    initial?.type ?? initialPreset?.providerType ?? 'generic',
+  );
+  const [protocol, setProtocol] = useState<DesktopAiModelProtocol | undefined>(
+    initial?.protocol ?? initialPreset?.protocol,
   );
   const [apiKey, setApiKey] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(!initial);
   const [showModelForm, setShowModelForm] = useState(false);
   const [confirmProviderDelete, setConfirmProviderDelete] = useState(false);
-  const requiresApiKey = protocol !== 'ollama';
-  const allowsOllama = modelFamily.length === 1 && modelFamily[0] === 'dialogue';
+  const requiresApiKey =
+    selectedPreset?.requiresApiKey ?? initial?.credentialStatus !== 'not-required';
   const canSave = Boolean(id.trim() && displayName.trim() && apiUrl.trim());
   const submit = (event: FormEvent): void => {
     event.preventDefault();
     void onSave(
-      { id, displayName, apiUrl, protocol, supportedModelFamilies: modelFamily, enabled: true },
+      {
+        id,
+        displayName,
+        type: providerType,
+        apiUrl,
+        ...(protocol === undefined ? {} : { protocol }),
+        ...(initial || presetId === undefined ? {} : { presetId }),
+        supportedModelFamilies: modelFamily,
+        enabled: true,
+      },
       apiKey.trim() ? apiKey : undefined,
     );
   };
@@ -762,6 +794,36 @@ function ProviderForm({
       <div className="desktop-settings__form-grid">
         {!initial ? (
           <>
+            <label className="desktop-settings__form-wide">
+              <span>{t('settings.agent.providerPreset')}</span>
+              <select
+                disabled={disabled}
+                value={presetId}
+                onChange={(event) => {
+                  const next = DESKTOP_AI_PROVIDER_PRESETS.find(
+                    (preset) => preset.id === event.currentTarget.value,
+                  );
+                  if (!next || next.family !== creationFamily) {
+                    throw new Error(
+                      `Provider preset '${event.currentTarget.value}' is unavailable.`,
+                    );
+                  }
+                  setPresetId(next.id);
+                  setId(next.suggestedProviderId);
+                  setDisplayName(next.displayName);
+                  setApiUrl(next.defaultApiUrl);
+                  setProviderType(next.providerType);
+                  setProtocol(next.protocol);
+                }}
+              >
+                {availablePresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.displayName}
+                  </option>
+                ))}
+              </select>
+              <small>{t(`settings.agent.providerPreset.${creationFamily}.description`)}</small>
+            </label>
             <label>
               <span>{t('settings.agent.providerId')}</span>
               <input
@@ -827,6 +889,10 @@ function ProviderForm({
             </label>
           ) : null}
           <label>
+            <span>{t('settings.agent.providerType')}</span>
+            <input disabled readOnly value={providerType} />
+          </label>
+          <label>
             <span>{t('settings.agent.apiUrl')}</span>
             <input
               disabled={disabled}
@@ -837,19 +903,27 @@ function ProviderForm({
               onChange={(e) => setApiUrl(e.currentTarget.value)}
             />
           </label>
-          <label className="desktop-settings__field-compact">
-            <span>{t('settings.agent.protocol')}</span>
-            <select
-              disabled={disabled}
-              value={protocol}
-              onChange={(e) => setProtocol(e.currentTarget.value as DesktopAiModelProtocol)}
-            >
-              <option value="openai-chat">OpenAI Chat compatible</option>
-              <option value="openai-responses">OpenAI Responses</option>
-              <option value="anthropic">Anthropic Messages</option>
-              {allowsOllama ? <option value="ollama">Ollama local</option> : null}
-            </select>
-          </label>
+          {modelFamily.includes('dialogue') ? (
+            <label className="desktop-settings__field-compact">
+              <span>{t('settings.agent.protocol')}</span>
+              <select
+                disabled={
+                  disabled ||
+                  !initial ||
+                  providerType === 'anthropic' ||
+                  providerType === 'ollama' ||
+                  providerType === 'newapi'
+                }
+                value={protocol ?? 'openai-chat'}
+                onChange={(e) => setProtocol(e.currentTarget.value as DesktopAiModelProtocol)}
+              >
+                <option value="openai-chat">OpenAI Chat compatible</option>
+                <option value="openai-responses">OpenAI Responses</option>
+                <option value="anthropic">Anthropic Messages</option>
+                {providerType === 'ollama' ? <option value="ollama">Ollama local</option> : null}
+              </select>
+            </label>
+          ) : null}
           {!initial && requiresApiKey ? (
             <label>
               <span>{t('settings.agent.apiKey')}</span>
@@ -898,7 +972,9 @@ function ProviderForm({
         )}
         {initial && showModelForm ? (
           <ModelForm
+            allowCustomModels={providerAllowsCustomModels(initial.type, modelFamily)}
             disabled={disabled}
+            modelTemplates={modelTemplatesForProvider(initial.type, modelFamily)}
             supportedTypes={modelTypesForFamilies(modelFamily, protocol)}
             providerId={initial.id}
             onCancel={() => setShowModelForm(false)}
@@ -957,13 +1033,17 @@ function ProviderForm({
 }
 
 function ModelForm({
+  allowCustomModels = true,
   disabled,
+  modelTemplates = [],
   onCancel,
   onSave,
   providerId,
   supportedTypes = ['llm', 'image', 'video', 'audio'],
 }: {
+  readonly allowCustomModels?: boolean;
   readonly disabled: boolean;
+  readonly modelTemplates?: readonly DesktopAiModelTemplate[];
   readonly onCancel: () => void;
   readonly onSave: (model: {
     readonly id: string;
@@ -972,6 +1052,7 @@ function ModelForm({
     readonly displayName: string;
     readonly type: DesktopAiModelType;
     readonly enabled: boolean;
+    readonly templateId?: string;
   }) => Promise<void>;
   readonly providerId: string;
   readonly supportedTypes?: readonly DesktopAiModelType[];
@@ -979,14 +1060,30 @@ function ModelForm({
   const { t } = useTranslation();
   const initialType = supportedTypes[0];
   if (!initialType) throw new Error(`Provider ${providerId} has no supported model types.`);
-  const [id, setId] = useState('');
-  const [apiName, setApiName] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [type, setType] = useState<DesktopAiModelType>(initialType);
+  const defaultTemplate = modelTemplates[0];
+  if (!allowCustomModels && !defaultTemplate) {
+    throw new Error(`Provider ${providerId} requires a builtin model template.`);
+  }
+  const [templateId, setTemplateId] = useState(defaultTemplate?.id ?? 'custom');
+  const [id, setId] = useState(
+    defaultTemplate ? modelIdForTemplate(providerId, defaultTemplate) : '',
+  );
+  const [apiName, setApiName] = useState(defaultTemplate?.apiName ?? '');
+  const [displayName, setDisplayName] = useState(defaultTemplate?.displayName ?? '');
+  const [type, setType] = useState<DesktopAiModelType>(defaultTemplate?.type ?? initialType);
+  const selectedTemplate = modelTemplates.find((template) => template.id === templateId);
   const canSave = Boolean(id.trim() && apiName.trim() && displayName.trim());
   const save = (): void => {
     if (disabled || !canSave) return;
-    void onSave({ id, providerId, apiName, displayName, type, enabled: true });
+    void onSave({
+      id,
+      providerId,
+      apiName,
+      displayName,
+      type,
+      enabled: true,
+      ...(selectedTemplate === undefined ? {} : { templateId: selectedTemplate.id }),
+    });
   };
   return (
     <div
@@ -1000,10 +1097,47 @@ function ModelForm({
       }}
     >
       <div className="desktop-settings__form-grid">
+        {modelTemplates.length > 0 ? (
+          <label className="desktop-settings__form-wide">
+            <span>{t('settings.agent.modelTemplate')}</span>
+            <select
+              disabled={disabled}
+              value={templateId}
+              onChange={(event) => {
+                const nextId = event.currentTarget.value;
+                setTemplateId(nextId);
+                const next = modelTemplates.find((template) => template.id === nextId);
+                if (!next) {
+                  if (!allowCustomModels) {
+                    throw new Error(`Provider ${providerId} does not allow custom models.`);
+                  }
+                  setId('');
+                  setApiName('');
+                  setDisplayName('');
+                  setType(initialType);
+                  return;
+                }
+                setId(modelIdForTemplate(providerId, next));
+                setApiName(next.apiName);
+                setDisplayName(next.displayName);
+                setType(next.type);
+              }}
+            >
+              {modelTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.displayName} · {template.apiName}
+                </option>
+              ))}
+              {allowCustomModels ? (
+                <option value="custom">{t('settings.agent.customModel')}</option>
+              ) : null}
+            </select>
+          </label>
+        ) : null}
         <label>
           <span>{t('settings.agent.modelType')}</span>
           <select
-            disabled={disabled}
+            disabled={disabled || selectedTemplate !== undefined}
             value={type}
             onChange={(e) => setType(e.currentTarget.value as DesktopAiModelType)}
           >
@@ -1017,7 +1151,7 @@ function ModelForm({
         <label>
           <span>{t('settings.agent.modelId')}</span>
           <input
-            disabled={disabled}
+            disabled={disabled || selectedTemplate !== undefined}
             required
             value={id}
             onChange={(e) => setId(e.currentTarget.value)}
@@ -1026,7 +1160,7 @@ function ModelForm({
         <label>
           <span>{t('settings.agent.apiModelName')}</span>
           <input
-            disabled={disabled}
+            disabled={disabled || selectedTemplate !== undefined}
             required
             value={apiName}
             onChange={(e) => setApiName(e.currentTarget.value)}
@@ -1061,13 +1195,36 @@ function ModelForm({
 
 function modelTypesForFamilies(
   families: readonly DesktopAiProviderModelFamily[],
-  protocol: DesktopAiModelProtocol,
+  protocol: DesktopAiModelProtocol | undefined,
 ): readonly DesktopAiModelType[] {
   if (protocol === 'ollama') return ['llm'];
   return [
     ...(families.includes('dialogue') ? (['llm'] as const) : []),
     ...(families.includes('generation') ? (['image', 'video', 'audio'] as const) : []),
   ];
+}
+
+function modelTemplatesForProvider(
+  providerType: DesktopAiProviderType,
+  families: readonly DesktopAiProviderModelFamily[],
+): readonly DesktopAiModelTemplate[] {
+  return DESKTOP_AI_PROVIDER_PRESETS.filter(
+    (preset) => preset.providerType === providerType && families.includes(preset.family),
+  ).flatMap((preset) => preset.modelTemplates);
+}
+
+function modelIdForTemplate(providerId: string, template: DesktopAiModelTemplate): string {
+  return `${providerId}-${template.id}`;
+}
+
+function providerAllowsCustomModels(
+  providerType: DesktopAiProviderType,
+  families: readonly DesktopAiProviderModelFamily[],
+): boolean {
+  const presets = DESKTOP_AI_PROVIDER_PRESETS.filter(
+    (preset) => preset.providerType === providerType && families.includes(preset.family),
+  );
+  return presets.length === 0 || presets.some((preset) => preset.allowCustomModels);
 }
 
 function ProviderModelCatalog({

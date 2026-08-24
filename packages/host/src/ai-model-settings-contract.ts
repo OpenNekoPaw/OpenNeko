@@ -1,18 +1,24 @@
 import type {
   ModelType,
+  ProviderType,
   ProviderConnectionKind,
   ProviderModelFamily,
-  ProviderProtocolProfile,
 } from '@neko/ai-contracts';
+import { PROVIDER_TYPES } from '@neko/ai-contracts';
+import type { DesktopAiModelProtocol } from './ai-model-provider-presets';
+
+export {
+  DESKTOP_AI_PROVIDER_PRESETS,
+  type DesktopAiModelProtocol,
+  type DesktopAiModelTemplate,
+  type DesktopAiProviderPreset,
+} from './ai-model-provider-presets';
 
 export const DESKTOP_AI_MODEL_SETTINGS_CHANNEL = 'openneko:desktop:ai-model-settings:execute';
 
-export type DesktopAiModelProtocol = Extract<
-  ProviderProtocolProfile,
-  'openai-chat' | 'openai-responses' | 'anthropic' | 'ollama'
->;
 export type DesktopAiModelType = ModelType;
 export type DesktopAiProviderModelFamily = ProviderModelFamily;
+export type DesktopAiProviderType = ProviderType;
 
 export interface DesktopAiModelRef {
   readonly providerId: string;
@@ -22,8 +28,9 @@ export interface DesktopAiModelRef {
 export interface DesktopAiProviderView {
   readonly id: string;
   readonly displayName: string;
+  readonly type: ProviderType;
   readonly apiUrl: string;
-  readonly protocol: DesktopAiModelProtocol;
+  readonly protocol?: DesktopAiModelProtocol;
   readonly connectionKind: ProviderConnectionKind;
   readonly enabled: boolean;
   readonly supportedModelFamilies: readonly ProviderModelFamily[];
@@ -54,8 +61,10 @@ export type DesktopAiModelSettingsRequest =
       readonly provider: {
         readonly id: string;
         readonly displayName: string;
+        readonly type: ProviderType;
         readonly apiUrl: string;
-        readonly protocol: DesktopAiModelProtocol;
+        readonly protocol?: DesktopAiModelProtocol;
+        readonly presetId?: string;
         readonly supportedModelFamilies: readonly ProviderModelFamily[];
         readonly enabled: boolean;
       };
@@ -71,6 +80,7 @@ export type DesktopAiModelSettingsRequest =
         readonly displayName: string;
         readonly type: ModelType;
         readonly enabled: boolean;
+        readonly templateId?: string;
       };
     }
   | {
@@ -145,7 +155,16 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
     const provider = exactRecord(record['provider'], 'Provider input');
     exactKeys(
       provider,
-      ['id', 'displayName', 'apiUrl', 'protocol', 'supportedModelFamilies', 'enabled'],
+      [
+        'id',
+        'displayName',
+        'type',
+        'apiUrl',
+        'protocol',
+        'presetId',
+        'supportedModelFamilies',
+        'enabled',
+      ],
       'Provider input',
     );
     const apiKey = record['apiKey'];
@@ -157,12 +176,20 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
       provider: {
         id: identity(provider['id'], 'provider.id'),
         displayName: nonEmpty(provider['displayName'], 'provider.displayName'),
+        type: oneOf(provider['type'], PROVIDER_TYPES, 'provider.type'),
         apiUrl: httpUrl(provider['apiUrl']),
-        protocol: oneOf(
-          provider['protocol'],
-          ['openai-chat', 'openai-responses', 'anthropic', 'ollama'] as const,
-          'provider.protocol',
-        ),
+        ...(provider['protocol'] === undefined
+          ? {}
+          : {
+              protocol: oneOf(
+                provider['protocol'],
+                ['openai-chat', 'openai-responses', 'anthropic', 'ollama'] as const,
+                'provider.protocol',
+              ),
+            }),
+        ...(provider['presetId'] === undefined
+          ? {}
+          : { presetId: identity(provider['presetId'], 'provider.presetId') }),
         supportedModelFamilies: providerModelFamilies(provider['supportedModelFamilies']),
         enabled: booleanValue(provider['enabled'], 'provider.enabled'),
       },
@@ -174,7 +201,7 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
     const model = exactRecord(record['model'], 'Model input');
     exactKeys(
       model,
-      ['id', 'providerId', 'apiName', 'displayName', 'type', 'enabled'],
+      ['id', 'providerId', 'apiName', 'displayName', 'type', 'enabled', 'templateId'],
       'Model input',
     );
     return {
@@ -187,6 +214,9 @@ export function parseDesktopAiModelSettingsRequest(value: unknown): DesktopAiMod
         displayName: nonEmpty(model['displayName'], 'model.displayName'),
         type: modelType(model['type']),
         enabled: booleanValue(model['enabled'], 'model.enabled'),
+        ...(model['templateId'] === undefined
+          ? {}
+          : { templateId: identity(model['templateId'], 'model.templateId') }),
       },
     };
   }
@@ -264,6 +294,7 @@ function parseProviderView(value: unknown): DesktopAiProviderView {
     [
       'id',
       'displayName',
+      'type',
       'apiUrl',
       'protocol',
       'connectionKind',
@@ -280,12 +311,17 @@ function parseProviderView(value: unknown): DesktopAiProviderView {
   return {
     id: identity(record['id'], 'provider.id'),
     displayName: nonEmpty(record['displayName'], 'provider.displayName'),
+    type: oneOf(record['type'], PROVIDER_TYPES, 'provider.type'),
     apiUrl: httpUrl(record['apiUrl']),
-    protocol: oneOf(
-      record['protocol'],
-      ['openai-chat', 'openai-responses', 'anthropic', 'ollama'] as const,
-      'provider.protocol',
-    ),
+    ...(record['protocol'] === undefined
+      ? {}
+      : {
+          protocol: oneOf(
+            record['protocol'],
+            ['openai-chat', 'openai-responses', 'anthropic', 'ollama'] as const,
+            'provider.protocol',
+          ),
+        }),
     connectionKind: oneOf(
       record['connectionKind'],
       ['gateway', 'local', 'direct'] as const,

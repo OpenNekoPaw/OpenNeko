@@ -109,18 +109,26 @@ export const en = {
   'settings.agent.providerGroup.generation.description':
     'Provide image, video, or audio generation models.',
   'settings.agent.providerGroup.empty': 'No configured providers',
+  'settings.agent.providerPreset': 'Provider type',
+  'settings.agent.providerPreset.dialogue.description':
+    'Choose an official or compatible provider; official types prefill the standard API URL.',
+  'settings.agent.providerPreset.generation.description':
+    'Choose a generation service; MiniMax H3 and Seedance prefill official API URLs and model templates.',
+  'settings.agent.providerType': 'Provider adapter',
   'settings.agent.modelCatalog': 'Model catalog',
   'settings.agent.modelCatalogDescription':
-    'Configure this provider’s dialogue and generation models, including each default.',
+    'Configure models supported by this provider, including each default.',
+  'settings.agent.modelTemplate': 'Model template',
+  'settings.agent.customModel': 'Custom model',
   'settings.agent.manage': 'Manage',
   'settings.agent.collapse': 'Collapse',
   'settings.agent.addModel': 'Add model',
   'settings.agent.providerSettings': 'Provider settings',
   'settings.agent.providerSettingsDescription':
     'Update credentials and expand connection or model settings only when needed.',
-  'settings.agent.customProvider': 'Custom provider',
+  'settings.agent.customProvider': 'Add provider',
   'settings.agent.customProviderDescription':
-    'Configure a compatible provider and its access credential.',
+    'Choose a provider type and configure its official or custom connection.',
   'settings.agent.advancedProviderSettings': 'Custom settings',
   'settings.agent.saveProviderBeforeModels':
     'Save the provider before configuring its model catalog.',

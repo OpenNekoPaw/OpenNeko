@@ -106,6 +106,131 @@ export const desktopAiModelSettingsScenario = Object.freeze({
     checkpoint('ai-model-provider-capability-groups', catalog);
     const catalogScreenshot = await screenshot('desktop-ai-model-provider-groups');
 
+    const generationPreset = await evaluate(`(() => {
+      const group = document.querySelector('[data-provider-group="generation"]');
+      const add = group?.querySelector(
+        '.desktop-settings__provider-group-actions .desktop-settings__action',
+      );
+      if (!(add instanceof HTMLButtonElement)) {
+        throw new Error('Generation Provider add action is unavailable.');
+      }
+      add.click();
+      return true;
+    })()`);
+    if (!generationPreset) throw new Error('Generation Provider add action did not run.');
+    await waitForSelector('.desktop-settings__editor');
+    const generationPresetState = await evaluate(`(() => {
+      const editor = document.querySelector('.desktop-settings__editor');
+      const preset = editor?.querySelector('select');
+      const apiUrl = editor?.querySelector('input[type="url"]');
+      const inputs = [...editor?.querySelectorAll('input') ?? []];
+      if (!(preset instanceof HTMLSelectElement) || !(apiUrl instanceof HTMLInputElement)) {
+        throw new Error('Generation Provider preset form is incomplete.');
+      }
+      return {
+        selectedPreset: preset.value,
+        presetLabels: [...preset.options].map((option) => option.textContent?.trim() ?? ''),
+        apiUrl: apiUrl.value,
+        providerTypeVisible: inputs.some((input) => input.value === 'minimax'),
+      };
+    })()`);
+    if (
+      generationPresetState.selectedPreset !== 'generation-minimax-h3' ||
+      generationPresetState.apiUrl !== 'https://api.minimaxi.com/v2' ||
+      !generationPresetState.providerTypeVisible ||
+      JSON.stringify(generationPresetState.presetLabels) !==
+        JSON.stringify(['MiniMax H3', 'ByteDance Ark / Seedance', 'Custom NewAPI Media'])
+    ) {
+      throw new Error(
+        `Generation Provider preset state is incorrect: ${JSON.stringify(generationPresetState)}`,
+      );
+    }
+    checkpoint('generation-provider-presets-visible', generationPresetState);
+    const generationPresetScreenshot = await screenshot('desktop-ai-model-generation-presets');
+    await evaluate(`(() => {
+      const editor = document.querySelector('.desktop-settings__editor');
+      const save = [...editor?.querySelectorAll('button') ?? []].find((button) =>
+        /保存|Save/u.test(button.textContent ?? ''),
+      );
+      if (!(save instanceof HTMLButtonElement)) throw new Error('Generation Provider save is unavailable.');
+      save.click();
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `!document.querySelector('.desktop-settings__editor')`,
+      'MiniMax Provider form did not close after save.',
+    );
+    await waitForCondition(
+      evaluate,
+      `[...document.querySelectorAll('.desktop-settings__provider-card')].some((card) =>
+        card.textContent?.includes('MiniMax H3'))`,
+      'MiniMax Provider did not appear in the generation directory.',
+    );
+
+    await openProvider(evaluate, 'MiniMax H3');
+    await waitForSelector('.desktop-settings__editor');
+    await evaluate(`(() => {
+      const editor = document.querySelector('.desktop-settings__editor');
+      const addModel = [...editor?.querySelectorAll('button') ?? []].find((button) =>
+        /新增模型|Add model/u.test(button.textContent ?? ''),
+      );
+      if (!(addModel instanceof HTMLButtonElement)) throw new Error('MiniMax add-model action is unavailable.');
+      addModel.click();
+      return true;
+    })()`);
+    await waitForSelector('.desktop-settings__model-editor');
+    const h3TemplateState = await evaluate(`(() => {
+      const editor = document.querySelector('.desktop-settings__model-editor');
+      const selects = [...editor?.querySelectorAll('select') ?? []];
+      const inputs = [...editor?.querySelectorAll('input') ?? []];
+      if (!(editor instanceof HTMLElement)) throw new Error('MiniMax model editor is missing.');
+      return {
+        template: selects[0]?.value,
+        modelType: selects[1]?.value,
+        values: inputs.map((input) => input.value),
+        lockedFieldCount: inputs.filter((input) => input.disabled).length,
+      };
+    })()`);
+    if (
+      h3TemplateState.template !== 'minimax-h3' ||
+      h3TemplateState.modelType !== 'video' ||
+      !h3TemplateState.values.includes('MiniMax-H3') ||
+      h3TemplateState.lockedFieldCount < 2
+    ) {
+      throw new Error(`MiniMax H3 model template is incorrect: ${JSON.stringify(h3TemplateState)}`);
+    }
+    checkpoint('minimax-h3-model-template-visible', h3TemplateState);
+    const h3TemplateScreenshot = await screenshot('desktop-ai-model-minimax-h3-template');
+    await evaluate(`(() => {
+      const save = document.querySelector(
+        '.desktop-settings__model-editor button.desktop-settings__action',
+      );
+      if (!(save instanceof HTMLButtonElement)) throw new Error('MiniMax H3 model save is unavailable.');
+      save.click();
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `[...document.querySelectorAll('.desktop-settings__model-chip')].some((model) =>
+        model.textContent?.includes('MiniMax H3'))`,
+      'MiniMax H3 model did not appear in its Provider catalog.',
+    );
+    await evaluate(`(() => {
+      const editor = document.querySelector('.desktop-settings__editor');
+      const close = [...editor?.querySelectorAll('button') ?? []].find((button) =>
+        /取消|Cancel/u.test(button.textContent ?? ''),
+      );
+      if (!(close instanceof HTMLButtonElement)) throw new Error('MiniMax Provider close is unavailable.');
+      close.click();
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `!document.querySelector('.desktop-settings__editor')`,
+      'MiniMax Provider editor did not close.',
+    );
+
     await openProvider(evaluate, 'Functional Ollama');
     await waitForSelector('.desktop-settings__editor');
     const localProvider = await evaluate(`(() => {
@@ -227,20 +352,30 @@ export const desktopAiModelSettingsScenario = Object.freeze({
     const persistedConfig = await readFile(prepared.configPath, 'utf8');
     if (
       persistedConfig.includes('functional-removable') ||
-      persistedConfig.includes('functional-removable-chat')
+      persistedConfig.includes('functional-removable-chat') ||
+      !persistedConfig.includes('type = "minimax"') ||
+      !persistedConfig.includes('name = "MiniMax-H3"')
     ) {
-      throw new Error('Provider deletion did not persist to the canonical config.toml.');
+      throw new Error('Provider/model mutations did not persist to the canonical config.toml.');
     }
     checkpoint('provider-delete-persisted-to-config', {
       configFileUpdated: true,
-      retainedProviders: ['functional-ollama', 'functional-generation'],
+      retainedProviders: ['functional-ollama', 'functional-generation', 'minimax-media'],
     });
 
     return {
       catalog,
       localProvider: { ...localProvider, localModelTypes },
       deleted,
-      screenshots: [catalogScreenshot, localScreenshot, deleteConfirmationScreenshot],
+      generationPresetState,
+      h3TemplateState,
+      screenshots: [
+        catalogScreenshot,
+        generationPresetScreenshot,
+        h3TemplateScreenshot,
+        localScreenshot,
+        deleteConfirmationScreenshot,
+      ],
     };
   },
 });

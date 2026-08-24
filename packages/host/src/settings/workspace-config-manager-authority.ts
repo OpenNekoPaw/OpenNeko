@@ -66,6 +66,12 @@ export class WorkspaceConfigManagerAuthority {
     return config;
   }
 
+  reloadAll(): void {
+    this.requireActive();
+    this.applicationConfig?.reloadConfig();
+    for (const entry of this.workspaceConfigs.values()) entry.config.reloadConfig();
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

@@ -118,6 +118,7 @@ describe('Desktop Settings surfaces', () => {
         {
           id: 'deepseek',
           displayName: 'DeepSeek Provider',
+          type: 'generic' as const,
           apiUrl: 'https://api.deepseek.com/v1',
           protocol: 'openai-chat' as const,
           connectionKind: 'direct' as const,
@@ -229,6 +230,7 @@ describe('Desktop Settings surfaces', () => {
         {
           id: 'ollama-local',
           displayName: 'Ollama Local',
+          type: 'ollama' as const,
           apiUrl: 'http://localhost:11434',
           protocol: 'ollama' as const,
           connectionKind: 'local' as const,
@@ -280,6 +282,7 @@ describe('Desktop Settings surfaces', () => {
         {
           id: 'deepseek-chat',
           displayName: 'DeepSeek Chat',
+          type: 'generic' as const,
           apiUrl: 'https://api.deepseek.com/v1',
           protocol: 'openai-chat' as const,
           connectionKind: 'direct' as const,
@@ -290,6 +293,7 @@ describe('Desktop Settings surfaces', () => {
         {
           id: 'neko-chat',
           displayName: 'Neko API Chat',
+          type: 'generic' as const,
           apiUrl: 'https://www.nekoapi.com/v1',
           protocol: 'openai-responses' as const,
           connectionKind: 'direct' as const,
@@ -365,6 +369,7 @@ describe('Desktop Settings surfaces', () => {
       {
         id: 'neko-chat',
         displayName: 'Neko API Chat',
+        type: 'generic',
         apiUrl: 'https://www.nekoapi.com/v1',
         protocol: 'openai-responses',
         supportedModelFamilies: ['dialogue'],
@@ -381,6 +386,7 @@ describe('Desktop Settings surfaces', () => {
         {
           id: 'custom-empty',
           displayName: 'Custom Empty',
+          type: 'generic' as const,
           apiUrl: 'https://custom.example/v1',
           protocol: 'openai-chat' as const,
           connectionKind: 'direct' as const,
@@ -437,6 +443,7 @@ describe('Desktop Settings surfaces', () => {
     ).map(([id, displayName, supportedModelFamilies]) => ({
       id,
       displayName,
+      type: 'generic' as const,
       apiUrl: `https://${id}.example/v1`,
       protocol: 'openai-chat' as const,
       connectionKind: 'direct' as const,
@@ -484,7 +491,7 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => root.unmount());
   });
 
-  it('shows a focused custom-provider form before model configuration is available', async () => {
+  it('prefills the official MiniMax generation Provider before model configuration', async () => {
     const projection = { providers: [], models: [], defaults: {} };
     const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
     const saveProvider = vi.fn(async () => response);
@@ -504,14 +511,97 @@ describe('Desktop Settings surfaces', () => {
 
     await act(async () => findButton(container, 'Add generation provider').click());
 
-    expect(container.textContent).toContain('Custom provider');
-    expect(container.querySelectorAll('.desktop-settings__editor input')).toHaveLength(4);
+    expect(container.textContent).toContain('Add provider');
+    expect(container.querySelectorAll('.desktop-settings__editor input')).toHaveLength(5);
     expect(container.querySelectorAll('.desktop-settings__editor select')).toHaveLength(1);
+    expect(
+      [...container.querySelectorAll('.desktop-settings__editor option')].map(
+        (option) => option.textContent,
+      ),
+    ).toEqual(['MiniMax H3', 'ByteDance Ark / Seedance', 'Custom NewAPI Media']);
+    expect(container.querySelector<HTMLInputElement>('input[type="url"]')?.value).toBe(
+      'https://api.minimaxi.com/v2',
+    );
+    expect(
+      [...container.querySelectorAll<HTMLInputElement>('.desktop-settings__editor input')].some(
+        (input) => input.value === 'minimax',
+      ),
+    ).toBe(true);
     expect(container.textContent).toContain(
       'Save the provider before configuring its model catalog.',
     );
     expect(container.querySelectorAll('.desktop-settings__model-editor')).toHaveLength(0);
     expect(saveProvider).not.toHaveBeenCalled();
+    await act(async () => findButton(container, 'Save').click());
+    expect(saveProvider).toHaveBeenCalledWith(
+      {
+        id: 'minimax-media',
+        displayName: 'MiniMax H3',
+        type: 'minimax',
+        apiUrl: 'https://api.minimaxi.com/v2',
+        presetId: 'generation-minimax-h3',
+        supportedModelFamilies: ['generation'],
+        enabled: true,
+      },
+      undefined,
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('adds MiniMax H3 through its canonical model template', async () => {
+    const projection = {
+      providers: [
+        {
+          id: 'minimax-media',
+          displayName: 'MiniMax H3',
+          type: 'minimax' as const,
+          apiUrl: 'https://api.minimaxi.com/v2',
+          connectionKind: 'direct' as const,
+          enabled: true,
+          supportedModelFamilies: ['generation'] as const,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
+    const saveModel = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('.desktop-settings__provider-card-main')?.click(),
+    );
+    await act(async () => findButtonContaining(container, 'Add model').click());
+    const modelEditor = container.querySelector<HTMLElement>('.desktop-settings__model-editor');
+    if (!modelEditor) throw new Error('MiniMax fixture requires a model editor.');
+    expect(modelEditor.textContent).toContain('MiniMax H3 · MiniMax-H3');
+    expect(modelEditor.querySelectorAll('select')).toHaveLength(2);
+    expect(modelEditor.querySelector<HTMLSelectElement>('select')?.value).toBe('minimax-h3');
+    const save = modelEditor.querySelector<HTMLButtonElement>('button.desktop-settings__action');
+    if (!save) throw new Error('MiniMax model fixture requires a save action.');
+    await act(async () => save.click());
+    expect(saveModel).toHaveBeenCalledWith({
+      id: 'minimax-media-minimax-h3',
+      providerId: 'minimax-media',
+      apiName: 'MiniMax-H3',
+      displayName: 'MiniMax H3',
+      type: 'video',
+      enabled: true,
+      templateId: 'minimax-h3',
+    });
     await act(async () => root.unmount());
   });
 });

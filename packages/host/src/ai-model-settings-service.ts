@@ -3,6 +3,7 @@ import type {
   ModelType,
   ProviderModelFamily,
   ProviderProtocolProfile,
+  ProviderType,
 } from '@neko/ai-contracts';
 import type { ConfigManager } from './settings/config-manager';
 import type { ProviderCredentialAuthority } from './settings/provider-credential-authority';
@@ -12,6 +13,12 @@ import type {
   DesktopAiModelSettingsRequest,
   DesktopAiProviderView,
 } from './ai-model-settings-contract';
+import {
+  DESKTOP_AI_PROVIDER_PRESETS,
+  getDesktopAiModelTemplate,
+  getDesktopAiProviderPreset,
+  type DesktopAiProviderPreset,
+} from './ai-model-provider-presets';
 
 export class DesktopAiModelSettingsService {
   constructor(
@@ -23,7 +30,7 @@ export class DesktopAiModelSettingsService {
     const providers = await Promise.all(
       this.config
         .getProviders()
-        .filter((provider) => toDesktopProtocol(provider.protocolProfile) !== undefined)
+        .filter((provider) => this.isProjectableProvider(provider.id))
         .map((provider) => this.projectProvider(provider.id)),
     );
     const projectedProviderIds = new Set(providers.map((provider) => provider.id));
@@ -59,61 +66,64 @@ export class DesktopAiModelSettingsService {
       return { projection: await this.project(), executionConfigurationChanged: false };
     if (request.operation === 'save-provider') {
       const existing = this.config.getProvider(request.provider.id);
-      const isLocalOllama = request.provider.protocol === 'ollama';
-      if (
-        isLocalOllama &&
-        (request.provider.supportedModelFamilies.length !== 1 ||
-          request.provider.supportedModelFamilies[0] !== 'dialogue')
-      ) {
+      const preset = request.provider.presetId
+        ? getDesktopAiProviderPreset(request.provider.presetId)
+        : undefined;
+      if (!existing && !preset) {
         throw new Error(
-          `Local Ollama Provider ${request.provider.id} only supports dialogue models.`,
+          `New Provider ${request.provider.id} requires an explicit Provider preset.`,
         );
       }
-      if (isLocalOllama && request.apiKey !== undefined) {
-        throw new Error(`Local Ollama Provider ${request.provider.id} does not accept an API key.`);
+      if (request.provider.presetId && !preset) {
+        throw new Error(`Provider preset ${request.provider.presetId} does not exist.`);
       }
-      const preserveProtocolMetadata =
-        existing !== undefined &&
-        request.provider.protocol === toDesktopProtocol(existing.protocolProfile);
-      const protocolProfile =
-        existing?.protocolProfile === 'newapi' && request.provider.protocol === 'openai-chat'
-          ? 'newapi'
-          : request.provider.protocol;
+      if (existing && existing.type !== request.provider.type) {
+        throw new Error(
+          `Provider ${existing.id} type is immutable (${existing.type}); create another Provider for ${request.provider.type}.`,
+        );
+      }
+      if (existing && request.provider.presetId) {
+        throw new Error(
+          `Provider ${existing.id} already exists. Choose another Provider ID or edit the existing record.`,
+        );
+      }
+      if (preset) assertPresetMatchesRequest(preset, request.provider);
+      assertProviderFamiliesSupported(request.provider);
+      assertProviderProtocolMatchesType(request.provider);
+      const isLocalOllama = request.provider.type === 'ollama';
+      const requiresApiKey = preset?.requiresApiKey ?? existing?.requiresApiKey ?? !isLocalOllama;
+      if (!requiresApiKey && request.apiKey !== undefined) {
+        throw new Error(`Provider ${request.provider.id} does not accept an API key.`);
+      }
+      const protocolProfile = toCanonicalProtocolProfile(
+        request.provider.type,
+        request.provider.protocol,
+      );
       await this.config.setProvider({
         id: request.provider.id,
         name: existing?.name ?? request.provider.id,
         displayName: request.provider.displayName,
-        type: preserveProtocolMetadata
-          ? existing.type
-          : isLocalOllama
-            ? 'ollama'
-            : request.provider.protocol === 'anthropic'
-              ? 'anthropic'
-              : 'generic',
+        type: request.provider.type,
         apiUrl: request.provider.apiUrl,
         enabled: request.provider.enabled,
-        connectionKind: preserveProtocolMetadata
-          ? (existing.connectionKind ?? (isLocalOllama ? 'local' : 'direct'))
-          : isLocalOllama
-            ? 'local'
-            : 'direct',
-        protocolProfile,
-        supportLevel: preserveProtocolMetadata ? (existing.supportLevel ?? 'custom') : 'custom',
+        connectionKind:
+          preset?.connectionKind ??
+          existing?.connectionKind ??
+          (isLocalOllama ? 'local' : 'direct'),
+        ...(protocolProfile === undefined ? {} : { protocolProfile }),
+        supportLevel:
+          preset === undefined
+            ? (existing?.supportLevel ?? 'custom')
+            : request.provider.apiUrl === preset.defaultApiUrl
+              ? preset.supportLevel
+              : 'custom',
         supportedModelFamilies: request.provider.supportedModelFamilies,
-        requiresApiKey: preserveProtocolMetadata
-          ? (existing.requiresApiKey ?? !isLocalOllama)
-          : !isLocalOllama,
-        supportsBeta: preserveProtocolMetadata
-          ? (existing.supportsBeta ?? request.provider.protocol === 'anthropic')
-          : request.provider.protocol === 'anthropic',
-        useBearerAuth: preserveProtocolMetadata
-          ? (existing.useBearerAuth ??
-            (!isLocalOllama && request.provider.protocol !== 'anthropic'))
-          : !isLocalOllama && request.provider.protocol !== 'anthropic',
-        ...(preserveProtocolMetadata && existing.options ? { options: existing.options } : {}),
-        ...(preserveProtocolMetadata && existing.protocolVariant
-          ? { protocolVariant: existing.protocolVariant }
-          : {}),
+        requiresApiKey,
+        supportsBeta: existing?.supportsBeta ?? request.provider.type === 'anthropic',
+        useBearerAuth:
+          existing?.useBearerAuth ?? (!isLocalOllama && request.provider.type !== 'anthropic'),
+        ...(existing?.options ? { options: existing.options } : {}),
+        ...(existing?.protocolVariant ? { protocolVariant: existing.protocolVariant } : {}),
       });
       if (request.apiKey !== undefined) {
         await this.credentials.replaceApiKey(request.provider.id, request.apiKey);
@@ -124,6 +134,12 @@ export class DesktopAiModelSettingsService {
       const provider = this.config.getProvider(request.model.providerId);
       if (!provider) {
         throw new Error(`Provider ${request.model.providerId} does not exist.`);
+      }
+      const existingModel = this.config.getModel(request.model.id);
+      if (existingModel && existingModel.providerId !== request.model.providerId) {
+        throw new Error(
+          `Model ${request.model.id} already belongs to Provider ${existingModel.providerId}. Choose another model ID.`,
+        );
       }
       if (
         (provider.protocolProfile === 'ollama' || provider.type === 'ollama') &&
@@ -140,13 +156,45 @@ export class DesktopAiModelSettingsService {
           `Provider ${provider.id} does not support ${modelFamily} models. Add the model to a matching Provider instead.`,
         );
       }
+      const template = request.model.templateId
+        ? getDesktopAiModelTemplate(request.model.templateId)
+        : undefined;
+      if (request.model.templateId && !template) {
+        throw new Error(`Model template ${request.model.templateId} does not exist.`);
+      }
+      if (template) {
+        if (
+          template.providerType !== provider.type ||
+          template.apiName !== request.model.apiName ||
+          template.type !== request.model.type
+        ) {
+          throw new Error(
+            `Model template ${template.id} does not match ${provider.type}/${request.model.apiName}.`,
+          );
+        }
+      }
+      const matchingPresets = DESKTOP_AI_PROVIDER_PRESETS.filter(
+        (preset) => preset.providerType === provider.type && preset.family === modelFamily,
+      );
+      if (
+        matchingPresets.length > 0 &&
+        matchingPresets.every((preset) => !preset.allowCustomModels) &&
+        template === undefined
+      ) {
+        const templateIds = matchingPresets.flatMap((preset) =>
+          preset.modelTemplates.map((candidate) => candidate.id),
+        );
+        throw new Error(
+          `Provider ${provider.id} supports only builtin model templates: ${templateIds.join(', ')}.`,
+        );
+      }
       await this.config.setModel({
         id: request.model.id,
         providerId: request.model.providerId,
         name: request.model.apiName,
         displayName: request.model.displayName,
         type: request.model.type,
-        capabilities: capabilitiesFor(request.model.type),
+        capabilities: template ? [...template.capabilities] : capabilitiesFor(request.model.type),
         enabled: request.model.enabled,
       });
       return { projection: await this.project(), executionConfigurationChanged: true };
@@ -201,40 +249,35 @@ export class DesktopAiModelSettingsService {
     const provider = this.config.getProvider(providerId);
     if (!provider) throw new Error(`Provider ${providerId} disappeared during projection.`);
     const protocol = toDesktopProtocol(provider.protocolProfile);
-    if (!protocol) throw new Error(`Provider ${providerId} is not supported by DSH settings.`);
+    const families = this.projectModelFamilies(provider.id);
+    if (families.includes('dialogue') && !protocol) {
+      throw new Error(`Dialogue Provider ${providerId} is not supported by DSH settings.`);
+    }
+    const base = {
+      id: provider.id,
+      displayName: provider.displayName,
+      type: provider.type,
+      apiUrl: provider.apiUrl,
+      ...(families.includes('dialogue') && protocol !== undefined ? { protocol } : {}),
+      connectionKind: provider.connectionKind ?? 'direct',
+      enabled: provider.enabled,
+      supportedModelFamilies: families,
+    } as const;
     if (provider.requiresApiKey === false) {
       return {
-        id: provider.id,
-        displayName: provider.displayName,
-        apiUrl: provider.apiUrl,
-        protocol,
-        connectionKind: provider.connectionKind ?? 'direct',
-        enabled: provider.enabled,
-        supportedModelFamilies: this.projectModelFamilies(provider.id),
+        ...base,
         credentialStatus: 'not-required',
       };
     }
     try {
       const credential = await this.credentials.read(provider.id);
       return {
-        id: provider.id,
-        displayName: provider.displayName,
-        apiUrl: provider.apiUrl,
-        protocol,
-        connectionKind: provider.connectionKind ?? 'direct',
-        enabled: provider.enabled,
-        supportedModelFamilies: this.projectModelFamilies(provider.id),
+        ...base,
         credentialStatus: credential ? 'configured' : 'missing',
       };
     } catch (error: unknown) {
       return {
-        id: provider.id,
-        displayName: provider.displayName,
-        apiUrl: provider.apiUrl,
-        protocol,
-        connectionKind: provider.connectionKind ?? 'direct',
-        enabled: provider.enabled,
-        supportedModelFamilies: this.projectModelFamilies(provider.id),
+        ...base,
         credentialStatus: 'invalid',
         diagnostic: error instanceof Error ? error.message : String(error),
       };
@@ -255,8 +298,92 @@ export class DesktopAiModelSettingsService {
     if (families.size > 0) {
       return (['dialogue', 'generation'] as const).filter((family) => families.has(family));
     }
+    if (isNativeGenerationProviderType(provider.type)) return ['generation'];
     return ['dialogue'];
   }
+
+  private isProjectableProvider(providerId: string): boolean {
+    const provider = this.config.getProvider(providerId);
+    if (!provider) return false;
+    const families = this.projectModelFamilies(providerId);
+    return (
+      (families.includes('dialogue') &&
+        toDesktopProtocol(provider.protocolProfile) !== undefined) ||
+      families.includes('generation')
+    );
+  }
+}
+
+function assertPresetMatchesRequest(
+  preset: DesktopAiProviderPreset,
+  provider: Extract<DesktopAiModelSettingsRequest, { operation: 'save-provider' }>['provider'],
+): void {
+  if (
+    provider.type !== preset.providerType ||
+    provider.supportedModelFamilies.length !== 1 ||
+    provider.supportedModelFamilies[0] !== preset.family ||
+    provider.protocol !== preset.protocol
+  ) {
+    throw new Error(`Provider preset ${preset.id} does not match the submitted Provider contract.`);
+  }
+}
+
+function assertProviderFamiliesSupported(
+  provider: Extract<DesktopAiModelSettingsRequest, { operation: 'save-provider' }>['provider'],
+): void {
+  const families = provider.supportedModelFamilies;
+  if (families.length !== 1) {
+    throw new Error(
+      `Provider ${provider.id} must belong to exactly one dialogue or generation directory.`,
+    );
+  }
+  if (provider.type === 'ollama' && (families.length !== 1 || families[0] !== 'dialogue')) {
+    throw new Error(`Ollama Provider ${provider.id} only supports dialogue models.`);
+  }
+  if (
+    isNativeGenerationProviderType(provider.type) &&
+    (families.length !== 1 || families[0] !== 'generation')
+  ) {
+    throw new Error(`Provider ${provider.id} only supports generation models in Desktop Settings.`);
+  }
+  if (families.includes('dialogue') && provider.protocol === undefined) {
+    throw new Error(`Dialogue Provider ${provider.id} requires an explicit DSH protocol.`);
+  }
+  if (!families.includes('dialogue') && provider.protocol !== undefined) {
+    throw new Error(`Generation Provider ${provider.id} must not declare a DSH dialogue protocol.`);
+  }
+}
+
+function assertProviderProtocolMatchesType(
+  provider: Extract<DesktopAiModelSettingsRequest, { operation: 'save-provider' }>['provider'],
+): void {
+  const canonicalProtocol =
+    provider.type === 'anthropic'
+      ? 'anthropic'
+      : provider.type === 'ollama'
+        ? 'ollama'
+        : provider.type === 'newapi'
+          ? 'openai-chat'
+          : undefined;
+  if (canonicalProtocol !== undefined && provider.protocol !== canonicalProtocol) {
+    throw new Error(
+      `Provider ${provider.id} type ${provider.type} requires protocol ${canonicalProtocol}.`,
+    );
+  }
+}
+
+function toCanonicalProtocolProfile(
+  providerType: ProviderType,
+  protocol: DesktopAiModelProtocol | undefined,
+): ProviderProtocolProfile | undefined {
+  if (providerType === 'newapi') return 'newapi';
+  if (providerType === 'ollama') return 'ollama';
+  if (providerType === 'anthropic') return 'anthropic';
+  return protocol;
+}
+
+function isNativeGenerationProviderType(type: ProviderType): boolean {
+  return type === 'minimax' || type === 'bytedance';
 }
 
 function toDesktopProtocol(
