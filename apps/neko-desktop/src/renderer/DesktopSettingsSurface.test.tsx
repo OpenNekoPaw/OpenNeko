@@ -122,7 +122,6 @@ describe('Desktop Settings surfaces', () => {
           protocol: 'openai-chat' as const,
           connectionKind: 'direct' as const,
           enabled: true,
-          builtin: false,
           supportedModelFamilies: ['dialogue', 'generation'] as const,
           credentialStatus: 'configured' as const,
         },
@@ -234,7 +233,6 @@ describe('Desktop Settings surfaces', () => {
           protocol: 'ollama' as const,
           connectionKind: 'local' as const,
           enabled: true,
-          builtin: true,
           supportedModelFamilies: ['dialogue'] as const,
           credentialStatus: 'not-required' as const,
         },
@@ -267,7 +265,7 @@ describe('Desktop Settings surfaces', () => {
     if (!providerCard) throw new Error('Ollama fixture requires a provider card.');
     await act(async () => providerCard.click());
     expect(container.querySelector('input[type="password"]')).toBeNull();
-    expect(container.textContent).not.toContain('Delete provider');
+    expect(container.textContent).toContain('Delete provider');
     await act(async () => findButtonContaining(container, 'Add model').click());
     expect(container.querySelectorAll('.desktop-settings__model-editor option')).toHaveLength(1);
     expect(container.querySelector('.desktop-settings__model-editor option')?.textContent).toBe(
@@ -276,7 +274,7 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => root.unmount());
   });
 
-  it('requires explicit confirmation before deleting an empty custom provider', async () => {
+  it('requires explicit confirmation before deleting an empty configured provider', async () => {
     const projection = {
       providers: [
         {
@@ -286,7 +284,6 @@ describe('Desktop Settings surfaces', () => {
           protocol: 'openai-chat' as const,
           connectionKind: 'direct' as const,
           enabled: true,
-          builtin: false,
           supportedModelFamilies: ['dialogue'] as const,
           credentialStatus: 'configured' as const,
         },
@@ -331,7 +328,6 @@ describe('Desktop Settings surfaces', () => {
       protocol: 'openai-chat' as const,
       connectionKind: 'direct' as const,
       enabled: true,
-      builtin: false,
       supportedModelFamilies,
       credentialStatus: 'configured' as const,
     }));

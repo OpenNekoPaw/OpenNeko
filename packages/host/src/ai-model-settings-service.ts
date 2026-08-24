@@ -69,61 +69,51 @@ export class DesktopAiModelSettingsService {
           `Local Ollama Provider ${request.provider.id} only supports dialogue models.`,
         );
       }
-      if (
-        existing?.builtin === true &&
-        request.provider.protocol !== toDesktopProtocol(existing.protocolProfile)
-      ) {
-        throw new Error(`Builtin Provider ${existing.id} protocol cannot be changed.`);
-      }
       if (isLocalOllama && request.apiKey !== undefined) {
         throw new Error(`Local Ollama Provider ${request.provider.id} does not accept an API key.`);
       }
-      const preserveBuiltinMetadata = existing?.builtin === true;
+      const preserveProtocolMetadata =
+        existing !== undefined &&
+        request.provider.protocol === toDesktopProtocol(existing.protocolProfile);
       const protocolProfile =
         existing?.protocolProfile === 'newapi' && request.provider.protocol === 'openai-chat'
           ? 'newapi'
           : request.provider.protocol;
       await this.config.setProvider({
-        ...existing,
         id: request.provider.id,
         name: existing?.name ?? request.provider.id,
         displayName: request.provider.displayName,
-        type:
-          preserveBuiltinMetadata && existing
-            ? existing.type
-            : isLocalOllama
-              ? 'ollama'
-              : request.provider.protocol === 'anthropic'
-                ? 'anthropic'
-                : 'generic',
+        type: preserveProtocolMetadata
+          ? existing.type
+          : isLocalOllama
+            ? 'ollama'
+            : request.provider.protocol === 'anthropic'
+              ? 'anthropic'
+              : 'generic',
         apiUrl: request.provider.apiUrl,
         enabled: request.provider.enabled,
-        connectionKind:
-          preserveBuiltinMetadata && existing
-            ? (existing.connectionKind ?? (isLocalOllama ? 'local' : 'direct'))
-            : isLocalOllama
-              ? 'local'
-              : 'direct',
+        connectionKind: preserveProtocolMetadata
+          ? (existing.connectionKind ?? (isLocalOllama ? 'local' : 'direct'))
+          : isLocalOllama
+            ? 'local'
+            : 'direct',
         protocolProfile,
-        supportLevel: existing?.supportLevel ?? 'custom',
-        supportedModelFamilies:
-          preserveBuiltinMetadata && existing?.supportedModelFamilies
-            ? existing.supportedModelFamilies
-            : request.provider.supportedModelFamilies,
-        requiresApiKey:
-          preserveBuiltinMetadata && existing
-            ? (existing.requiresApiKey ?? !isLocalOllama)
-            : !isLocalOllama,
-        builtin: existing?.builtin ?? false,
-        supportsBeta:
-          preserveBuiltinMetadata && existing
-            ? (existing.supportsBeta ?? request.provider.protocol === 'anthropic')
-            : request.provider.protocol === 'anthropic',
-        useBearerAuth:
-          preserveBuiltinMetadata && existing
-            ? (existing.useBearerAuth ??
-              (!isLocalOllama && request.provider.protocol !== 'anthropic'))
-            : !isLocalOllama && request.provider.protocol !== 'anthropic',
+        supportLevel: preserveProtocolMetadata ? (existing.supportLevel ?? 'custom') : 'custom',
+        supportedModelFamilies: request.provider.supportedModelFamilies,
+        requiresApiKey: preserveProtocolMetadata
+          ? (existing.requiresApiKey ?? !isLocalOllama)
+          : !isLocalOllama,
+        supportsBeta: preserveProtocolMetadata
+          ? (existing.supportsBeta ?? request.provider.protocol === 'anthropic')
+          : request.provider.protocol === 'anthropic',
+        useBearerAuth: preserveProtocolMetadata
+          ? (existing.useBearerAuth ??
+            (!isLocalOllama && request.provider.protocol !== 'anthropic'))
+          : !isLocalOllama && request.provider.protocol !== 'anthropic',
+        ...(preserveProtocolMetadata && existing.options ? { options: existing.options } : {}),
+        ...(preserveProtocolMetadata && existing.protocolVariant
+          ? { protocolVariant: existing.protocolVariant }
+          : {}),
       });
       if (request.apiKey !== undefined) {
         await this.credentials.replaceApiKey(request.provider.id, request.apiKey);
@@ -178,9 +168,6 @@ export class DesktopAiModelSettingsService {
     if (request.operation === 'delete-provider') {
       const provider = this.config.getProvider(request.providerId);
       if (!provider) throw new Error(`Provider ${request.providerId} does not exist.`);
-      if (provider.builtin === true) {
-        throw new Error(`Builtin Provider ${provider.id} cannot be deleted.`);
-      }
       const models = this.config.getModelsByProvider(provider.id);
       if (models.length > 0) {
         throw new Error(
@@ -223,7 +210,6 @@ export class DesktopAiModelSettingsService {
         protocol,
         connectionKind: provider.connectionKind ?? 'direct',
         enabled: provider.enabled,
-        builtin: provider.builtin ?? false,
         supportedModelFamilies: this.projectModelFamilies(provider.id),
         credentialStatus: 'not-required',
       };
@@ -237,7 +223,6 @@ export class DesktopAiModelSettingsService {
         protocol,
         connectionKind: provider.connectionKind ?? 'direct',
         enabled: provider.enabled,
-        builtin: provider.builtin ?? false,
         supportedModelFamilies: this.projectModelFamilies(provider.id),
         credentialStatus: credential ? 'configured' : 'missing',
       };
@@ -249,7 +234,6 @@ export class DesktopAiModelSettingsService {
         protocol,
         connectionKind: provider.connectionKind ?? 'direct',
         enabled: provider.enabled,
-        builtin: provider.builtin ?? false,
         supportedModelFamilies: this.projectModelFamilies(provider.id),
         credentialStatus: 'invalid',
         diagnostic: error instanceof Error ? error.message : String(error),

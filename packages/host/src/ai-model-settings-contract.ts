@@ -26,7 +26,6 @@ export interface DesktopAiProviderView {
   readonly protocol: DesktopAiModelProtocol;
   readonly connectionKind: ProviderConnectionKind;
   readonly enabled: boolean;
-  readonly builtin: boolean;
   readonly supportedModelFamilies: readonly ProviderModelFamily[];
   readonly credentialStatus: 'configured' | 'missing' | 'invalid' | 'not-required';
   readonly diagnostic?: string;
@@ -265,7 +264,6 @@ function parseProviderView(value: unknown): DesktopAiProviderView {
       'protocol',
       'connectionKind',
       'enabled',
-      'builtin',
       'supportedModelFamilies',
       'credentialStatus',
       'diagnostic',
@@ -290,7 +288,6 @@ function parseProviderView(value: unknown): DesktopAiProviderView {
       'provider.connectionKind',
     ),
     enabled: booleanValue(record['enabled'], 'provider.enabled'),
-    builtin: booleanValue(record['builtin'], 'provider.builtin'),
     supportedModelFamilies: providerModelFamilies(record['supportedModelFamilies']),
     credentialStatus: oneOf(
       record['credentialStatus'],

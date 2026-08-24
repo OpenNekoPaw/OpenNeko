@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export const desktopAiModelSettingsScenario = Object.freeze({
@@ -11,8 +11,9 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       mkdir(workspacePath, { recursive: true }),
       mkdir(configRoot, { recursive: true }),
     ]);
+    const configPath = join(configRoot, 'config.toml');
     await writeFile(
-      join(configRoot, 'config.toml'),
+      configPath,
       [
         '[[providers]]',
         'id = "functional-ollama"',
@@ -78,9 +79,9 @@ export const desktopAiModelSettingsScenario = Object.freeze({
       ].join('\n'),
       { encoding: 'utf8', mode: 0o600 },
     );
-    return { workspacePath };
+    return { workspacePath, configPath };
   },
-  async run({ checkpoint, evaluate, screenshot, waitForSelector }) {
+  async run({ checkpoint, evaluate, prepared, screenshot, waitForSelector }) {
     await evaluate(`(() => {
       window.resizeTo(1440, 960);
       const settings = document.querySelector('.home-navigation-footer__actions button:last-child');
@@ -131,7 +132,7 @@ export const desktopAiModelSettingsScenario = Object.freeze({
     })()`);
     if (
       localProvider.passwordFieldCount !== 0 ||
-      localProvider.deleteProviderVisible ||
+      !localProvider.deleteProviderVisible ||
       JSON.stringify(localModelTypes) !== JSON.stringify(['llm'])
     ) {
       throw new Error(
@@ -223,6 +224,17 @@ export const desktopAiModelSettingsScenario = Object.freeze({
     );
     const deleted = await inspectProviderCatalog(evaluate);
     checkpoint('provider-and-model-deleted', deleted);
+    const persistedConfig = await readFile(prepared.configPath, 'utf8');
+    if (
+      persistedConfig.includes('functional-removable') ||
+      persistedConfig.includes('functional-removable-chat')
+    ) {
+      throw new Error('Provider deletion did not persist to the canonical config.toml.');
+    }
+    checkpoint('provider-delete-persisted-to-config', {
+      configFileUpdated: true,
+      retainedProviders: ['functional-ollama', 'functional-generation'],
+    });
 
     return {
       catalog,

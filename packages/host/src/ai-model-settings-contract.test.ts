@@ -38,7 +38,6 @@ describe('Desktop AI model settings contract', () => {
                 protocol: 'openai-chat',
                 connectionKind: 'direct',
                 enabled: true,
-                builtin: false,
                 supportedModelFamilies: ['dialogue'],
                 credentialStatus: 'configured',
                 apiKey: 'must-not-cross',
@@ -49,6 +48,35 @@ describe('Desktop AI model settings contract', () => {
           },
         },
         'request-2',
+      ),
+    ).toThrow(/unknown fields/u);
+  });
+
+  it('rejects config-only Provider metadata in a Renderer projection', () => {
+    expect(() =>
+      parseDesktopAiModelSettingsResponse(
+        {
+          requestId: 'request-config-metadata',
+          restartRequired: false,
+          projection: {
+            providers: [
+              {
+                id: 'deepseek',
+                displayName: 'DeepSeek',
+                apiUrl: 'https://api.deepseek.com/v1',
+                protocol: 'openai-chat',
+                connectionKind: 'direct',
+                enabled: true,
+                supportedModelFamilies: ['dialogue'],
+                credentialStatus: 'configured',
+                builtin: true,
+              },
+            ],
+            models: [],
+            defaults: {},
+          },
+        },
+        'request-config-metadata',
       ),
     ).toThrow(/unknown fields/u);
   });

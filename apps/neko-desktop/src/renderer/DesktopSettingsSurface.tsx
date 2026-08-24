@@ -540,7 +540,7 @@ function AgentModelSettingsGroup({
                           {t(`settings.agent.credential.${provider.credentialStatus}`)}
                         </span>
                       </button>
-                      {!provider.builtin && port ? (
+                      {port ? (
                         <button
                           className={`desktop-settings__provider-card-delete${
                             confirmingProviderDeleteId === provider.id
@@ -889,7 +889,7 @@ function ProviderForm({
       </section>
 
       <div className="desktop-settings__editor-actions">
-        {initial && !initial.builtin ? (
+        {initial ? (
           confirmProviderDelete ? (
             <span className="desktop-settings__delete-confirmation">
               <span>
