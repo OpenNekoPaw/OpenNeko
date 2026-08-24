@@ -67,5 +67,6 @@ restored if the credential authority fails, protecting user configuration withou
 Renderer only requests the operation after explicit confirmation and never receives secret bytes.
 
 No blocking quality findings were found in the scoped diff. The new Electron acceptance scenario is advisory
-blocked by an already-running development process that owns the checkout's Vite bundle; deterministic contract,
-service, runtime and UI tests remain green.
+blocked by development process `74442`, which owns the checkout's Vite bundle. The launcher consequently timed
+out waiting for a CDP target after the child process rejected startup; deterministic contract, service, runtime
+and UI tests remain green.

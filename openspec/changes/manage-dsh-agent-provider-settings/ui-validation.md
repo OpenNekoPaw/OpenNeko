@@ -60,8 +60,8 @@ The direct catalog, title action and wide Provider grouping are visually accepte
 - **Functional evidence:** focused Renderer tests pass the same state transitions with the typed bridge;
   Host service and DSH projection tests pass the exact cross-boundary semantics.
 - **Visual evidence:** no new stable artifact was produced because the isolated development Desktop could
-  not start while process `74442` owned this checkout's Vite bundle. No pixel claim is inferred from unit
-  tests or the failed report.
+  not start while process `74442` owned this checkout's Vite bundle. The launcher timed out waiting for CDP
+  after that child startup was rejected. No pixel claim is inferred from unit tests or the failed report.
 - **Result:** `blocked` for the new Electron functional/visual inventory. The prior flattened catalog remains
   accepted; this advisory block does not turn deterministic contract/service results into a failure.
 - **Residual risk:** current-runtime pixels for local badges, compact delete confirmation and post-delete

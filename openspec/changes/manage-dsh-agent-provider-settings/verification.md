@@ -79,5 +79,6 @@ was changed during validation.
   Prettier/ESLint, Desktop typecheck and `git diff --check` passed.
 - The new isolated `desktop-ai-model-settings` scenario drives the real Settings overlay, capability groups,
   local Ollama editor and exact delete commands. Its current execution is `blocked` before Desktop launch:
-  development process `74442` already owns this checkout's Vite bundle. The runner report is under
-  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-24T01-21-35.508Z-desktop-ai-model-settings-development/report.json`.
+  development process `74442` already owns this checkout's Vite bundle. The launcher reports a CDP timeout
+  because that child startup is rejected. The latest runner report is under
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-24T01-37-02.636Z-desktop-ai-model-settings-development/report.json`.
