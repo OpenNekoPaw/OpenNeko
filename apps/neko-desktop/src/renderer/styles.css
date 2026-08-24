@@ -652,6 +652,11 @@ code {
   background: color-mix(in srgb, var(--neko-desktop-accent) 10%, transparent);
 }
 
+.desktop-settings__credential--not-required {
+  color: var(--neko-desktop-text-muted);
+  background: var(--neko-desktop-control);
+}
+
 .desktop-settings__credential--invalid {
   color: var(--neko-desktop-danger-foreground);
   background: var(--neko-desktop-danger-surface);
@@ -707,6 +712,39 @@ code {
 
 .desktop-settings__model-default-action:disabled {
   opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.desktop-settings__model-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.desktop-settings__model-delete-action {
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--neko-desktop-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.desktop-settings__model-delete-action:hover {
+  color: var(--neko-desktop-danger-foreground);
+  background: var(--neko-desktop-danger-surface);
+}
+
+.desktop-settings__model-delete-action--confirm {
+  color: var(--neko-desktop-danger-foreground);
+  background: var(--neko-desktop-danger-surface);
+}
+
+.desktop-settings__model-delete-action:disabled {
+  opacity: 0.42;
   cursor: not-allowed;
 }
 
@@ -841,6 +879,30 @@ code {
   border-top: 1px solid var(--neko-desktop-border);
 }
 
+.desktop-settings__danger-action {
+  margin-right: auto;
+  padding: 0;
+  border: 0;
+  color: var(--neko-desktop-danger-foreground);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.desktop-settings__delete-confirmation {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  color: var(--neko-desktop-text-muted);
+  font-size: 10px;
+}
+
+.desktop-settings__delete-confirmation > span:first-child {
+  max-width: 320px;
+}
+
 .desktop-settings__editor-actions button:not(.desktop-settings__action) {
   min-height: 34px;
   padding: 0 12px;
@@ -849,6 +911,11 @@ code {
   background: transparent;
   font: inherit;
   cursor: pointer;
+}
+
+.desktop-settings__editor-actions .desktop-settings__danger-action,
+.desktop-settings__delete-confirmation .desktop-settings__danger-action {
+  color: var(--neko-desktop-danger-foreground);
 }
 
 .desktop-settings__group-heading p {

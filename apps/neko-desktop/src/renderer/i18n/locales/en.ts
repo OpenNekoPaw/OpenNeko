@@ -98,6 +98,8 @@ export const en = {
   'settings.agent.providersDescription':
     'Manage configured providers by dialogue and generation capability.',
   'settings.agent.addProvider': 'Add provider',
+  'settings.agent.source.local': 'Local',
+  'settings.agent.source.remote': 'Remote',
   'settings.agent.providerGroup.dialogue': 'Dialogue providers',
   'settings.agent.providerGroup.dialogue.description':
     'Provide language models for DSH conversations.',
@@ -139,6 +141,13 @@ export const en = {
   'settings.agent.apiKey': 'API Key',
   'settings.agent.apiKeyPlaceholder': 'Enter API Key',
   'settings.agent.apiKeyKeep': 'Leave empty to keep the existing credential',
+  'settings.agent.deleteProvider': 'Delete provider',
+  'settings.agent.confirmDeleteProvider': 'Delete this provider? This cannot be undone.',
+  'settings.agent.deleteProviderModelsFirst': 'Delete this provider’s models first.',
+  'settings.agent.deleteModel': 'Delete',
+  'settings.agent.confirmDelete': 'Confirm delete',
+  'settings.agent.deleteDefaultModelBlocked':
+    'A default model cannot be deleted. Set another model as the default first.',
   'settings.agent.provider': 'Provider',
   'settings.agent.modelType': 'Model type',
   'settings.agent.modelId': 'Model ID',
@@ -151,6 +160,7 @@ export const en = {
   'settings.agent.credential.configured': 'Credential configured',
   'settings.agent.credential.missing': 'Credential missing',
   'settings.agent.credential.invalid': 'Credential invalid',
+  'settings.agent.credential.not-required': 'No credential required',
   'common.cancel': 'Cancel',
   'common.save': 'Save',
   'shell.activityAttention': 'Activity attention',

@@ -523,7 +523,12 @@ function AgentModelSettingsGroup({
                     >
                       <span>
                         <strong>{provider.displayName}</strong>
-                        <small>{provider.apiUrl}</small>
+                        <small>
+                          {provider.connectionKind === 'local'
+                            ? t('settings.agent.source.local')
+                            : t('settings.agent.source.remote')}{' '}
+                          · {provider.apiUrl}
+                        </small>
                       </span>
                       <span
                         className={`desktop-settings__credential desktop-settings__credential--${provider.credentialStatus}`}
@@ -553,6 +558,13 @@ function AgentModelSettingsGroup({
             }
             defaults={projection?.defaults ?? {}}
             onCancel={() => setShowProviderForm(false)}
+            onDeleteModel={(modelId) => execute(() => port.deleteModel(modelId))}
+            onDeleteProvider={(providerId) =>
+              execute(() => port.deleteProvider(providerId)).then((deleted) => {
+                if (deleted) setShowProviderForm(false);
+                return deleted;
+              })
+            }
             onSaveModel={(model) => execute(() => port.saveModel(model))}
             onSetDefault={(model) =>
               execute(() =>
@@ -627,6 +639,8 @@ function ProviderForm({
   initial,
   models,
   onCancel,
+  onDeleteModel,
+  onDeleteProvider,
   onSave,
   onSaveModel,
   onSetDefault,
@@ -636,6 +650,8 @@ function ProviderForm({
   readonly initial?: DesktopAiProviderView;
   readonly models: readonly DesktopAiModelView[];
   readonly onCancel: () => void;
+  readonly onDeleteModel: (modelId: string) => Promise<boolean>;
+  readonly onDeleteProvider: (providerId: string) => Promise<boolean>;
   readonly onSave: (
     provider: {
       readonly id: string;
@@ -666,6 +682,8 @@ function ProviderForm({
   const [apiKey, setApiKey] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(!initial);
   const [showModelForm, setShowModelForm] = useState(false);
+  const [confirmProviderDelete, setConfirmProviderDelete] = useState(false);
+  const requiresApiKey = protocol !== 'ollama';
   const canSave = Boolean(id.trim() && displayName.trim() && apiUrl.trim());
   const submit = (event: FormEvent): void => {
     event.preventDefault();
@@ -723,7 +741,7 @@ function ProviderForm({
           </>
         ) : null}
 
-        {initial ? (
+        {initial && requiresApiKey ? (
           <label>
             <span>{t('settings.agent.apiKey')}</span>
             <input
@@ -784,9 +802,10 @@ function ProviderForm({
               <option value="openai-chat">OpenAI Chat compatible</option>
               <option value="openai-responses">OpenAI Responses</option>
               <option value="anthropic">Anthropic Messages</option>
+              <option value="ollama">Ollama local</option>
             </select>
           </label>
-          {!initial ? (
+          {!initial && requiresApiKey ? (
             <label>
               <span>{t('settings.agent.apiKey')}</span>
               <input
@@ -824,6 +843,7 @@ function ProviderForm({
             defaults={defaults}
             disabled={disabled}
             models={models}
+            onDeleteModel={onDeleteModel}
             onSetDefault={onSetDefault}
           />
         ) : (
@@ -834,6 +854,7 @@ function ProviderForm({
         {initial && showModelForm ? (
           <ModelForm
             disabled={disabled}
+            supportedTypes={protocol === 'ollama' ? ['llm'] : undefined}
             providerId={initial.id}
             onCancel={() => setShowModelForm(false)}
             onSave={(model) =>
@@ -846,6 +867,39 @@ function ProviderForm({
       </section>
 
       <div className="desktop-settings__editor-actions">
+        {initial && !initial.builtin ? (
+          confirmProviderDelete ? (
+            <span className="desktop-settings__delete-confirmation">
+              <span>
+                {models.length > 0
+                  ? t('settings.agent.deleteProviderModelsFirst')
+                  : t('settings.agent.confirmDeleteProvider')}
+              </span>
+              {models.length === 0 ? (
+                <button
+                  className="desktop-settings__danger-action"
+                  disabled={disabled}
+                  type="button"
+                  onClick={() => void onDeleteProvider(initial.id)}
+                >
+                  {t('settings.agent.confirmDelete')}
+                </button>
+              ) : null}
+              <button type="button" onClick={() => setConfirmProviderDelete(false)}>
+                {t('common.cancel')}
+              </button>
+            </span>
+          ) : (
+            <button
+              className="desktop-settings__danger-action"
+              disabled={disabled}
+              type="button"
+              onClick={() => setConfirmProviderDelete(true)}
+            >
+              {t('settings.agent.deleteProvider')}
+            </button>
+          )
+        ) : null}
         <button type="button" onClick={onCancel}>
           {t('common.cancel')}
         </button>
@@ -862,6 +916,7 @@ function ModelForm({
   onCancel,
   onSave,
   providerId,
+  supportedTypes = ['llm', 'image', 'video', 'audio'],
 }: {
   readonly disabled: boolean;
   readonly onCancel: () => void;
@@ -874,6 +929,7 @@ function ModelForm({
     readonly enabled: boolean;
   }) => Promise<void>;
   readonly providerId: string;
+  readonly supportedTypes?: readonly ModelType[];
 }): JSX.Element {
   const { t } = useTranslation();
   const [id, setId] = useState('');
@@ -904,7 +960,7 @@ function ModelForm({
             value={type}
             onChange={(e) => setType(e.currentTarget.value as ModelType)}
           >
-            {(['llm', 'image', 'video', 'audio'] as const).map((candidate) => (
+            {supportedTypes.map((candidate) => (
               <option key={candidate} value={candidate}>
                 {t(`settings.agent.modelType.${candidate}`)}
               </option>
@@ -960,14 +1016,17 @@ function ProviderModelCatalog({
   defaults,
   disabled,
   models,
+  onDeleteModel,
   onSetDefault,
 }: {
   readonly defaults: DesktopAiModelSettingsProjection['defaults'];
   readonly disabled: boolean;
   readonly models: readonly DesktopAiModelView[];
+  readonly onDeleteModel: (modelId: string) => Promise<boolean>;
   readonly onSetDefault: (model: DesktopAiModelView) => Promise<boolean>;
 }): JSX.Element {
   const { t } = useTranslation();
+  const [confirmingModelId, setConfirmingModelId] = useState<string>();
   if (models.length === 0) {
     return <div className="desktop-settings__model-empty">{t('settings.agent.noModels')}</div>;
   }
@@ -1003,20 +1062,58 @@ function ProviderModelCatalog({
                     {t(`settings.agent.modelType.${model.type}`)} · {model.apiName}
                   </span>
                 </span>
-                {isDefault ? (
-                  <span className="desktop-settings__model-default-badge">
-                    {t('settings.agent.defaultModel')}
-                  </span>
-                ) : (
-                  <button
-                    className="desktop-settings__model-default-action"
-                    disabled={disabled || !model.enabled}
-                    type="button"
-                    onClick={() => void onSetDefault(model)}
-                  >
-                    {t('settings.agent.setAsDefault')}
-                  </button>
-                )}
+                <span className="desktop-settings__model-actions">
+                  {isDefault ? (
+                    <span className="desktop-settings__model-default-badge">
+                      {t('settings.agent.defaultModel')}
+                    </span>
+                  ) : (
+                    <button
+                      className="desktop-settings__model-default-action"
+                      disabled={disabled || !model.enabled}
+                      type="button"
+                      onClick={() => void onSetDefault(model)}
+                    >
+                      {t('settings.agent.setAsDefault')}
+                    </button>
+                  )}
+                  {confirmingModelId === model.id ? (
+                    <>
+                      <button
+                        className="desktop-settings__model-delete-action desktop-settings__model-delete-action--confirm"
+                        disabled={disabled || isDefault}
+                        title={
+                          isDefault ? t('settings.agent.deleteDefaultModelBlocked') : undefined
+                        }
+                        type="button"
+                        onClick={() =>
+                          void onDeleteModel(model.id).then((deleted) => {
+                            if (deleted) setConfirmingModelId(undefined);
+                          })
+                        }
+                      >
+                        {t('settings.agent.confirmDelete')}
+                      </button>
+                      <button
+                        className="desktop-settings__model-delete-action"
+                        type="button"
+                        onClick={() => setConfirmingModelId(undefined)}
+                      >
+                        {t('common.cancel')}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      className="desktop-settings__model-delete-action"
+                      disabled={disabled || isDefault}
+                      title={isDefault ? t('settings.agent.deleteDefaultModelBlocked') : undefined}
+                      type="button"
+                      onClick={() => setConfirmingModelId(model.id)}
+                    >
+                      {t('settings.agent.deleteModel')}
+                    </button>
+                  )}
+                </span>
               </div>
             );
           })}

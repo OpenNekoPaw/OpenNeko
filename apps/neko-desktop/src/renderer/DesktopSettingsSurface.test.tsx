@@ -120,7 +120,9 @@ describe('Desktop Settings surfaces', () => {
           displayName: 'DeepSeek Provider',
           apiUrl: 'https://api.deepseek.com/v1',
           protocol: 'openai-chat' as const,
+          connectionKind: 'direct' as const,
           enabled: true,
+          builtin: false,
           credentialStatus: 'configured' as const,
         },
       ],
@@ -157,10 +159,13 @@ describe('Desktop Settings surfaces', () => {
     };
     const response = { requestId: 'fixture', projection, restartRequired: false };
     const setDefault = vi.fn(async () => response);
+    const deleteModel = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
       get: async () => projection,
       saveProvider: async () => response,
       saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel,
       setDefault,
     };
     const { container, root } = await renderSettings({
@@ -205,6 +210,106 @@ describe('Desktop Settings surfaces', () => {
       providerId: 'deepseek',
       modelId: 'audio-model',
     });
+    const deleteAction = [
+      ...container.querySelectorAll<HTMLButtonElement>('.desktop-settings__model-delete-action'),
+    ].find((candidate) => !candidate.disabled && candidate.textContent?.trim() === 'Delete');
+    if (!deleteAction) throw new Error('Model fixture requires an enabled delete action.');
+    await act(async () => deleteAction.click());
+    await act(async () => findButton(container, 'Confirm delete').click());
+    expect(deleteModel).toHaveBeenCalledWith('audio-model');
+    await act(async () => root.unmount());
+  });
+
+  it('projects a local Ollama provider as dialogue-only without a credential field', async () => {
+    const projection = {
+      providers: [
+        {
+          id: 'ollama-local',
+          displayName: 'Ollama Local',
+          apiUrl: 'http://localhost:11434',
+          protocol: 'ollama' as const,
+          connectionKind: 'local' as const,
+          enabled: true,
+          builtin: true,
+          credentialStatus: 'not-required' as const,
+        },
+      ],
+      models: [modelFixture('qwen-local', 'ollama-local', 'llm')],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, restartRequired: false };
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+
+    const dialogue = container.querySelector('[data-provider-group="dialogue"]');
+    expect(dialogue?.textContent).toContain('Ollama Local');
+    expect(dialogue?.textContent).toContain('Local');
+    expect(dialogue?.textContent).toContain('No credential required');
+    const providerCard = dialogue?.querySelector<HTMLButtonElement>(
+      '.desktop-settings__provider-card',
+    );
+    if (!providerCard) throw new Error('Ollama fixture requires a provider card.');
+    await act(async () => providerCard.click());
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+    expect(container.textContent).not.toContain('Delete provider');
+    await act(async () => findButtonContaining(container, 'Add model').click());
+    expect(container.querySelectorAll('.desktop-settings__model-editor option')).toHaveLength(1);
+    expect(container.querySelector('.desktop-settings__model-editor option')?.textContent).toBe(
+      'Dialogue',
+    );
+    await act(async () => root.unmount());
+  });
+
+  it('requires explicit confirmation before deleting an empty custom provider', async () => {
+    const projection = {
+      providers: [
+        {
+          id: 'custom-empty',
+          displayName: 'Custom Empty',
+          apiUrl: 'https://custom.example/v1',
+          protocol: 'openai-chat' as const,
+          connectionKind: 'direct' as const,
+          enabled: true,
+          builtin: false,
+          credentialStatus: 'configured' as const,
+        },
+      ],
+      models: [],
+      defaults: {},
+    };
+    const response = { requestId: 'fixture', projection, restartRequired: false };
+    const deleteProvider = vi.fn(async () => response);
+    const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
+      get: async () => projection,
+      saveProvider: async () => response,
+      saveModel: async () => response,
+      deleteProvider,
+      deleteModel: async () => response,
+      setDefault: async () => response,
+    };
+    const { container, root } = await renderSettings({
+      aiModelSettings,
+      initialSection: 'agent',
+    });
+    await act(async () => Promise.resolve());
+    const card = container.querySelector<HTMLButtonElement>('.desktop-settings__provider-card');
+    if (!card) throw new Error('Custom Provider fixture requires a provider card.');
+    await act(async () => card.click());
+    await act(async () => findButton(container, 'Delete provider').click());
+    expect(deleteProvider).not.toHaveBeenCalled();
+    await act(async () => findButton(container, 'Confirm delete').click());
+    expect(deleteProvider).toHaveBeenCalledWith('custom-empty');
     await act(async () => root.unmount());
   });
 
@@ -221,7 +326,9 @@ describe('Desktop Settings surfaces', () => {
       displayName,
       apiUrl: `https://${id}.example/v1`,
       protocol: 'openai-chat' as const,
+      connectionKind: 'direct' as const,
       enabled: true,
+      builtin: false,
       credentialStatus: 'configured' as const,
     }));
     const projection = {
@@ -239,6 +346,8 @@ describe('Desktop Settings surfaces', () => {
       get: async () => projection,
       saveProvider: async () => response,
       saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
       setDefault: async () => response,
     };
     const { container, root } = await renderSettings({
@@ -271,6 +380,8 @@ describe('Desktop Settings surfaces', () => {
       get: async () => projection,
       saveProvider,
       saveModel: async () => response,
+      deleteProvider: async () => response,
+      deleteModel: async () => response,
       setDefault: async () => response,
     };
     const { container, root } = await renderSettings({
