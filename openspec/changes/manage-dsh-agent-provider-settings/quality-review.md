@@ -50,3 +50,22 @@ The flattened Provider-catalog follow-up remains L1 Renderer presentation. It re
 accordion state and visual wrapper; capability grouping still derives from the same projection and each Provider
 card still opens the same scoped editor. No Provider/model authority, credential path, runtime routing or save
 semantics changed. Focused tests and direct Electron inspection found no blocking regression.
+
+The local Provider and removal follow-up is L3 because it changes effective DSH Provider projection and adds
+destructive mutations across Renderer/preload/Main. Locality remains orthogonal to capability: the Host projects
+canonical `connectionKind`, while dialogue/generation grouping continues to derive only from model `type`.
+Ollama is mapped by the existing DSH Provider runtime adapter and is rejected for non-LLM model creation; no
+second local-model registry, endpoint fallback or credential path was added.
+
+Builtin Provider protocols are immutable through the simplified editor. Custom protocol changes recompute
+connection kind, credential requirement and authorization metadata as one canonical record update; Ollama
+requests carrying an API key fail before either configuration or credential authority is mutated.
+
+Deletion is owned by the Host service. It requires exact identity, rejects builtin Providers, Providers that still
+own models and models referenced by any default. Provider configuration is removed before credential cleanup and
+restored if the credential authority fails, protecting user configuration without reporting false success. The
+Renderer only requests the operation after explicit confirmation and never receives secret bytes.
+
+No blocking quality findings were found in the scoped diff. The new Electron acceptance scenario is advisory
+blocked by an already-running development process that owns the checkout's Vite bundle; deterministic contract,
+service, runtime and UI tests remain green.

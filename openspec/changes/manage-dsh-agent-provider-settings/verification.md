@@ -7,7 +7,7 @@
 - `pnpm check:openspec` — 168 governed changes/specs passed strict validation.
 - `pnpm test:agent:eval` — 45 files / 314 tests and all 27 indexed suites / 84 cases passed key-free validation.
 
-The strict response contract rejects secret-bearing projections. Provider credentials are written only through `ProviderCredentialAuthority`; provider/model facts remain in the canonical DSH-backed `ConfigManager` path. Editing an existing Provider preserves its canonical type and builtin metadata.
+The strict response contract rejects secret-bearing projections. Provider credentials are written only through `ProviderCredentialAuthority`; provider/model facts remain in the canonical DSH-backed `ConfigManager` path. Editing a builtin Provider preserves its canonical protocol metadata; changing a custom Provider protocol recomputes its connection and authentication metadata, and local Ollama rejects secret submission.
 
 ## Agent and UI validation
 
@@ -58,3 +58,26 @@ or add action is selected. Focused Renderer tests, Desktop typecheck, focused ES
 checks passed. The current Electron runtime at `localhost:5174` directly showed the flattened 2/1/1 grouped
 catalog and then exposed the scoped DeepSeek Chat editor only after selection. No credential or Provider fact
 was changed during validation.
+
+## Local Provider and safe-removal follow-up
+
+- `@neko/host` contract/service tests prove that Ollama projects as `connectionKind: local`,
+  `credentialStatus: not-required` and `builtin: true` without reading a secret. They also prove exact
+  model/Provider removal, default-model protection, builtin-Provider protection, owned-model protection and
+  Provider restoration when credential cleanup fails.
+- Desktop DSH projection tests prove that canonical Ollama uses `openai-completions`, normalizes its local
+  `/api` endpoint to `/v1`, preserves the exact model identity and does not read credentials or switch
+  Provider.
+- Renderer tests prove that local Ollama remains in the dialogue group, exposes no password field, limits
+  new models to `llm`, hides Provider deletion for builtin entries, and requires explicit two-step deletion
+  for custom models and empty custom Providers.
+- `pnpm test:agent:eval` passed 45 files / 314 tests and all 27 indexed suites / 84 cases. The affected
+  behavior reuses `agent-runtime.model-binding`: its positive case rejects provider/model fallback and its
+  unavailable-model case rejects implicit substitution. A real provider-backed case was not started because
+  explicit provider/model and cost authorization were not supplied.
+- `pnpm exec openspec validate manage-dsh-agent-provider-settings --strict --no-interactive`, focused
+  Prettier/ESLint, Desktop typecheck and `git diff --check` passed.
+- The new isolated `desktop-ai-model-settings` scenario drives the real Settings overlay, capability groups,
+  local Ollama editor and exact delete commands. Its current execution is `blocked` before Desktop launch:
+  development process `74442` already owns this checkout's Vite bundle. The runner report is under
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-24T01-21-35.508Z-desktop-ai-model-settings-development/report.json`.

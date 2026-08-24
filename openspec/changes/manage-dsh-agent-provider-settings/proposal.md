@@ -9,6 +9,8 @@ Agent 设置当前只能打开高级配置文件，无法安全查看和管理 D
 - API Key 只通过 typed IPC 交给既有 `ProviderCredentialAuthority`；projection 和响应不包含 secret。
 - 保留“打开高级配置”，不建立 `models.json` 或其他平行配置路径。
 - 明确 Provider catalog 在启动时物化：新增或结构修改后提示重启，运行中会话不被改写。
+- 将 canonical `ollama` 本地 Provider 投影到同一设置目录，并以连接来源标识“本地/云端”；能力分组仍只由模型类型派生。
+- 支持删除非内置 Provider 和模型；默认模型、仍拥有模型的 Provider 与内置 Provider 必须 fail-visible 拒绝删除。
 
 ## Capabilities
 
@@ -22,3 +24,4 @@ Agent 设置当前只能打开高级配置文件，无法安全查看和管理 D
 - `@neko/host` 新增 host-neutral model-settings application service，复用 `ConfigManager` 与 credential authority。
 - Desktop Main/preload 只负责 sender-bound IPC wiring；Renderer 不读取 credential store。
 - DSH profile materializer 仍是唯一运行时 provider/model 投影路径。
+- Ollama 通过其 OpenAI-compatible 本地执行端点进入同一 DSH profile materializer，不增加第二套本地模型 registry。

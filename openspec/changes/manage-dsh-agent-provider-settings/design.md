@@ -28,6 +28,14 @@ Agent 设置页直接展示按能力分组的 Provider 目录与新增入口，�
 
 Agent 配置文件入口直接位于 Agent 标题右侧，不再用单独的“高级设置”内容行重复表达。Provider 的能力分类由其 canonical 模型目录派生，不增加互斥的 `providerType` 或第二份分类 authority。纯对话与纯生成 Provider 在宽布局中左右分组，窄布局恢复为单列；同时拥有两类模型的 Provider 进入单独的多能力分组且只显示一次；尚无模型的 Provider 保留待配置分组，避免伪造用途。选中 Provider 后，其对话与生成模型仍按相同规则左右并列。
 
+### 6. 本地来源与模型能力保持正交
+
+`connectionKind` 表达 Provider 是本地、网关或直连来源；`Model.type` 继续唯一决定对话或生成能力。设置投影不得通过 URL 猜测本地来源，也不得增加与模型目录冲突的 Provider 能力字段。Ollama 使用 canonical `connectionKind = local`、`protocolProfile = ollama`，不要求凭据，并由 DSH profile materializer 映射到 Ollama 的 OpenAI-compatible `/v1` 端点。当前 Ollama 模型只支持对话类型；未来本地生成运行时必须以真实 generation Provider/model contract 接入，不能把 Ollama 模型伪装成生成模型。
+
+### 7. 删除在 Host owner 中校验引用
+
+Renderer 只提交精确 Provider/model identity。Host model-settings service 拒绝删除内置 Provider、仍拥有模型的 Provider，以及被任一默认模型引用的模型；不得静默级联、选择替代默认项或遗留隐式 fallback。用户先显式删除/改绑模型，再删除自定义 Provider。Provider 配置删除后，credential authority 清理该精确 identity 的 SecretStorage 条目；TOML-owned credential 随 Provider 记录一起移除。每次成功删除都要求 DSH 重启重新物化，运行中的 Session 不变。
+
 ## Runtime Boundary
 
 - Owner: `@neko/host/settings` and model-settings service.

@@ -69,3 +69,47 @@ The Agent settings surface SHALL show the Provider catalog directly without an a
 - **WHEN** the user chooses to add a custom Provider
 - **THEN** Provider identity, display name, API endpoint, protocol and credential fields are shown as one focused form
 - **AND** model configuration becomes available from the saved Provider editor without creating a second configuration authority
+
+### Requirement: Locality and capability remain independent
+
+The settings projection SHALL identify local Providers from canonical connection metadata while Provider capability grouping SHALL remain derived exclusively from configured model types.
+
+#### Scenario: A local Ollama dialogue model is configured
+
+- **WHEN** an enabled Ollama Provider owns an enabled LLM model
+- **THEN** the Provider is shown in the dialogue group with a local-source indicator
+- **AND** it is not duplicated in a separate local capability group
+- **AND** DSH materializes it through the Provider's OpenAI-compatible local execution endpoint without requiring an API key
+
+#### Scenario: A generation model is configured
+
+- **WHEN** a Provider owns an image, video or audio model
+- **THEN** that Provider is classified as generation-capable regardless of whether its connection source is local or remote
+
+### Requirement: Provider and model removal is explicit and reference-safe
+
+The Host model-settings owner SHALL support exact custom Provider and model removal without silently cascading models, changing defaults or selecting a fallback Provider.
+
+#### Scenario: A non-default model is deleted
+
+- **WHEN** the user confirms deletion of a model that is not referenced by any default
+- **THEN** only that exact model is removed from canonical config
+- **AND** DSH rematerialization is marked as required
+
+#### Scenario: A referenced model is deleted
+
+- **WHEN** the requested model is a configured default
+- **THEN** the request is rejected with a visible local diagnostic
+- **AND** the model and default reference remain unchanged
+
+#### Scenario: A custom Provider is deleted
+
+- **WHEN** the user confirms deletion of a non-builtin Provider with no configured models
+- **THEN** only that Provider and its exact credential are removed
+- **AND** sibling Providers and models remain available
+
+#### Scenario: Provider deletion is unsafe
+
+- **WHEN** the requested Provider is builtin or still owns configured models
+- **THEN** the request is rejected with a visible local diagnostic
+- **AND** no model, default or Provider is silently changed

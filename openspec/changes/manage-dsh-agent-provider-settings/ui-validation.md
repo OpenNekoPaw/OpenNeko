@@ -46,3 +46,25 @@ The authoritative runtime was the running OpenNeko Electron development applicat
 ## Residual risk
 
 The direct catalog, title action and wide Provider grouping are visually accepted. Provider and model single-column responsive behavior remains covered structurally but lacks stable Electron pixels because the shared dev runtime was replaced during an earlier resize. Credential submission, canonical Provider creation, dark-theme contrast and narrow-window pixels remain unexecuted. No secret was entered or projected during validation.
+
+## Local Provider and deletion follow-up
+
+- **Scope:** local/remote source copy, Ollama dialogue-only configuration, model deletion and Provider
+  deletion confirmation are applicable UI changes.
+- **Runtime:** the required authoritative boundary is the isolated Electron Desktop because both deletion
+  actions cross Renderer/preload/Main and mutate canonical ConfigManager state.
+- **Inventory:** the added `desktop-ai-model-settings` scenario opens Settings through the normal footer,
+  enters Agent settings, checks direct dialogue/generation groups, opens local Ollama, verifies no secret
+  input and only `llm`, then deletes a non-default model and its now-empty custom Provider through separate
+  confirmation cycles. It captures catalog, local editor and confirmation pixels.
+- **Functional evidence:** focused Renderer tests pass the same state transitions with the typed bridge;
+  Host service and DSH projection tests pass the exact cross-boundary semantics.
+- **Visual evidence:** no new stable artifact was produced because the isolated development Desktop could
+  not start while process `74442` owned this checkout's Vite bundle. No pixel claim is inferred from unit
+  tests or the failed report.
+- **Result:** `blocked` for the new Electron functional/visual inventory. The prior flattened catalog remains
+  accepted; this advisory block does not turn deterministic contract/service results into a failure.
+- **Residual risk:** current-runtime pixels for local badges, compact delete confirmation and post-delete
+  catalog reflow remain uninspected. Re-run
+  `node scripts/run-desktop-ui-functional.mjs --scenario desktop-ai-model-settings` after the existing
+  development process exits.

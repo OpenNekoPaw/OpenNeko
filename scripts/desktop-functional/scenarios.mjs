@@ -12,6 +12,7 @@ import { desktopTextEditorScenario } from '../../packages/text-editor/webview/fu
 import { characterManagementDialogueScenario } from './character-management-dialogue.mjs';
 import { characterWorldManagementHierarchyScenario } from './character-world-management-hierarchy.mjs';
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
+import { desktopAiModelSettingsScenario } from './desktop-ai-model-settings.mjs';
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
 import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
 import { domainManagementWorkbenchScenario } from './domain-management-workbench.mjs';
@@ -37,6 +38,7 @@ const scenarios = new Map(
     canvasTextFilePreviewScenario,
     previewOpenNekoConsumerScenario,
     desktopAgentProviderUiScenario,
+    desktopAiModelSettingsScenario,
     desktopAgentDiagnosticPortalScenario,
     desktopInvalidWindowConvergenceScenario,
     domainManagementWorkbenchScenario,
