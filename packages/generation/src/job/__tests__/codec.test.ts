@@ -29,6 +29,8 @@ describe('Generation Job codec', () => {
       request: {
         ...snapshot().request,
         generationType: 'image-to-image',
+        providerId: 'provider-1',
+        modelId: 'image-model',
         request: {
           prompt: 'restyle the source',
           providerId: 'provider-1',
@@ -49,6 +51,39 @@ describe('Generation Job codec', () => {
     };
 
     expect(decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(value))).toEqual(value);
+  });
+
+  it('round-trips a ComfyUI workflow/input snapshot without inventing a model binding', () => {
+    const value: GenerationJobSnapshot = {
+      ...snapshot(),
+      request: {
+        generationType: 'workflow',
+        providerId: 'comfyui',
+        request: {
+          endpoint: 'http://127.0.0.1:8188',
+          clientId: 'openneko-job-1',
+          workflow: { '3': { class_type: 'LoadImage', inputs: { image: 'source.png' } } },
+          outputKind: 'image',
+          inputBindings: [
+            {
+              nodeId: '3',
+              inputName: 'image',
+              contentLocator: {
+                file: { authority: 'workspace', path: 'references/source.png' },
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    const decoded = decodeGenerationJobSnapshot(encodeGenerationJobSnapshot(value));
+
+    expect(decoded).toEqual(value);
+    expect('modelId' in decoded.request).toBe(false);
+    expect(decoded.request.generationType).toBe('workflow');
+    if (decoded.request.generationType !== 'workflow') throw new Error('Expected workflow Job.');
+    expect(Object.isFrozen(decoded.request.request.workflow)).toBe(true);
   });
 
   it.each([

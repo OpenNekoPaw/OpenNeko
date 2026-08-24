@@ -342,18 +342,21 @@ CharacterVersion、WorldVersion、媒体库 source 或 Agent transcript。接受
 
 ## 当前成熟度
 
-| 能力                                                                   | 当前状态                                        |
-| ---------------------------------------------------------------------- | ----------------------------------------------- |
-| Pi/Agent 与 MCP Manager                                                | 已存在，可复用                                  |
-| External Processor registry、path/env/output ownership                 | 已存在，可复用，但不负责 GUI app                |
-| ContentLocator、Media Library、Cut OTIO/Export Job                     | 已存在，可作为 handoff 输入基础                 |
-| Desktop Professional Tool catalog/Host port                            | 不存在，需要实施                                |
-| Desktop Computer Use Host port/session/profile                         | 不存在，需要实施；不得显示可用                  |
-| DaVinci、剪映、Photoshop、Live2D、Blender、Unity、ComfyUI integrations | 未实现，不能显示成功 capability                 |
-| Professional round-trip                                                | 未实现，需要按 owning domain 和真实应用逐项验证 |
+| 能力                                                             | 当前状态                                                                                                                |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| DSH Agent、Skill 与 MCP authority                                | 已存在，保持唯一 runtime owner                                                                                          |
+| External Processor registry、path/env/output ownership           | 已存在，可复用，但不负责 GUI app                                                                                        |
+| ContentLocator、Media Library、Cut OTIO/Export Job               | 已存在，可作为 handoff 输入基础                                                                                         |
+| Professional Applications catalog/Host port                      | 已建立首个 package/typed IPC/UI 纵向切片                                                                                |
+| Desktop Computer Use exact-target kernel                         | contract/node kernel 已保留；ComfyUI 消费者待贯通                                                                       |
+| ComfyUI Desktop discovery/config/native selection/launch         | 初始 macOS qualified profile 与 exact bundle identity 选择已实现；可见 Electron 交互验收待完成                          |
+| ComfyUI API                                                      | exact prompt/queue/history/cancel/output、Generation Job 与 DSH Tool 已贯通；WebSocket、候选审阅与 Assets ingest 待实施 |
+| DaVinci、剪映、Photoshop、Live2D、Blender、Unity 等 integrations | 未实现，不能显示成功 capability                                                                                         |
+| Professional round-trip                                          | 未实现，需要按 owning domain 和真实应用逐项验证                                                                         |
 
-当前仓库没有 `apps/neko-desktop`。本文冻结目标边界，不授权创建空 integration、假 MCP
-tool、未验证 exchange format 或成功 no-op。
+当前实施由 `integrate-comfyui-professional-application` OpenSpec 约束。尚未贯通的资源入口、
+Computer Use、WebSocket progress、候选审阅与 Assets ingest 必须保持 fail-visible，不授权创建空
+integration、假 MCP tool、未验证 exchange format 或成功 no-op。
 
 ## 实施顺序
 

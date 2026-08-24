@@ -1,0 +1,26 @@
+{
+  "name": "@neko/professional-apps-webview",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./root": "./src/root.tsx",
+    "./messages": "./src/messages.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neko/professional-apps-contracts": "workspace:*",
+    "@neko/ui": "workspace:*",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^18.2.43",
+    "jsdom": "^27.0.1",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

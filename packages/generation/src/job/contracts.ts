@@ -11,6 +11,7 @@ import type {
   GenerationProviderTaskRef,
   PromptGenerationRequest,
 } from '../execution';
+import type { ComfyUiWorkflowGenerationRequest } from '../comfyui/index';
 
 export const GENERATION_JOB_KIND = 'generation' as const;
 
@@ -49,7 +50,12 @@ export type GenerationJobRequest =
   | (GenerationJobRequestBase & {
       readonly generationType: Extract<MediaGenerationType, 'text-to-audio' | 'text-to-music'>;
       readonly request: AudioGenerationRequest;
-    });
+    })
+  | {
+      readonly providerId: 'comfyui';
+      readonly generationType: 'workflow';
+      readonly request: ComfyUiWorkflowGenerationRequest;
+    };
 
 export interface GenerationJobProgress {
   readonly stage: GenerationJobStage;
@@ -89,13 +95,16 @@ export type SubmitGenerationJobInput = GenerationJobRequest & {
   readonly regenerateOf?: GenerationJobRef;
 };
 
-type PurposeGenerationRequest<T extends GenerationJobRequest = GenerationJobRequest> =
-  T extends GenerationJobRequest
-    ? Omit<T, 'providerId' | 'modelId'> & {
-        readonly purpose: string;
-        readonly lifecycleMode: GenerationJobLifecycleMode;
-      }
-    : never;
+type ModelBoundGenerationJobRequest = Exclude<GenerationJobRequest, { generationType: 'workflow' }>;
+
+type PurposeGenerationRequest<
+  T extends ModelBoundGenerationJobRequest = ModelBoundGenerationJobRequest,
+> = T extends GenerationJobRequest
+  ? Omit<T, 'providerId' | 'modelId'> & {
+      readonly purpose: string;
+      readonly lifecycleMode: GenerationJobLifecycleMode;
+    }
+  : never;
 
 export type SubmitPurposeGenerationJobInput = PurposeGenerationRequest;
 

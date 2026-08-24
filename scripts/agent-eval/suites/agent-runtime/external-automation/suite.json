@@ -67,6 +67,18 @@
       "file": "cases/computer-observation-cancelled.json",
       "group": "workflow",
       "visibility": "public"
+    },
+    {
+      "id": "comfyui-api-failure-no-computer-fallback",
+      "file": "cases/comfyui-api-failure-no-computer-fallback.json",
+      "group": "failure",
+      "visibility": "public"
+    },
+    {
+      "id": "comfyui-explicit-visual-api-composition",
+      "file": "cases/comfyui-explicit-visual-api-composition.json",
+      "group": "workflow",
+      "visibility": "public"
     }
   ],
   "rubricRefs": [],

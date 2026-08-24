@@ -231,6 +231,12 @@ import {
   type OpenNekoAgentExtensionManagementBridge,
 } from '@neko/agent-contracts/extension-management-host';
 import {
+  PROFESSIONAL_APPLICATION_HOST_CHANNEL,
+  parseProfessionalApplicationHostRequest,
+  parseProfessionalApplicationHostResult,
+  type OpenNekoProfessionalApplicationBridge,
+} from '@neko/professional-apps-contracts/host';
+import {
   CHARACTER_FOUNDATION_HOST_CHANNEL,
   CHARACTER_AUTHORING_HOST_CHANNEL,
   CHARACTER_AVATAR_HOST_CHANNEL,
@@ -356,6 +362,7 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoAssetCenterBridge &
   OpenNekoDesktopWorkspaceGrantBridge &
   OpenNekoAgentExtensionManagementBridge &
+  OpenNekoProfessionalApplicationBridge &
   OpenNekoDesktopApplicationSettingsBridge &
   OpenNekoDesktopAiModelSettingsBridge &
   OpenNekoDesktopStorageSettingsBridge &
@@ -1250,6 +1257,16 @@ const bridge: OpenNekoDesktopBridge &
         request,
       );
       return parseAgentExtensionManagementHostResult(response, request);
+    },
+  },
+  professionalApplications: {
+    async execute(input) {
+      const request = parseProfessionalApplicationHostRequest(input);
+      const response: unknown = await ipcRenderer.invoke(
+        PROFESSIONAL_APPLICATION_HOST_CHANNEL,
+        request,
+      );
+      return parseProfessionalApplicationHostResult(response, request);
     },
   },
   resources: {

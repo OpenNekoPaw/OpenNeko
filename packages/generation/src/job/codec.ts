@@ -20,6 +20,7 @@ import type {
   VideoGenerationRequest,
 } from '../contracts';
 import type { PromptGenerationRequest } from '../execution';
+import type { ComfyUiWorkflowGenerationRequest } from '../comfyui/index';
 
 const JOB_PHASES: ReadonlySet<string> = new Set([
   'pending',
@@ -152,21 +153,66 @@ function isGenerationJobSnapshot(value: unknown): value is GenerationJobSnapshot
 }
 
 function isGenerationJobRequest(value: unknown): value is GenerationJobRequest {
-  if (
-    !isRecord(value) ||
-    !isNonEmptyString(value['providerId']) ||
-    !isNonEmptyString(value['modelId'])
-  ) {
+  if (!isRecord(value) || !isNonEmptyString(value['providerId'])) {
     return false;
   }
   const generationType = value['generationType'];
   const request = value['request'];
   if (typeof generationType !== 'string') return false;
+  if (generationType === 'workflow') {
+    return (
+      value['providerId'] === 'comfyui' &&
+      value['modelId'] === undefined &&
+      hasOnlyKeys(value, COMFYUI_JOB_REQUEST_KEYS) &&
+      isComfyUiWorkflowRequest(request)
+    );
+  }
+  if (!isNonEmptyString(value['modelId']) || !hasOnlyKeys(value, MODEL_JOB_REQUEST_KEYS)) {
+    return false;
+  }
   if (generationType === 'prompt') return isPromptRequest(request);
   if (IMAGE_GENERATION_TYPES.has(generationType)) return isImageRequest(request);
   if (VIDEO_GENERATION_TYPES.has(generationType)) return isVideoRequest(request);
   if (AUDIO_GENERATION_TYPES.has(generationType)) return isAudioRequest(request);
   return false;
+}
+
+function isComfyUiWorkflowRequest(value: unknown): value is ComfyUiWorkflowGenerationRequest {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, COMFYUI_WORKFLOW_REQUEST_KEYS) &&
+    isNonEmptyString(value['endpoint']) &&
+    isNonEmptyString(value['clientId']) &&
+    value['outputKind'] === 'image' &&
+    isJsonObject(value['workflow']) &&
+    Object.keys(value['workflow']).length > 0 &&
+    Array.isArray(value['inputBindings']) &&
+    value['inputBindings'].every(isComfyUiInputBinding) &&
+    new Set(
+      value['inputBindings'].map((binding) => `${binding['nodeId']}\0${binding['inputName']}`),
+    ).size === value['inputBindings'].length
+  );
+}
+
+function isComfyUiInputBinding(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, COMFYUI_INPUT_BINDING_KEYS) &&
+    isNonEmptyString(value['nodeId']) &&
+    isNonEmptyString(value['inputName']) &&
+    isContentLocator(value['contentLocator'])
+  );
+}
+
+function isJsonObject(value: unknown): value is Readonly<Record<string, unknown>> {
+  return isRecord(value) && Object.values(value).every(isJsonValue);
+}
+
+function isJsonValue(value: unknown): boolean {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  return isJsonObject(value);
 }
 
 function isPromptRequest(value: unknown): value is PromptGenerationRequest {
@@ -395,6 +441,16 @@ const PURPOSE_GENERATION_REQUEST_KEYS = new Set([
   'lifecycleMode',
   'request',
 ]);
+const MODEL_JOB_REQUEST_KEYS = new Set(['providerId', 'modelId', 'generationType', 'request']);
+const COMFYUI_JOB_REQUEST_KEYS = new Set(['providerId', 'generationType', 'request']);
+const COMFYUI_WORKFLOW_REQUEST_KEYS = new Set([
+  'endpoint',
+  'clientId',
+  'workflow',
+  'outputKind',
+  'inputBindings',
+]);
+const COMFYUI_INPUT_BINDING_KEYS = new Set(['nodeId', 'inputName', 'contentLocator']);
 const GENERATION_JOB_SNAPSHOT_KEYS = new Set([
   'ref',
   'submissionId',

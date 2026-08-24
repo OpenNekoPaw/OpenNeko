@@ -10,7 +10,7 @@ import type { GenerationJobSnapshot } from './job/contracts';
 
 describe('Generation DSH tool contract', () => {
   it('owns the exact model-facing operation envelope and camelCase request fields', () => {
-    expect(GENERATION_DSH_TOOL_PARAMETERS.input.oneOf).toHaveLength(5);
+    expect(GENERATION_DSH_TOOL_PARAMETERS.input.oneOf).toHaveLength(6);
     const serialized = JSON.stringify(GENERATION_DSH_TOOL_PARAMETERS);
     expect(serialized).toContain('negativePrompt');
     expect(serialized).toContain('aspectRatio');
@@ -20,7 +20,7 @@ describe('Generation DSH tool contract', () => {
     expect(serialized).not.toContain('aspect_ratio');
   });
 
-  it('exposes exactly submit and describe with the exact tool name', () => {
+  it('exposes model-bound submit, Host-bound ComfyUI submit and describe', () => {
     expect(GENERATION_DSH_TOOL_NAME).toBe('openneko.generation');
     expect(
       decodeGenerationDshToolInput('submit', {
@@ -42,8 +42,24 @@ describe('Generation DSH tool contract', () => {
       operation: 'describe',
       input: { jobId: 'job-1' },
     });
+    expect(
+      decodeGenerationDshToolInput('submit-comfyui', {
+        lifecycleMode: 'detached',
+        workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
+        outputKind: 'image',
+        inputBindings: [],
+      }),
+    ).toEqual({
+      operation: 'submit-comfyui',
+      input: {
+        lifecycleMode: 'detached',
+        workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
+        outputKind: 'image',
+        inputBindings: [],
+      },
+    });
     expect(() => decodeGenerationDshToolInput('cancel', { jobId: 'job-1' })).toThrow(
-      /must be one of submit, describe/,
+      /must be one of submit, submit-comfyui, describe/,
     );
     expect(() =>
       decodeGenerationDshToolInput('describe', { jobId: 'job-1', include: 'result' }),
@@ -67,6 +83,34 @@ describe('Generation DSH tool contract', () => {
         request: {},
       }),
     ).toThrow(/generation type contract/);
+    expect(() =>
+      decodeGenerationDshToolInput('submit-comfyui', {
+        lifecycleMode: 'detached',
+        endpoint: 'http://127.0.0.1:8188',
+        workflow: { '3': {} },
+        outputKind: 'image',
+        inputBindings: [],
+      }),
+    ).toThrow(/input.endpoint is not supported/);
+    expect(() =>
+      decodeGenerationDshToolInput('submit-comfyui', {
+        lifecycleMode: 'detached',
+        workflow: { '3': { class_type: 'LoadImage', inputs: { image: 'source.png' } } },
+        outputKind: 'image',
+        inputBindings: [
+          {
+            nodeId: '3',
+            inputName: 'image',
+            contentLocator: { file: { authority: 'workspace', path: 'source.png' } },
+          },
+          {
+            nodeId: '3',
+            inputName: 'image',
+            contentLocator: { file: { authority: 'workspace', path: 'other.png' } },
+          },
+        ],
+      }),
+    ).toThrow(/duplicate exact node input/);
     expect(() =>
       decodeGenerationDshToolInput('submit', {
         purpose: 'image.generate',

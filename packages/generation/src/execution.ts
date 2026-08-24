@@ -6,6 +6,7 @@ import type {
   MediaOutput,
   VideoGenerationRequest,
 } from './contracts';
+import type { ComfyUiWorkflowGenerationResult } from './comfyui/index';
 
 export interface GenerationProviderTaskRef {
   readonly providerId: string;
@@ -19,7 +20,7 @@ export interface MediaGenerationExecutionOptions {
 }
 
 export interface MediaGenerationResult {
-  readonly type: MediaGenerationType;
+  readonly type: Exclude<MediaGenerationType, 'workflow'>;
   readonly providerId: string;
   readonly modelId: string;
   readonly outputs: readonly MediaOutput[];
@@ -46,7 +47,8 @@ export interface PromptGenerationResult {
   readonly request: PromptGenerationRequest;
 }
 
-export type GenerationExecutionResult = MediaGenerationResult | PromptGenerationResult;
+export type GenerationExecutionResult =
+  MediaGenerationResult | PromptGenerationResult | ComfyUiWorkflowGenerationResult;
 
 /**
  * The provider accepted a submission but the transport closed before a result

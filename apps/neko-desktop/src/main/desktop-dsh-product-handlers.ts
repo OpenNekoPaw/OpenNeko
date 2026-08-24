@@ -19,6 +19,7 @@ import type { CharacterDshAuthoringService } from '@neko/chara/application';
 import type { WorldDshAuthoringService } from '@neko/world/application';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
 import type { WorkspaceConfigManagerAuthority } from '@neko/host/settings';
+import type { ProfessionalApplicationBindingRepository } from '@neko/professional-apps-node';
 
 import type { DesktopDshAgentHandlerAssembly } from './desktop-dsh-agent-runtime';
 import {
@@ -45,6 +46,9 @@ export function createDesktopDshProductHandlers(options: {
     readonly root: string;
   };
   readonly skillAuthoring: Pick<DshSkillAuthoringService, 'create'>;
+  readonly comfyUi?: {
+    readonly bindings: Pick<ProfessionalApplicationBindingRepository, 'get'>;
+  };
   readonly cutRuntime: {
     resolveExportService(input: {
       readonly workspaceId: string;

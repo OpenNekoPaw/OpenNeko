@@ -1,11 +1,15 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type {
   GenerationExecutionResult,
   MediaGenerationExecutionPort,
   PromptGenerationExecutionPort,
 } from '@neko/generation';
+import type {
+  ComfyUiWorkflowExecutionPort,
+  ComfyUiWorkflowGenerationResult,
+} from '@neko/generation/comfyui';
 import type { WorkspaceFileContentLocator } from '@neko/content';
 import { resolveWorkspaceGeneratedAssetRelativeDirectory } from '@neko/generation';
 import {
@@ -25,8 +29,9 @@ import type { ResourceCacheManifestStore } from '@neko/local-metadata/resource-c
 import { PathResolver } from '@neko/shared';
 import { GeneratedAssetIndex } from './generated-asset-index';
 import { finalizeMediaGenerationOutputs } from './media-generation-output-finalizer';
+import { detectMediaExtension } from './media-file-downloader';
 import type { GeneratedMediaKind } from './media-generated-asset';
-import { createStableGeneratedOutputId } from './media-generated-asset';
+import { buildGeneratedMediaAssets, createStableGeneratedOutputId } from './media-generated-asset';
 import { LocalMetadataGeneratedOutputProjectionStore } from './local-metadata/generated-output-projection-store';
 
 export interface NodeGenerationJobOwnerOptions {
@@ -35,6 +40,7 @@ export interface NodeGenerationJobOwnerOptions {
   readonly homedir: string;
   readonly mediaExecution: MediaGenerationExecutionPort;
   readonly promptExecution: PromptGenerationExecutionPort;
+  readonly comfyUiExecution?: ComfyUiWorkflowExecutionPort;
 }
 
 interface GenerationMetadataBinding {
@@ -82,6 +88,7 @@ export async function createNodeGenerationJobOwner(
         describeExternalTask: (task) => options.mediaExecution.describeExternalTask(task),
         cancelExternalTask: (task) => options.mediaExecution.cancelExternalTask(task),
       },
+      ...(options.comfyUiExecution ? { comfyUiExecution: options.comfyUiExecution } : {}),
       resultCommitter: {
         commit: ({ ref, generation }) =>
           commitGenerationResult({
@@ -186,6 +193,14 @@ async function commitGenerationResult(input: {
       ownerRoot: input.ownerRoot,
     });
   }
+  if (input.generation.type === 'workflow') {
+    return commitComfyUiWorkflowResult({
+      operationId: input.operationId,
+      generation: input.generation,
+      ownerRoot: input.ownerRoot,
+      generatedAssets: input.generatedAssets,
+    });
+  }
   const mediaKind = toGeneratedMediaKind(input.generation.type);
   const finalized = await finalizeMediaGenerationOutputs({
     workspaceRoot: input.ownerRoot,
@@ -208,6 +223,97 @@ async function commitGenerationResult(input: {
     }
     return asset.lifecycle.contentLocator;
   });
+}
+
+async function commitComfyUiWorkflowResult(input: {
+  readonly operationId: string;
+  readonly generation: ComfyUiWorkflowGenerationResult;
+  readonly ownerRoot: string;
+  readonly generatedAssets: GeneratedAssetIndex;
+}): Promise<readonly WorkspaceFileContentLocator[]> {
+  const outputDir = path.join(
+    input.ownerRoot,
+    resolveWorkspaceGeneratedAssetRelativeDirectory({ mediaKind: 'image' }),
+  );
+  await fs.mkdir(outputDir, { recursive: true });
+  const hostOutputPaths: string[] = [];
+  const digests: string[] = [];
+  for (const [index, output] of input.generation.outputs.entries()) {
+    const extension = detectMediaExtension(output.mimeType, 'workflow', 'image');
+    const outputPath = path.join(outputDir, `${input.operationId}_${index}${extension}`);
+    const temporaryPath = `${outputPath}.part-${randomUUID()}`;
+    const bytes = Buffer.from(output.bytes);
+    const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+    try {
+      try {
+        const existing = await fs.readFile(outputPath);
+        const existingDigest = `sha256:${createHash('sha256').update(existing).digest('hex')}`;
+        if (existingDigest !== digest) {
+          throw new Error(
+            `ComfyUI output ${index} conflicts with the exact persisted Job output path.`,
+          );
+        }
+      } catch (error) {
+        if (!isMissingFileError(error)) throw error;
+        await fs.writeFile(temporaryPath, bytes, { flag: 'wx' });
+        await fs.rename(temporaryPath, outputPath);
+      }
+    } finally {
+      await fs.unlink(temporaryPath).catch(() => undefined);
+    }
+    hostOutputPaths.push(outputPath);
+    digests.push(digest);
+  }
+  const assets = buildGeneratedMediaAssets({
+    workspaceRoot: input.ownerRoot,
+    hostOutputPaths,
+    contentDigests: digests,
+    operationId: input.operationId,
+    providerId: input.generation.providerId,
+    mediaKind: 'image',
+    outputs: input.generation.outputs.map((output) => ({
+      type: 'image' as const,
+      mimeType: output.mimeType,
+      url: createComfyUiHistoryOutputIdentity(input.generation, output.descriptor),
+    })),
+  });
+  const indexed: string[] = [];
+  try {
+    for (const asset of assets) {
+      await input.generatedAssets.add(asset);
+      indexed.push(asset.id);
+    }
+  } catch (error) {
+    for (const assetId of indexed.reverse()) {
+      await input.generatedAssets.remove(assetId).catch(() => false);
+    }
+    throw error;
+  }
+  return assets.map((asset) => {
+    if (!asset.lifecycle) {
+      throw new Error(`Generated ComfyUI asset '${asset.id}' has no durable lifecycle.`);
+    }
+    return asset.lifecycle.contentLocator;
+  });
+}
+
+function createComfyUiHistoryOutputIdentity(
+  generation: ComfyUiWorkflowGenerationResult,
+  descriptor: ComfyUiWorkflowGenerationResult['outputs'][number]['descriptor'],
+): string {
+  const query = new URLSearchParams({
+    prompt_id: generation.promptId,
+    filename: descriptor.filename,
+    subfolder: descriptor.subfolder,
+    type: descriptor.outputType,
+  });
+  return `comfyui-history:${query.toString()}`;
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return (
+    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT'
+  );
 }
 
 async function commitPromptGenerationResult(input: {

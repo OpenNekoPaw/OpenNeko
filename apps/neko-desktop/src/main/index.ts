@@ -11,6 +11,7 @@ import {
   safeStorage,
   session,
   shell,
+  webContents,
 } from 'electron';
 import { ConsoleLogger, ConsoleTransport, LogLevel, type ILogger } from '@neko/shared/logger';
 import { ManagedFileLogTransport } from '@neko/shared/logger/node';
@@ -194,6 +195,7 @@ import {
   type CanvasHostRuntimeIdentity,
 } from '@neko/canvas-domain';
 import { GenerationApplicationRuntime } from '@neko/generation/job';
+import { ComfyUiLocalApi, ComfyUiWorkflowRunner } from '@neko/generation/comfyui';
 import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation/prompt';
 import {
   createContentReadMediaRequestAssetMaterializer,
@@ -270,6 +272,18 @@ import {
 import { DesktopDshRuntimeHost } from './desktop-dsh-runtime-host';
 import { DesktopDshExtensionManagementHost } from './desktop-dsh-extension-management-host';
 import { createDesktopDshSkillAuthoringService } from './desktop-dsh-skill-authoring';
+import {
+  COMFYUI_PROFESSIONAL_APPLICATION_PROFILE,
+  createPersistentProfessionalApplicationBindingRepository,
+  createProfessionalApplicationService,
+  initializeProfessionalApplicationBindingTables,
+} from '@neko/professional-apps-node';
+import {
+  createDesktopProfessionalApplicationNativePort,
+  DesktopProfessionalApplicationAdapter,
+  DesktopUnavailableProfessionalApplicationContentAuthorization,
+} from './desktop-professional-application-adapters';
+import { DesktopProfessionalApplicationHost } from './desktop-professional-application-host';
 import { createDesktopDshProviderRuntimeProjection } from './desktop-dsh-provider-runtime';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 
@@ -393,6 +407,7 @@ async function startDesktop(): Promise<void> {
       (rejection): rejection is InvalidJsonStateRejection => rejection !== undefined,
     );
     await initializeAssetLibraryMembershipTables(localMetadataStore);
+    await initializeProfessionalApplicationBindingTables(localMetadataStore);
     await initializeCharacterRuntimePersistenceTables(localMetadataStore);
     await initializeWorldRuntimePersistenceTables(localMetadataStore);
     agentRuntimeSettings = await createAgentRuntimeSettingsAuthority({
@@ -404,6 +419,9 @@ async function startDesktop(): Promise<void> {
     throw error;
   }
   const applicationSettings = new DesktopApplicationSettingsService(applicationSettingsRepository);
+  const professionalApplicationBindings = createPersistentProfessionalApplicationBindingRepository({
+    store: localMetadataStore,
+  });
   const characterGlobalCatalog = new CharacterGlobalCatalogFileRepository(globalStorage.root);
   const worldGlobalCatalog = new WorldGlobalCatalogFileRepository(globalStorage.root);
   const characterGlobalCatalogService = new CharacterGlobalCatalogService({
@@ -561,6 +579,7 @@ async function startDesktop(): Promise<void> {
           encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
         }),
       });
+      const comfyUiContentRead = createNodeHostContentReadService({ workspaceRoot: root });
       return createNodeGenerationJobOwner({
         owner,
         root,
@@ -570,6 +589,90 @@ async function startDesktop(): Promise<void> {
           configManager,
           createAiSdkPromptCompletionPort(),
         ),
+        comfyUiExecution: new ComfyUiWorkflowRunner({
+          api: new ComfyUiLocalApi({
+            request: ({ url, method, body, signal }) =>
+              fetch(url, {
+                method,
+                redirect: 'manual',
+                ...(body === undefined
+                  ? {}
+                  : {
+                      headers: { 'content-type': 'application/json' },
+                      body: JSON.stringify(body),
+                    }),
+                signal: signal
+                  ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
+                  : AbortSignal.timeout(10_000),
+              }),
+          }),
+          inputs: {
+            materialize: async ({ endpoint, binding, signal }) => {
+              const content = await comfyUiContentRead.read(binding.contentLocator, {
+                maxBytes: 64 * 1024 * 1024,
+                ...(signal ? { signal } : {}),
+              });
+              if (content.status === 'unavailable') {
+                throw new Error(
+                  `ComfyUI input '${binding.nodeId}.${binding.inputName}' is unavailable: ${content.diagnostic.code}.`,
+                );
+              }
+              const mimeType = content.mimeType ?? 'application/octet-stream';
+              if (!mimeType.startsWith('image/')) {
+                throw new Error(
+                  `ComfyUI input '${binding.nodeId}.${binding.inputName}' must be an image.`,
+                );
+              }
+              const digest = createHash('sha256').update(content.bytes).digest('hex');
+              const extension =
+                mimeType === 'image/jpeg'
+                  ? '.jpg'
+                  : mimeType === 'image/webp'
+                    ? '.webp'
+                    : mimeType === 'image/gif'
+                      ? '.gif'
+                      : '.png';
+              const fileName = `openneko-${digest}${extension}`;
+              const form = new FormData();
+              form.append(
+                'image',
+                new Blob([Buffer.from(content.bytes)], { type: mimeType }),
+                fileName,
+              );
+              form.append('type', 'input');
+              form.append('overwrite', 'false');
+              const response = await fetch(`${endpoint.replace(/\/$/u, '')}/upload/image`, {
+                method: 'POST',
+                redirect: 'manual',
+                body: form,
+                signal: signal
+                  ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+                  : AbortSignal.timeout(30_000),
+              });
+              if (!response.ok || response.status >= 300 || response.type === 'opaqueredirect') {
+                throw new Error(`ComfyUI input upload failed with HTTP ${response.status}.`);
+              }
+              const payload: unknown = await response.json();
+              if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+                throw new Error('ComfyUI input upload returned an invalid response.');
+              }
+              const name = (payload as Record<string, unknown>)['name'];
+              const subfolder = (payload as Record<string, unknown>)['subfolder'];
+              if (
+                typeof name !== 'string' ||
+                !name.trim() ||
+                name.includes('/') ||
+                name.includes('\\')
+              ) {
+                throw new Error('ComfyUI input upload did not return an exact filename.');
+              }
+              return {
+                filename: name,
+                ...(typeof subfolder === 'string' && subfolder ? { subfolder } : {}),
+              };
+            },
+          },
+        }),
       });
     },
   });
@@ -2071,6 +2174,9 @@ async function startDesktop(): Promise<void> {
         generationRuntime,
         generationProjection: {
           projectSnapshot: async ({ context, request, snapshot }) => {
+            if (snapshot.request.generationType === 'workflow') {
+              return { status: 'accepted' };
+            }
             if (context.binding.kind === 'assistant') return { status: 'accepted' };
             if (context.binding.kind !== 'workspace') {
               return {
@@ -2109,8 +2215,9 @@ async function startDesktop(): Promise<void> {
           },
         },
         configuration: workspaceConfigAuthority,
-        skillAuthoring,
+        comfyUi: { bindings: professionalApplicationBindings },
         assistant: { assistantSpaceId, root: assistantSpaceRoot },
+        skillAuthoring,
         cutRuntime,
         character: {
           resolveService: async (input) => {
@@ -2663,12 +2770,55 @@ async function startDesktop(): Promise<void> {
     runtime: dshProduct.runtime,
     windows: appHost.windows,
   });
+  const professionalApplicationNative = createDesktopProfessionalApplicationNativePort();
+  const professionalApplicationAdapter = new DesktopProfessionalApplicationAdapter(
+    professionalApplicationNative,
+    process.platform,
+    { comfyUiApiExecution: true },
+  );
+  const professionalApplicationService = createProfessionalApplicationService({
+    profiles: [COMFYUI_PROFESSIONAL_APPLICATION_PROFILE],
+    bindings: professionalApplicationBindings,
+    discovery: professionalApplicationAdapter,
+    launcher: professionalApplicationAdapter,
+    contentAuthorization: new DesktopUnavailableProfessionalApplicationContentAuthorization(),
+  });
+  const professionalApplicationHost = new DesktopProfessionalApplicationHost({
+    service: professionalApplicationService,
+    windows: appHost.windows,
+    selection: {
+      async selectApplicationIdentity(sender) {
+        const senderContents = webContents.fromId(sender.webContentsId);
+        if (!senderContents) {
+          throw new Error('Professional application selection requires live WebContents.');
+        }
+        const owner = BrowserWindow.fromWebContents(senderContents);
+        if (!owner) {
+          throw new Error(
+            'Professional application selection requires a registered BrowserWindow.',
+          );
+        }
+        const selection = await dialog.showOpenDialog(owner, {
+          title: 'Select Professional Application',
+          buttonLabel: 'Select Application',
+          properties: ['openFile'],
+        });
+        if (selection.canceled) return undefined;
+        const selectedPath = selection.filePaths[0];
+        if (!selectedPath || selection.filePaths.length !== 1) {
+          throw new Error('Professional application selection requires exactly one application.');
+        }
+        return professionalApplicationAdapter.identifySelectedApplication(selectedPath);
+      },
+    },
+  });
   const unsubscribeDshRuntimeStatus = dshProduct.runtime.subscribe(publishDshRuntimeChanged);
   const disposeIpc = registerDesktopIpc(appHost, {
     dshPermissions: dshPermissionHost,
     dshRuntime: dshRuntimeHost,
     dshSessions: dshSessionHost,
     dshExtensions: dshExtensionManagementHost,
+    professionalApplications: professionalApplicationHost,
     saveCharacterPackage: async (event, produce) => {
       const owner = BrowserWindow.fromWebContents(event.sender);
       if (!owner) throw new Error('Character package export requires a registered BrowserWindow.');

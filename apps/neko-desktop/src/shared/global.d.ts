@@ -18,6 +18,7 @@ import type {
 } from '@neko/project/contracts';
 import type { OpenNekoAssetCenterBridge } from '@neko/assets-domain/asset-center/host-contract';
 import type { OpenNekoAgentExtensionManagementBridge } from '@neko/agent-contracts/extension-management-host';
+import type { OpenNekoProfessionalApplicationBridge } from '@neko/professional-apps-contracts/host';
 import type { OpenNekoDesktopWorkspaceGrantBridge } from '@neko/host/desktop-workspace-grant-contract';
 import type {
   OpenNekoDesktopCharacterBridge,
@@ -48,6 +49,7 @@ declare global {
       OpenNekoAssetCenterBridge &
       OpenNekoDesktopWorkspaceGrantBridge &
       OpenNekoAgentExtensionManagementBridge &
+      OpenNekoProfessionalApplicationBridge &
       OpenNekoDesktopApplicationSettingsBridge &
       OpenNekoDesktopAiModelSettingsBridge &
       OpenNekoDesktopStorageSettingsBridge &

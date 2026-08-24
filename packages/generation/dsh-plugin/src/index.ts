@@ -19,7 +19,7 @@ export function apply(ctx: Context): void {
         defineTool({
           name: GENERATION_DSH_TOOL_NAME,
           description:
-            'Submit a durable OpenNeko Generation Job and wait for its terminal result, or describe an existing Job by exact identity.',
+            'Submit a durable model-bound or Host-bound ComfyUI Generation Job and wait for its terminal result, or describe an existing Job by exact identity.',
           parameters: GENERATION_DSH_TOOL_PARAMETERS,
           output: {
             schema: { type: 'json' },

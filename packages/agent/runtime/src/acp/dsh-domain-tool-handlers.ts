@@ -11,8 +11,6 @@ import type {
 import type { GenerationJobSnapshot, PurposeGenerationJobPort } from '@neko/generation/job';
 import type { CharacterDshAuthoringService } from '@neko/chara/application';
 import type { WorldDshAuthoringService } from '@neko/world/application';
-import { SkillAuthoringDshHostAdapter } from './skill-authoring-host-adapter';
-import type { DshSkillAuthoringService } from '../application/dsh-skill-authoring';
 import type { AgentContentAccessRuntime } from '../runtime/capability/agent-content-access-runtime';
 
 import type {
@@ -23,12 +21,15 @@ import { CanvasDshHostAdapter } from './canvas-host-adapter';
 import { CutDshHostAdapter } from './cut-host-adapter';
 import {
   GenerationDshHostAdapter,
+  type GenerationDshComfyUiSubmitter,
   type GenerationDshLifecycleProjectionOutcome,
 } from './generation-host-adapter';
 import { DocumentDshHostAdapter } from './document-host-adapter';
 import { ContentImageDshHostAdapter } from './content-image-host-adapter';
 import { CharacterDshHostAdapter } from './character-host-adapter';
 import { WorldDshHostAdapter } from './world-host-adapter';
+import { SkillAuthoringDshHostAdapter } from './skill-authoring-host-adapter';
+import type { DshSkillAuthoringService } from '../application/dsh-skill-authoring';
 
 export interface DshDomainToolHandlers {
   executeGenerationTool(
@@ -74,6 +75,11 @@ export function createDshDomainToolHandlers(options: {
       readonly request: DshAcpDomainToolRequest;
       readonly snapshot: GenerationJobSnapshot;
     }): Promise<GenerationDshLifecycleProjectionOutcome>;
+    submitComfyUi?: (input: {
+      readonly context: DshDomainToolContext;
+      readonly request: DshAcpDomainToolRequest;
+      readonly submission: Parameters<GenerationDshComfyUiSubmitter['submit']>[0];
+    }) => ReturnType<GenerationDshComfyUiSubmitter['submit']>;
   };
   readonly canvas: {
     resolveService(
@@ -157,6 +163,16 @@ export function createDshDomainToolHandlers(options: {
               snapshot,
             }),
         },
+        options.generation.submitComfyUi
+          ? {
+              submit: async (submission) =>
+                options.generation.submitComfyUi!({
+                  context: await resolveContext(),
+                  request,
+                  submission,
+                }),
+            }
+          : undefined,
       ).execute(request, signal);
     },
 

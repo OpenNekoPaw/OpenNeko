@@ -29,6 +29,8 @@ import {
   type GenerationApplicationRuntime,
   type GenerationJobSnapshot,
 } from '@neko/generation/job';
+import { createHash } from 'node:crypto';
+import type { ProfessionalApplicationBindingRepository } from '@neko/professional-apps-node';
 import type { DesktopWorkspaceGrantAuthorityPort } from '@neko/host/desktop-workspace-grant-authority';
 import type { ConfigManager, WorkspaceConfigManagerAuthority } from '@neko/host/settings';
 import type { CharacterDshAuthoringService } from '@neko/chara/application';
@@ -58,6 +60,9 @@ export function createDesktopDshDomainToolHandlers(options: {
     readonly root: string;
   };
   readonly skillAuthoring?: Pick<DshSkillAuthoringService, 'create'>;
+  readonly comfyUi?: {
+    readonly bindings: Pick<ProfessionalApplicationBindingRepository, 'get'>;
+  };
   readonly cutRuntime?: {
     resolveExportService(input: {
       readonly workspaceId: string;
@@ -86,58 +91,92 @@ export function createDesktopDshDomainToolHandlers(options: {
     bindings: options.bindings,
     contexts: options.contexts,
   });
+  const resolveGenerationOwner = async (context: DshDomainToolContext) => {
+    if (context.binding.kind === 'assistant') {
+      if (context.binding.assistantSpaceId !== options.assistant.assistantSpaceId) {
+        throw Object.assign(
+          new Error(
+            `Assistant Space '${context.binding.assistantSpaceId}' is not authorized by this Host.`,
+          ),
+          { code: 'GENERATION_DSH_ASSISTANT_UNAUTHORIZED' },
+        );
+      }
+      return {
+        jobs: await options.generationRuntime.getJobs({
+          owner: {
+            kind: 'assistant' as const,
+            assistantSpaceId: context.binding.assistantSpaceId,
+          },
+          root: options.assistant.root,
+        }),
+        config: options.configuration.getApplicationConfig(),
+      };
+    }
+    if (context.binding.kind !== 'workspace' && context.binding.kind !== 'authoring') {
+      throw Object.assign(
+        new Error(`Generation is unavailable for ${context.binding.kind} Conversation context.`),
+        { code: 'GENERATION_DSH_CONTEXT_UNSUPPORTED' },
+      );
+    }
+    const workspaceContext = asWorkspaceContext(context);
+    const resolution = await options.workspaceGrants.resolveAuthorizedWorkspace(
+      workspaceContext.binding.workspaceGrantId,
+      workspaceContext.binding.workspaceId,
+    );
+    return {
+      jobs: await options.generationRuntime.getJobs({
+        owner: { kind: 'workspace' as const, workspaceId: resolution.workspace.workspaceId },
+        root: resolution.workspace.workspacePath,
+      }),
+      config: options.configuration.getWorkspaceConfig({
+        workspaceId: resolution.workspace.workspaceId,
+        workspacePath: resolution.workspace.workspacePath,
+      }),
+    };
+  };
   return createDshDomainToolHandlers({
     contexts,
     skillAuthoring: options.skillAuthoring,
     generation: {
       projectSnapshot: (input) => options.generationProjection.projectSnapshot(input),
       resolveJobs: async (context) => {
-        if (context.binding.kind === 'assistant') {
-          if (context.binding.assistantSpaceId !== options.assistant.assistantSpaceId) {
-            throw Object.assign(
-              new Error(
-                `Assistant Space '${context.binding.assistantSpaceId}' is not authorized by this Host.`,
-              ),
-              { code: 'GENERATION_DSH_ASSISTANT_UNAUTHORIZED' },
-            );
-          }
-          return createPurposeGenerationJobPort({
-            jobs: await options.generationRuntime.getJobs({
-              owner: {
-                kind: 'assistant',
-                assistantSpaceId: context.binding.assistantSpaceId,
-              },
-              root: options.assistant.root,
-            }),
-            bindings: purposeBindings(options.configuration.getApplicationConfig()),
-          });
-        }
-        if (context.binding.kind !== 'workspace' && context.binding.kind !== 'authoring') {
-          throw Object.assign(
-            new Error(
-              `Generation is unavailable for ${context.binding.kind} Conversation context.`,
-            ),
-            { code: 'GENERATION_DSH_CONTEXT_UNSUPPORTED' },
-          );
-        }
-        const workspaceContext = asWorkspaceContext(context);
-        const resolution = await options.workspaceGrants.resolveAuthorizedWorkspace(
-          workspaceContext.binding.workspaceGrantId,
-          workspaceContext.binding.workspaceId,
-        );
+        const resolved = await resolveGenerationOwner(context);
         return createPurposeGenerationJobPort({
-          jobs: await options.generationRuntime.getJobs({
-            owner: { kind: 'workspace', workspaceId: resolution.workspace.workspaceId },
-            root: resolution.workspace.workspacePath,
-          }),
-          bindings: purposeBindings(
-            options.configuration.getWorkspaceConfig({
-              workspaceId: resolution.workspace.workspaceId,
-              workspacePath: resolution.workspace.workspacePath,
-            }),
-          ),
+          jobs: resolved.jobs,
+          bindings: purposeBindings(resolved.config),
         });
       },
+      ...(options.comfyUi
+        ? {
+            submitComfyUi: async ({ context, request, submission }) => {
+              const binding = await options.comfyUi!.bindings.get('comfyui');
+              if (!binding?.endpoint) {
+                throw Object.assign(
+                  new Error('ComfyUI requires an explicit configured loopback endpoint.'),
+                  { code: 'GENERATION_DSH_COMFYUI_UNCONFIGURED' },
+                );
+              }
+              const resolved = await resolveGenerationOwner(context);
+              const clientDigest = createHash('sha256')
+                .update(`${request.sessionId}\0${request.turn}\0${request.toolCallId}`)
+                .digest('hex')
+                .slice(0, 24);
+              const snapshot = await resolved.jobs.submitGeneration({
+                lifecycleMode: submission.lifecycleMode,
+                generationType: 'workflow',
+                providerId: 'comfyui',
+                request: {
+                  endpoint: binding.endpoint,
+                  clientId: `openneko-${clientDigest}`,
+                  workflow: submission.workflow,
+                  outputKind: submission.outputKind,
+                  inputBindings: submission.inputBindings,
+                },
+              });
+              return { snapshot, jobs: resolved.jobs };
+            },
+          }
+        : {}),
     },
     canvas: {
       resolveService: async (context) => {

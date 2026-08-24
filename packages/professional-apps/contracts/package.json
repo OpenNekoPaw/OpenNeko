@@ -1,0 +1,21 @@
+{
+  "name": "@neko/professional-apps-contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./host": "./src/host.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neko/content": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

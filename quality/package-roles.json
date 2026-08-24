@@ -289,6 +289,33 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/professional-apps/contracts",
+      "name": "@neko/professional-apps-contracts",
+      "family": "professional-apps",
+      "roles": ["contracts"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/professional-apps/node",
+      "name": "@neko/professional-apps-node",
+      "family": "professional-apps",
+      "roles": ["application", "node"],
+      "runtimes": ["host-neutral", "node"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/professional-apps/webview",
+      "name": "@neko/professional-apps-webview",
+      "family": "professional-apps",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/host",
       "name": "@neko/host",
       "family": "host",

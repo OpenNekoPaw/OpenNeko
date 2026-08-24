@@ -100,6 +100,57 @@ describe('DSH Host adapters for the W2 domain Tool slice', () => {
     });
   });
 
+  it('routes Host-bound ComfyUI submission through the same Generation lifecycle without model bindings', async () => {
+    const resolvePurposeJobs = vi.fn();
+    const workflowSnapshot: GenerationJobSnapshot = {
+      ref: { kind: 'generation', jobId: 'comfyui-job-1' },
+      phase: 'succeeded',
+      createdAt: 1,
+      updatedAt: 2,
+      lifecycleMode: 'detached',
+      request: {
+        generationType: 'workflow',
+        providerId: 'comfyui',
+        request: {
+          endpoint: 'http://127.0.0.1:8188',
+          clientId: 'openneko-host-owned',
+          workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
+          outputKind: 'image',
+          inputBindings: [],
+        },
+      },
+      progress: { stage: 'completed', percent: 100 },
+      resultLocators: [
+        { file: { authority: 'workspace', path: 'neko/generated/image/exact.png' } },
+      ],
+    };
+    const submit = vi.fn(async () => ({
+      snapshot: workflowSnapshot,
+      jobs: { observeGeneration: vi.fn() },
+    }));
+    const adapter = new GenerationDshHostAdapter(resolvePurposeJobs, undefined, undefined, {
+      submit,
+    });
+
+    const response = await adapter.execute(
+      request('openneko.generation', 'submit-comfyui', {
+        lifecycleMode: 'detached',
+        workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
+        outputKind: 'image',
+        inputBindings: [],
+      }),
+    );
+
+    expect(response).toMatchObject({ outcome: 'success', jobId: 'comfyui-job-1' });
+    expect(submit).toHaveBeenCalledWith({
+      lifecycleMode: 'detached',
+      workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
+      outputKind: 'image',
+      inputBindings: [],
+    });
+    expect(resolvePurposeJobs).not.toHaveBeenCalled();
+  });
+
   it('projects each distinct Generation lifecycle snapshot through the exact Tool request', async () => {
     const jobs = createGenerationJobs();
     const submitted = createGenerationSnapshot();

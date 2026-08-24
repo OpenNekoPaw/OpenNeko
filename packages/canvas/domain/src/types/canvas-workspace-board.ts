@@ -420,8 +420,14 @@ function createCanvasMaterialGenerationContext(
 function projectGenerationJobSnapshot(
   snapshot: GenerationJobSnapshot,
 ): CanvasGenerationProjectionSnapshot {
-  const request = snapshot.request.request;
-  const recipe = generationRecipe(snapshot.request);
+  const jobRequest = snapshot.request;
+  if (jobRequest.generationType === 'workflow') {
+    throw new Error(
+      'ComfyUI workflow Jobs cannot be projected as editable Canvas Generation Recipes.',
+    );
+  }
+  const request = jobRequest.request;
+  const recipe = generationRecipe(jobRequest);
   const parameters: CanvasMaterialGenerationContext = (() => {
     switch (snapshot.request.generationType) {
       case 'prompt':
@@ -453,6 +459,8 @@ function projectGenerationJobSnapshot(
         return snapshot.request.request.duration
           ? { duration: snapshot.request.request.duration }
           : {};
+      case 'workflow':
+        throw new Error('ComfyUI workflow projection requires a dedicated Canvas recipe contract.');
     }
   })();
   const summary: CanvasMaterialGenerationContext = {
@@ -479,6 +487,9 @@ function projectGenerationJobSnapshot(
 }
 
 function generationRecipe(request: GenerationJobSnapshot['request']): GenerationRecipe {
+  if (request.generationType === 'workflow') {
+    throw new Error('ComfyUI workflow Jobs are not Canvas Generation Recipes.');
+  }
   const model = {
     purpose: generationRecipePurpose(request.generationType),
     providerId: request.providerId,
@@ -562,6 +573,9 @@ function generationRecipe(request: GenerationJobSnapshot['request']): Generation
 function generationRecipePurpose(
   generationType: GenerationJobSnapshot['request']['generationType'],
 ): GenerationRecipePurpose {
+  if (generationType === 'workflow') {
+    throw new Error('ComfyUI workflow Jobs do not use a Canvas model purpose.');
+  }
   if (generationType === 'prompt') return 'canvas.prompt';
   if (
     generationType === 'text-to-image' ||
@@ -582,6 +596,7 @@ function generationRecipePurpose(
 }
 
 function generationJobTitle(snapshot: GenerationJobSnapshot): string {
+  if (snapshot.request.generationType === 'workflow') return 'Run ComfyUI workflow';
   const model = `${snapshot.request.providerId}/${snapshot.request.modelId}`;
   switch (snapshot.request.generationType) {
     case 'prompt':
@@ -605,6 +620,7 @@ function generationJobTitle(snapshot: GenerationJobSnapshot): string {
 function generationMediaKind(
   generationType: GenerationJobSnapshot['request']['generationType'],
 ): CanvasGenerationProjectionSnapshot['mediaKind'] {
+  if (generationType === 'workflow') return 'image';
   if (generationType === 'prompt') return 'document';
   if (
     generationType === 'text-to-image' ||

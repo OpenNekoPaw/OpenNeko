@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationExecutionPort, GenerationJobSnapshot } from '@neko/generation';
+import type { ComfyUiWorkflowExecutionPort } from '@neko/generation/comfyui';
 import { createNodeWorkspaceResourceCacheMetadataBinding } from '@neko/local-metadata/node';
 import { createNodeGenerationJobOwner } from '../node-generation-job-owner';
 
@@ -139,6 +140,72 @@ describe('createNodeGenerationJobOwner', () => {
     });
     await expect(fs.readFile(path.join(workspaceRoot, locator!.file.path), 'utf8')).resolves.toBe(
       '# Generated scene',
+    );
+    await owner.dispose();
+  });
+
+  it('commits only exact ComfyUI history bytes without a fabricated model identity', async () => {
+    const root = await createTemporaryDirectory();
+    const homedir = path.join(root, 'home');
+    const workspaceRoot = path.join(root, 'workspace');
+    await Promise.all([fs.mkdir(homedir), fs.mkdir(workspaceRoot)]);
+    const execution = createExecution(path.join(root, 'unused.png'));
+    const comfyUiExecution: ComfyUiWorkflowExecutionPort = {
+      generateWorkflow: vi.fn(async (request, options) => {
+        await options?.onExternalTask?.({
+          providerId: 'comfyui',
+          externalTaskId: 'prompt-exact',
+        });
+        return {
+          type: 'workflow' as const,
+          providerId: 'comfyui' as const,
+          promptId: 'prompt-exact',
+          request,
+          outputs: [
+            {
+              descriptor: { filename: 'exact.png', subfolder: '', outputType: 'output' },
+              mimeType: 'image/png',
+              bytes: new Uint8Array([137, 80, 78, 71]),
+            },
+          ],
+        };
+      }),
+      describeWorkflowTask: vi.fn(),
+      cancelWorkflowTask: vi.fn(),
+    };
+    const owner = await createNodeGenerationJobOwner({
+      owner: { kind: 'workspace', workspaceId: WORKSPACE_ID },
+      root: workspaceRoot,
+      homedir,
+      mediaExecution: execution,
+      promptExecution: execution,
+      comfyUiExecution,
+    });
+    const request = {
+      endpoint: 'http://127.0.0.1:8188',
+      clientId: 'openneko-job-1',
+      workflow: { '3': { class_type: 'KSampler', inputs: { seed: 42 } } },
+      outputKind: 'image' as const,
+      inputBindings: [],
+    };
+
+    const started = await owner.jobs.submitGeneration({
+      lifecycleMode: 'detached',
+      generationType: 'workflow',
+      providerId: 'comfyui',
+      request,
+    });
+    const completed = await waitForTerminal(owner.jobs.observeGeneration(started.ref));
+
+    expect(completed, completed.failure?.message).toMatchObject({
+      phase: 'succeeded',
+      providerTask: { providerId: 'comfyui', externalTaskId: 'prompt-exact' },
+    });
+    expect('modelId' in completed.request).toBe(false);
+    const locator = completed.resultLocators?.[0];
+    expect(locator?.file.path).toMatch(/^neko\/generated\/image\//u);
+    await expect(fs.readFile(path.join(workspaceRoot, locator!.file.path))).resolves.toEqual(
+      Buffer.from([137, 80, 78, 71]),
     );
     await owner.dispose();
   });

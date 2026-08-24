@@ -90,7 +90,7 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
   }
 
   private async generate(
-    generationType: MediaGenerationType,
+    generationType: Exclude<MediaGenerationType, 'workflow'>,
     request: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest,
     options: MediaGenerationExecutionOptions,
   ): Promise<MediaGenerationResult> {
@@ -134,7 +134,7 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
   }
 
   private async prepareGeneration(
-    generationType: MediaGenerationType,
+    generationType: Exclude<MediaGenerationType, 'workflow'>,
     initialRequest: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest,
   ): Promise<PreparedMediaGeneration> {
     let request = initialRequest;
