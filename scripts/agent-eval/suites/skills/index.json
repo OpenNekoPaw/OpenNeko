@@ -5,6 +5,7 @@
     { "suiteId": "skill.audio-mixing", "path": "audio-mixing/suite.json", "ownerId": "audio-mixing", "targetKind": "skill" },
     { "suiteId": "skill.color-grading", "path": "color-grading/suite.json", "ownerId": "color-grading", "targetKind": "skill" },
     { "suiteId": "skill.character-creator", "path": "character-creator/suite.json", "ownerId": "character-creator", "targetKind": "skill" },
+    { "suiteId": "skill.content-authoring", "path": "content-authoring/suite.json", "ownerId": "content-authoring", "targetKind": "skill" },
     { "suiteId": "skill.evaluation-artifact-author", "path": "evaluation-artifact-author/suite.json", "ownerId": "evaluation-artifact-author", "targetKind": "skill" },
     { "suiteId": "skill.image", "path": "image/suite.json", "ownerId": "image", "targetKind": "skill" },
     { "suiteId": "skill.media-production", "path": "media-production/suite.json", "ownerId": "media-production", "targetKind": "skill" },

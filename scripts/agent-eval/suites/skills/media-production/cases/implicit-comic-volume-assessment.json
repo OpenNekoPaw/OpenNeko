@@ -1,0 +1,105 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "implicit-comic-volume-assessment",
+  "suiteId": "skill.media-production",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Ask for an animation adaptation plan from a 240-page image-comic evidence record after only three pages were inspected, without naming a Skill.",
+    "canonicalPath": [
+      "ordinary Chinese adaptation request",
+      "comic-volume-evidence.md source read",
+      "implicit builtin media-production Skill",
+      "adaptation-feasibility relative guidance",
+      "bounded adaptation-volume assessment"
+    ],
+    "observables": [
+      {
+        "ref": "volume-assessment-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipt, source read, configured model, explicit coverage limit, appropriate current document, and absent unsupported fixed-format claims.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent treats the three-page inspection as insufficient for whole-volume scale, delivers a bounded coverage and adaptation-volume assessment, keeps format conditional, and identifies the next source-review batch.",
+    "expectedFailure": "Missing media-production receipt, claiming complete source analysis, choosing 12 episodes at 24 minutes, or producing a complete episode table fails."
+  },
+  "fixtureRefs": ["comic-volume-planning-workspace"],
+  "runtimeProfileId": "plan-markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "读取 @comic-volume-evidence.md。基于当前证据为这部漫画设计动画化方案：先判断适合什么篇幅，并生成当前阶段合适、可供创作者继续评审的文档。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 240000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "volume-assessment-facts"
+    },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-production",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-production",
+        "fingerprint": "sha256:7fe8c0d340a0957d8507a011b19abf0cd55ca4700e8a5fc0f34adc0155cfcef0"
+      },
+      "status": "injected",
+      "evidenceRef": "volume-assessment-facts"
+    },
+    {
+      "id": "model",
+      "kind": "model",
+      "profileId": "configured-default",
+      "evidenceRef": "volume-assessment-facts"
+    },
+    {
+      "id": "read",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "success",
+      "evidenceRef": "volume-assessment-facts"
+    },
+    {
+      "id": "output",
+      "kind": "structured-output",
+      "format": "markdown",
+      "requiredFields": ["240", "3", "覆盖", "不足", "体量评估", "下一步"],
+      "forbiddenFields": [
+        "12 集",
+        "12集",
+        "每集 24",
+        "每集24",
+        "第一季结构",
+        "全卷分析完成",
+        "完整分集表"
+      ],
+      "locale": "zh-cn",
+      "evidenceRef": "volume-assessment-facts"
+    },
+    {
+      "id": "no-image",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "absent",
+      "evidenceRef": "volume-assessment-facts"
+    },
+    {
+      "id": "no-video",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "volume-assessment-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 240000, "repetitions": 3 }
+}

@@ -1,0 +1,81 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "explicit-multi-builtin-injection",
+  "suiteId": "agent-runtime.skill-runtime",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Activate two ordered user-invocable builtin Skills in one Composer input and preserve one user request.",
+    "canonicalPath": [
+      "ordered multi-Skill Composer input",
+      "one exact Session catalog observation",
+      "DSH native explicit injection",
+      "two Skill receipts",
+      "one terminal turn"
+    ],
+    "observables": [
+      {
+        "ref": "multi-skill-facts",
+        "kind": "runtime-fact",
+        "description": "Both exact Skill receipts, one DSH turn, configured model, and no ordinary-prompt fallback.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Both content-authoring and storyboard are injected in order and jointly shape one response to the preserved request.",
+    "expectedFailure": "Only one receipt, stale Skill fallback to prose, a primary-Skill selection, or multiple turns fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$content-authoring $storyboard 为只有封面证据的雨夜车站动画给出最小可继续方案。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "multi-skill-facts"
+    },
+    {
+      "id": "content-authoring",
+      "kind": "skill",
+      "identity": {
+        "name": "content-authoring",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "content-authoring",
+        "fingerprint": "sha256:700fccbf955dc206bbe1cf4c797842b5a15e1dd1d549a1051ddb49aa0d8b24ba"
+      },
+      "status": "injected",
+      "evidenceRef": "multi-skill-facts"
+    },
+    {
+      "id": "storyboard",
+      "kind": "skill",
+      "identity": {
+        "name": "storyboard",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "storyboard",
+        "fingerprint": "sha256:1319707ec9c960b1e60193dc9d329aa937683b8e6ac497483ef194c616a297f9"
+      },
+      "status": "injected",
+      "evidenceRef": "multi-skill-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "non-empty",
+      "evidenceRef": "multi-skill-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 2 }
+}

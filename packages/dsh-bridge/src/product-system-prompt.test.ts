@@ -14,4 +14,21 @@ describe('OpenNeko DSH product system prompt', () => {
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(/CompositeArtifact|composite artifact/u);
     expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(/fenced JSON/u);
   });
+
+  it('defaults to progressive output without owning document templates or Skill selection', () => {
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain('smallest useful result');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'Expand when the user explicitly asks for detail',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).toContain(
+      'does not by itself require a complete document outline',
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toContain('active artifact profile');
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
+      /primary Skill|single Skill|fixed Skill|risk matrix is required|always include/u,
+    );
+    expect(OPENNEKO_PRODUCT_SYSTEM_PROMPT).not.toMatch(
+      /creative proposal fields|analysis report fields|project proposal fields/u,
+    );
+  });
 });

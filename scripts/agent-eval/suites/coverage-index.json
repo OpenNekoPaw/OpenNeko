@@ -9,6 +9,12 @@
     },
     {
       "kind": "builtin-skill",
+      "id": "content-authoring",
+      "disposition": "suite",
+      "suiteIds": ["skill.content-authoring"]
+    },
+    {
+      "kind": "builtin-skill",
       "id": "storyboard",
       "disposition": "suite",
       "suiteIds": ["skill.storyboard"]

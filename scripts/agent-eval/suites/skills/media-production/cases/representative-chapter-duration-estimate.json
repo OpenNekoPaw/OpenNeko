@@ -1,0 +1,104 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "representative-chapter-duration-estimate",
+  "suiteId": "skill.media-production",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Ask for a concise provisional animation-duration estimate from one fully reviewed representative comic chapter, without naming a Skill.",
+    "canonicalPath": [
+      "ordinary Chinese adaptation estimate request",
+      "chapter-sample-evidence.md source read",
+      "implicit builtin media-production Skill",
+      "adaptation-feasibility relative guidance",
+      "work-specific provisional range"
+    ],
+    "observables": [
+      {
+        "ref": "chapter-estimate-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Skill receipt, source read, configured model, reconstructed chapter range, method, confidence and absent universal or final-format claims.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent uses the reviewed 24-page chapter as a work-specific calibration, reports a provisional 5–6 minute range with method and medium confidence, and preserves whole-volume uncertainty.",
+    "expectedFailure": "Rejecting all estimation, converting pages by a universal rate, or promoting one chapter into a fixed whole-volume format fails."
+  },
+  "fixtureRefs": ["comic-volume-planning-workspace"],
+  "runtimeProfileId": "plan-markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "读取 @chapter-sample-evidence.md。请基于这个局部章节样本，简洁评估其动画化时长，并说明这个估算能否直接用于全卷。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 240000 }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "chapter-estimate-facts"
+    },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "media-production",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "media-production",
+        "fingerprint": "sha256:7fe8c0d340a0957d8507a011b19abf0cd55ca4700e8a5fc0f34adc0155cfcef0"
+      },
+      "status": "injected",
+      "evidenceRef": "chapter-estimate-facts"
+    },
+    {
+      "id": "model",
+      "kind": "model",
+      "profileId": "configured-default",
+      "evidenceRef": "chapter-estimate-facts"
+    },
+    {
+      "id": "read",
+      "kind": "tool-call",
+      "name": "Read",
+      "status": "success",
+      "evidenceRef": "chapter-estimate-facts"
+    },
+    {
+      "id": "output",
+      "kind": "structured-output",
+      "format": "markdown",
+      "requiredFields": ["24", "5", "6", "分钟", "样本", "置信", "全卷"],
+      "forbiddenFields": [
+        "每 24 页固定 5～6 分钟",
+        "每24页固定5～6分钟",
+        "全卷确定为",
+        "12 集",
+        "12集",
+        "完整分集表"
+      ],
+      "locale": "zh-cn",
+      "evidenceRef": "chapter-estimate-facts"
+    },
+    {
+      "id": "no-image",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "absent",
+      "evidenceRef": "chapter-estimate-facts"
+    },
+    {
+      "id": "no-video",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "absent",
+      "evidenceRef": "chapter-estimate-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 240000, "repetitions": 3 }
+}

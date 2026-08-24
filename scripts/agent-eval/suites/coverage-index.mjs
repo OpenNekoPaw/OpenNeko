@@ -30,6 +30,7 @@ const COVERAGE_INDEX_SCHEMA = s.object({
 
 export const EXPECTED_BUILTIN_SKILLS = Object.freeze([
   'skill-creator',
+  'content-authoring',
   'character-creator',
   'world-creator',
   'storyboard',

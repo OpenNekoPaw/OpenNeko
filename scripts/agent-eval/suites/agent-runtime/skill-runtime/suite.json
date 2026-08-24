@@ -39,6 +39,12 @@
       "visibility": "public"
     },
     {
+      "id": "explicit-multi-builtin-injection",
+      "file": "cases/explicit-multi-builtin-injection.json",
+      "group": "canonical",
+      "visibility": "public"
+    },
+    {
       "id": "model-selected-read-without-approval",
       "file": "cases/model-selected-read-without-approval.json",
       "group": "regression",
