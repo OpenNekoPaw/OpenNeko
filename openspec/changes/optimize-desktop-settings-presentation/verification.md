@@ -69,7 +69,7 @@ Acceptance inventory:
 - Each directory owns its own add action; a new Provider persists that directory's exact `supported_model_families` value through the canonical Host configuration authority.
 - There is no outer Provider management panel, shared add action, mixed directory or pending/unconfigured directory.
 - Local Ollama is dialogue-only and credential-free. Existing Providers without explicit family metadata are projected from their configured models; an empty existing Provider uses the canonical dialogue default instead of creating a third directory.
-- Custom Provider deletion is available on the Provider card with explicit confirmation. Host rejects builtin deletion and Providers that still own models, removes exact empty custom Providers and delegates credential cleanup to the credential authority with configuration restoration on cleanup failure.
+- Every config-backed Provider exposes deletion on the Provider card with explicit confirmation. Host rejects Providers that still own models, removes exact empty Providers and delegates credential cleanup to the credential authority with configuration restoration on cleanup failure. TOML-only preset metadata does not hide the action or create a second Provider catalog.
 
 Automated evidence:
 
@@ -82,3 +82,14 @@ Automated evidence:
 Visible Electron validation was attempted with the authoritative `desktop-ai-model-settings` development scenario. The isolated application could not start because Desktop process `74442` already owns this checkout's Vite bundle. The runner failed visibly before CDP interaction and preserved the report at `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-24T04-26-16.469Z-desktop-ai-model-settings-development/report.json`; the existing process was not interrupted. The scenario itself now asserts exactly two directories, two per-directory add actions, no outer management wrapper, local dialogue-only behavior, direct card deletion and post-delete projection.
 
 Residual risk: new Provider-directory pixels and direct-delete confirmation have not been inspected in a fresh Electron process because of the active bundle owner. Component DOM behavior and responsive structure are covered by focused tests; visual acceptance should be rerun after process `74442` exits naturally.
+
+## Canonical Provider Deletion Evidence
+
+- The strict Renderer projection no longer contains `builtin`; config-only preset metadata is rejected as an
+  unknown projection field.
+- Focused contract/service/ConfigManager/Desktop runtime/Renderer tests passed 80/80 and prove every config-backed
+  Provider exposes deletion, Providers with models remain protected, and edit/delete operations persist through
+  the single `config.toml` authority while credentials remain owned by `ProviderCredentialAuthority`.
+- The updated isolated Electron scenario also verifies post-delete TOML content, but its current run was blocked
+  before launch by existing Desktop process `95583`. Report:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-24T12-27-21.934Z-desktop-ai-model-settings-development/report.json`.

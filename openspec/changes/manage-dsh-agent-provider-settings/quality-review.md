@@ -57,14 +57,16 @@ canonical `connectionKind`, while dialogue/generation grouping continues to deri
 Ollama is mapped by the existing DSH Provider runtime adapter and is rejected for non-LLM model creation; no
 second local-model registry, endpoint fallback or credential path was added.
 
-Builtin Provider protocols are immutable through the simplified editor. Custom protocol changes recompute
-connection kind, credential requirement and authorization metadata as one canonical record update; Ollama
-requests carrying an API key fail before either configuration or credential authority is mutated.
+Provider protocol changes recompute connection kind, credential requirement and authorization metadata as one
+canonical record update; protocol-specific metadata is preserved only when the effective protocol is unchanged.
+Ollama requests carrying an API key fail before either configuration or credential authority is mutated.
 
-Deletion is owned by the Host service. It requires exact identity, rejects builtin Providers, Providers that still
-own models and models referenced by any default. Provider configuration is removed before credential cleanup and
-restored if the credential authority fails, protecting user configuration without reporting false success. The
-Renderer only requests the operation after explicit confirmation and never receives secret bytes.
+Deletion is owned by the Host service. It requires exact identity, rejects Providers that still own models and
+models referenced by any default. Provider configuration is removed before credential cleanup and
+restored if the credential authority fails, protecting user configuration without reporting false success. Every
+Provider record comes from the canonical TOML owner; config-only `builtin` metadata is neither projected nor used
+as deletion authority. The Renderer only requests the operation after explicit confirmation and never receives
+secret bytes.
 
 No blocking quality findings were found in the scoped diff. The new Electron acceptance scenario is advisory
 blocked by development process `74442`, which owns the checkout's Vite bundle. The launcher consequently timed

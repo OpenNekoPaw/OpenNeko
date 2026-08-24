@@ -7,7 +7,7 @@
 - `pnpm check:openspec` — 168 governed changes/specs passed strict validation.
 - `pnpm test:agent:eval` — 45 files / 314 tests and all 27 indexed suites / 84 cases passed key-free validation.
 
-The strict response contract rejects secret-bearing projections. Provider credentials are written only through `ProviderCredentialAuthority`; provider/model facts remain in the canonical DSH-backed `ConfigManager` path. Editing a builtin Provider preserves its canonical protocol metadata; changing a custom Provider protocol recomputes its connection and authentication metadata, and local Ollama rejects secret submission.
+The strict response contract rejects secret-bearing projections and config-only preset metadata. Provider credentials are written only through `ProviderCredentialAuthority`; provider/model facts remain in the canonical DSH-backed `ConfigManager` path. Editing a Provider preserves protocol-specific metadata only while its effective protocol is unchanged; changing protocol recomputes connection and authentication metadata, and local Ollama rejects secret submission.
 
 ## Agent and UI validation
 
@@ -61,16 +61,16 @@ was changed during validation.
 
 ## Local Provider and safe-removal follow-up
 
-- `@neko/host` contract/service tests prove that Ollama projects as `connectionKind: local`,
-  `credentialStatus: not-required` and `builtin: true` without reading a secret. They also prove exact
-  model/Provider removal, default-model protection, builtin-Provider protection, owned-model protection and
+- `@neko/host` contract/service tests prove that Ollama projects as `connectionKind: local` and
+  `credentialStatus: not-required` without reading a secret or projecting config-only preset metadata. They also prove exact
+  model/Provider removal, default-model protection, owned-model protection and
   Provider restoration when credential cleanup fails.
 - Desktop DSH projection tests prove that canonical Ollama uses `openai-completions`, normalizes its local
   `/api` endpoint to `/v1`, preserves the exact model identity and does not read credentials or switch
   Provider.
 - Renderer tests prove that local Ollama remains in the dialogue group, exposes no password field, limits
-  new models to `llm`, hides Provider deletion for builtin entries, and requires explicit two-step deletion
-  for custom models and empty custom Providers.
+  new models to `llm`, exposes deletion for every config-backed Provider, and requires explicit two-step deletion
+  for models and empty Providers.
 - `pnpm test:agent:eval` passed 45 files / 314 tests and all 27 indexed suites / 84 cases. The affected
   behavior reuses `agent-runtime.model-binding`: its positive case rejects provider/model fallback and its
   unavailable-model case rejects implicit substitution. A real provider-backed case was not started because
@@ -82,3 +82,22 @@ was changed during validation.
   development process `74442` already owns this checkout's Vite bundle. The launcher reports a CDP timeout
   because that child startup is rejected. The latest runner report is under
   `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-24T01-37-02.636Z-desktop-ai-model-settings-development/report.json`.
+
+## Canonical config ownership correction
+
+- `DesktopAiProviderView` no longer projects `builtin`; strict response decoding rejects the field so TOML-only
+  metadata cannot become a Renderer permission source.
+- Provider save and delete both mutate the single `FileUserConfigManager`-owned `config.toml`. A real temporary
+  TOML service test proves that editing rewrites the exact Provider, removes stale `builtin` metadata, and deleting
+  removes the exact Provider while delegating credential cleanup to `ProviderCredentialAuthority`.
+- All config-backed Provider cards and editors expose deletion. The Host still rejects Providers that own models,
+  rejects default-model deletion and restores Provider configuration if credential cleanup fails.
+- Focused contract/service/ConfigManager/Desktop runtime/Renderer tests passed 80/80; focused ESLint, Host and
+  Desktop typechecks, strict OpenSpec validation and formatting passed.
+- Agent Evaluation disposition: excluded. This correction does not change session routing, provider selection or
+  model-binding behavior; deterministic config-owner, strict-contract and Renderer interaction tests cover the
+  affected path.
+- The isolated Electron scenario was updated to require deletion on a fixture Provider carrying `builtin = true`
+  and to read its fixture `config.toml` after deletion. Execution was blocked before launch because Desktop process
+  `95583` already owned this checkout's Vite bundle; the existing process was not interrupted. The fail-visible
+  report is `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-24T12-27-21.934Z-desktop-ai-model-settings-development/report.json`.

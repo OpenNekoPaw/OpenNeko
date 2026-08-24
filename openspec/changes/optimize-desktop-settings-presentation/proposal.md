@@ -11,7 +11,7 @@
 - 窄 overlay 自动收敛导航和设置行，保持控件可达且不横向溢出。
 - Agent 模型设置把对话 Provider 与生成 Provider 作为两个直接目录呈现；每个目录拥有自己的新增入口，不再套用总 Provider 面板，也不生成“待配置 Provider”兜底分组。
 - Provider 的模型族归属由 canonical Provider 配置持久化；已有未声明归属的 Provider 只从其 authoritative 模型事实与协议能力生成当前投影，不写入第二份 Renderer 分类状态。
-- 自定义 Provider 可从详情中显式删除；删除继续由 Host authority 校验 builtin、关联模型与凭据清理，Renderer 不直接修改配置或密钥。
+- 配置文件中的 Provider 可从目录或详情中显式删除；删除继续由 Host authority 校验关联模型与凭据清理，Renderer 不直接修改配置或密钥，也不依据 `builtin` 元数据隐藏操作。
 
 ## Capabilities
 

@@ -44,5 +44,5 @@
 - [x] 8.1 Audit Provider/model ownership and define canonical model-family classification without a Renderer-only or parallel config path.
 - [x] 8.2 Add Provider model-family contract persistence, strict decoding and Host projection/validation tests.
 - [x] 8.3 Replace the outer Provider panel, shared add action and pending group with two direct sibling directories and per-directory add actions.
-- [x] 8.4 Keep exact custom Provider deletion available with builtin/model/credential safeguards and local diagnostics.
+- [x] 8.4 Keep exact config-backed Provider deletion available with model/credential safeguards and local diagnostics; remove `builtin`-based UI and Host blocking.
 - [x] 8.5 Run focused tests, affected typechecks, strict OpenSpec, quality review and visible Electron validation; record any runtime blocker.

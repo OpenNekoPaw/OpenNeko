@@ -34,7 +34,7 @@ Agent 配置文件入口直接位于 Agent 标题右侧，不再用单独的“�
 
 ### 7. 删除在 Host owner 中校验引用
 
-Renderer 只提交精确 Provider/model identity。Host model-settings service 拒绝删除内置 Provider、仍拥有模型的 Provider，以及被任一默认模型引用的模型；不得静默级联、选择替代默认项或遗留隐式 fallback。用户先显式删除/改绑模型，再删除自定义 Provider。Provider 配置删除后，credential authority 清理该精确 identity 的 SecretStorage 条目；TOML-owned credential 随 Provider 记录一起移除。每次成功删除都要求 DSH 重启重新物化，运行中的 Session 不变。
+Renderer 只提交精确 Provider/model identity。Provider 与模型事实只来自 canonical `~/.neko/config.toml`；`builtin` 等预置元数据不得成为第二份来源或删除权限。Host model-settings service 拒绝删除仍拥有模型的 Provider，以及被任一默认模型引用的模型；不得静默级联、选择替代默认项或遗留隐式 fallback。用户先显式删除/改绑模型，再删除配置文件中的 Provider。Provider 配置删除后，credential authority 清理该精确 identity 的 SecretStorage 条目；TOML-owned credential 随 Provider 记录一起移除。每次成功删除都要求 DSH 重启重新物化，运行中的 Session 不变。
 
 ## Runtime Boundary
 

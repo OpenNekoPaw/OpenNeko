@@ -16,7 +16,7 @@ Agent Provider 目录的五层分析：
 - 依赖：分类不依赖 Renderer 文案、卡片位置或加载顺序；凭据仍只经 Host credential authority，Renderer 不读取密钥。
 - 接口：`ProviderConfig.supportedModelFamilies` 是唯一持久分类；Desktop typed request/view 原样传递；模型仍由既有 `ModelType` contract 表达。
 - 扩展：一个 Provider 可以显式支持一个或两个模型族，并出现在对应目录；新增按钮创建时只声明所在目录的模型族。
-- 测试：覆盖双目录、独立新增、无待配置分组、刷新后分类稳定、模型族校验、builtin 保护、关联模型保护与凭据删除回滚。
+- 测试：覆盖双目录、独立新增、无待配置分组、刷新后分类稳定、模型族校验、所有 config-backed Provider 的删除入口、关联模型保护与凭据删除回滚。
 
 ## Goals / Non-Goals
 
@@ -65,7 +65,7 @@ Agent section 直接渲染“对话 Provider”和“生成 Provider”两个 si
 
 `ProviderConfig.supportedModelFamilies` 保存用户在新增时选择的目录归属。字段缺省不是旧配置成功路径：Host 从该 Provider 当前 authoritative models 推导投影；没有模型时只使用 provider protocol 的稳定能力语义（Ollama 及通用对话协议属于 dialogue），不制造“待配置”记录。Renderer 不缓存或写回推断结果。
 
-Provider 删除复用唯一 `delete-provider` application operation。builtin Provider 拒绝删除；仍拥有模型的 Provider 拒绝删除并显示局部 diagnostic；配置删除后凭据清理失败时恢复同一 Provider 配置并返回明确错误。没有 Renderer 直写 config、级联删除或静默凭据残留路径。
+Provider 删除复用唯一 `delete-provider` application operation。所有 Provider 都来自 canonical `~/.neko/config.toml`，Renderer 和 Host 不得用 `builtin` 元数据建立不可删除的平行目录；仍拥有模型的 Provider 拒绝删除并显示局部 diagnostic；配置删除后凭据清理失败时恢复同一 Provider 配置并返回明确错误。没有 Renderer 直写 config、级联删除或静默凭据残留路径。
 
 ## Risks / Trade-offs
 

@@ -115,17 +115,17 @@ Agent model settings SHALL present dialogue Providers and generation Providers a
 
 ### Requirement: Provider deletion is explicit and authority-owned
 
-Custom Providers SHALL expose a deletion action, while Host settings authority SHALL reject deletion of builtin Providers or Providers that still own configured models. Credential removal SHALL remain owned by the existing credential authority.
+Every config-backed Provider SHALL expose a deletion action, while Host settings authority SHALL reject Providers that still own configured models. TOML metadata SHALL NOT hide the action or make a configured Provider undeletable. Credential removal SHALL remain owned by the existing credential authority.
 
-#### Scenario: User deletes an empty custom Provider
+#### Scenario: User deletes an empty configured Provider
 
-- **WHEN** the user confirms deletion for a non-builtin Provider with no configured models
+- **WHEN** the user confirms deletion for a config-backed Provider with no configured models
 - **THEN** the Host removes the exact Provider and its credential through the canonical operation
 - **AND** both Provider directories refresh from the returned projection
 
 #### Scenario: Provider cannot be deleted safely
 
-- **WHEN** the Provider is builtin, still owns models, or credential cleanup fails
+- **WHEN** the Provider still owns models or credential cleanup fails
 - **THEN** deletion fails visibly in the Agent section
 - **AND** unrelated Providers, models and Settings sections remain available
 - **AND** no Renderer-side cascade or silent credential residue is reported as success

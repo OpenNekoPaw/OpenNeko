@@ -68,3 +68,16 @@ The direct catalog, title action and wide Provider grouping are visually accepte
   catalog reflow remain uninspected. Re-run
   `node scripts/run-desktop-ui-functional.mjs --scenario desktop-ai-model-settings` after the existing
   development process exits.
+
+## Canonical config ownership correction
+
+- **Scope:** deletion visibility changed for config-backed Providers carrying preset metadata; no layout or token
+  change was introduced.
+- **Inventory:** the isolated scenario now requires the local Ollama fixture with `builtin = true` to expose the
+  same delete action, retains dialogue-only and no-secret checks, deletes an empty Provider, and verifies the exact
+  fixture TOML records are gone.
+- **Functional evidence:** Renderer tests pass the visible action and confirmation states; Host tests pass
+  owned-model protection and real temporary TOML edit/delete persistence.
+- **Result:** `blocked` for fresh Electron pixels because process `95583` owned the checkout's development bundle
+  before the scenario could launch. The existing process was not interrupted, and no visual acceptance is inferred
+  from deterministic tests.

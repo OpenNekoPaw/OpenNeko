@@ -21,8 +21,8 @@
 
 ## 4. Local Providers And Safe Removal
 
-- [x] 4.1 扩展严格 settings contract，投影本地来源、免凭据状态和内置属性，并增加精确 Provider/model 删除命令。
+- [x] 4.1 扩展严格 settings contract，投影本地来源与免凭据状态，并增加精确 Provider/model 删除命令；配置文件预置元数据不得进入 Renderer projection。
 - [x] 4.2 将 canonical Ollama Provider 投影到设置目录，并通过唯一 DSH profile materializer 映射其 OpenAI-compatible 本地执行端点。
-- [x] 4.3 在 Host owner 中拒绝删除内置 Provider、仍有模型的 Provider 和默认模型；成功删除后清理精确 Provider credential。
+- [x] 4.3 在 Host owner 中拒绝删除仍有模型的 Provider 和默认模型；所有 config-backed Provider 均可删除，成功后清理精确 Provider credential。
 - [x] 4.4 在 Provider/model 卡片中展示本地/云端标识与按需删除确认，不增加第三种能力分组。
 - [x] 4.5 运行 focused contract/service/runtime/UI 测试、Agent Evaluation key-free gate、typecheck、OpenSpec 与真实 Electron 验收；真实 Electron 新场景因共享开发进程占用启动锁明确记录为 blocked。

@@ -88,7 +88,7 @@ The settings projection SHALL identify local Providers from canonical connection
 
 ### Requirement: Provider and model removal is explicit and reference-safe
 
-The Host model-settings owner SHALL support exact custom Provider and model removal without silently cascading models, changing defaults or selecting a fallback Provider.
+The Host model-settings owner SHALL support exact config-backed Provider and model removal without silently cascading models, changing defaults or selecting a fallback Provider. A Provider metadata field SHALL NOT create a second builtin catalog or make a `~/.neko/config.toml` record undeletable.
 
 #### Scenario: A non-default model is deleted
 
@@ -102,14 +102,14 @@ The Host model-settings owner SHALL support exact custom Provider and model remo
 - **THEN** the request is rejected with a visible local diagnostic
 - **AND** the model and default reference remain unchanged
 
-#### Scenario: A custom Provider is deleted
+#### Scenario: A configured Provider is deleted
 
-- **WHEN** the user confirms deletion of a non-builtin Provider with no configured models
+- **WHEN** the user confirms deletion of a config-backed Provider with no configured models
 - **THEN** only that Provider and its exact credential are removed
 - **AND** sibling Providers and models remain available
 
 #### Scenario: Provider deletion is unsafe
 
-- **WHEN** the requested Provider is builtin or still owns configured models
+- **WHEN** the requested Provider still owns configured models
 - **THEN** the request is rejected with a visible local diagnostic
 - **AND** no model, default or Provider is silently changed

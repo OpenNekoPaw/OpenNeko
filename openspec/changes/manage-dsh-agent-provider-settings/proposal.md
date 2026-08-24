@@ -10,7 +10,7 @@ Agent 设置当前只能打开高级配置文件，无法安全查看和管理 D
 - 保留“打开高级配置”，不建立 `models.json` 或其他平行配置路径。
 - 明确 Provider catalog 在启动时物化：新增或结构修改后提示重启，运行中会话不被改写。
 - 将 canonical `ollama` 本地 Provider 投影到同一设置目录，并以连接来源标识“本地/云端”；能力分组仍只由模型类型派生。
-- 支持删除非内置 Provider 和模型；默认模型、仍拥有模型的 Provider 与内置 Provider 必须 fail-visible 拒绝删除。
+- 支持删除配置文件中的 Provider 和模型；默认模型与仍拥有模型的 Provider 必须 fail-visible 拒绝删除。Provider 是否可删除不得由 TOML 中的展示/预置元数据决定。
 
 ## Capabilities
 
