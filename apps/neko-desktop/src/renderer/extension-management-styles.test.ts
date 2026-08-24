@@ -14,12 +14,18 @@ describe('Extension management styles', () => {
     );
   });
 
-  it('uses bounded cards, content-width search and responsive layout for both package roots', () => {
+  it('uses bounded cards, flexible search and non-collapsing toolbar actions', () => {
     expect(styles).toMatch(
       /\.agent-extension-management-root \.management-surface-list\.is-grid,[\s\S]*?grid-template-columns:\s*repeat\(auto-fill, 214px\)/u,
     );
     expect(styles).toMatch(
-      /\.agent-extension-management-root \.management-search-field,[\s\S]*?width:\s*100%[\s\S]*?max-width:\s*none/u,
+      /\.agent-extension-management-root \.management-search-field,[\s\S]*?width:\s*auto[\s\S]*?min-width:\s*12rem[\s\S]*?flex:\s*1 1 24rem/u,
+    );
+    expect(styles).toMatch(
+      /\.agent-extension-management-root \.management-surface-toolbar > button,[\s\S]*?width:\s*auto;[\s\S]*?min-width:\s*max-content;[\s\S]*?flex:\s*0 0 auto;[\s\S]*?white-space:\s*nowrap/u,
+    );
+    expect(styles).toMatch(
+      /\.agent-extension-management-root \.management-segmented-control button,[\s\S]*?white-space:\s*nowrap/u,
     );
     expect(styles).toMatch(
       /@container extension-management \(max-width: 820px\)[\s\S]*?flex-basis:\s*100%/u,

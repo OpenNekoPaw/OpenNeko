@@ -92,11 +92,35 @@
 
 .agent-extension-management-root .management-search-field,
 .professional-application-management-root .management-search-field {
-  width: 100%;
+  width: auto;
   max-width: none;
+  min-width: 12rem;
   min-height: 36px;
-  flex: 1 1 100%;
+  flex: 1 1 24rem;
   border-radius: 8px;
+}
+
+.agent-extension-management-root .management-surface-toolbar > button,
+.professional-application-management-root .management-surface-toolbar > button {
+  display: inline-flex;
+  width: auto;
+  min-width: max-content;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.agent-extension-management-root .management-segmented-control,
+.professional-application-management-root .management-segmented-control {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.agent-extension-management-root .management-segmented-control button,
+.professional-application-management-root .management-segmented-control button {
+  white-space: nowrap;
 }
 
 .agent-extension-management-root .management-surface-list,
