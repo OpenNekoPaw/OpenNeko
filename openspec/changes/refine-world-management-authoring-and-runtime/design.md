@@ -169,9 +169,8 @@ Workbench 使用一个 owner-qualified scene，而不是 Workspace authoring Vie
 实施本 change 前完成一次 active-area governance：
 
 - 本 change 接管 Foundation 第一闭环的 management、Workspace authoring、portable package、creator assistance 和 deterministic runtime UI/product composition。
-- `define-world-topology-and-data-contracts` 与 `build-deterministic-world-experience-runtime` 只保留 Foundation 之外的 Story/Experience topology/runtime范围，或在无剩余范围时显式关闭；不得再次定义 WorldProject/Version/Run/Save owner。
-- `add-world-interaction-surface-and-desktop-loop` 删除被本 change 接管的 Library/Studio/Foundation Runtime范围，仅在未来完整 Experience surface仍有独立需求时保留。
-- `qualify-world-agent-and-realtime-capabilities` 与 `add-world-gameplay-and-agent-play-composition` 保持 gated，且不能成为基础运行的依赖。
+- 未实施的 World topology/runtime/surface/Agent/Gameplay proposals 从 active area 删除；其 Foundation 范围已由本 change 接管，不得再次定义 WorldProject/Version/Run/Save owner。
+- 完整 Story/Experience surface、Agent realtime 与 Gameplay 只保留在 `ROADMAP_CN.md` / `ROADMAP.md` 的 gated 方向中；出现真实用户证据后通过新的 focused OpenSpec 重新定义 owner、contract、数据和验收，不得成为基础运行的依赖。
 - `define-ai-native-interactive-world` 中“生产 World Management 全部 unavailable”的条款由本 change原子收敛为“基础 World闭环在全部门禁通过后可达；完整 WorldExperience仍 unavailable”。
 
 不得用 feature flag、registration priority或两个 scene kind 并行保留旧 Foundation UI。

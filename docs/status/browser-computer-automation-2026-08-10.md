@@ -3,7 +3,9 @@
 日期：2026-08-10
 > **状态说明（2026-08-20）：** 本文记录旧 OpenNeko Plugin/MCP/Pi 组合的审计快照，不再定义目标执行路径。`replace-pi-with-dsh-runtime-atomically` 接管 DSH MCP contribution、删除旧 runtime 与新 Evaluation；本文的 upstream compatibility、exact target、OS permission、approval 与 evidence 结论仍可作为输入。
 >
-> **后续处置（2026-08-22）：** `remove-unreachable-automation-management` 已删除本文记录的
+> **后续处置（2026-08-22）：** canonical
+> [`unreachable-automation-management-removal`](../../openspec/specs/unreachable-automation-management-removal/spec.md)
+> 约束已删除本文记录的
 > Plugin/Automation 专用管理 UI、IPC、preload bridge、Desktop adapter 与 Automation Webview。
 > 通用 Extensions 入口只投影 DSH-owned Skill/MCP，不承载 Plugin 或 Automation 专用配置；
 > contracts/node 安全规则仅作为 retained kernel 保留，当前没有 Desktop 产品消费者。

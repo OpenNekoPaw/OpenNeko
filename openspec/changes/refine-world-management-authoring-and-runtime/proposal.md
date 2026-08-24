@@ -13,7 +13,7 @@ World Foundation 已经具备 `WorldProject -> WorldVersion -> WorldRun -> World
 - 新增 builtin `world-creator` Skill 与 typed Agent Entry handoff，用于提出有来源、可审核的 World draft candidates；它复用 canonical Agent Composer、exact fresh WorldProject destination、World owner capability 和标准 approval，不建立第二 Agent controller，也不自动发布、运行或创建 Save。
 - 新增基础 World Runtime Workbench，围绕精确 `WorldRun` / `WorldSave` / branch 投影 WorldView、typed action、state/status 和 event timeline；离开场景卸载 Renderer Root，但不修改 durable records 或受保护后台 runtime。
 - 保留完整 World Story、Gameplay、WorldExperience composition、Agent Play、realtime image/video/spatial provider 和连续运行期结构改造为后续 gated capabilities。本变更不会用基础运行表面伪装完整 World Experience ready。
-- 对账并收敛尚未实施的 `define-world-topology-and-data-contracts`、`build-deterministic-world-experience-runtime`、`add-world-interaction-surface-and-desktop-loop`、`qualify-world-agent-and-realtime-capabilities` 与 `add-world-gameplay-and-agent-play-composition`：本变更接管 Foundation 第一闭环的管理/authoring/runtime product path；高级 Experience/Story/Gameplay/Agent/realtime 范围继续保持独立且 unavailable，禁止并行实现重叠 owner、contract、repository、scene 或 Webview Root。
+- 对账并关闭未实施的重叠 Foundation 与未来 gated World proposals：本变更接管 Foundation 第一闭环的管理/authoring/runtime product path；高级 Experience/Story/Gameplay/Agent/realtime 方向仅由 `ROADMAP_CN.md` / `ROADMAP.md` 的晋级门槛承载，继续保持 unavailable，未来出现真实用户证据时必须建立新的 focused OpenSpec，禁止并行实现重叠 owner、contract、repository、scene 或 Webview Root。
 
 ## Capabilities
 

@@ -82,10 +82,10 @@
 ## 6. W3 DSH-Owned Extension Management (Skill/MCP)
 
 - [ ] 6.1 确认 Skill/MCP 的实际发现/加载/启停/执行与内部 Plugin lifecycle 全部由 DSH profile 拥有；OpenNeko 不实现自研 Skill Host、MCP Manager、Plugin runtime。
-- [ ] 6.2 实现 OpenNeko 管理面只展示 Skill/MCP，并通过 bridge 投影 inventory/readiness/config/diagnostics、提交精确管理命令；不得展示 generic Plugin 管理，不得建立本地 extension catalog/config/readiness authority 或直接写 DSH storage。当前只读 snapshot 路径已由 `preserve-skill-mcp-extension-management` 恢复；mutation/config 仍保持未完成。
+- [ ] 6.2 实现 OpenNeko 管理面只展示 Skill/MCP，并通过 bridge 投影 inventory/readiness/config/diagnostics、提交精确管理命令；不得展示 generic Plugin 管理，不得建立本地 extension catalog/config/readiness authority 或直接写 DSH storage。当前只读 snapshot 路径已由 canonical [`skill-mcp-extension-management`](../../specs/skill-mcp-extension-management/spec.md) 约束恢复；mutation/config 仍保持未完成。
 - [x] 6.3 首版只加载随 OpenNeko 发布、官方维护并精确锁定的 DSH profile/plugins；Plugin 仅是内部 composition unit，拒绝第三方插件 runtime、第三方 Webview JS、任意第三方 JS 注入 Electron Main/DSH。development/product closure、官方 profile materializer、精确 package allowlist、tree/checksum/license gate 与缺失/额外 Plugin 拒绝测试均已完成；MCP contribution 功能缺口仍由 6.8/6.9 跟踪。
 - [ ] 6.4 实现单条 extension 注册/加载失败 fail-local：仅该 extension 不可用，sibling extension、Conversation、Workspace 保持可用。
-- [ ] 6.5 添加 extension 管理面 producer/consumer 测试：inventory/readiness/config/diagnostics 可重建、只读、不成为第二 authority；并 poison Plugin tab/catalog/install/config 路径。只读 Skill/MCP producer/consumer 与 Plugin 字段拒绝已由 `preserve-skill-mcp-extension-management` 覆盖，完整 config/command 仍待完成。
+- [ ] 6.5 添加 extension 管理面 producer/consumer 测试：inventory/readiness/config/diagnostics 可重建、只读、不成为第二 authority；并 poison Plugin tab/catalog/install/config 路径。只读 Skill/MCP producer/consumer 与 Plugin 字段拒绝已由 canonical [`skill-mcp-extension-management`](../../specs/skill-mcp-extension-management/spec.md) 约束覆盖，完整 config/command 仍待完成。
 - [x] 6.6 添加 poison 测试：自研 Skill Host、MCP Manager、Plugin runtime、try-next 注册或 wildcard factory 不能提供成功路径。Agent boundary、extension surface、dual-registration 与 retired-authority scans 已覆盖并通过；当前 Tool inventory 对同文件多 Tool 注册的计数缺口单独由 9.6/9.7 跟踪，不冒充本项的旧 runtime poison。
 - [x] 6.7 审计锁定的 DSH/ACP 公开 Skill、Settings、Plugin inventory、MCP 与 Attachment surface，记录 Skill API 可用、MCP/Settings wire contract 与非图片附件 blocker；证据见 `evidence/w3-dsh-extension-attachment-public-api-audit.md`，该审计不表示 production consumer 已完成。
 - [ ] 6.8 将 Browser Use 与 Computer Use 从旧 OpenNeko Plugin/MCP 资源迁为官方 DSH MCP contributions；DSH 拥有 connection/Tool lifecycle，Automation/Host 只拥有 exact target、OS permission、grant、approval 与 evidence。旧 `resources/extensions/plugins/*` 已删除并由空目录 poison 保护，相关 OpenNeko Plugin/MCP runtime 已不可达；官方 DSH MCP contribution 尚未形成可达产品调用路径，故保持未完成。
@@ -171,7 +171,7 @@
 ## 12. Documentation And Atomic Release
 
 - [ ] 12.1 更新架构文档/ADR，描述最终 DSH 独立子进程 + ACP JSON-RPC stdio + bridge 边界、Skill/MCP-only 产品扩展面、内部 Plugin composition、附件/感知、first-party domain Tools、Evaluation 与 OpenNeko retained authority。当前已将 Pi runtime ADR 标记为 superseded，并将 SQLite ADR 与相关 Agent ADR 的当前 owner/path 更新为 DSH Session JSONL + OpenNeko Conversation catalog/binding；剩余完整发布文档仍待最终矩阵后收口。
-- [x] 12.2 标记 `adopt-pi-agent-runtime` 与 `integrate-open-source-browser-and-computer-use` 的旧 Pi/Plugin/MCP execution path 为被本变更取代，不吸收独立 `purify-agent-contracts` 或 Agent Evaluation platform ownership；保留 Automation 的 upstream compatibility、target、OS permission、approval 与 evidence 规则。
+- [x] 12.2 标记 `adopt-pi-agent-runtime` 与 `integrate-open-source-browser-and-computer-use` 的旧 Pi/Plugin/MCP execution path 为被本变更取代，不引入无 live consumer 的 Agent domain extraction 或吸收 Agent Evaluation platform ownership；canonical dead-surface约束见 [`agent-dead-public-surface-removal`](../../specs/agent-dead-public-surface-removal/spec.md)，Automation 的 upstream compatibility、target、OS permission、approval 与 evidence 规则继续保留。
 - [x] 12.3 运行 `openspec validate replace-pi-with-dsh-runtime-atomically --strict` 与 `pnpm check:openspec`；112 项严格检查通过。
 - [ ] 12.4 运行 `neko-quality-review` workflow，关闭所有 blocking findings，记录 commands、evidence、unexecuted checks 与 residual risks。
 - [ ] 12.5 满足 machine release guard：Q0、W1-W8、deterministic、data-protection、Evaluation/non-release 证据齐备。

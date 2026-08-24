@@ -1,8 +1,5 @@
-# agent-dead-public-surface-removal Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change remove-dead-agent-public-surface. Update Purpose after archive.
-## Requirements
 ### Requirement: Dead pre-DSH Agent public surface is removed
 
 `@neko/agent-runtime` and `@neko/agent-contracts` MUST NOT re-export or retain the removed OpenNeko
@@ -43,3 +40,12 @@ Domain, another domain package or a replacement registry, and MUST NOT add a com
 - **WHEN** the repository searches for deleted module names and symbols
 - **THEN** no new package, public entry, adapter or alias re-exposes them
 - **AND** live package-owned domain facts and operations remain under their existing owners
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Dead pre-Pi Agent public surface is removed`
+- TO: `### Requirement: Dead pre-DSH Agent public surface is removed`
+- FROM: `### Requirement: Canonical Agent paths are preserved`
+- TO: `### Requirement: Canonical DSH Agent paths are preserved`
+- FROM: `### Requirement: No capability is migrated to another package`
+- TO: `### Requirement: No retired capability is migrated to another package`

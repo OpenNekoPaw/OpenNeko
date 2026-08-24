@@ -88,8 +88,9 @@ batch prove the following advisory inventory only:
 - the UI states that detection never installs an application, Skill, MCP server, node or model.
 
 Desktop composition and shared Skill/MCP/Professional Applications presentation are implemented by the
-separate extension-management UI batch. Its focused tests and visible UI evidence are recorded under
-`optimize-extension-management-presentation`. OS application selection/permission flow, exact-window
+separate extension-management UI batch. Its accepted presentation requirements are recorded in the
+canonical [`extension-management-responsive-presentation`](../../specs/extension-management-responsive-presentation/spec.md)
+specification. OS application selection/permission flow, exact-window
 Computer Use controls and a real Agent provider path remain task 6.4.
 
 ## Real ComfyUI fixture
