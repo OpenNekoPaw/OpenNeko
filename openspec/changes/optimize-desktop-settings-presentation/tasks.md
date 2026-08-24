@@ -58,3 +58,9 @@
 - [x] 10.1 Replace broad control-gray fills on Provider directories and the expanded Provider editor with raised surfaces and quiet borders.
 - [x] 10.2 Give model cards an explicit raised surface so their hierarchy remains stable inside the low-fill editor.
 - [x] 10.3 Run focused component validation, affected typecheck, strict OpenSpec and visible Electron inspection.
+
+## 11. Unify Provider Card Feedback
+
+- [x] 11.1 Move primary hover/focus feedback from the card's left segment to the complete Provider card surface.
+- [x] 11.2 Keep open/edit and delete as independent accessible controls without rendering the delete action as a second panel.
+- [x] 11.3 Run focused component validation, affected typecheck, strict OpenSpec and visible Electron inspection.

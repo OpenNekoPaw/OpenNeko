@@ -128,6 +128,8 @@ Every config-backed Provider SHALL expose a deletion action, while Host settings
 
 The deletion action SHALL remain a compact card action instead of reserving a full-height segmented column. Entering the destructive confirmation state SHALL keep an explicit cancel action adjacent to confirmation without replacing the Provider's primary open/edit target.
 
+The Provider identity, credential state and delete action SHALL read as one continuous card. Hovering or focusing the primary open/edit target SHALL apply feedback to the whole card rather than filling only the primary segment and visually splitting the delete action into a second panel.
+
 #### Scenario: User deletes an empty configured Provider
 
 - **WHEN** the user confirms deletion for a config-backed Provider with no configured models
@@ -140,6 +142,12 @@ The deletion action SHALL remain a compact card action instead of reserving a fu
 - **THEN** no delete operation is sent
 - **AND** the Provider card returns to its normal compact action state
 - **AND** the Provider card remains available as the primary open/edit target
+
+#### Scenario: User points to a Provider card
+
+- **WHEN** the primary open/edit target receives hover or keyboard focus
+- **THEN** the whole Provider card receives one continuous interaction surface
+- **AND** the delete action remains inside that card without a separate panel background or divider
 
 #### Scenario: Provider cannot be deleted safely
 

@@ -126,3 +126,19 @@ existing danger tokens and their DOM/state transitions are covered by focused te
 
 Residual visual risk remains limited to uninspected dark-theme pixels. The updated surfaces and borders reuse the
 existing theme tokens and introduce no light-only color literals.
+
+## Unified Provider Card Feedback Evidence
+
+- The primary open/edit control no longer paints only its own flex segment. Hover and keyboard focus now promote
+  the interaction fill and stronger border to the complete Provider card, including the area behind its compact
+  secondary action.
+- The delete control remains an independent accessible button but has no panel background or divider. Its focused
+  danger feedback is limited to the compact action itself, matching model deletion without splitting the card.
+- The running Electron application was inspected in normal, primary keyboard-focus, delete keyboard-focus and
+  expanded-editor states. Each Provider remained one continuous card, and opening then cancelling configuration
+  returned to the directory without saving or deleting data.
+- Focused `DesktopSettingsSurface` tests passed 10/10, Desktop typecheck passed, strict OpenSpec validation passed,
+  and `git diff --check` passed.
+
+Residual visual risk remains limited to uninspected dark-theme pixels; the unified feedback uses existing border,
+control-hover and danger tokens.
