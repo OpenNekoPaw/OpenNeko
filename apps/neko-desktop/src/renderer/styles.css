@@ -501,7 +501,7 @@ code {
   padding: 10px;
   border: 1px solid var(--neko-desktop-border);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--neko-desktop-control) 46%, transparent);
+  background: var(--neko-desktop-surface-raised);
 }
 
 .desktop-settings__provider-group-heading {
@@ -712,6 +712,7 @@ code {
   padding: 9px 10px;
   border: 1px solid var(--neko-desktop-border);
   border-radius: 8px;
+  background: var(--neko-desktop-surface-raised);
 }
 
 .desktop-settings__model-chip[data-default='true'] {
@@ -792,9 +793,9 @@ code {
   display: grid;
   gap: 16px;
   padding: 18px;
-  border: 0;
+  border: 1px solid var(--neko-desktop-border);
   border-radius: 12px;
-  background: var(--neko-desktop-control);
+  background: var(--neko-desktop-surface-raised);
 }
 
 .desktop-settings__editor-heading,
