@@ -11,6 +11,26 @@ import type { GenerationJobSnapshot } from './job/contracts';
 describe('Generation DSH tool contract', () => {
   it('owns the exact model-facing operation envelope and camelCase request fields', () => {
     expect(GENERATION_DSH_TOOL_PARAMETERS.input.oneOf).toHaveLength(6);
+    const videoSubmitSchema = GENERATION_DSH_TOOL_PARAMETERS.input.oneOf.find(
+      (candidate) => candidate.title === 'video submit input',
+    );
+    expect(videoSubmitSchema).toMatchObject({
+      properties: {
+        request: {
+          properties: {
+            inputs: {
+              items: {
+                oneOf: [
+                  { properties: { type: { const: 'image' } } },
+                  { properties: { type: { const: 'video' } } },
+                  { properties: { type: { const: 'audio' } } },
+                ],
+              },
+            },
+          },
+        },
+      },
+    });
     const serialized = JSON.stringify(GENERATION_DSH_TOOL_PARAMETERS);
     expect(serialized).toContain('negativePrompt');
     expect(serialized).toContain('aspectRatio');
@@ -18,6 +38,7 @@ describe('Generation DSH tool contract', () => {
     expect(serialized).toContain('lifecycleMode');
     expect(serialized).not.toContain('negative_prompt');
     expect(serialized).not.toContain('aspect_ratio');
+    expect(serialized).not.toContain('anyOf');
   });
 
   it('exposes model-bound submit, Host-bound ComfyUI submit and describe', () => {

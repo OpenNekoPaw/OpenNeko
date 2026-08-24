@@ -216,7 +216,7 @@ const VIDEO_REQUEST_SCHEMA = {
     inputs: {
       type: 'array',
       items: {
-        anyOf: [
+        oneOf: [
           {
             type: 'object',
             properties: {
