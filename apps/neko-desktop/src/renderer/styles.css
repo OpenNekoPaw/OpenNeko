@@ -630,10 +630,9 @@ code {
 }
 
 .desktop-settings__provider-card-delete {
-  align-self: stretch;
-  padding: 0 10px;
+  padding: 3px 7px;
   border: 0;
-  border-left: 1px solid var(--neko-desktop-border);
+  border-radius: 999px;
   color: var(--neko-desktop-text-muted);
   background: transparent;
   font: inherit;
@@ -641,7 +640,16 @@ code {
   cursor: pointer;
 }
 
+.desktop-settings__provider-card-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding-right: 10px;
+}
+
 .desktop-settings__provider-card-delete:hover,
+.desktop-settings__provider-card-delete:focus-visible,
 .desktop-settings__provider-card-delete--confirm {
   color: var(--neko-desktop-danger-foreground);
   background: var(--neko-desktop-danger-surface);

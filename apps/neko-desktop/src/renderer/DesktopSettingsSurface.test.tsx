@@ -308,6 +308,15 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => Promise.resolve());
     await act(async () => findButton(container, 'Delete provider').click());
     expect(deleteProvider).not.toHaveBeenCalled();
+    expect(
+      container.querySelector('.desktop-settings__provider-card-actions')?.textContent,
+    ).toContain('Cancel');
+    await act(async () => findButton(container, 'Cancel').click());
+    expect(deleteProvider).not.toHaveBeenCalled();
+    expect(
+      container.querySelector('.desktop-settings__provider-card-actions')?.textContent,
+    ).toContain('Delete provider');
+    await act(async () => findButton(container, 'Delete provider').click());
     await act(async () => findButton(container, 'Confirm delete').click());
     expect(deleteProvider).toHaveBeenCalledWith('custom-empty');
     await act(async () => root.unmount());

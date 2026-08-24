@@ -541,28 +541,43 @@ function AgentModelSettingsGroup({
                         </span>
                       </button>
                       {port ? (
-                        <button
-                          className={`desktop-settings__provider-card-delete${
-                            confirmingProviderDeleteId === provider.id
-                              ? ' desktop-settings__provider-card-delete--confirm'
-                              : ''
-                          }`}
-                          disabled={pending}
-                          type="button"
-                          onClick={() => {
-                            if (confirmingProviderDeleteId !== provider.id) {
-                              setConfirmingProviderDeleteId(provider.id);
-                              return;
-                            }
-                            void execute(() => port.deleteProvider(provider.id)).then((deleted) => {
-                              if (deleted) setConfirmingProviderDeleteId(undefined);
-                            });
-                          }}
-                        >
-                          {confirmingProviderDeleteId === provider.id
-                            ? t('settings.agent.confirmDelete')
-                            : t('settings.agent.deleteProvider')}
-                        </button>
+                        <span className="desktop-settings__provider-card-actions">
+                          {confirmingProviderDeleteId === provider.id ? (
+                            <>
+                              <button
+                                className="desktop-settings__provider-card-delete desktop-settings__provider-card-delete--confirm"
+                                disabled={pending}
+                                type="button"
+                                onClick={() => {
+                                  void execute(() => port.deleteProvider(provider.id)).then(
+                                    (deleted) => {
+                                      if (deleted) setConfirmingProviderDeleteId(undefined);
+                                    },
+                                  );
+                                }}
+                              >
+                                {t('settings.agent.confirmDelete')}
+                              </button>
+                              <button
+                                className="desktop-settings__provider-card-delete"
+                                disabled={pending}
+                                type="button"
+                                onClick={() => setConfirmingProviderDeleteId(undefined)}
+                              >
+                                {t('common.cancel')}
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              className="desktop-settings__provider-card-delete"
+                              disabled={pending}
+                              type="button"
+                              onClick={() => setConfirmingProviderDeleteId(provider.id)}
+                            >
+                              {t('settings.agent.deleteProvider')}
+                            </button>
+                          )}
+                        </span>
                       ) : null}
                     </article>
                   ))}
