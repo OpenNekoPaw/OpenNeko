@@ -93,3 +93,18 @@ Residual risk: new Provider-directory pixels and direct-delete confirmation have
 - The updated isolated Electron scenario also verifies post-delete TOML content, but its current run was blocked
   before launch by existing Desktop process `95583`. Report:
   `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-24T12-27-21.934Z-desktop-ai-model-settings-development/report.json`.
+
+## Compact Provider Deletion Evidence
+
+- Provider deletion now uses the same compact pill action language as model deletion. It no longer stretches to
+  card height, draws a vertical separator or occupies a second card-like column.
+- Activating deletion replaces the single action with adjacent confirm and cancel actions. Cancel sends no Host
+  operation and restores the normal card action; the Provider's primary open/edit button remains independent.
+- The running visible Electron development instance was inspected after hot reload. Dialogue and Generation
+  Provider cards retained their two-column density, credential badges and primary open targets while the compact
+  delete action remained visually secondary. No real Provider was deleted from the user's configuration.
+- Focused `DesktopSettingsSurface` tests passed 10/10, direct stylesheet inspection confirmed the compact action
+  rule, Desktop typecheck and focused ESLint passed, and strict OpenSpec validation passed.
+
+Residual visual risk is limited to the destructive hover/confirmation colors in dark theme; both states reuse the
+existing danger tokens and their DOM/state transitions are covered by focused tests.

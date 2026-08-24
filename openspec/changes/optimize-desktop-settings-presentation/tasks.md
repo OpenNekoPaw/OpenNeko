@@ -46,3 +46,9 @@
 - [x] 8.3 Replace the outer Provider panel, shared add action and pending group with two direct sibling directories and per-directory add actions.
 - [x] 8.4 Keep exact config-backed Provider deletion available with model/credential safeguards and local diagnostics; remove `builtin`-based UI and Host blocking.
 - [x] 8.5 Run focused tests, affected typechecks, strict OpenSpec, quality review and visible Electron validation; record any runtime blocker.
+
+## 9. Compact Provider Deletion
+
+- [x] 9.1 Replace the full-height Provider delete segment with the compact action language used by model management.
+- [x] 9.2 Keep explicit confirmation and add an adjacent cancel action without changing the Provider card's primary open/edit target.
+- [x] 9.3 Run focused component/style tests, affected typecheck, strict OpenSpec and UI validation.

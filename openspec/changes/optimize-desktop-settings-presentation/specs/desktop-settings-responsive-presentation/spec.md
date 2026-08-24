@@ -117,11 +117,20 @@ Agent model settings SHALL present dialogue Providers and generation Providers a
 
 Every config-backed Provider SHALL expose a deletion action, while Host settings authority SHALL reject Providers that still own configured models. TOML metadata SHALL NOT hide the action or make a configured Provider undeletable. Credential removal SHALL remain owned by the existing credential authority.
 
+The deletion action SHALL remain a compact card action instead of reserving a full-height segmented column. Entering the destructive confirmation state SHALL keep an explicit cancel action adjacent to confirmation without replacing the Provider's primary open/edit target.
+
 #### Scenario: User deletes an empty configured Provider
 
 - **WHEN** the user confirms deletion for a config-backed Provider with no configured models
 - **THEN** the Host removes the exact Provider and its credential through the canonical operation
 - **AND** both Provider directories refresh from the returned projection
+
+#### Scenario: User cancels Provider deletion
+
+- **WHEN** the user activates the compact delete action and then cancels the confirmation
+- **THEN** no delete operation is sent
+- **AND** the Provider card returns to its normal compact action state
+- **AND** the Provider card remains available as the primary open/edit target
 
 #### Scenario: Provider cannot be deleted safely
 
