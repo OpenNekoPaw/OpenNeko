@@ -4,6 +4,7 @@ export {
   type DshAcpApplicationClientOptions,
   type DshAcpByteTransport,
   type DshAcpConnection,
+  type DshAcpSessionUpdateDelivery,
 } from './dsh-acp-application-client';
 export { CanvasDshHostAdapter } from './canvas-host-adapter';
 export { CutDshHostAdapter } from './cut-host-adapter';

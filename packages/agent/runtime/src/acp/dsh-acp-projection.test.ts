@@ -506,6 +506,7 @@ describe('DshAcpProjection', () => {
         time: 1_005,
         type: 'turn/start',
         data: { turn: 1.5 },
+        replay: false,
       })[0],
     ).toMatchObject({ kind: 'diagnostic', code: 'ACP_PROJECTION_INVALID_TURN' });
   });
@@ -722,7 +723,7 @@ function stepEvent(
   turn: number,
   step: number,
 ): DshAcpSessionEventNotification {
-  return { sessionId, sequence, time: 1_000 + sequence, type, data: { turn, step } };
+  return { sessionId, sequence, time: 1_000 + sequence, type, data: { turn, step }, replay: false };
 }
 
 function toolCallUpdate(
@@ -757,6 +758,7 @@ function turnEvent(
     time,
     type,
     data: reason === undefined ? { turn } : { turn, reason: { kind: reason } },
+    replay: false,
   };
 }
 
@@ -766,7 +768,7 @@ function commandEvent(
   type: 'command/run' | 'command/done',
   data: unknown,
 ): DshAcpSessionEventNotification {
-  return { sessionId, sequence, time: 1_000 + sequence, type, data };
+  return { sessionId, sequence, time: 1_000 + sequence, type, data, replay: false };
 }
 
 function permission(

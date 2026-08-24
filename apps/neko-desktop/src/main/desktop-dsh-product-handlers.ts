@@ -11,6 +11,7 @@ import {
 import type {
   DshAcpApplicationClientHandlers,
   DshAcpSessionUpdateNotification,
+  DshAcpSessionUpdateDelivery,
 } from '@neko/agent-runtime/acp';
 import type { GenerationApplicationRuntime } from '@neko/generation/job';
 import type { CutProjectAuthoringService } from '@neko/cut-domain';
@@ -73,7 +74,10 @@ export function createDesktopDshProductHandlers(options: {
     }): Promise<Pick<WorldDshAuthoringService, 'query' | 'fillDraft'>>;
   };
   readonly onPermissionChanged: (conversationId: string) => Promise<void> | void;
-  readonly onSessionUpdate: (notification: DshAcpSessionUpdateNotification) => Promise<void> | void;
+  readonly onSessionUpdate: (
+    notification: DshAcpSessionUpdateNotification,
+    delivery: DshAcpSessionUpdateDelivery,
+  ) => Promise<void> | void;
   readonly onSessionEvent: (notification: DshAcpSessionEventNotification) => Promise<void> | void;
   readonly onContextPressure: (
     notification: DshAcpContextPressureNotification,

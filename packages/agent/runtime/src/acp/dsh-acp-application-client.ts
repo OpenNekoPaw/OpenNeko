@@ -120,13 +120,20 @@ export interface DshAcpApplicationClientHandlers {
     request: DshAcpDomainToolRequest,
     signal: AbortSignal,
   ) => Promise<DshAcpDomainToolResponse>;
-  readonly onSessionUpdate: (notification: SessionNotification) => Promise<void> | void;
+  readonly onSessionUpdate: (
+    notification: SessionNotification,
+    delivery: DshAcpSessionUpdateDelivery,
+  ) => Promise<void> | void;
   readonly onSessionEvent: (
     notification: ReturnType<typeof decodeDshAcpSessionEventNotification>,
   ) => Promise<void> | void;
   readonly onContextPressure: (
     notification: ReturnType<typeof decodeDshAcpContextPressureNotification>,
   ) => Promise<void> | void;
+}
+
+export interface DshAcpSessionUpdateDelivery {
+  readonly replay: boolean;
 }
 
 export interface DshAcpConnection {
@@ -524,6 +531,7 @@ function createProtocolClient(
       });
     },
     async sessionUpdate(notification) {
+      const delivery = decodeSessionUpdateDelivery(notification);
       const projected = projection.acceptSessionUpdate(notification);
       const diagnosticEvent = projected.find((event) => event.kind === 'diagnostic');
       if (diagnosticEvent !== undefined && diagnosticEvent.kind === 'diagnostic') {
@@ -531,7 +539,7 @@ function createProtocolClient(
           `DSH ACP projection rejected session update: ${diagnosticEvent.code}: ${diagnosticEvent.message}`,
         );
       }
-      await handlers.onSessionUpdate(notification);
+      await handlers.onSessionUpdate(notification, delivery);
     },
     async extMethod(method, input) {
       if (method === DSH_ACP_EXTENSION_METHODS.executeDomainTool) {
@@ -574,6 +582,16 @@ function createProtocolClient(
       await handlers.onSessionEvent(event);
     },
   };
+}
+
+function decodeSessionUpdateDelivery(
+  notification: SessionNotification,
+): DshAcpSessionUpdateDelivery {
+  const replay = notification._meta?.opennekoReplay;
+  if (typeof replay !== 'boolean') {
+    throw new Error('DSH ACP session update opennekoReplay must be a boolean.');
+  }
+  return Object.freeze({ replay });
 }
 
 class HostToolAdmission {

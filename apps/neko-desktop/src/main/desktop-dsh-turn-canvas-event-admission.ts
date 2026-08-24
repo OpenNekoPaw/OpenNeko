@@ -1,7 +1,7 @@
 import type { DshTurnCanvasTargetOwner } from '@neko/agent-runtime/application';
 
 export async function resolveDesktopDshSessionEventAdmission<T>(input: {
-  readonly event: { readonly sessionId: string; readonly type: string };
+  readonly event: { readonly sessionId: string; readonly type: string; readonly replay: boolean };
   readonly projection: {
     snapshot(dshSessionId: string): { readonly currentTurn?: number };
   };
@@ -9,7 +9,7 @@ export async function resolveDesktopDshSessionEventAdmission<T>(input: {
   readonly resolveBinding: () => Promise<T | undefined>;
 }): Promise<{ readonly binding: T; readonly startedTurn?: number }> {
   let startedTurn: number | undefined;
-  if (input.event.type === 'turn/start') {
+  if (input.event.type === 'turn/start' && !input.event.replay) {
     startedTurn = input.projection.snapshot(input.event.sessionId).currentTurn;
     if (startedTurn === undefined) {
       throw new Error('DSH turn/start has no projected current turn identity.');

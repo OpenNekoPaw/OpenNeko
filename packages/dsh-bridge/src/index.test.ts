@@ -359,7 +359,7 @@ describe('OpenNeko DSH ACP bridge projections', () => {
           messageId: user.data.id,
           content: { type: 'text', text: 'hello' },
         },
-        _meta: { opennekoSequence: user.seq },
+        _meta: { opennekoSequence: user.seq, opennekoReplay: false },
       },
     ]);
     expect(projectSessionEvent('session-1', call)).toEqual([
@@ -372,7 +372,11 @@ describe('OpenNeko DSH ACP bridge projections', () => {
           status: 'pending',
           rawInput: { node: 'a' },
         },
-        _meta: { opennekoSequence: call.seq, opennekoTurn: call.data.turn },
+        _meta: {
+          opennekoSequence: call.seq,
+          opennekoTurn: call.data.turn,
+          opennekoReplay: false,
+        },
       },
     ]);
   });
@@ -500,7 +504,11 @@ describe('OpenNeko DSH ACP bridge projections', () => {
           status: 'failed',
           rawOutput: [{ type: 'text', text: 'Error: rejected' }],
         },
-        _meta: { opennekoSequence: result.seq, opennekoTurn: result.data.turn },
+        _meta: {
+          opennekoSequence: result.seq,
+          opennekoTurn: result.data.turn,
+          opennekoReplay: false,
+        },
       },
     ]);
   });
@@ -532,6 +540,7 @@ describe('OpenNeko DSH ACP bridge projections', () => {
           opennekoStep: 1,
           opennekoBlockIndex: 0,
           opennekoMessagePhase: 'delta',
+          opennekoReplay: false,
         },
       },
     ]);
@@ -591,6 +600,25 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     ]);
   });
 
+  it('marks standard ACP notifications as live or replay without inference', () => {
+    const session = Session.create(SessionId('session-1'));
+    const message = session.append(
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'Replay me.' }],
+        source: { kind: 'user' },
+      }),
+      { surfaceOp: 'append' },
+    );
+
+    expect(projectSessionEvent('session-1', message)[0]?._meta).toMatchObject({
+      opennekoReplay: false,
+    });
+    expect(projectSessionEvent('session-1', message, { replay: true })[0]?._meta).toMatchObject({
+      opennekoReplay: true,
+    });
+  });
+
   it('does not project non-standard DSH events as standard ACP messages', () => {
     const session = Session.create(SessionId('session-1'));
     const todo = session.append('todo/write', {
@@ -598,13 +626,15 @@ describe('OpenNeko DSH ACP bridge projections', () => {
     });
 
     expect(projectSessionEvent('session-1', todo)).toEqual([]);
-    expect(projectExtensionSessionEvent('session-1', todo)).toEqual({
+    expect(projectExtensionSessionEvent('session-1', todo, false)).toEqual({
       sessionId: 'session-1',
       sequence: todo.seq,
       time: todo.time,
       type: 'todo/write',
       data: todo.data,
+      replay: false,
     });
+    expect(projectExtensionSessionEvent('session-1', todo, true)).toMatchObject({ replay: true });
   });
 
   it('does not project DSH runtime-context snapshots as user messages', () => {

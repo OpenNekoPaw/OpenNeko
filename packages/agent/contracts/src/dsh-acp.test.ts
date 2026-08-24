@@ -372,6 +372,7 @@ describe('DSH ACP extension contract', () => {
         time: 1_000,
         type: 'turn/start',
         data: { turn: 1 },
+        replay: false,
       }),
     ).toEqual({
       sessionId: 'session-1',
@@ -379,6 +380,7 @@ describe('DSH ACP extension contract', () => {
       time: 1_000,
       type: 'turn/start',
       data: { turn: 1 },
+      replay: false,
     });
     expect(() =>
       decodeDshAcpSessionEventNotification({
@@ -387,6 +389,7 @@ describe('DSH ACP extension contract', () => {
         time: 1_000,
         type: 'tool/call',
         data: {},
+        replay: false,
       }),
     ).toThrow(/sequence must be a non-negative safe integer/);
     expect(() =>
@@ -395,6 +398,7 @@ describe('DSH ACP extension contract', () => {
         sequence: 1,
         type: 'turn/start',
         data: { turn: 1 },
+        replay: false,
       }),
     ).toThrow(/must contain exactly/u);
     expect(() =>
@@ -404,8 +408,28 @@ describe('DSH ACP extension contract', () => {
         time: -1,
         type: 'turn/start',
         data: { turn: 1 },
+        replay: false,
       }),
     ).toThrow(/time must be a non-negative safe integer/u);
+    expect(() =>
+      decodeDshAcpSessionEventNotification({
+        sessionId: 'session-1',
+        sequence: 1,
+        time: 1_000,
+        type: 'turn/start',
+        data: { turn: 1 },
+      }),
+    ).toThrow(/must contain exactly/u);
+    expect(() =>
+      decodeDshAcpSessionEventNotification({
+        sessionId: 'session-1',
+        sequence: 1,
+        time: 1_000,
+        type: 'turn/start',
+        data: { turn: 1 },
+        replay: 'yes',
+      }),
+    ).toThrow(/replay must be boolean/u);
     expect(() =>
       decodeDshAcpInboxSnapshot({
         nextTurn: [],

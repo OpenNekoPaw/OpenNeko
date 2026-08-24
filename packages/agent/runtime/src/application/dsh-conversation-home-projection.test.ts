@@ -105,6 +105,7 @@ describe('DSH Conversation Home projection', () => {
       time: 1_000,
       type: 'turn/start',
       data: { turn: 4 },
+      replay: false,
     });
     const home = createDshConversationHomeProjection({
       catalog: catalogWith([
@@ -140,6 +141,7 @@ describe('DSH Conversation Home projection', () => {
       time: 2_000,
       type: 'turn/end',
       data: { turn: 4, reason: { kind: 'completed' } },
+      replay: false,
     });
     await home.refresh();
     expect(home.readHomeProjection()).toMatchObject({

@@ -695,6 +695,7 @@ export interface DshAcpSessionEventNotification {
   readonly time: number;
   readonly type: string;
   readonly data: unknown;
+  readonly replay: boolean;
 }
 
 export interface DshAcpContextPressureProjection {
@@ -846,13 +847,18 @@ export type DshAcpDomainToolResponse =
 export function decodeDshAcpSessionEventNotification(
   input: Record<string, unknown>,
 ): DshAcpSessionEventNotification {
-  requireExactKeys(input, ['sessionId', 'sequence', 'time', 'type', 'data'], 'Session event');
+  requireExactKeys(
+    input,
+    ['sessionId', 'sequence', 'time', 'type', 'data', 'replay'],
+    'Session event',
+  );
   return {
     sessionId: requireNonEmptyString(input.sessionId, 'sessionId'),
     sequence: requireNonNegativeInteger(input.sequence, 'sequence'),
     time: requireNonNegativeInteger(input.time, 'time'),
     type: requireNonEmptyString(input.type, 'type'),
     data: input.data,
+    replay: requireBoolean(input.replay, 'Session event replay'),
   };
 }
 

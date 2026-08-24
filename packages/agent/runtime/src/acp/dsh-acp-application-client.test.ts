@@ -520,6 +520,7 @@ describe('DshAcpApplicationClient', () => {
       time: 1_004,
       type: 'tool/call',
       data: {},
+      replay: false,
     });
 
     expect(handlers.executeGenerationTool).toHaveBeenCalledWith(
@@ -543,7 +544,7 @@ describe('DshAcpApplicationClient', () => {
       expect.any(AbortSignal),
     );
     expect(handlers.onSessionEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'session-1', sequence: 4 }),
+      expect.objectContaining({ sessionId: 'session-1', sequence: 4, replay: false }),
     );
     await expect(
       protocolClient.extMethod?.('openneko/domain-tool/execute', {
@@ -594,10 +595,11 @@ describe('DshAcpApplicationClient', () => {
       time: 1_000,
       type: 'turn/start',
       data: { turn: 0 },
+      replay: false,
     });
     await protocolClient.sessionUpdate?.({
       sessionId: 's1',
-      _meta: { opennekoSequence: 1, opennekoTurn: 0 },
+      _meta: { opennekoSequence: 1, opennekoTurn: 0, opennekoReplay: false },
       update: {
         sessionUpdate: 'tool_call',
         toolCallId: 'call-1',
@@ -616,7 +618,7 @@ describe('DshAcpApplicationClient', () => {
     );
     await protocolClient.sessionUpdate?.({
       sessionId: 's1',
-      _meta: { opennekoSequence: 2, opennekoTurn: 0 },
+      _meta: { opennekoSequence: 2, opennekoTurn: 0, opennekoReplay: false },
       update: {
         sessionUpdate: 'tool_call_update',
         toolCallId: 'call-1',
@@ -638,6 +640,61 @@ describe('DshAcpApplicationClient', () => {
       turn: 0,
     });
     expect(projected[2]).toMatchObject({ kind: 'tool', status: 'completed', turn: 0 });
+    expect(handlers.onSessionUpdate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sessionId: 's1' }),
+      { replay: false },
+    );
+  });
+
+  it('forwards explicit replay identity and rejects an unclassified standard update', async () => {
+    const handlers = createHandlers();
+    const fixture = createFixture({ protocolVersion: 1, agentCapabilities: {} });
+    await DshAcpApplicationClient.connect({
+      transport: unusedTransport,
+      virtualCwd: '/virtual/workspace',
+      handlers,
+      createConnection: fixture.createConnection,
+    });
+    const protocolClient = fixture.readProtocolClient();
+
+    await protocolClient.sessionUpdate?.({
+      sessionId: 's1',
+      _meta: { opennekoSequence: 0, opennekoReplay: true },
+      update: {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'message-1',
+        content: { type: 'text', text: 'Replayed.' },
+      },
+    });
+    expect(handlers.onSessionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 's1' }),
+      { replay: true },
+    );
+
+    await protocolClient.extNotification?.('openneko/session/event', {
+      sessionId: 's1',
+      sequence: 1,
+      time: 1_001,
+      type: 'turn/start',
+      data: { turn: 0 },
+      replay: true,
+    });
+    expect(handlers.onSessionEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 's1', replay: true }),
+    );
+
+    await expect(
+      protocolClient.sessionUpdate?.({
+        sessionId: 's1',
+        _meta: { opennekoSequence: 2 },
+        update: {
+          sessionUpdate: 'user_message_chunk',
+          messageId: 'message-2',
+          content: { type: 'text', text: 'Unclassified.' },
+        },
+      }),
+    ).rejects.toThrow(/opennekoReplay must be a boolean/u);
+    expect(handlers.onSessionUpdate).toHaveBeenCalledTimes(1);
   });
 
   it('does not forward a permission request that the projection cannot correlate', async () => {
@@ -675,7 +732,7 @@ describe('DshAcpApplicationClient', () => {
     await expect(
       protocolClient.sessionUpdate?.({
         sessionId: 's1',
-        _meta: { opennekoSequence: 1, opennekoTurn: -1 },
+        _meta: { opennekoSequence: 1, opennekoTurn: -1, opennekoReplay: false },
         update: {
           sessionUpdate: 'tool_call',
           toolCallId: 'call-1',
@@ -705,6 +762,7 @@ describe('DshAcpApplicationClient', () => {
         time: 1_000,
         type: 'turn/start',
         data: { turn: 1.5 },
+        replay: false,
       }),
     ).rejects.toThrow(/projection rejected session event/);
     expect(handlers.onSessionEvent).not.toHaveBeenCalled();

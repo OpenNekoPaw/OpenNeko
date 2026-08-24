@@ -495,6 +495,7 @@ describe('Desktop DSH Session Host', () => {
       time: 1_000,
       type: 'turn/start',
       data: { turn: 1 },
+      replay: false,
     });
     const enqueueInboxMessage = vi.fn(async () => ({
       nextTurn: [{ messageId: 'queued-1', createdAt: 1, content: [] }],
@@ -555,6 +556,7 @@ describe('Desktop DSH Session Host', () => {
       time: 1_000,
       type: 'turn/start',
       data: { turn: 1 },
+      replay: false,
     });
     const enqueueInboxMessage = vi.fn(async () => ({
       nextTurn: [{ messageId: 'queued-1', createdAt: 1, content: [] }],
@@ -1047,6 +1049,7 @@ describe('Desktop DSH Session Host', () => {
       time: 1_000,
       type: 'turn/start',
       data: { turn: 2 },
+      replay: false,
     });
     projection.acceptSessionEvent({
       sessionId: identity.dshSessionId,
@@ -1054,6 +1057,7 @@ describe('Desktop DSH Session Host', () => {
       time: 4_250,
       type: 'turn/end',
       data: { turn: 2, reason: { kind: 'completed' } },
+      replay: false,
     });
 
     const result = requireSessionResult(
@@ -1090,6 +1094,7 @@ describe('Desktop DSH Session Host', () => {
       time: 1_000,
       type: 'turn/start',
       data: { turn: 0 },
+      replay: false,
     });
     projection.acceptSessionEvent({
       sessionId: identity.dshSessionId,
@@ -1097,6 +1102,7 @@ describe('Desktop DSH Session Host', () => {
       time: 1_001,
       type: 'step/start',
       data: { turn: 0, step: 0 },
+      replay: false,
     });
     projection.acceptSessionUpdate({
       sessionId: identity.dshSessionId,
@@ -1354,6 +1360,7 @@ describe('Desktop DSH Session Host', () => {
       time: 1_000,
       type: 'turn/start',
       data: { turn: 0 },
+      replay: false,
     });
     projection.acceptSessionEvent({
       sessionId: identity.dshSessionId,
@@ -1361,6 +1368,7 @@ describe('Desktop DSH Session Host', () => {
       time: 1_001,
       type: 'step/start',
       data: { turn: 0, step: 0 },
+      replay: false,
     });
     projection.acceptSessionUpdate({
       sessionId: identity.dshSessionId,

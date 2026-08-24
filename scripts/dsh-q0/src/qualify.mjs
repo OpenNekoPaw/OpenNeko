@@ -648,8 +648,14 @@ async function qualify() {
     ) {
       throw new Error('OpenNeko DSH bridge did not replay Tool progress through session/update');
     }
+    if (thirdClient.updates.some((item) => item._meta?.opennekoReplay !== true)) {
+      throw new Error('OpenNeko DSH bridge emitted an unclassified replayed session/update');
+    }
     if (!thirdClient.events.some((item) => item.sessionId === session.sessionId)) {
       throw new Error('OpenNeko DSH bridge did not replay exact session events');
+    }
+    if (thirdClient.events.some((item) => item.replay !== true)) {
+      throw new Error('OpenNeko DSH bridge emitted an unclassified replayed session event');
     }
     const finalInbox = await third.connection.extMethod('openneko/session/inbox/read', {
       sessionId: session.sessionId,

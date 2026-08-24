@@ -109,6 +109,14 @@ Because the official `dsh-acp` rc.8 bridge is automation-only, OpenNeko SHALL sh
 - **THEN** the bridge delegates to the exact public DSH Session/Agent owner and replays history over ACP
 - **AND** it does not consult or create a Host transcript repository
 
+#### Scenario: History replay rebuilds projection without live delivery side effects
+
+- **WHEN** `session/load` replays historical messages, Tools and turn lifecycle events for an exact bound Session
+- **THEN** every replayed standard or extension notification carries an explicit replay identity through the canonical bridge and ACP application contract
+- **AND** the package-owned projection rebuilds the historical transcript, Tool and turn facts
+- **AND** Desktop does not consume a live Canvas target admission, repeat completed Tool or turn artifact delivery, release a live turn target or infer a Workspace Board fallback
+- **AND** a live `turn/start` without an exact pending admission still fails visibly for only that Session event
+
 #### Scenario: A requested product surface needs private DSH internals
 
 - **WHEN** Q0 shows that a required surface can only be implemented by copying a DSH state machine or depending on an unqualified private module

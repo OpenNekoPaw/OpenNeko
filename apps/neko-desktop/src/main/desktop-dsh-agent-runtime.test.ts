@@ -307,6 +307,7 @@ describe('Desktop DSH Agent runtime composition', () => {
       time: 1_000,
       type: 'turn/start',
       data: { turn: 0 },
+      replay: false,
     });
 
     await expect(runtime.refreshConfiguration()).resolves.toBe('pending');
@@ -321,6 +322,7 @@ describe('Desktop DSH Agent runtime composition', () => {
       time: 1_001,
       type: 'turn/end',
       data: { turn: 0, reason: { kind: 'success' } },
+      replay: false,
     });
     await runtime.flushPendingConfigurationRefresh();
 

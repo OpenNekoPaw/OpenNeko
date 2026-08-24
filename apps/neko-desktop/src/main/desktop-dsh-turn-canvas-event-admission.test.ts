@@ -16,7 +16,7 @@ describe('Desktop DSH turn Canvas event admission', () => {
     });
 
     const pending = resolveDesktopDshSessionEventAdmission({
-      event: { sessionId: 'dsh-1', type: 'turn/start' },
+      event: { sessionId: 'dsh-1', type: 'turn/start', replay: false },
       projection: { snapshot: () => ({ currentTurn: 1 }) },
       targets,
       resolveBinding: () => binding,
@@ -39,12 +39,26 @@ describe('Desktop DSH turn Canvas event admission', () => {
 
     await expect(
       resolveDesktopDshSessionEventAdmission({
-        event: { sessionId: 'dsh-1', type: 'turn/start' },
+        event: { sessionId: 'dsh-1', type: 'turn/start', replay: false },
         projection: { snapshot: () => ({ currentTurn: 1 }) },
         targets,
         resolveBinding: async () => undefined,
       }),
     ).rejects.toThrow('has no Conversation binding');
+    expect(() => targets.read('dsh-1', 1)).toThrow('has no bound Canvas target admission');
+  });
+
+  it('replays turn/start without consuming or fabricating a live Canvas admission', async () => {
+    const targets = createDshTurnCanvasTargetOwner();
+
+    await expect(
+      resolveDesktopDshSessionEventAdmission({
+        event: { sessionId: 'dsh-1', type: 'turn/start', replay: true },
+        projection: { snapshot: () => ({ currentTurn: 1 }) },
+        targets,
+        resolveBinding: async () => ({ conversationId: 'conversation-1' }),
+      }),
+    ).resolves.toEqual({ binding: { conversationId: 'conversation-1' } });
     expect(() => targets.read('dsh-1', 1)).toThrow('has no bound Canvas target admission');
   });
 });

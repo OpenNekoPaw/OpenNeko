@@ -269,7 +269,7 @@ export function apply(ctx: Context, config: OpenNekoDshBridgeConfig): void {
     } else {
       await connection.extNotification(
         'openneko/session/event',
-        projectExtensionSessionEvent(sessionId, event),
+        projectExtensionSessionEvent(sessionId, event, replay),
       );
     }
     await publishContextPressure(requireOwned(sessionId));
@@ -1602,6 +1602,22 @@ export function projectSessionEvent(
   event: SessionEvent,
   options: { readonly replay?: boolean } = {},
 ): readonly SessionNotification[] {
+  if (options.replay === true && event.type === 'assistant/chunk') return [];
+  return projectSessionEventNotifications(sessionId, event).map((notification) => ({
+    ...notification,
+    _meta: {
+      ...(notification._meta === undefined || notification._meta === null
+        ? {}
+        : notification._meta),
+      opennekoReplay: options.replay === true,
+    },
+  }));
+}
+
+function projectSessionEventNotifications(
+  sessionId: string,
+  event: SessionEvent,
+): readonly SessionNotification[] {
   switch (event.type) {
     case 'user/message':
       if (event.data.source.kind !== 'user') return [];
@@ -1617,7 +1633,7 @@ export function projectSessionEvent(
         }),
       );
     case 'assistant/chunk':
-      return options.replay ? [] : projectAssistantChunk(sessionId, event);
+      return projectAssistantChunk(sessionId, event);
     case 'assistant/message':
       return projectAssistantMessage(sessionId, event);
     case 'tool/call':
@@ -1662,6 +1678,7 @@ export function projectSessionEvent(
 export function projectExtensionSessionEvent(
   sessionId: string,
   event: SessionEvent,
+  replay: boolean,
 ): DshAcpSessionEventNotification & Record<string, unknown> {
   return {
     sessionId,
@@ -1669,6 +1686,7 @@ export function projectExtensionSessionEvent(
     time: event.time,
     type: event.type,
     data: event.data,
+    replay,
   };
 }
 

@@ -2266,7 +2266,7 @@ async function startDesktop(): Promise<void> {
         },
         onPermissionChanged: (conversationId) =>
           publishDshChanged(DSH_PERMISSION_CHANGED_CHANNEL, { conversationId }),
-        onSessionUpdate: async (notification) => {
+        onSessionUpdate: async (notification, delivery) => {
           const binding = await bindings.getByDshSessionId(notification.sessionId);
           if (!binding) {
             throw new Error(
@@ -2274,6 +2274,7 @@ async function startDesktop(): Promise<void> {
             );
           }
           if (
+            !delivery.replay &&
             notification.update.sessionUpdate === 'tool_call_update' &&
             notification.update.status === 'completed'
           ) {
@@ -2300,7 +2301,7 @@ async function startDesktop(): Promise<void> {
             targets: dshTurnCanvasTargets,
             resolveBinding: () => bindings.getByDshSessionId(notification.sessionId),
           });
-          if (notification.type === 'turn/end') {
+          if (notification.type === 'turn/end' && !notification.replay) {
             const terminals = dshProduct.runtime.client.projection
               .snapshot(notification.sessionId)
               .events.filter(
@@ -2335,7 +2336,7 @@ async function startDesktop(): Promise<void> {
           if (notification.type === 'turn/start' || notification.type === 'turn/end') {
             await refreshDshHomeAfterProjectionChange();
           }
-          if (notification.type === 'turn/end') {
+          if (notification.type === 'turn/end' && !notification.replay) {
             setTimeout(() => {
               void dshProduct.runtime.flushPendingConfigurationRefresh().catch(() => undefined);
             }, 0);
