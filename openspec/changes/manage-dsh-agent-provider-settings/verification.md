@@ -49,3 +49,12 @@ the wide two-column and narrow single-column rules. Typecheck, focused ESLint, s
 passed. A real Electron capture verified the current wide layout with 2 dialogue, 1 generation and 1
 unconfigured Provider. Narrow-window recapture was blocked when the shared development Electron was replaced
 by its default page during resize; no credentials or Provider facts were changed during validation.
+
+## Flattened Provider catalog follow-up
+
+The outer Provider summary card, count and disclosure state were removed. Provider capability groups and Add
+Provider now render directly in the Agent settings group, while the Provider editor remains absent until a card
+or add action is selected. Focused Renderer tests, Desktop typecheck, focused ESLint, strict OpenSpec and diff
+checks passed. The current Electron runtime at `localhost:5174` directly showed the flattened 2/1/1 grouped
+catalog and then exposed the scoped DeepSeek Chat editor only after selection. No credential or Provider fact
+was changed during validation.

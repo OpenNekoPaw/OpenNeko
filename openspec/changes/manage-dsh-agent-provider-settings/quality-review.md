@@ -45,3 +45,8 @@ The Provider capability-group follow-up remains L1 Renderer presentation. Group 
 the canonical projected model `type` values, so Host contracts, ConfigManager, credentials and runtime routing
 remain unchanged. Dialogue-only and generation-only Providers use separate columns; mixed Providers appear
 once and model-less Providers remain fail-visible as unconfigured instead of being classified by name or URL.
+
+The flattened Provider-catalog follow-up remains L1 Renderer presentation. It removes only the outer summary,
+accordion state and visual wrapper; capability grouping still derives from the same projection and each Provider
+card still opens the same scoped editor. No Provider/model authority, credential path, runtime routing or save
+semantics changed. Focused tests and direct Electron inspection found no blocking regression.

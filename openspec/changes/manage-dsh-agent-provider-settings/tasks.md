@@ -12,6 +12,7 @@
 - [x] 2.5 合并 Provider 与模型管理入口，实现 Provider-scoped 表单、高级字段按需展开及局部模型目录。
 - [x] 2.6 移除重复的 Agent 高级设置区块，将 canonical 配置入口放入标题栏，并将 Provider 内的对话/生成模型响应式分为左右两组。
 - [x] 2.7 从 Provider 列表层按 canonical 模型能力派生对话、生成、多能力和待配置分组；宽布局左右排列且不得复制多能力 Provider。
+- [x] 2.8 移除 Provider 汇总卡片与外层展开包装，直接展示能力分组目录并保持具体 Provider 表单按需打开。
 
 ## 3. Verification
 

@@ -400,7 +400,6 @@ function AgentModelSettingsGroup({
   const [restartRequired, setRestartRequired] = useState(false);
   const [editingProvider, setEditingProvider] = useState<DesktopAiProviderView>();
   const [showProviderForm, setShowProviderForm] = useState(false);
-  const [providersExpanded, setProvidersExpanded] = useState(false);
   const providerGroups = useMemo(
     () => groupProvidersByCapability(projection?.providers ?? [], projection?.models ?? []),
     [projection],
@@ -450,12 +449,6 @@ function AgentModelSettingsGroup({
     }
   };
 
-  const toggleProviders = (): void => {
-    setProvidersExpanded((current) => !current);
-    setEditingProvider(undefined);
-    setShowProviderForm(false);
-  };
-
   return (
     <SettingsGroup
       action={
@@ -484,117 +477,97 @@ function AgentModelSettingsGroup({
           {t('settings.agent.restartRequired')}
         </div>
       ) : null}
-      <div className="desktop-settings__subsection">
-        <button
-          aria-expanded={providersExpanded}
-          className="desktop-settings__management-summary"
-          type="button"
-          onClick={toggleProviders}
-        >
-          <div>
-            <strong>{t('settings.agent.providers')}</strong>
-            <small>{t('settings.agent.providersDescription')}</small>
-          </div>
-          <span>
-            <span className="desktop-settings__count">{projection?.providers.length ?? 0}</span>
-            {t(providersExpanded ? 'settings.agent.collapse' : 'settings.agent.manage')}
-          </span>
-        </button>
-        {providersExpanded ? (
-          <div className="desktop-settings__management-panel">
-            <div className="desktop-settings__management-actions">
-              <button
-                className="desktop-settings__action"
-                disabled={pending || !port}
-                type="button"
-                onClick={() => {
-                  setEditingProvider(undefined);
-                  setShowProviderForm(true);
-                }}
-              >
-                {t('settings.agent.addProvider')}
-              </button>
-            </div>
-            <div className="desktop-settings__provider-groups">
-              {providerGroups.map((group) => (
-                <section
-                  key={group.kind}
-                  className={`desktop-settings__provider-group${
-                    group.kind === 'mixed' || group.kind === 'unconfigured'
-                      ? ' desktop-settings__provider-group--wide'
-                      : ''
-                  }`}
-                  data-provider-group={group.kind}
-                >
-                  <div className="desktop-settings__provider-group-heading">
-                    <div>
-                      <strong>{t(`settings.agent.providerGroup.${group.kind}`)}</strong>
-                      <small>{t(`settings.agent.providerGroup.${group.kind}.description`)}</small>
-                    </div>
-                    <span className="desktop-settings__count">{group.providers.length}</span>
-                  </div>
-                  {group.providers.length > 0 ? (
-                    <div className="desktop-settings__provider-list">
-                      {group.providers.map((provider) => (
-                        <button
-                          key={provider.id}
-                          className="desktop-settings__provider-card"
-                          type="button"
-                          onClick={() => {
-                            setEditingProvider(provider);
-                            setShowProviderForm(true);
-                          }}
-                        >
-                          <span>
-                            <strong>{provider.displayName}</strong>
-                            <small>{provider.apiUrl}</small>
-                          </span>
-                          <span
-                            className={`desktop-settings__credential desktop-settings__credential--${provider.credentialStatus}`}
-                          >
-                            {t(`settings.agent.credential.${provider.credentialStatus}`)}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="desktop-settings__provider-empty">
-                      {t('settings.agent.providerGroup.empty')}
-                    </p>
-                  )}
-                </section>
-              ))}
-            </div>
-            {showProviderForm && port ? (
-              <ProviderForm
-                disabled={pending}
-                initial={editingProvider}
-                models={
-                  editingProvider
-                    ? (projection?.models.filter(
-                        (model) => model.providerId === editingProvider.id,
-                      ) ?? [])
-                    : []
-                }
-                defaults={projection?.defaults ?? {}}
-                onCancel={() => setShowProviderForm(false)}
-                onSaveModel={(model) => execute(() => port.saveModel(model))}
-                onSetDefault={(model) =>
-                  execute(() =>
-                    port.setDefault(model.type, {
-                      providerId: model.providerId,
-                      modelId: model.id,
-                    }),
-                  )
-                }
-                onSave={(provider, apiKey) =>
-                  execute(() => port.saveProvider(provider, apiKey)).then((saved) => {
-                    if (saved) setShowProviderForm(false);
-                  })
-                }
-              />
-            ) : null}
-          </div>
+      <div className="desktop-settings__management-panel">
+        <div className="desktop-settings__management-actions">
+          <button
+            className="desktop-settings__action"
+            disabled={pending || !port}
+            type="button"
+            onClick={() => {
+              setEditingProvider(undefined);
+              setShowProviderForm(true);
+            }}
+          >
+            {t('settings.agent.addProvider')}
+          </button>
+        </div>
+        <div className="desktop-settings__provider-groups">
+          {providerGroups.map((group) => (
+            <section
+              key={group.kind}
+              className={`desktop-settings__provider-group${
+                group.kind === 'mixed' || group.kind === 'unconfigured'
+                  ? ' desktop-settings__provider-group--wide'
+                  : ''
+              }`}
+              data-provider-group={group.kind}
+            >
+              <div className="desktop-settings__provider-group-heading">
+                <div>
+                  <strong>{t(`settings.agent.providerGroup.${group.kind}`)}</strong>
+                  <small>{t(`settings.agent.providerGroup.${group.kind}.description`)}</small>
+                </div>
+                <span className="desktop-settings__count">{group.providers.length}</span>
+              </div>
+              {group.providers.length > 0 ? (
+                <div className="desktop-settings__provider-list">
+                  {group.providers.map((provider) => (
+                    <button
+                      key={provider.id}
+                      className="desktop-settings__provider-card"
+                      type="button"
+                      onClick={() => {
+                        setEditingProvider(provider);
+                        setShowProviderForm(true);
+                      }}
+                    >
+                      <span>
+                        <strong>{provider.displayName}</strong>
+                        <small>{provider.apiUrl}</small>
+                      </span>
+                      <span
+                        className={`desktop-settings__credential desktop-settings__credential--${provider.credentialStatus}`}
+                      >
+                        {t(`settings.agent.credential.${provider.credentialStatus}`)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="desktop-settings__provider-empty">
+                  {t('settings.agent.providerGroup.empty')}
+                </p>
+              )}
+            </section>
+          ))}
+        </div>
+        {showProviderForm && port ? (
+          <ProviderForm
+            disabled={pending}
+            initial={editingProvider}
+            models={
+              editingProvider
+                ? (projection?.models.filter((model) => model.providerId === editingProvider.id) ??
+                  [])
+                : []
+            }
+            defaults={projection?.defaults ?? {}}
+            onCancel={() => setShowProviderForm(false)}
+            onSaveModel={(model) => execute(() => port.saveModel(model))}
+            onSetDefault={(model) =>
+              execute(() =>
+                port.setDefault(model.type, {
+                  providerId: model.providerId,
+                  modelId: model.id,
+                }),
+              )
+            }
+            onSave={(provider, apiKey) =>
+              execute(() => port.saveProvider(provider, apiKey)).then((saved) => {
+                if (saved) setShowProviderForm(false);
+              })
+            }
+          />
         ) : null}
       </div>
     </SettingsGroup>

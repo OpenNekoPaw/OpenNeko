@@ -112,7 +112,7 @@ describe('Desktop Settings surfaces', () => {
     container.remove();
   });
 
-  it('keeps provider configuration on demand and scopes models to the selected provider', async () => {
+  it('shows provider groups directly while keeping provider editing on demand', async () => {
     const projection = {
       providers: [
         {
@@ -172,14 +172,10 @@ describe('Desktop Settings surfaces', () => {
     expect(container.textContent).not.toContain('Dialogue models');
     expect(container.textContent).not.toContain('Generation models');
     expect(container.querySelectorAll('select')).toHaveLength(0);
-    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(0);
+    expect(container.querySelectorAll('.desktop-settings__management-summary')).toHaveLength(0);
+    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(1);
     expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(0);
     expect(container.textContent).not.toContain('Model catalog');
-
-    const providerSummary = findButtonContaining(container, 'Providers');
-    await act(async () => providerSummary.click());
-    expect(providerSummary.getAttribute('aria-expanded')).toBe('true');
-    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(1);
     expect(container.querySelector('[data-provider-group="mixed"]')?.textContent).toContain(
       'DeepSeek Provider',
     );
@@ -250,7 +246,6 @@ describe('Desktop Settings surfaces', () => {
       initialSection: 'agent',
     });
     await act(async () => Promise.resolve());
-    await act(async () => findButtonContaining(container, 'Providers').click());
 
     const expectedGroups = {
       dialogue: 'Dialogue Provider',
@@ -284,7 +279,6 @@ describe('Desktop Settings surfaces', () => {
     });
     await act(async () => Promise.resolve());
 
-    await act(async () => findButtonContaining(container, 'Providers').click());
     await act(async () => findButtonContaining(container, 'Add provider').click());
 
     expect(container.textContent).toContain('Custom provider');

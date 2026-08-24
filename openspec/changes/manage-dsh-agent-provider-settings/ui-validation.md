@@ -1,15 +1,15 @@
 ## Scope
 
-Agent Settings Provider-scoped configuration is applicable UI work. The inventory covers the compact initial state, Provider catalog, configured Provider editor, advanced connection disclosure, Provider-owned dialogue/generation models, custom Provider form, model-add entry, scrolling and adjacent Settings overlay layout.
+Agent Settings Provider-scoped configuration is applicable UI work. The inventory covers the direct grouped Provider catalog, configured Provider editor, advanced connection disclosure, Provider-owned dialogue/generation models, custom Provider form, model-add entry, scrolling and adjacent Settings overlay layout.
 
 ## Runtime
 
-The authoritative runtime was the running OpenNeko Electron development application at `localhost:5173`, using the real Settings overlay and current canonical Provider/model projection. Component tests supplement interaction evidence without replacing Electron presentation evidence.
+The authoritative runtime was the running OpenNeko Electron development application at `localhost:5174`, using the real Settings overlay and current canonical Provider/model projection. Component tests supplement interaction evidence without replacing Electron presentation evidence.
 
 ## Inventory
 
-- Initial: open Settings → Agent; the compact Provider summary is visible, the canonical configuration action sits beside the Agent heading, and no separate advanced-settings content row is rendered.
-- Catalog: expand Provider management; configured Providers remain compact, full-width rows with credential status.
+- Initial: open Settings → Agent; the grouped Provider catalog and add action are directly visible, the canonical configuration action sits beside the Agent heading, and no Provider summary/accordion or separate advanced-settings content row is rendered.
+- Catalog: configured Providers remain compact rows with credential status inside their exact capability group.
 - Provider capability groups: dialogue and generation Providers use side-by-side groups at desktop width; mixed Providers appear once; model-less Providers remain visible as unconfigured; narrow containers return all groups to one column.
 - Configured Provider: select a Provider; credential input, collapsed custom settings, Provider-owned model catalog and footer actions appear in one panel.
 - Advanced: expand and collapse custom settings; display name, API URL and protocol appear without changing model ownership.
@@ -25,23 +25,24 @@ The authoritative runtime was the running OpenNeko Electron development applicat
 - Electron configured Provider footer was directly inspected after scrolling: the model catalog, Set as default actions, Cancel/Save footer and adjacent advanced Agent entry did not overlap or clip.
 - Electron custom Provider state was directly inspected at the top and after scrolling to its footer: all required fields, compact protocol control, empty model state and disabled incomplete save flow remained contained in the overlay.
 - Current Electron Provider catalog was directly inspected after the capability-group follow-up: DeepSeek Chat and Neko API Chat rendered in the left dialogue group, Neko API Media rendered in the right generation group, and model-less Olloma Chat remained visible in the full-width unconfigured group. Counts were 2, 1 and 1 respectively.
+- The flattened-catalog follow-up was directly inspected in the current Electron runtime: the Agent heading is followed immediately by Add Provider and the dialogue/generation/unconfigured groups; no outer Provider title, count, summary card or disclosure control exists. Selecting DeepSeek Chat then exposed the scoped Provider editor, proving editing remains on demand.
 - The focused component fixture proves dialogue-only, generation-only, mixed and unconfigured Providers enter their exact groups and that the mixed Provider appears once. The renderer style test proves the two-column rule and its 620px single-column container override.
 
 ## Visual findings
 
-- One Provider management entry replaces the earlier Provider/model parallel hierarchy.
+- Direct capability groups replace the earlier Provider/model parallel hierarchy and the redundant outer Provider management wrapper.
 - Full-width Provider rows and the neutral editor surface match the reference hierarchy without reproducing unsupported fetch/delete actions.
 - Existing Provider connection fields are subordinate to credential and model management through an explicit disclosure.
 - Custom Provider fields use a single reading column; protocol remains compact while endpoint and credential fields use available width.
 - Model cards stay compact in two columns and collapse to one column under the existing settings container query.
 - No clipping, overlap, unreadable labels or overlay-boundary regression was observed in the inspected light-theme 1220×768 states.
-- A current Electron screenshot directly confirms the Agent heading, description, right-aligned configuration action and compact Provider summary share one coherent initial viewport with no duplicate advanced-settings block.
+- A current Electron screenshot directly confirms the Agent heading, description, right-aligned configuration action and direct Provider groups share one coherent initial viewport with no duplicate Provider or advanced-settings block.
 - A current Electron screenshot directly confirms the Provider-level two-column hierarchy, aligned group headings/counts, compact cards, readable credential badges and full-width unconfigured section without clipping or overlap.
 
 ## Result
 
-`blocked`: the current Agent initial state and wide Provider capability grouping passed direct Electron inspection, and component/style tests cover the complete grouping and responsive structure. The shared development Electron was replaced by its default page while resizing, so the narrow-container pixels remain blocked. Real credential entry/provider creation was intentionally not performed, and dark theme was not exercised.
+`passed` for the flattened Provider hierarchy: the current Agent initial state and wide Provider capability grouping passed direct Electron inspection, and selecting a Provider proved the editor remains on demand. Component/style tests cover the complete grouping and responsive structure. Real credential entry/provider creation was intentionally not performed, and dark theme was not exercised.
 
 ## Residual risk
 
-The current title action and wide Provider grouping are visually accepted. Provider and model single-column responsive behavior is covered structurally but lacks stable Electron pixels because the shared dev runtime was replaced during resize. Credential submission, canonical Provider creation, dark-theme contrast and narrow-window pixels remain unexecuted. No secret was entered or projected during validation.
+The direct catalog, title action and wide Provider grouping are visually accepted. Provider and model single-column responsive behavior remains covered structurally but lacks stable Electron pixels because the shared dev runtime was replaced during an earlier resize. Credential submission, canonical Provider creation, dark-theme contrast and narrow-window pixels remain unexecuted. No secret was entered or projected during validation.

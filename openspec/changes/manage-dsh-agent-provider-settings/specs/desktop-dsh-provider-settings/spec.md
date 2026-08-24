@@ -29,12 +29,13 @@ Default dialogue changes SHALL apply to future conversations. Provider catalog c
 
 ### Requirement: Model configuration uses progressive disclosure
 
-The Agent settings surface SHALL keep Provider configuration collapsed until the user explicitly opens the management area. Models SHALL be managed within their owning Provider editor, and default model selection SHALL be part of that Provider's configured model catalog rather than a separate settings block.
+The Agent settings surface SHALL show the Provider catalog directly without an additional Provider summary wrapper. Provider editing SHALL remain collapsed until the user selects a Provider. Models SHALL be managed within their owning Provider editor, and default model selection SHALL be part of that Provider's configured model catalog rather than a separate settings block.
 
 #### Scenario: Agent settings are opened
 
 - **WHEN** the Agent settings category becomes visible
-- **THEN** Provider configuration is represented by a compact management summary rather than a fully expanded catalog
+- **THEN** the capability-grouped Provider catalog and add action are directly visible without an outer Provider summary, accordion or management card
+- **AND** no Provider editor is shown until the user selects or adds a Provider
 - **AND** the canonical Agent configuration action is shown beside the Agent heading
 - **AND** no separate advanced-settings content row is shown
 - **AND** no separate default-model selectors are shown
@@ -42,7 +43,7 @@ The Agent settings surface SHALL keep Provider configuration collapsed until the
 
 #### Scenario: Providers are grouped by configured capability
 
-- **WHEN** the user opens Provider management
+- **WHEN** the Agent settings category becomes visible
 - **THEN** providers with only dialogue models and providers with only generation models are shown in separate side-by-side groups when space permits
 - **AND** the groups use a single-column layout in narrow containers
 - **AND** a Provider with both dialogue and generation models is shown once in a multi-capability group
