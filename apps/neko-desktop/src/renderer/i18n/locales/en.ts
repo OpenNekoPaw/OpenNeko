@@ -98,6 +98,8 @@ export const en = {
   'settings.agent.providersDescription':
     'Manage configured providers by dialogue and generation capability.',
   'settings.agent.addProvider': 'Add provider',
+  'settings.agent.addProvider.dialogue': 'Add dialogue provider',
+  'settings.agent.addProvider.generation': 'Add generation provider',
   'settings.agent.source.local': 'Local',
   'settings.agent.source.remote': 'Remote',
   'settings.agent.providerGroup.dialogue': 'Dialogue providers',
@@ -106,12 +108,6 @@ export const en = {
   'settings.agent.providerGroup.generation': 'Generation providers',
   'settings.agent.providerGroup.generation.description':
     'Provide image, video, or audio generation models.',
-  'settings.agent.providerGroup.mixed': 'Multi-capability providers',
-  'settings.agent.providerGroup.mixed.description':
-    'Provide both dialogue and generation models and appear here only once.',
-  'settings.agent.providerGroup.unconfigured': 'Providers to configure',
-  'settings.agent.providerGroup.unconfigured.description':
-    'No models are configured, so no capability is inferred yet.',
   'settings.agent.providerGroup.empty': 'No configured providers',
   'settings.agent.modelCatalog': 'Model catalog',
   'settings.agent.modelCatalogDescription':

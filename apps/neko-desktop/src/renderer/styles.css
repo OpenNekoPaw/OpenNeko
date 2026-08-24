@@ -455,15 +455,9 @@ code {
   text-align: center;
 }
 
-.desktop-settings__management-panel {
+.desktop-settings__provider-directories {
   display: grid;
-  gap: 10px;
-  padding-top: 2px;
-}
-
-.desktop-settings__management-actions {
-  display: flex;
-  justify-content: flex-end;
+  gap: 12px;
 }
 
 .desktop-settings__compact-field,
@@ -510,16 +504,23 @@ code {
   background: color-mix(in srgb, var(--neko-desktop-control) 46%, transparent);
 }
 
-.desktop-settings__provider-group--wide {
-  grid-column: 1 / -1;
-}
-
 .desktop-settings__provider-group-heading {
   display: flex;
   min-width: 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.desktop-settings__provider-group-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-settings__provider-group-actions .desktop-settings__action {
+  width: auto;
 }
 
 .desktop-settings__provider-group-heading > div {
@@ -552,10 +553,6 @@ code {
 
 .desktop-settings__provider-list {
   grid-template-columns: 1fr;
-}
-
-.desktop-settings__provider-group--wide .desktop-settings__provider-list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .desktop-settings__model-list {
@@ -599,25 +596,60 @@ code {
   min-width: 0;
   min-height: 58px;
   align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 9px;
+  color: inherit;
+  background: transparent;
+}
+
+.desktop-settings__provider-card-main {
+  display: flex;
+  min-width: 0;
+  min-height: 56px;
+  flex: 1 1 auto;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 10px 11px;
-  border: 1px solid var(--neko-desktop-border);
-  border-radius: 9px;
+  border: 0;
   color: inherit;
   background: transparent;
   text-align: left;
   cursor: pointer;
 }
 
-.desktop-settings__provider-card:hover {
+.desktop-settings__provider-card-main:hover {
   background: var(--neko-desktop-control-hover);
 }
 
-.desktop-settings__provider-card > span:first-child {
+.desktop-settings__provider-card-main > span:first-child {
   display: grid;
   min-width: 0;
   gap: 3px;
+}
+
+.desktop-settings__provider-card-delete {
+  align-self: stretch;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid var(--neko-desktop-border);
+  color: var(--neko-desktop-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.desktop-settings__provider-card-delete:hover,
+.desktop-settings__provider-card-delete--confirm {
+  color: var(--neko-desktop-danger-foreground);
+  background: var(--neko-desktop-danger-surface);
+}
+
+.desktop-settings__provider-card-delete:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .desktop-settings__provider-card strong,
@@ -2735,7 +2767,6 @@ code {
 
   .desktop-settings__provider-list,
   .desktop-settings__provider-groups,
-  .desktop-settings__provider-group--wide .desktop-settings__provider-list,
   .desktop-settings__model-groups,
   .desktop-settings__model-list,
   .desktop-settings__form-grid,

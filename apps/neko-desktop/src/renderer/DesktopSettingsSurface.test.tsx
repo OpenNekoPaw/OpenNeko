@@ -123,6 +123,7 @@ describe('Desktop Settings surfaces', () => {
           connectionKind: 'direct' as const,
           enabled: true,
           builtin: false,
+          supportedModelFamilies: ['dialogue', 'generation'] as const,
           credentialStatus: 'configured' as const,
         },
       ],
@@ -178,16 +179,19 @@ describe('Desktop Settings surfaces', () => {
     expect(container.textContent).not.toContain('Generation models');
     expect(container.querySelectorAll('select')).toHaveLength(0);
     expect(container.querySelectorAll('.desktop-settings__management-summary')).toHaveLength(0);
-    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(1);
+    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(2);
     expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(0);
     expect(container.textContent).not.toContain('Model catalog');
-    expect(container.querySelector('[data-provider-group="mixed"]')?.textContent).toContain(
+    expect(container.querySelector('[data-provider-group="dialogue"]')?.textContent).toContain(
+      'DeepSeek Provider',
+    );
+    expect(container.querySelector('[data-provider-group="generation"]')?.textContent).toContain(
       'DeepSeek Provider',
     );
     expect(container.querySelectorAll('.desktop-settings__model-chip')).toHaveLength(0);
 
     const providerCard = container.querySelector<HTMLButtonElement>(
-      '.desktop-settings__provider-card',
+      '.desktop-settings__provider-card-main',
     );
     if (!providerCard) throw new Error('Provider settings fixture requires a provider card.');
     await act(async () => providerCard.click());
@@ -231,6 +235,7 @@ describe('Desktop Settings surfaces', () => {
           connectionKind: 'local' as const,
           enabled: true,
           builtin: true,
+          supportedModelFamilies: ['dialogue'] as const,
           credentialStatus: 'not-required' as const,
         },
       ],
@@ -257,7 +262,7 @@ describe('Desktop Settings surfaces', () => {
     expect(dialogue?.textContent).toContain('Local');
     expect(dialogue?.textContent).toContain('No credential required');
     const providerCard = dialogue?.querySelector<HTMLButtonElement>(
-      '.desktop-settings__provider-card',
+      '.desktop-settings__provider-card-main',
     );
     if (!providerCard) throw new Error('Ollama fixture requires a provider card.');
     await act(async () => providerCard.click());
@@ -282,6 +287,7 @@ describe('Desktop Settings surfaces', () => {
           connectionKind: 'direct' as const,
           enabled: true,
           builtin: false,
+          supportedModelFamilies: ['dialogue'] as const,
           credentialStatus: 'configured' as const,
         },
       ],
@@ -303,9 +309,6 @@ describe('Desktop Settings surfaces', () => {
       initialSection: 'agent',
     });
     await act(async () => Promise.resolve());
-    const card = container.querySelector<HTMLButtonElement>('.desktop-settings__provider-card');
-    if (!card) throw new Error('Custom Provider fixture requires a provider card.');
-    await act(async () => card.click());
     await act(async () => findButton(container, 'Delete provider').click());
     expect(deleteProvider).not.toHaveBeenCalled();
     await act(async () => findButton(container, 'Confirm delete').click());
@@ -313,15 +316,15 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => root.unmount());
   });
 
-  it('groups providers by canonical model capability without duplicating mixed providers', async () => {
+  it('renders only the two canonical Provider directories without an outer or pending group', async () => {
     const providers = (
       [
-        ['chat', 'Dialogue Provider'],
-        ['media', 'Generation Provider'],
-        ['hybrid', 'Hybrid Provider'],
-        ['empty', 'Provider Without Models'],
+        ['chat', 'Dialogue Provider', ['dialogue']],
+        ['media', 'Generation Provider', ['generation']],
+        ['hybrid', 'Hybrid Provider', ['dialogue', 'generation']],
+        ['empty', 'Provider Without Models', ['dialogue']],
       ] as const
-    ).map(([id, displayName]) => ({
+    ).map(([id, displayName, supportedModelFamilies]) => ({
       id,
       displayName,
       apiUrl: `https://${id}.example/v1`,
@@ -329,6 +332,7 @@ describe('Desktop Settings surfaces', () => {
       connectionKind: 'direct' as const,
       enabled: true,
       builtin: false,
+      supportedModelFamilies,
       credentialStatus: 'configured' as const,
     }));
     const projection = {
@@ -356,19 +360,18 @@ describe('Desktop Settings surfaces', () => {
     });
     await act(async () => Promise.resolve());
 
-    const expectedGroups = {
-      dialogue: 'Dialogue Provider',
-      generation: 'Generation Provider',
-      mixed: 'Hybrid Provider',
-      unconfigured: 'Provider Without Models',
-    } as const;
-    for (const [kind, providerName] of Object.entries(expectedGroups)) {
-      const group = container.querySelector(`[data-provider-group="${kind}"]`);
-      expect(group?.textContent).toContain(providerName);
-      expect(group?.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(1);
-    }
-    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(4);
-    expect(container.textContent?.match(/Hybrid Provider/g)).toHaveLength(1);
+    const dialogue = container.querySelector('[data-provider-group="dialogue"]');
+    const generation = container.querySelector('[data-provider-group="generation"]');
+    expect(dialogue?.textContent).toContain('Dialogue Provider');
+    expect(dialogue?.textContent).toContain('Hybrid Provider');
+    expect(dialogue?.textContent).toContain('Provider Without Models');
+    expect(generation?.textContent).toContain('Generation Provider');
+    expect(generation?.textContent).toContain('Hybrid Provider');
+    expect(container.querySelectorAll('[data-provider-group]')).toHaveLength(2);
+    expect(container.querySelector('[data-provider-group="mixed"]')).toBeNull();
+    expect(container.querySelector('[data-provider-group="unconfigured"]')).toBeNull();
+    expect(container.querySelectorAll('.desktop-settings__provider-card')).toHaveLength(5);
+    expect(container.querySelectorAll('.desktop-settings__card')).toHaveLength(0);
     await act(async () => root.unmount());
   });
 
@@ -390,7 +393,7 @@ describe('Desktop Settings surfaces', () => {
     });
     await act(async () => Promise.resolve());
 
-    await act(async () => findButtonContaining(container, 'Add provider').click());
+    await act(async () => findButton(container, 'Add generation provider').click());
 
     expect(container.textContent).toContain('Custom provider');
     expect(container.querySelectorAll('.desktop-settings__editor input')).toHaveLength(4);

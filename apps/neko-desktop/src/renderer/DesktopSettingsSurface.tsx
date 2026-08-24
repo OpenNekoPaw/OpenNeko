@@ -4,12 +4,13 @@ import { Dialog } from '@neko/ui/primitives';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { DesktopApplicationPreferences } from '@neko/host/application-settings';
 import type {
+  DesktopAiModelType,
   DesktopAiModelView,
   DesktopAiModelProtocol,
   DesktopAiModelSettingsProjection,
+  DesktopAiProviderModelFamily,
   DesktopAiProviderView,
 } from '@neko/host/ai-model-settings';
-import type { ModelType } from '@neko/ai-contracts';
 import type { DesktopStorageSettingsProjection } from '@neko/host/desktop-storage-settings-contract';
 import { useDesktopApplicationSettings } from './application-settings-context';
 import { DesktopApplicationNavigationButton } from './DesktopApplicationSidebar';
@@ -399,9 +400,11 @@ function AgentModelSettingsGroup({
   const [pending, setPending] = useState(false);
   const [restartRequired, setRestartRequired] = useState(false);
   const [editingProvider, setEditingProvider] = useState<DesktopAiProviderView>();
-  const [showProviderForm, setShowProviderForm] = useState(false);
+  const [creatingProviderFamily, setCreatingProviderFamily] =
+    useState<DesktopAiProviderModelFamily>();
+  const [confirmingProviderDeleteId, setConfirmingProviderDeleteId] = useState<string>();
   const providerGroups = useMemo(
-    () => groupProvidersByCapability(projection?.providers ?? [], projection?.models ?? []),
+    () => groupProvidersByCapability(projection?.providers ?? []),
     [projection],
   );
 
@@ -471,35 +474,19 @@ function AgentModelSettingsGroup({
       }
       description={t('settings.category.agent.description')}
       title={t('settings.category.agent')}
+      unframed
     >
       {restartRequired ? (
         <div className="desktop-settings__notice" role="status">
           {t('settings.agent.restartRequired')}
         </div>
       ) : null}
-      <div className="desktop-settings__management-panel">
-        <div className="desktop-settings__management-actions">
-          <button
-            className="desktop-settings__action"
-            disabled={pending || !port}
-            type="button"
-            onClick={() => {
-              setEditingProvider(undefined);
-              setShowProviderForm(true);
-            }}
-          >
-            {t('settings.agent.addProvider')}
-          </button>
-        </div>
+      <div className="desktop-settings__provider-directories">
         <div className="desktop-settings__provider-groups">
           {providerGroups.map((group) => (
             <section
               key={group.kind}
-              className={`desktop-settings__provider-group${
-                group.kind === 'mixed' || group.kind === 'unconfigured'
-                  ? ' desktop-settings__provider-group--wide'
-                  : ''
-              }`}
+              className="desktop-settings__provider-group"
               data-provider-group={group.kind}
             >
               <div className="desktop-settings__provider-group-heading">
@@ -507,35 +494,77 @@ function AgentModelSettingsGroup({
                   <strong>{t(`settings.agent.providerGroup.${group.kind}`)}</strong>
                   <small>{t(`settings.agent.providerGroup.${group.kind}.description`)}</small>
                 </div>
-                <span className="desktop-settings__count">{group.providers.length}</span>
+                <span className="desktop-settings__provider-group-actions">
+                  <span className="desktop-settings__count">{group.providers.length}</span>
+                  <button
+                    className="desktop-settings__action desktop-settings__action--quiet"
+                    disabled={pending || !port}
+                    type="button"
+                    onClick={() => {
+                      setEditingProvider(undefined);
+                      setCreatingProviderFamily(group.kind);
+                    }}
+                  >
+                    {t(`settings.agent.addProvider.${group.kind}`)}
+                  </button>
+                </span>
               </div>
               {group.providers.length > 0 ? (
                 <div className="desktop-settings__provider-list">
                   {group.providers.map((provider) => (
-                    <button
-                      key={provider.id}
+                    <article
+                      key={`${group.kind}:${provider.id}`}
                       className="desktop-settings__provider-card"
-                      type="button"
-                      onClick={() => {
-                        setEditingProvider(provider);
-                        setShowProviderForm(true);
-                      }}
                     >
-                      <span>
-                        <strong>{provider.displayName}</strong>
-                        <small>
-                          {provider.connectionKind === 'local'
-                            ? t('settings.agent.source.local')
-                            : t('settings.agent.source.remote')}{' '}
-                          · {provider.apiUrl}
-                        </small>
-                      </span>
-                      <span
-                        className={`desktop-settings__credential desktop-settings__credential--${provider.credentialStatus}`}
+                      <button
+                        className="desktop-settings__provider-card-main"
+                        type="button"
+                        onClick={() => {
+                          setEditingProvider(provider);
+                          setCreatingProviderFamily(undefined);
+                          setConfirmingProviderDeleteId(undefined);
+                        }}
                       >
-                        {t(`settings.agent.credential.${provider.credentialStatus}`)}
-                      </span>
-                    </button>
+                        <span>
+                          <strong>{provider.displayName}</strong>
+                          <small>
+                            {provider.connectionKind === 'local'
+                              ? t('settings.agent.source.local')
+                              : t('settings.agent.source.remote')}{' '}
+                            · {provider.apiUrl}
+                          </small>
+                        </span>
+                        <span
+                          className={`desktop-settings__credential desktop-settings__credential--${provider.credentialStatus}`}
+                        >
+                          {t(`settings.agent.credential.${provider.credentialStatus}`)}
+                        </span>
+                      </button>
+                      {!provider.builtin && port ? (
+                        <button
+                          className={`desktop-settings__provider-card-delete${
+                            confirmingProviderDeleteId === provider.id
+                              ? ' desktop-settings__provider-card-delete--confirm'
+                              : ''
+                          }`}
+                          disabled={pending}
+                          type="button"
+                          onClick={() => {
+                            if (confirmingProviderDeleteId !== provider.id) {
+                              setConfirmingProviderDeleteId(provider.id);
+                              return;
+                            }
+                            void execute(() => port.deleteProvider(provider.id)).then((deleted) => {
+                              if (deleted) setConfirmingProviderDeleteId(undefined);
+                            });
+                          }}
+                        >
+                          {confirmingProviderDeleteId === provider.id
+                            ? t('settings.agent.confirmDelete')
+                            : t('settings.agent.deleteProvider')}
+                        </button>
+                      ) : null}
+                    </article>
                   ))}
                 </div>
               ) : (
@@ -546,10 +575,14 @@ function AgentModelSettingsGroup({
             </section>
           ))}
         </div>
-        {showProviderForm && port ? (
+        {(editingProvider || creatingProviderFamily) && port ? (
           <ProviderForm
             disabled={pending}
             initial={editingProvider}
+            modelFamily={
+              editingProvider?.supportedModelFamilies ??
+              (creatingProviderFamily ? [creatingProviderFamily] : ['dialogue'])
+            }
             models={
               editingProvider
                 ? (projection?.models.filter((model) => model.providerId === editingProvider.id) ??
@@ -557,11 +590,17 @@ function AgentModelSettingsGroup({
                 : []
             }
             defaults={projection?.defaults ?? {}}
-            onCancel={() => setShowProviderForm(false)}
+            onCancel={() => {
+              setEditingProvider(undefined);
+              setCreatingProviderFamily(undefined);
+            }}
             onDeleteModel={(modelId) => execute(() => port.deleteModel(modelId))}
             onDeleteProvider={(providerId) =>
               execute(() => port.deleteProvider(providerId)).then((deleted) => {
-                if (deleted) setShowProviderForm(false);
+                if (deleted) {
+                  setEditingProvider(undefined);
+                  setCreatingProviderFamily(undefined);
+                }
                 return deleted;
               })
             }
@@ -576,7 +615,10 @@ function AgentModelSettingsGroup({
             }
             onSave={(provider, apiKey) =>
               execute(() => port.saveProvider(provider, apiKey)).then((saved) => {
-                if (saved) setShowProviderForm(false);
+                if (saved) {
+                  setEditingProvider(undefined);
+                  setCreatingProviderFamily(undefined);
+                }
               })
             }
           />
@@ -586,7 +628,7 @@ function AgentModelSettingsGroup({
   );
 }
 
-type ProviderCapabilityGroupKind = 'dialogue' | 'generation' | 'mixed' | 'unconfigured';
+type ProviderCapabilityGroupKind = DesktopAiProviderModelFamily;
 
 interface ProviderCapabilityGroup {
   readonly kind: ProviderCapabilityGroupKind;
@@ -595,48 +637,25 @@ interface ProviderCapabilityGroup {
 
 function groupProvidersByCapability(
   providers: readonly DesktopAiProviderView[],
-  models: readonly DesktopAiModelView[],
 ): readonly ProviderCapabilityGroup[] {
-  const modelTypesByProvider = new Map<string, Set<ModelType>>();
-  for (const model of models) {
-    const types = modelTypesByProvider.get(model.providerId) ?? new Set<ModelType>();
-    types.add(model.type);
-    modelTypesByProvider.set(model.providerId, types);
-  }
-
   const grouped: Record<ProviderCapabilityGroupKind, DesktopAiProviderView[]> = {
     dialogue: [],
     generation: [],
-    mixed: [],
-    unconfigured: [],
   };
   for (const provider of providers) {
-    const types = modelTypesByProvider.get(provider.id);
-    const hasDialogue = types?.has('llm') ?? false;
-    const hasGeneration =
-      (types?.has('image') ?? false) ||
-      (types?.has('video') ?? false) ||
-      (types?.has('audio') ?? false);
-    const kind: ProviderCapabilityGroupKind =
-      hasDialogue && hasGeneration
-        ? 'mixed'
-        : hasDialogue
-          ? 'dialogue'
-          : hasGeneration
-            ? 'generation'
-            : 'unconfigured';
-    grouped[kind].push(provider);
+    for (const family of provider.supportedModelFamilies) grouped[family].push(provider);
   }
-
-  return (['dialogue', 'generation', 'mixed', 'unconfigured'] as const)
-    .filter((kind) => kind === 'dialogue' || kind === 'generation' || grouped[kind].length > 0)
-    .map((kind) => ({ kind, providers: grouped[kind] }));
+  return (['dialogue', 'generation'] as const).map((kind) => ({
+    kind,
+    providers: grouped[kind],
+  }));
 }
 
 function ProviderForm({
   disabled,
   defaults,
   initial,
+  modelFamily,
   models,
   onCancel,
   onDeleteModel,
@@ -648,6 +667,7 @@ function ProviderForm({
   readonly disabled: boolean;
   readonly defaults: DesktopAiModelSettingsProjection['defaults'];
   readonly initial?: DesktopAiProviderView;
+  readonly modelFamily: readonly DesktopAiProviderModelFamily[];
   readonly models: readonly DesktopAiModelView[];
   readonly onCancel: () => void;
   readonly onDeleteModel: (modelId: string) => Promise<boolean>;
@@ -658,6 +678,7 @@ function ProviderForm({
       readonly displayName: string;
       readonly apiUrl: string;
       readonly protocol: DesktopAiModelProtocol;
+      readonly supportedModelFamilies: readonly DesktopAiProviderModelFamily[];
       readonly enabled: boolean;
     },
     apiKey?: string,
@@ -667,7 +688,7 @@ function ProviderForm({
     readonly providerId: string;
     readonly apiName: string;
     readonly displayName: string;
-    readonly type: ModelType;
+    readonly type: DesktopAiModelType;
     readonly enabled: boolean;
   }) => Promise<boolean>;
   readonly onSetDefault: (model: DesktopAiModelView) => Promise<boolean>;
@@ -684,11 +705,12 @@ function ProviderForm({
   const [showModelForm, setShowModelForm] = useState(false);
   const [confirmProviderDelete, setConfirmProviderDelete] = useState(false);
   const requiresApiKey = protocol !== 'ollama';
+  const allowsOllama = modelFamily.length === 1 && modelFamily[0] === 'dialogue';
   const canSave = Boolean(id.trim() && displayName.trim() && apiUrl.trim());
   const submit = (event: FormEvent): void => {
     event.preventDefault();
     void onSave(
-      { id, displayName, apiUrl, protocol, enabled: true },
+      { id, displayName, apiUrl, protocol, supportedModelFamilies: modelFamily, enabled: true },
       apiKey.trim() ? apiKey : undefined,
     );
   };
@@ -802,7 +824,7 @@ function ProviderForm({
               <option value="openai-chat">OpenAI Chat compatible</option>
               <option value="openai-responses">OpenAI Responses</option>
               <option value="anthropic">Anthropic Messages</option>
-              <option value="ollama">Ollama local</option>
+              {allowsOllama ? <option value="ollama">Ollama local</option> : null}
             </select>
           </label>
           {!initial && requiresApiKey ? (
@@ -854,7 +876,7 @@ function ProviderForm({
         {initial && showModelForm ? (
           <ModelForm
             disabled={disabled}
-            supportedTypes={protocol === 'ollama' ? ['llm'] : undefined}
+            supportedTypes={modelTypesForFamilies(modelFamily, protocol)}
             providerId={initial.id}
             onCancel={() => setShowModelForm(false)}
             onSave={(model) =>
@@ -925,17 +947,19 @@ function ModelForm({
     readonly providerId: string;
     readonly apiName: string;
     readonly displayName: string;
-    readonly type: ModelType;
+    readonly type: DesktopAiModelType;
     readonly enabled: boolean;
   }) => Promise<void>;
   readonly providerId: string;
-  readonly supportedTypes?: readonly ModelType[];
+  readonly supportedTypes?: readonly DesktopAiModelType[];
 }): JSX.Element {
   const { t } = useTranslation();
+  const initialType = supportedTypes[0];
+  if (!initialType) throw new Error(`Provider ${providerId} has no supported model types.`);
   const [id, setId] = useState('');
   const [apiName, setApiName] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [type, setType] = useState<ModelType>('llm');
+  const [type, setType] = useState<DesktopAiModelType>(initialType);
   const canSave = Boolean(id.trim() && apiName.trim() && displayName.trim());
   const save = (): void => {
     if (disabled || !canSave) return;
@@ -958,7 +982,7 @@ function ModelForm({
           <select
             disabled={disabled}
             value={type}
-            onChange={(e) => setType(e.currentTarget.value as ModelType)}
+            onChange={(e) => setType(e.currentTarget.value as DesktopAiModelType)}
           >
             {supportedTypes.map((candidate) => (
               <option key={candidate} value={candidate}>
@@ -1010,6 +1034,17 @@ function ModelForm({
       </div>
     </div>
   );
+}
+
+function modelTypesForFamilies(
+  families: readonly DesktopAiProviderModelFamily[],
+  protocol: DesktopAiModelProtocol,
+): readonly DesktopAiModelType[] {
+  if (protocol === 'ollama') return ['llm'];
+  return [
+    ...(families.includes('dialogue') ? (['llm'] as const) : []),
+    ...(families.includes('generation') ? (['image', 'video', 'audio'] as const) : []),
+  ];
 }
 
 function ProviderModelCatalog({
@@ -1178,11 +1213,13 @@ function SettingsGroup({
   children,
   description,
   title,
+  unframed = false,
 }: {
   readonly action?: ReactNode;
   readonly children: ReactNode;
   readonly description: string;
   readonly title: string;
+  readonly unframed?: boolean;
 }): JSX.Element {
   return (
     <section className="desktop-settings__group">
@@ -1193,7 +1230,7 @@ function SettingsGroup({
         </div>
         {action}
       </div>
-      <div className="desktop-settings__card">{children}</div>
+      {unframed ? children : <div className="desktop-settings__card">{children}</div>}
     </section>
   );
 }

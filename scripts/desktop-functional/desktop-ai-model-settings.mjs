@@ -23,6 +23,7 @@ export const desktopAiModelSettingsScenario = Object.freeze({
         'builtin = true',
         'connection_kind = "local"',
         'protocol_profile = "ollama"',
+        'supported_model_families = ["dialogue"]',
         'requires_api_key = false',
         '',
         '[[providers]]',
@@ -33,6 +34,7 @@ export const desktopAiModelSettingsScenario = Object.freeze({
         'enabled = true',
         'connection_kind = "direct"',
         'protocol_profile = "openai-chat"',
+        'supported_model_families = ["dialogue"]',
         'requires_api_key = false',
         '',
         '[[providers]]',
@@ -43,6 +45,7 @@ export const desktopAiModelSettingsScenario = Object.freeze({
         'enabled = true',
         'connection_kind = "direct"',
         'protocol_profile = "openai-chat"',
+        'supported_model_families = ["generation"]',
         'requires_api_key = false',
         '',
         '[[models]]',
@@ -182,20 +185,32 @@ export const desktopAiModelSettingsScenario = Object.freeze({
     );
     await evaluate(`(() => {
       const editor = document.querySelector('.desktop-settings__editor');
-      const remove = [...editor?.querySelectorAll('button') ?? []].find((button) =>
-        /删除 Provider|Delete provider/u.test(button.textContent ?? ''),
+      const cancelButtons = [...editor?.querySelectorAll('button') ?? []].filter((button) =>
+        /取消|Cancel/u.test(button.textContent ?? ''),
       );
-      if (!(remove instanceof HTMLButtonElement)) throw new Error('Provider delete control is unavailable.');
+      const closeEditor = cancelButtons.at(-1);
+      if (!(closeEditor instanceof HTMLButtonElement)) throw new Error('Provider editor close is unavailable.');
+      closeEditor.click();
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `!document.querySelector('.desktop-settings__editor')`,
+      'Provider editor did not close before direct deletion.',
+    );
+    await evaluate(`(() => {
+      const card = [...document.querySelectorAll('.desktop-settings__provider-card')].find((item) =>
+        item.textContent?.includes('Functional Removable'),
+      );
+      const remove = card?.querySelector('.desktop-settings__provider-card-delete');
+      if (!(remove instanceof HTMLButtonElement)) throw new Error('Direct Provider delete is unavailable.');
       remove.click();
       return true;
     })()`);
-    await waitForSelector('.desktop-settings__delete-confirmation');
+    await waitForSelector('.desktop-settings__provider-card-delete--confirm');
     const deleteConfirmationScreenshot = await screenshot('desktop-ai-model-delete-confirmation');
     await evaluate(`(() => {
-      const confirmation = document.querySelector('.desktop-settings__delete-confirmation');
-      const confirm = [...confirmation?.querySelectorAll('button') ?? []].find((button) =>
-        /确认删除|Confirm delete/u.test(button.textContent ?? ''),
-      );
+      const confirm = document.querySelector('.desktop-settings__provider-card-delete--confirm');
       if (!(confirm instanceof HTMLButtonElement)) throw new Error('Provider delete confirmation is unavailable.');
       confirm.click();
       return true;
@@ -220,9 +235,10 @@ export const desktopAiModelSettingsScenario = Object.freeze({
 
 async function openProvider(evaluate, label) {
   await evaluate(`(() => {
-    const provider = [...document.querySelectorAll('.desktop-settings__provider-card')].find((card) =>
-      card.textContent?.includes(${JSON.stringify(label)}),
+    const card = [...document.querySelectorAll('.desktop-settings__provider-card')].find((item) =>
+      item.textContent?.includes(${JSON.stringify(label)}),
     );
+    const provider = card?.querySelector('.desktop-settings__provider-card-main');
     if (!(provider instanceof HTMLButtonElement)) {
       throw new Error(${JSON.stringify(`Provider '${label}' is unavailable.`)});
     }
@@ -244,6 +260,19 @@ async function inspectProviderCatalog(evaluate) {
         ),
       ]),
     );
+    const groupKeys = Object.keys(groups).sort();
+    if (JSON.stringify(groupKeys) !== JSON.stringify(['dialogue', 'generation'])) {
+      throw new Error('Provider directories are not canonical: ' + JSON.stringify(groupKeys));
+    }
+    const addActions = [...document.querySelectorAll(
+      '.desktop-settings__provider-group-actions .desktop-settings__action',
+    )];
+    if (addActions.length !== 2) {
+      throw new Error('Expected one add action per Provider directory, received ' + addActions.length + '.');
+    }
+    if (document.querySelector('.desktop-settings__management-summary')) {
+      throw new Error('The retired outer Provider management wrapper is still visible.');
+    }
     const localCard = [...document.querySelectorAll('.desktop-settings__provider-card')].find((card) =>
       card.textContent?.includes('Functional Ollama'),
     );
