@@ -53,12 +53,15 @@ after hot reload:
 - Professional Applications switches through the same selector, renders the bounded ComfyUI card and
   opens a package-owned detail Overlay containing endpoint, workflow binding, launch preference,
   application selection, save and open actions;
+- Skill, MCP and Professional Application search fields span the same catalog content track as the
+  displayed card grid instead of stopping at an unrelated fixed-width limit;
 - selected cards remain visible behind both Skill and Professional Application Overlays, and closing an
   Overlay returns to the unchanged catalog.
 
 Direct screenshot inspection found the mode selector visually primary, cards start-aligned and bounded,
-and both detail Overlays readable without clipping at the current full-width window. A dark-theme pixel
-pass was not run because changing the user's persisted theme was outside this validation scope.
+search fields aligned to the catalog content boundaries, and both detail Overlays readable without
+clipping at the current full-width window. A dark-theme pixel pass was not run because changing the
+user's persisted theme was outside this validation scope.
 
 ## Quality Review
 

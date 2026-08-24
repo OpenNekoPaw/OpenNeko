@@ -58,3 +58,4 @@
 - [x] 9.2 Add an accurate empty state for an unconfigured MCP catalog without adding an installed-state filter to MCP or Professional Applications.
 - [x] 9.3 Update focused package and Desktop style tests for loaded catalog semantics and bounded search sizing.
 - [x] 9.4 Validate Skill, MCP and Professional Application modes in the Development Electron scene.
+- [x] 9.5 Align the Skill, MCP and Professional Application search fields to the full catalog content track so their displayed width follows the card grid at every supported container size.

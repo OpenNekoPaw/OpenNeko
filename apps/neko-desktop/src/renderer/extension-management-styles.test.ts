@@ -14,12 +14,12 @@ describe('Extension management styles', () => {
     );
   });
 
-  it('uses bounded cards, search and responsive layout for both package roots', () => {
+  it('uses bounded cards, content-width search and responsive layout for both package roots', () => {
     expect(styles).toMatch(
       /\.agent-extension-management-root \.management-surface-list\.is-grid,[\s\S]*?grid-template-columns:\s*repeat\(auto-fill, 214px\)/u,
     );
     expect(styles).toMatch(
-      /\.agent-extension-management-root \.management-search-field,[\s\S]*?max-width:\s*520px/u,
+      /\.agent-extension-management-root \.management-search-field,[\s\S]*?width:\s*100%[\s\S]*?max-width:\s*none/u,
     );
     expect(styles).toMatch(
       /@container extension-management \(max-width: 820px\)[\s\S]*?flex-basis:\s*100%/u,

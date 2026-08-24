@@ -92,10 +92,10 @@
 
 .agent-extension-management-root .management-search-field,
 .professional-application-management-root .management-search-field {
-  width: clamp(280px, 46vw, 520px);
-  max-width: 520px;
+  width: 100%;
+  max-width: none;
   min-height: 36px;
-  flex: 0 1 520px;
+  flex: 1 1 100%;
   border-radius: 8px;
 }
 
