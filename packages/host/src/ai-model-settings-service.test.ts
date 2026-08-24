@@ -96,7 +96,7 @@ describe('DesktopAiModelSettingsService', () => {
       }),
     );
     expect(credentials.replaceApiKey).toHaveBeenCalledWith('provider-a', 'secret-value');
-    expect(result.restartRequired).toBe(true);
+    expect(result.executionConfigurationChanged).toBe(true);
     expect(JSON.stringify(result)).not.toContain('secret-value');
   });
 
@@ -245,7 +245,7 @@ describe('DesktopAiModelSettingsService', () => {
     } as unknown as ProviderCredentialAuthority;
     const service = new DesktopAiModelSettingsService(config, credentials);
 
-    await service.execute({
+    const result = await service.execute({
       requestId: 'request-2',
       operation: 'set-default',
       modelType: 'image',
@@ -256,6 +256,7 @@ describe('DesktopAiModelSettingsService', () => {
       providerId: 'provider-a',
       modelId: 'image-a',
     });
+    expect(result.executionConfigurationChanged).toBe(true);
   });
 
   it('rejects models outside an explicitly configured Provider family', async () => {

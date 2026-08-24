@@ -398,7 +398,7 @@ function AgentModelSettingsGroup({
   const port = settings.aiModelSettings;
   const [projection, setProjection] = useState<DesktopAiModelSettingsProjection>();
   const [pending, setPending] = useState(false);
-  const [restartRequired, setRestartRequired] = useState(false);
+  const [runtimeRefreshPending, setRuntimeRefreshPending] = useState(false);
   const [editingProvider, setEditingProvider] = useState<DesktopAiProviderView>();
   const [creatingProviderFamily, setCreatingProviderFamily] =
     useState<DesktopAiProviderModelFamily>();
@@ -434,7 +434,7 @@ function AgentModelSettingsGroup({
   const execute = async (
     action: () => Promise<{
       readonly projection: DesktopAiModelSettingsProjection;
-      readonly restartRequired: boolean;
+      readonly runtimeEffect: 'unchanged' | 'applied' | 'pending';
     }>,
   ): Promise<boolean> => {
     setPending(true);
@@ -442,7 +442,8 @@ function AgentModelSettingsGroup({
     try {
       const response = await action();
       setProjection(response.projection);
-      setRestartRequired((current) => current || response.restartRequired);
+      if (response.runtimeEffect === 'pending') setRuntimeRefreshPending(true);
+      if (response.runtimeEffect === 'applied') setRuntimeRefreshPending(false);
       return true;
     } catch (error: unknown) {
       onDiagnostic(error instanceof Error ? error.message : String(error));
@@ -476,9 +477,9 @@ function AgentModelSettingsGroup({
       title={t('settings.category.agent')}
       unframed
     >
-      {restartRequired ? (
+      {runtimeRefreshPending ? (
         <div className="desktop-settings__notice" role="status">
-          {t('settings.agent.restartRequired')}
+          {t('settings.agent.runtimeRefreshPending')}
         </div>
       ) : null}
       <div className="desktop-settings__provider-directories">

@@ -29,10 +29,7 @@ import type {
 } from '@neko/agent-contracts/dsh-acp';
 import type { DshSkillAuthoringLayout } from '@neko/agent-contracts/dsh-skill-authoring';
 
-import type {
-  DesktopDshSubprocessHandle,
-  DesktopDshSubprocessSupervisor,
-} from './desktop-dsh-subprocess-supervisor';
+import type { DesktopDshSubprocessHandle } from './desktop-dsh-subprocess-supervisor';
 
 export interface DesktopDshAgentClient
   extends
@@ -61,12 +58,18 @@ export interface DesktopDshAgentRuntime {
   resolveSessionCwd(context: AgentConversationContext): Promise<string>;
   getStatus(): DshRuntimeHostProjection;
   subscribe(listener: (projection: DshRuntimeHostProjection) => void): () => void;
+  refreshConfiguration(): Promise<'applied' | 'pending'>;
+  flushPendingConfigurationRefresh(): Promise<void>;
   restart(): Promise<void>;
   dispose(): Promise<void>;
 }
 
 export interface DesktopDshAgentRuntimeOptions {
-  readonly supervisor: Pick<DesktopDshSubprocessSupervisor, 'start'>;
+  readonly supervisor: {
+    start(): DesktopDshSubprocessHandle | Promise<DesktopDshSubprocessHandle>;
+  };
+  readonly onGenerationConnected?: () => void;
+  readonly onGenerationUnavailable?: () => void;
   readonly virtualCwd: string;
   readonly metadataStore: LocalMetadataStore;
   readonly resolveSessionCwd: (context: AgentConversationContext) => Promise<string>;
@@ -106,6 +109,10 @@ export async function startDesktopDshAgentRuntime(
   const connectClient = options.connectClient ?? DshAcpApplicationClient.connect;
   const projection = new DshAcpProjection();
   let current: DesktopDshRuntimeGeneration | undefined;
+  let activeWork = 0;
+  let workBlocked = false;
+  let configurationRefreshPending = false;
+  const refreshFlushTrigger: { current?: () => Promise<void> } = {};
   const requireGenerationClient = (): DesktopDshAgentClient => {
     const client = current?.client;
     if (client === undefined) throw new Error('Desktop DSH Agent runtime is unavailable.');
@@ -128,14 +135,19 @@ export async function startDesktopDshAgentRuntime(
     for (const listener of statusListeners) listener(status);
   };
   const connectGeneration = async (): Promise<DesktopDshRuntimeGeneration> => {
-    const subprocess = options.supervisor.start();
-    const client = await connectClient({
-      transport: subprocess.transport,
-      handlers: handlerAssembly.handlers,
-      virtualCwd: options.virtualCwd,
-      projection,
-    }).catch((error: unknown) => disposeSubprocessAfterConnectionFailure(subprocess, error));
-    return { subprocess, client };
+    const subprocess = await options.supervisor.start();
+    try {
+      const client = await connectClient({
+        transport: subprocess.transport,
+        handlers: handlerAssembly.handlers,
+        virtualCwd: options.virtualCwd,
+        projection,
+      });
+      options.onGenerationConnected?.();
+      return { subprocess, client };
+    } catch (error) {
+      return disposeSubprocessAfterConnectionFailure(subprocess, error);
+    }
   };
   const watchGeneration = (generation: DesktopDshRuntimeGeneration): void => {
     void Promise.race([generation.subprocess.closed, generation.client.closed])
@@ -157,6 +169,7 @@ export async function startDesktopDshAgentRuntime(
     current = undefined;
     conversations.activation.reset();
     projection.reset();
+    options.onGenerationUnavailable?.();
     publishStatus({
       status: 'unavailable',
       diagnostic: {
@@ -183,7 +196,18 @@ export async function startDesktopDshAgentRuntime(
     throw error;
   });
   watchGeneration(current);
-  const client = createStableDesktopDshAgentClient(projection, () => current?.client);
+  const client = createStableDesktopDshAgentClient(projection, () => current?.client, {
+    isWorkBlocked: () => workBlocked,
+    async trackWork<T>(operation: () => Promise<T>): Promise<T> {
+      activeWork += 1;
+      try {
+        return await operation();
+      } finally {
+        activeWork -= 1;
+        void refreshFlushTrigger.current?.().catch(() => undefined);
+      }
+    },
+  });
 
   const conversations = createConversationDshSessionApplication({
     client,
@@ -195,6 +219,56 @@ export async function startDesktopDshAgentRuntime(
     lookupCwd: { resolve: options.resolveSessionCwd },
   });
   await conversations.home.refresh();
+  const restart = (): Promise<void> => {
+    if (disposed) return Promise.reject(new Error('Desktop DSH Agent runtime is disposed.'));
+    if (restartPromise !== undefined) return restartPromise;
+    workBlocked = true;
+    publishStatus({ status: 'restarting' });
+    const previous = current;
+    current = undefined;
+    conversations.activation.reset();
+    projection.reset();
+    restartPromise = (async () => {
+      await retirement;
+      if (previous !== undefined) {
+        await handlerAssembly.reset();
+        await previous.subprocess.dispose();
+      }
+      const next = await connectGeneration();
+      if (disposed) {
+        await next.subprocess.dispose();
+        throw new Error('Desktop DSH Agent runtime was disposed during restart.');
+      }
+      current = next;
+      watchGeneration(next);
+      workBlocked = configurationRefreshPending;
+      publishStatus({ status: 'running' });
+    })()
+      .catch((error: unknown) => {
+        options.onGenerationUnavailable?.();
+        configurationRefreshPending = false;
+        workBlocked = false;
+        publishStatus({
+          status: 'unavailable',
+          diagnostic: {
+            code: 'desktop-dsh-runtime-restart-failed',
+            message: describeRuntimeFailure(error),
+          },
+        });
+        throw error;
+      })
+      .finally(() => {
+        restartPromise = undefined;
+      });
+    return restartPromise;
+  };
+  const flushPendingConfigurationRefresh = async (): Promise<void> => {
+    if (!configurationRefreshPending || restartPromise !== undefined) return;
+    if (activeWork > 0 || projection.hasActiveTurn()) return;
+    configurationRefreshPending = false;
+    await restart();
+  };
+  refreshFlushTrigger.current = flushPendingConfigurationRefresh;
   return Object.freeze({
     client,
     conversations,
@@ -205,44 +279,21 @@ export async function startDesktopDshAgentRuntime(
       statusListeners.add(listener);
       return () => statusListeners.delete(listener);
     },
-    restart() {
-      if (disposed) return Promise.reject(new Error('Desktop DSH Agent runtime is disposed.'));
-      if (restartPromise !== undefined) return restartPromise;
-      publishStatus({ status: 'restarting' });
-      restartPromise = (async () => {
-        await retirement;
-        const previous = current;
-        current = undefined;
-        conversations.activation.reset();
-        projection.reset();
-        if (previous !== undefined) {
-          await handlerAssembly.reset();
-          await previous.subprocess.dispose();
-        }
-        const next = await connectGeneration();
-        if (disposed) {
-          await next.subprocess.dispose();
-          throw new Error('Desktop DSH Agent runtime was disposed during restart.');
-        }
-        current = next;
-        watchGeneration(next);
-        publishStatus({ status: 'running' });
-      })()
-        .catch((error: unknown) => {
-          publishStatus({
-            status: 'unavailable',
-            diagnostic: {
-              code: 'desktop-dsh-runtime-restart-failed',
-              message: describeRuntimeFailure(error),
-            },
-          });
-          throw error;
-        })
-        .finally(() => {
-          restartPromise = undefined;
-        });
-      return restartPromise;
+    async refreshConfiguration() {
+      if (restartPromise !== undefined) {
+        configurationRefreshPending = true;
+        workBlocked = true;
+        await restartPromise;
+      }
+      configurationRefreshPending = true;
+      workBlocked = true;
+      if (activeWork > 0 || projection.hasActiveTurn()) return 'pending';
+      configurationRefreshPending = false;
+      await restart();
+      return 'applied';
     },
+    flushPendingConfigurationRefresh,
+    restart,
     async dispose() {
       if (disposed) return;
       disposed = true;
@@ -284,11 +335,27 @@ interface DesktopDshRuntimeGeneration {
 function createStableDesktopDshAgentClient(
   projection: DshAcpProjection,
   readClient: () => DesktopDshAgentClient | undefined,
+  activity: {
+    readonly isWorkBlocked: () => boolean;
+    readonly trackWork: <T>(operation: () => Promise<T>) => Promise<T>;
+  },
 ): DesktopDshAgentClient {
   const requireClient = (): DesktopDshAgentClient => {
     const client = readClient();
     if (client === undefined) throw new Error('Desktop DSH Agent runtime is unavailable.');
     return client;
+  };
+  const requireWorkClient = (): DesktopDshAgentClient => {
+    if (activity.isWorkBlocked()) {
+      throw new Error(
+        'Desktop DSH Agent runtime configuration refresh is pending; wait for the active turn to finish.',
+      );
+    }
+    return requireClient();
+  };
+  const runWork = <T>(operation: (client: DesktopDshAgentClient) => Promise<T>): Promise<T> => {
+    const generationClient = requireWorkClient();
+    return activity.trackWork(() => operation(generationClient));
   };
   const client: DesktopDshAgentClient = {
     projection,
@@ -299,13 +366,13 @@ function createStableDesktopDshAgentClient(
       return requireClient().listSessions(input);
     },
     async createSession(input) {
-      return requireClient().createSession(input);
+      return runWork((client) => client.createSession(input));
     },
     async loadSession(input) {
-      return requireClient().loadSession(input);
+      return runWork((client) => client.loadSession(input));
     },
     async resumeSession(input) {
-      return requireClient().resumeSession(input);
+      return runWork((client) => client.resumeSession(input));
     },
     async closeSession(sessionId) {
       return requireClient().closeSession(sessionId);
@@ -317,19 +384,19 @@ function createStableDesktopDshAgentClient(
       return requireClient().readArchivedSessions();
     },
     async setSessionMode(input) {
-      return requireClient().setSessionMode(input);
+      return runWork((client) => client.setSessionMode(input));
     },
     async setSessionConfigOption(input) {
-      return requireClient().setSessionConfigOption(input);
+      return runWork((client) => client.setSessionConfigOption(input));
     },
     async prompt(input) {
-      return requireClient().prompt(input);
+      return runWork((client) => client.prompt(input));
     },
     async cancel(sessionId) {
       return requireClient().cancel(sessionId);
     },
     async setSessionContext(input) {
-      return requireClient().setSessionContext(input);
+      return runWork((client) => client.setSessionContext(input));
     },
     async readPermissionPresets(sessionId) {
       return requireClient().readPermissionPresets(sessionId);
@@ -338,10 +405,10 @@ function createStableDesktopDshAgentClient(
       return requireClient().readInputCatalog(input);
     },
     async executeCommand(input) {
-      return requireClient().executeCommand(input);
+      return runWork((client) => client.executeCommand(input));
     },
     async invokeSkill(input) {
-      return requireClient().invokeSkill(input);
+      return runWork((client) => client.invokeSkill(input));
     },
     async readExtensions() {
       return requireClient().readExtensions();

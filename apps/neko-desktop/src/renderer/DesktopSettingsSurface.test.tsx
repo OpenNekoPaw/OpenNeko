@@ -157,7 +157,7 @@ describe('Desktop Settings surfaces', () => {
         image: { providerId: 'deepseek', modelId: 'image-model' },
       },
     };
-    const response = { requestId: 'fixture', projection, restartRequired: false };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
     const setDefault = vi.fn(async () => response);
     const deleteModel = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
@@ -240,7 +240,7 @@ describe('Desktop Settings surfaces', () => {
       models: [modelFixture('qwen-local', 'ollama-local', 'llm')],
       defaults: {},
     };
-    const response = { requestId: 'fixture', projection, restartRequired: false };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
       get: async () => projection,
       saveProvider: async () => response,
@@ -291,7 +291,7 @@ describe('Desktop Settings surfaces', () => {
       models: [],
       defaults: {},
     };
-    const response = { requestId: 'fixture', projection, restartRequired: false };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'pending' as const };
     const deleteProvider = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
       get: async () => projection,
@@ -319,6 +319,9 @@ describe('Desktop Settings surfaces', () => {
     await act(async () => findButton(container, 'Delete provider').click());
     await act(async () => findButton(container, 'Confirm delete').click());
     expect(deleteProvider).toHaveBeenCalledWith('custom-empty');
+    expect(container.textContent).toContain(
+      'Configuration saved. DSH will refresh after the active task finishes, then new conversations will use the latest model catalog.',
+    );
     await act(async () => root.unmount());
   });
 
@@ -350,7 +353,7 @@ describe('Desktop Settings surfaces', () => {
       ],
       defaults: {},
     };
-    const response = { requestId: 'fixture', projection, restartRequired: false };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
       get: async () => projection,
       saveProvider: async () => response,
@@ -382,7 +385,7 @@ describe('Desktop Settings surfaces', () => {
 
   it('shows a focused custom-provider form before model configuration is available', async () => {
     const projection = { providers: [], models: [], defaults: {} };
-    const response = { requestId: 'fixture', projection, restartRequired: false };
+    const response = { requestId: 'fixture', projection, runtimeEffect: 'unchanged' as const };
     const saveProvider = vi.fn(async () => response);
     const aiModelSettings: OpenNekoDesktopAiModelSettingsBridge['aiModelSettings'] = {
       get: async () => projection,

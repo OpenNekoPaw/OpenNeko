@@ -333,6 +333,7 @@ export interface DesktopAppHostOptions {
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
   readonly aiModelSettings: DesktopAiModelSettingsService;
+  readonly refreshAiModelExecutionConfiguration: () => Promise<'applied' | 'pending'>;
   readonly storageSettings: DesktopStorageSettingsRuntime;
   readonly openAgentAdvancedSettings: () => Promise<void>;
   readonly instanceId?: string;
@@ -994,7 +995,10 @@ export class DesktopAppHost {
     const result = await this.aiModelSettings.execute(request);
     return {
       requestId: request.requestId,
-      ...result,
+      projection: result.projection,
+      runtimeEffect: result.executionConfigurationChanged
+        ? await this.options.refreshAiModelExecutionConfiguration()
+        : 'unchanged',
     };
   }
 

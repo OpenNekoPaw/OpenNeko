@@ -53,10 +53,10 @@ export class DesktopAiModelSettingsService {
 
   async execute(request: DesktopAiModelSettingsRequest): Promise<{
     readonly projection: DesktopAiModelSettingsProjection;
-    readonly restartRequired: boolean;
+    readonly executionConfigurationChanged: boolean;
   }> {
     if (request.operation === 'get')
-      return { projection: await this.project(), restartRequired: false };
+      return { projection: await this.project(), executionConfigurationChanged: false };
     if (request.operation === 'save-provider') {
       const existing = this.config.getProvider(request.provider.id);
       const isLocalOllama = request.provider.protocol === 'ollama';
@@ -118,7 +118,7 @@ export class DesktopAiModelSettingsService {
       if (request.apiKey !== undefined) {
         await this.credentials.replaceApiKey(request.provider.id, request.apiKey);
       }
-      return { projection: await this.project(), restartRequired: true };
+      return { projection: await this.project(), executionConfigurationChanged: true };
     }
     if (request.operation === 'save-model') {
       const provider = this.config.getProvider(request.model.providerId);
@@ -149,7 +149,7 @@ export class DesktopAiModelSettingsService {
         capabilities: capabilitiesFor(request.model.type),
         enabled: request.model.enabled,
       });
-      return { projection: await this.project(), restartRequired: true };
+      return { projection: await this.project(), executionConfigurationChanged: true };
     }
     if (request.operation === 'delete-model') {
       const model = this.config.getModel(request.modelId);
@@ -163,7 +163,7 @@ export class DesktopAiModelSettingsService {
         }
       }
       await this.config.removeModel(model.id);
-      return { projection: await this.project(), restartRequired: true };
+      return { projection: await this.project(), executionConfigurationChanged: true };
     }
     if (request.operation === 'delete-provider') {
       const provider = this.config.getProvider(request.providerId);
@@ -191,10 +191,10 @@ export class DesktopAiModelSettingsService {
           { cause: error },
         );
       }
-      return { projection: await this.project(), restartRequired: true };
+      return { projection: await this.project(), executionConfigurationChanged: true };
     }
     await this.config.setDefaultModelRef(request.modelType, request.ref);
-    return { projection: await this.project(), restartRequired: false };
+    return { projection: await this.project(), executionConfigurationChanged: true };
   }
 
   private async projectProvider(providerId: string): Promise<DesktopAiProviderView> {

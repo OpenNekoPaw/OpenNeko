@@ -78,7 +78,8 @@ export const zhCN = {
   'settings.storage.project': '项目',
   'settings.agent.openConfig': '打开 Agent 配置',
   'settings.agent.unavailable': '当前 Desktop 运行时未提供模型设置能力。',
-  'settings.agent.restartRequired': 'Provider 或模型目录已更改，重启 OpenNeko 后可用于 DSH 对话。',
+  'settings.agent.runtimeRefreshPending':
+    '配置已保存；当前任务结束后会自动刷新 DSH，新会话随后使用最新模型目录。',
   'settings.agent.dialogueModels': '对话模型',
   'settings.agent.dialogueModelsDescription':
     '配置新会话使用的语言模型，当前默认项直接标识在卡片中。',

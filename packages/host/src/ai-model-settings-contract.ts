@@ -93,7 +93,7 @@ export type DesktopAiModelSettingsRequest =
 export interface DesktopAiModelSettingsResponse {
   readonly requestId: string;
   readonly projection: DesktopAiModelSettingsProjection;
-  readonly restartRequired: boolean;
+  readonly runtimeEffect: 'unchanged' | 'applied' | 'pending';
 }
 
 export interface OpenNekoDesktopAiModelSettingsBridge {
@@ -220,14 +220,18 @@ export function parseDesktopAiModelSettingsResponse(
   expectedRequestId: string,
 ): DesktopAiModelSettingsResponse {
   const record = exactRecord(value, 'AI model settings response');
-  exactKeys(record, ['requestId', 'projection', 'restartRequired'], 'AI model settings response');
+  exactKeys(record, ['requestId', 'projection', 'runtimeEffect'], 'AI model settings response');
   const requestId = nonEmpty(record['requestId'], 'requestId');
   if (requestId !== expectedRequestId)
     throw invalid('AI model settings response request mismatch.');
   return {
     requestId,
     projection: parseDesktopAiModelSettingsProjection(record['projection']),
-    restartRequired: booleanValue(record['restartRequired'], 'restartRequired'),
+    runtimeEffect: oneOf(
+      record['runtimeEffect'],
+      ['unchanged', 'applied', 'pending'] as const,
+      'runtimeEffect',
+    ),
   };
 }
 

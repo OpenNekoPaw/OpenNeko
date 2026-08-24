@@ -537,6 +537,18 @@ describe('DshAcpProjection', () => {
     expect(projection.snapshot('s1').currentTurn).toBeUndefined();
   });
 
+  it('reports active turns without treating completed sibling turns as active', () => {
+    const projection = new DshAcpProjection();
+    projection.acceptSessionEvent(turnEvent('s1', 0, 'turn/start', 0));
+    projection.acceptSessionEvent(turnEvent('s2', 0, 'turn/start', 0));
+    projection.acceptSessionEvent(turnEvent('s2', 1, 'turn/end', 0, 'success'));
+
+    expect(projection.hasActiveTurn()).toBe(true);
+
+    projection.acceptSessionEvent(turnEvent('s1', 1, 'turn/end', 0, 'success'));
+    expect(projection.hasActiveTurn()).toBe(false);
+  });
+
   it('rejects missing or decreasing DSH turn timing without affecting a sibling Session', () => {
     const projection = new DshAcpProjection();
     expect(projection.acceptSessionEvent(turnEvent('s1', 0, 'turn/end', 0))[0]).toMatchObject({

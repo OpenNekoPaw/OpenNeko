@@ -84,8 +84,8 @@ export const en = {
   'settings.storage.project': 'Project',
   'settings.agent.openConfig': 'Open Agent config',
   'settings.agent.unavailable': 'AI model settings are unavailable in this Desktop runtime.',
-  'settings.agent.restartRequired':
-    'Provider or model catalog changed. Restart OpenNeko before using it in DSH conversations.',
+  'settings.agent.runtimeRefreshPending':
+    'Configuration saved. DSH will refresh after the active task finishes, then new conversations will use the latest model catalog.',
   'settings.agent.dialogueModels': 'Dialogue models',
   'settings.agent.dialogueModelsDescription':
     'Language models for new conversations; the current default is marked on its card.',

@@ -28,7 +28,7 @@ describe('Desktop AI model settings contract', () => {
       parseDesktopAiModelSettingsResponse(
         {
           requestId: 'request-2',
-          restartRequired: false,
+          runtimeEffect: 'unchanged',
           projection: {
             providers: [
               {
@@ -52,12 +52,25 @@ describe('Desktop AI model settings contract', () => {
     ).toThrow(/unknown fields/u);
   });
 
+  it('rejects the removed whole-application restart response', () => {
+    expect(() =>
+      parseDesktopAiModelSettingsResponse(
+        {
+          requestId: 'request-restart',
+          restartRequired: true,
+          projection: { providers: [], models: [], defaults: {} },
+        },
+        'request-restart',
+      ),
+    ).toThrow(/unknown fields/u);
+  });
+
   it('rejects config-only Provider metadata in a Renderer projection', () => {
     expect(() =>
       parseDesktopAiModelSettingsResponse(
         {
           requestId: 'request-config-metadata',
-          restartRequired: false,
+          runtimeEffect: 'unchanged',
           projection: {
             providers: [
               {

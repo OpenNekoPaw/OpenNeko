@@ -1913,6 +1913,9 @@ async function startDesktop(): Promise<void> {
       }),
     });
   };
+  const dshProviderRefresh: {
+    current?: () => Promise<'applied' | 'pending'>;
+  } = {};
   const appHost = new DesktopAppHost({
     host,
     logger,
@@ -2095,6 +2098,13 @@ async function startDesktop(): Promise<void> {
     cut: cutRuntime,
     settings: applicationSettings,
     aiModelSettings,
+    refreshAiModelExecutionConfiguration: () => {
+      const refresh = dshProviderRefresh.current;
+      if (refresh === undefined) {
+        throw new Error('Desktop DSH Provider runtime refresh is not initialized.');
+      }
+      return refresh();
+    },
     storageSettings,
     openAgentAdvancedSettings: () => openHostPath(buildConfigFilePath(homedir)),
     instanceId: applicationInstanceId,
@@ -2119,18 +2129,12 @@ async function startDesktop(): Promise<void> {
       if (!owner.isDestroyed()) owner.webContents.send(DSH_RUNTIME_CHANGED_CHANNEL, projection);
     }
   };
-  const dshProviderRuntime = await createDesktopDshProviderRuntimeProjection({
-    providers: applicationAgentConfig.getEnabledProviders(),
-    models: applicationAgentConfig.getEnabledModels(),
-    credentials: providerCredentials,
-  });
-  for (const diagnostic of dshProviderRuntime.diagnostics) {
-    logger.warn('DSH provider is unavailable.', {
-      providerId: diagnostic.providerId,
-      ...(diagnostic.modelId === undefined ? {} : { modelId: diagnostic.modelId }),
-      message: diagnostic.message,
+  const projectDshProviderRuntime = () =>
+    createDesktopDshProviderRuntimeProjection({
+      providers: applicationAgentConfig.getEnabledProviders(),
+      models: applicationAgentConfig.getEnabledModels(),
+      credentials: providerCredentials,
     });
-  }
   const dshWorkspaceBoardDeliveryTrigger: {
     current?: (
       dshSessionId: string,
@@ -2150,7 +2154,16 @@ async function startDesktop(): Promise<void> {
       resourcesPath: process.resourcesPath,
     }),
     environment: process.env,
-    providers: dshProviderRuntime,
+    providers: projectDshProviderRuntime,
+    onProviderProjection: (projection) => {
+      for (const diagnostic of projection.diagnostics) {
+        logger.warn('DSH provider is unavailable.', {
+          providerId: diagnostic.providerId,
+          ...(diagnostic.modelId === undefined ? {} : { modelId: diagnostic.modelId }),
+          message: diagnostic.message,
+        });
+      }
+    },
     metadataStore: localMetadataStore,
     resolveWorkspaceSessionCwd: async (context) => {
       const resolution = await workspaceGrantAuthority.resolveAuthorizedWorkspace(
@@ -2320,6 +2333,11 @@ async function startDesktop(): Promise<void> {
           if (notification.type === 'turn/start' || notification.type === 'turn/end') {
             await refreshDshHomeAfterProjectionChange();
           }
+          if (notification.type === 'turn/end') {
+            setTimeout(() => {
+              void dshProduct.runtime.flushPendingConfigurationRefresh().catch(() => undefined);
+            }, 0);
+          }
         },
         onContextPressure: async (notification) => {
           const binding = await bindings.getByDshSessionId(notification.sessionId);
@@ -2337,6 +2355,7 @@ async function startDesktop(): Promise<void> {
       return assembly;
     },
   });
+  dshProviderRefresh.current = () => dshProduct.runtime.refreshConfiguration();
   dshWorkspaceBoardDeliveryTrigger.current = async (dshSessionId, conversationId, trigger) => {
     try {
       const snapshot = dshProduct.runtime.client.projection.snapshot(dshSessionId);
@@ -2472,7 +2491,7 @@ async function startDesktop(): Promise<void> {
     sessions: dshProduct.runtime.conversations.conversations,
     preTurnInputCatalog: dshProduct.runtime.client,
     lookupCwd: { resolve: dshProduct.runtime.resolveSessionCwd },
-    executionCatalog: dshProviderRuntime.executionCatalog,
+    executionCatalog: dshProduct.executionCatalog,
     resourceBrowser,
     assets: {
       materialize: ({ assetId, workspaceRoot }) =>

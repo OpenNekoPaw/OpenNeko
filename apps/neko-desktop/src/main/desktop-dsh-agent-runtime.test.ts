@@ -233,7 +233,108 @@ describe('Desktop DSH Agent runtime composition', () => {
     await fixture.store.dispose();
   });
 
-  it('keeps the stable runtime unavailable when the only restart handshake fails', async () => {
+  it('refreshes an idle runtime immediately while preserving exact Conversation bindings', async () => {
+    const fixture = await createFixture();
+    const firstSubprocess = createSubprocess(createTransport());
+    const secondSubprocess = createSubprocess(createTransport());
+    const start = vi
+      .fn()
+      .mockReturnValueOnce(firstSubprocess)
+      .mockReturnValueOnce(secondSubprocess);
+    const connectClient = vi
+      .fn()
+      .mockResolvedValueOnce(createClient(['dsh-session-a']))
+      .mockResolvedValueOnce(createClient(['dsh-session-a', 'dsh-session-b']));
+    const handlerAssembly = createHandlerAssembly();
+    const runtime = await startDesktopDshAgentRuntime({
+      supervisor: { start },
+      virtualCwd: '/virtual/workspace',
+      metadataStore: fixture.store,
+      resolveSessionCwd: async () => '/virtual/workspace',
+      createHandlers: () => handlerAssembly,
+      connectClient,
+    });
+    await runtime.conversations.binding.bind({
+      conversationId: fixture.conversationId,
+      dshSessionId: 'dsh-session-a',
+    });
+
+    await expect(runtime.refreshConfiguration()).resolves.toBe('applied');
+
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(connectClient).toHaveBeenCalledTimes(2);
+    expect(handlerAssembly.reset).toHaveBeenCalledOnce();
+    expect(firstSubprocess.dispose).toHaveBeenCalledOnce();
+    await expect(runtime.client.listSessions()).resolves.toEqual({
+      sessions: [
+        { sessionId: 'dsh-session-a', cwd: '/workspace' },
+        { sessionId: 'dsh-session-b', cwd: '/workspace' },
+      ],
+    });
+    await expect(runtime.conversations.binding.resolve(fixture.conversationId)).resolves.toEqual({
+      ok: true,
+      binding: {
+        conversationId: fixture.conversationId,
+        dshSessionId: 'dsh-session-a',
+      },
+    });
+
+    await runtime.dispose();
+    expect(secondSubprocess.dispose).toHaveBeenCalledOnce();
+    await fixture.store.dispose();
+  });
+
+  it('defers configuration refresh until an active turn ends and blocks new work meanwhile', async () => {
+    const fixture = await createFixture();
+    const firstSubprocess = createSubprocess(createTransport());
+    const secondSubprocess = createSubprocess(createTransport());
+    const start = vi
+      .fn()
+      .mockReturnValueOnce(firstSubprocess)
+      .mockReturnValueOnce(secondSubprocess);
+    const connectClient = vi.fn(async () => createClient(['dsh-session-a']));
+    const runtime = await startDesktopDshAgentRuntime({
+      supervisor: { start },
+      virtualCwd: '/virtual/workspace',
+      metadataStore: fixture.store,
+      resolveSessionCwd: async () => '/virtual/workspace',
+      createHandlers: () => createHandlerAssembly(),
+      connectClient,
+    });
+    runtime.client.projection.acceptSessionEvent({
+      sessionId: 'dsh-session-a',
+      sequence: 0,
+      time: 1_000,
+      type: 'turn/start',
+      data: { turn: 0 },
+    });
+
+    await expect(runtime.refreshConfiguration()).resolves.toBe('pending');
+    expect(start).toHaveBeenCalledOnce();
+    await expect(
+      runtime.client.createSession({ mcpServers: [], cwd: '/virtual/workspace' }),
+    ).rejects.toThrow(/configuration refresh is pending/u);
+
+    runtime.client.projection.acceptSessionEvent({
+      sessionId: 'dsh-session-a',
+      sequence: 1,
+      time: 1_001,
+      type: 'turn/end',
+      data: { turn: 0, reason: { kind: 'success' } },
+    });
+    await runtime.flushPendingConfigurationRefresh();
+
+    expect(start).toHaveBeenCalledTimes(2);
+    expect(connectClient).toHaveBeenCalledTimes(2);
+    await expect(runtime.client.listSessions()).resolves.toEqual({
+      sessions: [{ sessionId: 'dsh-session-a', cwd: '/workspace' }],
+    });
+
+    await runtime.dispose();
+    await fixture.store.dispose();
+  });
+
+  it('keeps the stable runtime unavailable when a configuration refresh handshake fails', async () => {
     const fixture = await createFixture();
     const firstSubprocess = createSubprocess(createTransport());
     const secondSubprocess = createSubprocess(createTransport());
@@ -256,7 +357,7 @@ describe('Desktop DSH Agent runtime composition', () => {
       connectClient,
     });
 
-    await expect(runtime.restart()).rejects.toBe(restartFailure);
+    await expect(runtime.refreshConfiguration()).rejects.toBe(restartFailure);
     expect(runtime.getStatus()).toEqual({
       status: 'unavailable',
       diagnostic: {

@@ -707,6 +707,10 @@ export class DshAcpProjection {
     this.sessions.clear();
   }
 
+  hasActiveTurn(): boolean {
+    return [...this.sessions.values()].some((session) => session.currentTurn !== undefined);
+  }
+
   snapshot(sessionId: string): DshAcpProjectionSnapshot {
     const session = this.session(sessionId);
     return {

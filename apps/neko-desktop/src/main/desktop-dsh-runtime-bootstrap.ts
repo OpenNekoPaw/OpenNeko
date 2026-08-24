@@ -20,6 +20,7 @@ import {
 } from './desktop-dsh-runtime-resource';
 import { DesktopDshSubprocessSupervisor } from './desktop-dsh-subprocess-supervisor';
 import type { DesktopDshProviderRuntimeProjection } from './desktop-dsh-provider-runtime';
+import type { DesktopDshExecutionCatalog } from './desktop-dsh-provider-runtime';
 
 const DSH_SHELL_ENVIRONMENT_KEYS = Object.freeze(['PATH', 'TMPDIR', 'LANG', 'LC_ALL']);
 
@@ -76,7 +77,7 @@ export async function startDesktopDshProductRuntime(options: {
   readonly userDataRoot: string;
   readonly builtinSkillRoot: string;
   readonly environment: Readonly<Record<string, string | undefined>>;
-  readonly providers: DesktopDshProviderRuntimeProjection;
+  readonly providers: () => Promise<DesktopDshProviderRuntimeProjection>;
   readonly metadataStore: LocalMetadataStore;
   readonly resolveWorkspaceSessionCwd: (
     context: Extract<AgentConversationContext, { readonly kind: 'workspace' | 'authoring' }>,
@@ -90,26 +91,70 @@ export async function startDesktopDshProductRuntime(options: {
     readonly personalSkillRoot: string;
   }) => DesktopDshAgentHandlerAssembly;
   readonly onStderr?: (chunk: string) => void;
+  readonly onProviderProjection?: (projection: DesktopDshProviderRuntimeProjection) => void;
 }): Promise<{
   readonly prepared: PreparedDesktopDshRuntime;
   readonly runtime: DesktopDshAgentRuntime;
+  readonly executionCatalog: DesktopDshExecutionCatalog;
 }> {
-  const prepared = await prepareDesktopDshRuntime(options);
+  const prepareCandidate = async (): Promise<{
+    readonly prepared: PreparedDesktopDshRuntime;
+    readonly providers: DesktopDshProviderRuntimeProjection;
+  }> => {
+    const providers = await options.providers();
+    options.onProviderProjection?.(providers);
+    return {
+      prepared: await prepareDesktopDshRuntime({ ...options, providers }),
+      providers,
+    };
+  };
+  const initial = await prepareCandidate();
+  type RuntimeCandidate = {
+    readonly prepared: PreparedDesktopDshRuntime;
+    readonly providers: DesktopDshProviderRuntimeProjection;
+  };
+  let queuedCandidate: RuntimeCandidate | undefined = initial;
+  let connectingCandidate: RuntimeCandidate | undefined = queuedCandidate;
+  let activeExecutionCatalog: DesktopDshExecutionCatalog | undefined;
+  const executionCatalog: DesktopDshExecutionCatalog = Object.freeze({
+    resolve(providerId: string, productModelId: string) {
+      return activeExecutionCatalog?.resolve(providerId, productModelId);
+    },
+  });
   const runtime = await startDesktopDshAgentRuntime({
-    supervisor: prepared.supervisor,
-    virtualCwd: prepared.workingDirectory,
+    supervisor: {
+      async start() {
+        const candidate = queuedCandidate ?? (await prepareCandidate());
+        queuedCandidate = undefined;
+        connectingCandidate = candidate;
+        return candidate.prepared.supervisor.start();
+      },
+    },
+    onGenerationConnected() {
+      const candidate = connectingCandidate;
+      if (candidate === undefined) {
+        throw new Error('Desktop DSH runtime connected without a prepared Provider candidate.');
+      }
+      activeExecutionCatalog = candidate.providers.executionCatalog;
+      connectingCandidate = undefined;
+    },
+    onGenerationUnavailable() {
+      activeExecutionCatalog = undefined;
+      connectingCandidate = undefined;
+    },
+    virtualCwd: initial.prepared.workingDirectory,
     metadataStore: options.metadataStore,
     resolveSessionCwd: (context) =>
       context.kind === 'workspace' || context.kind === 'authoring'
         ? options.resolveWorkspaceSessionCwd(context)
-        : Promise.resolve(prepared.workingDirectory),
+        : Promise.resolve(initial.prepared.workingDirectory),
     createHandlers: (input) =>
       options.createHandlers({
         ...input,
-        personalSkillRoot: join(prepared.profile.dshHome, 'skills'),
+        personalSkillRoot: join(initial.prepared.profile.dshHome, 'skills'),
       }),
   });
-  return Object.freeze({ prepared, runtime });
+  return Object.freeze({ prepared: initial.prepared, runtime, executionCatalog });
 }
 
 function selectDshShellEnvironment(
