@@ -232,6 +232,7 @@ describe('CharacterAvatarAuthorityService', () => {
       service.resolveSelectedRepresentation({
         characterRunId: 'run-a',
         representationId: 'avatar-selected',
+        surface: 'avatar',
       }),
     ).resolves.toMatchObject({
       representation: { representationId: 'avatar-selected' },
@@ -240,6 +241,7 @@ describe('CharacterAvatarAuthorityService', () => {
       service.resolveSelectedRepresentation({
         characterRunId: 'run-a',
         representationId: 'avatar-first',
+        surface: 'avatar',
       }),
     ).rejects.toMatchObject({ code: 'character-avatar-representation-unavailable' });
     await expect(service.assertRoomContainsRun('room-run-a', 'run-a')).resolves.toBe(undefined);

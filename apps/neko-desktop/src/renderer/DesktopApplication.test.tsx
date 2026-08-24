@@ -2,6 +2,7 @@
 
 import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import {
@@ -1126,7 +1127,21 @@ describe('DesktopApplication scene lifecycle', () => {
 
   it('projects the exact Room cover and participant portrait without mounting another Avatar', async () => {
     const room = withActiveScene(createProjection(), characterRoomInteractionScene());
-    const openSurface = vi.fn();
+    const openSurface = vi.fn(async () => ({
+      requestId: 'portrait-open-lin',
+      status: 'ready' as const,
+      descriptor: {
+        avatarResourceLeaseId: 'portrait-lease-lin',
+        characterRunId: 'character-run-lin',
+        representationId: 'portrait-lin',
+        kind: 'portrait' as const,
+        url: 'openneko://resource/portrait-lin',
+        displayName: 'portrait.png',
+        mediaType: 'image/png' as const,
+        byteLength: 128,
+        sourceFingerprint: '1:128',
+      },
+    }));
     installBridge({
       projection: room,
       characterFoundationGetSnapshot: vi.fn(async () => roomIdentityArtFoundationSnapshot()),
@@ -1140,14 +1155,26 @@ describe('DesktopApplication scene lifecycle', () => {
           .querySelector('[data-character-room-feed="true"]')
           ?.getAttribute('data-room-cover-resource-ref') === 'global-asset-library:room-cover-a',
     );
-    expect(
-      container.querySelectorAll(
-        '[data-participant-portrait-resource-ref="global-asset-library:portrait-lin"]',
-      ),
-    ).toHaveLength(1);
+    await waitFor(
+      () => container.querySelector('img[src="openneko://resource/portrait-lin"]') !== null,
+    );
+    expect(container.querySelector('[data-participant-portrait-resource-ref]')).toBeNull();
     expect(container.querySelector('[data-character-avatar-surface="true"]')).toBeNull();
     expect(container.querySelector('[data-character-vrm-runtime]')).toBeNull();
-    expect(openSurface).not.toHaveBeenCalled();
+    expect(openSurface).toHaveBeenCalledTimes(1);
+    expect(openSurface).toHaveBeenCalledWith({
+      workbenchInstanceId: room.window.workbench.workbenchInstanceId,
+      characterRunId: 'character-run-lin',
+      representationId: 'portrait-lin',
+      surface: 'portrait',
+    });
+    expect(screen.getByRole('region', { name: 'User details' })).toBeTruthy();
+    const messageAvatar = container.querySelector<HTMLButtonElement>(
+      '[data-room-event-id="room-event-1"] button[aria-label="Select Lin"]',
+    );
+    if (!messageAvatar) throw new Error('Expected the exact Room message avatar.');
+    fireEvent.click(messageAvatar);
+    expect(screen.getByRole('region', { name: 'Lin details' })).toBeTruthy();
     await act(async () => root.unmount());
   });
 
@@ -3602,6 +3629,11 @@ function roomIdentityArtFoundationSnapshot() {
           characterRoomId: 'room-1',
           roomRevision: 0,
           participants: [
+            {
+              participantId: 'participant-user',
+              displayName: 'User',
+              controller: { kind: 'human' as const, userId: 'user:local' },
+            },
             {
               participantId: 'participant-lin',
               displayName: 'Lin',

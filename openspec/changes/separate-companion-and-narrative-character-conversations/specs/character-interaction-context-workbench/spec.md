@@ -78,6 +78,36 @@ Room Context/Participant Manager SHALL identify every participant, controller, e
 - **THEN** the owning Agent configuration service applies it only to that participant's later turns and the manager projects the new receipt
 - **AND** sibling participants, CharacterVersion, TTS/representation facts and existing turn receipts remain unchanged
 
+#### Scenario: Dialogue participant manager avoids catalog chrome and raw identities
+
+- **WHEN** the exact owner is one Character Dialogue
+- **THEN** the manager renders one expanded Character participant with display name, immutable version label, mode, controller binding, Presentation summary and availability state
+- **AND** it omits Room-only search/count chrome and never renders CharacterRun, CharacterVersion, participant or AgentSession identity as a user-facing label
+
+#### Scenario: Room participant manager selects an exact participant
+
+- **WHEN** the exact owner is a Room containing Character, human or system participants
+- **THEN** the manager renders every participant, allows search and local detail selection, and joins Character details only through that participant's exact CharacterRun and CharacterVersion
+- **AND** selection changes no runtime fact, missing exact authority fails visibly, and sibling details are not substituted
+
+#### Scenario: Dialogue message renders its exact Character identity
+
+- **WHEN** an assistant message is rendered for an exact Character Dialogue owner
+- **THEN** the message lane renders the selected Character portrait and bounded profile facts from that owner's exact participant projection
+- **AND** the Agent transcript event remains role-based, the user lane remains the local user, and no raw identity, path or resource ref is shown
+
+#### Scenario: Room message avatar selects its exact participant
+
+- **WHEN** a user activates the avatar of a Room message authored by one exact `authorParticipantId`
+- **THEN** the right participant manager selects and reveals that same participant
+- **AND** hover or keyboard focus alone changes no selection, Room fact, AgentSession, scheduling state or transcript event
+
+#### Scenario: Selected portrait resource is unavailable
+
+- **WHEN** the exact selected portrait representation is missing, stale or cannot be authorized for the active Character Scene
+- **THEN** the affected avatar renders a neutral fallback and its profile card reports the portrait as unavailable
+- **AND** sibling messages and participants remain usable without trying another representation, exposing a raw resource ref or reading a local path in Renderer
+
 ### Requirement: Workbench lifetime does not own business runtime
 
 Leaving Character Interaction SHALL unmount its React Roots and release unprotected Presentation/Web/Game resources. Protected Agent turns, approvals and explicit external operations MAY continue under their exact runtime owners without retaining hidden UI. Reopen SHALL reconstruct surfaces from exact Conversation, Character/Room and provider refs rather than active/recent identities.

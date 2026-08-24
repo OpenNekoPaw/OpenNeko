@@ -30,6 +30,10 @@ export interface DesktopAgentSurfaceProps {
   readonly characterDialogueHandoff?: CharacterDialogueHandoffIntent;
   readonly onCharacterDialogueHandoffConsumed?: (intentId: string) => void;
   readonly conversationFeed?: ReactNode;
+  readonly messageAuthorPresentation?: {
+    readonly assistant?: ReactNode;
+    readonly user?: ReactNode;
+  };
 }
 
 type DesktopAgentSurfaceState =
@@ -47,6 +51,7 @@ export function DesktopAgentSurface({
   conversationFeed,
   conversationId,
   entryContext,
+  messageAuthorPresentation,
   onCharacterDialogueHandoffConsumed,
   sceneId,
   surfaceKind,
@@ -469,6 +474,7 @@ export function DesktopAgentSurface({
       composerConfigurationError={composerConfigurationError}
       mentionItems={mentionItems}
       mentionDiagnostic={mentionDiagnostic}
+      messageAuthorPresentation={messageAuthorPresentation}
       configuring={configuring}
       errorMessage={operationError ?? (state.kind === 'error' ? state.message : undefined)}
       loading={state.kind === 'loading'}

@@ -45,6 +45,14 @@ export {
 } from './character-portable-package-surface';
 export { CharacterCompanionContinuitySurface } from './companion-continuity';
 export {
+  CharacterParticipantManagerSurface,
+  CharacterParticipantIdentityAvatar,
+  projectCharacterParticipantManager,
+  type CharacterParticipantManagerOwner,
+  type CharacterParticipantManagerProjection,
+  type CharacterParticipantProjection,
+} from './participant-manager';
+export {
   CharacterManagementDetailSurface,
   type CharacterManagementDetailActions,
 } from './character-management-detail';

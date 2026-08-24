@@ -89,3 +89,48 @@ evidence operations. At that point, add strict scenarios for:
 
 Provider-backed hidden Desktop repetition and visible Electron evidence remain intentionally
 deferred. No current key-free result is treated as release evidence.
+
+## 2026-08-25 Participant manager read-model slice
+
+### Disposition
+
+**Excluded from behavioral Agent Evaluation.** This slice changes only the Chara-owned, read-only
+participant projection and Webview rendering. It does not change prompts, Skills, provider/model
+selection, AgentSession execution, tool routing, persistence or approval behavior.
+
+### Canonical path and deterministic evidence
+
+- Canonical path: exact Chara foundation snapshot -> pure participant projector ->
+  `@neko/chara-webview` surface -> Desktop right Context slot.
+- Forbidden paths: identity-derived display labels, active/recent participant fallback, Desktop-owned
+  participant rendering policy, Agent configuration mutation and provider/model substitution.
+- `@neko/chara-webview` tests cover Dialogue details, all Room controller kinds, local search and
+  selection, narrative node projection, immutable input and missing-publication rejection.
+- Focused Desktop application tests prove the package surface is composed from the exact owner and
+  remains isolated from an invalid Main Presentation provider.
+
+Because no Agent input or model-visible behavior can differ, provider-backed repetition would not
+measure this slice. Agent-owned provider/model summaries and participant write commands remain task
+6.6 and keep the proposal-level Evaluation work open.
+
+## 2026-08-25 Participant message identity slice
+
+### Disposition
+
+**Excluded from behavioral Agent Evaluation.** This slice changes only Webview message identity,
+short-lived portrait authorization and current-Scene participant selection. It does not change the
+Agent event contract, prompt, provider/model choice, Skill/Tool exposure, approval, turn routing,
+transcript persistence or Room scheduling.
+
+### Canonical path and deterministic evidence
+
+- Dialogue path: exact Character Scene owner -> Chara participant projection -> authorized selected
+  portrait -> optional Agent Webview presentation node.
+- Room path: exact `RoomEvent.authorParticipantId` -> the same Chara participant projection ->
+  authorized selected portrait -> current-Scene participant selection.
+- Forbidden paths: Character identity fields in Agent transcript events, identity-derived labels,
+  alternate portrait selection, raw path/resource-ref image sources, active/recent participant
+  fallback and hover-triggered runtime mutation.
+- Contract, Chara Webview, Agent Webview and Desktop tests must prove the unique path, local resource
+  failure, sibling isolation, keyboard/hover behavior and exact manager selection before this task is
+  complete. Visible Electron evidence remains required because the change is user-visible.

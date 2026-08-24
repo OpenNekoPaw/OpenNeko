@@ -21,6 +21,37 @@ afterEach(() => {
 });
 
 describe('DshAgentView content-creation composer', () => {
+  it('uses an optional assistant identity node without changing the role-based event', () => {
+    const projection = {
+      conversationId: 'conversation-character',
+      dshSessionId: 'dsh-character',
+      title: 'Neko',
+      inbox: { nextTurn: [], nextStep: [] },
+      events: [
+        {
+          kind: 'message' as const,
+          role: 'assistant' as const,
+          turn: 1,
+          step: 1,
+          text: 'Hello.',
+          messageId: 'message-character',
+          state: 'final' as const,
+        },
+      ],
+    };
+    renderAgent(
+      <DshComposerHarness
+        messageAuthorPresentation={{ assistant: <span data-testid="character-avatar">N</span> }}
+        onSubmit={vi.fn(async () => true)}
+        projection={projection}
+      />,
+    );
+
+    expect(screen.getByTestId('character-avatar')).toBeTruthy();
+    expect(screen.queryByLabelText('Agent')).toBeNull();
+    expect(projection.events[0]?.role).toBe('assistant');
+  });
+
   it('projects DSH next-request pressure through the existing usage indicator', () => {
     renderAgent(
       <DshComposerHarness
@@ -1735,6 +1766,7 @@ function renderAgent(view: JSX.Element, locale: SupportedLocale = 'zh-cn') {
 function DshComposerHarness({
   conversationId = 'conversation-1',
   mentionItems = [],
+  messageAuthorPresentation,
   onRequestMentions = vi.fn(),
   onMaterializeAsset,
   onRemoveQueuedMessage,
@@ -1743,6 +1775,9 @@ function DshComposerHarness({
 }: {
   readonly conversationId?: string;
   readonly mentionItems?: React.ComponentProps<typeof DshAgentView>['mentionItems'];
+  readonly messageAuthorPresentation?: React.ComponentProps<
+    typeof DshAgentView
+  >['messageAuthorPresentation'];
   readonly onRequestMentions?: (filter: string) => void;
   readonly onMaterializeAsset?: React.ComponentProps<typeof DshAgentView>['onMaterializeAsset'];
   readonly onRemoveQueuedMessage?: React.ComponentProps<
@@ -1810,6 +1845,7 @@ function DshComposerHarness({
         },
       }}
       mentionItems={mentionItems}
+      messageAuthorPresentation={messageAuthorPresentation}
       configuring={false}
       draft={draft}
       loading={false}

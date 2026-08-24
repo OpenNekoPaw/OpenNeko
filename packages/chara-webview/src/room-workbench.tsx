@@ -6,8 +6,9 @@ import type {
 } from '@neko/chara/contracts';
 import { ClockIcon, MessageIcon, UsersIcon, WarningIcon } from '@neko/ui';
 import type { SupportedLocale } from '@neko/ui/i18n';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { foundationLabel } from './labels';
+import type { CharacterParticipantProjection } from './participant-manager';
 
 export type CharacterRoomWorkbenchLoadState =
   | { readonly kind: 'idle' }
@@ -107,10 +108,17 @@ export function useCharacterRoomWorkbenchRuntime(input: {
 export function CharacterRoomInteractionFeed({
   identity,
   locale,
+  participantProjection,
+  renderParticipantIdentity,
   state,
 }: {
   readonly identity?: CharacterRoomIdentityProjection;
   readonly locale: SupportedLocale;
+  readonly participantProjection?: readonly CharacterParticipantProjection[];
+  readonly renderParticipantIdentity?: (
+    participant: CharacterParticipantProjection,
+    placement: 'header' | 'message',
+  ) => ReactNode;
   readonly state: CharacterRoomWorkbenchLoadState;
 }): JSX.Element {
   if (state.kind === 'idle' || state.kind === 'loading') {
@@ -128,11 +136,11 @@ export function CharacterRoomInteractionFeed({
   const messages = projection.events.filter(
     (event): event is Extract<RoomEvent, { readonly kind: 'message' }> => event.kind === 'message',
   );
-  const participantNames = new Map(
-    projection.participants.map((participant) => [
-      participant.participantId,
-      participant.displayName,
-    ]),
+  const participantProfiles = new Map(
+    participantProjection?.map((participant) => [participant.participantId, participant]) ?? [],
+  );
+  const roomParticipants = new Map(
+    projection.participants.map((participant) => [participant.participantId, participant]),
   );
   const activeSpeakerId = messages.at(-1)?.authorParticipantId;
   return (
@@ -145,26 +153,31 @@ export function CharacterRoomInteractionFeed({
     >
       {identity ? (
         <header className="character-room-feed__identity">
-          <div className="character-room-feed__cover" title={identity.coverResourceRef}>
+          <div className="character-room-feed__cover">
             <UsersIcon aria-hidden="true" size={18} />
           </div>
           <div className="character-room-feed__identity-copy">
             <strong>{identity.title}</strong>
             <ul aria-label={foundationLabel(locale, '聊天室参与者', 'Room participants')}>
-              {identity.participants.map((participant) => (
-                <li
-                  data-participant-id={participant.participantId}
-                  data-participant-portrait-resource-ref={participant.portraitResourceRef}
-                  data-room-speaker-active={
-                    participant.participantId === activeSpeakerId ? 'true' : undefined
-                  }
-                  key={participant.participantId}
-                  title={participant.portraitResourceRef}
-                >
-                  <span aria-hidden="true">{participant.displayName.slice(0, 1)}</span>
-                  <small>{participant.displayName}</small>
-                </li>
-              ))}
+              {identity.participants.map((participant) => {
+                const participantProfile = participantProfiles.get(participant.participantId);
+                return (
+                  <li
+                    data-participant-id={participant.participantId}
+                    data-room-speaker-active={
+                      participant.participantId === activeSpeakerId ? 'true' : undefined
+                    }
+                    key={participant.participantId}
+                  >
+                    {participantProfile && renderParticipantIdentity ? (
+                      renderParticipantIdentity(participantProfile, 'header')
+                    ) : (
+                      <span aria-hidden="true">{participant.displayName.slice(0, 1)}</span>
+                    )}
+                    <small>{participant.displayName}</small>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </header>
@@ -177,19 +190,35 @@ export function CharacterRoomInteractionFeed({
         <ol className="character-room-feed__messages" aria-live="polite">
           {messages.map((event) => {
             const ownMessage = event.authorParticipantId === projection.participantId;
+            const participant = roomParticipants.get(event.authorParticipantId);
+            if (!participant) {
+              throw new Error(
+                `Room message author '${event.authorParticipantId}' is not an exact Room participant.`,
+              );
+            }
+            const participantProfile = participantProfiles.get(event.authorParticipantId);
             return (
               <li
                 className={ownMessage ? 'is-local-user' : undefined}
                 data-room-event-id={event.roomEventId}
                 key={event.roomEventId}
               >
-                <div className="character-room-feed__message-meta">
-                  <strong>
-                    {participantNames.get(event.authorParticipantId) ?? event.authorParticipantId}
-                  </strong>
-                  <time dateTime={event.createdAt}>{formatTime(locale, event.createdAt)}</time>
+                <div className="character-room-feed__message-row">
+                  {participantProfile && renderParticipantIdentity ? (
+                    renderParticipantIdentity(participantProfile, 'message')
+                  ) : (
+                    <span className="character-room-feed__message-avatar" aria-hidden="true">
+                      {participant.displayName.slice(0, 1)}
+                    </span>
+                  )}
+                  <div className="character-room-feed__message-body">
+                    <div className="character-room-feed__message-meta">
+                      <strong>{participant.displayName}</strong>
+                      <time dateTime={event.createdAt}>{formatTime(locale, event.createdAt)}</time>
+                    </div>
+                    <p>{event.content}</p>
+                  </div>
                 </div>
-                <p>{event.content}</p>
               </li>
             );
           })}

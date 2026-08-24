@@ -8,6 +8,7 @@ export type CharacterAvatarHostRequest =
       readonly workbenchInstanceId: string;
       readonly characterRunId: string;
       readonly representationId: string;
+      readonly surface: 'avatar' | 'portrait';
     }
   | {
       readonly requestId: string;
@@ -16,17 +17,24 @@ export type CharacterAvatarHostRequest =
       readonly avatarResourceLeaseId: string;
     };
 
-export interface CharacterAvatarResourceDescriptor {
+interface CharacterAvatarResourceDescriptorBase {
   readonly avatarResourceLeaseId: string;
   readonly characterRunId: string;
   readonly representationId: string;
-  readonly kind: 'vrm';
   readonly url: string;
   readonly displayName: string;
-  readonly mediaType: 'model/gltf-binary';
   readonly byteLength: number;
   readonly sourceFingerprint: string;
 }
+
+export type CharacterAvatarResourceDescriptor = CharacterAvatarResourceDescriptorBase &
+  (
+    | { readonly kind: 'vrm'; readonly mediaType: 'model/gltf-binary' }
+    | {
+        readonly kind: 'portrait';
+        readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+      }
+  );
 
 export type CharacterAvatarHostDiagnosticCode =
   | 'character-avatar-scene-mismatch'
@@ -61,6 +69,7 @@ export interface OpenNekoDesktopCharacterAvatarBridge {
       readonly workbenchInstanceId: string;
       readonly characterRunId: string;
       readonly representationId: string;
+      readonly surface: 'avatar' | 'portrait';
     }): Promise<CharacterAvatarHostResult>;
     releaseSurface(avatarResourceLeaseId: string): Promise<void>;
   };
@@ -72,6 +81,7 @@ export function createCharacterAvatarOpenRequest(input: {
   readonly workbenchInstanceId: string;
   readonly characterRunId: string;
   readonly representationId: string;
+  readonly surface: 'avatar' | 'portrait';
 }): Extract<CharacterAvatarHostRequest, { readonly operation: 'open' }> {
   return parseCharacterAvatarHostRequest({ ...input, operation: 'open' }) as Extract<
     CharacterAvatarHostRequest,
@@ -103,6 +113,7 @@ export function parseCharacterAvatarHostRequest(value: unknown): CharacterAvatar
         'workbenchInstanceId',
         'characterRunId',
         'representationId',
+        'surface',
       ],
       'Character Avatar open request',
     );
@@ -113,6 +124,7 @@ export function parseCharacterAvatarHostRequest(value: unknown): CharacterAvatar
       workbenchInstanceId: identity(record['workbenchInstanceId'], 'Workbench instance'),
       characterRunId: identity(record['characterRunId'], 'CharacterRun'),
       representationId: identity(record['representationId'], 'representation'),
+      surface: characterSurface(record['surface']),
     };
   }
   if (operation === 'release') {
@@ -199,8 +211,17 @@ function parseDescriptor(value: unknown): CharacterAvatarResourceDescriptor {
     ],
     'Character Avatar descriptor',
   );
-  if (record['kind'] !== 'vrm' || record['mediaType'] !== 'model/gltf-binary') {
-    throw new Error('Character Avatar descriptor requires the canonical VRM renderer shape.');
+  const kind = record['kind'];
+  const mediaType = record['mediaType'];
+  if (!(
+    (kind === 'vrm' && mediaType === 'model/gltf-binary') ||
+    (kind === 'portrait' &&
+      (mediaType === 'image/png' ||
+        mediaType === 'image/jpeg' ||
+        mediaType === 'image/webp' ||
+        mediaType === 'image/gif'))
+  )) {
+    throw new Error('Character Avatar descriptor kind and media type do not match.');
   }
   const url = identity(record['url'], 'Character Avatar URL');
   if (!url.startsWith('openneko://resource/')) {
@@ -210,17 +231,30 @@ function parseDescriptor(value: unknown): CharacterAvatarResourceDescriptor {
   if (!Number.isSafeInteger(byteLength) || (byteLength as number) < 0) {
     throw new Error('Character Avatar byteLength must be a non-negative integer.');
   }
-  return {
+  const base = {
     avatarResourceLeaseId: identity(record['avatarResourceLeaseId'], 'Avatar resource lease'),
     characterRunId: identity(record['characterRunId'], 'CharacterRun'),
     representationId: identity(record['representationId'], 'representation'),
-    kind: 'vrm',
     url,
     displayName: identity(record['displayName'], 'Character Avatar display name'),
-    mediaType: 'model/gltf-binary',
     byteLength: byteLength as number,
     sourceFingerprint: identity(record['sourceFingerprint'], 'Character Avatar fingerprint'),
   };
+  if (kind === 'vrm') return { ...base, kind, mediaType: 'model/gltf-binary' };
+  if (
+    mediaType !== 'image/png' &&
+    mediaType !== 'image/jpeg' &&
+    mediaType !== 'image/webp' &&
+    mediaType !== 'image/gif'
+  ) {
+    throw new Error('Character portrait descriptor requires an image media type.');
+  }
+  return { ...base, kind: 'portrait', mediaType };
+}
+
+function characterSurface(value: unknown): 'avatar' | 'portrait' {
+  if (value === 'avatar' || value === 'portrait') return value;
+  throw new Error(`Unknown Character Avatar surface '${String(value)}'.`);
 }
 
 function recordValue(value: unknown, label: string): Record<string, unknown> {

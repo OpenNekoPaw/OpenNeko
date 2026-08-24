@@ -351,7 +351,11 @@ export class CharacterAvatarAuthorityService {
   constructor(private readonly repository: CharacterAvatarAuthorityRepository) {}
 
   async resolveSelectedRepresentation(
-    input: { readonly characterRunId: string; readonly representationId: string },
+    input: {
+      readonly characterRunId: string;
+      readonly representationId: string;
+      readonly surface: 'avatar' | 'portrait';
+    },
     signal?: AbortSignal,
   ): Promise<{
     readonly run: CharacterRun;
@@ -376,13 +380,14 @@ export class CharacterAvatarAuthorityService {
       );
     }
     const publication = parseCharacterVersion(storedPublication);
-    if (
-      publication.definition.representationDefaults?.avatarRepresentationId !==
-      input.representationId
-    ) {
+    const selectedRepresentationId =
+      input.surface === 'avatar'
+        ? publication.definition.representationDefaults?.avatarRepresentationId
+        : publication.definition.representationDefaults?.portraitRepresentationId;
+    if (selectedRepresentationId !== input.representationId) {
       throw presentationError(
         'character-avatar-representation-unavailable',
-        'The request does not match the exact user-selected Avatar representation.',
+        `The request does not match the exact user-selected ${input.surface} representation.`,
         input.characterRunId,
       );
     }

@@ -229,6 +229,58 @@ Agent Evaluation disposition is `excluded`: this change does not alter command o
 
 Composer command, Skill and mention candidates share one row presentation. Hover, focus and keyboard selection retain their existing background, border, text contrast, `aria` state and navigation behavior, but do not render an inset leading-edge accent. This is a visual-only change at the Webview boundary and does not alter candidate ranking, selected identity or invocation.
 
+### 14. Character conversation presentation keeps names separate from identities
+
+Agent Webview owns the localized labels and descriptions for the Companion/Narrative mode selector. Every key used by the control must exist in both supported locale bundles; a missing key is a presentation defect and must remain observable in tests rather than becoming a product label.
+
+The authoritative GlobalCharacter catalog resolves each selected CharacterVersion to its Character display name before the Chara launch command is created. Chara carries that display name only as launch presentation metadata and passes it to the Agent Conversation publication adapter; CharacterVersion and GlobalCharacter identities remain the only ownership and routing authorities. Desktop recent-conversation grouping uses the newest published conversation title for the non-empty Character group instead of rendering the owner identity. It must not derive a name by trimming an identity, and a structurally empty Character group is an invalid projection rather than a reason to fall back to the identity.
+
+This atomically replaces the hard-coded `Character <characterVersionId>` title and `Character · <characterId>` group label for newly published conversations. Stored titles are non-authoritative presentation records and are not rewritten automatically; reopening still preserves every Conversation and transcript.
+
+### 15. Participant management starts from one Chara-owned exact read model
+
+`@neko/chara-webview` owns one participant-manager projection and surface for both Dialogue and
+Room. A Dialogue projects its exact CharacterRun as one expanded role card without a redundant
+search/catalog treatment. A Room projects every runtime participant, exposes search and selection,
+and joins an agent-controlled participant to its exact CharacterRun, immutable CharacterVersion,
+mode binding, Presentation configuration and scheduling eligibility.
+
+The first delivery is intentionally read-only. It exposes only facts already owned by the Chara
+foundation snapshot and never copies or guesses Agent provider/model/session state. Agent-owned
+effective configuration and exact participant commands remain a later extension through Agent
+public ports. Missing Room, CharacterRun or CharacterVersion authority is a local visible failure;
+the projection does not display an identity as a label or substitute another participant.
+
+This removes participant rendering policy from the Desktop composition root. Desktop maps the
+exact Scene owner to the Chara Webview surface and continues to compose continuity as a sibling
+projection. The same participant projection can later accept exact owner commands without creating
+a second participant registry or making the React selection state authoritative.
+
+### 16. Message identity reuses the exact participant projection and authorized portrait resources
+
+Dialogue and Room message identity SHALL reuse the Chara-owned participant projection instead of
+adding Character facts to Agent transcript events. Agent Webview accepts only an optional
+presentation node for the existing `user` or `assistant` message lane; Desktop composes that node
+from the exact Character Scene owner. Room messages continue to resolve their author from the
+existing exact `authorParticipantId`. No CharacterRun, CharacterVersion or participant identity is
+copied into the Agent event contract for rendering convenience.
+
+The participant projection carries the exact selected portrait representation identity, while
+Desktop authorizes its Global Asset bytes through the existing sender- and Scene-bound Character
+resource port. Webviews receive only the short-lived authorized URL and bounded display facts; raw
+resource refs, absolute paths, AgentSession identities, provider secrets and permission internals
+are not rendered. Missing or stale portraits fail locally to a neutral initial/icon presentation
+and an explicit unavailable label in the profile card; they never try another representation or
+use a raw path as an image source.
+
+One Chara-owned avatar/profile primitive is reused by Dialogue messages, Room messages, the Room
+header and the participant manager. Hover and keyboard focus open a bounded profile card with
+display name, controller, immutable CharacterVersion label, mode, participation state and available
+voice/representation/story context. Hover/focus is read-only. Activating a Room message avatar
+updates only the current Character Scene's selected participant presentation state so the right
+manager reveals that exact participant; it does not mutate a RoomRun, AgentSession, scheduling or
+conversation transcript.
+
 ## Risks / Trade-offs
 
 - [Stable continuity crosses CharacterVersion boundaries incorrectly] → every memory keeps exact source version; the canonical projector validates compatibility against the selected publication and exposes local diagnostics without rewriting facts.
@@ -250,6 +302,7 @@ Composer command, Skill and mention candidates share one row presentation. Hover
 - [Overlapping active OpenSpec changes encode opposite behavior] → update or supersede conflicting requirements before implementation and run cross-change OpenSpec checks; no code lands while both canonical paths are claimed.
 - [A third-party Skill reuses an OpenNeko builtin name] → localize only entries whose Host source is exactly `builtin`; personal, project and plugin entries keep their package-authored description.
 - [A third-party command reuses an OpenNeko builtin name] → localize only entries whose Host source is exactly `builtin`; command artifacts and plugin commands keep their package-authored description and exact executable identity.
+- [Character display metadata is mistaken for authority] → resolve it from the exact GlobalCharacter catalog at the Host/Chara launch boundary, keep all identity checks on GlobalCharacter/CharacterVersion ids, and test that title changes cannot redirect a Conversation.
 
 ## Migration Plan
 
@@ -273,5 +326,7 @@ Rollback is performed by reverting the complete change before any product promot
 - Should the first model-comparison action duplicate a Conversation automatically or require an explicit “new Conversation with this model” confirmation? Configuration editing remains in the exact role/participant manager either way, and comparison must preserve separate transcript owners and the same CharacterVersion receipt.
 - Should Storyline user Timeline expose future-node titles by default in consumer mode, or require an author-defined spoiler visibility field? Character turn projection remains restricted in either case.
 - What explicit user workflow should handle preserved legacy StorylineRun records: read-only JSON export, authoring reconstruction candidate, deletion, or a bounded combination? No option may auto-create new Storyline facts.
+
 <!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+
 > **Successor disposition (2026-08-14):** The global/Workspace destination chooser and standalone Character target described below are historical context only. The successor owns Project-bound Character Skill creation; Conversation/Room/runtime boundaries remain applicable.

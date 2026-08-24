@@ -783,8 +783,7 @@ describe('DesktopAgentSurface', () => {
         surfaceKind="entry"
         entryContext={{
           workspace: { projects: [] },
-          loadCharacterTargets,
-          loadWorldTargets,
+          experimentalCreative: { loadCharacterTargets, loadWorldTargets },
         }}
       />,
     );
@@ -964,8 +963,10 @@ describe('DesktopAgentSurface', () => {
         surfaceKind="entry"
         entryContext={{
           workspace: { projects: [{ projectId: 'project-1', label: 'Project One' }] },
-          loadCharacterTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
-          loadWorldTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+          experimentalCreative: {
+            loadCharacterTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+            loadWorldTargets: vi.fn(async () => ({ targets: [], diagnostics: [] })),
+          },
         }}
       />,
     );

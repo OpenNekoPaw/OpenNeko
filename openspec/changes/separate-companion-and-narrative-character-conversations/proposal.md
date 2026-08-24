@@ -12,6 +12,7 @@
 - 日常角色通道通过稳定 companion continuity 读取已接受的 CharacterMemory 与 UserCharacterRelationship，并只把新对话或外部资料结果提交为带来源的候选；完整 transcript 继续由 AgentSession 唯一保存。
 - 叙事模式冻结精确 CharacterVersion 与可选 StorylineVersion/Node，只注入该节点作者发布的情境、允许/禁止故事事实、叙事记忆、关系状态和知识边界；不得读取或写入日常长期记忆，不允许外部资料注入，并强制将该角色参与者的有效 Agent Skill/Tool 集合收敛为空。
 - provider/model、Skill/Tool activation 与权限是每个 CharacterRun/Room participant 对应 Agent Conversation/Turn 的配置并由 Agent 冻结 receipt；Character Workbench 的角色/参与者管理器通过 Agent 公共配置端口管理精确参与者，并投影其结果。不同角色可以选择不同 provider/model，不使用所有 Character 会话共享的全局模型；叙事参与者只允许配置 provider/model 等无工具执行参数。切换模型不创建 CharacterVersion，修改角色设定必须发布新的 CharacterVersion。
+- Character Dialogue 的模式控件由 Agent Webview locale bundle 提供完整可读文案；新建角色会话的标题和 Desktop 会话导航使用全局角色目录解析出的展示名，不得回显 i18n key、GlobalCharacter identity 或 CharacterVersion identity。展示名只服务 presentation，不参与 owner identity、版本选择或会话路由。
 - 删除已经出现的 `CharacterCompanionAssistantLane` 及 Character 专用 AgentWorkspace/turn 路由；外部资料使用 Agent 标准 reference/grant/context 路径，Chara 只提供模式验证、角色上下文和显式记忆/authoring candidate 操作。
 - Assistant 与 Workspace Agent 都可以发现 authoring-only `character-creator` Skill。调用只填充完整输入并打开一个操作级目标选择器，由用户明确选择 standalone Character library 或当前/指定 Content Project 后创建和绑定精确 fresh CharacterProject；目标选择不得切换 Entry 模式、重绑原 Conversation 或推断 active/recent Workspace。Agent-owned Character authoring primitive ports 再将用户提示词与授权资料整理为一个可审阅 draft；Skill 只负责创作方法、字段完整性和证据区分，不写运行时工具协议。创建结果不得自动发布 CharacterVersion、启动 Character Conversation、写入 Companion continuity 或把模型推断变成已确认事实。角色预览、验证与改进继续作为显式辅助操作，任何角色事实写入仍需用户确认。
 - 为 Character/Room Workbench 增加只读 Storyline Timeline、当前节点背景和多角色节点投影。用户可查看或基于另一节点新建会话，但 Timeline 不表达运行进度，也不触发节点推进。
@@ -40,5 +41,7 @@
 - User data：现有 CharacterProject/Version、Conversation transcript、RelationshipMemory、CharacterMemory 和资源引用必须保留。旧 StorylineRun/observation/transition 记录不得静默转换为新故事线事实或长期记忆；owning catalog 保留其可见 diagnostic，并提供显式离线导出/清理或作者重建入口。已有 Conversation 继续绑定原精确身份，不得自动改为新模式、升级 StorylineVersion 或注入新的日常记忆。
 - Dependencies：本变更是 `define-character-dialogue-chatroom-world-foundation` 的破坏性后续收敛，并与 `unify-domain-authoring-workspaces`、`unify-agent-launch-and-domain-bindings`、Desktop Workbench 和 Agent Evaluation artifacts 重叠；实施前必须先消除相互矛盾的 active requirements 和任务声明。
 - Scope boundary：本变更实现最小 authoring-only `character-creator` Skill，用于根据提示词与 Agent 已授权资料填充用户在当前调用中明确选择归属并创建的普通 CharacterProject fresh draft；Skill 不猜测 owner identity，也不自动生成或绑定正式 CharacterVersion、Storyline、Character Conversation、Room、Companion continuity、模型配置或运行时权限。Skill 不进入正式角色对话运行时，发布和后续事实修改继续由 Chara authoring owner 与用户确认控制。
+
 <!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+
 > **Successor disposition (2026-08-14):** Global Assistant and standalone Character creation are retired. Character Dialogue/Room lifecycle, exact CharacterVersion binding, and Agent runtime ownership remain applicable; persistent Character creation now requires an exact Project Workspace.

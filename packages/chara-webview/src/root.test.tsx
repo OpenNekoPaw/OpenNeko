@@ -19,6 +19,7 @@ import {
   CharacterAuthoringSurface,
   CharacterCompanionContinuitySurface,
   CharacterDetailSurface,
+  CharacterParticipantIdentityAvatar,
   CharacterRoomInteractionFeed,
   CharacterRoomTimelineSurface,
   type CharacterDetailSelection,
@@ -947,11 +948,10 @@ describe('Character Room Workbench surfaces', () => {
         .querySelector('[data-character-room-feed]')
         ?.getAttribute('data-room-cover-resource-ref'),
     ).toBe('global-asset-library:room-cover-a');
+    expect(container.querySelector('[data-participant-portrait-resource-ref]')).toBeNull();
     expect(
-      container
-        .querySelector('[data-participant-id="participant-agent"]')
-        ?.getAttribute('data-participant-portrait-resource-ref'),
-    ).toBe('global-asset-library:portrait-lin');
+      container.querySelector('[data-character-participant-identity="participant-agent"]'),
+    ).not.toBeNull();
     expect(
       container
         .querySelector('[data-participant-id="participant-user"]')
@@ -1099,6 +1099,35 @@ function RoomWorkbenchHarness({
           ],
         }}
         locale="en"
+        participantProjection={[
+          {
+            participantId: 'participant-user',
+            displayName: 'User',
+            controllerKind: 'human',
+            schedulingState: 'active',
+          },
+          {
+            participantId: 'participant-agent',
+            displayName: 'Lin',
+            controllerKind: 'agent',
+            schedulingState: 'active',
+            character: {
+              characterRunId: 'character-run-lin',
+              versionLabel: 'Lin release',
+              mode: 'companion',
+              agentSessionBound: true,
+              portraitRepresentationId: 'portrait-lin',
+            },
+          },
+        ]}
+        renderParticipantIdentity={(participant) => (
+          <CharacterParticipantIdentityAvatar
+            locale="en"
+            participant={participant}
+            portraitState="unavailable"
+            size="compact"
+          />
+        )}
         state={state}
       />
       <CharacterRoomTimelineSurface locale="en" state={state} />

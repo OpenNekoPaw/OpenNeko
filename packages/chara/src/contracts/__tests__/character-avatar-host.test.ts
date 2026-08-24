@@ -13,6 +13,7 @@ describe('Character Avatar host contract', () => {
       workbenchInstanceId: 'workbench-a',
       characterRunId: 'character-run-a',
       representationId: 'avatar-a',
+      surface: 'avatar',
     });
     const result = parseCharacterAvatarHostResult(
       {

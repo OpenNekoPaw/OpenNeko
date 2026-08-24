@@ -108,6 +108,23 @@ Agent Webview SHALL render OpenNeko builtin Skill and command descriptions throu
 - **THEN** the row communicates its state through background, border and text contrast without a leading inset accent bar
 - **AND** the exact selected candidate, accessibility state and invocation behavior remain unchanged
 
+### Requirement: Character conversation presentation is localized and identity-safe
+
+The Agent Webview SHALL render the Character Dialogue mode field, both mode names and both descriptions from the active supported locale bundle. A newly published Character Conversation SHALL use the exact selected GlobalCharacter display name for its visible Conversation title, and Desktop SHALL use that visible title for the non-empty Character navigation group. GlobalCharacter and CharacterVersion identities SHALL remain available only as internal ownership and routing facts and MUST NOT be formatted as user-facing names. Display names MUST NOT participate in owner matching, CharacterVersion validation or Conversation routing.
+
+#### Scenario: User opens the Character Dialogue mode selector in Simplified Chinese
+
+- **WHEN** the selected Character Dialogue mode control and its menu are visible under Simplified Chinese locale
+- **THEN** the trigger, menu heading, both mode labels and both descriptions SHALL be readable Chinese copy
+- **AND** no `chat.entryExperience.characterDialogue.*` key SHALL be visible
+
+#### Scenario: User starts a Conversation with an exact Character version
+
+- **WHEN** Host resolves the selected CharacterVersion to one GlobalCharacter named `Neko` and Chara publishes its exact Agent Conversation
+- **THEN** the Conversation row and Character navigation group SHALL visibly identify `Neko`
+- **AND** neither surface SHALL render the GlobalCharacter or CharacterVersion identity as its display name
+- **AND** changing the supplied display metadata without changing the exact identities SHALL NOT change Conversation ownership or routing
+
 ### Requirement: External materials are companion-only authorized turn context
 
 Companion SHALL reuse the Agent-owned reference, resource-grant and context-provider contracts to attach authorized Workspace, Content, Asset or supported external material to the selected Character turn. The owning source SHALL retain bytes and authority; Agent turn context SHALL receive only the qualified projection required by that exact participant. Narrative MUST reject external-material attachment before context materialization. Chara MUST NOT define a parallel attachment contract or store raw paths, and active Workspace inference or implicit search results MUST NOT enter Character records or Agent transcript metadata.
@@ -159,5 +176,7 @@ Invalid mode fields, unavailable CharacterVersion, stale StorylineNode, forbidde
 - **WHEN** launch validation finds one participant's StorylineNode does not belong to its selected StorylineVersion
 - **THEN** the Room launch fails before every CharacterRun and AgentSession commit
 - **AND** existing Character, Room and Assistant Conversations remain usable
+
 <!-- SUCCESSOR: simplify-project-authoring-and-installed-libraries -->
+
 > **Successor disposition (2026-08-14):** The global Assistant destination chooser and standalone Character creation scenarios are superseded. Exact Dialogue/Room mode and CharacterVersion runtime requirements remain applicable; persistent creation now requires a Project-bound Agent.

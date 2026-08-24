@@ -136,11 +136,15 @@ import {
   CharacterAuthoringSurface,
   CharacterPortableExportScopeSurface,
   CharacterCompanionContinuitySurface,
+  CharacterParticipantManagerSurface,
+  CharacterParticipantIdentityAvatar,
   CharacterRoomInteractionFeed,
   CharacterRoomTimelineSurface as CharacterRoomTimelineProjectionSurface,
   CharacterStorylineTimelineSurface,
   projectCharacterRoomIdentity,
+  projectCharacterParticipantManager,
   type CharacterManagementRuntime,
+  type CharacterParticipantProjection,
   type CharacterPortableExportScopePresentation,
   type CharacterPortableExportSelection,
   useCharacterManagementRuntime,
@@ -1236,6 +1240,10 @@ function DesktopSceneWorkbench({
   const [portalTargets, setPortalTargets] = useState<ReadonlyMap<string, HTMLDivElement>>(
     () => new Map(),
   );
+  const [characterParticipantSelection, setCharacterParticipantSelection] = useState<{
+    readonly sceneId: string;
+    readonly participantId: string;
+  }>();
   const registerPortalTarget = useCallback(
     (
       workbenchInstanceId: string,
@@ -1349,6 +1357,36 @@ function DesktopSceneWorkbench({
           roomInteractionOwner.roomRunId,
         )
       : undefined;
+  const characterParticipantSnapshot =
+    characterManagement.loadState.kind === 'ready'
+      ? characterManagement.loadState.snapshot
+      : undefined;
+  const characterParticipantOwner = characterInteractionScene ? scene.context.owner : undefined;
+  const characterParticipantProjection = useMemo(() => {
+    if (!characterParticipantSnapshot || !characterParticipantOwner) return undefined;
+    try {
+      return projectCharacterParticipantManager(
+        characterParticipantSnapshot,
+        characterParticipantOwner,
+      );
+    } catch {
+      return undefined;
+    }
+  }, [characterParticipantOwner, characterParticipantSnapshot]);
+  const selectedCharacterParticipantId =
+    characterParticipantSelection?.sceneId === scene.sceneId
+      ? characterParticipantSelection.participantId
+      : undefined;
+  const characterParticipantPortraits = useCharacterParticipantPortraits({
+    participants: characterParticipantProjection?.participants ?? EMPTY_CHARACTER_PARTICIPANTS,
+    workbenchInstanceId: activeWorkbench.workbenchInstanceId,
+  });
+  const selectCharacterParticipant = useCallback(
+    (participantId: string) => {
+      setCharacterParticipantSelection({ sceneId: scene.sceneId, participantId });
+    },
+    [scene.sceneId],
+  );
   const characterTimelineStack =
     characterInteractionScene && scene.slots.cutPanel?.kind === 'character-timeline-stack'
       ? scene.slots.cutPanel
@@ -1520,9 +1558,39 @@ function DesktopSceneWorkbench({
                     <CharacterRoomInteractionFeed
                       identity={characterRoomIdentity}
                       locale={locale}
+                      participantProjection={characterParticipantProjection?.participants}
+                      renderParticipantIdentity={(participant, placement) => (
+                        <DesktopCharacterParticipantIdentity
+                          key={`${placement}:${participant.participantId}`}
+                          locale={locale}
+                          onSelect={selectCharacterParticipant}
+                          participant={participant}
+                          portrait={characterParticipantPortraits.get(participant.participantId)}
+                          profile
+                          size="compact"
+                        />
+                      )}
                       state={roomWorkbench}
                     />
                   ) : undefined
+                }
+                messageAuthorPresentation={
+                  characterInteractionScene && !roomInteractionOwner
+                    ? {
+                        assistant: characterParticipantProjection?.participants[0] ? (
+                          <DesktopCharacterParticipantIdentity
+                            locale={locale}
+                            onSelect={selectCharacterParticipant}
+                            participant={characterParticipantProjection.participants[0]}
+                            portrait={characterParticipantPortraits.get(
+                              characterParticipantProjection.participants[0].participantId,
+                            )}
+                            profile
+                            size="compact"
+                          />
+                        ) : undefined,
+                      }
+                    : undefined
                 }
               />
             </DesktopSurfaceErrorBoundary>
@@ -1780,6 +1848,9 @@ function DesktopSceneWorkbench({
           portalTargets={portalTargets}
           projection={projection}
           roomWorkbench={roomWorkbench}
+          characterParticipantPortraits={characterParticipantPortraits}
+          selectedCharacterParticipantId={selectedCharacterParticipantId}
+          onSelectedCharacterParticipantChange={selectCharacterParticipant}
           resourceBrowserView={settings.projection.preferences.resourceBrowserView}
           worldManagement={worldManagement}
           runtimePanelVisibility={runtimePanelVisibility}
@@ -1832,11 +1903,14 @@ function DesktopWorkbenchPortalTarget({
 function DesktopWorkbenchRuntimePortals({
   actions,
   characterManagement,
+  characterParticipantPortraits,
   composition,
   interactive,
   portalTargets,
   projection,
   roomWorkbench,
+  selectedCharacterParticipantId,
+  onSelectedCharacterParticipantChange,
   resourceBrowserView,
   runtimePanelVisibility,
   worldManagement,
@@ -1844,11 +1918,14 @@ function DesktopWorkbenchRuntimePortals({
 }: {
   readonly actions: ShellActions;
   readonly characterManagement: CharacterManagementRuntime;
+  readonly characterParticipantPortraits: ReadonlyMap<string, CharacterParticipantPortraitState>;
   readonly composition: DesktopWindowCompositionProjection;
   readonly interactive: boolean;
   readonly portalTargets: ReadonlyMap<string, HTMLDivElement>;
   readonly projection: DesktopShellProjection;
   readonly roomWorkbench: ReturnType<typeof useCharacterRoomWorkbenchRuntime>;
+  readonly selectedCharacterParticipantId?: string;
+  readonly onSelectedCharacterParticipantChange: (participantId: string) => void;
   readonly resourceBrowserView: 'list' | 'grid';
   readonly runtimePanelVisibility: RuntimePanelVisibility;
   readonly worldManagement: ReturnType<typeof useWorldManagementRuntime>;
@@ -1903,7 +1980,10 @@ function DesktopWorkbenchRuntimePortals({
   const runtimeManager = characterInteraction ? (
     <CharacterRuntimeManagerSurface
       owner={characterInteraction.owner}
+      onSelectedParticipantChange={onSelectedCharacterParticipantChange}
+      participantPortraits={characterParticipantPortraits}
       runtime={characterManagement}
+      selectedParticipantId={selectedCharacterParticipantId}
     />
   ) : worldRuntimeProjection ? (
     <WorldRuntimeManagerSurface locale={locale} projection={worldRuntimeProjection} />
@@ -2393,6 +2473,7 @@ function CharacterAvatarSurface({
         workbenchInstanceId,
         characterRunId: avatarCharacterRunId,
         representationId: selectedAvatarRepresentationId,
+        surface: 'avatar',
       })
       .then((result) => {
         if (result.status !== 'ready') {
@@ -2481,93 +2562,52 @@ function CharacterAvatarSurface({
 }
 
 function CharacterRuntimeManagerSurface({
+  onSelectedParticipantChange,
   owner,
+  participantPortraits,
   runtime,
+  selectedParticipantId,
 }: {
+  readonly onSelectedParticipantChange: (participantId: string) => void;
   readonly owner: CharacterInteractionOwner;
+  readonly participantPortraits: ReadonlyMap<string, CharacterParticipantPortraitState>;
   readonly runtime: CharacterManagementRuntime;
+  readonly selectedParticipantId?: string;
 }): JSX.Element {
   const { locale, t } = useTranslation();
-  const [query, setQuery] = useState('');
   const snapshot = runtime.loadState.kind === 'ready' ? runtime.loadState.snapshot : undefined;
   const runs = snapshot ? resolveOwnerCharacterRuns(snapshot, owner) : [];
-  const roomRun =
-    owner.kind === 'room'
-      ? snapshot?.character.roomRuns.find((run) => run.roomRunId === owner.roomRunId)
-      : undefined;
-  const normalizedQuery = query.trim().toLocaleLowerCase(locale);
-  const visibleRuns = runs.filter((run) => {
-    const publication = snapshot?.character.versions.find(
-      (version) => version.characterVersionId === run.characterVersionId,
-    );
-    const label = publication?.label ?? run.characterVersionId;
-    return (
-      normalizedQuery.length === 0 ||
-      label.toLocaleLowerCase(locale).includes(normalizedQuery) ||
-      run.characterVersionId.toLocaleLowerCase(locale).includes(normalizedQuery)
-    );
-  });
   return (
     <section
       className="character-workbench-manager project-dock-panel"
       data-character-context-manager="true"
       data-character-owner-kind={owner.kind}
     >
-      <header className="character-workbench-panel-header">
-        <UserIcon size={16} />
-        <strong>{t('character.workbench.runtimeManager')}</strong>
-        <span className="character-workbench-panel-header__count">{runs.length}</span>
-      </header>
-      <label className="character-workbench-manager__search">
-        <SearchIcon size={14} aria-hidden="true" />
-        <input
-          aria-label={t('character.workbench.search')}
-          placeholder={t('character.workbench.search')}
-          value={query}
-          onChange={(event) => setQuery(event.currentTarget.value)}
+      {snapshot ? (
+        <CharacterParticipantManagerSurface
+          locale={locale}
+          onSelectedParticipantChange={onSelectedParticipantChange}
+          owner={owner}
+          renderParticipantIdentity={(participant, placement) => (
+            <DesktopCharacterParticipantIdentity
+              key={`${placement}:${participant.participantId}`}
+              locale={locale}
+              participant={participant}
+              portrait={participantPortraits.get(participant.participantId)}
+              profile={placement === 'details'}
+              size="standard"
+            />
+          )}
+          selectedParticipantId={selectedParticipantId}
+          snapshot={snapshot}
         />
-      </label>
-      <div className="character-workbench-manager__capabilities" data-character-list="true">
-        {visibleRuns.map((run) => {
-          const publication = snapshot?.character.versions.find(
-            (version) => version.characterVersionId === run.characterVersionId,
-          );
-          const schedulingEligible =
-            roomRun?.schedulingPolicy.kind !== 'bounded-autonomous' ||
-            roomRun.schedulingPolicy.eligibleParticipantIds.includes(run.participantId);
-          return (
-            <article
-              key={run.characterRunId}
-              className="character-workbench-manager__participant"
-              data-character-participant={run.participantId}
-              data-character-mode={run.runtimeBinding.kind}
-            >
-              <div className="character-workbench-manager__participant-heading">
-                <UserIcon size={15} aria-hidden="true" />
-                <strong>{publication?.label ?? run.characterVersionId}</strong>
-                <span>
-                  {schedulingEligible
-                    ? t('character.workbench.active')
-                    : t('character.workbench.paused')}
-                </span>
-              </div>
-              <div className="character-workbench-manager__participant-meta">
-                <span>{run.runtimeBinding.kind}</span>
-                <span>{run.controller.kind}</span>
-              </div>
-            </article>
-          );
-        })}
-        {visibleRuns.length === 0 ? (
-          <div className="character-workbench-manager__row" role="status">
-            <span>
-              {runs.length === 0
-                ? t('character.workbench.notConnected')
-                : t('character.workbench.noMatches')}
-            </span>
-          </div>
-        ) : null}
-      </div>
+      ) : (
+        <div className="character-workbench-manager__status" role="status">
+          {runtime.loadState.kind === 'failed'
+            ? runtime.loadState.message
+            : t('character.workbench.notConnected')}
+        </div>
+      )}
       {snapshot && runs.length > 0 ? (
         <CharacterCompanionContinuitySurface
           execute={runtime.execute}
@@ -2579,6 +2619,142 @@ function CharacterRuntimeManagerSurface({
       {runtime.diagnostic ? <span role="alert">{runtime.diagnostic}</span> : null}
     </section>
   );
+}
+
+function DesktopCharacterParticipantIdentity({
+  locale,
+  onSelect,
+  participant,
+  portrait,
+  profile,
+  size,
+}: {
+  readonly locale: SupportedLocale;
+  readonly onSelect?: (participantId: string) => void;
+  readonly participant: CharacterParticipantProjection;
+  readonly portrait?: CharacterParticipantPortraitState;
+  readonly profile: boolean;
+  readonly size: 'compact' | 'standard';
+}): JSX.Element {
+  return (
+    <CharacterParticipantIdentityAvatar
+      locale={locale}
+      onSelect={onSelect}
+      participant={participant}
+      portraitState={
+        portrait?.kind ??
+        (participant.character?.portraitRepresentationId ? 'loading' : 'unconfigured')
+      }
+      portraitUrl={portrait?.kind === 'ready' ? portrait.url : undefined}
+      profile={profile}
+      size={size}
+    />
+  );
+}
+
+type CharacterParticipantPortraitState =
+  | { readonly kind: 'unconfigured' | 'loading' | 'unavailable' }
+  | { readonly kind: 'ready'; readonly url: string };
+
+const EMPTY_CHARACTER_PARTICIPANTS: readonly CharacterParticipantProjection[] = [];
+
+function useCharacterParticipantPortraits(input: {
+  readonly participants: readonly CharacterParticipantProjection[];
+  readonly workbenchInstanceId: string;
+}): ReadonlyMap<string, CharacterParticipantPortraitState> {
+  const portraitRequests = useMemo(
+    () =>
+      input.participants
+        .map((participant) => ({
+          participantId: participant.participantId,
+          characterRunId: participant.character?.characterRunId,
+          representationId: participant.character?.portraitRepresentationId,
+        }))
+        .filter(
+          (
+            request,
+          ): request is {
+            readonly participantId: string;
+            readonly characterRunId: string;
+            readonly representationId: string;
+          } => Boolean(request.characterRunId && request.representationId),
+        ),
+    [input.participants],
+  );
+  const [portraits, setPortraits] = useState<
+    ReadonlyMap<string, CharacterParticipantPortraitState>
+  >(() => new Map());
+
+  useEffect(() => {
+    let active = true;
+    const leases: string[] = [];
+    const initial = new Map<string, CharacterParticipantPortraitState>();
+    for (const participant of input.participants) {
+      initial.set(
+        participant.participantId,
+        participant.character?.portraitRepresentationId
+          ? { kind: 'loading' }
+          : { kind: 'unconfigured' },
+      );
+    }
+    setPortraits(initial);
+    for (const request of portraitRequests) {
+      void Promise.resolve(
+        window.openNekoDesktop.characterAvatar.openSurface({
+          characterRunId: request.characterRunId,
+          representationId: request.representationId,
+          surface: 'portrait',
+          workbenchInstanceId: input.workbenchInstanceId,
+        }),
+      )
+        .then((result) => {
+          if (!result) {
+            if (active) {
+              setPortraits((current) =>
+                new Map(current).set(request.participantId, { kind: 'unavailable' }),
+              );
+            }
+            return;
+          }
+          if (!active) {
+            if (result.status === 'ready') {
+              void window.openNekoDesktop.characterAvatar.releaseSurface(
+                result.descriptor.avatarResourceLeaseId,
+              );
+            }
+            return;
+          }
+          if (result.status !== 'ready' || result.descriptor.kind !== 'portrait') {
+            setPortraits((current) =>
+              new Map(current).set(request.participantId, { kind: 'unavailable' }),
+            );
+            return;
+          }
+          leases.push(result.descriptor.avatarResourceLeaseId);
+          setPortraits((current) =>
+            new Map(current).set(request.participantId, {
+              kind: 'ready',
+              url: result.descriptor.url,
+            }),
+          );
+        })
+        .catch(() => {
+          if (active) {
+            setPortraits((current) =>
+              new Map(current).set(request.participantId, { kind: 'unavailable' }),
+            );
+          }
+        });
+    }
+    return () => {
+      active = false;
+      for (const leaseId of leases) {
+        void window.openNekoDesktop.characterAvatar.releaseSurface(leaseId);
+      }
+    };
+  }, [input.participants, input.workbenchInstanceId, portraitRequests]);
+
+  return portraits;
 }
 
 function resolveOwnerCharacterRuns(

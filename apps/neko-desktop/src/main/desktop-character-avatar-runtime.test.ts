@@ -46,6 +46,7 @@ describe('DesktopCharacterAvatarRuntime', () => {
         workbenchInstanceId: 'workbench-a',
         characterRunId: 'character-run-a',
         representationId: 'avatar-a',
+        surface: 'avatar',
       },
     });
 
@@ -87,6 +88,7 @@ describe('DesktopCharacterAvatarRuntime', () => {
           workbenchInstanceId: 'workbench-a',
           characterRunId: 'character-run-a',
           representationId: 'avatar-unselected',
+          surface: 'avatar',
         },
       }),
     ).resolves.toMatchObject({
@@ -104,6 +106,7 @@ describe('DesktopCharacterAvatarRuntime', () => {
           workbenchInstanceId: 'workbench-a',
           characterRunId: 'character-run-outside-room',
           representationId: 'avatar-a',
+          surface: 'avatar',
         },
       }),
     ).resolves.toMatchObject({
@@ -111,17 +114,58 @@ describe('DesktopCharacterAvatarRuntime', () => {
       diagnostic: { code: 'character-avatar-scene-mismatch' },
     });
   });
+
+  it('authorizes only the exact selected portrait as an image resource', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-character-portrait-'));
+    roots.push(root);
+    await writeFile(path.join(root, 'portrait.png'), 'png-fixture');
+    const resources = new DesktopResourceRegistry();
+    resources.bindWindow('window-a', 101);
+    registries.push(resources);
+    const runtime = new DesktopCharacterAvatarRuntime({
+      globalAssetRoot: root,
+      assetLibraryMemberships: memberships(),
+      resources,
+      authority: new CharacterAvatarAuthorityService(repository()),
+    });
+
+    await expect(
+      runtime.open({
+        windowId: 'window-a',
+        owner: { kind: 'character', characterRunId: 'character-run-a' },
+        request: {
+          requestId: 'request-portrait',
+          operation: 'open',
+          rendererSessionId: 'renderer-a',
+          workbenchInstanceId: 'workbench-a',
+          characterRunId: 'character-run-a',
+          representationId: 'portrait-a',
+          surface: 'portrait',
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: 'ready',
+      descriptor: {
+        kind: 'portrait',
+        mediaType: 'image/png',
+        representationId: 'portrait-a',
+      },
+    });
+  });
 });
 
 function memberships(): AssetLibraryMembershipRepository {
   return {
     get: vi.fn(async (membershipId) =>
-      membershipId === 'global-asset-library:avatar-a'
+      membershipId === 'global-asset-library:avatar-a' ||
+      membershipId === 'global-asset-library:portrait-a'
         ? {
             membershipId,
-            sourceRelativePath: 'avatar.vrm',
-            label: 'avatar.vrm',
-            mediaType: 'model/gltf-binary',
+            sourceRelativePath:
+              membershipId === 'global-asset-library:avatar-a' ? 'avatar.vrm' : 'portrait.png',
+            label: membershipId === 'global-asset-library:avatar-a' ? 'avatar.vrm' : 'portrait.png',
+            mediaType:
+              membershipId === 'global-asset-library:avatar-a' ? 'model/gltf-binary' : 'image/png',
             byteLength: 11,
             modifiedAt: '2026-08-10T00:00:00.000Z',
             state: 'active' as const,
@@ -181,8 +225,16 @@ function repository(): {
           kind: 'vrm',
           resourceRef: 'global-asset-library:avatar-a',
         },
+        {
+          representationId: 'portrait-a',
+          kind: 'portrait',
+          resourceRef: 'global-asset-library:portrait-a',
+        },
       ],
-      representationDefaults: { avatarRepresentationId: 'avatar-a' },
+      representationDefaults: {
+        avatarRepresentationId: 'avatar-a',
+        portraitRepresentationId: 'portrait-a',
+      },
     },
     acceptedEvidenceIds: [],
     publishedAt: '2026-08-10T00:00:00.000Z',

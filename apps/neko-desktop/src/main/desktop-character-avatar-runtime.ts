@@ -61,6 +61,7 @@ export class DesktopCharacterAvatarRuntime {
       ({ representation } = await this.options.authority.resolveSelectedRepresentation({
         characterRunId: request.characterRunId,
         representationId: request.representationId,
+        surface: request.surface,
       }));
     } catch (error) {
       if (
@@ -79,11 +80,14 @@ export class DesktopCharacterAvatarRuntime {
         `CharacterRun '${request.characterRunId}' or its publication is unavailable.`,
       );
     }
-    if (representation.kind !== 'vrm') {
+    if (
+      (request.surface === 'avatar' && representation.kind !== 'vrm') ||
+      (request.surface === 'portrait' && representation.kind !== 'portrait')
+    ) {
       return unavailable(
         request.requestId,
         'character-avatar-renderer-unavailable',
-        `The exact '${representation.kind}' Avatar renderer is unavailable.`,
+        `The exact '${representation.kind}' representation cannot render the ${request.surface} surface.`,
       );
     }
     if (!representation.resourceRef.startsWith('global-asset-library:')) {
@@ -108,11 +112,12 @@ export class DesktopCharacterAvatarRuntime {
         'The selected VRM Global Asset is stale or unavailable.',
       );
     }
-    if (path.extname(absolutePath).toLocaleLowerCase() !== '.vrm') {
+    const mediaType = resolveCharacterVisualMediaType(request.surface, absolutePath);
+    if (!mediaType) {
       return unavailable(
         request.requestId,
         'character-avatar-resource-unavailable',
-        'The selected Avatar resource is not a VRM file.',
+        `The selected ${request.surface} resource has an unsupported file type.`,
       );
     }
 
@@ -126,7 +131,7 @@ export class DesktopCharacterAvatarRuntime {
           sessionId: `character-avatar:${request.characterRunId}`,
           rendererSessionId: request.rendererSessionId,
         },
-        { absolutePath, mediaType: 'model/gltf-binary' },
+        { absolutePath, mediaType },
       );
       const avatarResourceLeaseId = `character-avatar-lease:${randomUUID()}`;
       this.leases.set(avatarResourceLeaseId, {
@@ -134,20 +139,34 @@ export class DesktopCharacterAvatarRuntime {
         rendererSessionId: request.rendererSessionId,
         lease,
       });
+      const descriptor =
+        request.surface === 'avatar'
+          ? {
+              avatarResourceLeaseId,
+              characterRunId: request.characterRunId,
+              representationId: request.representationId,
+              kind: 'vrm' as const,
+              url: lease.url,
+              displayName: path.basename(absolutePath),
+              mediaType: 'model/gltf-binary' as const,
+              byteLength: source.size,
+              sourceFingerprint: `${source.mtimeMs}:${source.size}`,
+            }
+          : {
+              avatarResourceLeaseId,
+              characterRunId: request.characterRunId,
+              representationId: request.representationId,
+              kind: 'portrait' as const,
+              url: lease.url,
+              displayName: path.basename(absolutePath),
+              mediaType: requirePortraitMediaType(mediaType),
+              byteLength: source.size,
+              sourceFingerprint: `${source.mtimeMs}:${source.size}`,
+            };
       return {
         requestId: request.requestId,
         status: 'ready',
-        descriptor: {
-          avatarResourceLeaseId,
-          characterRunId: request.characterRunId,
-          representationId: request.representationId,
-          kind: 'vrm',
-          url: lease.url,
-          displayName: path.basename(absolutePath),
-          mediaType: 'model/gltf-binary',
-          byteLength: source.size,
-          sourceFingerprint: `${source.mtimeMs}:${source.size}`,
-        },
+        descriptor,
       };
     } catch {
       return unavailable(
@@ -206,6 +225,36 @@ export class DesktopCharacterAvatarRuntime {
 
   private requireActive(): void {
     if (this.disposed) throw new Error('Desktop Character Avatar runtime is disposed.');
+  }
+}
+
+function requirePortraitMediaType(
+  mediaType: 'model/gltf-binary' | 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif',
+): 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' {
+  if (mediaType === 'model/gltf-binary') {
+    throw new Error('Character portrait resource resolved to a VRM media type.');
+  }
+  return mediaType;
+}
+
+function resolveCharacterVisualMediaType(
+  surface: CharacterAvatarOpenRequest['surface'],
+  absolutePath: string,
+): 'model/gltf-binary' | 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' | undefined {
+  const extension = path.extname(absolutePath).toLocaleLowerCase();
+  if (surface === 'avatar') return extension === '.vrm' ? 'model/gltf-binary' : undefined;
+  switch (extension) {
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.webp':
+      return 'image/webp';
+    case '.gif':
+      return 'image/gif';
+    default:
+      return undefined;
   }
 }
 

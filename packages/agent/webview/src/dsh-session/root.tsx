@@ -78,6 +78,10 @@ export interface DshAgentViewProps {
   readonly composerConfigurationError?: string;
   readonly mentionItems?: readonly DshComposerMentionProjection[];
   readonly mentionDiagnostic?: string;
+  readonly messageAuthorPresentation?: {
+    readonly assistant?: ReactNode;
+    readonly user?: ReactNode;
+  };
   readonly configuring: boolean;
   readonly draft: string;
   readonly errorMessage?: string;
@@ -485,6 +489,7 @@ function DshAgentViewContent(props: DshAgentViewProps): JSX.Element {
                 copy={copy}
                 event={event}
                 key={eventKey(event, index)}
+                messageAuthorPresentation={props.messageAuthorPresentation}
                 onOpenTerminalArtifact={props.onOpenTerminalArtifact}
                 onResolveImageAttachmentPreview={props.onResolveImageAttachmentPreview}
               />
@@ -1283,11 +1288,13 @@ function assertImagePreviewMatches(
 function DshSessionEvent({
   copy,
   event,
+  messageAuthorPresentation,
   onOpenTerminalArtifact,
   onResolveImageAttachmentPreview,
 }: {
   readonly copy: DshAgentCopy;
   readonly event: DshSessionHostEvent;
+  readonly messageAuthorPresentation?: DshAgentViewProps['messageAuthorPresentation'];
   readonly onOpenTerminalArtifact?: DshAgentViewProps['onOpenTerminalArtifact'];
   readonly onResolveImageAttachmentPreview?: DshAgentViewProps['onResolveImageAttachmentPreview'];
 }): JSX.Element | null {
@@ -1327,12 +1334,14 @@ function DshSessionEvent({
           >
             <div className={`flex gap-2 px-2 py-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
               <div className="w-5 flex-shrink-0 pt-0.5">
-                <span
-                  aria-label={isUser ? copy.you : copy.agent}
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full border text-[8px] font-semibold leading-none ${isUser ? 'border-[var(--agent-composer-send-border)] bg-[var(--agent-composer-send-bg)] text-[var(--agent-composer-send-fg)]' : 'border-[var(--agent-bubble-assistant-border)] bg-[var(--agent-bubble-assistant-bg)] text-[var(--agent-fg)]'}`}
-                >
-                  {isUser ? copy.youAvatar : 'AI'}
-                </span>
+                {messageAuthorPresentation?.[isUser ? 'user' : 'assistant'] ?? (
+                  <span
+                    aria-label={isUser ? copy.you : copy.agent}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full border text-[8px] font-semibold leading-none ${isUser ? 'border-[var(--agent-composer-send-border)] bg-[var(--agent-composer-send-bg)] text-[var(--agent-composer-send-fg)]' : 'border-[var(--agent-bubble-assistant-border)] bg-[var(--agent-bubble-assistant-bg)] text-[var(--agent-fg)]'}`}
+                  >
+                    {isUser ? copy.youAvatar : 'AI'}
+                  </span>
+                )}
               </div>
               <div
                 className={`min-w-0 flex-1 ${isUser ? 'flex max-w-[85%] flex-col items-end' : 'max-w-none'}`}
