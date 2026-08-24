@@ -14,6 +14,7 @@ import type {
   MediaOutput,
 } from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
+import { findMaterializedVideoInput } from '../materialized-video-input';
 
 /**
  * LiblibAI API response types
@@ -195,10 +196,11 @@ export class LiblibMediaAdapter extends BaseMediaAdapter {
     };
 
     // Image-to-video
-    if (request.referenceImageUrl) {
+    const imageInput = findMaterializedVideoInput(request, 'first-frame', 'reference-image');
+    if (imageInput) {
       body.generateParams = {
         ...(body.generateParams as Record<string, unknown>),
-        initImageUrl: request.referenceImageUrl,
+        initImageUrl: imageInput.url,
       };
     }
 

@@ -343,10 +343,17 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
    * Determine the DashScope video service endpoint.
    */
   private resolveVideoService(request: MaterializedVideoGenerationRequest): string {
-    if (request.sourceVideoUrl || request.editInstruction) {
+    if (
+      request.inputs?.some((input) => input.role === 'reference-video') ||
+      request.editInstruction
+    ) {
       return 'text2video/video-editing';
     }
-    if (request.referenceImageUrl || request.startFrameImageBase64) {
+    if (
+      request.inputs?.some(
+        (input) => input.role === 'first-frame' || input.role === 'reference-image',
+      )
+    ) {
       return 'text2video/image2video';
     }
     return 'text2video/video-synthesis';
@@ -363,24 +370,14 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
       prompt: request.prompt,
     };
 
-    // First/last frame images
-    if (request.startFrameImageBase64) {
-      input.first_frame_image = `data:image/png;base64,${request.startFrameImageBase64}`;
-    }
-
-    if (request.endFrameImageBase64) {
-      input.last_frame_image = `data:image/png;base64,${request.endFrameImageBase64}`;
-    }
-
-    // Reference image for image-to-video
-    if (request.referenceImageUrl) {
-      input.image_url = request.referenceImageUrl;
-    }
-
-    // Source video for video editing
-    if (request.sourceVideoUrl) {
-      input.ref_video = request.sourceVideoUrl;
-    }
+    const firstFrame = request.inputs?.find((entry) => entry.role === 'first-frame');
+    const lastFrame = request.inputs?.find((entry) => entry.role === 'last-frame');
+    const referenceImage = request.inputs?.find((entry) => entry.role === 'reference-image');
+    const referenceVideo = request.inputs?.find((entry) => entry.role === 'reference-video');
+    if (firstFrame) input.first_frame_image = firstFrame.url;
+    if (lastFrame) input.last_frame_image = lastFrame.url;
+    if (referenceImage) input.image_url = referenceImage.url;
+    if (referenceVideo) input.ref_video = referenceVideo.url;
 
     // Edit instruction
     if (request.editInstruction) {

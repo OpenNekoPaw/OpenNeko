@@ -117,6 +117,7 @@ export type ProviderType =
   | 'runway'
   | 'luma'
   | 'minimax'
+  | 'bytedance'
   | 'jimeng'
   | 'liblib'
   | 'suno'
@@ -139,6 +140,7 @@ export const PROVIDER_TYPES = [
   'runway',
   'luma',
   'minimax',
+  'bytedance',
   'jimeng',
   'liblib',
   'suno',

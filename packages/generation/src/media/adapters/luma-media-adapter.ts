@@ -13,6 +13,7 @@ import type {
   MediaOutput,
 } from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
+import { findMaterializedVideoInput } from '../materialized-video-input';
 
 /**
  * Luma API response types
@@ -76,11 +77,12 @@ export class LumaMediaAdapter extends BaseMediaAdapter {
       body.aspect_ratio = request.aspectRatio.replace(':', ':');
     }
 
-    if (request.referenceImageUrl) {
+    const imageInput = findMaterializedVideoInput(request, 'first-frame', 'reference-image');
+    if (imageInput) {
       body.keyframes = {
         frame0: {
           type: 'image',
-          url: request.referenceImageUrl,
+          url: imageInput.url,
         },
       };
     }

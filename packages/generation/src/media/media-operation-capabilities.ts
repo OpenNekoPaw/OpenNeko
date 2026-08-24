@@ -116,11 +116,21 @@ export function getProviderVideoOperationSupport(
 
 export function resolveCanonicalVideoOperation(request: VideoGenerationRequest): VideoOperationId {
   if (request.operation) return request.operation;
-  if (request.referenceVideoLocator) {
+  if (
+    request.inputs?.some(
+      (input) => input.role === 'reference-video' || input.role === 'reference-audio',
+    )
+  ) {
     return request.editInstruction ? 'transform' : 'restyle';
   }
-  if (request.endFrameLocator) return 'generate-from-keyframes';
-  if (request.startFrameLocator) {
+  if (request.inputs?.some((input) => input.role === 'last-frame')) {
+    return 'generate-from-keyframes';
+  }
+  if (
+    request.inputs?.some(
+      (input) => input.role === 'first-frame' || input.role === 'reference-image',
+    )
+  ) {
     return 'generate-from-image';
   }
   return 'generate-from-prompt';
@@ -370,9 +380,17 @@ function providerVideoProfile(
     }
     return unsupportedVideoProfile(operationId);
   }
-  if (providerType === 'minimax') {
-    if (operationId === 'generate-from-prompt') {
-      return { level: 'supported', controls: ['prompt'] };
+  if (providerType === 'minimax' || providerType === 'bytedance') {
+    if (
+      [
+        'generate-from-prompt',
+        'generate-from-image',
+        'generate-from-keyframes',
+        'transform',
+        'restyle',
+      ].includes(operationId)
+    ) {
+      return { level: 'supported', controls: FULL_VIDEO_CONTROLS };
     }
     return unsupportedVideoProfile(operationId);
   }
@@ -415,11 +433,15 @@ function requestedVideoControls(
 ): readonly CreativeMediaControlId[] {
   const controls: CreativeMediaControlId[] = [];
   if (request.prompt) controls.push('prompt');
-  if (request.startFrameLocator) {
+  if (request.inputs?.some((input) => input.role === 'first-frame')) {
     controls.push('start-frame');
   }
-  if (request.endFrameLocator) controls.push('end-frame');
-  if (request.referenceVideoLocator) {
+  if (request.inputs?.some((input) => input.role === 'last-frame')) controls.push('end-frame');
+  if (
+    request.inputs?.some(
+      (input) => input.role === 'reference-video' || input.role === 'reference-audio',
+    )
+  ) {
     controls.push('reference-video');
   }
   if (request.editInstruction) controls.push('edit-instruction');

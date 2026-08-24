@@ -282,14 +282,28 @@ function isVideoRequest(value: unknown): value is VideoGenerationRequest {
     isMediaRequestBase(value) &&
     hasOnlyKeys(value, VIDEO_REQUEST_KEYS) &&
     optionalNumbersAreFinite(value, ['duration', 'fps', 'motionStrength']) &&
-    optionalContentLocators(value, [
-      'startFrameLocator',
-      'endFrameLocator',
-      'referenceVideoLocator',
-    ]) &&
-    (value['referenceImages'] === undefined ||
-      (Array.isArray(value['referenceImages']) &&
-        value['referenceImages'].every(isIpAdapterReference)))
+    (value['generateAudio'] === undefined || typeof value['generateAudio'] === 'boolean') &&
+    (value['inputs'] === undefined ||
+      (Array.isArray(value['inputs']) &&
+        value['inputs'].every(isVideoGenerationInput) &&
+        value['inputs'].filter((input) => isRecord(input) && input['role'] === 'first-frame')
+          .length <= 1 &&
+        value['inputs'].filter((input) => isRecord(input) && input['role'] === 'last-frame')
+          .length <= 1))
+  );
+}
+
+function isVideoGenerationInput(value: unknown): boolean {
+  if (!isRecord(value) || !hasOnlyKeys(value, VIDEO_INPUT_KEYS)) return false;
+  if (!isContentLocator(value['locator'])) return false;
+  if (value['mimeType'] !== undefined && typeof value['mimeType'] !== 'string') return false;
+  const type = value['type'];
+  const role = value['role'];
+  return (
+    (type === 'image' &&
+      (role === 'first-frame' || role === 'last-frame' || role === 'reference-image')) ||
+    (type === 'video' && role === 'reference-video') ||
+    (type === 'audio' && role === 'reference-audio')
   );
 }
 
@@ -497,16 +511,15 @@ const VIDEO_REQUEST_KEYS = new Set([
   'resolution',
   'fps',
   'aspectRatio',
-  'startFrameLocator',
-  'endFrameLocator',
-  'referenceVideoLocator',
+  'generateAudio',
+  'inputs',
   'motionStrength',
   'cameraMovement',
   'cameraAngle',
   'shotScale',
-  'referenceImages',
   'editInstruction',
 ]);
+const VIDEO_INPUT_KEYS = new Set(['type', 'role', 'locator', 'mimeType']);
 const AUDIO_REQUEST_KEYS = new Set([
   ...BASE_REQUEST_KEYS,
   'duration',

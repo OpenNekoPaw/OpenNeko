@@ -41,6 +41,195 @@ const model: Model = {
 describe('MediaGenerationExecutor linked execution', () => {
   afterEach(() => {
     getMediaAdapterRegistry().unregisterBuiltin('runway');
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('persists an AI SDK video task checkpoint before the first status query', async () => {
+    const h3Provider: Provider = {
+      ...provider,
+      id: 'minimax-provider',
+      type: 'minimax',
+      apiUrl: 'https://api.minimaxi.com/v2',
+    };
+    const h3Model: Model = {
+      ...model,
+      id: 'h3-model',
+      name: 'MiniMax-H3',
+      providerId: h3Provider.id,
+      capabilities: ['text_to_video'],
+    };
+    let checkpointPersisted = false;
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith('/v2/video_generation')) {
+        return new Response(JSON.stringify({ task_id: 'h3-task-1' }), { status: 200 });
+      }
+      if (url.endsWith('/v2/query/video_generation/h3-task-1')) {
+        if (!checkpointPersisted) throw new Error('status queried before checkpoint persistence');
+        return new Response(
+          JSON.stringify({
+            task: {
+              id: 'h3-task-1',
+              model: 'MiniMax-H3',
+              status: 'succeeded',
+              content: { url: 'https://cdn.example/output.mp4' },
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const config: MediaGenerationConfigPort = {
+      getProvider: (id) => (id === h3Provider.id ? h3Provider : undefined),
+      getModel: (id) => (id === h3Model.id ? h3Model : undefined),
+      getDefaultModelRef: () => ({ providerId: h3Provider.id, modelId: h3Model.id }),
+    };
+    const executor = new MediaGenerationExecutor(
+      config,
+      { resolveProvider: async (id) => (id === h3Provider.id ? h3Provider : undefined) },
+      { pollingIntervalMs: 1, maxPollingAttempts: 2 },
+    );
+
+    await expect(
+      executor.executeLinked({
+        generationType: 'text-to-video',
+        providerId: h3Provider.id,
+        modelId: h3Model.id,
+        request: {
+          prompt: 'cinematic cat',
+          duration: 5,
+          resolution: '2K',
+          aspectRatio: '16:9',
+        },
+        onExternalTask: async (taskId) => {
+          expect(taskId).toBe('h3-task-1');
+          checkpointPersisted = true;
+        },
+      }),
+    ).resolves.toEqual({
+      outputs: [{ type: 'video', url: 'https://cdn.example/output.mp4', mimeType: 'video/mp4' }],
+      metadata: { providerResolutionSource: 'native' },
+    });
+    expect(checkpointPersisted).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps canonical frame and audio roles into the official Seedance task request', async () => {
+    const seedanceProvider: Provider = {
+      ...provider,
+      id: 'bytedance-provider',
+      type: 'bytedance',
+      apiUrl: 'https://ark.example/api/v3',
+    };
+    const seedanceModel: Model = {
+      ...model,
+      id: 'seedance-model',
+      name: 'doubao-seedance-2-0-260128',
+      providerId: seedanceProvider.id,
+      capabilities: ['text_to_video'],
+    };
+    let submittedBody: Record<string, unknown> | undefined;
+    const fetchMock = vi.fn(
+      async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+        submittedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return new Response(JSON.stringify({ id: 'seedance-task-1' }), { status: 200 });
+      },
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const config: MediaGenerationConfigPort = {
+      getProvider: (id) => (id === seedanceProvider.id ? seedanceProvider : undefined),
+      getModel: (id) => (id === seedanceModel.id ? seedanceModel : undefined),
+      getDefaultModelRef: () => ({
+        providerId: seedanceProvider.id,
+        modelId: seedanceModel.id,
+      }),
+    };
+    const executor = new MediaGenerationExecutor(
+      config,
+      {
+        resolveProvider: async (id) => (id === seedanceProvider.id ? seedanceProvider : undefined),
+      },
+      {
+        requestAssetMaterializer: {
+          readAsBase64: async () => '',
+          resolveAsUrl: async (locator) => `https://assets.example/${locator.file.path}`,
+        },
+      },
+    );
+
+    await expect(
+      executor.executeLinked({
+        generationType: 'image-to-video',
+        providerId: seedanceProvider.id,
+        modelId: seedanceModel.id,
+        request: {
+          prompt: 'animate the portrait',
+          duration: 5,
+          resolution: '1920x1080',
+          aspectRatio: '16:9',
+          generateAudio: true,
+          inputs: [
+            {
+              type: 'image',
+              role: 'first-frame',
+              locator: { file: { authority: 'workspace', path: 'frames/first.png' } },
+              mimeType: 'image/png',
+            },
+            {
+              type: 'image',
+              role: 'last-frame',
+              locator: { file: { authority: 'workspace', path: 'frames/last.png' } },
+              mimeType: 'image/png',
+            },
+            {
+              type: 'audio',
+              role: 'reference-audio',
+              locator: { file: { authority: 'workspace', path: 'audio/voice.mp3' } },
+              mimeType: 'audio/mpeg',
+            },
+          ],
+        },
+        onExternalTask: async (taskId) => {
+          expect(taskId).toBe('seedance-task-1');
+          return {
+            status: 'completed',
+            outputs: [{ type: 'video', url: 'https://cdn.example/seedance.mp4' }],
+          };
+        },
+      }),
+    ).resolves.toEqual({
+      outputs: [{ type: 'video', url: 'https://cdn.example/seedance.mp4' }],
+      metadata: { providerResolutionSource: 'native' },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(submittedBody).toEqual({
+      model: seedanceModel.name,
+      content: [
+        { type: 'text', text: 'animate the portrait' },
+        {
+          type: 'image_url',
+          image_url: { url: 'https://assets.example/frames/first.png' },
+          role: 'first_frame',
+        },
+        {
+          type: 'image_url',
+          image_url: { url: 'https://assets.example/frames/last.png' },
+          role: 'last_frame',
+        },
+        {
+          type: 'audio_url',
+          audio_url: { url: 'https://assets.example/audio/voice.mp3' },
+          role: 'reference_audio',
+        },
+      ],
+      ratio: '16:9',
+      duration: 5,
+      resolution: '1080p',
+      generate_audio: true,
+    });
   });
 
   it('returns terminal outputs without registering a generic Task', async () => {
@@ -235,6 +424,7 @@ describe('MediaGenerationExecutor linked execution', () => {
     await expect(
       executor.describeExternalTask({
         providerId: provider.id,
+        modelId: model.id,
         externalTaskId: 'external-1',
       }),
     ).resolves.toMatchObject({ status: 'processing', progress: 25 });
@@ -244,6 +434,7 @@ describe('MediaGenerationExecutor linked execution', () => {
     await expect(
       executor.cancelExternalTask({
         providerId: provider.id,
+        modelId: model.id,
         externalTaskId: 'external-1',
       }),
     ).rejects.toThrow(`Configured media provider ${provider.id} is unavailable.`);

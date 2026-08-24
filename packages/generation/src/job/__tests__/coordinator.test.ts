@@ -159,6 +159,66 @@ describe('GenerationJobCoordinator', () => {
     });
   });
 
+  it('owns status scheduling after checkpoint persistence during normal execution', async () => {
+    const execution = createExecution();
+    const store = createInMemoryGenerationJobStore();
+    const resultLocator = createResultLocator('generated-video');
+    execution.describeExternalTask
+      .mockResolvedValueOnce({ status: 'processing', progress: 40 })
+      .mockResolvedValueOnce({
+        status: 'completed',
+        outputs: [{ type: 'video', url: 'https://provider.test/generated.mp4' }],
+      });
+    execution.generateVideo.mockImplementation(async (request, options) => {
+      const observed = await options?.onExternalTask?.({
+        providerId: 'provider-1',
+        externalTaskId: 'video-task-1',
+      });
+      if (!observed?.outputs) throw new Error('Expected Job-owned terminal observation.');
+      return {
+        type: 'text-to-video',
+        providerId: 'provider-1',
+        modelId: 'video-model',
+        outputs: observed.outputs,
+        request,
+      };
+    });
+    const coordinator = new GenerationJobCoordinator({
+      store,
+      execution,
+      resultCommitter: { commit: vi.fn(async () => [resultLocator]) },
+      createJobId: () => 'job-owned-video',
+      now: incrementingClock(100),
+      recoveryPollIntervalMs: 1,
+      waitForRecoveryPoll: async () => undefined,
+    });
+
+    const initial = await coordinator.submitGeneration({
+      lifecycleMode: 'detached',
+      generationType: 'text-to-video',
+      providerId: 'provider-1',
+      modelId: 'video-model',
+      request: {
+        prompt: 'cinematic cat',
+        providerId: 'provider-1',
+        modelId: 'video-model',
+      },
+    });
+    const terminal = await waitForTerminal(coordinator, initial.ref);
+
+    expect(terminal.phase).toBe('succeeded');
+    expect(execution.describeExternalTask).toHaveBeenNthCalledWith(1, {
+      providerId: 'provider-1',
+      modelId: 'video-model',
+      externalTaskId: 'video-task-1',
+    });
+    expect(execution.describeExternalTask).toHaveBeenCalledTimes(2);
+    expect(terminal.providerTask).toEqual({
+      providerId: 'provider-1',
+      externalTaskId: 'video-task-1',
+    });
+  });
+
   it('cancels an active Prompt execution without requiring a provider task', async () => {
     const execution = createExecution();
     execution.generatePrompt.mockImplementation((_request, options) =>
@@ -389,6 +449,11 @@ describe('GenerationJobCoordinator', () => {
       code: 'media-task-cancel-unsupported',
     });
     expect((await coordinator.describeGeneration(initial.ref)).phase).toBe('running');
+    expect(execution.cancelExternalTask).toHaveBeenCalledWith({
+      providerId: 'provider-1',
+      modelId: 'image-model',
+      externalTaskId: 'external-1',
+    });
   });
 
   it('reconciles a recovered provider task without submitting generation again', async () => {
@@ -422,6 +487,11 @@ describe('GenerationJobCoordinator', () => {
 
     expect(terminal.phase).toBe('succeeded');
     expect(execution.describeExternalTask).toHaveBeenCalledTimes(2);
+    expect(execution.describeExternalTask).toHaveBeenNthCalledWith(1, {
+      providerId: 'provider-1',
+      modelId: 'image-model',
+      externalTaskId: 'external-1',
+    });
     expect(execution.generateImage).not.toHaveBeenCalled();
   });
 

@@ -13,6 +13,7 @@ import type {
   MediaOutput,
 } from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
+import { findMaterializedVideoInput } from '../materialized-video-input';
 
 /**
  * Runway API response types
@@ -74,7 +75,8 @@ export class RunwayMediaAdapter extends BaseMediaAdapter {
     provider: Provider,
   ): Promise<MediaAdapterResult> {
     // Determine if this is text-to-video or image-to-video
-    const isImageToVideo = !!request.referenceImageUrl;
+    const imageInput = findMaterializedVideoInput(request, 'first-frame', 'reference-image');
+    const isImageToVideo = imageInput !== undefined;
     const url = `${provider.apiUrl}/v1/${isImageToVideo ? 'image_to_video' : 'text_to_video'}`;
 
     const body: Record<string, unknown> = {
@@ -83,7 +85,7 @@ export class RunwayMediaAdapter extends BaseMediaAdapter {
     };
 
     if (isImageToVideo) {
-      body.prompt_image = request.referenceImageUrl;
+      body.prompt_image = imageInput?.url;
     }
 
     if (request.duration) {

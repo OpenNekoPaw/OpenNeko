@@ -212,14 +212,52 @@ const VIDEO_REQUEST_SCHEMA = {
     resolution: { type: 'string' },
     fps: { type: 'number' },
     aspectRatio: { type: 'string' },
-    startFrameLocator: CONTENT_LOCATOR_SCHEMA,
-    endFrameLocator: CONTENT_LOCATOR_SCHEMA,
-    referenceVideoLocator: CONTENT_LOCATOR_SCHEMA,
+    generateAudio: { type: 'boolean' },
+    inputs: {
+      type: 'array',
+      items: {
+        anyOf: [
+          {
+            type: 'object',
+            properties: {
+              type: { type: 'string', const: 'image', required: true },
+              role: {
+                type: 'string',
+                enum: ['first-frame', 'last-frame', 'reference-image'],
+                required: true,
+              },
+              locator: { ...CONTENT_LOCATOR_SCHEMA, required: true },
+              mimeType: { type: 'string' },
+            },
+            additionalProperties: false,
+          },
+          {
+            type: 'object',
+            properties: {
+              type: { type: 'string', const: 'video', required: true },
+              role: { type: 'string', const: 'reference-video', required: true },
+              locator: { ...CONTENT_LOCATOR_SCHEMA, required: true },
+              mimeType: { type: 'string' },
+            },
+            additionalProperties: false,
+          },
+          {
+            type: 'object',
+            properties: {
+              type: { type: 'string', const: 'audio', required: true },
+              role: { type: 'string', const: 'reference-audio', required: true },
+              locator: { ...CONTENT_LOCATOR_SCHEMA, required: true },
+              mimeType: { type: 'string' },
+            },
+            additionalProperties: false,
+          },
+        ],
+      },
+    },
     motionStrength: { type: 'number' },
     cameraMovement: { type: 'string' },
     cameraAngle: { type: 'string' },
     shotScale: { type: 'string' },
-    referenceImages: { type: 'array', items: IP_ADAPTER_REFERENCE_SCHEMA },
     editInstruction: { type: 'string' },
   },
   additionalProperties: false,

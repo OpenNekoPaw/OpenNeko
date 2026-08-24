@@ -130,7 +130,6 @@ import type { MediaExecutionProviderResolver, MediaGenerationConfigPort } from '
 import { getMediaAdapterRegistry } from './adapters/media-adapter-registry';
 import { RunwayMediaAdapter } from './adapters/runway-media-adapter';
 import { LumaMediaAdapter } from './adapters/luma-media-adapter';
-import { MiniMaxMediaAdapter } from './adapters/minimax-media-adapter';
 import { LiblibMediaAdapter } from './adapters/liblib-media-adapter';
 import { SunoMediaAdapter } from './adapters/suno-media-adapter';
 import { ViduMediaAdapter } from './adapters/vidu-media-adapter';
@@ -168,7 +167,6 @@ export function createMediaPlatform(deps: MediaPlatformDeps): MediaPlatform {
   // Register built-in polling adapters for the provider types the AI SDK does not own.
   adapterRegistry.registerBuiltin('runway', new RunwayMediaAdapter());
   adapterRegistry.registerBuiltin('luma', new LumaMediaAdapter());
-  adapterRegistry.registerBuiltin('minimax', new MiniMaxMediaAdapter());
   adapterRegistry.registerBuiltin('liblib', new LiblibMediaAdapter());
   adapterRegistry.registerBuiltin('suno', new SunoMediaAdapter());
   adapterRegistry.registerBuiltin('vidu', new ViduMediaAdapter());

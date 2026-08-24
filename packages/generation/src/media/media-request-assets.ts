@@ -113,35 +113,15 @@ export async function materializeVideoRequestFileUris(
   materializer?: MediaRequestAssetMaterializer,
   options: MediaRequestMaterializationOptions = {},
 ): Promise<MaterializedVideoGenerationRequest> {
-  const { startFrameLocator, endFrameLocator, referenceVideoLocator, referenceImages, ...stable } =
-    request;
+  const { inputs, ...stable } = request;
   return {
     ...stable,
-    ...(startFrameLocator
+    ...(inputs
       ? {
-          startFrameImageBase64: await readAsBase64(
-            startFrameLocator,
-            materializer,
-            options.signal,
-          ),
-        }
-      : {}),
-    ...(endFrameLocator
-      ? {
-          endFrameImageBase64: await readAsBase64(endFrameLocator, materializer, options.signal),
-        }
-      : {}),
-    ...(referenceVideoLocator
-      ? {
-          sourceVideoUrl: await resolveAsUrl(referenceVideoLocator, materializer, options.signal),
-        }
-      : {}),
-    ...(referenceImages
-      ? {
-          referenceImages: await Promise.all(
-            referenceImages.map(async ({ imageLocator, ...reference }) => ({
-              ...reference,
-              imageBase64: await readAsBase64(imageLocator, materializer, options.signal),
+          inputs: await Promise.all(
+            inputs.map(async ({ locator, ...input }) => ({
+              ...input,
+              url: await resolveAsUrl(locator, materializer, options.signal),
             })),
           ),
         }

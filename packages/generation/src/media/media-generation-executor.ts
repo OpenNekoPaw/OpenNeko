@@ -18,6 +18,7 @@ import type {
   MediaTaskDescriber,
   MaterializedImageGenerationRequest,
   MaterializedVideoGenerationRequest,
+  GenerationProviderTaskBinding,
 } from '@neko/generation';
 import { getMediaAdapterRegistry } from './adapters/media-adapter-registry';
 import {
@@ -29,8 +30,23 @@ import {
 } from './media-adapter-capabilities';
 import type { MediaExecutionProviderResolver, MediaGenerationConfigPort } from './types';
 import { getLogger } from '../utils/logger';
-import { resolveProvider, type ResolvedProvider } from '@neko/ai-sdk';
-import { generateImage, experimental_generateVideo, experimental_generateSpeech } from 'ai';
+import {
+  createVideoTaskOperation,
+  decodeVideoTaskOperation,
+  resolveProvider,
+  type ResolvedProvider,
+} from '@neko/ai-sdk';
+import {
+  generateImage,
+  experimental_getVideoStatus,
+  experimental_generateSpeech,
+  experimental_startVideo,
+} from 'ai';
+import type {
+  Experimental_VideoModelV4,
+  Experimental_VideoModelV4VideoData,
+  SharedV4ProviderOptions,
+} from '@ai-sdk/provider';
 import {
   materializeImageRequestFileUris,
   materializeVideoRequestFileUris,
@@ -68,7 +84,9 @@ export interface MediaGenerationPayload {
 export interface LinkedMediaExecutionInput extends MediaGenerationPayload {
   readonly signal?: AbortSignal;
   readonly onProgress?: (progress: number) => void;
-  readonly onExternalTask?: (externalTaskId: string) => void | Promise<void>;
+  readonly onExternalTask?: (
+    externalTaskId: string,
+  ) => MediaAdapterResult | void | Promise<MediaAdapterResult | void>;
 }
 
 export interface LinkedMediaExecutionResult {
@@ -78,7 +96,9 @@ export interface LinkedMediaExecutionResult {
 
 interface MediaExecutionContext {
   readonly signal?: AbortSignal;
-  readonly onExternalTask?: (externalTaskId: string) => void | Promise<void>;
+  readonly onExternalTask?: (
+    externalTaskId: string,
+  ) => MediaAdapterResult | void | Promise<MediaAdapterResult | void>;
 }
 
 interface MediaExecutionOutput {
@@ -120,6 +140,8 @@ export class MediaGenerationExecutor {
   private readonly imageTaskTimeoutMs: number;
   private readonly videoTaskTimeoutMs: number;
   private readonly audioTaskTimeoutMs: number;
+  private readonly pollingIntervalMs: number;
+  private readonly maxPollingAttempts: number;
 
   constructor(
     configManager: MediaGenerationConfigPort,
@@ -132,6 +154,14 @@ export class MediaGenerationExecutor {
     this.imageTaskTimeoutMs = options.imageTaskTimeoutMs ?? DEFAULT_IMAGE_TASK_TIMEOUT_MS;
     this.videoTaskTimeoutMs = options.videoTaskTimeoutMs ?? DEFAULT_VIDEO_TASK_TIMEOUT_MS;
     this.audioTaskTimeoutMs = options.audioTaskTimeoutMs ?? DEFAULT_AUDIO_TASK_TIMEOUT_MS;
+    this.pollingIntervalMs = options.pollingIntervalMs ?? 5_000;
+    this.maxPollingAttempts = options.maxPollingAttempts ?? 360;
+    if (!Number.isSafeInteger(this.pollingIntervalMs) || this.pollingIntervalMs <= 0) {
+      throw new RangeError('Media polling interval must be a positive integer.');
+    }
+    if (!Number.isSafeInteger(this.maxPollingAttempts) || this.maxPollingAttempts <= 0) {
+      throw new RangeError('Media max polling attempts must be a positive integer.');
+    }
   }
 
   async executeLinked(input: LinkedMediaExecutionInput): Promise<LinkedMediaExecutionResult> {
@@ -152,26 +182,59 @@ export class MediaGenerationExecutor {
     });
   }
 
-  async describeExternalTask(input: {
-    readonly providerId: string;
-    readonly externalTaskId: string;
-  }): Promise<MediaAdapterResult> {
+  async describeExternalTask(input: GenerationProviderTaskBinding): Promise<MediaAdapterResult> {
     const provider = await this.providerResolver.resolveProvider(input.providerId);
-    if (!provider || provider.id !== input.providerId) {
+    const model = this.configManager.getModel(input.modelId);
+    if (
+      !provider ||
+      provider.id !== input.providerId ||
+      !model ||
+      model.id !== input.modelId ||
+      model.providerId !== input.providerId
+    ) {
       throw new Error(`Configured media provider ${input.providerId} is unavailable.`);
+    }
+    const resolved = resolveProvider(provider.type, {
+      apiUrl: provider.apiUrl,
+      apiKey: provider.apiKey ?? '',
+    });
+    if (resolved) {
+      const videoModel = requireAsyncVideoModel(resolved, model.name, provider.type);
+      const status = await experimental_getVideoStatus(videoModel, {
+        operation: createVideoTaskOperation(input.externalTaskId),
+        maxRetries: 0,
+      });
+      return mapAiSdkVideoStatus(status);
     }
     const adapter = getMediaAdapterRegistry().getForType(provider.type);
     if (!adapter) throw new Error(createUnsupportedProviderDiagnostic(provider.type));
     return requireMediaTaskDescriber(adapter).getTaskStatus(input.externalTaskId, provider);
   }
 
-  async cancelExternalTask(input: {
-    readonly providerId: string;
-    readonly externalTaskId: string;
-  }): Promise<void> {
+  async cancelExternalTask(input: GenerationProviderTaskBinding): Promise<void> {
     const provider = await this.providerResolver.resolveProvider(input.providerId);
-    if (!provider || provider.id !== input.providerId) {
+    const model = this.configManager.getModel(input.modelId);
+    if (
+      !provider ||
+      provider.id !== input.providerId ||
+      !model ||
+      model.id !== input.modelId ||
+      model.providerId !== input.providerId
+    ) {
       throw new Error(`Configured media provider ${input.providerId} is unavailable.`);
+    }
+    const resolved = resolveProvider(provider.type, {
+      apiUrl: provider.apiUrl,
+      apiKey: provider.apiKey ?? '',
+    });
+    if (resolved) {
+      if (!resolved.cancelVideoTask) {
+        throw new Error(
+          `Provider ${provider.type} does not expose remote video task cancellation.`,
+        );
+      }
+      await resolved.cancelVideoTask(model.name, input.externalTaskId);
+      return;
     }
     const adapter = getMediaAdapterRegistry().getForType(provider.type);
     if (!adapter) throw new Error(createUnsupportedProviderDiagnostic(provider.type));
@@ -206,7 +269,6 @@ export class MediaGenerationExecutor {
       {
         apiUrl: provider.apiUrl,
         apiKey: provider.apiKey ?? '',
-        onExternalTaskId: () => undefined,
       },
       { imageMode },
     );
@@ -339,54 +401,95 @@ export class MediaGenerationExecutor {
         if (!videoModel) {
           return { error: `Provider ${provider.type} does not expose a video model runtime.` };
         }
+        if (videoModel.specificationVersion !== 'v4') {
+          return {
+            error: `Provider ${provider.type} video model does not expose the required start/status lifecycle.`,
+          };
+        }
 
         const vidReq = await materializeVideoRequestFileUris(
           request as VideoGenerationRequest,
           this.requestAssetMaterializer,
           { ...(context?.signal ? { signal: context.signal } : {}) },
         );
-        const resolution = vidReq.resolution
-          ? this.parseResolutionToSize(vidReq.resolution)
-          : undefined;
-        const prompt = this.buildVideoPrompt(vidReq);
+        const resolution =
+          provider.type === 'minimax'
+            ? undefined
+            : vidReq.resolution
+              ? this.parseResolutionToSize(vidReq.resolution)
+              : undefined;
         const videoProviderOptions = this.buildVideoProviderOptions(vidReq);
+        const frameImages: Array<{
+          image: string;
+          frameType: 'first_frame' | 'last_frame';
+        }> = [];
+        const inputReferences: Array<{ data: string; mediaType: string }> = [];
+        const referenceAudioUrls: string[] = [];
+        for (const input of vidReq.inputs ?? []) {
+          if (input.role === 'first-frame' || input.role === 'last-frame') {
+            frameImages.push({
+              image: input.url,
+              frameType: input.role === 'first-frame' ? 'first_frame' : 'last_frame',
+            });
+            continue;
+          }
+          const mediaType =
+            input.mimeType ??
+            (input.type === 'image'
+              ? 'image/png'
+              : input.type === 'video'
+                ? 'video/mp4'
+                : 'audio/mpeg');
+          if (input.role === 'reference-audio' && provider.type === 'bytedance') {
+            referenceAudioUrls.push(input.url);
+          } else {
+            inputReferences.push({ data: input.url, mediaType });
+          }
+        }
 
-        const result = await runProviderCallWithTimeout({
+        const providerOptions: SharedV4ProviderOptions = {};
+        if (provider.type === 'minimax') {
+          providerOptions['minimax'] = { resolution: vidReq.resolution };
+        } else if (provider.type === 'bytedance') {
+          providerOptions['bytedance'] = {
+            ...videoProviderOptions,
+            ...(referenceAudioUrls.length > 0 ? { referenceAudio: referenceAudioUrls } : {}),
+          };
+        } else if (Object.keys(videoProviderOptions).length > 0) {
+          providerOptions['neko'] = videoProviderOptions;
+        }
+
+        const started = await runProviderCallWithTimeout({
           timeoutMs: this.videoTaskTimeoutMs,
           signal: context?.signal,
-          timeoutMessage: `Video generation timed out after ${this.videoTaskTimeoutMs}ms`,
+          timeoutMessage: `Video task submission timed out after ${this.videoTaskTimeoutMs}ms`,
           run: (abortSignal) =>
-            experimental_generateVideo({
+            experimental_startVideo({
               model: videoModel,
-              prompt,
+              prompt: vidReq.prompt,
               aspectRatio: this.parseAspectRatio(vidReq.aspectRatio),
               resolution,
               duration: vidReq.duration,
               fps: vidReq.fps,
-              ...(Object.keys(videoProviderOptions).length > 0
-                ? { providerOptions: { neko: videoProviderOptions } }
-                : {}),
+              generateAudio: vidReq.generateAudio,
+              ...(frameImages.length > 0 ? { frameImages } : {}),
+              ...(inputReferences.length > 0 ? { inputReferences } : {}),
+              ...(Object.keys(providerOptions).length > 0 ? { providerOptions } : {}),
               abortSignal,
               maxRetries: 0,
             }),
         });
+        const { taskId } = decodeVideoTaskOperation(started.operation);
+        const observed = await context?.onExternalTask?.(taskId);
+        const completed = observed
+          ? requireCompletedProviderOutputs(observed)
+          : await this.pollAiSdkVideoForCompletion(videoModel, taskId, onProgress, context?.signal);
 
         throwIfAborted(context?.signal);
         onProgress(100);
-        const video = result.video;
-        // Handle both base64 (file type) and URL (url type) responses
-        const videoUrl = video.base64
-          ? `data:${video.mediaType};base64,${video.base64}`
-          : ((video as { url?: string }).url ?? '');
         return {
           data: {
-            outputs: [
-              {
-                type: 'video' as const,
-                url: videoUrl,
-                mimeType: video.mediaType,
-              },
-            ],
+            outputs: completed,
             metadata: createAiSdkMediaTaskMetadata(resolved.source),
           },
         };
@@ -545,7 +648,31 @@ export class MediaGenerationExecutor {
         result.status !== 'failed' &&
         result.status !== 'cancelled'
       ) {
-        await context?.onExternalTask?.(result.externalTaskId);
+        const observed = await context?.onExternalTask?.(result.externalTaskId);
+        if (observed) {
+          if (observed.status === 'completed') {
+            if (!observed.outputs?.length) {
+              return { error: 'Media provider completed without outputs.' };
+            }
+            onProgress(100);
+            return {
+              data: {
+                outputs: observed.outputs,
+                metadata: {
+                  ...observed.metadata,
+                  providerResolutionSource: 'media-adapter',
+                },
+              },
+            };
+          }
+          if (observed.status === 'failed') {
+            return { error: observed.error?.message ?? 'Media generation failed.' };
+          }
+          if (observed.status === 'cancelled') {
+            return { error: 'Media generation was cancelled.' };
+          }
+          return { error: 'Generation Job observation returned a non-terminal provider result.' };
+        }
         return this.pollForCompletion(
           requireMediaTaskDescriber(adapter),
           result.externalTaskId,
@@ -647,36 +774,60 @@ export class MediaGenerationExecutor {
     return undefined;
   }
 
-  private parseAspectRatio(aspectRatio: string | undefined): `${number}:${number}` | undefined {
+  private parseAspectRatio(
+    aspectRatio: string | undefined,
+  ): `${number}:${number}` | 'adaptive' | undefined {
     if (!aspectRatio) return undefined;
+    if (aspectRatio === 'adaptive') return 'adaptive';
     return /^\d+:\d+$/.test(aspectRatio) ? (aspectRatio as `${number}:${number}`) : undefined;
-  }
-
-  private buildVideoPrompt(
-    request: MaterializedVideoGenerationRequest,
-  ): string | { image: string; text?: string } {
-    const image = request.referenceImageUrl ?? request.referenceImageBase64;
-    return image ? { image, text: request.prompt } : request.prompt;
   }
 
   private buildVideoProviderOptions(
     request: MaterializedVideoGenerationRequest,
   ): Record<string, string | number> {
     const options: Record<string, string | number> = {};
-    if (request.referenceVideoUrl !== undefined) {
-      options['referenceVideoUrl'] = request.referenceVideoUrl;
-    }
-    if (request.startFrameImageBase64 !== undefined)
-      options['startFrameImageBase64'] = request.startFrameImageBase64;
-    if (request.endFrameImageBase64 !== undefined)
-      options['endFrameImageBase64'] = request.endFrameImageBase64;
-    if (request.sourceVideoUrl !== undefined) options['sourceVideoUrl'] = request.sourceVideoUrl;
     if (request.cameraMovement !== undefined) options['cameraMovement'] = request.cameraMovement;
     if (request.cameraAngle !== undefined) options['cameraAngle'] = request.cameraAngle;
     if (request.shotScale !== undefined) options['shotScale'] = request.shotScale;
     if (request.editInstruction !== undefined) options['editInstruction'] = request.editInstruction;
     if (request.motionStrength !== undefined) options['motionStrength'] = request.motionStrength;
     return options;
+  }
+
+  private async pollAiSdkVideoForCompletion(
+    model: Experimental_VideoModelV4,
+    externalTaskId: string,
+    onProgress: (progress: number) => void,
+    signal?: AbortSignal,
+  ): Promise<MediaOutput[]> {
+    const startedAt = Date.now();
+    let intervalMs = this.pollingIntervalMs;
+    let attempts = 0;
+    while (Date.now() - startedAt < this.videoTaskTimeoutMs && attempts < this.maxPollingAttempts) {
+      await sleepWithAbort(intervalMs, signal);
+      attempts += 1;
+      const status = await experimental_getVideoStatus(model, {
+        operation: createVideoTaskOperation(externalTaskId),
+        abortSignal: signal,
+        maxRetries: 0,
+      });
+      const result = mapAiSdkVideoStatus(status);
+      if (result.status === 'completed') {
+        if (!result.outputs?.length) {
+          throw new Error('AI SDK video provider completed without outputs.');
+        }
+        onProgress(100);
+        return result.outputs;
+      }
+      if (result.status === 'failed') {
+        throw new Error(result.error?.message ?? 'AI SDK video provider task failed.');
+      }
+      if (result.status === 'cancelled') {
+        throw new Error('AI SDK video provider task was cancelled.');
+      }
+      intervalMs = Math.min(intervalMs + this.pollingIntervalMs, 15_000);
+    }
+    throw new Error(`Video generation timed out after ${this.videoTaskTimeoutMs}ms.`);
   }
 
   /**
@@ -747,6 +898,82 @@ export class MediaGenerationExecutor {
     return {
       error: `Generation timed out after ${elapsedSec}s`,
     };
+  }
+}
+
+function requireAsyncVideoModel(
+  resolved: ResolvedProvider,
+  modelName: string,
+  providerType: string,
+): Experimental_VideoModelV4 {
+  const model = resolved.video(modelName);
+  if (!model) {
+    throw new Error(`Provider ${providerType} does not expose a video model runtime.`);
+  }
+  if (model.specificationVersion !== 'v4' || !model.doStart || !model.doStatus) {
+    throw new Error(
+      `Provider ${providerType} video model does not expose the required start/status lifecycle.`,
+    );
+  }
+  return model;
+}
+
+function mapAiSdkVideoStatus(
+  status: Awaited<ReturnType<typeof experimental_getVideoStatus>>,
+): MediaAdapterResult {
+  switch (status.status) {
+    case 'pending':
+      return { status: 'processing' };
+    case 'error':
+      return {
+        status: status.error.toLowerCase().includes('cancel') ? 'cancelled' : 'failed',
+        error: {
+          code: 'ai-sdk-video-task-failed',
+          message: status.error,
+          retryable: false,
+        },
+      };
+    case 'completed':
+      return {
+        status: 'completed',
+        outputs: status.videos.map(videoDataToMediaOutput),
+        metadata: { providerResolutionSource: 'ai-sdk' },
+      };
+  }
+}
+
+function requireCompletedProviderOutputs(result: MediaAdapterResult): MediaOutput[] {
+  if (result.status === 'completed') {
+    if (!result.outputs?.length) {
+      throw new Error('Video provider completed without outputs.');
+    }
+    return result.outputs;
+  }
+  if (result.status === 'failed') {
+    throw new Error(result.error?.message ?? 'Video provider task failed.');
+  }
+  if (result.status === 'cancelled') {
+    throw new Error('Video provider task was cancelled.');
+  }
+  throw new Error('Generation Job observation returned a non-terminal video provider result.');
+}
+
+function videoDataToMediaOutput(video: Experimental_VideoModelV4VideoData): MediaOutput {
+  switch (video.type) {
+    case 'url':
+      return { type: 'video', url: video.url, mimeType: video.mediaType };
+    case 'base64':
+      return {
+        type: 'video',
+        url: `data:${video.mediaType};base64,${video.data}`,
+        mimeType: video.mediaType,
+      };
+    case 'binary':
+      return {
+        type: 'video',
+        url: `data:${video.mediaType};base64,${Buffer.from(video.data).toString('base64')}`,
+        mimeType: video.mediaType,
+      };
   }
 }
 

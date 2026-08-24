@@ -12,6 +12,7 @@ import type {
   MaterializedVideoGenerationRequest,
 } from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
+import { findMaterializedVideoInput } from '../materialized-video-input';
 
 /**
  * Vidu API response types
@@ -48,9 +49,8 @@ export class ViduMediaAdapter extends BaseMediaAdapter {
     const baseUrl = provider.apiUrl || 'https://api.vidu.com/v1';
 
     // Determine endpoint based on whether reference image is provided
-    const endpoint = request.referenceImageUrl
-      ? `${baseUrl}/tasks/img2video`
-      : `${baseUrl}/tasks/text2video`;
+    const imageInput = findMaterializedVideoInput(request, 'first-frame', 'reference-image');
+    const endpoint = imageInput ? `${baseUrl}/tasks/img2video` : `${baseUrl}/tasks/text2video`;
 
     const body: Record<string, unknown> = {
       model: model.name || 'vidu-1.5',
@@ -58,8 +58,8 @@ export class ViduMediaAdapter extends BaseMediaAdapter {
     };
 
     // Add image reference for image-to-video
-    if (request.referenceImageUrl) {
-      body.image_url = request.referenceImageUrl;
+    if (imageInput) {
+      body.image_url = imageInput.url;
     }
 
     // Add optional parameters

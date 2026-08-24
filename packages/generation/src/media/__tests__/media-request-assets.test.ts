@@ -111,7 +111,6 @@ describe('media request asset materialization', () => {
     const startFrameLocator = workspaceLocator('frames/start.png');
     const endFrameLocator = workspaceLocator('frames/end.png');
     const referenceVideoLocator = workspaceLocator('videos/source.mp4');
-    const readAsBase64 = vi.fn(async (locator: ContentLocator) => `base64:${locatorPath(locator)}`);
     const resolveAsUrl = vi.fn(
       async (locator: ContentLocator) => `authorized://${locatorPath(locator)}`,
     );
@@ -119,38 +118,42 @@ describe('media request asset materialization', () => {
     const request = await materializeVideoRequestFileUris(
       {
         prompt: 'keyframe transform',
-        startFrameLocator,
-        endFrameLocator,
-        referenceVideoLocator,
+        inputs: [
+          { type: 'image', role: 'first-frame', locator: startFrameLocator },
+          { type: 'image', role: 'last-frame', locator: endFrameLocator },
+          { type: 'video', role: 'reference-video', locator: referenceVideoLocator },
+        ],
       },
-      { readAsBase64, resolveAsUrl },
+      { readAsBase64: vi.fn(), resolveAsUrl },
     );
 
     expect(request).toEqual({
       prompt: 'keyframe transform',
-      startFrameImageBase64: 'base64:frames/start.png',
-      endFrameImageBase64: 'base64:frames/end.png',
-      sourceVideoUrl: 'authorized://videos/source.mp4',
+      inputs: [
+        { type: 'image', role: 'first-frame', url: 'authorized://frames/start.png' },
+        { type: 'image', role: 'last-frame', url: 'authorized://frames/end.png' },
+        { type: 'video', role: 'reference-video', url: 'authorized://videos/source.mp4' },
+      ],
     });
     expect(resolveAsUrl).toHaveBeenCalledWith(referenceVideoLocator);
   });
 
   it('materializes video reference images from locators', async () => {
     const imageLocator = workspaceLocator('references/character.png');
-    const readAsBase64 = vi.fn(async () => 'base64:character');
+    const resolveAsUrl = vi.fn(async () => 'authorized://references/character.png');
 
     const request = await materializeVideoRequestFileUris(
       {
         prompt: 'preserve character',
-        referenceImages: [{ imageLocator, strength: 0.7, mode: 'subject' }],
+        inputs: [{ type: 'image', role: 'reference-image', locator: imageLocator }],
       },
-      { readAsBase64 },
+      { readAsBase64: vi.fn(), resolveAsUrl },
     );
 
-    expect(request.referenceImages).toEqual([
-      { imageBase64: 'base64:character', strength: 0.7, mode: 'subject' },
+    expect(request.inputs).toEqual([
+      { type: 'image', role: 'reference-image', url: 'authorized://references/character.png' },
     ]);
-    expect(readAsBase64).toHaveBeenCalledWith(imageLocator);
+    expect(resolveAsUrl).toHaveBeenCalledWith(imageLocator);
   });
 
   it('fails visibly when locator materialization has no Host content access', async () => {
@@ -167,7 +170,13 @@ describe('media request asset materialization', () => {
       materializeVideoRequestFileUris(
         {
           prompt: 'transform source video',
-          referenceVideoLocator: workspaceLocator('videos/source.mp4'),
+          inputs: [
+            {
+              type: 'video',
+              role: 'reference-video',
+              locator: workspaceLocator('videos/source.mp4'),
+            },
+          ],
         },
         { readAsBase64: vi.fn() },
       ),

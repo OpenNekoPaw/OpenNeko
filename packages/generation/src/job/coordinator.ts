@@ -9,6 +9,7 @@ import {
   GenerationExecutionOutcomeUnknownError,
   type GenerationExecutionPort,
   type GenerationExecutionResult,
+  type GenerationProviderTaskBinding,
   type MediaGenerationExecutionOptions,
 } from '../execution';
 import type { MediaAdapterResult } from '../contracts';
@@ -157,7 +158,9 @@ export class GenerationJobCoordinator implements GenerationJobPort {
             current.providerTask,
           );
         } else {
-          await this.options.execution.cancelExternalTask(current.providerTask);
+          await this.options.execution.cancelExternalTask(
+            bindMediaProviderTask(current, current.providerTask),
+          );
         }
       } else if (!active) {
         throw new GenerationJobError(
@@ -233,7 +236,9 @@ export class GenerationJobCoordinator implements GenerationJobPort {
         );
         return this.applyComfyUiProviderResult(current, result);
       }
-      const result = await this.options.execution.describeExternalTask(current.providerTask);
+      const result = await this.options.execution.describeExternalTask(
+        bindMediaProviderTask(current, current.providerTask),
+      );
       return this.applyProviderResult(current, result);
     });
   }
@@ -350,6 +355,8 @@ export class GenerationJobCoordinator implements GenerationJobPort {
               },
             });
           });
+          if (initial.request.generationType === 'workflow') return;
+          return this.observeActiveMediaProviderTask(initial, providerTask, controller.signal);
         },
       });
       assertGenerationResultBinding(initial, result);
@@ -422,7 +429,9 @@ export class GenerationJobCoordinator implements GenerationJobPort {
                 initial.request.request,
                 providerTask,
               )
-            : await this.options.execution.describeExternalTask(providerTask);
+            : await this.options.execution.describeExternalTask(
+                bindMediaProviderTask(initial, providerTask),
+              );
         const current = await this.enqueue(initial.ref, async () => {
           const latest = await this.options.store.get(initial.ref);
           if (isTerminalJobPhase(latest.phase)) return latest;
@@ -454,6 +463,29 @@ export class GenerationJobCoordinator implements GenerationJobPort {
       this.active.delete(initial.ref.jobId);
       this.shutdownJobs.delete(initial.ref.jobId);
     }
+  }
+
+  private async observeActiveMediaProviderTask(
+    initial: GenerationJobSnapshot,
+    providerTask: NonNullable<GenerationJobSnapshot['providerTask']>,
+    signal: AbortSignal,
+  ): Promise<MediaAdapterResult> {
+    while (!signal.aborted) {
+      await this.waitForRecoveryPoll(this.recoveryPollIntervalMs, signal);
+      const result = await this.options.execution.describeExternalTask(
+        bindMediaProviderTask(initial, providerTask),
+      );
+      if (result.status === 'completed') return result;
+      const current = await this.enqueue(initial.ref, async () => {
+        const latest = await this.options.store.get(initial.ref);
+        if (isTerminalJobPhase(latest.phase)) return latest;
+        return this.applyProviderResult(latest, result);
+      });
+      if (isTerminalJobPhase(current.phase)) return result;
+    }
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : new Error('Generation Job provider observation aborted.');
   }
 
   private executeGeneration(
@@ -678,6 +710,26 @@ export class GenerationJobCoordinator implements GenerationJobPort {
       throw new Error('Generation Job coordinator is disposed.');
     }
   }
+}
+
+function bindMediaProviderTask(
+  snapshot: GenerationJobSnapshot,
+  task: NonNullable<GenerationJobSnapshot['providerTask']>,
+): GenerationProviderTaskBinding {
+  if (
+    snapshot.request.generationType === 'prompt' ||
+    snapshot.request.generationType === 'workflow'
+  ) {
+    throw new GenerationJobError(
+      'generation-job-binding-mismatch',
+      `Generation Job ${snapshot.ref.jobId} does not have a model-bound media provider task.`,
+    );
+  }
+  return {
+    providerId: task.providerId,
+    externalTaskId: task.externalTaskId,
+    modelId: snapshot.request.modelId,
+  };
 }
 
 function freezeRequest(input: SubmitGenerationJobInput): GenerationJobSnapshot['request'] {

@@ -32,7 +32,13 @@ describe('media generation type resolution', () => {
     expect(
       resolveVideoGenerationType({
         prompt: 'animate',
-        startFrameLocator: { file: { authority: 'workspace', path: 'frames/start.png' } },
+        inputs: [
+          {
+            type: 'image',
+            role: 'first-frame',
+            locator: { file: { authority: 'workspace', path: 'frames/start.png' } },
+          },
+        ],
       }),
     ).toBe('image-to-video');
   });
@@ -41,7 +47,13 @@ describe('media generation type resolution', () => {
     expect(
       resolveVideoGenerationType({
         prompt: 'edit',
-        referenceVideoLocator: { file: { authority: 'workspace', path: 'videos/source.mp4' } },
+        inputs: [
+          {
+            type: 'video',
+            role: 'reference-video',
+            locator: { file: { authority: 'workspace', path: 'videos/source.mp4' } },
+          },
+        ],
       }),
     ).toBe('video-to-video');
   });

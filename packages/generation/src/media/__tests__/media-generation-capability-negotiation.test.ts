@@ -88,8 +88,18 @@ function keyframeRequest(provider: Provider) {
   return {
     operation: 'generate-from-keyframes' as const,
     prompt: 'Move from dawn to dusk',
-    startFrameLocator: workspaceLocator('assets/first-frame.png'),
-    endFrameLocator: workspaceLocator('assets/last-frame.png'),
+    inputs: [
+      {
+        type: 'image' as const,
+        role: 'first-frame' as const,
+        locator: workspaceLocator('assets/first-frame.png'),
+      },
+      {
+        type: 'image' as const,
+        role: 'last-frame' as const,
+        locator: workspaceLocator('assets/last-frame.png'),
+      },
+    ],
     providerId: provider.id,
     modelId: `${provider.id}-video`,
   };

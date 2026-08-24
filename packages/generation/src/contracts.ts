@@ -138,6 +138,26 @@ export interface ImageGenerationRequest extends MediaGenerationRequestBase {
 /**
  * Video generation request
  */
+export type VideoGenerationInput =
+  | {
+      readonly type: 'image';
+      readonly role: 'first-frame' | 'last-frame' | 'reference-image';
+      readonly locator: ContentLocator;
+      readonly mimeType?: string;
+    }
+  | {
+      readonly type: 'video';
+      readonly role: 'reference-video';
+      readonly locator: ContentLocator;
+      readonly mimeType?: string;
+    }
+  | {
+      readonly type: 'audio';
+      readonly role: 'reference-audio';
+      readonly locator: ContentLocator;
+      readonly mimeType?: string;
+    };
+
 export interface VideoGenerationRequest extends MediaGenerationRequestBase {
   /** Canonical single-clip video operation. When absent, semantic request inputs determine the operation. */
   operation?: VideoOperationId;
@@ -149,12 +169,10 @@ export interface VideoGenerationRequest extends MediaGenerationRequestBase {
   fps?: number;
   /** Aspect ratio (e.g., "16:9") */
   aspectRatio?: string;
-  /** Stable start frame location, materialized by the host before provider execution. */
-  startFrameLocator?: ContentLocator;
-  /** Stable end frame location, materialized by the host before provider execution. */
-  endFrameLocator?: ContentLocator;
-  /** Stable reference video location, materialized by the host before provider execution. */
-  referenceVideoLocator?: ContentLocator;
+  /** Whether the video model should generate synchronized audio. */
+  generateAudio?: boolean;
+  /** Stable, role-typed media inputs materialized by the authorized host. */
+  inputs?: readonly VideoGenerationInput[];
   /** Motion strength (0-1) */
   motionStrength?: number;
   /** Camera movement directive (matches @neko/shared CameraMovement values) */
@@ -163,8 +181,6 @@ export interface VideoGenerationRequest extends MediaGenerationRequestBase {
   cameraAngle?: string;
   /** Shot scale (matches @neko/shared ShotScale values) */
   shotScale?: string;
-  /** Reference images for subject consistency (IP-Adapter) */
-  referenceImages?: IPAdapterReference[];
   /** Natural language edit instruction */
   editInstruction?: string;
 }
@@ -197,17 +213,12 @@ export interface MaterializedImageGenerationRequest extends Omit<
   readonly panoramaReference?: MaterializedGenerationPanoramaReference;
 }
 
-export interface MaterializedVideoGenerationRequest extends Omit<
-  VideoGenerationRequest,
-  'startFrameLocator' | 'endFrameLocator' | 'referenceVideoLocator' | 'referenceImages'
-> {
-  readonly referenceImageBase64?: string;
-  readonly referenceImageUrl?: string;
-  readonly startFrameImageBase64?: string;
-  readonly endFrameImageBase64?: string;
-  readonly referenceVideoUrl?: string;
-  readonly sourceVideoUrl?: string;
-  readonly referenceImages?: readonly MaterializedIPAdapterReference[];
+export type MaterializedVideoGenerationInput = Omit<VideoGenerationInput, 'locator'> & {
+  readonly url: string;
+};
+
+export interface MaterializedVideoGenerationRequest extends Omit<VideoGenerationRequest, 'inputs'> {
+  readonly inputs?: readonly MaterializedVideoGenerationInput[];
 }
 
 /**

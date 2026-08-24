@@ -22,10 +22,21 @@ export function resolveVideoGenerationType(
   ) {
     return 'video-edit';
   }
-  if (request.referenceVideoLocator) {
+  if (
+    request.inputs?.some(
+      (input) => input.role === 'reference-video' || input.role === 'reference-audio',
+    )
+  ) {
     return 'video-to-video';
   }
-  if (request.startFrameLocator) {
+  if (
+    request.inputs?.some(
+      (input) =>
+        input.role === 'first-frame' ||
+        input.role === 'last-frame' ||
+        input.role === 'reference-image',
+    )
+  ) {
     return 'image-to-video';
   }
   return 'text-to-video';

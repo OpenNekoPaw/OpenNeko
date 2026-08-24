@@ -14,6 +14,7 @@ import type {
   MediaGenerationExecutionOptions,
   MediaGenerationResult,
   MediaGenerationType,
+  GenerationProviderTaskBinding,
   VideoGenerationRequest,
 } from '@neko/generation';
 import { MediaRoutingManager } from './routing/media-routing-manager';
@@ -122,14 +123,11 @@ export class MediaGenerationService implements MediaGenerationExecutionPort {
     });
   }
 
-  describeExternalTask(input: { readonly providerId: string; readonly externalTaskId: string }) {
+  describeExternalTask(input: GenerationProviderTaskBinding) {
     return this.executor.describeExternalTask(input);
   }
 
-  cancelExternalTask(input: {
-    readonly providerId: string;
-    readonly externalTaskId: string;
-  }): Promise<void> {
+  cancelExternalTask(input: GenerationProviderTaskBinding): Promise<void> {
     return this.executor.cancelExternalTask(input);
   }
 

@@ -31,8 +31,14 @@ describe('media provider capability negotiation', () => {
       errorCodes(
         videoRequest({
           operation: 'generate-from-keyframes',
-          startFrameLocator: contentLocator('asset:image:first.png'),
-          endFrameLocator: contentLocator('asset:image:last.png'),
+          inputs: [
+            {
+              type: 'image',
+              role: 'first-frame',
+              locator: contentLocator('asset:image:first.png'),
+            },
+            { type: 'image', role: 'last-frame', locator: contentLocator('asset:image:last.png') },
+          ],
         }),
         'runway',
       ),
@@ -44,8 +50,14 @@ describe('media provider capability negotiation', () => {
       errorCodes(
         videoRequest({
           operation: 'generate-from-keyframes',
-          startFrameLocator: contentLocator('asset:image:first.png'),
-          endFrameLocator: contentLocator('asset:image:last.png'),
+          inputs: [
+            {
+              type: 'image',
+              role: 'first-frame',
+              locator: contentLocator('asset:image:first.png'),
+            },
+            { type: 'image', role: 'last-frame', locator: contentLocator('asset:image:last.png') },
+          ],
           cameraMovement: 'dolly-in',
           duration: 5,
           aspectRatio: '16:9',
@@ -61,17 +73,29 @@ describe('media provider capability negotiation', () => {
       errorCodes(
         videoRequest({
           operation: 'transform',
-          referenceVideoLocator: source,
+          inputs: [{ type: 'video', role: 'reference-video', locator: source }],
           editInstruction: 'turn this into watercolor',
         }),
         'runway',
       ),
     ).toContain('operation-unsupported');
     expect(
-      errorCodes(videoRequest({ operation: 'extend', referenceVideoLocator: source }), 'openai'),
+      errorCodes(
+        videoRequest({
+          operation: 'extend',
+          inputs: [{ type: 'video', role: 'reference-video', locator: source }],
+        }),
+        'openai',
+      ),
     ).toContain('operation-unsupported');
     expect(
-      errorCodes(videoRequest({ operation: 'enhance', referenceVideoLocator: source }), 'openai'),
+      errorCodes(
+        videoRequest({
+          operation: 'enhance',
+          inputs: [{ type: 'video', role: 'reference-video', locator: source }],
+        }),
+        'openai',
+      ),
     ).toContain('operation-unsupported');
   });
 
@@ -80,8 +104,14 @@ describe('media provider capability negotiation', () => {
       errorCodes(
         videoRequest({
           operation: 'generate-from-keyframes',
-          startFrameLocator: contentLocator('asset:image:first.png'),
-          endFrameLocator: contentLocator('asset:image:last.png'),
+          inputs: [
+            {
+              type: 'image',
+              role: 'first-frame',
+              locator: contentLocator('asset:image:first.png'),
+            },
+            { type: 'image', role: 'last-frame', locator: contentLocator('asset:image:last.png') },
+          ],
           motionStrength: 0.5,
           cameraMovement: 'pan-left',
           cameraAngle: 'low-angle',
@@ -99,14 +129,28 @@ describe('media provider capability negotiation', () => {
     expect(
       resolveCanonicalVideoOperation(
         videoRequest({
-          startFrameLocator: contentLocator('asset:image:first.png'),
-          endFrameLocator: contentLocator('asset:image:last.png'),
+          inputs: [
+            {
+              type: 'image',
+              role: 'first-frame',
+              locator: contentLocator('asset:image:first.png'),
+            },
+            { type: 'image', role: 'last-frame', locator: contentLocator('asset:image:last.png') },
+          ],
         }),
       ),
     ).toBe('generate-from-keyframes');
     expect(
       resolveCanonicalVideoOperation(
-        videoRequest({ referenceVideoLocator: contentLocator('asset:video:source.mp4') }),
+        videoRequest({
+          inputs: [
+            {
+              type: 'video',
+              role: 'reference-video',
+              locator: contentLocator('asset:video:source.mp4'),
+            },
+          ],
+        }),
       ),
     ).toBe('restyle');
   });

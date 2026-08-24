@@ -67,7 +67,6 @@ describe('canonical media execution stack split', () => {
     for (const type of [
       'runway',
       'luma',
-      'minimax',
       'liblib',
       'suno',
       'vidu',
@@ -93,7 +92,6 @@ describe('canonical media execution stack split', () => {
     for (const type of [
       'runway',
       'luma',
-      'minimax',
       'liblib',
       'suno',
       'vidu',
@@ -103,7 +101,16 @@ describe('canonical media execution stack split', () => {
     ]) {
       expect(registry.getForType(type), `${type} should have a polling adapter`).toBeDefined();
     }
-    for (const type of ['openai', 'generic', 'newapi', 'xai', 'kling', 'oneapi']) {
+    for (const type of [
+      'openai',
+      'generic',
+      'newapi',
+      'xai',
+      'kling',
+      'oneapi',
+      'minimax',
+      'bytedance',
+    ]) {
       expect(registry.getForType(type), `${type} must be AI SDK-only`).toBeUndefined();
     }
   });

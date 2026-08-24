@@ -9,7 +9,7 @@ describe('NewAPIVideoModel', () => {
     });
 
     await expect(
-      model.doGenerate({
+      model.doStart({
         prompt: undefined,
         n: 1,
         aspectRatio: undefined,
@@ -18,8 +18,11 @@ describe('NewAPIVideoModel', () => {
         fps: undefined,
         seed: undefined,
         image: undefined,
+        frameImages: undefined,
+        inputReferences: undefined,
+        generateAudio: undefined,
         providerOptions: {},
       }),
-    ).rejects.toThrow('NewAPI video generation requires a prompt.');
+    ).rejects.toThrow('NewAPI video generation requires a non-empty prompt.');
   });
 });

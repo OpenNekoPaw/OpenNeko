@@ -1779,6 +1779,326 @@
       "normativeSource": "https://vitest.dev/guide/coverage.html",
       "path": "vitest.shared.ts",
       "token": "v8"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "fieldScope": "H3 creation endpoint assertion",
+      "id": "2522ac59bb8302c2ba90",
+      "isolationRule": "The path is asserted only for the explicitly selected MiniMax H3 adapter and cannot select an OpenNeko contract or fallback path.",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "path": "packages/ai/sdk/src/providers/minimax/minimax-h3-video-model.test.ts",
+      "token": "/v2/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "fieldScope": "H3 status and cancellation endpoint assertions",
+      "id": "5657d4973a854a0fb398",
+      "isolationRule": "The path is asserted only for the explicitly selected MiniMax H3 adapter and cannot select an OpenNeko contract or fallback path.",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-query",
+      "path": "packages/ai/sdk/src/providers/minimax/minimax-h3-video-model.test.ts",
+      "token": "/v2/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "fieldScope": "H3 configured base endpoint in adapter test",
+      "id": "fa53b2435c4f997d494e",
+      "isolationRule": "The value configures only a MiniMax test provider and cannot version or dispatch an OpenNeko contract.",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "path": "packages/ai/sdk/src/providers/minimax/minimax-h3-video-model.test.ts",
+      "token": "/v2"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "MiniMax H3 VideoModelV4 interface import",
+      "id": "bb74fb5e88016b05415f",
+      "isolationRule": "The identifier is required by the external AI SDK interface and cannot identify persisted OpenNeko data or select an internal path.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/providers/minimax/minimax-h3-video-model.ts",
+      "token": "lV4"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "MiniMax H3 external VideoModelV4 specification field",
+      "id": "dcad55eda28c332786d9",
+      "isolationRule": "The field satisfies only the external AI SDK provider interface and is not projected into any OpenNeko contract or persistence record.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/providers/minimax/minimax-h3-video-model.ts",
+      "token": "specificationVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "MiniMax H3 external VideoModelV4 specification value",
+      "id": "f6c76839547eb41e39dd",
+      "isolationRule": "The value satisfies only the external AI SDK provider interface and cannot select an OpenNeko schema or alternate implementation.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/providers/minimax/minimax-h3-video-model.ts",
+      "token": "v4"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "fieldScope": "H3 task creation endpoint",
+      "id": "432c2b1966a7c7a990c7",
+      "isolationRule": "The route is emitted only by the explicitly selected MiniMax H3 adapter and cannot dispatch an OpenNeko contract or fallback provider.",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "path": "packages/ai/sdk/src/providers/minimax/minimax-h3-video-model.ts",
+      "token": "/v2/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "fieldScope": "H3 task status endpoint",
+      "id": "7c726f5f869525fe8285",
+      "isolationRule": "The route is emitted only by the explicitly selected MiniMax H3 adapter and cannot dispatch an OpenNeko contract or fallback provider.",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-query",
+      "path": "packages/ai/sdk/src/providers/minimax/minimax-h3-video-model.ts",
+      "token": "/v2/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "fieldScope": "H3 task cancellation endpoint",
+      "id": "3c9f84b05c31cb37c710",
+      "isolationRule": "The route is emitted only by the explicitly selected MiniMax H3 adapter and cannot dispatch an OpenNeko contract or fallback provider.",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-delete",
+      "path": "packages/ai/sdk/src/providers/minimax/minimax-h3-video-model.ts",
+      "token": "/v2/"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI VideoModelV4 interface import",
+      "id": "9b035c6f38fecca8e872",
+      "isolationRule": "The identifier is required by the external AI SDK interface and cannot identify persisted OpenNeko data or select an internal path.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "lV4"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI external VideoModelV4 specification field",
+      "id": "ffc923ded5d9809b8b89",
+      "isolationRule": "The field satisfies only the external AI SDK provider interface and is not projected into any OpenNeko contract or persistence record.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "specificationVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI external VideoModelV4 specification value",
+      "id": "3d57ced63bf833090e04",
+      "isolationRule": "The value satisfies only the external AI SDK provider interface and cannot select an OpenNeko schema or alternate implementation.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "v4"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "NewAPI video API",
+      "fieldScope": "NewAPI video task creation endpoint",
+      "id": "c12eec2a9e6fb612afb1",
+      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and cannot version OpenNeko data or select a fallback provider.",
+      "normativeSource": "https://docs.newapi.pro/en/api/openai-video/",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "NewAPI video API",
+      "fieldScope": "NewAPI video task status endpoint",
+      "id": "121e8a843edac695f01a",
+      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and cannot version OpenNeko data or select a fallback provider.",
+      "normativeSource": "https://docs.newapi.pro/en/api/openai-video/",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "NewAPI video API",
+      "fieldScope": "NewAPI video output endpoint normalization",
+      "id": "0a9cd4eb310e59ea5a87",
+      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and cannot version OpenNeko data or select a fallback provider.",
+      "normativeSource": "https://docs.newapi.pro/en/api/openai-video/",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "fieldScope": "MiniMax configured endpoint in provider resolution test",
+      "id": "31f97c20f53c807708b9",
+      "isolationRule": "The value configures only a MiniMax test provider and cannot dispatch an OpenNeko contract.",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "path": "packages/ai/sdk/src/resolve.test.ts",
+      "token": "/v2"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "ByteDance Ark API",
+      "fieldScope": "ByteDance configured endpoint in provider resolution test",
+      "id": "d49e4646f9f299e7a150",
+      "isolationRule": "The value configures only a ByteDance test provider and cannot dispatch an OpenNeko contract.",
+      "normativeSource": "https://ai-sdk.dev/providers/ai-sdk-providers/bytedance",
+      "path": "packages/ai/sdk/src/resolve.test.ts",
+      "token": "/v3"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "Resolved MiniMax model external specification assertion",
+      "id": "8a263ea6a2c543ec48a0",
+      "isolationRule": "The field is asserted only for the external AI SDK interface and cannot enter OpenNeko persistence or routing.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/resolve.test.ts",
+      "token": "specificationVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "Resolved MiniMax model external specification value",
+      "id": "08dd7519508119e4e58b",
+      "isolationRule": "The value is asserted only for the external AI SDK interface and cannot select an OpenNeko contract or alternate path.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/resolve.test.ts",
+      "token": "v4"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "Resolved ByteDance model external specification assertion",
+      "id": "fd0b77af06580de0a648",
+      "isolationRule": "The field is asserted only for the external AI SDK interface and cannot enter OpenNeko persistence or routing.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/resolve.test.ts",
+      "token": "specificationVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "Resolved ByteDance model external specification value",
+      "id": "ffbb67bb09b11cdf02d5",
+      "isolationRule": "The value is asserted only for the external AI SDK interface and cannot select an OpenNeko contract or alternate path.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/resolve.test.ts",
+      "token": "v4"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "AI SDK image model external interface union",
+      "id": "3cd24bbca029340432b1",
+      "isolationRule": "The identifier is an external SDK type only and cannot identify OpenNeko data or select an internal implementation.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
+      "path": "packages/ai/sdk/src/types.ts",
+      "token": "lV4"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "AI SDK language model external interface union",
+      "id": "c8b1fad7aaab743881e2",
+      "isolationRule": "The identifier is an external SDK type only and cannot identify OpenNeko data or select an internal implementation.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/generating-text",
+      "path": "packages/ai/sdk/src/types.ts",
+      "token": "lV4"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "AI SDK speech model external interface union",
+      "id": "1e2b765555c1d6824a11",
+      "isolationRule": "The identifier is an external SDK type only and cannot identify OpenNeko data or select an internal implementation.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/speech",
+      "path": "packages/ai/sdk/src/types.ts",
+      "token": "lV4"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "AI SDK video model external interface union",
+      "id": "4c4649c8d815e9dd3352",
+      "isolationRule": "The identifier is an external SDK type only and cannot identify OpenNeko data or select an internal implementation.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/types.ts",
+      "token": "lV4"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "fieldScope": "MiniMax configured endpoint in linked execution test",
+      "id": "c792fe9a03780eda7a08",
+      "isolationRule": "The value configures only a MiniMax test provider and cannot dispatch an OpenNeko contract.",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "path": "packages/generation/src/media/__tests__/media-linked-execution.test.ts",
+      "token": "/v2"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "fieldScope": "MiniMax task creation endpoint assertion in linked execution test",
+      "id": "3ad9addf0feee7473257",
+      "isolationRule": "The route is asserted only for the selected MiniMax H3 provider and cannot dispatch an OpenNeko contract or fallback path.",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-create",
+      "path": "packages/generation/src/media/__tests__/media-linked-execution.test.ts",
+      "token": "/v2/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation V2 API",
+      "fieldScope": "MiniMax task status endpoint assertion in linked execution test",
+      "id": "130d2bdbe3764ae3c50f",
+      "isolationRule": "The route is asserted only for the selected MiniMax H3 provider and cannot dispatch an OpenNeko contract or fallback path.",
+      "normativeSource": "https://platform.minimaxi.com/docs/api-reference/video-generation-v2-query",
+      "path": "packages/generation/src/media/__tests__/media-linked-execution.test.ts",
+      "token": "/v2/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "ByteDance Ark API",
+      "fieldScope": "ByteDance configured endpoint in linked execution test",
+      "id": "d9c206692b46cd0f735a",
+      "isolationRule": "The value configures only a ByteDance test provider and cannot dispatch an OpenNeko contract.",
+      "normativeSource": "https://ai-sdk.dev/providers/ai-sdk-providers/bytedance",
+      "path": "packages/generation/src/media/__tests__/media-linked-execution.test.ts",
+      "token": "/v3"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "Generation executor VideoModelV4 interface import",
+      "id": "efe5b7025be1ada7a86f",
+      "isolationRule": "The identifier is required by the external AI SDK interface and cannot identify persisted OpenNeko data or select an internal path.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/generation/src/media/media-generation-executor.ts",
+      "token": "lV4"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "Generation executor external VideoModelV4 requirement",
+      "id": "cab18b0a00a7fbd968cc",
+      "isolationRule": "The value checks only the external AI SDK video provider interface and cannot version an OpenNeko contract or select a fallback path.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/generation/src/media/media-generation-executor.ts",
+      "token": "v4"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "Generation status reader external VideoModelV4 requirement",
+      "id": "4d1f686b999e3f13a738",
+      "isolationRule": "The value checks only the external AI SDK video provider interface and cannot version an OpenNeko contract or select a fallback path.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/generation/src/media/media-generation-executor.ts",
+      "token": "v4"
     }
   ]
 }

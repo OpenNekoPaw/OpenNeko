@@ -21,11 +21,15 @@ export type {
   MediaTaskDescriber,
   MediaVideoSubmitter,
   MaterializedVideoGenerationRequest,
+  MaterializedVideoGenerationInput,
+  VideoGenerationInput,
   VideoGenerationRequest,
 } from './contracts';
 export type {
   GenerationExecutionPort,
   GenerationExecutionResult,
+  GenerationProviderTaskBinding,
+  GenerationProviderTaskRef,
   MediaGenerationExecutionPort,
   MediaGenerationExecutionOptions,
   MediaGenerationResult,

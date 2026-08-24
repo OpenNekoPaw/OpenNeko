@@ -273,8 +273,19 @@ export function projectGenerationRecipeRequest(
           ...(recipe.aspectRatio === undefined ? {} : { aspectRatio: recipe.aspectRatio }),
           ...(recipe.motionStrength === undefined ? {} : { motionStrength: recipe.motionStrength }),
           ...(recipe.cameraMovement === undefined ? {} : { cameraMovement: recipe.cameraMovement }),
-          ...(video ? { referenceVideoLocator: video } : {}),
-          ...(!video && image ? { startFrameLocator: image } : {}),
+          ...(video
+            ? {
+                inputs: [
+                  { type: 'video' as const, role: 'reference-video' as const, locator: video },
+                ],
+              }
+            : image
+              ? {
+                  inputs: [
+                    { type: 'image' as const, role: 'first-frame' as const, locator: image },
+                  ],
+                }
+              : {}),
         },
       };
     }
