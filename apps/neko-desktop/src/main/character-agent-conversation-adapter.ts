@@ -22,10 +22,7 @@ export function createCharacterAgentConversationAdapter(options: {
       );
       await options.conversations.publish({
         conversationId,
-        title:
-          input.owner.kind === 'character'
-            ? `Character ${input.characterVersionId}`
-            : `Room ${input.owner.roomId}`,
+        title: input.displayName,
         context:
           input.owner.kind === 'character'
             ? {

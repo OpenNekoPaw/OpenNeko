@@ -233,7 +233,15 @@ Composer command, Skill and mention candidates share one row presentation. Hover
 
 Agent Webview owns the localized labels and descriptions for the Companion/Narrative mode selector. Every key used by the control must exist in both supported locale bundles; a missing key is a presentation defect and must remain observable in tests rather than becoming a product label.
 
-The authoritative GlobalCharacter catalog resolves each selected CharacterVersion to its Character display name before the Chara launch command is created. Chara carries that display name only as launch presentation metadata and passes it to the Agent Conversation publication adapter; CharacterVersion and GlobalCharacter identities remain the only ownership and routing authorities. Desktop recent-conversation grouping uses the newest published conversation title for the non-empty Character group instead of rendering the owner identity. It must not derive a name by trimming an identity, and a structurally empty Character group is an invalid projection rather than a reason to fall back to the identity.
+The Chara application resolves each selected CharacterVersion to exactly one display name through a
+`CharacterDisplayNameReader` backed by the authoritative GlobalCharacter catalog. Launch selections carry
+only exact identities and mode-specific configuration; they do not accept caller-supplied display text.
+Every Character-to-Agent publication port uses the single field name `displayName`, and neither
+CharacterVersion `label` nor Room participant aliases may be substituted for it. CharacterVersion and
+GlobalCharacter identities remain the only ownership and routing authorities. Desktop recent-conversation
+grouping uses the newest published conversation title for the non-empty Character group instead of
+rendering the owner identity. It must not derive a name by trimming an identity, and a structurally empty
+Character group is an invalid projection rather than a reason to fall back to the identity.
 
 This atomically replaces the hard-coded `Character <characterVersionId>` title and `Character · <characterId>` group label for newly published conversations. Stored titles are non-authoritative presentation records and are not rewritten automatically; reopening still preserves every Conversation and transcript.
 

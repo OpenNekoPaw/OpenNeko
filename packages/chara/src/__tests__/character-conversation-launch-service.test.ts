@@ -61,6 +61,10 @@ describe('CharacterConversationLaunchService', () => {
       }),
     ]);
     expect(fixture.createPrimarySession).toHaveBeenCalledTimes(1);
+    expect(fixture.createPrimarySession).toHaveBeenCalledWith(
+      expect.objectContaining({ displayName: 'Character A' }),
+      undefined,
+    );
   });
 
   it('reuses one stable Companion continuity and relationship across Conversations', async () => {
@@ -93,7 +97,12 @@ describe('CharacterConversationLaunchService', () => {
       ...companionInput('request-role', ['version-a']),
       selection: {
         mode: 'companion',
-        characters: [{ characterVersionId: 'version-a', roleProfileId: 'role-profile-a' }],
+        characters: [
+          {
+            characterVersionId: 'version-a',
+            roleProfileId: 'role-profile-a',
+          },
+        ],
       },
     });
 
@@ -269,6 +278,18 @@ describe('CharacterConversationLaunchService', () => {
     expect(fixture.repository.dialogues[0]?.mode).toBe('companion');
   });
 
+  it('keeps authoritative display-name changes out of Conversation ownership and replay routing', async () => {
+    const fixture = createFixture([publication('a')]);
+    const first = await fixture.service.launch(companionInput('request-display', ['version-a']));
+    fixture.createPrimarySession.mockClear();
+    fixture.displayNames.set('version-a', 'Renamed Character');
+
+    const replay = await fixture.service.launch(companionInput('request-display', ['version-a']));
+
+    expect(replay).toEqual(first);
+    expect(fixture.createPrimarySession).not.toHaveBeenCalled();
+  });
+
   it('rejects replay when the exact Companion continuity authority is missing', async () => {
     const fixture = createFixture([publication('a')]);
     const input = companionInput('request-corrupt-memory', ['version-a']);
@@ -284,6 +305,12 @@ describe('CharacterConversationLaunchService', () => {
 
 function createFixture(publications: readonly CharacterVersion[]) {
   const repository = new MemoryLaunchRepository(publications);
+  const displayNames = new Map(
+    publications.map((item) => [
+      item.characterVersionId,
+      `Character ${item.characterVersionId.slice('version-'.length).toUpperCase()}`,
+    ]),
+  );
   const createPrimarySession = vi.fn<CharacterAgentConversationPort['createPrimarySession']>(
     async ({ characterRunId }) => ({
       primaryAgentSessionId: `conversation:character:${characterRunId}`,
@@ -295,6 +322,13 @@ function createFixture(publications: readonly CharacterVersion[]) {
   const service = new CharacterConversationLaunchService({
     repository,
     publications: repository,
+    displayNames: {
+      requireDisplayName: async (characterVersionId) => {
+        const displayName = displayNames.get(characterVersionId);
+        if (!displayName) throw new Error(`Missing display name for '${characterVersionId}'.`);
+        return displayName;
+      },
+    },
     agentConversations: {
       createPrimarySession,
       releaseUnboundSession,
@@ -302,7 +336,7 @@ function createFixture(publications: readonly CharacterVersion[]) {
     },
     now: () => NOW,
   });
-  return { service, repository, createPrimarySession, releaseUnboundSession };
+  return { service, repository, displayNames, createPrimarySession, releaseUnboundSession };
 }
 
 class MemoryLaunchRepository implements CharacterConversationLaunchRepository {
@@ -433,7 +467,9 @@ function companionInput(requestId: string, characterVersionIds: readonly string[
     userDisplayName: 'You',
     selection: {
       mode: 'companion' as const,
-      characters: characterVersionIds.map((characterVersionId) => ({ characterVersionId })),
+      characters: characterVersionIds.map((characterVersionId) => ({
+        characterVersionId,
+      })),
     },
   };
 }

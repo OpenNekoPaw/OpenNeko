@@ -25,6 +25,7 @@ import {
   projectCharacterAgentModeConstraint,
   type CharacterAgentModeConstraint,
 } from './character-agent-mode-constraint';
+import type { CharacterDisplayNameReader } from './character-global-catalog-service';
 
 export interface CharacterInteractionRepository {
   readPublication(
@@ -65,6 +66,7 @@ export interface CharacterAgentConversationPort {
     input: {
       readonly characterRunId: string;
       readonly characterVersionId: string;
+      readonly displayName: string;
       readonly purpose: 'character.primary';
       readonly owner:
         | {
@@ -140,6 +142,7 @@ export interface CharacterAgentTurnResult {
 
 export interface CharacterInteractionServiceOptions {
   readonly repository: CharacterInteractionRepository;
+  readonly displayNames: CharacterDisplayNameReader;
   readonly agentConversations: CharacterAgentConversationPort;
   readonly roomViews: CharacterRoomViewPort;
   readonly presentationTurns?: {
@@ -321,10 +324,15 @@ export class CharacterInteractionService {
 
     let primaryAgentSessionId: string | undefined;
     if (input.controller.kind === 'agent') {
+      const displayName = await this.options.displayNames.requireDisplayName(
+        publication.characterVersionId,
+        signal,
+      );
       const created = await this.options.agentConversations.createPrimarySession(
         {
           characterRunId: input.characterRunId,
           characterVersionId: publication.characterVersionId,
+          displayName,
           purpose: 'character.primary',
           owner: {
             kind: 'character',

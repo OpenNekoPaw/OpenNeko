@@ -44,6 +44,10 @@ describe('CharacterRoomInteractionService', () => {
     });
 
     expect(fixture.createPrimarySession).toHaveBeenCalledTimes(2);
+    expect(fixture.createPrimarySession.mock.calls.map(([input]) => input.displayName)).toEqual([
+      'Neko',
+      'Rin',
+    ]);
     expect(fixture.createPrimarySession.mock.calls.map(([input]) => input.owner)).toEqual([
       {
         kind: 'room',
@@ -173,6 +177,17 @@ function createFixture() {
           structuredClone(continuities.get(continuityId)),
       },
       roomRuns: { createPreparedRun },
+      displayNames: {
+        requireDisplayName: async (characterVersionId: string) => {
+          const displayNames = new Map([
+            ['character-version-a', 'Neko'],
+            ['character-version-b', 'Rin'],
+          ]);
+          const displayName = displayNames.get(characterVersionId);
+          if (!displayName) throw new Error(`Missing display name for '${characterVersionId}'.`);
+          return displayName;
+        },
+      },
       agentConversations: {
         createPrimarySession,
         releaseUnboundSession,

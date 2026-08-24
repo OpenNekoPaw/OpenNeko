@@ -90,6 +90,7 @@ describe('Character runtime repositories', () => {
     const launch = new CharacterConversationLaunchService({
       repository: repositories.conversationLaunch,
       publications: authoringRepository,
+      displayNames: { requireDisplayName: async () => 'Runtime Character' },
       agentConversations: {
         createPrimarySession: vi.fn(async ({ characterRunId }) => ({
           primaryAgentSessionId: `conversation:character:${characterRunId}`,
@@ -105,7 +106,11 @@ describe('Character runtime repositories', () => {
       userDisplayName: 'User',
       selection: {
         mode: 'companion',
-        characters: [{ characterVersionId: publication.characterVersionId }],
+        characters: [
+          {
+            characterVersionId: publication.characterVersionId,
+          },
+        ],
       },
     });
 

@@ -15,6 +15,7 @@ describe('Character Agent Conversation adapter', () => {
     const input = {
       characterRunId: 'character-run:stable',
       characterVersionId: 'character-version:stable',
+      displayName: 'Stable Character',
       purpose: 'character.primary' as const,
       owner: {
         kind: 'character' as const,
@@ -46,6 +47,7 @@ describe('Character Agent Conversation adapter', () => {
       adapter.createPrimarySession({
         characterRunId: 'character-run:dialogue',
         characterVersionId: 'character-version:dialogue',
+        displayName: 'Neko',
         purpose: 'character.primary',
         owner: {
           kind: 'character',
@@ -61,6 +63,7 @@ describe('Character Agent Conversation adapter', () => {
       adapter.createPrimarySession({
         characterRunId: 'character-run:room',
         characterVersionId: 'character-version:room',
+        displayName: 'Rin',
         purpose: 'character.primary',
         owner: {
           kind: 'room',
@@ -75,7 +78,7 @@ describe('Character Agent Conversation adapter', () => {
 
     expect(conversations.publish).toHaveBeenNthCalledWith(1, {
       conversationId: 'conversation:character:character-run:dialogue',
-      title: 'Character character-version:dialogue',
+      title: 'Neko',
       context: {
         kind: 'character',
         characterId: 'character:dialogue',
@@ -86,7 +89,7 @@ describe('Character Agent Conversation adapter', () => {
     });
     expect(conversations.publish).toHaveBeenNthCalledWith(2, {
       conversationId: 'conversation:character:character-run:room',
-      title: 'Room room:one',
+      title: 'Rin',
       context: {
         kind: 'room',
         scope: 'participant',

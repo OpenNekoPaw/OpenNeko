@@ -23,6 +23,7 @@ import {
 } from '@neko/chara/contracts';
 import type { CharacterAgentConversationPort } from './character-interaction-service';
 import type { CharacterPublicationReader } from './character-authoring-service';
+import type { CharacterDisplayNameReader } from './character-global-catalog-service';
 
 export type CharacterConversationLaunchAggregate =
   | {
@@ -106,6 +107,7 @@ interface CompanionLaunchAuthority {
 
 interface PreparedLaunchCharacter {
   readonly publication: CharacterVersion;
+  readonly displayName: string;
   readonly storyline?: {
     readonly version: CharacterStorylineVersion;
     readonly storylineNodeId: string;
@@ -120,6 +122,7 @@ export class CharacterConversationLaunchService {
     private readonly options: {
       readonly repository: CharacterConversationLaunchRepository;
       readonly publications: CharacterPublicationReader;
+      readonly displayNames: CharacterDisplayNameReader;
       readonly agentConversations: CharacterAgentConversationPort;
       readonly now?: () => string;
     },
@@ -189,10 +192,15 @@ export class CharacterConversationLaunchService {
           );
         }
         const publication = parseCharacterVersion(stored);
+        const displayName = await this.options.displayNames.requireDisplayName(
+          publication.characterVersionId,
+          signal,
+        );
         const storylineSelection = 'storyline' in character ? character.storyline : undefined;
         if (storylineSelection === undefined) {
           return {
             publication,
+            displayName,
             ...(character.roleProfileId === undefined
               ? {}
               : { roleProfileId: character.roleProfileId }),
@@ -237,6 +245,7 @@ export class CharacterConversationLaunchService {
         }
         return {
           publication,
+          displayName,
           storyline: {
             version: canonicalStoryline,
             storylineNodeId: storylineSelection.storylineNodeId,
@@ -262,6 +271,7 @@ export class CharacterConversationLaunchService {
       {
         characterRunId,
         characterVersionId: publication.characterVersionId,
+        displayName: character.displayName,
         purpose: 'character.primary',
         owner: {
           kind: 'character',
@@ -373,6 +383,7 @@ export class CharacterConversationLaunchService {
           {
             characterRunId,
             characterVersionId: publication.characterVersionId,
+            displayName: character.displayName,
             purpose: 'character.primary',
             owner: {
               kind: 'room',
@@ -387,6 +398,7 @@ export class CharacterConversationLaunchService {
         participantSessions.push({
           index,
           publication,
+          displayName: character.displayName,
           storyline: character.storyline,
           characterRunId,
           participantId: identities.characterParticipantId(index),
@@ -396,7 +408,7 @@ export class CharacterConversationLaunchService {
       const timestamp = this.now();
       const room = parseCharacterRoom({
         characterRoomId: identities.characterRoomId,
-        title: characters.map((character) => character.publication.label).join(', '),
+        title: characters.map((character) => character.displayName).join(', '),
         participantTemplates: [
           {
             participantTemplateId: identities.userParticipantId,
@@ -406,7 +418,7 @@ export class CharacterConversationLaunchService {
           },
           ...participantSessions.map((participant) => ({
             participantTemplateId: participant.participantId,
-            displayName: participant.publication.label,
+            displayName: participant.displayName,
             controllerKind: 'agent' as const,
             characterVersionId: participant.publication.characterVersionId,
           })),
@@ -468,7 +480,7 @@ export class CharacterConversationLaunchService {
           },
           ...participantSessions.map((participant) => ({
             participantId: participant.participantId,
-            displayName: participant.publication.label,
+            displayName: participant.displayName,
             characterVersionId: participant.publication.characterVersionId,
             controller: {
               kind: 'agent' as const,

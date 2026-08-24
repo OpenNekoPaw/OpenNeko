@@ -101,7 +101,14 @@ describe('Character conversation launch contract', () => {
     });
   });
 
-  it('rejects removed launch fields and cross-mode context', () => {
+  it('rejects caller-supplied display text, removed launch fields and cross-mode context', () => {
+    expect(() =>
+      parseCharacterConversationLaunchSelection({
+        mode: 'companion',
+        characters: [{ characterVersionId: 'character-version-a', displayName: 'Neko' }],
+      }),
+    ).toThrow(/unsupported fields/u);
+
     expect(() =>
       parseCharacterConversationLaunchSelection({
         runtimeKind: 'companion',

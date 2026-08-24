@@ -38,7 +38,20 @@ export const characterManagementDialogueScenario = Object.freeze({
     checkpoint('character-dialogue-dsh-handoff', handoff);
     const handoffScreenshot = await screenshot('character-dialogue-dsh-handoff');
 
-    return { detail, handoff, screenshots: [detailScreenshot, handoffScreenshot] };
+    await click('[data-primary-surface="agent"] .agent-character-conversation-mode-trigger');
+    await waitForSelector(
+      '[data-primary-surface="agent"] .agent-dropdown-menu-mode [role="menuitemradio"]',
+    );
+    const modeMenu = await inspectDialogueModeMenu(evaluate);
+    checkpoint('character-dialogue-mode-menu-localized', modeMenu);
+    const modeMenuScreenshot = await screenshot('character-dialogue-mode-menu-localized');
+
+    return {
+      detail,
+      handoff,
+      modeMenu,
+      screenshots: [detailScreenshot, handoffScreenshot, modeMenuScreenshot],
+    };
   },
 });
 
@@ -74,6 +87,35 @@ async function inspectCharacterDetail(evaluate) {
     state.editActionCount !== 0
   ) {
     throw new Error(`Character read-only detail is invalid: ${JSON.stringify(state)}`);
+  }
+  return state;
+}
+
+async function inspectDialogueModeMenu(evaluate) {
+  const state = await evaluate(`(() => {
+    const menu = document.querySelector(
+      '[data-primary-surface="agent"] .agent-dropdown-menu-mode'
+    );
+    const text = menu?.textContent?.replace(/\\s+/gu, ' ').trim() ?? '';
+    return {
+      text,
+      optionCount: menu?.querySelectorAll('[role="menuitemradio"]').length ?? 0,
+      selectedCount: menu?.querySelectorAll('[aria-checked="true"]').length ?? 0,
+      exposesTranslationKey: text.includes('chat.entryExperience.characterDialogue.'),
+    };
+  })()`);
+  const hasCompleteCopy =
+    (state.text.includes('Conversation mode') &&
+      state.text.includes('Companion') &&
+      state.text.includes('Narrative')) ||
+    (state.text.includes('对话模式') && state.text.includes('日常') && state.text.includes('叙事'));
+  if (
+    !hasCompleteCopy ||
+    state.optionCount !== 2 ||
+    state.selectedCount !== 1 ||
+    state.exposesTranslationKey
+  ) {
+    throw new Error(`Character dialogue mode menu is invalid: ${JSON.stringify(state)}`);
   }
   return state;
 }

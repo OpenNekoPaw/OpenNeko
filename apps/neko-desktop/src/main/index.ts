@@ -1657,6 +1657,7 @@ async function startDesktop(): Promise<void> {
   const characterConversationLaunches = new CharacterConversationLaunchService({
     repository: characterRuntimeRepositories.conversationLaunch,
     publications: characterGlobalCatalog,
+    displayNames: characterGlobalCatalogService,
     agentConversations: characterAgentConversations,
   });
   const characterPresentation = new CharacterPresentationService(
@@ -1676,6 +1677,7 @@ async function startDesktop(): Promise<void> {
   });
   const characterInteractions = new CharacterInteractionService({
     repository: characterRuntimeRepositories.interaction,
+    displayNames: characterGlobalCatalogService,
     agentConversations: characterAgentConversations,
     roomViews: {
       materializeRoomView: (roomRunId, participantId, signal) =>
@@ -1690,6 +1692,7 @@ async function startDesktop(): Promise<void> {
   const characterRoomInteractions = new CharacterRoomInteractionService({
     repository: characterRuntimeRepositories.roomInteraction,
     roomRuns: characterRooms,
+    displayNames: characterGlobalCatalogService,
     agentConversations: characterAgentConversations,
   });
   const characterCreationSourceAuthority = createDesktopCharacterCreationSourceAuthority({

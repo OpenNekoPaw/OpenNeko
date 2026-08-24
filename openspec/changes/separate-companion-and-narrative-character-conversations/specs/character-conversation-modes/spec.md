@@ -110,7 +110,7 @@ Agent Webview SHALL render OpenNeko builtin Skill and command descriptions throu
 
 ### Requirement: Character conversation presentation is localized and identity-safe
 
-The Agent Webview SHALL render the Character Dialogue mode field, both mode names and both descriptions from the active supported locale bundle. A newly published Character Conversation SHALL use the exact selected GlobalCharacter display name for its visible Conversation title, and Desktop SHALL use that visible title for the non-empty Character navigation group. GlobalCharacter and CharacterVersion identities SHALL remain available only as internal ownership and routing facts and MUST NOT be formatted as user-facing names. Display names MUST NOT participate in owner matching, CharacterVersion validation or Conversation routing.
+The Agent Webview SHALL render the Character Dialogue mode field, both mode names and both descriptions from the active supported locale bundle. A newly published Character Conversation SHALL use the exact selected GlobalCharacter display name resolved by Chara's authoritative display-name reader for its visible Conversation title, and Desktop SHALL use that visible title for the non-empty Character navigation group. Launch selections MUST NOT accept caller-supplied display text, and every Character Conversation publication SHALL use the canonical `displayName` field. CharacterVersion labels and Room participant aliases MUST NOT be substituted for the Character display name. GlobalCharacter and CharacterVersion identities SHALL remain available only as internal ownership and routing facts and MUST NOT be formatted as user-facing names. Display names MUST NOT participate in owner matching, CharacterVersion validation or Conversation routing.
 
 #### Scenario: User opens the Character Dialogue mode selector in Simplified Chinese
 
@@ -123,7 +123,7 @@ The Agent Webview SHALL render the Character Dialogue mode field, both mode name
 - **WHEN** Host resolves the selected CharacterVersion to one GlobalCharacter named `Neko` and Chara publishes its exact Agent Conversation
 - **THEN** the Conversation row and Character navigation group SHALL visibly identify `Neko`
 - **AND** neither surface SHALL render the GlobalCharacter or CharacterVersion identity as its display name
-- **AND** changing the supplied display metadata without changing the exact identities SHALL NOT change Conversation ownership or routing
+- **AND** changing the authoritative display name without changing the exact identities SHALL NOT change Conversation ownership or routing
 
 ### Requirement: External materials are companion-only authorized turn context
 

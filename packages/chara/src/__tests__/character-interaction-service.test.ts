@@ -120,6 +120,7 @@ class MemoryInteractionRepository implements CharacterInteractionRepository {
 
 class RecordingAgentConversations implements CharacterAgentConversationPort {
   readonly created: string[] = [];
+  readonly displayNames: string[] = [];
   readonly released: string[] = [];
   readonly turns: {
     readonly requestId: string;
@@ -129,8 +130,10 @@ class RecordingAgentConversations implements CharacterAgentConversationPort {
 
   async createPrimarySession(input: {
     readonly characterRunId: string;
+    readonly displayName: string;
   }): Promise<{ readonly primaryAgentSessionId: string }> {
     this.created.push(input.characterRunId);
+    this.displayNames.push(input.displayName);
     return { primaryAgentSessionId: `conversation:${input.characterRunId}` };
   }
 
@@ -215,6 +218,10 @@ function serviceFixture(presentationTurns?: {
   const roomViews = new StubRoomViews();
   const service = new CharacterInteractionService({
     repository,
+    displayNames: {
+      requireDisplayName: async (characterVersionId) =>
+        `Display ${characterVersionId.at(-1)?.toUpperCase() ?? 'Unknown'}`,
+    },
     agentConversations,
     roomViews,
     ...(presentationTurns === undefined ? {} : { presentationTurns }),
@@ -256,6 +263,7 @@ describe('CharacterInteractionService', () => {
       characterRunId: 'character-run-a',
     });
     expect(fixture.agentConversations.created).toEqual(['character-run-a']);
+    expect(fixture.agentConversations.displayNames).toEqual(['Display A']);
     expect(created.characterRun.controller).toEqual({
       kind: 'agent',
       primaryAgentSessionId: 'conversation:character-run-a',

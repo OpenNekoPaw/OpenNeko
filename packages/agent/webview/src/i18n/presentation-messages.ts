@@ -22,6 +22,13 @@ const en = {
   'chat.entryExperience.characterDialogue.head': 'Branch head',
   'chat.entryExperience.characterDialogue.unlinked': 'Unlinked',
   'chat.entryExperience.characterDialogue.lineageUnavailable': 'Lineage unavailable',
+  'chat.entryExperience.characterDialogue.modeLabel': 'Conversation mode',
+  'chat.entryExperience.characterDialogue.modeDaily': 'Companion',
+  'chat.entryExperience.characterDialogue.modeDailyDescription':
+    'Continue a daily relationship with standard Agent capabilities.',
+  'chat.entryExperience.characterDialogue.modeNarrative': 'Narrative',
+  'chat.entryExperience.characterDialogue.modeNarrativeDescription':
+    'Roleplay within the selected authored narrative and knowledge boundaries.',
   'chat.entryExperience.worldExperience.selectorLabel': 'Choose a World',
   'chat.entryExperience.worldExperience.loading': 'Loading available Worlds...',
   'chat.entryExperience.worldExperience.empty':
@@ -180,6 +187,13 @@ const zhCn = {
   'chat.entryExperience.characterDialogue.head': '分支头',
   'chat.entryExperience.characterDialogue.unlinked': '未连接',
   'chat.entryExperience.characterDialogue.lineageUnavailable': '版本关系不可用',
+  'chat.entryExperience.characterDialogue.modeLabel': '对话模式',
+  'chat.entryExperience.characterDialogue.modeDaily': '日常',
+  'chat.entryExperience.characterDialogue.modeDailyDescription':
+    '延续日常关系，并可使用标准 Agent 能力。',
+  'chat.entryExperience.characterDialogue.modeNarrative': '叙事',
+  'chat.entryExperience.characterDialogue.modeNarrativeDescription':
+    '在选定的作者叙事情境和知识边界内进行角色扮演。',
   'chat.entryExperience.worldExperience.selectorLabel': '选择世界',
   'chat.entryExperience.worldExperience.loading': '正在加载可用世界...',
   'chat.entryExperience.worldExperience.empty': '还没有已发布、可用于体验的世界版本。',

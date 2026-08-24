@@ -6,6 +6,30 @@ import {
 } from './character-global-catalog-service';
 
 describe('CharacterGlobalCatalogService', () => {
+  it('resolves one authoritative display name from the exact CharacterVersion', async () => {
+    const repository = repositoryFixture({
+      characters: [
+        {
+          globalCharacterId: 'global-character-1',
+          displayName: 'Neko',
+          currentCharacterVersionId: 'character-version-1',
+          characterVersionIds: ['character-version-1'],
+          createdAt: '2026-08-15T00:00:00.000Z',
+          updatedAt: '2026-08-15T00:00:00.000Z',
+        },
+      ],
+      versions: [characterVersion('character-version-1')],
+      links: [],
+      diagnostics: [],
+    });
+    const service = serviceFixture(repository);
+
+    await expect(service.requireDisplayName('character-version-1')).resolves.toBe('Neko');
+    await expect(service.requireDisplayName('character-version-missing')).rejects.toMatchObject({
+      code: 'global-character-version-unavailable',
+    });
+  });
+
   it('creates a global Character and first version without a Workspace link', async () => {
     const repository = repositoryFixture();
     const receipt = await serviceFixture(repository).createGlobal({

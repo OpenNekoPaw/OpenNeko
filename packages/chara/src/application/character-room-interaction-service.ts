@@ -16,6 +16,7 @@ import {
   type UserCharacterRelationship,
 } from '@neko/chara/contracts';
 import type { CharacterAgentConversationPort } from './character-interaction-service';
+import type { CharacterDisplayNameReader } from './character-global-catalog-service';
 
 export interface CharacterRoomInteractionRepository {
   readRoom(characterRoomId: string, signal?: AbortSignal): Promise<CharacterRoom | undefined>;
@@ -67,6 +68,7 @@ export class CharacterRoomInteractionService {
       readonly repository: CharacterRoomInteractionRepository;
       readonly roomRuns: CharacterPreparedRoomRunPort;
       readonly agentConversations: CharacterAgentConversationPort;
+      readonly displayNames: CharacterDisplayNameReader;
       readonly now?: () => string;
       readonly createCharacterRunId?: (roomRunId: string, participantId: string) => string;
     },
@@ -163,6 +165,10 @@ export class CharacterRoomInteractionService {
           {
             characterRunId,
             characterVersionId: authority.publication.characterVersionId,
+            displayName: await this.options.displayNames.requireDisplayName(
+              authority.publication.characterVersionId,
+              signal,
+            ),
             purpose: 'character.primary',
             owner: {
               kind: 'room',

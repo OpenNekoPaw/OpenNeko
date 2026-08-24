@@ -40,6 +40,10 @@ export interface CharacterWorkspaceProjectReader {
   ): Promise<CharacterProject | undefined>;
 }
 
+export interface CharacterDisplayNameReader {
+  requireDisplayName(characterVersionId: string, signal?: AbortSignal): Promise<string>;
+}
+
 export type SynchronizeCharacterConflictChoice = 'base-on-current' | 'save-as-new';
 
 export interface SynchronizeCharacterInput {
@@ -99,6 +103,7 @@ export class CharacterGlobalCatalogError extends Error {
       | 'character-workspace-object-unavailable'
       | 'global-character-already-exists'
       | 'global-character-unavailable'
+      | 'global-character-version-unavailable'
       | 'global-character-stale-base'
       | 'global-character-version-conflict'
       | 'global-character-conflict-choice-invalid'
@@ -110,7 +115,7 @@ export class CharacterGlobalCatalogError extends Error {
   }
 }
 
-export class CharacterGlobalCatalogService {
+export class CharacterGlobalCatalogService implements CharacterDisplayNameReader {
   private readonly now: () => string;
 
   constructor(
@@ -126,6 +131,29 @@ export class CharacterGlobalCatalogService {
   async readCatalog(signal?: AbortSignal): Promise<GlobalCharacterCatalog> {
     signal?.throwIfAborted();
     return parseGlobalCharacterCatalog(await this.ports.repository.readCatalog(signal));
+  }
+
+  async requireDisplayName(characterVersionId: string, signal?: AbortSignal): Promise<string> {
+    const catalog = await this.readCatalog(signal);
+    const version = catalog.versions.find(
+      (candidate) => candidate.characterVersionId === characterVersionId,
+    );
+    if (!version) {
+      throw new CharacterGlobalCatalogError(
+        'global-character-version-unavailable',
+        `CharacterVersion '${characterVersionId}' is unavailable in the GlobalCharacter catalog.`,
+      );
+    }
+    const character = catalog.characters.find(
+      (candidate) => candidate.globalCharacterId === version.globalCharacterId,
+    );
+    if (!character || !character.characterVersionIds.includes(characterVersionId)) {
+      throw new CharacterGlobalCatalogError(
+        'global-character-unavailable',
+        `GlobalCharacter '${version.globalCharacterId}' does not own CharacterVersion '${characterVersionId}'.`,
+      );
+    }
+    return character.displayName;
   }
 
   async synchronize(
