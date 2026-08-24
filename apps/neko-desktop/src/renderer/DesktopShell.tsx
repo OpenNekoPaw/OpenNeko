@@ -94,6 +94,7 @@ import {
 import { DesktopAssetManagementSurface } from './DesktopAssetManagementSurface';
 import { DesktopExtensionManagementSurface } from './DesktopExtensionManagementSurface';
 import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
+import { DesktopProfessionalApplicationRuntime } from './desktop-professional-application-runtime';
 import { WorkbenchMainPanelSurface } from './WorkbenchMainPanelSurface';
 import {
   ProjectContentRoot,
@@ -1873,6 +1874,7 @@ function DesktopWorkbenchRuntimePortals({
     viewMode: resourceBrowserView,
   });
   const extensionManagement = useDesktopExtensionManagementScene(scene);
+  const professionalApplications = useDesktopProfessionalApplicationScene(scene);
   const workspaceProject = resolveWorkspaceSceneProject(projection, composition);
   const workspaceSlots = useContentProjectWorkbenchSlots({
     actions,
@@ -1934,10 +1936,11 @@ function DesktopWorkbenchRuntimePortals({
         <DesktopAssetManagementSurface interactive={interactive} runtime={assetCenter.runtime} />
       ) : null
     ) : scene.context.kind === 'extensions' ? (
-      extensionManagement ? (
+      extensionManagement && professionalApplications ? (
         <DesktopExtensionManagementSurface
           interactive={interactive}
-          runtime={extensionManagement}
+          extensionRuntime={extensionManagement}
+          professionalApplicationRuntime={professionalApplications}
         />
       ) : null
     ) : scene.context.kind === 'world-runtime' ? (
@@ -2893,6 +2896,21 @@ function useDesktopExtensionManagementScene(
   const runtime = useMemo(() => {
     if (!active || typeof window === 'undefined') return undefined;
     return new DesktopExtensionManagementRuntime(
+      { windowId: scene.windowId },
+      window.openNekoDesktop,
+    );
+  }, [active, scene.windowId]);
+  useDisposeRuntime(runtime);
+  return runtime;
+}
+
+function useDesktopProfessionalApplicationScene(
+  scene: DesktopWorkbenchSceneProjection,
+): DesktopProfessionalApplicationRuntime | undefined {
+  const active = scene.context.kind === 'extensions';
+  const runtime = useMemo(() => {
+    if (!active || typeof window === 'undefined') return undefined;
+    return new DesktopProfessionalApplicationRuntime(
       { windowId: scene.windowId },
       window.openNekoDesktop,
     );

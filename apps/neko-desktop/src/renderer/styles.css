@@ -1,5 +1,6 @@
 @import '@neko/ui/workbench/editor-workbench.css';
 @import '@neko/ui/icons/codicon.css';
+@import './extension-management.css';
 
 @tailwind base;
 @tailwind components;

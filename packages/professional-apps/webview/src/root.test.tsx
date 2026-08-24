@@ -197,6 +197,7 @@ describe('ProfessionalApplicationManagementRoot', () => {
     await screen.findByText('ComfyUI');
     expect(screen.queryByRole('heading')).toBeNull();
     expect(screen.queryByRole('button', { name: '刷新应用' })).toBeNull();
+    expect(screen.queryByText('已添加')).toBeNull();
   });
 });
 

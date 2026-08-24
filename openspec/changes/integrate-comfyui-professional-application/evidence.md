@@ -7,9 +7,9 @@ resource handoff, Computer Use production wiring and real-runtime acceptance are
 
 ## Canonical paths established
 
-- Management core: Professional Apps Root -> Window-bound renderer runtime -> typed preload/Main request
-  -> host-neutral Professional Apps service. Composition beside Skill/MCP in the current Extensions scene
-  is deferred to the presentation batch.
+- Management: current Extensions scene -> unique Skill/MCP/Professional Applications selector -> active
+  package-owned Root -> Window-bound renderer runtime -> typed preload/Main request -> host-neutral
+  Professional Apps service. Inactive package Roots are not retained.
 - Qualified discovery: ComfyUI product profile -> exact macOS bundle identity probe and explicit loopback
   `/system_stats` probe. The adapter does not enumerate arbitrary executables or applications.
 - Native selection: sender-bound Window -> Electron application picker -> Main-only macOS bundle
@@ -87,11 +87,10 @@ batch prove the following advisory inventory only:
   unchanged, while Main returns only the verified application identity;
 - the UI states that detection never installs an application, Skill, MCP server, node or model.
 
-Desktop composition, shared Skill/MCP/Professional applications toolbar styling and authoritative
-visible Electron inspection are intentionally deferred to the separate extension-management UI batch.
-This batch therefore does not claim current visible Desktop acceptance. OS application
-selection/permission flow, visible Professional applications state, exact-window Computer Use controls
-and a real Agent provider path remain task 6.4.
+Desktop composition and shared Skill/MCP/Professional Applications presentation are implemented by the
+separate extension-management UI batch. Its focused tests and visible UI evidence are recorded under
+`optimize-extension-management-presentation`. OS application selection/permission flow, exact-window
+Computer Use controls and a real Agent provider path remain task 6.4.
 
 ## Real ComfyUI fixture
 

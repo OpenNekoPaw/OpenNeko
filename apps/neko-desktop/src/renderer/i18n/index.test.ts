@@ -21,6 +21,8 @@ describe('Desktop renderer i18n', () => {
       zhCN.t('shell.conversationRecordInvalid', { conversationId: 'conversation:invalid' }),
     ).toContain('旧会话“conversation:invalid”');
     expect(zhCN.t('shell.openProject')).not.toBe('shell.openProject');
+    expect(en.t('skill.catalog.content-authoring.title')).toBe('Content authoring');
+    expect(zhCN.t('skill.catalog.content-authoring.title')).toBe('内容创作');
   });
 
   it('normalizes the Electron locale and projects it onto the embedded Webview DOM', () => {

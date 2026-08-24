@@ -75,15 +75,15 @@ vi.mock('@neko/chara-webview/avatar', () => ({
 
 vi.mock('./DesktopExtensionManagementSurface', () => ({
   DesktopExtensionManagementSurface: ({
-    runtime,
+    extensionRuntime,
   }: {
-    readonly runtime: DesktopExtensionManagementRuntime;
+    readonly extensionRuntime: DesktopExtensionManagementRuntime;
   }) => {
-    rendererInstrumentation.extensionRootRender(runtime.identity.windowId);
+    rendererInstrumentation.extensionRootRender(extensionRuntime.identity.windowId);
     return (
       <div
         data-extension-management-root="agent"
-        data-extension-management-window={runtime.identity.windowId}
+        data-extension-management-window={extensionRuntime.identity.windowId}
       />
     );
   },

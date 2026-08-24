@@ -24,10 +24,12 @@ export function I18nProvider({
   readonly children: ReactNode;
   readonly service: II18nService;
 }): JSX.Element {
-  const [locale, setLocale] = useState<SupportedLocale>(service.locale);
+  const [observedLocale, setObservedLocale] = useState<SupportedLocale>(service.locale);
   useEffect(() => {
-    service.onLocaleChange(setLocale);
+    setObservedLocale(service.locale);
+    service.onLocaleChange(setObservedLocale);
   }, [service]);
+  const locale = observedLocale === service.locale ? observedLocale : service.locale;
   return (
     <AgentI18nContext.Provider value={{ locale, t: (key, params) => service.t(key, params) }}>
       {children}

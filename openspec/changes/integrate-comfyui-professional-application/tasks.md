@@ -12,7 +12,7 @@
 
 ## 2. Compose management and configuration
 
-- [ ] 2.1 Add the Host-owned Capabilities and integrations scene composition while preserving the
+- [x] 2.1 Add the Host-owned Capabilities and integrations scene composition while preserving the
       existing strict DSH Skill/MCP projection and Root.
 - [x] 2.2 Add sender-bound Main/preload adapters for professional application snapshot, configuration,
       native selection and launch intents.
