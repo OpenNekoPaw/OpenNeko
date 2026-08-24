@@ -621,7 +621,8 @@ describe('DshAgentView content-creation composer', () => {
 
     expect(screen.getByText('开始创作')).toBeTruthy();
     expect(screen.getByText('短片项目')).toBeTruthy();
-    expect(screen.getByText('画板')).toBeTruthy();
+    expect(screen.getByText('工作区画板')).toBeTruthy();
+    expect(screen.getByPlaceholderText('描述你想要完成的内容...')).toBeTruthy();
     expect(view.container.querySelector('[data-workspace-canvas-context="true"]')).toBeTruthy();
     expect((screen.getByRole('button', { name: '添加附件' }) as HTMLButtonElement).disabled).toBe(
       false,
@@ -631,7 +632,10 @@ describe('DshAgentView content-creation composer', () => {
     expect(onModelChange).toHaveBeenCalledWith('openai:gpt-5');
     fireEvent.click(screen.getByRole('button', { name: '执行模式' }));
     expect(screen.queryByRole('menuitemradio', { name: '计划' })).toBeNull();
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Full access' }));
+    expect(screen.getByRole('menuitemradio', { name: '只读' })).toBeTruthy();
+    expect(screen.getByRole('menuitemradio', { name: '工作区可写' })).toBeTruthy();
+    expect(screen.queryByRole('menuitemradio', { name: 'Full access' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '完全访问' }));
     expect(onPermissionPresetChange).toHaveBeenCalledWith('danger-full-access');
     fireEvent.change(screen.getByRole('combobox', { name: '画布索引' }), {
       target: { value: 'neko/boards/story.nkc' },

@@ -890,7 +890,7 @@ function DshComposer({
                   current: configuration.permissionPresetId,
                   options: configuration.permissionPresets.map((preset) => ({
                     id: preset.id,
-                    label: formatPermissionPresetLabel(preset.id, preset.label),
+                    label: formatPermissionPresetLabel(t, preset.id, preset.label),
                     disabled: !preset.selectable,
                     ...(preset.description === undefined
                       ? {}
@@ -920,7 +920,10 @@ function DshComposer({
                         option.target.kind === 'workspace-board'
                           ? 'workspace-board'
                           : option.target.canvasId,
-                      label: option.label,
+                      label:
+                        option.target.kind === 'workspace-board'
+                          ? t('chat.input.workspaceCanvas.board')
+                          : option.label,
                       target: option.target,
                       ...(option.summary === undefined ? {} : { summary: option.summary }),
                       ...(option.disabled === undefined ? {} : { disabled: option.disabled }),
@@ -2060,9 +2063,13 @@ function projectCatalogDiagnostic(diagnostics: readonly string[]): string | unde
   return diagnostics.length === 0 ? undefined : diagnostics.join('\n');
 }
 
-function formatPermissionPresetLabel(permissionPresetId: string, advertisedLabel: string): string {
-  if (permissionPresetId === 'read-only') return 'Read Only';
-  if (permissionPresetId === 'workspace-write') return 'Workspace Write';
-  if (permissionPresetId === 'danger-full-access') return 'Full access';
+function formatPermissionPresetLabel(
+  t: (key: string) => string,
+  permissionPresetId: string,
+  advertisedLabel: string,
+): string {
+  if (permissionPresetId === 'read-only') return t('chat.executionMode.readOnly');
+  if (permissionPresetId === 'workspace-write') return t('chat.executionMode.workspaceWrite');
+  if (permissionPresetId === 'danger-full-access') return t('chat.executionMode.fullAccess');
   return advertisedLabel;
 }
