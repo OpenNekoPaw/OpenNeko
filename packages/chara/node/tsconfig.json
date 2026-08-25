@@ -10,7 +10,8 @@
     "noImplicitOverride": true,
     "skipLibCheck": true,
     "rootDir": "./src",
-    "noEmit": true
+    "noEmit": true,
+    "types": ["node"]
   },
   "include": ["src/**/*"]
 }

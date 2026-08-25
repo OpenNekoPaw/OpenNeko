@@ -23,7 +23,7 @@
     "@neko/content-domain": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.8.3",
+    "typescript": "6.0.3",
     "vitest": "^4.1.2"
   },
   "license": "AGPL-3.0-or-later"
