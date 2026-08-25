@@ -182,7 +182,11 @@ const config: KnipConfig = {
       ],
     },
     'packages/agent/runtime': {
-      entry: ['src/index.ts', 'src/runtime/index.ts', 'src/workspace/index.ts'],
+      entry: [
+        'src/index.ts',
+        'src/runtime/index.ts',
+        'src/workspace/index.ts',
+      ],
     },
     'scripts/dsh-q0': {
       entry: [

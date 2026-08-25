@@ -837,15 +837,15 @@ function createCutDocumentStorage(
         { file: { authority: 'workspace', path: documentId } },
         bytes,
         {
-          conflict: options.expectedFingerprint === undefined ? 'fail-if-exists' : 'replace',
-          ...(options.expectedFingerprint === undefined
-            ? {}
-            : {
-                expectedFingerprint: {
-                  strategy: 'mtime-size' as const,
-                  value: options.expectedFingerprint,
-                },
-              }),
+        conflict: options.expectedFingerprint === undefined ? 'fail-if-exists' : 'replace',
+        ...(options.expectedFingerprint === undefined
+          ? {}
+          : {
+              expectedFingerprint: {
+                strategy: 'mtime-size' as const,
+                value: options.expectedFingerprint,
+              },
+            }),
         },
       );
       if (result.status !== 'written') {

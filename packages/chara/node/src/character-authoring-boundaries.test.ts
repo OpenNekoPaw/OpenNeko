@@ -12,7 +12,7 @@ describe('Character authoring storage boundary', () => {
 
   it('keeps the Desktop production composition off the mixed SQLite authoring repository', async () => {
     const source = await readFile(
-      new URL('../../../apps/neko-desktop/src/main/index.ts', import.meta.url),
+      new URL('../../../../apps/neko-desktop/src/main/index.ts', import.meta.url),
       'utf8',
     );
     expect(source).toContain('createCharacterAuthoringFileRepository');

@@ -46,7 +46,9 @@ export function createDesktopCharacterCreationSourceAuthority(input: {
         );
         const projectId = `content:${resolution.workspace.workspaceId}`;
         if (source.projectId !== projectId) {
-          throw new Error(`Project '${source.projectId}' does not match the authorized Workspace.`);
+          throw new Error(
+            `Project '${source.projectId}' does not match the authorized Workspace.`,
+          );
         }
         await new NodeProjectEntityAuthoringService({
           workspace: {

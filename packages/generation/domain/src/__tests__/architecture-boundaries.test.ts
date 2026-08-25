@@ -5,7 +5,7 @@ import * as generation from '../index';
 import * as generationJob from '../job';
 
 const packageRoot = resolve(import.meta.dirname, '../..');
-const workspaceRoot = resolve(packageRoot, '../..');
+const workspaceRoot = resolve(packageRoot, '../../..');
 
 describe('@neko/generation-domain architecture boundaries', () => {
   it('keeps the root renderer-safe while exposing Job implementations explicitly', () => {

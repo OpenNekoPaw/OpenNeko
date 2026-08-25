@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const packageRoot = resolve(import.meta.dirname, '../..');
-const repositoryRoot = resolve(packageRoot, '../..');
+const repositoryRoot = resolve(packageRoot, '../../..');
 
 describe('World production path boundaries', () => {
   it('keeps the basic runtime bound to exact WorldVersion authority', () => {

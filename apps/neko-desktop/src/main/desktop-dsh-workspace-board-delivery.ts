@@ -14,10 +14,7 @@ import {
   type AuthorizedWorkspaceWriter,
   type ContentReadService,
 } from '@neko/content-domain';
-import {
-  createNodeHostContentReadService,
-  type NodeDocumentEntryReader,
-} from '@neko/content-domain/node';
+import { createNodeHostContentReadService, type NodeDocumentEntryReader } from '@neko/content-domain/node';
 import {
   WorkspaceBoardDeliveryCoordinator,
   WorkspaceBoardDeliveryLedger,

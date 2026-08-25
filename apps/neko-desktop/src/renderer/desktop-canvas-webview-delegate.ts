@@ -19,7 +19,8 @@ export function createDesktopCanvasWebviewDelegate(
   };
   return {
     supportsMessage: (messageType) =>
-      messageType === 'preview:resolveResource' || messageType === 'preview:releaseResource',
+      messageType === 'preview:resolveResource' ||
+      messageType === 'preview:releaseResource',
     postMessage(message) {
       if (isRecord(message) && message['type'] === 'preview:resolveResource') {
         const request = parsePreviewResourceMessage(message);

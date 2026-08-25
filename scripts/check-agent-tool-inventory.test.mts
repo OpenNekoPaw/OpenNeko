@@ -7,10 +7,7 @@ import { test } from 'node:test';
 import { CANVAS_DSH_TOOL_NAME, CANVAS_DSH_TOOL_OPERATIONS } from '@neko/canvas-domain';
 import { CUT_DSH_TOOL_NAME, CUT_DSH_TOOL_OPERATIONS } from '@neko/cut-domain';
 import { GENERATION_DSH_TOOL_NAME, GENERATION_DSH_TOOL_OPERATIONS } from '@neko/generation-domain';
-import {
-  DOCUMENT_DSH_TOOL_NAME,
-  DOCUMENT_DSH_TOOL_OPERATIONS,
-} from '@neko/content-domain/document';
+import { DOCUMENT_DSH_TOOL_NAME, DOCUMENT_DSH_TOOL_OPERATIONS } from '@neko/content-domain/document';
 import {
   CHARACTER_DSH_TOOL_NAME,
   CHARACTER_DSH_TOOL_OPERATIONS,

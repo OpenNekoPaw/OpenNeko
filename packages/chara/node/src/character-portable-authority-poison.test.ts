@@ -20,13 +20,13 @@ describe('Character portable package authority poison scan', () => {
       readFile(new URL('./character-portable-archive.ts', import.meta.url), 'utf8'),
       readFile(
         new URL(
-          '../../chara/src/application/character-portable-package-service.ts',
+          '../../domain/src/application/character-portable-package-service.ts',
           import.meta.url,
         ),
         'utf8',
       ),
       readFile(
-        new URL('../../chara/src/contracts/character-portable-package.ts', import.meta.url),
+        new URL('../../domain/src/contracts/character-portable-package.ts', import.meta.url),
         'utf8',
       ),
     ]);

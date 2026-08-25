@@ -150,7 +150,7 @@ describe('neko-chara architecture boundaries', () => {
       /CharacterStorylineRun|StorylineObservation|acceptedTransition|progressRevision|updateStoryline|storeStorylineVersion|restoreAsDraft|deleteStoryline/u,
     );
 
-    const packagesRoot = resolve(packageRoot, '..');
+    const packagesRoot = resolve(packageRoot, '../..');
     const externalSources = ['agent', 'world', 'project', 'content', 'host']
       .flatMap((name) => listTypeScriptFiles(resolve(packagesRoot, name)))
       .filter((file) => !file.endsWith('.test.ts') && !file.includes('/node_modules/'))
@@ -169,7 +169,7 @@ describe('neko-chara architecture boundaries', () => {
   });
 
   it('keeps CharacterVersion and Storyline graphs separate from the retired Pi authority', () => {
-    const repositoryRoot = resolve(packageRoot, '../..');
+    const repositoryRoot = resolve(packageRoot, '../../..');
     const versionGraph = readFileSync(
       resolve(packageRoot, 'src/application/character-version-graph-service.ts'),
       'utf8',
@@ -199,7 +199,7 @@ describe('neko-chara architecture boundaries', () => {
   });
 
   it('keeps Desktop Character composition on delegated projections and exact providers', () => {
-    const repositoryRoot = resolve(packageRoot, '../..');
+    const repositoryRoot = resolve(packageRoot, '../../..');
     const desktopShell = readFileSync(
       resolve(repositoryRoot, 'apps/neko-desktop/src/renderer/DesktopShell.tsx'),
       'utf8',
@@ -227,7 +227,7 @@ describe('neko-chara architecture boundaries', () => {
   });
 
   it('keeps Desktop composition and Agent Webview detached from Character application runtime', () => {
-    const repositoryRoot = resolve(packageRoot, '../..');
+    const repositoryRoot = resolve(packageRoot, '../../..');
     const productionFiles = listTypeScriptFiles(repositoryRoot).filter(
       (file) => !file.endsWith('.test.ts') && !file.endsWith('.test.tsx'),
     );

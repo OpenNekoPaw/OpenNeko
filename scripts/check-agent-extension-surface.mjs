@@ -34,11 +34,21 @@ export function validateSurfaceStructure(surface) {
   const capability = requireRecord(surface, 'hostCapability', findings);
   const standardsSupport = requireRecord(surface, 'standardsSupport', findings);
 
-  expectEqual(skill?.definition, 'dsh-filesystem-skill', 'portableSkill.definition', findings);
+  expectEqual(
+    skill?.definition,
+    'dsh-filesystem-skill',
+    'portableSkill.definition',
+    findings,
+  );
   expectEqual(skill?.classification, 'dsh-skill', 'portableSkill.classification', findings);
   expectFalse(skill?.hostManifestRequired, 'portableSkill.hostManifestRequired', findings);
   expectFalse(skill?.mcpRequired, 'portableSkill.mcpRequired', findings);
-  expectStringArray(skill?.sourceKinds, dshSkillSourceKinds, 'portableSkill.sourceKinds', findings);
+  expectStringArray(
+    skill?.sourceKinds,
+    dshSkillSourceKinds,
+    'portableSkill.sourceKinds',
+    findings,
+  );
   expectStringArray(
     skill?.layouts,
     ['directory-skill-md', 'flat-markdown'],
@@ -47,7 +57,14 @@ export function validateSurfaceStructure(surface) {
   );
   expectStringArray(
     skill?.frontmatter,
-    ['name', 'description', 'whenToUse', 'metadata', 'disable-model-invocation', 'user-invocable'],
+    [
+      'name',
+      'description',
+      'whenToUse',
+      'metadata',
+      'disable-model-invocation',
+      'user-invocable',
+    ],
     'portableSkill.frontmatter',
     findings,
   );
@@ -529,7 +546,9 @@ async function checkCanonicalSourceEvidence(root, findings) {
     ...validateCanonicalAgentRegistrationGraph({
       runtimes: ['dsh'],
       tools: [
-        ...Array(countMatches(agentToolsSource, /ctx\.tools\.register\s*\(/gu)).fill('CreateSkill'),
+        ...Array(countMatches(agentToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
+          'CreateSkill',
+        ),
         ...Array(countMatches(characterToolsSource, /ctx\.tools\.register\s*\(/gu)).fill(
           'openneko.character',
         ),

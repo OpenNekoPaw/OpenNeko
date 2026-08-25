@@ -5,22 +5,12 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist",
-    "cordis.patch.yml"
-  ],
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
-  },
+  "files": ["dist", "cordis.patch.yml"],
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:@deepseek-ai/* --external:@neko/agent-contracts --outfile=dist/index.js && tsc -p tsconfig.build.json --emitDeclarationOnly",
     "test": "vitest run",
@@ -32,11 +22,6 @@
     "@neko/agent-contracts": "workspace:*",
     "@neko/world-domain": "workspace:*"
   },
-  "devDependencies": {
-    "@types/node": "^24.0.0",
-    "esbuild": "^0.27.2",
-    "typescript": "^5.9.3",
-    "vitest": "4.1.2"
-  },
+  "devDependencies": { "@types/node": "^24.0.0", "esbuild": "^0.27.2", "typescript": "^5.9.3", "vitest": "4.1.2" },
   "license": "AGPL-3.0-or-later"
 }

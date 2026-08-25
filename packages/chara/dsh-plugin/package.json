@@ -12,15 +12,8 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist",
-    "cordis.patch.yml"
-  ],
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
-  },
+  "files": ["dist", "cordis.patch.yml"],
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --format=esm --external:@deepseek-ai/* --external:@neko/agent-contracts --outfile=dist/index.js && tsc -p tsconfig.build.json --emitDeclarationOnly",
     "test": "vitest run",

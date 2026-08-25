@@ -194,10 +194,7 @@ import {
 } from '@neko/canvas-domain';
 import { GenerationApplicationRuntime } from '@neko/generation-domain/job';
 import { ComfyUiLocalApi, ComfyUiWorkflowRunner } from '@neko/generation-domain/comfyui';
-import {
-  PromptGenerationService,
-  createAiSdkPromptCompletionPort,
-} from '@neko/generation-domain/prompt';
+import { PromptGenerationService, createAiSdkPromptCompletionPort } from '@neko/generation-domain/prompt';
 import {
   createContentReadMediaRequestAssetMaterializer,
   createMediaPlatform,

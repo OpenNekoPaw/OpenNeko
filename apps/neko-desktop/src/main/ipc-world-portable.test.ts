@@ -54,11 +54,13 @@ describe('Desktop World portable IPC', () => {
       result: { requestId: context.requestId, status: 'completed' as const, result },
       archiveBytes,
     }));
-    const saveWorldPackage = vi.fn(async (_event: unknown, produce: () => Promise<Uint8Array>) => {
-      expect(createWorldPortableExport).not.toHaveBeenCalled();
-      expect(await produce()).toEqual(archiveBytes);
-      return true;
-    });
+    const saveWorldPackage = vi.fn(
+      async (_event: unknown, produce: () => Promise<Uint8Array>) => {
+        expect(createWorldPortableExport).not.toHaveBeenCalled();
+        expect(await produce()).toEqual(archiveBytes);
+        return true;
+      },
+    );
     registerDesktopIpc({ createWorldPortableExport } as never, options({ saveWorldPackage }));
     const handler = electron.handlers.get(WORLD_PORTABLE_HOST_CHANNELS.exportPackage);
     if (!handler) throw new Error('World export IPC handler was not registered.');
